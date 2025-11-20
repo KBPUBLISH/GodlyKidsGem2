@@ -15,11 +15,14 @@ npm run sync
 ./scripts/sync-from-github.sh
 ```
 
-**Before Gemini 3 (on your local machine):**
+**⚠️ BEFORE Gemini 3 (CRITICAL - on your local machine):**
 ```bash
-git pull origin main
+git pull origin main        # MUST do this first!
+git log --oneline -5        # Verify you have latest
 ```
-Then copy file contents into Gemini 3 prompt
+Then open the UPDATED file and copy entire contents into Gemini 3 prompt
+
+**Why:** Gemini 3 can't access GitHub, so you must give it the latest code!
 
 ### After Making Changes
 

@@ -6,7 +6,10 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "sync": "./scripts/sync-from-github.sh",
+    "push": "./scripts/push-to-github.sh",
+    "branch": "./scripts/create-work-branch.sh"
   },
   "dependencies": {
     "react": "^19.2.0",

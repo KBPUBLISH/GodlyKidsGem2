@@ -273,7 +273,7 @@ export const AVATAR_ASSETS: Record<string, React.ReactNode> = {
   'body-puffer': (
     <g>
       <rect x="20" y="0" width="60" height="60" rx="10" fill="#ff9800" />
-      <line x1="20" y1="15" x2="80" y1="15" stroke="#ef6c00" strokeWidth="2" />
+      <line x1="20" y1="15" x2="80" y2="15" stroke="#ef6c00" strokeWidth="2" />
       <line x1="20" y1="30" x2="80" y2="30" stroke="#ef6c00" strokeWidth="2" />
       <line x1="20" y1="45" x2="80" y2="45" stroke="#ef6c00" strokeWidth="2" />
       <rect x="48" y="0" width="4" height="60" fill="#333" />

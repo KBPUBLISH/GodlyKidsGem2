@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ChevronLeft, Volume2, Music, Bell, Shield, FileText, LogOut, Crown, HelpCircle } from 'lucide-react';
@@ -11,15 +10,10 @@ const SettingsPage: React.FC = () => {
   const { isSubscribed } = useUser();
   const { musicEnabled, sfxEnabled, toggleMusic, toggleSfx, playBack } = useAudio();
   
-  // Robust back handler
+  // Robust back handler - Explicitly goes to Profile as requested
   const handleBack = () => {
       playBack();
-      // Fallback to home if no history exists to prevent getting stuck
-      if (window.history.length > 2) {
-          navigate(-1);
-      } else {
-          navigate('/home');
-      }
+      navigate('/profile');
   };
 
   return (

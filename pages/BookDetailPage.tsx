@@ -1,5 +1,6 @@
+
 import React, { useEffect, useState } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { Heart, BookOpen, Crown, PlayCircle, Headphones, Disc } from 'lucide-react';
 import { useBooks } from '../context/BooksContext';
 import { Book } from '../types';
@@ -29,6 +30,7 @@ const AUDIO_CHAPTERS = [
 const BookDetailPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const location = useLocation();
   const { books, loading } = useBooks();
   const [book, setBook] = useState<Book | null>(null);
 
@@ -44,6 +46,16 @@ const BookDetailPage: React.FC = () => {
   if (!book) return <div className="h-full flex items-center justify-center text-white font-display">Book not found</div>;
 
   const isAudio = book.isAudio;
+
+  const handleChapterClick = (chapterId: number) => {
+    navigate(`/player/${id}/${chapterId}`);
+  };
+
+  const handleBack = () => {
+    // Navigate back to the previous main tab (passed via state) or default to Home
+    const backPath = (location.state as any)?.from || '/home';
+    navigate(backPath);
+  };
 
   return (
     // Opaque background to hide panorama
@@ -75,7 +87,7 @@ const BookDetailPage: React.FC = () => {
         {/* Header Icons */}
         <div className="relative z-20 flex justify-between items-center px-4 pt-6 pb-2">
             {/* Back Button */}
-             <button onClick={() => navigate(-1)} className="w-12 h-12 bg-[#90be6d] rounded-full border-4 border-[#f3e5ab] overflow-hidden shadow-[0_4px_0_rgba(0,0,0,0.3)] relative flex items-center justify-center transform transition-transform active:scale-95 group">
+             <button onClick={handleBack} className="w-12 h-12 bg-[#90be6d] rounded-full border-4 border-[#f3e5ab] overflow-hidden shadow-[0_4px_0_rgba(0,0,0,0.3)] relative flex items-center justify-center transform transition-transform active:scale-95 group">
                  <div className="w-0 h-0 border-t-[8px] border-t-transparent border-r-[12px] border-r-white border-b-[8px] border-b-transparent mr-1"></div>
             </button>
 
@@ -88,8 +100,8 @@ const BookDetailPage: React.FC = () => {
         {/* Main Content Area - Swaps based on type */}
         <div className="relative z-20 px-6 pt-2 flex flex-col items-center space-y-5">
             
-            {/* Book Cover - Aspect Square 1:1 */}
-            <div className="w-full aspect-square max-w-[18rem] rounded-xl overflow-hidden shadow-[0_10px_30px_rgba(0,0,0,0.6)] border-[3px] border-[#5c2e0b] relative bg-gray-800">
+            {/* Book Cover - Aspect Square 1:1 - Increased max-width by another 7% */}
+            <div className="w-full aspect-square max-w-[20.6rem] md:max-w-[28rem] lg:max-w-[32rem] rounded-xl overflow-hidden shadow-[0_10px_30px_rgba(0,0,0,0.6)] border-[3px] border-[#5c2e0b] relative bg-gray-800">
                 <img 
                     src={book.coverUrl} 
                     alt={book.title} 
@@ -192,7 +204,11 @@ const BookDetailPage: React.FC = () => {
               {isAudio && (
                 <div className="space-y-3 animate-in fade-in slide-in-from-bottom-4 duration-700">
                   {AUDIO_CHAPTERS.map((chapter, index) => (
-                    <div key={chapter.id} className="bg-white rounded-2xl p-2 flex items-center gap-3 shadow-[0_4px_10px_rgba(0,0,0,0.05)] border border-[#eecaa0] hover:border-[#d4b483] transition-colors group cursor-pointer">
+                    <div 
+                        key={chapter.id} 
+                        onClick={() => handleChapterClick(chapter.id)}
+                        className="bg-white rounded-2xl p-2 flex items-center gap-3 shadow-[0_4px_10px_rgba(0,0,0,0.05)] border border-[#eecaa0] hover:border-[#d4b483] transition-colors group cursor-pointer"
+                    >
                         {/* Thumbnail */}
                         <div className="w-16 h-16 shrink-0 rounded-xl overflow-hidden bg-gray-100 border border-gray-100 relative">
                             <img src={chapter.image} alt={`Ch ${index + 1}`} className="w-full h-full object-cover transition-transform group-hover:scale-110" />

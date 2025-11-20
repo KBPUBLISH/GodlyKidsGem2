@@ -1,7 +1,7 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import WoodButton from '../components/ui/WoodButton';
-import { Apple, Mail, LogIn } from 'lucide-react';
+import { Apple, } from 'lucide-react';
 
 const LandingPage: React.FC = () => {
   const navigate = useNavigate();
@@ -12,69 +12,121 @@ const LandingPage: React.FC = () => {
   };
 
   return (
-    <div className="flex flex-col h-screen items-center justify-center px-6 relative overflow-hidden">
-      {/* Background with sunrise effect handled in App Layout, enhancing here */}
-      <div className="absolute inset-0 bg-gradient-to-t from-[#FFD700] via-[#f59e0b] to-transparent opacity-20 bottom-0 h-1/3 pointer-events-none"></div>
+    <div className="relative h-full w-full overflow-hidden">
+      {/* 
+        NOTE: Background (Sky, Stars, Sunrise) is now handled globally in App.tsx > PanoramaBackground
+        to support the swipe navigation effect.
+      */}
 
-      {/* Logo Area */}
-      <div className="flex-1 flex flex-col items-center justify-center w-full max-w-sm">
-        {/* Placeholder for the Ship Logo */}
-        <div className="relative w-64 h-64 mb-6">
-            {/* Simplified Ship Illustration using CSS/SVG composition */}
-             <svg viewBox="0 0 200 200" className="w-full h-full drop-shadow-2xl">
+      {/* --- SHIP ILLUSTRATION --- */}
+      <div className="absolute top-[10%] left-1/2 -translate-x-1/2 w-full max-w-md z-10 pointer-events-none">
+         <div className="relative w-full aspect-square">
+            <svg viewBox="0 0 400 400" className="w-full h-full drop-shadow-2xl">
+                {/* Back Flag */}
+                <path d="M330,180 L360,170 L330,160 Z" fill="#F44336" />
+
+                {/* Masts */}
+                <rect x="195" y="50" width="10" height="200" fill="#D88E56" stroke="#5D4037" strokeWidth="2" />
+                <rect x="120" y="100" width="8" height="140" fill="#D88E56" stroke="#5D4037" strokeWidth="2" />
+                <rect x="270" y="80" width="8" height="150" fill="#D88E56" stroke="#5D4037" strokeWidth="2" />
+
+                {/* Rear Sails (Right) */}
+                <path d="M274,90 Q320,100 320,130 H274 Z" fill="#29B6F6" stroke="#01579B" strokeWidth="2" />
+                <path d="M274,135 Q330,150 330,180 H274 Z" fill="#039BE5" stroke="#01579B" strokeWidth="2" />
+
+                {/* Main Sails (Center) */}
+                <path d="M200,60 Q270,80 270,120 H200 Z" fill="#4FC3F7" stroke="#0277BD" strokeWidth="2" />
+                <path d="M200,125 Q280,150 280,190 H200 Z" fill="#03A9F4" stroke="#0277BD" strokeWidth="2" />
+
+                {/* Front Sails (Left) */}
+                <path d="M124,110 Q170,120 170,150 H124 Z" fill="#81D4FA" stroke="#0277BD" strokeWidth="2" />
+                <path d="M124,155 Q180,170 180,200 H124 Z" fill="#4FC3F7" stroke="#0277BD" strokeWidth="2" />
+
+                {/* Bowsprit */}
+                <path d="M300,220 L380,180 L300,240" stroke="#8D6E63" strokeWidth="6" strokeLinecap="round" />
+
                 {/* Hull */}
-                <path d="M40,120 Q100,180 160,120 L150,100 H50 Z" fill="#8B4513" stroke="#3E1F07" strokeWidth="2"/>
-                <path d="M50,100 H150 V90 H50 Z" fill="#CD853F" />
-                {/* Sails */}
-                <path d="M100,90 V20 M100,30 Q140,50 140,80 H100" fill="#E0F7FA" stroke="#26C6DA" strokeWidth="1" />
-                <path d="M100,90 V20 M100,30 Q60,50 60,80 H100" fill="#B2EBF2" stroke="#26C6DA" strokeWidth="1" />
-                {/* Flag */}
-                <path d="M100,20 L120,10 L100,10" fill="#FF0000" />
-             </svg>
-             <div className="absolute bottom-0 inset-x-0 text-center">
-                <h1 className="text-5xl font-display font-extrabold text-transparent bg-clip-text bg-gradient-to-b from-white to-blue-200 drop-shadow-[0_4px_4px_rgba(0,0,0,0.5)]" style={{ WebkitTextStroke: '2px #0c2e4e' }}>
-                  GODLY
-                </h1>
-                <h2 className="text-4xl font-display font-extrabold text-[#FFD700] drop-shadow-[0_4px_4px_rgba(0,0,0,0.5)]" style={{ WebkitTextStroke: '1px #8B4513' }}>
-                  KIDS
-                </h2>
-             </div>
-        </div>
+                <path d="M80,220 Q200,320 320,220 L300,200 H100 Z" fill="#FFA726" stroke="#E65100" strokeWidth="3" />
+                {/* Hull Details (Wood Planks) */}
+                <path d="M95,220 Q200,300 310,220" fill="none" stroke="#E65100" strokeWidth="2" opacity="0.5" />
+                <path d="M110,235 Q200,290 290,235" fill="none" stroke="#E65100" strokeWidth="2" opacity="0.5" />
+                <path d="M130,255 Q200,290 270,255" fill="none" stroke="#E65100" strokeWidth="2" opacity="0.5" />
 
-        <p className="text-center text-white font-bold text-lg mb-10 drop-shadow-md px-4">
-          Faith Filled Content the whole family will enjoy <span className="text-yellow-300">✦</span>
-        </p>
-
-        <div className="w-full space-y-3 z-10">
-            <div className="bg-white/10 backdrop-blur-sm p-4 rounded-xl border border-white/20 shadow-xl space-y-3">
-                <p className="text-center text-xs text-yellow-100 mb-2 opacity-80">By continuing, you agree to Terms of Use</p>
+                {/* Railing */}
+                <path d="M90,210 L100,220 M310,210 L300,220" stroke="#5D4037" strokeWidth="3" />
+                <rect x="100" y="195" width="200" height="25" rx="5" fill="#8D6E63" stroke="#5D4037" strokeWidth="2" />
                 
-                <WoodButton fullWidth variant="dark" onClick={handleLogin} className="flex items-center justify-center gap-2">
-                   <Apple size={20} fill="white" /> Continue with Apple
-                </WoodButton>
-
-                <WoodButton fullWidth variant="light" onClick={handleLogin} className="flex items-center justify-center gap-2 text-[#5c2e0b]">
-                   <div className="w-5 h-5 bg-white rounded-full flex items-center justify-center text-xs font-bold">G</div> Continue with Google
-                </WoodButton>
-
-                <div className="relative py-2">
-                    <div className="absolute inset-0 flex items-center">
-                        <span className="w-full border-t border-white/30"></span>
-                    </div>
-                    <div className="relative flex justify-center text-xs uppercase">
-                        <span className="bg-transparent px-2 text-white font-bold drop-shadow">Or</span>
-                    </div>
-                </div>
-
-                <WoodButton fullWidth variant="primary" onClick={handleLogin}>
-                   Sign in
-                </WoodButton>
+                {/* Windows */}
+                <circle cx="140" cy="230" r="6" fill="#3E2723" />
+                <circle cx="180" cy="240" r="6" fill="#3E2723" />
+                <circle cx="220" cy="240" r="6" fill="#3E2723" />
+                <circle cx="260" cy="230" r="6" fill="#3E2723" />
                 
-                <WoodButton fullWidth variant="primary" onClick={handleLogin}>
-                   Register with Email
-                </WoodButton>
-            </div>
-        </div>
+                {/* Flag on Main Mast */}
+                <path d="M195,50 L160,65 L195,80 Z" fill="#0288D1" />
+                <text x="165" y="72" fontSize="8" fill="white" fontWeight="bold">GODLY</text>
+            </svg>
+         </div>
+      </div>
+
+
+      {/* --- OCEAN / UI SECTION --- */}
+      <div className="absolute bottom-0 left-0 right-0 h-[50%] z-20">
+          {/* Wave Graphic Divider */}
+          <div className="absolute -top-16 left-0 right-0 h-20 w-full overflow-hidden">
+               <svg viewBox="0 0 1440 320" className="w-full h-full" preserveAspectRatio="none">
+                  {/* Back Wave (Lighter) */}
+                  <path fill="#4FC3F7" fillOpacity="1" d="M0,224L48,213.3C96,203,192,181,288,181.3C384,181,480,203,576,224C672,245,768,267,864,261.3C960,256,1056,224,1152,208C1248,192,1344,192,1392,192L1440,192L1440,320L1392,320C1344,320,1248,320,1152,320C1056,320,960,320,864,320C768,320,672,320,576,320C480,320,384,320,288,320C192,320,96,320,48,320L0,320Z"></path>
+                  {/* Front Wave (Darker Main Blue) */}
+                  <path fill="#039BE5" fillOpacity="1" d="M0,96L48,112C96,128,192,160,288,186.7C384,213,480,235,576,213.3C672,192,768,128,864,128C960,128,1056,192,1152,208C1248,224,1344,192,1392,176L1440,160L1440,320L1392,320C1344,320,1248,320,1152,320C1056,320,960,320,864,320C768,320,672,320,576,320C480,320,384,320,288,320C192,320,96,320,48,320L0,320Z" transform="translate(0, 50)"></path>
+               </svg>
+          </div>
+
+          {/* Underwater Blue Background */}
+          <div className="absolute inset-0 top-2 bg-gradient-to-b from-[#039BE5] to-[#023e8a] flex flex-col items-center px-8 pt-4">
+              
+              {/* Bubble Particles */}
+              <div className="absolute bottom-10 left-10 w-4 h-4 rounded-full bg-white/20 animate-[bounce_3s_infinite]"></div>
+              <div className="absolute bottom-20 right-20 w-6 h-6 rounded-full bg-white/10 animate-[bounce_5s_infinite]"></div>
+              
+              {/* App Title (Styled to look integrated) */}
+              <div className="relative mb-8 text-center z-10">
+                 <h1 className="font-display font-extrabold text-4xl text-white drop-shadow-[0_4px_0_rgba(0,0,0,0.2)] tracking-wider">
+                    GODLY KIDS
+                 </h1>
+                 <p className="text-blue-100 font-sans font-bold text-sm mt-1 opacity-90">
+                    Adventure Awaits!
+                 </p>
+              </div>
+
+              {/* Login Buttons Container */}
+              <div className="w-full max-w-sm space-y-3 relative z-10">
+                  
+                  <button onClick={handleLogin} className="w-full bg-white hover:bg-gray-50 text-black font-bold py-3 px-4 rounded-xl shadow-[0_4px_0_rgba(0,0,0,0.1)] active:translate-y-[2px] active:shadow-none transition-all flex items-center justify-center gap-3">
+                      <Apple size={20} />
+                      <span>Continue with Apple</span>
+                  </button>
+
+                  <button onClick={handleLogin} className="w-full bg-white hover:bg-gray-50 text-black font-bold py-3 px-4 rounded-xl shadow-[0_4px_0_rgba(0,0,0,0.1)] active:translate-y-[2px] active:shadow-none transition-all flex items-center justify-center gap-3">
+                      <div className="w-5 h-5 bg-white rounded-full flex items-center justify-center text-xs font-bold border border-gray-300">G</div>
+                      <span>Continue with Google</span>
+                  </button>
+
+                  <div className="relative py-2 flex items-center justify-center opacity-70">
+                        <div className="h-px bg-white/40 w-full"></div>
+                        <span className="px-2 text-white text-xs font-bold uppercase">Or</span>
+                        <div className="h-px bg-white/40 w-full"></div>
+                  </div>
+
+                  <WoodButton fullWidth variant="primary" onClick={handleLogin}>
+                      Sign In with Email
+                  </WoodButton>
+
+                  <p className="text-center text-white/60 text-xs mt-4">
+                    By continuing you agree to our Terms & Conditions
+                  </p>
+              </div>
+          </div>
       </div>
     </div>
   );

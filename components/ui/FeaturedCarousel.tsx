@@ -1,3 +1,4 @@
+
 import React, { useState, useRef } from 'react';
 import { Book } from '../../types';
 import { BookOpen } from 'lucide-react';
@@ -26,7 +27,7 @@ const FeaturedCarousel: React.FC<FeaturedCarouselProps> = ({ books, onBookClick 
 
   return (
     // Aspect ratio set to square 1:1
-    <div className="relative w-full aspect-square max-h-[500px] rounded-2xl overflow-hidden shadow-[0_8px_16px_rgba(0,0,0,0.4)] mb-6 mx-auto border-b-4 border-[#5c2e0b] bg-[#3e1f07]">
+    <div className="relative w-full aspect-square max-h-[500px] md:max-h-[550px] rounded-2xl overflow-hidden shadow-[0_8px_16px_rgba(0,0,0,0.4)] mb-6 mx-auto border-b-4 border-[#5c2e0b] bg-[#3e1f07]">
       
       {/* Scroll Container */}
       <div 
@@ -58,8 +59,8 @@ const FeaturedCarousel: React.FC<FeaturedCarouselProps> = ({ books, onBookClick 
 
             {/* Content Container */}
             <div className="relative z-10 transform transition-transform active:scale-95 duration-200">
-                {/* Book Cover - Aspect Square */}
-                <div className="w-56 aspect-square rounded-lg shadow-2xl relative">
+                {/* Book Cover - Aspect Square - Increased size by 15% */}
+                <div className="w-[18.5rem] md:w-[23rem] aspect-square rounded-lg shadow-2xl relative">
                      <img 
                         src={book.coverUrl} 
                         alt={book.title} 
@@ -67,13 +68,13 @@ const FeaturedCarousel: React.FC<FeaturedCarouselProps> = ({ books, onBookClick 
                      />
                      
                      {/* NEW! Badge */}
-                     <div className="absolute -top-3 -right-5 bg-white text-black font-display font-extrabold text-xs px-3 py-1.5 rounded-full shadow-lg transform rotate-12 border-2 border-gray-100 z-20">
+                     <div className="absolute -top-3 -right-5 bg-white text-black font-display font-extrabold text-xs md:text-sm px-3 py-1.5 rounded-full shadow-lg transform rotate-12 border-2 border-gray-100 z-20">
                         NEW!
                      </div>
 
                      {/* Read Button Overlay */}
-                     <div className="absolute bottom-2 right-2 bg-white/90 backdrop-blur-md text-black text-[10px] font-bold px-3 py-1 rounded-full flex items-center gap-1.5 shadow-lg hover:bg-white transition-colors">
-                        <BookOpen size={12} fill="currentColor" />
+                     <div className="absolute bottom-2 right-2 bg-white/90 backdrop-blur-md text-black text-[10px] md:text-xs font-bold px-3 py-1 rounded-full flex items-center gap-1.5 shadow-lg hover:bg-white transition-colors">
+                        <BookOpen size={12} fill="currentColor" className="md:w-4 md:h-4" />
                         <span>Read</span>
                      </div>
                 </div>

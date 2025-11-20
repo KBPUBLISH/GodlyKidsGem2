@@ -54,6 +54,66 @@ export const MOCK_BOOKS: Book[] = [
     coverUrl: 'https://picsum.photos/seed/gotales/400/400',
     level: '0+',
     category: 'Activity Books'
+  },
+  {
+    id: '8',
+    title: 'The Lost Sheep Found',
+    coverUrl: 'https://picsum.photos/seed/sheep/400/400',
+    level: '3+',
+    category: 'Bible Stories',
+    isAudio: true
+  },
+  {
+    id: '9',
+    title: 'David and the Giant',
+    coverUrl: 'https://picsum.photos/seed/goliath/400/400',
+    level: '6+',
+    category: 'Books Gone Free',
+    isRead: true
+  },
+  {
+    id: '10',
+    title: 'Coloring Creation',
+    coverUrl: 'https://picsum.photos/seed/creation/400/400',
+    level: '2+',
+    category: 'Activity Books'
+  },
+  {
+    id: '11',
+    title: 'Songs of Joy',
+    coverUrl: 'https://picsum.photos/seed/songs/400/400',
+    level: '0+',
+    category: 'Young Readers',
+    isAudio: true
+  },
+  {
+    id: '12',
+    title: 'The Good Samaritan',
+    coverUrl: 'https://picsum.photos/seed/samaritan/400/400',
+    level: '4+',
+    category: 'Books Gone Free'
+  },
+  {
+    id: '13',
+    title: 'Jungle Jam',
+    coverUrl: 'https://picsum.photos/seed/jungle/400/400',
+    level: '3+',
+    category: 'Activity Books'
+  },
+  {
+    id: '14',
+    title: 'Space Explorers: Faith Frontier',
+    coverUrl: 'https://picsum.photos/seed/space/400/400',
+    level: '7+',
+    category: 'Activity Books'
+  },
+  {
+    id: '15',
+    title: 'The First Christmas',
+    coverUrl: 'https://picsum.photos/seed/xmas/400/400',
+    level: '2+',
+    category: 'Young Readers',
+    isRead: true
   }
 ];
 

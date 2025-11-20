@@ -1,7 +1,8 @@
+
 import React from 'react';
 
 interface WoodButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
-  variant?: 'primary' | 'dark' | 'light';
+  variant?: 'primary' | 'dark' | 'light' | 'gold';
   fullWidth?: boolean;
 }
 
@@ -13,12 +14,14 @@ const WoodButton: React.FC<WoodButtonProps> = ({
   ...props 
 }) => {
   
-  const baseStyles = "relative overflow-hidden font-display font-bold text-white transition-transform active:scale-95 rounded-lg shadow-xl border-b-4";
+  // Removed text-white from base so variants can control it
+  const baseStyles = "relative overflow-hidden font-display font-bold transition-transform active:scale-95 rounded-lg shadow-xl border-b-4";
   
   const variants = {
-    primary: "bg-[#8B4513] border-[#5c2e0b] hover:bg-[#A0522D]", // Standard wood
-    dark: "bg-[#5c2e0b] border-[#3e1f07] hover:bg-[#70380d]", // Dark wood
-    light: "bg-[#CD853F] border-[#8B4513] hover:bg-[#DEB887]"  // Light wood
+    primary: "bg-[#8B4513] border-[#5c2e0b] hover:bg-[#A0522D] text-white", // Standard wood
+    dark: "bg-[#5c2e0b] border-[#3e1f07] hover:bg-[#70380d] text-white", // Dark wood
+    light: "bg-[#CD853F] border-[#8B4513] hover:bg-[#DEB887] text-white",  // Light wood
+    gold: "bg-[#FFD700] border-[#B8860B] hover:bg-[#ffe066] text-[#5c2e0b]" // Gold metal/wood
   };
 
   const widthClass = fullWidth ? 'w-full' : '';

@@ -2,7 +2,7 @@
 
 ## ⚠️ Important: Tool Differences
 - **Cursor**: Can run `npm run sync` and `npm run push` directly
-- **Gemini 3**: Cannot run commands - you must run them manually in terminal
+- **Gemini 3**: Text files only (no terminal) - you must run Git commands on your local machine
 
 ## ⚡ Most Common Commands
 
@@ -15,7 +15,7 @@ npm run sync
 ./scripts/sync-from-github.sh
 ```
 
-**In Gemini 3:**
+**Before Gemini 3 (on your local machine):**
 ```bash
 git pull origin main
 ```
@@ -30,9 +30,9 @@ npm run push
 ./scripts/push-to-github.sh
 ```
 
-**In Gemini 3:**
-1. Save modified files
-2. In terminal:
+**After Gemini 3 (on your local machine):**
+1. Save modified files to your project
+2. In Terminal:
 ```bash
 git add .
 git commit -m "Your message"

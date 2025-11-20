@@ -1,0 +1,86 @@
+================================================================================
+GEMINI 3 WORKFLOW - COMMANDS TO RUN ON YOUR LOCAL MACHINE
+================================================================================
+
+Since Gemini 3 can only work with text files (no terminal), you need to run
+these commands on your local computer (in Terminal, VS Code terminal, etc.)
+
+================================================================================
+BEFORE ASKING GEMINI 3 TO MODIFY CODE:
+================================================================================
+
+1. Open Terminal/Command Prompt on your computer
+2. Navigate to project:
+   cd /path/to/GodlyKidsGeminiProject
+
+3. Get latest changes from GitHub:
+   git pull origin main
+
+4. Open the file you want Gemini 3 to modify
+5. Copy the entire file content
+6. Paste it into Gemini 3 prompt
+
+================================================================================
+AFTER GEMINI 3 PROVIDES MODIFIED CODE:
+================================================================================
+
+1. Copy the modified code from Gemini 3
+2. Save it to the file in your project (overwrite the old file)
+
+3. In Terminal, run these commands:
+   git add .
+   git commit -m "Description of what Gemini 3 changed"
+   git pull origin main
+   git push origin main
+
+================================================================================
+QUICK REFERENCE - COPY AND PASTE THESE:
+================================================================================
+
+# Get latest changes
+git pull origin main
+
+# See what changed
+git status
+
+# Save and push changes (after saving Gemini 3's code)
+git add .
+git commit -m "Your message here"
+git pull origin main
+git push origin main
+
+# If you have uncommitted work and need to pull
+git stash
+git pull origin main
+git stash pop
+
+================================================================================
+EXAMPLE WORKFLOW:
+================================================================================
+
+1. In Terminal: git pull origin main
+2. Open App.tsx, copy entire content
+3. In Gemini 3: Paste content, ask for changes
+4. Copy modified code from Gemini 3
+5. Save to App.tsx in your project
+6. In Terminal:
+   git add App.tsx
+   git commit -m "Updated App.tsx from Gemini 3"
+   git pull origin main
+   git push origin main
+
+================================================================================
+SYNCING BETWEEN CURSOR AND GEMINI 3:
+================================================================================
+
+If you made changes in Cursor:
+1. In Cursor terminal: npm run push (or git push)
+2. Then in your Terminal: git pull origin main
+3. Copy files into Gemini 3
+
+If you made changes with Gemini 3:
+1. Save files, then in Terminal: git add . && git commit -m "msg" && git push
+2. Then in Cursor: npm run sync (or git pull)
+
+================================================================================
+

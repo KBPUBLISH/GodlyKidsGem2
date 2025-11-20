@@ -5,6 +5,9 @@ import { Heart, BookOpen, Crown, PlayCircle, Headphones, Disc } from 'lucide-rea
 import { useBooks } from '../context/BooksContext';
 import { Book } from '../types';
 
+// Default placeholder image
+const DEFAULT_COVER = 'https://via.placeholder.com/400x400/8B4513/FFFFFF?text=Book+Cover';
+
 // Mock Chapters Data for Audio Books
 const AUDIO_CHAPTERS = [
   { 
@@ -33,6 +36,7 @@ const BookDetailPage: React.FC = () => {
   const location = useLocation();
   const { books, loading } = useBooks();
   const [book, setBook] = useState<Book | null>(null);
+  const [imageError, setImageError] = useState(false);
 
   useEffect(() => {
     if (books.length > 0) {
@@ -103,9 +107,10 @@ const BookDetailPage: React.FC = () => {
             {/* Book Cover - Aspect Square 1:1 - Increased max-width by another 7% */}
             <div className="w-full aspect-square max-w-[20.6rem] md:max-w-[28rem] lg:max-w-[32rem] rounded-xl overflow-hidden shadow-[0_10px_30px_rgba(0,0,0,0.6)] border-[3px] border-[#5c2e0b] relative bg-gray-800">
                 <img 
-                    src={book.coverUrl} 
+                    src={imageError || !book.coverUrl ? DEFAULT_COVER : book.coverUrl} 
                     alt={book.title} 
                     className="w-full h-full object-cover"
+                    onError={() => setImageError(true)}
                 />
                 {/* Decorative Sparkles */}
                 <div className="absolute top-3 right-4 text-white/90 text-2xl animate-pulse filter drop-shadow-md">✦</div>

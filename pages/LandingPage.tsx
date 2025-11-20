@@ -1,15 +1,9 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import WoodButton from '../components/ui/WoodButton';
-import { Apple, } from 'lucide-react';
 
 const LandingPage: React.FC = () => {
   const navigate = useNavigate();
-
-  const handleLogin = () => {
-    // Simulate login
-    navigate('/home');
-  };
 
   return (
     <div className="relative h-full w-full overflow-hidden">
@@ -99,28 +93,23 @@ const LandingPage: React.FC = () => {
                  </p>
               </div>
 
-              {/* Login Buttons Container */}
+              {/* Sign In and Guest Buttons */}
               <div className="w-full max-w-sm space-y-3 relative z-10">
-                  
-                  <button onClick={handleLogin} className="w-full bg-white hover:bg-gray-50 text-black font-bold py-3 px-4 rounded-xl shadow-[0_4px_0_rgba(0,0,0,0.1)] active:translate-y-[2px] active:shadow-none transition-all flex items-center justify-center gap-3">
-                      <Apple size={20} />
-                      <span>Continue with Apple</span>
-                  </button>
-
-                  <button onClick={handleLogin} className="w-full bg-white hover:bg-gray-50 text-black font-bold py-3 px-4 rounded-xl shadow-[0_4px_0_rgba(0,0,0,0.1)] active:translate-y-[2px] active:shadow-none transition-all flex items-center justify-center gap-3">
-                      <div className="w-5 h-5 bg-white rounded-full flex items-center justify-center text-xs font-bold border border-gray-300">G</div>
-                      <span>Continue with Google</span>
-                  </button>
-
-                  <div className="relative py-2 flex items-center justify-center opacity-70">
-                        <div className="h-px bg-white/40 w-full"></div>
-                        <span className="px-2 text-white text-xs font-bold uppercase">Or</span>
-                        <div className="h-px bg-white/40 w-full"></div>
-                  </div>
-
-                  <WoodButton fullWidth variant="primary" onClick={handleLogin}>
-                      Sign In with Email
+                  <WoodButton 
+                    onClick={() => navigate('/signin')}
+                    fullWidth 
+                    variant="primary"
+                    className="py-4 text-lg"
+                  >
+                    Sign In
                   </WoodButton>
+
+                  <button
+                    onClick={() => navigate('/home')}
+                    className="w-full bg-white/10 hover:bg-white/20 backdrop-blur-sm border border-white/30 text-white font-bold py-3 px-4 rounded-xl shadow-[0_4px_0_rgba(0,0,0,0.1)] active:translate-y-[2px] active:shadow-none transition-all"
+                  >
+                    Continue as Guest
+                  </button>
 
                   <p className="text-center text-white/60 text-xs mt-4">
                     By continuing you agree to our Terms & Conditions

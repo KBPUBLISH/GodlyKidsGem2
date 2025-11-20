@@ -3,6 +3,9 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { ChevronLeft, Crown, Pause, Play, SkipBack, SkipForward } from 'lucide-react';
 import { useBooks } from '../context/BooksContext';
 
+// Default placeholder image
+const DEFAULT_COVER = 'https://via.placeholder.com/400x400/8B4513/FFFFFF?text=Book+Cover';
+
 // Mock Data for demonstration purposes, matching the visual request
 const MOCK_CHAPTER_DETAILS = {
   '1': {
@@ -33,6 +36,7 @@ const AudioPlayerPage: React.FC = () => {
   const navigate = useNavigate();
   const { books } = useBooks();
   const [isPlaying, setIsPlaying] = useState(false);
+  const [imageError, setImageError] = useState(false);
   const [progress, setProgress] = useState(35); // Mock progress percentage
 
   const book = books.find(b => b.id === bookId);
@@ -67,7 +71,12 @@ const AudioPlayerPage: React.FC = () => {
              {/* Decorative Frame/Glow */}
              <div className="absolute inset-0 bg-white/10 rounded-xl transform rotate-3 scale-105 blur-sm"></div>
              <div className="relative w-full h-full rounded-lg overflow-hidden border-4 border-[#8B4513] shadow-2xl">
-                <img src={book.coverUrl} alt={book.title} className="w-full h-full object-cover" />
+                <img 
+                  src={imageError || !book.coverUrl ? DEFAULT_COVER : book.coverUrl} 
+                  alt={book.title} 
+                  className="w-full h-full object-cover"
+                  onError={() => setImageError(true)}
+                />
                 
                 {/* Decorative corners (simulated with CSS) */}
                 <div className="absolute top-0 left-0 w-8 h-8 border-t-4 border-l-4 border-[#FFD700] rounded-tl-md opacity-80"></div>

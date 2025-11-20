@@ -8,9 +8,24 @@ interface FeaturedCarouselProps {
   onBookClick: (id: string) => void;
 }
 
+// Default placeholder image
+const DEFAULT_COVER = 'https://via.placeholder.com/400x400/8B4513/FFFFFF?text=Book+Cover';
+
 const FeaturedCarousel: React.FC<FeaturedCarouselProps> = ({ books, onBookClick }) => {
   const [activeIndex, setActiveIndex] = useState(0);
+  const [imageErrors, setImageErrors] = useState<Record<string, boolean>>({});
   const scrollRef = useRef<HTMLDivElement>(null);
+
+  const handleImageError = (bookId: string) => {
+    setImageErrors(prev => ({ ...prev, [bookId]: true }));
+  };
+
+  const getImageSrc = (book: Book) => {
+    if (imageErrors[book.id] || !book.coverUrl) {
+      return DEFAULT_COVER;
+    }
+    return book.coverUrl;
+  };
 
   const handleScroll = () => {
     if (scrollRef.current) {
@@ -62,9 +77,10 @@ const FeaturedCarousel: React.FC<FeaturedCarouselProps> = ({ books, onBookClick 
                 {/* Book Cover - Aspect Square - Increased size by 15% */}
                 <div className="w-[18.5rem] md:w-[23rem] aspect-square rounded-lg shadow-2xl relative">
                      <img 
-                        src={book.coverUrl} 
+                        src={getImageSrc(book)} 
                         alt={book.title} 
                         className="w-full h-full object-cover rounded-lg border-2 border-white/10" 
+                        onError={() => handleImageError(book.id)}
                      />
                      
                      {/* NEW! Badge */}

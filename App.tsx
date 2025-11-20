@@ -2,6 +2,7 @@
 import React, { useMemo } from 'react';
 import { HashRouter, Routes, Route, useLocation } from 'react-router-dom';
 import LandingPage from './pages/LandingPage';
+import SignInPage from './pages/SignInPage';
 import HomePage from './pages/HomePage';
 import ListenPage from './pages/ListenPage';
 import ReadPage from './pages/ReadPage';
@@ -78,6 +79,7 @@ const PanoramaBackground: React.FC = () => {
   const activeIndex = useMemo(() => {
     const path = location.pathname;
     if (path === '/') return 0;
+    if (path === '/signin') return 0;
     if (path === '/home') return 1;
     if (path === '/listen') return 2;
     if (path === '/read') return 3;
@@ -109,8 +111,8 @@ const PanoramaBackground: React.FC = () => {
            className="absolute inset-0 w-full h-full"
            style={{
              backgroundImage: 'url(/assets/images/panorama-background.jpg)',
-             backgroundSize: 'cover',
-             backgroundPosition: 'center',
+             backgroundSize: 'auto 120%',
+             backgroundPosition: 'center bottom',
              backgroundRepeat: 'no-repeat'
            }}
          >
@@ -134,6 +136,7 @@ const PanoramaBackground: React.FC = () => {
 const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const location = useLocation();
   const isLanding = location.pathname === '/';
+  const isSignIn = location.pathname === '/signin';
   const isBookDetail = location.pathname.startsWith('/book/');
   const isPlayer = location.pathname.startsWith('/player/');
   const isProfile = location.pathname === '/profile';
@@ -152,7 +155,7 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
       </div>
 
       {/* Only show BottomNavigation on main tab pages */}
-      {!isLanding && !isBookDetail && !isPlayer && !isProfile && !isCreateProfile && !isPaywall && !isSettings && <BottomNavigation />}
+      {!isLanding && !isSignIn && !isBookDetail && !isPlayer && !isProfile && !isCreateProfile && !isPaywall && !isSettings && <BottomNavigation />}
     </div>
   );
 };
@@ -166,6 +169,7 @@ const App: React.FC = () => {
             <Layout>
               <Routes>
                 <Route path="/" element={<LandingPage />} />
+                <Route path="/signin" element={<SignInPage />} />
                 <Route path="/home" element={<HomePage />} />
                 <Route path="/listen" element={<ListenPage />} />
                 <Route path="/read" element={<ReadPage />} />

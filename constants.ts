@@ -118,4 +118,7 @@ export const MOCK_BOOKS: Book[] = [
 ];
 
 // API Base URL - can be overridden with VITE_API_BASE_URL environment variable
-export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "https://api.devgodlykids.kbpublish.org/";
+export const API_BASE_URL =
+  typeof import.meta !== "undefined" && (import.meta as any).env?.VITE_API_BASE_URL
+    ? (import.meta as any).env.VITE_API_BASE_URL
+    : "https://api.devgodlykids.kbpublish.org/";

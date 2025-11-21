@@ -25,10 +25,6 @@ const BottomNavigation: React.FC = () => {
     else if (location.pathname === '/listen') setActiveTab('listen');
     else if (location.pathname === '/read') setActiveTab('read');
     else if (location.pathname === '/library') setActiveTab('library');
-    // Default to explore if pathname doesn't match any known tab
-    else if (!['/signin', '/onboarding', '/profile', '/create-profile', '/paywall', '/settings'].includes(location.pathname) && !location.pathname.startsWith('/book/') && !location.pathname.startsWith('/player/')) {
-      setActiveTab('explore');
-    }
   }, [location.pathname]);
 
   const handleNav = (id: string, path: string) => {
@@ -58,7 +54,8 @@ const BottomNavigation: React.FC = () => {
 
   const onStart = (clientX: number, clientY: number) => {
     startAngleRef.current = getAngle(clientX, clientY);
-    startRotationRef.current = -(activeItem.index * ITEM_ANGLE);
+    // Positive rotation aligns with index when items are on the left/CCW side
+    startRotationRef.current = (activeItem.index * ITEM_ANGLE);
     
     setDragRotation(startRotationRef.current);
     setIsDragging(true);
@@ -69,14 +66,15 @@ const BottomNavigation: React.FC = () => {
     if (!isDragging) return;
     
     const currentAngle = getAngle(clientX, clientY);
+    
+    // Standard physics: Dragging right (CW) increases rotation
     let delta = currentAngle - startAngleRef.current;
 
     if (delta > 180) delta -= 360;
     if (delta < -180) delta += 360;
 
     totalMoveRef.current += Math.abs(delta);
-    // Invert delta so rotating left moves background left (and vice versa)
-    setDragRotation(startRotationRef.current - delta);
+    setDragRotation(startRotationRef.current + delta);
   };
 
   const onEnd = () => {
@@ -84,7 +82,8 @@ const BottomNavigation: React.FC = () => {
     setIsDragging(false);
 
     if (dragRotation !== null) {
-      const rawIndex = -dragRotation / ITEM_ANGLE;
+      // Positive rotation maps to index
+      const rawIndex = dragRotation / ITEM_ANGLE;
       let index = Math.round(rawIndex);
 
       if (index < 0) index = 0;
@@ -108,7 +107,8 @@ const BottomNavigation: React.FC = () => {
   const RADIUS = 115; 
   const CENTER = WHEEL_SIZE / 2; 
 
-  const targetRotation = -(activeItem.index * ITEM_ANGLE);
+  // Positive target rotation
+  const targetRotation = (activeItem.index * ITEM_ANGLE);
   const visualRotation = isDragging && dragRotation !== null ? dragRotation : targetRotation;
 
   return (
@@ -194,7 +194,12 @@ const BottomNavigation: React.FC = () => {
 
             {/* Icons */}
             {navItems.map((item) => {
-            const angleDeg = (item.index * ITEM_ANGLE) - 90;
+            // PLACEMENT LOGIC:
+            // Index 0 -> -90 (Top)
+            // Index 1 -> -135 (Top Left)
+            // Index 2 -> -180 (Left)
+            // Index 3 -> -225 (Bottom Left)
+            const angleDeg = -90 - (item.index * ITEM_ANGLE);
             const angleRad = angleDeg * (Math.PI / 180);
             
             const x = CENTER + RADIUS * Math.cos(angleRad);
@@ -215,6 +220,7 @@ const BottomNavigation: React.FC = () => {
                 style={{
                     left: `${x}px`,
                     top: `${y}px`,
+                    // Counter-rotate icon so it stays upright while wheel spins
                     transform: `rotate(${-visualRotation}deg) scale(${isActive ? 1.1 : 0.9})`, 
                 }}
                 >
@@ -248,3 +254,4 @@ const BottomNavigation: React.FC = () => {
 };
 
 export default BottomNavigation;
+    

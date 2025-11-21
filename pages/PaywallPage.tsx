@@ -3,13 +3,20 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Check, X } from 'lucide-react';
 import { useUser } from '../context/UserContext';
+import ParentGateModal from '../components/features/ParentGateModal';
 
 const PaywallPage: React.FC = () => {
   const navigate = useNavigate();
   const { subscribe } = useUser();
   const [selectedPlan, setSelectedPlan] = useState<'annual' | 'monthly'>('annual');
+  const [showParentGate, setShowParentGate] = useState(false);
 
-  const handleSubscribe = () => {
+  const handleSubscribeClick = () => {
+    // Show parent gate before processing
+    setShowParentGate(true);
+  };
+
+  const handleGateSuccess = () => {
     // Simulate subscription process
     subscribe();
     // Navigate to home to show the "Gold Crown"
@@ -128,7 +135,7 @@ const PaywallPage: React.FC = () => {
 
                 {/* CTA Button */}
                 <button 
-                    onClick={handleSubscribe}
+                    onClick={handleSubscribeClick}
                     className="w-full bg-gradient-to-b from-[#009688] to-[#00796b] hover:from-[#26a69a] hover:to-[#00897b] text-white font-display font-bold text-lg py-4 rounded-2xl shadow-[0_4px_0_#004d40,0_8px_15px_rgba(0,0,0,0.2)] active:translate-y-[4px] active:shadow-[0_0_0_#004d40] transition-all mb-8 border-t border-[#4db6ac] relative overflow-hidden group"
                 >
                     <span className="relative z-10">
@@ -160,6 +167,12 @@ const PaywallPage: React.FC = () => {
                 Subscription automatically renews unless auto-renew is turned off at least 24-hours before the end of the current period.
             </p>
         </div>
+
+        <ParentGateModal 
+            isOpen={showParentGate} 
+            onClose={() => setShowParentGate(false)} 
+            onSuccess={handleGateSuccess} 
+        />
     </div>
   );
 };

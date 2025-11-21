@@ -3,7 +3,7 @@ import { API_BASE_URL } from '../constants';
 
 // Get API base URL (same logic as apiService)
 const getApiBaseUrl = (): string => {
-  const envUrl = import.meta.env.VITE_API_BASE_URL;
+  const envUrl = (import.meta as any).env?.VITE_API_BASE_URL;
   const baseUrl = envUrl || API_BASE_URL;
   return baseUrl.endsWith('/') ? baseUrl : `${baseUrl}/`;
 };

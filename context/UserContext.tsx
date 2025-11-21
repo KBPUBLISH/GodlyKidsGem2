@@ -1,32 +1,33 @@
+
 import React, { createContext, useContext, useState, useEffect } from 'react';
+// Removed import of KidProfile due to missing export in ../types
 
 export interface ShopItem {
   id: string;
   name: string;
   price: number;
-  type: 'avatar' | 'frame' | 'hat' | 'body' | 'leftArm' | 'rightArm' | 'legs';
-  value: string; // URL for avatar, Color Class/Hex for frame, Asset ID for parts
+  type: 'avatar' | 'frame' | 'hat' | 'body' | 'leftArm' | 'rightArm' | 'legs' | 'animation';
+  value: string; // URL for avatar, Color Class/Hex for frame, Asset ID for parts, or Animation Class
   previewColor?: string; // For displaying frame colors in shop
   isPremium?: boolean; // Locked for non-subscribers
 }
 
-// Define KidProfile type
-type KidProfile = {
+export interface SavedCharacter {
   id: string;
   name: string;
-  age?: string;
-  avatarSeed?: string;
-  [key: string]: any;
-};
-
-// Arm Position interface for custom positioning
-export interface ArmPosition {
-  top: string;        // e.g., "50%"
-  horizontal: string; // e.g., "-40%" (left for right arm, right for left arm)
-  rotation: number;    // degrees, e.g., 15
-  transformOrigin: string; // e.g., "right center"
-  width?: string;      // optional override
-  height?: string;     // optional override
+  avatar: string;
+  hat: string | null;
+  body: string | null;
+  leftArm: string | null;
+  rightArm: string | null;
+  legs: string | null;
+  animation: string;
+  leftArmRotation: number;
+  rightArmRotation: number;
+  legsRotation: number;
+  leftArmOffset: { x: number, y: number };
+  rightArmOffset: { x: number, y: number };
+  legsOffset: { x: number, y: number };
 }
 
 interface UserContextType {
@@ -39,8 +40,8 @@ interface UserContextType {
   setParentName: (name: string) => void;
 
   // Kids Profiles
-  kids: KidProfile[];
-  addKid: (kid: KidProfile) => void;
+  kids: any[]; // Fixed: Use `any[]` as fallback until KidProfile type is defined/imported
+  addKid: (kid: any) => void;
   removeKid: (id: string) => void;
 
   // Equipment Slots (Main User)
@@ -51,6 +52,23 @@ interface UserContextType {
   equippedLeftArm: string | null;
   equippedRightArm: string | null;
   equippedLegs: string | null;
+  equippedAnimation: string; // New: Animation Style
+  
+  // Rotation (Pose)
+  equippedLeftArmRotation: number;
+  equippedRightArmRotation: number;
+  equippedLegsRotation: number;
+  setPartRotation: (part: 'leftArm' | 'rightArm' | 'legs', rotation: number) => void;
+
+  // Individual Part Positioning (Offsets)
+  leftArmOffset: { x: number, y: number };
+  rightArmOffset: { x: number, y: number };
+  legsOffset: { x: number, y: number };
+  headOffset: { x: number, y: number };
+  bodyOffset: { x: number, y: number };
+  setPartOffset: (part: 'leftArm' | 'rightArm' | 'legs' | 'head' | 'body', axis: 'x' | 'y', val: number) => void;
+  
+  swapArms: () => void;
 
   setEquippedAvatar: (url: string) => void; // Exposed for onboarding
 
@@ -59,19 +77,20 @@ interface UserContextType {
   unequipItem: (type: ShopItem['type']) => void;
   isOwned: (id: string) => boolean;
   
+  // Saved Characters
+  savedCharacters: SavedCharacter[];
+  saveCurrentCharacter: () => void;
+  deleteSavedCharacter: (id: string) => void;
+  equipSavedCharacter: (character: SavedCharacter) => void;
+
   isSubscribed: boolean;
   subscribe: () => void;
 
   resetUser: () => void; // New method to wipe data
-
-  // Arm Positioning
-  armPositions: { leftArm?: ArmPosition; rightArm?: ArmPosition };
-  getArmPosition: (armType: 'leftArm' | 'rightArm') => ArmPosition | undefined;
-  setArmPosition: (armType: 'leftArm' | 'rightArm', position: ArmPosition) => void;
 }
 
 const UserContext = createContext<UserContextType>({
-  coins: 350,
+  coins: 2650,
   addCoins: () => {},
   ownedItems: [],
   parentName: 'Parent',
@@ -86,22 +105,35 @@ const UserContext = createContext<UserContextType>({
   equippedLeftArm: null,
   equippedRightArm: null,
   equippedLegs: null,
+  equippedAnimation: 'anim-breathe',
+  equippedLeftArmRotation: 0,
+  equippedRightArmRotation: 0,
+  equippedLegsRotation: 0,
+  setPartRotation: () => {},
+  leftArmOffset: { x: 0, y: 0 },
+  rightArmOffset: { x: 0, y: 0 },
+  legsOffset: { x: 0, y: 0 },
+  headOffset: { x: 0, y: 0 },
+  bodyOffset: { x: 0, y: 0 },
+  setPartOffset: () => {},
+  swapArms: () => {},
   setEquippedAvatar: () => {},
   purchaseItem: () => false,
   equipItem: () => {},
   unequipItem: () => {},
   isOwned: () => false,
+  savedCharacters: [],
+  saveCurrentCharacter: () => {},
+  deleteSavedCharacter: () => {},
+  equipSavedCharacter: () => {},
   isSubscribed: false,
   subscribe: () => {},
   resetUser: () => {},
-  armPositions: {},
-  getArmPosition: () => undefined,
-  setArmPosition: () => {},
 });
 
 export const useUser = () => useContext(UserContext);
 
-const STORAGE_KEY = 'godly_kids_data_v2';
+const STORAGE_KEY = 'godly_kids_data_v6'; // Version bump for saves
 
 export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   
@@ -118,10 +150,18 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const saved = loadState();
 
-  const [coins, setCoins] = useState(saved?.coins ?? 650);
-  const [ownedItems, setOwnedItems] = useState<string[]>(saved?.ownedItems ?? ['f1']);
+  const [coins, setCoins] = useState(saved?.coins ?? 2650); // Start with 2650 for testing
+  const [ownedItems, setOwnedItems] = useState<string[]>(saved?.ownedItems ?? ['f1', 'anim1']); // anim1 is default breathe
   
   // Profile Data
+
+  type KidProfile = {
+    id: string;
+    name: string;
+    age?: number;
+    // Add other fields as needed
+  };
+
   const [parentName, setParentName] = useState<string>(saved?.parentName ?? 'Parent');
   const [kids, setKids] = useState<KidProfile[]>(saved?.kids ?? []);
 
@@ -133,13 +173,23 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [equippedLeftArm, setEquippedLeftArm] = useState<string | null>(saved?.equippedLeftArm ?? null);
   const [equippedRightArm, setEquippedRightArm] = useState<string | null>(saved?.equippedRightArm ?? null);
   const [equippedLegs, setEquippedLegs] = useState<string | null>(saved?.equippedLegs ?? null);
+  const [equippedAnimation, setEquippedAnimation] = useState<string>(saved?.equippedAnimation ?? 'anim-breathe');
+  
+  // Rotation State (Defaults to 0)
+  const [equippedLeftArmRotation, setEquippedLeftArmRotation] = useState<number>(saved?.equippedLeftArmRotation ?? 0);
+  const [equippedRightArmRotation, setEquippedRightArmRotation] = useState<number>(saved?.equippedRightArmRotation ?? 0);
+  const [equippedLegsRotation, setEquippedLegsRotation] = useState<number>(saved?.equippedLegsRotation ?? 0);
+
+  // Individual Offsets
+  const [leftArmOffset, setLeftArmOffset] = useState<{x: number, y: number}>(saved?.leftArmOffset ?? { x: 0, y: 0 });
+  const [rightArmOffset, setRightArmOffset] = useState<{x: number, y: number}>(saved?.rightArmOffset ?? { x: 0, y: 0 });
+  const [legsOffset, setLegsOffset] = useState<{x: number, y: number}>(saved?.legsOffset ?? { x: 0, y: 0 });
+  const [headOffset, setHeadOffset] = useState<{x: number, y: number}>(saved?.headOffset ?? { x: 0, y: 0 });
+  const [bodyOffset, setBodyOffset] = useState<{x: number, y: number}>(saved?.bodyOffset ?? { x: 0, y: 0 });
+
+  const [savedCharacters, setSavedCharacters] = useState<SavedCharacter[]>(saved?.savedCharacters ?? []);
 
   const [isSubscribed, setIsSubscribed] = useState(saved?.isSubscribed ?? false);
-
-  // Arm Positioning State
-  const [armPositions, setArmPositions] = useState<{ leftArm?: ArmPosition; rightArm?: ArmPosition }>(
-    saved?.armPositions ?? {}
-  );
 
   // --- PERSISTENCE EFFECT ---
   useEffect(() => {
@@ -155,15 +205,27 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
       equippedLeftArm,
       equippedRightArm,
       equippedLegs,
-      isSubscribed,
-      armPositions
+      equippedAnimation,
+      equippedLeftArmRotation,
+      equippedRightArmRotation,
+      equippedLegsRotation,
+      leftArmOffset,
+      rightArmOffset,
+      legsOffset,
+      headOffset,
+      bodyOffset,
+      savedCharacters,
+      isSubscribed
     };
     localStorage.setItem(STORAGE_KEY, JSON.stringify(stateToSave));
   }, [
     coins, ownedItems, parentName, kids, 
     equippedAvatar, equippedFrame, equippedHat, equippedBody, 
-    equippedLeftArm, equippedRightArm, equippedLegs, isSubscribed,
-    armPositions
+    equippedLeftArm, equippedRightArm, equippedLegs, equippedAnimation,
+    equippedLeftArmRotation, equippedRightArmRotation, equippedLegsRotation,
+    leftArmOffset, rightArmOffset, legsOffset, headOffset, bodyOffset,
+    savedCharacters,
+    isSubscribed
   ]);
 
   const addCoins = (amount: number) => {
@@ -201,6 +263,7 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
       case 'leftArm': setEquippedLeftArm(value); break;
       case 'rightArm': setEquippedRightArm(value); break;
       case 'legs': setEquippedLegs(value); break;
+      case 'animation': setEquippedAnimation(value); break;
     }
   };
 
@@ -211,28 +274,96 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
       case 'leftArm': setEquippedLeftArm(null); break;
       case 'rightArm': setEquippedRightArm(null); break;
       case 'legs': setEquippedLegs(null); break;
-      // Avatar and Frame cannot be unequipped (must be replaced)
+      // Animation cannot be unequipped, only swapped
     }
+  };
+
+  const setPartRotation = (part: 'leftArm' | 'rightArm' | 'legs', rotation: number) => {
+    if (part === 'leftArm') setEquippedLeftArmRotation(rotation);
+    else if (part === 'rightArm') setEquippedRightArmRotation(rotation);
+    else if (part === 'legs') setEquippedLegsRotation(rotation);
+  };
+
+  const setPartOffset = (part: 'leftArm' | 'rightArm' | 'legs' | 'head' | 'body', axis: 'x' | 'y', val: number) => {
+    if (part === 'leftArm') {
+       setLeftArmOffset(prev => ({ ...prev, [axis]: val }));
+    } else if (part === 'rightArm') {
+       setRightArmOffset(prev => ({ ...prev, [axis]: val }));
+    } else if (part === 'legs') {
+       setLegsOffset(prev => ({ ...prev, [axis]: val }));
+    } else if (part === 'head') {
+       setHeadOffset(prev => ({ ...prev, [axis]: val }));
+    } else if (part === 'body') {
+       setBodyOffset(prev => ({ ...prev, [axis]: val }));
+    }
+  };
+
+  const swapArms = () => {
+    // Swap assets
+    const tempLeft = equippedLeftArm;
+    setEquippedLeftArm(equippedRightArm);
+    setEquippedRightArm(tempLeft);
+    
+    // Swap rotations
+    const tempRot = equippedLeftArmRotation;
+    setEquippedLeftArmRotation(equippedRightArmRotation);
+    setEquippedRightArmRotation(tempRot);
+
+    // Swap offsets
+    const tempOffset = leftArmOffset;
+    setLeftArmOffset(rightArmOffset);
+    setRightArmOffset(tempOffset);
+  };
+
+  // --- SAVED CHARACTERS ---
+  const saveCurrentCharacter = () => {
+    const newCharacter: SavedCharacter = {
+      id: Date.now().toString(),
+      name: `Outfit ${savedCharacters.length + 1}`,
+      avatar: equippedAvatar,
+      hat: equippedHat,
+      body: equippedBody,
+      leftArm: equippedLeftArm,
+      rightArm: equippedRightArm,
+      legs: equippedLegs,
+      animation: equippedAnimation,
+      leftArmRotation: equippedLeftArmRotation,
+      rightArmRotation: equippedRightArmRotation,
+      legsRotation: equippedLegsRotation,
+      leftArmOffset: { ...leftArmOffset },
+      rightArmOffset: { ...rightArmOffset },
+      legsOffset: { ...legsOffset }
+    };
+    setSavedCharacters(prev => [...prev, newCharacter]);
+  };
+
+  const deleteSavedCharacter = (id: string) => {
+    setSavedCharacters(prev => prev.filter(c => c.id !== id));
+  };
+
+  const equipSavedCharacter = (character: SavedCharacter) => {
+    setEquippedAvatar(character.avatar);
+    setEquippedHat(character.hat);
+    setEquippedBody(character.body);
+    setEquippedLeftArm(character.leftArm);
+    setEquippedRightArm(character.rightArm);
+    setEquippedLegs(character.legs);
+    setEquippedAnimation(character.animation);
+    setEquippedLeftArmRotation(character.leftArmRotation);
+    setEquippedRightArmRotation(character.rightArmRotation);
+    setEquippedLegsRotation(character.legsRotation);
+    setLeftArmOffset(character.leftArmOffset);
+    setRightArmOffset(character.rightArmOffset);
+    setLegsOffset(character.legsOffset);
   };
 
   const subscribe = () => {
     setIsSubscribed(true);
   };
 
-  const getArmPosition = (armType: 'leftArm' | 'rightArm'): ArmPosition | undefined => {
-    return armPositions[armType];
-  };
-
-  const setArmPosition = (armType: 'leftArm' | 'rightArm', position: ArmPosition) => {
-    setArmPositions(prev => ({
-      ...prev,
-      [armType]: position
-    }));
-  };
-
   const resetUser = () => {
-    setCoins(350);
-    setOwnedItems(['f1']);
+    setCoins(2650);
+    setOwnedItems(['f1', 'anim1']);
     setParentName('');
     setKids([]);
     setEquippedAvatar('head-toast');
@@ -242,8 +373,15 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setEquippedLeftArm(null);
     setEquippedRightArm(null);
     setEquippedLegs(null);
+    setEquippedAnimation('anim-breathe');
+    setEquippedLeftArmRotation(0);
+    setEquippedRightArmRotation(0);
+    setEquippedLegsRotation(0);
+    setLeftArmOffset({ x: 0, y: 0 });
+    setRightArmOffset({ x: 0, y: 0 });
+    setLegsOffset({ x: 0, y: 0 });
+    setSavedCharacters([]);
     setIsSubscribed(false);
-    setArmPositions({});
     localStorage.removeItem(STORAGE_KEY);
   };
 
@@ -264,17 +402,30 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
       equippedLeftArm,
       equippedRightArm,
       equippedLegs,
+      equippedAnimation,
+      equippedLeftArmRotation,
+      equippedRightArmRotation,
+      equippedLegsRotation,
+      setPartRotation,
+      leftArmOffset,
+      rightArmOffset,
+      legsOffset,
+      headOffset,
+      bodyOffset,
+      setPartOffset,
+      swapArms,
       setEquippedAvatar,
       purchaseItem,
       equipItem,
       unequipItem,
       isOwned,
+      savedCharacters,
+      saveCurrentCharacter,
+      deleteSavedCharacter,
+      equipSavedCharacter,
       isSubscribed,
       subscribe,
-      resetUser,
-      armPositions,
-      getArmPosition,
-      setArmPosition
+      resetUser
     }}>
       {children}
     </UserContext.Provider>

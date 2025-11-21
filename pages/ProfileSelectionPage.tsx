@@ -18,7 +18,8 @@ const ProfileSelectionPage: React.FC = () => {
     kids,
     equippedAvatar, 
     equippedFrame, 
-    equippedHat
+    equippedHat,
+    headOffset
   } = useUser();
   const [isShopOpen, setIsShopOpen] = useState(false);
 
@@ -91,33 +92,40 @@ const ProfileSelectionPage: React.FC = () => {
               >
                 <div className="relative">
                     <div className={`w-28 h-28 bg-[#f3e5ab] rounded-full border-[4px] ${equippedFrame} overflow-hidden shadow-[0_8px_15px_rgba(0,0,0,0.3)] transition-transform duration-200 group-active:scale-95 group-hover:scale-105 flex items-center justify-center relative z-10`}>
-                        {/* Head Only */}
-                        {(() => {
-                            const isInternalHead = equippedAvatar && equippedAvatar.startsWith('head-');
-                            const headAsset = isInternalHead ? AVATAR_ASSETS[equippedAvatar] : null;
-                            
-                            return (
-                                <>
-                                    {headAsset ? (
-                                        <div className="w-[90%] h-[90%] flex items-center justify-center">
-                                            <svg viewBox="0 0 100 100" className="w-full h-full overflow-visible">
-                                                {headAsset}
-                                            </svg>
-                                        </div>
-                                    ) : (
-                                        <img src={equippedAvatar || ''} alt="Head" className="w-full h-full object-cover rounded-full" />
-                                    )}
-                                    {/* Hat Overlay */}
-                                    {equippedHat && AVATAR_ASSETS[equippedHat] && (
-                                        <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                                            <svg viewBox="0 0 100 80" className="w-full h-full p-1 overflow-visible">
-                                                {AVATAR_ASSETS[equippedHat]}
-                                            </svg>
-                                        </div>
-                                    )}
-                                </>
-                            );
-                        })()}
+                        {/* Head Only with Offset */}
+                        <div 
+                            className="w-full h-full flex items-center justify-center relative"
+                            style={{
+                                transform: `translate(${headOffset.x}%, ${headOffset.y}%)`
+                            }}
+                        >
+                            {(() => {
+                                const isInternalHead = equippedAvatar && equippedAvatar.startsWith('head-');
+                                const headAsset = isInternalHead ? AVATAR_ASSETS[equippedAvatar] : null;
+                                
+                                return (
+                                    <>
+                                        {headAsset ? (
+                                            <div className="w-[90%] h-[90%] flex items-center justify-center">
+                                                <svg viewBox="0 0 100 100" className="w-full h-full overflow-visible">
+                                                    {headAsset}
+                                                </svg>
+                                            </div>
+                                        ) : (
+                                            <img src={equippedAvatar || ''} alt="Head" className="w-full h-full object-cover rounded-full" />
+                                        )}
+                                        {/* Hat Overlay */}
+                                        {equippedHat && AVATAR_ASSETS[equippedHat] && (
+                                            <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                                                <svg viewBox="0 0 100 80" className="w-full h-full p-1 overflow-visible">
+                                                    {AVATAR_ASSETS[equippedHat]}
+                                                </svg>
+                                            </div>
+                                        )}
+                                    </>
+                                );
+                            })()}
+                        </div>
                     </div>
                     {/* Crown Badge */}
                     <div className={`absolute top-0 right-0 bg-white rounded-full p-1.5 shadow-md border-2 z-20 ${isSubscribed ? 'border-[#FFD700]' : 'border-gray-200'}`}>

@@ -15,7 +15,7 @@ interface HeaderProps {
 
 const Header: React.FC<HeaderProps> = ({ isVisible, title = "GODLY KIDS" }) => {
   const navigate = useNavigate();
-  const { coins, equippedAvatar, equippedFrame, equippedHat, equippedBody, equippedLeftArm, equippedRightArm, equippedLegs, isSubscribed } = useUser();
+  const { coins, equippedAvatar, equippedFrame, equippedHat, equippedBody, equippedLeftArm, equippedRightArm, equippedLegs, isSubscribed, headOffset } = useUser();
   const { musicEnabled, toggleMusic, playClick } = useAudio();
   const [isShopOpen, setIsShopOpen] = useState(false);
   const [isDetailOpen, setIsDetailOpen] = useState(false);
@@ -45,33 +45,40 @@ const Header: React.FC<HeaderProps> = ({ isVisible, title = "GODLY KIDS" }) => {
                     className="relative group cursor-pointer active:scale-95 transition-transform"
                 >
                     <div className={`w-11 h-11 bg-[#f3e5ab] rounded-full border-[3px] ${equippedFrame} overflow-hidden shadow-[0_2px_4px_rgba(0,0,0,0.3)] relative z-0 flex items-center justify-center`}>
-                        {/* Head Only */}
-                        {(() => {
-                            const isInternalHead = equippedAvatar && equippedAvatar.startsWith('head-');
-                            const headAsset = isInternalHead ? AVATAR_ASSETS[equippedAvatar] : null;
-                            
-                            return (
-                                <>
-                                    {headAsset ? (
-                                        <div className="w-[90%] h-[90%] flex items-center justify-center">
-                                            <svg viewBox="0 0 100 100" className="w-full h-full overflow-visible">
-                                                {headAsset}
-                                            </svg>
-                                        </div>
-                                    ) : (
-                                        <img src={equippedAvatar || ''} alt="Head" className="w-full h-full object-cover" />
-                                    )}
-                                    {/* Hat Overlay */}
-                                    {equippedHat && AVATAR_ASSETS[equippedHat] && (
-                                        <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                                            <svg viewBox="0 0 100 80" className="w-full h-full p-1 overflow-visible">
-                                                {AVATAR_ASSETS[equippedHat]}
-                                            </svg>
-                                        </div>
-                                    )}
-                                </>
-                            );
-                        })()}
+                        {/* Head Only with Offset */}
+                        <div 
+                            className="w-full h-full flex items-center justify-center relative"
+                            style={{
+                                transform: `translate(${headOffset.x}%, ${headOffset.y}%)`
+                            }}
+                        >
+                            {(() => {
+                                const isInternalHead = equippedAvatar && equippedAvatar.startsWith('head-');
+                                const headAsset = isInternalHead ? AVATAR_ASSETS[equippedAvatar] : null;
+                                
+                                return (
+                                    <>
+                                        {headAsset ? (
+                                            <div className="w-[90%] h-[90%] flex items-center justify-center">
+                                                <svg viewBox="0 0 100 100" className="w-full h-full overflow-visible">
+                                                    {headAsset}
+                                                </svg>
+                                            </div>
+                                        ) : (
+                                            <img src={equippedAvatar || ''} alt="Head" className="w-full h-full object-cover" />
+                                        )}
+                                        {/* Hat Overlay */}
+                                        {equippedHat && AVATAR_ASSETS[equippedHat] && (
+                                            <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                                                <svg viewBox="0 0 100 80" className="w-full h-full p-1 overflow-visible">
+                                                    {AVATAR_ASSETS[equippedHat]}
+                                                </svg>
+                                            </div>
+                                        )}
+                                    </>
+                                );
+                            })()}
+                        </div>
                     </div>
                     
                     {/* Subscription Status Crown */}

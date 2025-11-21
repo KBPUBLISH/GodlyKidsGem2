@@ -16,7 +16,9 @@ interface AvatarCompositorProps {
   leftArmOffset?: { x: number, y: number };
   rightArmOffset?: { x: number, y: number };
   legsOffset?: { x: number, y: number };
-  onPartClick?: (part: 'leftArm' | 'rightArm' | 'legs') => void;
+  headOffset?: { x: number, y: number };
+  bodyOffset?: { x: number, y: number };
+  onPartClick?: (part: 'leftArm' | 'rightArm' | 'legs' | 'head' | 'body') => void;
   isAnimating?: boolean;
   className?: string;
   frameClass?: string; // Pass the frame border class here
@@ -41,6 +43,8 @@ const AvatarCompositor: React.FC<AvatarCompositorProps> = ({
   leftArmOffset = { x: 0, y: 0 },
   rightArmOffset = { x: 0, y: 0 },
   legsOffset = { x: 0, y: 0 },
+  headOffset = { x: 0, y: 0 },
+  bodyOffset = { x: 0, y: 0 },
   onPartClick,
   isAnimating = false,
   className = "w-full h-full",
@@ -57,7 +61,7 @@ const AvatarCompositor: React.FC<AvatarCompositorProps> = ({
   const isInternalHead = headUrl && headUrl.startsWith('head-');
   const headAsset = isInternalHead ? AVATAR_ASSETS[headUrl] : null;
 
-  const handlePartClick = (e: React.MouseEvent, part: 'leftArm' | 'rightArm' | 'legs') => {
+  const handlePartClick = (e: React.MouseEvent, part: 'leftArm' | 'rightArm' | 'legs' | 'head' | 'body') => {
     if (onPartClick) {
       e.stopPropagation();
       onPartClick(part);
@@ -100,10 +104,16 @@ const AvatarCompositor: React.FC<AvatarCompositorProps> = ({
     <div className={`relative ${className}`}>
       
       {/* 4. HEAD (Top Layer Z-50) */}
-      <div className="absolute inset-0 z-50 pointer-events-none flex items-center justify-center">
+      <div 
+        className="absolute inset-0 z-50 flex items-center justify-center"
+        style={{
+          transform: `translate(${headOffset.x}%, ${headOffset.y}%)`
+        }}
+      >
           <div 
-            className={`w-[72%] h-[72%] flex items-center justify-center ${headAnimationClass}`} // Sized to sit on neck
+            className={`w-[72%] h-[72%] flex items-center justify-center ${headAnimationClass} ${onPartClick ? 'cursor-pointer hover:brightness-110 active:scale-95 pointer-events-auto' : 'pointer-events-none'}`} // Sized to sit on neck
             style={{ animationDuration: animationStyle === 'anim-spin' ? '1s' : '2s' }}
+            onClick={(e) => onPartClick && handlePartClick(e, 'head')}
           >
               {/* Head Container - Transparent, No Border/Background */}
               <div className={`w-full h-full flex items-center justify-center relative`}>
@@ -143,14 +153,15 @@ const AvatarCompositor: React.FC<AvatarCompositorProps> = ({
       {/* BODY GROUP */}
       {body && AVATAR_ASSETS[body] && (
           <div
-             className={`absolute z-20 flex items-center justify-center pointer-events-none ${bodyAnimationClass}`}
+             className={`absolute z-20 flex items-center justify-center ${bodyAnimationClass} ${onPartClick ? 'cursor-pointer hover:brightness-110 active:scale-95 pointer-events-auto' : 'pointer-events-none'}`}
              style={{
-                top: '85%', 
-                left: '50%', 
+                top: `calc(85% + ${bodyOffset.y}%)`, 
+                left: `calc(50% + ${bodyOffset.x}%)`, 
                 width: '100%', 
                 height: '80%',
                 transform: 'translate(-50%, 0)' 
              }}
+             onClick={(e) => onPartClick && handlePartClick(e, 'body')}
           >
                {/* 1. LEGS (Bottom Layer Z-10) */}
                {legs && AVATAR_ASSETS[legs] && (

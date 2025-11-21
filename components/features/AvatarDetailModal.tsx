@@ -46,17 +46,26 @@ const AvatarDetailModal: React.FC<AvatarDetailModalProps> = ({ isOpen, onClose, 
           {/* Top Controls Container */}
           <div className="absolute top-4 left-0 right-0 flex justify-between items-start z-50 px-2 pointer-events-none">
               
-              {/* Play Animation Toggle (Top Left) - Hide when playing to avoid overlap */}
-              <div className={`pointer-events-auto transition-all duration-500 ${isPlaying ? 'opacity-0 -translate-x-10' : 'opacity-100 translate-x-0'}`}>
-                  <button 
-                    onClick={() => setIsPlaying(true)} 
-                    className="rounded-full p-3 flex items-center justify-center shadow-lg border-2 bg-[#3E1F07] border-[#5c2e0b] text-[#FFD700] hover:scale-105 transition-transform"
-                  >
-                      <Play size={24} fill="currentColor" className="ml-1"/>
-                  </button>
+              {/* Left Side: Play/Stop Button */}
+              <div className="flex items-center gap-2 pointer-events-auto">
+                  {!isPlaying ? (
+                      <button 
+                        onClick={() => setIsPlaying(true)} 
+                        className="rounded-full p-3 flex items-center justify-center shadow-lg border-2 bg-[#3E1F07] border-[#5c2e0b] text-[#FFD700] hover:scale-105 transition-transform"
+                      >
+                          <Play size={24} fill="currentColor" className="ml-1"/>
+                      </button>
+                  ) : (
+                      <button 
+                        onClick={() => setIsPlaying(false)}
+                        className="bg-red-500 hover:bg-red-600 text-white font-display font-bold text-sm py-2 px-4 rounded-full shadow-[0_0_15px_rgba(239,68,68,0.4)] border-2 border-red-700 flex items-center gap-2 transition-transform hover:scale-105 active:scale-95"
+                      >
+                          <Square size={16} fill="currentColor" /> STOP
+                      </button>
+                  )}
               </div>
 
-              {/* Close Button - Always visible */}
+              {/* Right Side: Close Button - Always visible */}
               <button 
                 onClick={onClose} 
                 className="pointer-events-auto text-white hover:text-gray-300 transition-colors bg-black/20 rounded-full p-2"
@@ -65,8 +74,8 @@ const AvatarDetailModal: React.FC<AvatarDetailModalProps> = ({ isOpen, onClose, 
               </button>
           </div>
 
-          {/* Avatar Large View - Reduced zoom when playing to prevent cropping */}
-          <div className={`relative shrink-0 transition-all duration-700 ease-[cubic-bezier(0.34,1.56,0.64,1)] ${isPlaying ? 'w-64 h-64 md:w-72 md:h-72 mb-8' : 'w-48 h-48 md:w-60 md:h-60 mb-10 mt-10'}`}>
+          {/* Avatar Large View - Zoomed out */}
+          <div className={`relative shrink-0 transition-all duration-700 ease-[cubic-bezier(0.34,1.56,0.64,1)] ${isPlaying ? 'w-48 h-48 md:w-56 md:h-56 mb-8' : 'w-40 h-40 md:w-48 md:h-48 mb-10 mt-10'}`}>
               {/* Glow */}
               <div className={`absolute inset-0 bg-[#FFD700] rounded-full blur-3xl animate-pulse transition-opacity duration-500 ${isPlaying ? 'opacity-30' : 'opacity-10'}`}></div>
               
@@ -112,15 +121,6 @@ const AvatarDetailModal: React.FC<AvatarDetailModalProps> = ({ isOpen, onClose, 
                   </div>
               </div>
 
-              {/* Stop Button (When Playing) - Replaces other UI */}
-              <div className={`w-full flex justify-center transition-all duration-500 ease-in-out absolute bottom-0 left-0 right-0 ${!isPlaying ? 'opacity-0 translate-y-20 pointer-events-none' : 'opacity-100 translate-y-0 relative'}`}>
-                   <button 
-                      onClick={() => setIsPlaying(false)}
-                      className="bg-red-500 hover:bg-red-600 text-white font-display font-bold text-lg py-3 px-8 rounded-full shadow-[0_0_20px_rgba(239,68,68,0.4)] border-4 border-red-700 flex items-center gap-2 transition-transform hover:scale-105 active:scale-95 mb-10"
-                   >
-                      <Square size={20} fill="currentColor" /> STOP
-                   </button>
-              </div>
 
           </div>
 

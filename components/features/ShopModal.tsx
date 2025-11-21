@@ -3,8 +3,8 @@ import React, { useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import WoodButton from '../ui/WoodButton';
-import { X, ShoppingBag, Check, Trash2, Crown, Move } from 'lucide-react';
-import { useUser, ShopItem } from '../../context/UserContext';
+import { X, ShoppingBag, Check, Trash2, Crown, Wrench, Play, Pause, ArrowUpToLine, ArrowDownToLine, MoveHorizontal, RotateCcw, RotateCw, ArrowLeftRight, Activity, Save, User } from 'lucide-react';
+import { useUser, ShopItem, SavedCharacter } from '../../context/UserContext';
 import AvatarCompositor from '../avatar/AvatarCompositor';
 import { AVATAR_ASSETS } from '../avatar/AvatarAssets';
 
@@ -35,13 +35,6 @@ const SHOP_AVATARS: ShopItem[] = [
     { id: 'av18', name: 'Orange Cat', price: 50, type: 'avatar', value: 'head-cat-orange' },
     { id: 'av19', name: 'Black Cat', price: 50, type: 'avatar', value: 'head-cat-black', isPremium: true },
     { id: 'av20', name: 'Lizard', price: 50, type: 'avatar', value: 'head-lizard', isPremium: true },
-];
-
-const SHOP_FRAMES: ShopItem[] = [
-    { id: 'f1', name: 'Golden Wood', price: 100, type: 'frame', value: 'border-[#DAA520]', previewColor: 'bg-[#DAA520]' },
-    { id: 'f2', name: 'Deep Ocean', price: 200, type: 'frame', value: 'border-[#0077be]', previewColor: 'bg-[#0077be]' },
-    { id: 'f3', name: 'Emerald', price: 300, type: 'frame', value: 'border-[#50C878]', previewColor: 'bg-[#50C878]', isPremium: true },
-    { id: 'f4', name: 'Ruby Red', price: 500, type: 'frame', value: 'border-[#E0115F]', previewColor: 'bg-[#E0115F]', isPremium: true },
 ];
 
 const SHOP_HATS: ShopItem[] = [
@@ -155,20 +148,37 @@ const SHOP_LEGS: ShopItem[] = [
     { id: 'l19', name: 'Karate', price: 150, type: 'legs', value: 'legs-karate' },
 ];
 
-type ShopTab = 'head' | 'frame' | 'hat' | 'body' | 'arms' | 'legs';
+const SHOP_ANIMATIONS: ShopItem[] = [
+    { id: 'anim1', name: 'Breathe', price: 100, type: 'animation', value: 'anim-breathe' },
+    { id: 'anim4', name: 'Wiggle', price: 150, type: 'animation', value: 'anim-wiggle' },
+    { id: 'anim10', name: 'Jiggle', price: 150, type: 'animation', value: 'anim-jiggle' },
+    { id: 'anim2', name: 'Bounce', price: 200, type: 'animation', value: 'anim-bounce' },
+    { id: 'anim11', name: 'Sway', price: 250, type: 'animation', value: 'anim-sway' },
+    { id: 'anim8', name: 'Wobble', price: 300, type: 'animation', value: 'anim-wobble' },
+    { id: 'anim7', name: 'Shake', price: 350, type: 'animation', value: 'anim-shake' },
+    { id: 'anim12', name: 'Hop', price: 400, type: 'animation', value: 'anim-hop' },
+    { id: 'anim3', name: 'Float', price: 450, type: 'animation', value: 'anim-float' },
+    { id: 'anim5', name: 'Pulse', price: 500, type: 'animation', value: 'anim-pulse' },
+    { id: 'anim9', name: 'Heartbeat', price: 550, type: 'animation', value: 'anim-heartbeat', isPremium: true },
+    { id: 'anim6', name: 'Spin', price: 600, type: 'animation', value: 'anim-spin', isPremium: true },
+];
+
+type ShopTab = 'head' | 'hat' | 'body' | 'arms' | 'legs' | 'moves' | 'saves';
 
 const ShopModal: React.FC<ShopModalProps> = ({ isOpen, onClose }) => {
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState<ShopTab>('head');
   const [isMenuMinimized, setIsMenuMinimized] = useState(false);
-  const [isEditMode, setIsEditMode] = useState(false);
-  const [selectedArm, setSelectedArm] = useState<'leftArm' | 'rightArm' | null>(null);
+  const [isBuilderMode, setIsBuilderMode] = useState(false);
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [selectedPart, setSelectedPart] = useState<'leftArm' | 'rightArm' | 'legs' | 'head' | 'body' | null>(null);
+  const [isSavedFeedback, setIsSavedFeedback] = useState(false);
 
   const { 
       coins, 
       purchaseItem, 
       equipItem, 
-      unequipItem,
+      unequipItem, 
       isOwned, 
       isSubscribed,
       equippedFrame, 
@@ -177,7 +187,19 @@ const ShopModal: React.FC<ShopModalProps> = ({ isOpen, onClose }) => {
       equippedBody,
       equippedLeftArm,
       equippedRightArm,
-      equippedLegs
+      equippedLegs,
+      equippedAnimation,
+      equippedLeftArmRotation,
+      equippedRightArmRotation,
+      equippedLegsRotation,
+      setPartRotation,
+      leftArmOffset, rightArmOffset, legsOffset, headOffset, bodyOffset,
+      setPartOffset,
+      swapArms,
+      savedCharacters,
+      saveCurrentCharacter,
+      deleteSavedCharacter,
+      equipSavedCharacter
   } = useUser();
 
   if (!isOpen) return null;
@@ -188,20 +210,51 @@ const ShopModal: React.FC<ShopModalProps> = ({ isOpen, onClose }) => {
 
   const handleEquip = (item: ShopItem) => {
     equipItem(item.type, item.value);
+    if (item.type === 'animation') {
+        setIsPlaying(true); // Auto play preview
+    }
   };
 
   const handleUnequip = (type: ShopItem['type']) => {
       unequipItem(type);
   };
 
+  const handleQuickSave = () => {
+    saveCurrentCharacter();
+    setIsPlaying(false); // Stop animation on save to prevent weirdness
+    setIsSavedFeedback(true);
+    setTimeout(() => setIsSavedFeedback(false), 1500);
+  };
+
+  const isBodyEquipped = !!equippedBody;
+
+  const handleCardClick = (item: ShopItem) => {
+      if (isOwned(item.id)) {
+          if (isEquipped(item)) {
+             // Animations cannot be unequipped to null, only swapped
+             if (item.type !== 'animation') {
+                 handleUnequip(item.type);
+             }
+          } else {
+             const isLimb = ['leftArm', 'rightArm', 'legs'].includes(item.type);
+             if (isLimb && !isBodyEquipped) return; 
+             handleEquip(item);
+          }
+      } else if (item.isPremium && !isSubscribed) {
+          onClose();
+          navigate('/paywall');
+      }
+  };
+
   const getActiveItems = () => {
       switch(activeTab) {
           case 'head': return SHOP_AVATARS;
-          case 'frame': return SHOP_FRAMES;
           case 'hat': return SHOP_HATS;
           case 'body': return SHOP_BODIES;
           case 'arms': return SHOP_ARMS;
           case 'legs': return SHOP_LEGS;
+          case 'moves': return SHOP_ANIMATIONS;
+          case 'saves': return []; // Handled separately
           default: return [];
       }
   };
@@ -209,75 +262,93 @@ const ShopModal: React.FC<ShopModalProps> = ({ isOpen, onClose }) => {
   const isEquipped = (item: ShopItem) => {
       switch(item.type) {
           case 'avatar': return equippedAvatar === item.value;
-          case 'frame': return equippedFrame === item.value;
           case 'hat': return equippedHat === item.value;
           case 'body': return equippedBody === item.value;
           case 'leftArm': return equippedLeftArm === item.value;
           case 'rightArm': return equippedRightArm === item.value;
           case 'legs': return equippedLegs === item.value;
+          case 'animation': return equippedAnimation === item.value;
           default: return false;
       }
   };
 
-  const isBodyEquipped = !!equippedBody;
+  // --- BUILDER CONTROLS LOGIC ---
+  const handlePartClick = (part: 'leftArm' | 'rightArm' | 'legs' | 'head' | 'body') => {
+      if (isBuilderMode) {
+          setSelectedPart(part);
+      }
+  };
+
+  const updateOffset = (axis: 'x' | 'y', delta: number) => {
+      if (!selectedPart) return;
+      
+      let currentVal = 0;
+      if (selectedPart === 'leftArm') currentVal = leftArmOffset[axis];
+      else if (selectedPart === 'rightArm') currentVal = rightArmOffset[axis];
+      else if (selectedPart === 'legs') currentVal = legsOffset[axis];
+      else if (selectedPart === 'head') currentVal = headOffset[axis];
+      else if (selectedPart === 'body') currentVal = bodyOffset[axis];
+
+      const minVal = -50;
+      const maxVal = axis === 'y' ? 120 : 100;
+      const next = Math.max(minVal, Math.min(maxVal, currentVal + delta)); 
+      setPartOffset(selectedPart, axis, next);
+  };
+
+  const updateRotation = (delta: number) => {
+      if (!selectedPart) return;
+      let current = 0;
+      if (selectedPart === 'leftArm') current = equippedLeftArmRotation;
+      if (selectedPart === 'rightArm') current = equippedRightArmRotation;
+      if (selectedPart === 'legs') current = equippedLegsRotation;
+
+      let next = current + delta;
+      if (next > 180) next = 180;
+      if (next < -180) next = -180;
+      setPartRotation(selectedPart, next);
+  };
 
   const renderItem = (item: ShopItem) => {
     const owned = isOwned(item.id);
     const equipped = isEquipped(item);
-    
-    // Debug: Log if head assets are missing
-    if (item.type === 'avatar' && !AVATAR_ASSETS[item.value]) {
-      console.warn(`⚠️ Missing avatar asset: ${item.value}`, { item, available: Object.keys(AVATAR_ASSETS).filter(k => k.startsWith('head-')) });
-    }
     const isLimb = ['leftArm', 'rightArm', 'legs'].includes(item.type);
     const isDisabled = isLimb && !isBodyEquipped;
-    
-    // Premium Lock Logic
     const isLocked = item.isPremium && !isSubscribed;
 
     return (
-        <div key={item.id} className={`bg-[#3E1F07] rounded-xl p-3 border-2 border-[#5c2e0b] shadow-lg flex flex-col items-center group ${isDisabled ? 'opacity-60' : ''} relative`}>
-            
+        <div 
+            key={item.id} 
+            onClick={() => handleCardClick(item)}
+            className={`bg-[#3E1F07] rounded-xl p-3 border-2 border-[#5c2e0b] shadow-lg flex flex-col items-center group ${isDisabled ? 'opacity-60 cursor-not-allowed' : 'cursor-pointer hover:border-[#d4a373]'} relative transition-colors`}
+        >
             {/* Item Preview Box */}
             <div className={`w-20 h-20 rounded-xl bg-[#f3e5ab] mb-3 overflow-hidden shadow-inner relative flex items-center justify-center ${item.type === 'frame' ? item.value + ' border-[6px] rounded-full' : 'border-2 border-[#eecaa0]/30'} ${isLocked ? 'grayscale opacity-70' : ''}`}>
-                {/* Avatar Handling */}
                 {item.type === 'avatar' && (
                     AVATAR_ASSETS[item.value] ? (
-                        <div className="w-[90%] h-[90%] flex items-center justify-center">
+                        <div className="w-[90%] h-[90%]">
                             <svg viewBox="0 0 100 100" className="w-full h-full overflow-visible">
                                 {AVATAR_ASSETS[item.value]}
                             </svg>
                         </div>
                     ) : (
-                        <div className="w-full h-full bg-[#f3e5ab] flex items-center justify-center text-[#8B4513] font-bold text-lg">
-                            ?
-                        </div>
+                        <img src={item.value} alt={item.name} className="w-full h-full object-cover" />
                     )
                 )}
-                
-                {item.type === 'frame' && (
-                    <div className="text-[#5c2e0b]/40 font-bold text-[10px]">FRAME</div>
+                {item.type === 'animation' && (
+                    <div className="flex flex-col items-center justify-center text-[#8B4513]">
+                        <Activity size={32} className="animate-pulse" />
+                    </div>
                 )}
                 {(['hat', 'body', 'leftArm', 'rightArm', 'legs'].includes(item.type)) && AVATAR_ASSETS[item.value] && (
-                    <svg viewBox={item.type === 'body' ? "0 0 100 80" : "0 0 100 100"} className={`w-full h-full ${item.type === 'body' ? 'p-0' : 'p-2'} overflow-visible`}>
-                        {item.type === 'body' ? (
-                            <g transform="scale(1.15) translate(-7.5, -5)">
-                                {AVATAR_ASSETS[item.value]}
-                            </g>
-                        ) : (
-                            AVATAR_ASSETS[item.value]
-                        )}
+                    <svg viewBox="0 0 100 100" className="w-full h-full p-2 overflow-visible">
+                        {AVATAR_ASSETS[item.value]}
                     </svg>
                 )}
-                
-                {/* Disabled Overlay (Need Body) */}
                 {isDisabled && !isLocked && (
                     <div className="absolute inset-0 bg-black/50 flex items-center justify-center backdrop-blur-[1px]">
                        <span className="text-white font-bold text-[8px] uppercase text-center px-1">Needs Body</span>
                     </div>
                 )}
-
-                {/* BIG GOLD CROWN LOCK OVERLAY */}
                 {isLocked && (
                     <div className="absolute inset-0 z-10 flex flex-col items-center justify-center bg-black/30 backdrop-blur-[1px]">
                          <Crown size={36} className="text-[#FFD700] drop-shadow-md mb-1" fill="#B8860B" />
@@ -294,7 +365,7 @@ const ShopModal: React.FC<ShopModalProps> = ({ isOpen, onClose }) => {
                     variant="gold"
                     fullWidth
                     className="text-[10px] py-1.5 flex items-center justify-center gap-1 border border-[#B8860B] shadow-[0_2px_0_#8B4513]"
-                    onClick={() => { onClose(); navigate('/paywall'); }}
+                    onClick={(e) => { e.stopPropagation(); onClose(); navigate('/paywall'); }}
                 >
                     <Crown size={10} fill="currentColor" /> PREMIUM
                 </WoodButton>
@@ -302,14 +373,24 @@ const ShopModal: React.FC<ShopModalProps> = ({ isOpen, onClose }) => {
                 <div className="flex w-full gap-1">
                     {equipped ? (
                          <button 
-                            onClick={() => handleUnequip(item.type)}
-                            className="flex-1 bg-[#2e7d32] text-white font-bold text-[10px] py-1.5 rounded-lg flex items-center justify-center gap-1 border border-white/20 shadow-inner hover:bg-[#d32f2f] group-hover:content-['UNEQUIP']"
+                            onClick={(e) => { 
+                                e.stopPropagation(); 
+                                if (item.type !== 'animation') handleUnequip(item.type); 
+                            }}
+                            disabled={item.type === 'animation'} // Can't unequip animation, must swap
+                            className={`flex-1 bg-[#2e7d32] text-white font-bold text-[10px] py-1.5 rounded-lg flex items-center justify-center gap-1 border border-white/20 shadow-inner ${item.type !== 'animation' ? 'hover:bg-[#d32f2f] group-hover:content-["UNEQUIP"]' : ''}`}
                          >
-                            <Check size={12} /> <span className="group-hover:hidden">ON</span> <span className="hidden group-hover:block"><Trash2 size={10} /></span>
+                            <Check size={12} /> 
+                            {item.type === 'animation' ? <span>ACTIVE</span> : (
+                                <>
+                                    <span className="group-hover:hidden">ON</span> 
+                                    <span className="hidden group-hover:block"><Trash2 size={10} /></span>
+                                </>
+                            )}
                         </button>
                     ) : (
                         <button 
-                            onClick={() => handleEquip(item)}
+                            onClick={(e) => { e.stopPropagation(); handleEquip(item); }}
                             disabled={isDisabled}
                             className={`flex-1 font-bold text-[10px] py-1.5 rounded-lg flex items-center justify-center gap-1 shadow-[0_2px_0_rgba(0,0,0,0.2)] active:translate-y-[2px] active:shadow-none transition-all ${isDisabled ? 'bg-gray-400 text-gray-800 cursor-not-allowed' : 'bg-[#f3e5ab] hover:bg-[#fff5cc] text-[#5c2e0b] shadow-[0_2px_0_#d4a373]'}`}
                         >
@@ -322,7 +403,7 @@ const ShopModal: React.FC<ShopModalProps> = ({ isOpen, onClose }) => {
                     variant="primary" 
                     fullWidth 
                     className={`text-[10px] py-1.5 ${(coins < item.price || isDisabled) ? 'opacity-50 grayscale cursor-not-allowed' : ''}`}
-                    onClick={() => handleBuy(item)}
+                    onClick={(e) => { e.stopPropagation(); handleBuy(item); }}
                     disabled={coins < item.price || isDisabled}
                 >
                     {isDisabled ? 'NEED BODY' : `${item.price} gold`}
@@ -332,10 +413,60 @@ const ShopModal: React.FC<ShopModalProps> = ({ isOpen, onClose }) => {
     );
   };
 
+  const renderSavedCharacter = (character: SavedCharacter) => (
+      <div key={character.id} className="bg-[#3E1F07] rounded-xl p-2 border-2 border-[#5c2e0b] shadow-lg relative group">
+          {/* Unstyled wrapper, Compositor handles frame */}
+          <div className="w-full aspect-square relative overflow-hidden mb-2">
+               <div className="w-full h-full transform scale-75 translate-y-2">
+                   <AvatarCompositor 
+                        headUrl={character.avatar}
+                        hat={character.hat}
+                        body={character.body}
+                        leftArm={character.leftArm}
+                        rightArm={character.rightArm}
+                        legs={character.legs}
+                        animationStyle={character.animation}
+                        leftArmRotation={character.leftArmRotation}
+                        rightArmRotation={character.rightArmRotation}
+                        legsRotation={character.legsRotation}
+                        leftArmOffset={character.leftArmOffset}
+                        rightArmOffset={character.rightArmOffset}
+                        legsOffset={character.legsOffset}
+                        frameClass="border-[#8B4513]" // Default frame for saved view
+                   />
+               </div>
+          </div>
+          <h3 className="text-white text-xs font-bold text-center mb-2 truncate px-1">{character.name}</h3>
+          
+          <div className="flex gap-1">
+              <button 
+                onClick={() => equipSavedCharacter(character)}
+                className="flex-1 bg-[#2e7d32] hover:bg-[#388e3c] text-white text-[10px] font-bold py-1.5 rounded flex items-center justify-center gap-1 shadow-sm active:scale-95 transition-transform"
+              >
+                  <Check size={10} /> WEAR
+              </button>
+              <button 
+                onClick={() => deleteSavedCharacter(character.id)}
+                className="w-8 bg-[#d32f2f] hover:bg-[#e53935] text-white rounded flex items-center justify-center shadow-sm active:scale-95 transition-transform"
+              >
+                  <Trash2 size={12} />
+              </button>
+          </div>
+      </div>
+  );
+
   const renderTab = (id: ShopTab, label: string) => (
     <button 
-        onClick={() => setActiveTab(id)}
-        className={`flex-shrink-0 px-4 py-2 rounded-xl font-display font-bold text-sm transition-all whitespace-nowrap ${activeTab === id ? 'bg-[#8B4513] text-[#FFD700] shadow-md border border-[#FFD700]/20' : 'text-[#8B4513] hover:bg-[#3E1F07]/10'}`}
+        id={`shop-tab-${id}`}
+        onClick={() => {
+            setActiveTab(id);
+            document.getElementById(`shop-tab-${id}`)?.scrollIntoView({ 
+                behavior: 'smooth', 
+                inline: 'center', 
+                block: 'nearest' 
+            });
+        }}
+        className={`flex-shrink-0 px-4 py-2 rounded-xl font-display font-bold text-sm transition-all whitespace-nowrap z-10 relative ${activeTab === id ? 'bg-[#8B4513] text-[#FFD700] shadow-md border border-[#FFD700]/20' : 'text-[#8B4513] hover:bg-[#3E1F07]/10'}`}
     >
         {label}
     </button>
@@ -364,30 +495,10 @@ const ShopModal: React.FC<ShopModalProps> = ({ isOpen, onClose }) => {
                 </div>
              </div>
              
-             {/* Coin Balance */}
              <div className="flex items-center gap-2 bg-black/40 px-3 py-1.5 rounded-full border border-[#FFD700]/30 shadow-inner">
                 <div className="w-5 h-5 rounded-full bg-[#FFD700] border border-[#B8860B] flex items-center justify-center text-[#B8860B] font-bold text-[10px]">$</div>
                 <span className="text-[#FFD700] font-bold font-display text-lg">{coins}</span>
              </div>
-
-             {/* Edit Mode Toggle */}
-             <button 
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setIsEditMode(!isEditMode);
-                  if (!isEditMode) {
-                    setSelectedArm(null); // Clear selection when exiting edit mode
-                  }
-                }}
-                className={`ml-2 p-2 rounded-lg transition-all ${
-                  isEditMode 
-                    ? 'bg-[#FFD700] text-[#8B4513] shadow-lg' 
-                    : 'text-[#eecaa0] hover:text-white hover:bg-black/20'
-                } active:scale-95`}
-                title={isEditMode ? "Exit Edit Mode" : "Edit Arm Positions"}
-             >
-                <Move size={20} />
-             </button>
 
              <button onClick={onClose} className="ml-2 text-[#eecaa0] hover:text-white active:scale-95 transition-transform">
                 <X size={24} />
@@ -396,8 +507,7 @@ const ShopModal: React.FC<ShopModalProps> = ({ isOpen, onClose }) => {
 
           {/* Preview Area (Live updates) */}
           <div 
-              className={`w-full bg-[#8B4513] relative shrink-0 shadow-inner overflow-hidden flex justify-center items-center transition-all duration-500 ease-in-out ${isMenuMinimized ? 'flex-1' : 'h-64 shrink-0'}`}
-              onClick={() => setIsMenuMinimized(true)} 
+              className={`w-full bg-[#8B4513] relative shrink-0 shadow-inner overflow-hidden flex flex-col items-center transition-all duration-500 ease-in-out ${isMenuMinimized ? 'flex-1' : 'h-[20rem] shrink-0'}`}
           >
               {/* Background Pattern */}
               <div className="absolute inset-0 opacity-10 pointer-events-none" 
@@ -407,9 +517,59 @@ const ShopModal: React.FC<ShopModalProps> = ({ isOpen, onClose }) => {
               {/* Spotlight */}
               <div className="absolute top-0 left-1/2 -translate-x-1/2 w-40 h-full bg-gradient-to-b from-white/20 to-transparent pointer-events-none blur-md"></div>
 
+              {/* Toolbar: Builder Mode & Play */}
+              <div className="absolute top-4 left-4 right-4 flex justify-between z-30 pointer-events-none">
+                  <div className="flex gap-2 pointer-events-auto">
+                      <button 
+                        onClick={() => {
+                            setIsBuilderMode(!isBuilderMode);
+                            if (!isBuilderMode) setSelectedPart(null);
+                        }}
+                        className={`w-10 h-10 rounded-full flex items-center justify-center shadow-lg border-2 transition-all active:scale-95 ${isBuilderMode ? 'bg-[#FFD700] border-[#B8860B] text-[#5c2e0b]' : 'bg-black/30 border-white/20 text-white/70 hover:bg-black/50'}`}
+                      >
+                          <Wrench size={18} fill={isBuilderMode ? "currentColor" : "none"} />
+                      </button>
+
+                      {/* Swap Arms Button in Toolbar when Builder Mode is Active */}
+                      {isBuilderMode && (
+                          <button 
+                            onClick={swapArms}
+                            className="w-10 h-10 rounded-full flex items-center justify-center shadow-lg border-2 transition-all active:scale-95 bg-[#FFD700] border-[#B8860B] text-[#5c2e0b]"
+                            title="Swap Arms"
+                          >
+                              <ArrowLeftRight size={18} />
+                          </button>
+                      )}
+                  </div>
+
+                  <div className="flex gap-2 pointer-events-auto">
+                      {/* Quick Save Button - Updated Style */}
+                      <button 
+                        onClick={handleQuickSave}
+                        className={`w-auto px-4 h-10 rounded-full flex items-center justify-center gap-2 shadow-lg border-2 transition-all active:scale-95 ${isSavedFeedback ? 'bg-green-500 border-green-600 text-white' : 'bg-[#FFD700] border-[#B8860B] text-[#5c2e0b] hover:bg-[#ffe066]'}`}
+                        title="Save Character"
+                      >
+                          {isSavedFeedback ? <Check size={18} /> : <Save size={18} />}
+                          <span className="font-display font-bold text-xs">{isSavedFeedback ? 'SAVED' : 'SAVE'}</span>
+                      </button>
+
+                      {/* Play Animation */}
+                      <button 
+                        onClick={() => setIsPlaying(!isPlaying)}
+                        className={`w-10 h-10 rounded-full flex items-center justify-center shadow-lg border-2 transition-all active:scale-95 ${isPlaying ? 'bg-green-500 border-green-700 text-white' : 'bg-black/30 border-white/20 text-white/70 hover:bg-black/50'}`}
+                      >
+                          {isPlaying ? <Pause size={18} fill="currentColor" /> : <Play size={18} fill="currentColor" className="ml-0.5" />}
+                      </button>
+                  </div>
+              </div>
+
               {/* The Compositor */}
-              <div className={`w-32 h-32 relative z-10 transition-all duration-500 ease-in-out ${isMenuMinimized ? 'translate-y-0 scale-110' : '-translate-y-8 scale-90'}`}>
-                   <div className={`w-full h-full rounded-full border-[4px] ${equippedFrame} shadow-2xl bg-white overflow-visible`}>
+              <div 
+                className={`w-40 h-40 relative z-20 transition-all duration-500 ease-in-out mt-10 ${isMenuMinimized ? 'scale-125 mt-20' : ''}`}
+                onClick={() => setIsMenuMinimized(true)} 
+              >
+                   {/* Wrapper now only sizes; Compositor handles frame */}
+                   <div className="w-full h-full relative">
                         <AvatarCompositor 
                             headUrl={equippedAvatar}
                             hat={equippedHat}
@@ -417,24 +577,29 @@ const ShopModal: React.FC<ShopModalProps> = ({ isOpen, onClose }) => {
                             leftArm={equippedLeftArm}
                             rightArm={equippedRightArm}
                             legs={equippedLegs}
-                            isEditable={isEditMode}
-                            onEditRequest={() => setIsEditMode(true)}
-                            selectedArm={selectedArm}
-                            onArmSelect={setSelectedArm}
-                            onArmRotate={(armType, angle) => {
-                              // Rotation is handled by DraggableArm's onRotate callback
-                              // This is just for tracking if needed
-                            }}
+                            animationStyle={equippedAnimation} // Pass equipped animation
+                            leftArmRotation={equippedLeftArmRotation}
+                            rightArmRotation={equippedRightArmRotation}
+                            legsRotation={equippedLegsRotation}
+                            leftArmOffset={leftArmOffset}
+                            rightArmOffset={rightArmOffset}
+                            legsOffset={legsOffset}
+                            headOffset={headOffset}
+                            bodyOffset={bodyOffset}
+                            onPartClick={isBuilderMode ? handlePartClick : undefined}
+                            isAnimating={isPlaying}
+                            frameClass={equippedFrame} // Pass frame
                         />
                    </div>
+                   {/* Tip */}
+                   {isBuilderMode && !selectedPart && (
+                       <div className="absolute -bottom-12 left-0 right-0 text-center animate-bounce">
+                           <span className="text-[#FFD700] text-[10px] font-bold bg-black/60 px-2 py-1 rounded-full">
+                               Tap parts to edit!
+                           </span>
+                       </div>
+                   )}
               </div>
-
-              {/* Edit Mode Tooltip */}
-              {isEditMode && (
-                <div className="absolute bottom-4 left-1/2 -translate-x-1/2 bg-black/80 text-white text-xs px-3 py-2 rounded-lg shadow-lg z-20 pointer-events-none animate-pulse">
-                  {selectedArm ? 'Tap rotation buttons to adjust angle' : 'Tap an arm to select, then use rotation buttons'}
-                </div>
-              )}
           </div>
 
           {/* Menu Container */}
@@ -448,23 +613,100 @@ const ShopModal: React.FC<ShopModalProps> = ({ isOpen, onClose }) => {
                 <div className={`w-12 h-1.5 rounded-full bg-[#8B4513]/30 transition-all duration-300 ${isMenuMinimized ? 'rotate-0' : ''}`}></div>
              </div>
 
-             {/* Tabs Scroller */}
-             <div className="flex overflow-x-auto p-2 gap-1 border-b border-[#8B4513]/20 bg-[#eecaa0]/30 no-scrollbar shrink-0">
-                {renderTab('head', 'HEADS')}
-                {renderTab('hat', 'HATS')}
-                {renderTab('body', 'BODIES')}
-                {renderTab('arms', 'ARMS')}
-                {renderTab('legs', 'LEGS')}
-                {renderTab('frame', 'FRAMES')}
+             {/* Tabs Scroller - Updated visual cues */}
+             <div className="relative w-full border-b border-[#8B4513]/20 bg-[#eecaa0]/30 shrink-0">
+                 <div className="absolute inset-y-0 left-0 w-6 bg-gradient-to-r from-[#eecaa0] to-transparent z-20 pointer-events-none"></div>
+                 <div className="absolute inset-y-0 right-0 w-6 bg-gradient-to-l from-[#eecaa0] to-transparent z-20 pointer-events-none"></div>
+                 
+                 <div className="flex overflow-x-auto p-2 gap-1 no-scrollbar relative z-10 px-4">
+                    {renderTab('head', 'HEADS')}
+                    {renderTab('hat', 'HATS')}
+                    {renderTab('body', 'BODIES')}
+                    {renderTab('arms', 'ARMS')}
+                    {renderTab('legs', 'LEGS')}
+                    {renderTab('moves', 'MOVES')}
+                    {renderTab('saves', 'MY SAVES')}
+                 </div>
              </div>
 
              {/* Scrollable Items Content */}
              <div className={`overflow-y-auto p-4 bg-[#f3e5ab] relative transition-all duration-500 ${isMenuMinimized ? 'h-0 p-0 opacity-0' : 'flex-1 opacity-100'}`}>
-                 <div className="grid grid-cols-3 gap-3 pb-20">
-                    {getActiveItems().map(renderItem)}
-                 </div>
+                 {activeTab === 'saves' ? (
+                     <div className="flex flex-col gap-4 pb-20">
+                         {/* Save Current Button */}
+                         <WoodButton 
+                            fullWidth 
+                            variant="primary"
+                            onClick={handleQuickSave}
+                            className="py-3 flex items-center justify-center gap-2 shadow-lg"
+                         >
+                             <Save size={20} /> {isSavedFeedback ? 'SAVED!' : 'SAVE CURRENT LOOK'}
+                         </WoodButton>
+
+                         <h3 className="font-display font-bold text-[#8B4513] text-sm uppercase tracking-wider border-b border-[#8B4513]/20 pb-1">
+                             Saved Characters
+                         </h3>
+
+                         {savedCharacters.length === 0 ? (
+                             <div className="text-center p-8 text-[#8B4513]/60 italic">
+                                 No saved characters yet. <br/> Build something cool and save it!
+                             </div>
+                         ) : (
+                             <div className="grid grid-cols-2 gap-4">
+                                 {savedCharacters.map(renderSavedCharacter)}
+                             </div>
+                         )}
+                     </div>
+                 ) : (
+                     <div className="grid grid-cols-3 gap-3 pb-20">
+                        {getActiveItems().map(renderItem)}
+                     </div>
+                 )}
              </div>
           </div>
+
+          {/* Builder Controls Overlay */}
+          {isBuilderMode && selectedPart && (
+              <div className="absolute bottom-0 left-0 right-0 bg-[#2b1d13] border-t-4 border-[#8B4513] p-6 rounded-t-3xl z-50 animate-in slide-in-from-bottom-10 shadow-[0_-10px_40px_rgba(0,0,0,0.5)]">
+                  
+                  <div className="flex justify-between items-center mb-4">
+                       <div className="flex items-center gap-2">
+                           <div className="bg-[#FFD700] w-2 h-6 rounded-full"></div>
+                           <span className="text-white font-display font-bold text-lg uppercase tracking-wider">
+                              Adjust {selectedPart === 'legs' ? 'Legs' : selectedPart === 'leftArm' ? 'Left Arm' : selectedPart === 'rightArm' ? 'Right Arm' : selectedPart === 'head' ? 'Head' : 'Body'}
+                           </span>
+                       </div>
+                       <button 
+                          onClick={() => setSelectedPart(null)} 
+                          className="bg-white/10 p-2 rounded-full text-white/70 hover:bg-red-500 hover:text-white transition-colors"
+                       >
+                          <X size={20}/>
+                       </button>
+                  </div>
+
+                  <div className="flex justify-around items-center">
+                      <div className="flex flex-col gap-2 items-center">
+                          <span className="text-[10px] text-[#eecaa0]/60 font-bold uppercase tracking-wider">Move</span>
+                          <div className="grid grid-cols-2 gap-2">
+                              <button onClick={() => updateOffset('x', -5)} className="w-12 h-12 bg-[#3E1F07] rounded-xl text-[#eecaa0] hover:bg-[#5c2e0b] active:scale-95 border-b-4 border-[#2a1505] active:border-b-0 active:translate-y-1 flex items-center justify-center"><MoveHorizontal size={20} className="rotate-180" /></button>
+                              <button onClick={() => updateOffset('x', 5)} className="w-12 h-12 bg-[#3E1F07] rounded-xl text-[#eecaa0] hover:bg-[#5c2e0b] active:scale-95 border-b-4 border-[#2a1505] active:border-b-0 active:translate-y-1 flex items-center justify-center"><MoveHorizontal size={20} /></button>
+                              <button onClick={() => updateOffset('y', -5)} className="w-12 h-12 bg-[#3E1F07] rounded-xl text-[#eecaa0] hover:bg-[#5c2e0b] active:scale-95 border-b-4 border-[#2a1505] active:border-b-0 active:translate-y-1 flex items-center justify-center"><ArrowUpToLine size={20} /></button>
+                              <button onClick={() => updateOffset('y', 5)} className="w-12 h-12 bg-[#3E1F07] rounded-xl text-[#eecaa0] hover:bg-[#5c2e0b] active:scale-95 border-b-4 border-[#2a1505] active:border-b-0 active:translate-y-1 flex items-center justify-center"><ArrowDownToLine size={20} /></button>
+                          </div>
+                      </div>
+
+                      <div className="w-px h-24 bg-white/10"></div>
+
+                      <div className="flex flex-col gap-2 items-center">
+                          <span className="text-[10px] text-[#eecaa0]/60 font-bold uppercase tracking-wider">Rotate</span>
+                          <div className="flex gap-2 h-full items-center">
+                              <button onClick={() => updateRotation(-15)} className="w-14 h-14 bg-[#3E1F07] rounded-xl text-[#eecaa0] hover:bg-[#5c2e0b] active:scale-95 border-b-4 border-[#2a1505] active:border-b-0 active:translate-y-1 flex items-center justify-center"><RotateCcw size={24} /></button>
+                              <button onClick={() => updateRotation(15)} className="w-14 h-14 bg-[#3E1F07] rounded-xl text-[#eecaa0] hover:bg-[#5c2e0b] active:scale-95 border-b-4 border-[#2a1505] active:border-b-0 active:translate-y-1 flex items-center justify-center"><RotateCw size={24} /></button>
+                          </div>
+                      </div>
+                  </div>
+              </div>
+          )}
 
       </div>
     </div>

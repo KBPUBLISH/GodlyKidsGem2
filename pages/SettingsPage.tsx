@@ -8,7 +8,7 @@ import { useAudio } from '../context/AudioContext';
 const SettingsPage: React.FC = () => {
   const navigate = useNavigate();
   const { isSubscribed } = useUser();
-  const { musicEnabled, sfxEnabled, toggleMusic, toggleSfx, playBack } = useAudio();
+  const { musicEnabled, sfxEnabled, musicVolume, toggleMusic, toggleSfx, setMusicVolume, playBack } = useAudio();
   
   // Robust back handler - Explicitly goes to Profile as requested
   const handleBack = () => {
@@ -50,19 +50,43 @@ const SettingsPage: React.FC = () => {
                 <h3 className="font-display font-bold text-[#8B4513] text-lg mb-4 uppercase tracking-wide opacity-80">Audio & Notifications</h3>
                 
                 <div className="space-y-5">
-                    <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-3 text-[#5c2e0b]">
-                            <div className="w-8 h-8 rounded-full bg-[#ffe0b2] flex items-center justify-center text-[#f57c00]">
-                                <Music size={18} />
+                    <div className="space-y-3">
+                        <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-3 text-[#5c2e0b]">
+                                <div className="w-8 h-8 rounded-full bg-[#ffe0b2] flex items-center justify-center text-[#f57c00]">
+                                    <Music size={18} />
+                                </div>
+                                <span className="font-bold">Background Music</span>
                             </div>
-                            <span className="font-bold">Background Music</span>
+                            <button 
+                                onClick={toggleMusic}
+                                className={`w-12 h-7 rounded-full relative transition-colors duration-200 border-2 ${musicEnabled ? 'bg-[#8bc34a] border-[#689f38]' : 'bg-gray-300 border-gray-400'}`}
+                            >
+                                <div className={`absolute top-0.5 w-5 h-5 bg-white rounded-full shadow-sm transition-all duration-200 ${musicEnabled ? 'left-5' : 'left-0.5'}`}></div>
+                            </button>
                         </div>
-                        <button 
-                            onClick={toggleMusic}
-                            className={`w-12 h-7 rounded-full relative transition-colors duration-200 border-2 ${musicEnabled ? 'bg-[#8bc34a] border-[#689f38]' : 'bg-gray-300 border-gray-400'}`}
-                        >
-                            <div className={`absolute top-0.5 w-5 h-5 bg-white rounded-full shadow-sm transition-all duration-200 ${musicEnabled ? 'left-5' : 'left-0.5'}`}></div>
-                        </button>
+                        
+                        {/* Music Volume Slider */}
+                        {musicEnabled && (
+                            <div className="flex items-center gap-3 pl-11">
+                                <Volume2 size={16} className="text-[#5c2e0b] opacity-60" />
+                                <input
+                                    type="range"
+                                    min="0"
+                                    max="1"
+                                    step="0.01"
+                                    value={musicVolume}
+                                    onChange={(e) => setMusicVolume(parseFloat(e.target.value))}
+                                    className="flex-1 h-2 bg-[#eecaa0] rounded-lg appearance-none cursor-pointer accent-[#8B4513]"
+                                    style={{
+                                        background: `linear-gradient(to right, #8B4513 0%, #8B4513 ${musicVolume * 100}%, #eecaa0 ${musicVolume * 100}%, #eecaa0 100%)`
+                                    }}
+                                />
+                                <span className="text-[#5c2e0b] font-bold text-sm w-10 text-right">
+                                    {Math.round(musicVolume * 100)}%
+                                </span>
+                            </div>
+                        )}
                     </div>
 
                     <div className="flex items-center justify-between">

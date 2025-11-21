@@ -110,10 +110,10 @@ const PanoramaBackground: React.FC = () => {
              Replace the gradient-based panorama with an image
          ============================================== */}
          <div 
-           className="absolute inset-0 w-full h-full"
+           className="absolute inset-0 w-[600vw] h-full"
            style={{
              backgroundImage: 'url(/assets/images/panorama-background.jpg)',
-             backgroundSize: 'auto 120%',
+             backgroundSize: 'cover',
              backgroundPosition: 'center bottom',
              backgroundRepeat: 'no-repeat'
            }}

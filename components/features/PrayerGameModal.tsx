@@ -199,15 +199,15 @@ const PrayerGameModal: React.FC<PrayerGameModalProps> = ({ isOpen, onClose }) =>
   // --- SETUP ---
   useEffect(() => {
     if (isOpen) {
-      setGameMode(false); // Stop all music for prayer time
+      setGameMode(false); // Stop all music for prayer time (pauses all tracks)
       initializeGame();
     } else {
-      setGameMode(false);
+      // Don't call setGameMode here - let it return to background music naturally
       setGameState('intro');
       cleanup();
     }
     return cleanup;
-  }, [isOpen]);
+  }, [isOpen, setGameMode]);
 
   // Cleanup function
   const cleanup = () => {

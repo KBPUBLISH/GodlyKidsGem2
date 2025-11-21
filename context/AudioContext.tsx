@@ -4,8 +4,10 @@ import React, { createContext, useContext, useState, useEffect, useRef, useCallb
 interface AudioContextType {
   musicEnabled: boolean;
   sfxEnabled: boolean;
+  musicVolume: number;
   toggleMusic: () => void;
   toggleSfx: () => void;
+  setMusicVolume: (volume: number) => void;
   playClick: () => void;
   playBack: () => void;
   playSuccess: () => void;
@@ -16,8 +18,10 @@ interface AudioContextType {
 const AudioContext = createContext<AudioContextType>({
   musicEnabled: true,
   sfxEnabled: true,
+  musicVolume: 0.5,
   toggleMusic: () => {},
   toggleSfx: () => {},
+  setMusicVolume: () => {},
   playClick: () => {},
   playBack: () => {},
   playSuccess: () => {},
@@ -27,20 +31,21 @@ const AudioContext = createContext<AudioContextType>({
 
 export const useAudio = () => useContext(AudioContext);
 
-// Ambient Ocean Sound (Main App)
-// IMPORTANT: This must be a direct MP3 file URL (ends in .mp3), not a webpage URL
-// For Suno tracks: Download the MP3 and host it, or use a direct audio CDN URL
-// Example: "https://your-cdn.com/path/to/background-music.mp3"
-const BG_MUSIC_URL = "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3";
+// Ambient Ocean Sound (Main App) - "Seaside Adventure" from Cloudinary
+const BG_MUSIC_URL = "https://res.cloudinary.com/dxh8fuq7b/video/upload/v1763747567/Seaside_Adventure_2025-11-21T174503_i3p43n.mp3";
 
 // Upbeat Game Music (Daily Verse, Challenge) - "Happy Pop"
 const GAME_MUSIC_URL = "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-2.mp3";
 
-// Energetic Workout Music (Strength Game) - Upbeat Dance/Electronic
-// Using a reliable test music source - replace with your own workout music file
-const WORKOUT_MUSIC_URL = "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-3.mp3";
+// Energetic Workout Music (Strength Game) - "Jump and Spin" from Cloudinary
+const WORKOUT_MUSIC_URL = "https://res.cloudinary.com/dxh8fuq7b/video/upload/v1763747567/Jump_and_Spin_pczce5.mp3";
 
 export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  // Load music volume from localStorage or default to 0.5 (half)
+  const [musicVolume, setMusicVolumeState] = useState<number>(() => {
+    const saved = localStorage.getItem('godly_kids_music_volume');
+    return saved ? parseFloat(saved) : 0.5;
+  });
   const [musicEnabled, setMusicEnabled] = useState(true);
   const [sfxEnabled, setSfxEnabled] = useState(true);
   const [musicMode, setMusicMode] = useState<'bg' | 'game' | 'workout'>('bg');
@@ -121,6 +126,10 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const setGameMode = useCallback((active: boolean, type: 'default' | 'workout' = 'default') => {
       if (!active) {
           setMusicMode('bg');
+          // If explicitly stopping (e.g., for prayer), pause all music immediately
+          if (bgAudioRef.current) bgAudioRef.current.pause();
+          if (gameAudioRef.current) gameAudioRef.current.pause();
+          if (workoutAudioRef.current) workoutAudioRef.current.pause();
       } else {
           setMusicMode(type === 'workout' ? 'workout' : 'game');
       }
@@ -264,17 +273,17 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
     if (musicEnabled) {
         if (musicMode === 'bg') {
-            fadeTo(bg, 0.25);
+            fadeTo(bg, 0.25 * musicVolume);
             fadeTo(game, 0);
             fadeTo(workout, 0);
         } else if (musicMode === 'game') {
             fadeTo(bg, 0);
-            fadeTo(game, 0.3);
+            fadeTo(game, 0.3 * musicVolume);
             fadeTo(workout, 0);
         } else if (musicMode === 'workout') {
             fadeTo(bg, 0);
             fadeTo(game, 0);
-            fadeTo(workout, 0.4); // Increased volume for workout
+            fadeTo(workout, 0.4 * musicVolume); // Apply volume multiplier
         }
     } else {
         bg.pause();
@@ -326,17 +335,25 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         window.removeEventListener('click', unlockAudio);
         window.removeEventListener('touchstart', unlockAudio);
     };
-  }, [musicEnabled, musicMode]);
+  }, [musicEnabled, musicMode, musicVolume]);
 
   const toggleMusic = () => setMusicEnabled(prev => !prev);
   const toggleSfx = () => setSfxEnabled(prev => !prev);
+  
+  const setMusicVolume = useCallback((volume: number) => {
+    const clampedVolume = Math.max(0, Math.min(1, volume));
+    setMusicVolumeState(clampedVolume);
+    localStorage.setItem('godly_kids_music_volume', clampedVolume.toString());
+  }, []);
 
   return (
     <AudioContext.Provider value={{ 
         musicEnabled, 
         sfxEnabled, 
+        musicVolume,
         toggleMusic, 
         toggleSfx, 
+        setMusicVolume,
         playClick,
         playBack,
         playSuccess,

@@ -1,8 +1,6 @@
 
 import React from 'react';
 import { AVATAR_ASSETS } from './AvatarAssets';
-import DraggableArm from './DraggableArm';
-import { useUser, ArmPosition } from '../../context/UserContext';
 
 interface AvatarCompositorProps {
   headUrl: string;
@@ -11,12 +9,22 @@ interface AvatarCompositorProps {
   leftArm?: string | null;
   rightArm?: string | null;
   legs?: string | null;
+  animationStyle?: string; // e.g. 'anim-breathe', 'anim-bounce'
+  leftArmRotation?: number;
+  rightArmRotation?: number;
+  legsRotation?: number;
+  leftArmOffset?: { x: number, y: number };
+  rightArmOffset?: { x: number, y: number };
+  legsOffset?: { x: number, y: number };
+  onPartClick?: (part: 'leftArm' | 'rightArm' | 'legs') => void;
+  isAnimating?: boolean;
   className?: string;
-  isEditable?: boolean; // Enable/disable arm positioning (default: false)
-  onEditRequest?: () => void; // Callback when arm is clicked in non-editable mode
+  frameClass?: string; // Pass the frame border class here
   selectedArm?: 'leftArm' | 'rightArm' | null; // Which arm is currently selected
   onArmSelect?: (armType: 'leftArm' | 'rightArm' | null) => void; // Callback when arm is selected
   onArmRotate?: (armType: 'leftArm' | 'rightArm', angle: number) => void; // Callback to rotate arm
+  isEditable?: boolean; // Enable/disable arm positioning (default: false)
+  onEditRequest?: () => void; // Callback when arm is clicked in non-editable mode
 }
 
 const AvatarCompositor: React.FC<AvatarCompositorProps> = ({
@@ -26,116 +34,136 @@ const AvatarCompositor: React.FC<AvatarCompositorProps> = ({
   leftArm,
   rightArm,
   legs,
+  animationStyle = 'anim-breathe', // Default
+  leftArmRotation = 0,
+  rightArmRotation = 0,
+  legsRotation = 0,
+  leftArmOffset = { x: 0, y: 0 },
+  rightArmOffset = { x: 0, y: 0 },
+  legsOffset = { x: 0, y: 0 },
+  onPartClick,
+  isAnimating = false,
   className = "w-full h-full",
-  isEditable = false,
-  onEditRequest,
+  frameClass = "border-[#8B4513]",
   selectedArm = null,
   onArmSelect,
-  onArmRotate
+  onArmRotate,
+  isEditable = false,
+  onEditRequest
 }) => {
-  const { getArmPosition, setArmPosition } = useUser();
+  // Card Styles for BODY PARTS only
+  const cardClass = "bg-[#fdf6e3] border-[3px] border-[#8B4513] shadow-[0_2px_0_rgba(0,0,0,0.15)] flex items-center justify-center overflow-hidden";
   
-  // Card Styles - The "Badge/Button" look
-  const cardClass = "absolute bg-[#fdf6e3] border-[3px] border-[#8B4513] shadow-[0_3px_0_rgba(0,0,0,0.2)] flex items-center justify-center overflow-hidden";
-  
-  // Robust check: treat any string starting with "head-" as internal ID.
-  // If AVATAR_ASSETS doesn't have it, we still treat it as internal to avoid 404ing on an image tag.
   const isInternalHead = headUrl && headUrl.startsWith('head-');
   const headAsset = isInternalHead ? AVATAR_ASSETS[headUrl] : null;
 
-  // Helper function to get default arm position
-  const getDefaultArmPosition = (armType: 'leftArm' | 'rightArm'): ArmPosition => {
-    if (armType === 'leftArm') {
-      return {
-        top: '50%',
-        horizontal: '-40%',
-        rotation: -15,
-        transformOrigin: 'left center',
-        width: '65%',
-        height: '80%'
-      };
-    } else {
-      return {
-        top: '50%',
-        horizontal: '-40%',
-        rotation: 15,
-        transformOrigin: 'right center',
-        width: '65%',
-        height: '80%'
-      };
+  const handlePartClick = (e: React.MouseEvent, part: 'leftArm' | 'rightArm' | 'legs') => {
+    if (onPartClick) {
+      e.stopPropagation();
+      onPartClick(part);
     }
   };
 
-  // Get arm positions from context or use defaults
-  const leftArmPosition = getArmPosition('leftArm') || getDefaultArmPosition('leftArm');
-  const rightArmPosition = getArmPosition('rightArm') || getDefaultArmPosition('rightArm');
+  // Adjusted offsets for narrower arm containers
+  const DEFAULT_ARM_TOP = 15; 
+  const DEFAULT_ARM_SIDE = -25; // Adjusted for 44% width
+  const DEFAULT_LEGS_TOP = 85;
+  const DEFAULT_LEGS_LEFT = 15;
+
+  // Determine which animation class to apply to the body container
+  let bodyAnimationClass = isAnimating ? animationStyle : '';
+  
+  // Special case: For 'anim-spin', we don't rotate the whole body container rigidly.
+  if (isAnimating && animationStyle === 'anim-spin') {
+      bodyAnimationClass = 'anim-breathe';
+  }
+  
+  // Head animation logic
+  let headAnimationClass = '';
+  if (isAnimating) {
+      if (animationStyle === 'anim-bounce') headAnimationClass = 'anim-bounce-head';
+      else if (animationStyle === 'anim-spin') headAnimationClass = 'anim-rotate'; 
+      else if (animationStyle === 'anim-wobble') headAnimationClass = 'anim-wobble';
+      else if (animationStyle === 'anim-jiggle') headAnimationClass = 'anim-jiggle';
+      else if (animationStyle === 'anim-sway') headAnimationClass = 'anim-sway';
+      else if (animationStyle === 'anim-hop') headAnimationClass = 'anim-hop-head';
+      else headAnimationClass = 'anim-bounce-subtle';
+  }
+
+  // Helper for limb classes
+  const getLimbAnimClass = () => {
+      if (isAnimating && animationStyle === 'anim-spin') return ' anim-rotate';
+      return '';
+  };
 
   return (
     <div className={`relative ${className}`}>
-      {/* 
-         LAYOUT CONCEPT: "Connected Modules"
-         The Head is the central hub.
-         The Body connects to the Head.
-         Limbs connect to the Body.
-      */}
-
-      {/* 1. HEAD (Anchor) */}
-      <div className="absolute inset-0 z-30 rounded-full overflow-hidden border-[4px] border-[#eecaa0] bg-[#f3e5ab] shadow-inner flex items-center justify-center">
-          {headAsset ? (
-               <div className="w-[90%] h-[90%]">
-                  <svg viewBox="0 0 100 100" className="w-full h-full overflow-visible">
-                      {headAsset}
-                  </svg>
-               </div>
-          ) : (
-               // Fallback Logic
-               isInternalHead ? (
-                 /* Missing internal asset fallback - shows a Question Mark instead of broken image */
-                 <div className="w-full h-full bg-[#f3e5ab] flex flex-col items-center justify-center text-[#8B4513]">
-                    <span className="text-xs font-bold">?</span>
-                 </div>
-               ) : (
-                 /* External Image URL */
-                 <img src={headUrl || ''} alt="Head" className="w-full h-full object-cover" />
-               )
-          )}
+      
+      {/* 4. HEAD (Top Layer Z-50) */}
+      <div className="absolute inset-0 z-50 pointer-events-none flex items-center justify-center">
+          <div 
+            className={`w-[72%] h-[72%] flex items-center justify-center ${headAnimationClass}`} // Sized to sit on neck
+            style={{ animationDuration: animationStyle === 'anim-spin' ? '1s' : '2s' }}
+          >
+              {/* Head Container - Transparent, No Border/Background */}
+              <div className={`w-full h-full flex items-center justify-center relative`}>
+                  {headAsset ? (
+                      // FUNNY HEAD (SVG)
+                      <svg viewBox="0 0 100 100" className="w-full h-full overflow-visible">
+                          {headAsset}
+                      </svg>
+                  ) : (
+                      // IMAGE HEAD
+                      <img src={headUrl || ''} alt="Head" className="w-full h-full object-cover pointer-events-none rounded-2xl" />
+                  )}
+              </div>
+          </div>
       </div>
 
-      {/* 2. HAT (Connects to Head) */}
+      {/* 5. HAT (Topmost Z-60) */}
       {hat && AVATAR_ASSETS[hat] && (
-          <div 
-            className={`${cardClass} z-40 rounded-2xl`}
-            style={{ 
-                top: '-55%', left: '10%', width: '80%', height: '70%',
-                transform: 'rotate(-5deg)' 
-            }}
-          >
-               <svg viewBox="0 0 100 80" className="w-full h-full p-1 overflow-visible">
-                  {AVATAR_ASSETS[hat]}
-               </svg>
+          <div className="absolute inset-0 z-[60] pointer-events-none">
+             <div 
+                className="absolute top-[-25%] left-1/2 w-[90%] h-[70%] origin-center"
+                style={{ transform: 'translateX(-50%) rotate(-3deg)' }}
+             >
+                 <div 
+                    className={`absolute inset-0 flex items-center justify-center ${headAnimationClass}`}
+                    style={{ animationDuration: animationStyle === 'anim-spin' ? '1s' : '2s', animationDelay: '0.1s' }}
+                 >
+                      {/* Transparent Hat Container */}
+                      <svg viewBox="0 0 100 80" className="w-full h-full p-1 overflow-visible pointer-events-none filter drop-shadow-md">
+                          {AVATAR_ASSETS[hat]}
+                      </svg>
+                 </div>
+             </div>
           </div>
       )}
 
-      {/* 3. BODY CONTAINER (Connects to Head) 
-          This container holds the Body Card AND the attached Limbs.
-          If Body is missing, Limbs are not rendered.
-      */}
+      {/* BODY GROUP */}
       {body && AVATAR_ASSETS[body] && (
           <div
-             className="absolute z-20 flex items-center justify-center"
+             className={`absolute z-20 flex items-center justify-center pointer-events-none ${bodyAnimationClass}`}
              style={{
-                // Positioned relative to the Head container
-                top: '80%', left: '50%', width: '70%', height: '70%',
+                top: '85%', 
+                left: '50%', 
+                width: '100%', 
+                height: '80%',
                 transform: 'translate(-50%, 0)' 
              }}
           >
-               {/* 3a. LEGS (Behind Body) */}
+               {/* 1. LEGS (Bottom Layer Z-10) */}
                {legs && AVATAR_ASSETS[legs] && (
                     <div 
-                        className={`${cardClass} z-0 rounded-xl bg-[#fff8e1]`}
+                        onClick={(e) => handlePartClick(e, 'legs')}
+                        className={`absolute z-10 rounded-xl bg-[#fff8e1] transition-transform duration-300 ${cardClass} ${onPartClick ? 'cursor-pointer hover:brightness-110 active:scale-95 pointer-events-auto' : ''} ${getLimbAnimClass()}`}
                         style={{ 
-                            top: '85%', left: '10%', width: '80%', height: '80%',
-                            transform: 'rotate(-2deg)'
+                            top: `${DEFAULT_LEGS_TOP + legsOffset.y}%`, 
+                            left: `${DEFAULT_LEGS_LEFT + legsOffset.x}%`, 
+                            width: '70%', 
+                            height: '70%',
+                            transformOrigin: 'top center',
+                            transform: `rotate(${legsRotation}deg)`
                         }}
                     >
                         <svg viewBox="0 0 100 60" className="w-full h-full p-1 overflow-visible">
@@ -144,79 +172,230 @@ const AvatarCompositor: React.FC<AvatarCompositorProps> = ({
                     </div>
                 )}
 
-               {/* 3b. RIGHT ARM (Viewer Left) */}
-               {rightArm && AVATAR_ASSETS[rightArm] && (
-                  <DraggableArm
-                    armType="rightArm"
-                    initialPosition={rightArmPosition}
-                    onPositionChange={(position) => setArmPosition('rightArm', position)}
-                    isEditable={isEditable}
-                    onEditRequest={onEditRequest}
-                    isSelected={selectedArm === 'rightArm'}
-                    onSelect={() => onArmSelect && onArmSelect(selectedArm === 'rightArm' ? null : 'rightArm')}
-                    onRotate={(angle) => {
-                      if (onArmRotate) {
-                        const newPosition: ArmPosition = {
-                          ...rightArmPosition,
-                          rotation: angle
-                        };
-                        setArmPosition('rightArm', newPosition);
-                        onArmRotate('rightArm', angle);
-                      }
-                    }}
-                  >
-                    <div className={`${cardClass} w-full h-full rounded-xl`}>
-                      <svg viewBox="0 0 50 100" className="w-full h-full p-0 overflow-visible">
-                        <g transform="translate(5, 0)">
-                          {AVATAR_ASSETS[rightArm]}
-                        </g>
-                      </svg>
-                    </div>
-                  </DraggableArm>
-               )}
-
-               {/* 3c. LEFT ARM (Viewer Right) */}
-               {leftArm && AVATAR_ASSETS[leftArm] && (
-                  <DraggableArm
-                    armType="leftArm"
-                    initialPosition={leftArmPosition}
-                    onPositionChange={(position) => setArmPosition('leftArm', position)}
-                    isEditable={isEditable}
-                    onEditRequest={onEditRequest}
-                    isSelected={selectedArm === 'leftArm'}
-                    onSelect={() => onArmSelect && onArmSelect(selectedArm === 'leftArm' ? null : 'leftArm')}
-                    onRotate={(angle) => {
-                      if (onArmRotate) {
-                        const newPosition: ArmPosition = {
-                          ...leftArmPosition,
-                          rotation: angle
-                        };
-                        setArmPosition('leftArm', newPosition);
-                        onArmRotate('leftArm', angle);
-                      }
-                    }}
-                  >
-                    <div className={`${cardClass} w-full h-full rounded-xl`}>
-                      <svg viewBox="0 0 50 100" className="w-full h-full p-0 overflow-visible">
-                        <g transform="translate(-5, 0)">
-                          {AVATAR_ASSETS[leftArm]}
-                        </g>
-                      </svg>
-                    </div>
-                  </DraggableArm>
-               )}
-
-               {/* 3d. THE BODY CARD ITSELF */}
-               <div className={`${cardClass} z-10 rounded-2xl w-full h-full`}>
-                   <svg viewBox="0 0 100 80" className="w-full h-full overflow-visible">
-                      <g transform="scale(1.15) translate(-7.5, -5)">
-                         {AVATAR_ASSETS[body]}
-                      </g>
+               {/* 2. MAIN BODY (Z-20) */}
+               <div 
+                  className={`absolute z-20 rounded-2xl ${cardClass}`}
+                  style={{ width: '90%', height: '100%' }}
+                >
+                   <svg viewBox="0 0 100 80" className="w-full h-full p-0.5 overflow-visible">
+                      {AVATAR_ASSETS[body]}
                    </svg>
                </div>
+
+               {/* 3. RIGHT ARM (Viewer Left) (Z-30) */}
+               {rightArm && AVATAR_ASSETS[rightArm] && (
+                  <div 
+                    className="absolute z-30"
+                    style={{ 
+                        top: `${DEFAULT_ARM_TOP + rightArmOffset.y}%`, 
+                        left: `${DEFAULT_ARM_SIDE - rightArmOffset.x}%`,
+                        width: '44%', // Widened from 38%
+                        height: '80%',
+                        transformOrigin: '90% 15%', 
+                        transform: `rotate(${rightArmRotation}deg)`
+                    }}
+                  >
+                      <div
+                        onClick={(e) => handlePartClick(e, 'rightArm')}
+                        className={`w-full h-full rounded-xl transition-colors duration-300 ${cardClass} ${onPartClick ? 'cursor-pointer hover:brightness-110 active:scale-95 pointer-events-auto' : ''} ${isAnimating && animationStyle !== 'anim-spin' ? 'animate-arm-sway-right' : ''} ${getLimbAnimClass()}`}
+                        style={{ transformOrigin: '50% 15%' }} 
+                      >
+                           <svg viewBox="0 0 50 100" className="w-full h-full p-0.5 overflow-visible">
+                              {AVATAR_ASSETS[rightArm]}
+                          </svg>
+                      </div>
+                  </div>
+               )}
+
+               {/* 4. LEFT ARM (Viewer Right) (Z-30) */}
+               {leftArm && AVATAR_ASSETS[leftArm] && (
+                  <div 
+                    className="absolute z-30"
+                    style={{ 
+                        top: `${DEFAULT_ARM_TOP + leftArmOffset.y}%`, 
+                        right: `${DEFAULT_ARM_SIDE - leftArmOffset.x}%`,
+                        width: '44%', // Widened from 38%
+                        height: '80%',
+                        transformOrigin: '10% 15%',
+                        transform: `rotate(${leftArmRotation}deg)`
+                    }}
+                  >
+                      <div 
+                        onClick={(e) => handlePartClick(e, 'leftArm')}
+                        className={`w-full h-full rounded-xl transition-colors duration-300 ${cardClass} ${onPartClick ? 'cursor-pointer hover:brightness-110 active:scale-95 pointer-events-auto' : ''} ${isAnimating && animationStyle !== 'anim-spin' ? 'animate-arm-sway-left' : ''} ${getLimbAnimClass()}`}
+                        style={{ transformOrigin: '50% 15%' }} 
+                      >
+                           <svg viewBox="0 0 50 100" className="w-full h-full p-0.5 overflow-visible">
+                              {AVATAR_ASSETS[leftArm]}
+                          </svg>
+                      </div>
+                  </div>
+               )}
           </div>
       )}
+      <style>{`
+        /* --- ARM SWAY (Standard for all) --- */
+        @keyframes armSwayLeft {
+          0%, 100% { transform: rotate(-5deg); }
+          50% { transform: rotate(-25deg); }
+        }
+        @keyframes armSwayRight {
+          0%, 100% { transform: rotate(5deg); }
+          50% { transform: rotate(25deg); }
+        }
+        .animate-arm-sway-left {
+           animation: armSwayLeft 2s ease-in-out infinite;
+        }
+        .animate-arm-sway-right {
+           animation: armSwayRight 2s ease-in-out infinite;
+        }
 
+        /* --- ANIM: BREATHE (Default) --- */
+        @keyframes animBreathe {
+          0%, 100% { transform: translate(-50%, 0) scale(1); }
+          50% { transform: translate(-50%, -2px) scale(1.02); }
+        }
+        .anim-breathe {
+           animation: animBreathe 3s ease-in-out infinite;
+        }
+
+        /* --- ANIM: BOUNCE (Energetic) --- */
+        @keyframes animBounce {
+          0%, 100% { transform: translate(-50%, 0); }
+          50% { transform: translate(-50%, -15px); }
+        }
+        .anim-bounce {
+           animation: animBounce 0.6s cubic-bezier(0.28, 0.84, 0.42, 1) infinite;
+        }
+        @keyframes headBounce {
+           0%, 100% { transform: translateY(0); }
+           50% { transform: translateY(-5px); }
+        }
+        .anim-bounce-head {
+           animation: headBounce 0.6s cubic-bezier(0.28, 0.84, 0.42, 1) infinite;
+        }
+
+        /* --- ANIM: FLOAT (Ghostly/Space) --- */
+        @keyframes animFloat {
+          0%, 100% { transform: translate(-50%, 0); }
+          50% { transform: translate(-50%, -10px); }
+        }
+        .anim-float {
+           animation: animFloat 2.5s ease-in-out infinite;
+        }
+
+        /* --- ANIM: WIGGLE (Silly) --- */
+        @keyframes animWiggle {
+          0%, 100% { transform: translate(-50%, 0) rotate(-3deg); }
+          50% { transform: translate(-50%, 0) rotate(3deg); }
+        }
+        .anim-wiggle {
+           animation: animWiggle 0.4s ease-in-out infinite;
+        }
+
+        /* --- ANIM: PULSE (Power) --- */
+        @keyframes animPulse {
+          0%, 100% { transform: translate(-50%, 0) scale(1); }
+          50% { transform: translate(-50%, 0) scale(1.08); }
+        }
+        .anim-pulse {
+           animation: animPulse 1s ease-in-out infinite;
+        }
+
+        /* --- NEW ANIMATIONS --- */
+
+        /* SPIN (Old body container spin - maintained for ref, but replaced for anim-spin) */
+        @keyframes animSpin {
+          0% { transform: translate(-50%, 0) rotate(0deg); }
+          100% { transform: translate(-50%, 0) rotate(360deg); }
+        }
+        /* ROTATE (Pure rotation for limbs/head) */
+        @keyframes animRotate {
+          0% { transform: rotate(0deg); }
+          100% { transform: rotate(360deg); }
+        }
+        .anim-rotate {
+           animation: animRotate 1s linear infinite;
+        }
+
+        /* SHAKE */
+        @keyframes animShake {
+          0%, 100% { transform: translate(-50%, 0); }
+          10%, 30%, 50%, 70%, 90% { transform: translate(calc(-50% - 5px), 0); }
+          20%, 40%, 60%, 80% { transform: translate(calc(-50% + 5px), 0); }
+        }
+        .anim-shake {
+           animation: animShake 0.5s ease-in-out infinite;
+        }
+
+        /* WOBBLE */
+        @keyframes animWobble {
+          0%, 100% { transform: translate(-50%, 0) rotate(0deg); }
+          25% { transform: translate(-50%, 0) rotate(-10deg); }
+          75% { transform: translate(-50%, 0) rotate(10deg); }
+        }
+        .anim-wobble {
+           animation: animWobble 1s ease-in-out infinite;
+        }
+
+        /* HEARTBEAT */
+        @keyframes animHeartbeat {
+          0% { transform: translate(-50%, 0) scale(1); }
+          14% { transform: translate(-50%, 0) scale(1.15); }
+          28% { transform: translate(-50%, 0) scale(1); }
+          42% { transform: translate(-50%, 0) scale(1.15); }
+          70% { transform: translate(-50%, 0) scale(1); }
+        }
+        .anim-heartbeat {
+           animation: animHeartbeat 1.3s ease-in-out infinite;
+        }
+
+        /* JIGGLE */
+        @keyframes animJiggle {
+          0% { transform: translate(-50%, 0) rotate(0deg); }
+          25% { transform: translate(-50%, 0) rotate(3deg); }
+          50% { transform: translate(-50%, 0) rotate(-3deg); }
+          75% { transform: translate(-50%, 0) rotate(1deg); }
+          100% { transform: translate(-50%, 0) rotate(0deg); }
+        }
+        .anim-jiggle {
+           animation: animJiggle 0.4s ease-in-out infinite;
+        }
+
+        /* SWAY */
+        @keyframes animSway {
+          0%, 100% { transform: translate(calc(-50% - 5px), 0) rotate(-5deg); }
+          50% { transform: translate(calc(-50% + 5px), 0) rotate(5deg); }
+        }
+        .anim-sway {
+           animation: animSway 3s ease-in-out infinite;
+        }
+
+        /* HOP */
+        @keyframes animHop {
+          0%, 100% { transform: translate(-50%, 0); }
+          50% { transform: translate(-50%, -20px); }
+        }
+        .anim-hop {
+           animation: animHop 0.8s cubic-bezier(0.25, 1.5, 0.5, 1) infinite;
+        }
+        @keyframes animHopHead {
+          0%, 100% { transform: translateY(0); }
+          50% { transform: translateY(-20px); }
+        }
+        .anim-hop-head {
+           animation: animHopHead 0.8s cubic-bezier(0.25, 1.5, 0.5, 1) infinite;
+        }
+
+        /* --- HEAD DEFAULT BOUNCE --- */
+        @keyframes bounceSubtle {
+          0%, 100% { transform: translateY(0); }
+          50% { transform: translateY(-3px); }
+        }
+        .anim-bounce-subtle {
+           animation: bounceSubtle 3s ease-in-out infinite;
+        }
+      `}</style>
     </div>
   );
 };

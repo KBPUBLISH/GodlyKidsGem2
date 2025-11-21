@@ -6,7 +6,7 @@ import ShopModal from '../features/ShopModal';
 import AvatarDetailModal from '../features/AvatarDetailModal';
 import { useUser } from '../../context/UserContext';
 import { useAudio } from '../../context/AudioContext';
-import AvatarCompositor from '../avatar/AvatarCompositor';
+import { AVATAR_ASSETS } from '../avatar/AvatarAssets';
 
 interface HeaderProps {
   isVisible: boolean;
@@ -39,21 +39,39 @@ const Header: React.FC<HeaderProps> = ({ isVisible, title = "GODLY KIDS" }) => {
             
             {/* Content */}
             <div className="flex justify-between items-center relative z-10 mb-1">
-                {/* User Avatar with Compositor */}
+                {/* User Avatar - Head Only */}
                 <div 
                     onClick={() => setIsDetailOpen(true)}
                     className="relative group cursor-pointer active:scale-95 transition-transform"
                 >
-                    <div className={`w-11 h-11 bg-[#f3e5ab] rounded-full border-[3px] ${equippedFrame} overflow-visible shadow-[0_2px_4px_rgba(0,0,0,0.3)] relative z-0`}>
-                        <AvatarCompositor 
-                            headUrl={equippedAvatar}
-                            hat={equippedHat}
-                            body={equippedBody}
-                            leftArm={equippedLeftArm}
-                            rightArm={equippedRightArm}
-                            legs={equippedLegs}
-                            className="w-full h-full"
-                        />
+                    <div className={`w-11 h-11 bg-[#f3e5ab] rounded-full border-[3px] ${equippedFrame} overflow-hidden shadow-[0_2px_4px_rgba(0,0,0,0.3)] relative z-0 flex items-center justify-center`}>
+                        {/* Head Only */}
+                        {(() => {
+                            const isInternalHead = equippedAvatar && equippedAvatar.startsWith('head-');
+                            const headAsset = isInternalHead ? AVATAR_ASSETS[equippedAvatar] : null;
+                            
+                            return (
+                                <>
+                                    {headAsset ? (
+                                        <div className="w-[90%] h-[90%] flex items-center justify-center">
+                                            <svg viewBox="0 0 100 100" className="w-full h-full overflow-visible">
+                                                {headAsset}
+                                            </svg>
+                                        </div>
+                                    ) : (
+                                        <img src={equippedAvatar || ''} alt="Head" className="w-full h-full object-cover" />
+                                    )}
+                                    {/* Hat Overlay */}
+                                    {equippedHat && AVATAR_ASSETS[equippedHat] && (
+                                        <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                                            <svg viewBox="0 0 100 80" className="w-full h-full p-1 overflow-visible">
+                                                {AVATAR_ASSETS[equippedHat]}
+                                            </svg>
+                                        </div>
+                                    )}
+                                </>
+                            );
+                        })()}
                     </div>
                     
                     {/* Subscription Status Crown */}

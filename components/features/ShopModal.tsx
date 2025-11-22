@@ -3,7 +3,7 @@ import React, { useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import WoodButton from '../ui/WoodButton';
-import { X, ShoppingBag, Check, Trash2, Crown, Wrench, Play, Pause, ArrowUpToLine, ArrowDownToLine, MoveHorizontal, RotateCcw, RotateCw, ArrowLeftRight, Activity, Save, User } from 'lucide-react';
+import { X, ShoppingBag, Check, Trash2, Crown, Wrench, Play, Pause, ArrowUpToLine, ArrowDownToLine, MoveHorizontal, RotateCcw, RotateCw, ArrowLeftRight, Activity, Save, User, ZoomIn, ZoomOut } from 'lucide-react';
 import { useUser, ShopItem, SavedCharacter } from '../../context/UserContext';
 import AvatarCompositor from '../avatar/AvatarCompositor';
 import { AVATAR_ASSETS } from '../avatar/AvatarAssets';
@@ -195,6 +195,8 @@ const ShopModal: React.FC<ShopModalProps> = ({ isOpen, onClose }) => {
       setPartRotation,
       leftArmOffset, rightArmOffset, legsOffset, headOffset, bodyOffset, hatOffset,
       setPartOffset,
+      leftArmScale, rightArmScale, legsScale, headScale, bodyScale, hatScale,
+      setPartScale,
       swapArms,
       savedCharacters,
       saveCurrentCharacter,
@@ -307,6 +309,22 @@ const ShopModal: React.FC<ShopModalProps> = ({ isOpen, onClose }) => {
       if (next > 180) next = 180;
       if (next < -180) next = -180;
       setPartRotation(selectedPart, next);
+  };
+
+  const updateScale = (delta: number) => {
+      if (!selectedPart) return;
+      
+      let currentScale = 1;
+      if (selectedPart === 'leftArm') currentScale = leftArmScale;
+      else if (selectedPart === 'rightArm') currentScale = rightArmScale;
+      else if (selectedPart === 'legs') currentScale = legsScale;
+      else if (selectedPart === 'head') currentScale = headScale;
+      else if (selectedPart === 'body') currentScale = bodyScale;
+      else if (selectedPart === 'hat') currentScale = hatScale;
+
+      const step = 0.1; // 10% increments
+      const next = currentScale + (delta * step);
+      setPartScale(selectedPart, next);
   };
 
   const renderItem = (item: ShopItem) => {
@@ -588,6 +606,12 @@ const ShopModal: React.FC<ShopModalProps> = ({ isOpen, onClose }) => {
                             headOffset={headOffset}
                             bodyOffset={bodyOffset}
                             hatOffset={hatOffset}
+                            leftArmScale={leftArmScale}
+                            rightArmScale={rightArmScale}
+                            legsScale={legsScale}
+                            headScale={headScale}
+                            bodyScale={bodyScale}
+                            hatScale={hatScale}
                             onPartClick={isBuilderMode ? handlePartClick : undefined}
                             isAnimating={isPlaying}
                             frameClass={equippedFrame} // Pass frame
@@ -711,6 +735,30 @@ const ShopModal: React.FC<ShopModalProps> = ({ isOpen, onClose }) => {
                               </div>
                           </>
                       )}
+
+                      {/* Scale Controls (All Parts) */}
+                      <div className="w-px h-24 bg-white/10"></div>
+
+                      <div className="flex flex-col gap-2 items-center">
+                          <span className="text-[10px] text-[#eecaa0]/60 font-bold uppercase tracking-wider">Scale</span>
+                          <div className="flex gap-2 h-full items-center">
+                              <button onClick={() => updateScale(-1)} className="w-14 h-14 bg-[#3E1F07] rounded-xl text-[#eecaa0] hover:bg-[#5c2e0b] active:scale-95 border-b-4 border-[#2a1505] active:border-b-0 active:translate-y-1 flex items-center justify-center" title="Make Smaller"><ZoomOut size={24} /></button>
+                              <button onClick={() => updateScale(1)} className="w-14 h-14 bg-[#3E1F07] rounded-xl text-[#eecaa0] hover:bg-[#5c2e0b] active:scale-95 border-b-4 border-[#2a1505] active:border-b-0 active:translate-y-1 flex items-center justify-center" title="Make Bigger"><ZoomIn size={24} /></button>
+                          </div>
+                          {/* Display current scale percentage */}
+                          <span className="text-[10px] text-[#eecaa0] font-bold mt-1">
+                              {(() => {
+                                  let currentScale = 1;
+                                  if (selectedPart === 'leftArm') currentScale = leftArmScale;
+                                  else if (selectedPart === 'rightArm') currentScale = rightArmScale;
+                                  else if (selectedPart === 'legs') currentScale = legsScale;
+                                  else if (selectedPart === 'head') currentScale = headScale;
+                                  else if (selectedPart === 'body') currentScale = bodyScale;
+                                  else if (selectedPart === 'hat') currentScale = hatScale;
+                                  return `${Math.round(currentScale * 100)}%`;
+                              })()}
+                          </span>
+                      </div>
                   </div>
               </div>
           )}

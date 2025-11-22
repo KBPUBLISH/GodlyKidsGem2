@@ -19,6 +19,12 @@ interface AvatarCompositorProps {
   headOffset?: { x: number, y: number };
   bodyOffset?: { x: number, y: number };
   hatOffset?: { x: number, y: number };
+  leftArmScale?: number;
+  rightArmScale?: number;
+  legsScale?: number;
+  headScale?: number;
+  bodyScale?: number;
+  hatScale?: number;
   onPartClick?: (part: 'leftArm' | 'rightArm' | 'legs' | 'head' | 'body' | 'hat') => void;
   isAnimating?: boolean;
   className?: string;
@@ -47,6 +53,12 @@ const AvatarCompositor: React.FC<AvatarCompositorProps> = ({
       headOffset = { x: 0, y: 0 },
       bodyOffset = { x: 0, y: 0 },
       hatOffset = { x: 0, y: 0 },
+      leftArmScale = 1,
+      rightArmScale = 1,
+      legsScale = 1,
+      headScale = 1,
+      bodyScale = 1,
+      hatScale = 1,
       onPartClick,
   isAnimating = false,
   className = "w-full h-full",
@@ -109,7 +121,7 @@ const AvatarCompositor: React.FC<AvatarCompositorProps> = ({
       <div 
         className="absolute inset-0 z-50 flex items-center justify-center"
         style={{
-          transform: `translate(${headOffset.x}%, ${headOffset.y}%)`
+          transform: `translate(${headOffset.x}%, ${headOffset.y}%) scale(${headScale})`
         }}
       >
           <div 
@@ -137,7 +149,7 @@ const AvatarCompositor: React.FC<AvatarCompositorProps> = ({
           <div 
             className="absolute inset-0 z-[60] flex items-center justify-center"
             style={{
-              transform: `translate(${hatOffset.x}%, ${hatOffset.y}%)`
+              transform: `translate(${hatOffset.x}%, ${hatOffset.y}%) scale(${hatScale})`
             }}
           >
              <div 
@@ -167,7 +179,7 @@ const AvatarCompositor: React.FC<AvatarCompositorProps> = ({
                 left: `calc(50% + ${bodyOffset.x}%)`, 
                 width: '95%', 
                 height: '90%',
-                transform: 'translate(-50%, 0)' 
+                transform: `translate(-50%, 0) scale(${bodyScale})` 
              }}
              onClick={(e) => onPartClick && handlePartClick(e, 'body')}
           >
@@ -182,7 +194,7 @@ const AvatarCompositor: React.FC<AvatarCompositorProps> = ({
                             width: '70%', 
                             height: '70%',
                             transformOrigin: 'top center',
-                            transform: `rotate(${legsRotation}deg)`
+                            transform: `rotate(${legsRotation}deg) scale(${legsScale})`
                         }}
                     >
                         <svg viewBox="0 0 100 60" className="w-full h-full overflow-visible">
@@ -211,7 +223,7 @@ const AvatarCompositor: React.FC<AvatarCompositorProps> = ({
                         width: '44%', // Widened from 38%
                         height: '80%',
                         transformOrigin: '90% 15%', 
-                        transform: `rotate(${rightArmRotation}deg)`
+                        transform: `rotate(${rightArmRotation}deg) scale(${rightArmScale})`
                     }}
                   >
                       <div
@@ -236,7 +248,7 @@ const AvatarCompositor: React.FC<AvatarCompositorProps> = ({
                         width: '44%', // Widened from 38%
                         height: '80%',
                         transformOrigin: '10% 15%',
-                        transform: `rotate(${leftArmRotation}deg)`
+                        transform: `rotate(${leftArmRotation}deg) scale(${leftArmScale})`
                     }}
                   >
                       <div 

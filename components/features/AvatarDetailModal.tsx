@@ -20,7 +20,9 @@ const AvatarDetailModal: React.FC<AvatarDetailModalProps> = ({ isOpen, onClose, 
       equippedLeftArm, equippedRightArm, equippedLegs,
       equippedAnimation, // Use configured animation
       equippedLeftArmRotation, equippedRightArmRotation, equippedLegsRotation,
-      leftArmOffset, rightArmOffset, legsOffset
+      leftArmOffset, rightArmOffset, legsOffset,
+      headOffset, bodyOffset, hatOffset,
+      leftArmScale, rightArmScale, legsScale, headScale, bodyScale, hatScale
   } = useUser();
 
   const [isPlaying, setIsPlaying] = useState(false);
@@ -94,6 +96,15 @@ const AvatarDetailModal: React.FC<AvatarDetailModalProps> = ({ isOpen, onClose, 
                         leftArmOffset={leftArmOffset}
                         rightArmOffset={rightArmOffset}
                         legsOffset={legsOffset}
+                        headOffset={headOffset}
+                        bodyOffset={bodyOffset}
+                        hatOffset={hatOffset}
+                        leftArmScale={leftArmScale}
+                        rightArmScale={rightArmScale}
+                        legsScale={legsScale}
+                        headScale={headScale}
+                        bodyScale={bodyScale}
+                        hatScale={hatScale}
                         isAnimating={isPlaying}
                         frameClass={equippedFrame}
                    />

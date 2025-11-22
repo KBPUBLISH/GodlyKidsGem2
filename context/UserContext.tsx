@@ -1,5 +1,5 @@
 
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 // Removed import of KidProfile due to missing export in ../types
 
 export interface ShopItem {
@@ -43,6 +43,10 @@ interface UserContextType {
   kids: any[]; // Fixed: Use `any[]` as fallback until KidProfile type is defined/imported
   addKid: (kid: any) => void;
   removeKid: (id: string) => void;
+  
+  // Active Profile
+  currentProfileId: string | null; // null = parent, otherwise kid id
+  switchProfile: (profileId: string | null) => void; // null = parent, string = kid id
 
   // Equipment Slots (Main User)
   equippedAvatar: string; // "Head"
@@ -68,6 +72,15 @@ interface UserContextType {
   bodyOffset: { x: number, y: number };
   hatOffset: { x: number, y: number };
   setPartOffset: (part: 'leftArm' | 'rightArm' | 'legs' | 'head' | 'body' | 'hat', axis: 'x' | 'y', val: number) => void;
+  
+  // Individual Part Scaling
+  leftArmScale: number;
+  rightArmScale: number;
+  legsScale: number;
+  headScale: number;
+  bodyScale: number;
+  hatScale: number;
+  setPartScale: (part: 'leftArm' | 'rightArm' | 'legs' | 'head' | 'body' | 'hat', scale: number) => void;
   
   swapArms: () => void;
 
@@ -118,6 +131,13 @@ const UserContext = createContext<UserContextType>({
   bodyOffset: { x: 0, y: 0 },
   hatOffset: { x: 0, y: 0 },
   setPartOffset: () => {},
+  leftArmScale: 1,
+  rightArmScale: 1,
+  legsScale: 1,
+  headScale: 1,
+  bodyScale: 1,
+  hatScale: 1,
+  setPartScale: () => {},
   swapArms: () => {},
   setEquippedAvatar: () => {},
   purchaseItem: () => false,
@@ -161,11 +181,36 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
     id: string;
     name: string;
     age?: number;
-    // Add other fields as needed
+    avatarSeed?: string; // Initial head selection
+    // Full avatar configuration
+    avatar?: string;
+    frame?: string;
+    hat?: string | null;
+    body?: string | null;
+    leftArm?: string | null;
+    rightArm?: string | null;
+    legs?: string | null;
+    animation?: string;
+    leftArmRotation?: number;
+    rightArmRotation?: number;
+    legsRotation?: number;
+    leftArmOffset?: { x: number, y: number };
+    rightArmOffset?: { x: number, y: number };
+    legsOffset?: { x: number, y: number };
+    headOffset?: { x: number, y: number };
+    bodyOffset?: { x: number, y: number };
+    hatOffset?: { x: number, y: number };
+    leftArmScale?: number;
+    rightArmScale?: number;
+    legsScale?: number;
+    headScale?: number;
+    bodyScale?: number;
+    hatScale?: number;
   };
 
   const [parentName, setParentName] = useState<string>(saved?.parentName ?? 'Parent');
   const [kids, setKids] = useState<KidProfile[]>(saved?.kids ?? []);
+  const [currentProfileId, setCurrentProfileId] = useState<string | null>(saved?.currentProfileId ?? null);
 
   // Default Equipment - Start with TOAST!
   const [equippedAvatar, setEquippedAvatar] = useState<string>(saved?.equippedAvatar ?? 'head-toast');
@@ -190,9 +235,44 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [bodyOffset, setBodyOffset] = useState<{x: number, y: number}>(saved?.bodyOffset ?? { x: 0, y: 0 });
   const [hatOffset, setHatOffset] = useState<{x: number, y: number}>(saved?.hatOffset ?? { x: 0, y: 0 });
 
+  // Individual Part Scaling (default to 1.0 = 100%)
+  const [leftArmScale, setLeftArmScale] = useState<number>(saved?.leftArmScale ?? 1);
+  const [rightArmScale, setRightArmScale] = useState<number>(saved?.rightArmScale ?? 1);
+  const [legsScale, setLegsScale] = useState<number>(saved?.legsScale ?? 1);
+  const [headScale, setHeadScale] = useState<number>(saved?.headScale ?? 1);
+  const [bodyScale, setBodyScale] = useState<number>(saved?.bodyScale ?? 1);
+  const [hatScale, setHatScale] = useState<number>(saved?.hatScale ?? 1);
+
   const [savedCharacters, setSavedCharacters] = useState<SavedCharacter[]>(saved?.savedCharacters ?? []);
 
   const [isSubscribed, setIsSubscribed] = useState(saved?.isSubscribed ?? false);
+
+  // Store parent's avatar data persistently
+  const [parentAvatarData, setParentAvatarData] = useState<{
+    avatar: string;
+    frame: string;
+    hat: string | null;
+    body: string | null;
+    leftArm: string | null;
+    rightArm: string | null;
+    legs: string | null;
+    animation: string;
+    leftArmRotation: number;
+    rightArmRotation: number;
+    legsRotation: number;
+    leftArmOffset: { x: number, y: number };
+    rightArmOffset: { x: number, y: number };
+    legsOffset: { x: number, y: number };
+    headOffset: { x: number, y: number };
+    bodyOffset: { x: number, y: number };
+    hatOffset: { x: number, y: number };
+    leftArmScale: number;
+    rightArmScale: number;
+    legsScale: number;
+    headScale: number;
+    bodyScale: number;
+    hatScale: number;
+  } | null>(saved?.parentAvatarData ?? null);
 
   // --- PERSISTENCE EFFECT ---
   useEffect(() => {
@@ -201,6 +281,7 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
       ownedItems,
       parentName,
       kids,
+      currentProfileId,
       equippedAvatar,
       equippedFrame,
       equippedHat,
@@ -218,18 +299,27 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
       headOffset,
       bodyOffset,
       hatOffset,
+      leftArmScale,
+      rightArmScale,
+      legsScale,
+      headScale,
+      bodyScale,
+      hatScale,
       savedCharacters,
-      isSubscribed
+      isSubscribed,
+      parentAvatarData
     };
     localStorage.setItem(STORAGE_KEY, JSON.stringify(stateToSave));
   }, [
-    coins, ownedItems, parentName, kids, 
-    equippedAvatar, equippedFrame, equippedHat, equippedBody, 
+    coins, ownedItems, parentName, kids, currentProfileId,
+      equippedAvatar, equippedFrame, equippedHat, equippedBody,
     equippedLeftArm, equippedRightArm, equippedLegs, equippedAnimation,
     equippedLeftArmRotation, equippedRightArmRotation, equippedLegsRotation,
     leftArmOffset, rightArmOffset, legsOffset, headOffset, bodyOffset, hatOffset,
+    leftArmScale, rightArmScale, legsScale, headScale, bodyScale, hatScale,
     savedCharacters,
-    isSubscribed
+    isSubscribed,
+    parentAvatarData
   ]);
 
   const addCoins = (amount: number) => {
@@ -242,6 +332,219 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const removeKid = (id: string) => {
     setKids(prev => prev.filter(k => k.id !== id));
+    // If we're removing the currently active profile, switch back to parent
+    if (currentProfileId === id) {
+      setCurrentProfileId(null);
+    }
+  };
+
+  // Helper to get current avatar state
+  const getCurrentAvatarState = () => ({
+    avatar: equippedAvatar,
+    frame: equippedFrame,
+    hat: equippedHat,
+    body: equippedBody,
+    leftArm: equippedLeftArm,
+    rightArm: equippedRightArm,
+    legs: equippedLegs,
+    animation: equippedAnimation,
+    leftArmRotation: equippedLeftArmRotation,
+    rightArmRotation: equippedRightArmRotation,
+    legsRotation: equippedLegsRotation,
+    leftArmOffset: { ...leftArmOffset },
+    rightArmOffset: { ...rightArmOffset },
+    legsOffset: { ...legsOffset },
+    headOffset: { ...headOffset },
+    bodyOffset: { ...bodyOffset },
+    hatOffset: { ...hatOffset },
+    leftArmScale,
+    rightArmScale,
+    legsScale,
+    headScale,
+    bodyScale,
+    hatScale
+  });
+
+  // Helper to apply avatar state
+  const applyAvatarState = (state: {
+    avatar: string;
+    frame: string;
+    hat: string | null;
+    body: string | null;
+    leftArm: string | null;
+    rightArm: string | null;
+    legs: string | null;
+    animation: string;
+    leftArmRotation: number;
+    rightArmRotation: number;
+    legsRotation: number;
+    leftArmOffset: { x: number, y: number };
+    rightArmOffset: { x: number, y: number };
+    legsOffset: { x: number, y: number };
+    headOffset: { x: number, y: number };
+    bodyOffset: { x: number, y: number };
+    hatOffset: { x: number, y: number };
+    leftArmScale: number;
+    rightArmScale: number;
+    legsScale: number;
+    headScale: number;
+    bodyScale: number;
+    hatScale: number;
+  }) => {
+    setEquippedAvatar(state.avatar);
+    setEquippedFrame(state.frame);
+    setEquippedHat(state.hat);
+    setEquippedBody(state.body);
+    setEquippedLeftArm(state.leftArm);
+    setEquippedRightArm(state.rightArm);
+    setEquippedLegs(state.legs);
+    setEquippedAnimation(state.animation);
+    setEquippedLeftArmRotation(state.leftArmRotation);
+    setEquippedRightArmRotation(state.rightArmRotation);
+    setEquippedLegsRotation(state.legsRotation);
+    setLeftArmOffset(state.leftArmOffset);
+    setRightArmOffset(state.rightArmOffset);
+    setLegsOffset(state.legsOffset);
+    setHeadOffset(state.headOffset);
+    setBodyOffset(state.bodyOffset);
+    setHatOffset(state.hatOffset);
+    setLeftArmScale(state.leftArmScale);
+    setRightArmScale(state.rightArmScale);
+    setLegsScale(state.legsScale);
+    setHeadScale(state.headScale);
+    setBodyScale(state.bodyScale);
+    setHatScale(state.hatScale);
+  };
+
+  // Helper to save current avatar state to active profile
+  const saveCurrentProfileAvatar = useCallback(() => {
+    // Don't save if we're not on any profile yet (initial load)
+    if (currentProfileId === null && parentAvatarData === null) {
+      return;
+    }
+    
+    const currentState = getCurrentAvatarState();
+    
+    if (currentProfileId === null) {
+      // Currently on parent - save parent's state
+      setParentAvatarData(currentState);
+    } else {
+      // Currently on a kid - save kid's state to their profile
+      setKids(prev => prev.map(kid => 
+        kid.id === currentProfileId 
+          ? { ...kid, ...currentState }
+          : kid
+      ));
+    }
+  }, [currentProfileId, parentAvatarData, equippedAvatar, equippedFrame, equippedHat, equippedBody, 
+      equippedLeftArm, equippedRightArm, equippedLegs, equippedAnimation,
+      equippedLeftArmRotation, equippedRightArmRotation, equippedLegsRotation,
+      leftArmOffset, rightArmOffset, legsOffset, headOffset, bodyOffset, hatOffset,
+      leftArmScale, rightArmScale, legsScale, headScale, bodyScale, hatScale]);
+
+  // Auto-save avatar changes to current profile (with debounce to avoid excessive saves)
+  useEffect(() => {
+    // Don't save on initial mount or if no profile is active
+    if (currentProfileId === null && parentAvatarData === null) {
+      return;
+    }
+    
+    // Debounce the save to avoid excessive updates during rapid changes
+    const timeoutId = setTimeout(() => {
+      saveCurrentProfileAvatar();
+    }, 100);
+    
+    return () => clearTimeout(timeoutId);
+  }, [
+    equippedAvatar, equippedFrame, equippedHat, equippedBody,
+    equippedLeftArm, equippedRightArm, equippedLegs, equippedAnimation,
+    equippedLeftArmRotation, equippedRightArmRotation, equippedLegsRotation,
+    leftArmOffset, rightArmOffset, legsOffset, headOffset, bodyOffset, hatOffset,
+    leftArmScale, rightArmScale, legsScale, headScale, bodyScale, hatScale,
+    currentProfileId,
+    saveCurrentProfileAvatar
+  ]);
+
+  const switchProfile = (profileId: string | null) => {
+    // Save current profile's avatar data before switching
+    saveCurrentProfileAvatar();
+
+    setCurrentProfileId(profileId);
+
+    if (profileId === null) {
+      // Switching to parent - restore parent's avatar data
+      if (parentAvatarData) {
+        applyAvatarState(parentAvatarData);
+      }
+    } else {
+      // Switching to a kid profile - restore kid's saved avatar or use defaults
+      const kid = kids.find(k => k.id === profileId);
+      if (kid) {
+        // If kid has saved avatar data, use it; otherwise use defaults with their avatarSeed
+        if (kid.avatar !== undefined) {
+          // Kid has saved avatar configuration
+          applyAvatarState({
+            avatar: kid.avatar || kid.avatarSeed || 'head-toast',
+            frame: kid.frame || 'border-[#8B4513]',
+            hat: kid.hat ?? null,
+            body: kid.body ?? null,
+            leftArm: kid.leftArm ?? null,
+            rightArm: kid.rightArm ?? null,
+            legs: kid.legs ?? null,
+            animation: kid.animation || 'anim-breathe',
+            leftArmRotation: kid.leftArmRotation ?? 0,
+            rightArmRotation: kid.rightArmRotation ?? 0,
+            legsRotation: kid.legsRotation ?? 0,
+            leftArmOffset: kid.leftArmOffset ?? { x: 0, y: 0 },
+            rightArmOffset: kid.rightArmOffset ?? { x: 0, y: 0 },
+            legsOffset: kid.legsOffset ?? { x: 0, y: 0 },
+            headOffset: kid.headOffset ?? { x: 0, y: 0 },
+            bodyOffset: kid.bodyOffset ?? { x: 0, y: 0 },
+            hatOffset: kid.hatOffset ?? { x: 0, y: 0 },
+            leftArmScale: kid.leftArmScale ?? 1,
+            rightArmScale: kid.rightArmScale ?? 1,
+            legsScale: kid.legsScale ?? 1,
+            headScale: kid.headScale ?? 1,
+            bodyScale: kid.bodyScale ?? 1,
+            hatScale: kid.hatScale ?? 1
+          });
+        } else {
+          // First time switching to this kid - use defaults with their avatarSeed
+          const defaultState = {
+            avatar: kid.avatarSeed || 'head-toast',
+            frame: 'border-[#8B4513]',
+            hat: null,
+            body: null,
+            leftArm: null,
+            rightArm: null,
+            legs: null,
+            animation: 'anim-breathe',
+            leftArmRotation: 0,
+            rightArmRotation: 0,
+            legsRotation: 0,
+            leftArmOffset: { x: 0, y: 0 },
+            rightArmOffset: { x: 0, y: 0 },
+            legsOffset: { x: 0, y: 0 },
+            headOffset: { x: 0, y: 0 },
+            bodyOffset: { x: 0, y: 0 },
+            hatOffset: { x: 0, y: 0 },
+            leftArmScale: 1,
+            rightArmScale: 1,
+            legsScale: 1,
+            headScale: 1,
+            bodyScale: 1,
+            hatScale: 1
+          };
+          applyAvatarState(defaultState);
+          // Save this default state to the kid's profile
+          setKids(prev => prev.map(k => 
+            k.id === profileId 
+              ? { ...k, ...defaultState }
+              : k
+          ));
+        }
+      }
+    }
   };
 
   const isOwned = (id: string) => {
@@ -301,6 +604,24 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
        setBodyOffset(prev => ({ ...prev, [axis]: val }));
     } else if (part === 'hat') {
        setHatOffset(prev => ({ ...prev, [axis]: val }));
+    }
+  };
+
+  const setPartScale = (part: 'leftArm' | 'rightArm' | 'legs' | 'head' | 'body' | 'hat', scale: number) => {
+    // Clamp scale between 0.5 (50%) and 2.0 (200%)
+    const clampedScale = Math.max(0.5, Math.min(2.0, scale));
+    if (part === 'leftArm') {
+       setLeftArmScale(clampedScale);
+    } else if (part === 'rightArm') {
+       setRightArmScale(clampedScale);
+    } else if (part === 'legs') {
+       setLegsScale(clampedScale);
+    } else if (part === 'head') {
+       setHeadScale(clampedScale);
+    } else if (part === 'body') {
+       setBodyScale(clampedScale);
+    } else if (part === 'hat') {
+       setHatScale(clampedScale);
     }
   };
 
@@ -389,6 +710,12 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setHeadOffset({ x: 0, y: 0 });
     setBodyOffset({ x: 0, y: 0 });
     setHatOffset({ x: 0, y: 0 });
+    setLeftArmScale(1);
+    setRightArmScale(1);
+    setLegsScale(1);
+    setHeadScale(1);
+    setBodyScale(1);
+    setHatScale(1);
     setSavedCharacters([]);
     setIsSubscribed(false);
     localStorage.removeItem(STORAGE_KEY);
@@ -423,8 +750,17 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
       bodyOffset,
       hatOffset,
       setPartOffset,
+      leftArmScale,
+      rightArmScale,
+      legsScale,
+      headScale,
+      bodyScale,
+      hatScale,
+      setPartScale,
       swapArms,
       setEquippedAvatar,
+      currentProfileId,
+      switchProfile,
       purchaseItem,
       equipItem,
       unequipItem,

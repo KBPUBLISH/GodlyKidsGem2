@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { Plus, User as UserIcon, Settings, ChevronLeft, ShoppingBag, Crown } from 'lucide-react';
 import WoodButton from '../components/ui/WoodButton';
 import ShopModal from '../components/features/ShopModal';
+import AvatarCompositor from '../components/avatar/AvatarCompositor';
 import { useUser } from '../context/UserContext';
 import { AVATAR_ASSETS } from '../components/avatar/AvatarAssets';
 
@@ -16,10 +17,31 @@ const ProfileSelectionPage: React.FC = () => {
     isSubscribed, 
     parentName,
     kids,
+    currentProfileId,
+    switchProfile,
     equippedAvatar, 
     equippedFrame, 
     equippedHat,
-    headOffset
+    equippedBody,
+    equippedLeftArm,
+    equippedRightArm,
+    equippedLegs,
+    equippedAnimation,
+    equippedLeftArmRotation,
+    equippedRightArmRotation,
+    equippedLegsRotation,
+    leftArmOffset,
+    rightArmOffset,
+    legsOffset,
+    headOffset,
+    bodyOffset,
+    hatOffset,
+    leftArmScale,
+    rightArmScale,
+    legsScale,
+    headScale,
+    bodyScale,
+    hatScale
   } = useUser();
   const [isShopOpen, setIsShopOpen] = useState(false);
 
@@ -83,49 +105,45 @@ const ProfileSelectionPage: React.FC = () => {
           </div>
 
           {/* Grid */}
-          <div className="grid grid-cols-2 gap-x-10 gap-y-8 w-full max-w-[300px] mb-auto">
+          <div className="grid grid-cols-2 gap-x-10 gap-y-8 w-full max-w-[300px] mb-8">
             
-            {/* PARENT PROFILE (Main User) - Head Only */}
+            {/* PARENT PROFILE (Main User) - Full Avatar */}
              <div 
-                onClick={() => navigate('/home')}
+                onClick={() => {
+                  switchProfile(null); // Switch to parent profile
+                  navigate('/home');
+                }}
                 className="flex flex-col items-center gap-3 cursor-pointer group"
               >
-                <div className="relative">
-                    <div className={`w-28 h-28 bg-[#f3e5ab] rounded-full border-[4px] ${equippedFrame} overflow-hidden shadow-[0_8px_15px_rgba(0,0,0,0.3)] transition-transform duration-200 group-active:scale-95 group-hover:scale-105 flex items-center justify-center relative z-10`}>
-                        {/* Head Only with Offset */}
-                        <div 
-                            className="w-full h-full flex items-center justify-center relative"
-                            style={{
-                                transform: `translate(${headOffset.x}%, ${headOffset.y}%)`
-                            }}
-                        >
-                            {(() => {
-                                const isInternalHead = equippedAvatar && equippedAvatar.startsWith('head-');
-                                const headAsset = isInternalHead ? AVATAR_ASSETS[equippedAvatar] : null;
-                                
-                                return (
-                                    <>
-                                        {headAsset ? (
-                                            <div className="w-[90%] h-[90%] flex items-center justify-center">
-                                                <svg viewBox="0 0 100 100" className="w-full h-full overflow-visible">
-                                                    {headAsset}
-                                                </svg>
-                                            </div>
-                                        ) : (
-                                            <img src={equippedAvatar || ''} alt="Head" className="w-full h-full object-cover rounded-full" />
-                                        )}
-                                        {/* Hat Overlay */}
-                                        {equippedHat && AVATAR_ASSETS[equippedHat] && (
-                                            <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                                                <svg viewBox="0 0 100 80" className="w-full h-full p-1 overflow-visible">
-                                                    {AVATAR_ASSETS[equippedHat]}
-                                                </svg>
-                                            </div>
-                                        )}
-                                    </>
-                                );
-                            })()}
-                        </div>
+                <div className="relative mb-1">
+                    {/* Full Avatar with Animation - No Circle Container, Properly Sized */}
+                    <div className="w-32 h-32 overflow-visible flex items-center justify-center relative z-10 transition-transform duration-200 group-active:scale-95 group-hover:scale-105">
+                        <AvatarCompositor
+                            headUrl={equippedAvatar}
+                            hat={equippedHat}
+                            body={equippedBody}
+                            leftArm={equippedLeftArm}
+                            rightArm={equippedRightArm}
+                            legs={equippedLegs}
+                            animationStyle={equippedAnimation}
+                            leftArmRotation={equippedLeftArmRotation}
+                            rightArmRotation={equippedRightArmRotation}
+                            legsRotation={equippedLegsRotation}
+                            leftArmOffset={leftArmOffset}
+                            rightArmOffset={rightArmOffset}
+                            legsOffset={legsOffset}
+                            headOffset={headOffset}
+                            bodyOffset={bodyOffset}
+                            hatOffset={hatOffset}
+                            leftArmScale={leftArmScale}
+                            rightArmScale={rightArmScale}
+                            legsScale={legsScale}
+                            headScale={headScale}
+                            bodyScale={bodyScale}
+                            hatScale={hatScale}
+                            isAnimating={true}
+                            className="w-full h-full"
+                        />
                     </div>
                     {/* Crown Badge */}
                     <div className={`absolute top-0 right-0 bg-white rounded-full p-1.5 shadow-md border-2 z-20 ${isSubscribed ? 'border-[#FFD700]' : 'border-gray-200'}`}>
@@ -137,7 +155,8 @@ const ProfileSelectionPage: React.FC = () => {
                     </div>
                 </div>
 
-                <span className="font-display font-bold text-white text-lg tracking-wide drop-shadow-md text-center leading-tight break-words w-32">
+                {/* User Name - Below Avatar */}
+                <span className="font-display font-bold text-white text-lg tracking-wide drop-shadow-[0_2px_4px_rgba(0,0,0,0.8)] text-center leading-tight break-words w-32 mt-1">
                   {parentName || "Parent"}
                 </span>
               </div>
@@ -146,7 +165,10 @@ const ProfileSelectionPage: React.FC = () => {
             {kids.map((profile, index) => (
               <div 
                 key={profile.id} 
-                onClick={() => navigate('/home')}
+                onClick={() => {
+                  switchProfile(profile.id); // Switch to this kid's profile
+                  navigate('/home');
+                }}
                 className="flex flex-col items-center gap-3 cursor-pointer group"
               >
                 <div className="relative">
@@ -169,18 +191,19 @@ const ProfileSelectionPage: React.FC = () => {
               </div>
             ))}
 
-            {/* New Profile Button */}
-            <div 
-                onClick={() => navigate('/create-profile')}
-                className="flex flex-col items-center gap-3 cursor-pointer group"
-            >
-               <div className="w-28 h-28 rounded-full bg-[#64748b]/60 backdrop-blur-md border-4 border-white/30 shadow-lg flex items-center justify-center transition-transform duration-200 group-active:scale-95 group-hover:bg-[#64748b]/80">
-                  <Plus size={48} className="text-white" strokeWidth={4} />
-               </div>
-               <span className="font-display font-bold text-white text-lg tracking-wide drop-shadow-md">
-                  New
-                </span>
-            </div>
+          </div>
+
+          {/* New Profile Button - Moved Outside Grid, Lower Down */}
+          <div 
+              onClick={() => navigate('/create-profile')}
+              className="flex flex-col items-center gap-3 cursor-pointer group mt-8"
+          >
+             <div className="w-28 h-28 rounded-full bg-[#64748b]/60 backdrop-blur-md border-4 border-white/30 shadow-lg flex items-center justify-center transition-transform duration-200 group-active:scale-95 group-hover:bg-[#64748b]/80">
+                <Plus size={48} className="text-white" strokeWidth={4} />
+             </div>
+             <span className="font-display font-bold text-white text-lg tracking-wide drop-shadow-md">
+                New
+              </span>
           </div>
 
           {/* Go Premium Banner (If Not Subscribed) */}

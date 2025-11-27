@@ -19,6 +19,8 @@ app.use('/api/pages', require('./routes/pages'));
 app.use('/api/playlists', require('./routes/playlists'));
 app.use('/api/categories', require('./routes/categories'));
 app.use('/api/upload', require('./routes/upload'));
+app.use('/api/authentication', require('./routes/authentication'));
+app.use('/api/auth', require('./routes/auth'));
 
 app.get('/', (req, res) => {
   res.send('Godly Kids Backend API is running');

@@ -7,7 +7,7 @@ export const getApiBaseUrl = (): string => {
   // Check for environment variable (Vite uses import.meta.env)
   const envUrl = import.meta.env.VITE_API_BASE_URL;
   const baseUrl = envUrl || API_BASE_URL;
-  
+
   // Ensure URL ends with a slash
   return baseUrl.endsWith('/') ? baseUrl : `${baseUrl}/`;
 };
@@ -15,12 +15,12 @@ export const getApiBaseUrl = (): string => {
 // Helper to ensure cover URL is absolute
 const normalizeCoverUrl = (url: string | undefined | null): string => {
   if (!url || url.trim() === '') return '';
-  
+
   // If already absolute URL (starts with http:// or https://), return as is
   if (url.startsWith('http://') || url.startsWith('https://')) {
     return url;
   }
-  
+
   // If relative URL, make it absolute using API base URL
   const baseUrl = getApiBaseUrl();
   // Remove trailing slash from base URL and leading slash from relative URL
@@ -35,42 +35,42 @@ const transformBook = (apiBook: any): Book => {
   // Handle cover URL - try multiple possible field names
   // From /v3/books/by-categories: coverURI, coverMiniURI
   const rawCoverUrl = apiBook.coverURI ||
-                      apiBook.coverUri ||
-                      apiBook.coverMiniURI ||
-                      apiBook.coverMiniUri ||
-                      apiBook.coverUrl || 
-                      apiBook.cover_url || 
-                      apiBook.cover || 
-                      apiBook.coverImage ||
-                      apiBook.cover_image ||
-                      apiBook.image || 
-                      apiBook.imageUrl || 
-                      apiBook.image_url ||
-                      apiBook.thumbnail || 
-                      apiBook.thumbnailUrl ||
-                      apiBook.thumbnail_url ||
-                      '';
-  
+    apiBook.coverUri ||
+    apiBook.coverMiniURI ||
+    apiBook.coverMiniUri ||
+    apiBook.coverUrl ||
+    apiBook.cover_url ||
+    apiBook.cover ||
+    apiBook.coverImage ||
+    apiBook.cover_image ||
+    apiBook.image ||
+    apiBook.imageUrl ||
+    apiBook.image_url ||
+    apiBook.thumbnail ||
+    apiBook.thumbnailUrl ||
+    apiBook.thumbnail_url ||
+    '';
+
   // Handle category - try multiple possible field names
-  const category = apiBook.category || 
-                   apiBook.categoryName ||
-                   apiBook.genre || 
-                   apiBook.type ||
-                   apiBook.bookType ||
-                   apiBook.book_type ||
-                   'Uncategorized';
-  
+  const category = apiBook.category ||
+    apiBook.categoryName ||
+    apiBook.genre ||
+    apiBook.type ||
+    apiBook.bookType ||
+    apiBook.book_type ||
+    'Uncategorized';
+
   // Handle level/age - try multiple possible field names
   // From /v3/books/by-categories: minAge (number)
   const level = apiBook.minAge !== undefined ? `${apiBook.minAge}+` :
-                apiBook.level || 
-                apiBook.age_level || 
-                apiBook.ageLevel || 
-                apiBook.age ||
-                apiBook.recommendedAge ||
-                apiBook.recommended_age ||
-                '0+';
-  
+    apiBook.level ||
+    apiBook.age_level ||
+    apiBook.ageLevel ||
+    apiBook.age ||
+    apiBook.recommendedAge ||
+    apiBook.recommended_age ||
+    '0+';
+
   return {
     id: apiBook.id || apiBook._id || String(apiBook.id || apiBook._id || Math.random()),
     title: apiBook.title || apiBook.name || 'Untitled',
@@ -94,22 +94,22 @@ const transformBooks = (apiBooks: any[]): Book[] => {
 // Simple helper to handle potential API calls with authentication
 async function fetchWithTimeout(resource: string, options: RequestInit & { timeout?: number } = {}) {
   const { timeout = 8000, ...fetchOptions } = options;
-  
+
   const controller = new AbortController();
   const id = setTimeout(() => {
     console.warn(`⏱️ Request timeout after ${timeout}ms: ${resource}`);
     controller.abort();
   }, timeout);
-  
+
   // Get auth token if available
   const token = authService.getToken();
   const headers = new Headers(fetchOptions.headers);
-  
+
   // Set default headers
   if (!headers.has('Content-Type')) {
     headers.set('Content-Type', 'application/json');
   }
-  
+
   // Add authorization header if token exists
   // Format: "Bearer <token>"
   if (token) {
@@ -120,12 +120,12 @@ async function fetchWithTimeout(resource: string, options: RequestInit & { timeo
   } else {
     console.log('⚠️ No token available, request will be unauthenticated');
   }
-  
+
   try {
     const response = await fetch(resource, {
       ...fetchOptions,
       headers,
-      signal: controller.signal  
+      signal: controller.signal
     });
     clearTimeout(id);
     return response;
@@ -141,20 +141,13 @@ export const ApiService = {
     try {
       const baseUrl = getApiBaseUrl();
       const token = authService.getToken();
-      
-      // Use the correct user endpoint: /v3/books/by-categories
-      // This endpoint is for users, not admin-only
-      const endpoint = `${baseUrl}v3/books/by-categories`;
+
+      // Use the correct endpoint for local backend
+      const endpoint = `${baseUrl}api/books`;
       console.log('🔍 Fetching books from API:', endpoint);
       console.log('🔑 Has auth token:', !!token);
-      
-      // Add pagination parameters
-      const params = new URLSearchParams({
-        page: '1',
-        limit: '100' // Get a good number of books
-      });
-      
-      const response = await fetchWithTimeout(`${endpoint}?${params.toString()}`, {
+
+      const response = await fetchWithTimeout(endpoint, {
         method: 'GET',
       });
 
@@ -170,7 +163,7 @@ export const ApiService = {
         } catch {
           // Couldn't parse error response
         }
-        
+
         // Handle different error status codes
         if (response.status === 401) {
           if (token) {
@@ -180,12 +173,12 @@ export const ApiService = {
             console.warn('⚠️ No authentication token. API requires authentication.');
             console.warn('💡 Please log in to access the API and see real data from the dev database.');
           }
-          
+
           console.warn('⚠️ Returning mock data due to 401 Unauthorized');
           await new Promise(resolve => setTimeout(resolve, 300));
           return MOCK_BOOKS;
         }
-        
+
         if (response.status === 403) {
           console.error('❌ API returned 403 Forbidden - User is authenticated but lacks permission');
           console.error('💡 This might mean:');
@@ -194,7 +187,7 @@ export const ApiService = {
           console.error('   3. The endpoint requires a different permission level');
           console.error('   4. The API might require a subscription or premium account');
           console.error('📋 Token being used:', token ? token.substring(0, 20) + '...' : 'None');
-          
+
           // Try to get more details from error response
           let errorDetails = null;
           try {
@@ -209,7 +202,7 @@ export const ApiService = {
               console.error('📋 Could not read error response');
             }
           }
-          
+
           // Try alternative endpoints that might have different permissions
           console.log('🔍 Trying alternative book endpoints...');
           const alternativeEndpoints = [
@@ -220,14 +213,14 @@ export const ApiService = {
             `${baseUrl}user/books`,
             `${baseUrl}my-books`,
           ];
-          
+
           for (const altEndpoint of alternativeEndpoints) {
             try {
               console.log(`🔍 Trying: ${altEndpoint}`);
               const altResponse = await fetchWithTimeout(altEndpoint, {
                 method: 'GET',
               });
-              
+
               if (altResponse.ok) {
                 console.log(`✅ Alternative endpoint worked: ${altEndpoint}`);
                 const altData = await altResponse.json();
@@ -243,29 +236,29 @@ export const ApiService = {
               console.log(`❌ ${altEndpoint} error:`, altError);
             }
           }
-          
+
           console.warn('⚠️ Returning mock data due to 403 Forbidden - no alternative endpoints worked');
           await new Promise(resolve => setTimeout(resolve, 300));
           return MOCK_BOOKS;
         }
-        
+
         // For other errors, also return mock data as fallback
         console.warn(`⚠️ API request failed with status ${response.status}, returning mock data as fallback`);
         await new Promise(resolve => setTimeout(resolve, 300));
         return MOCK_BOOKS;
       }
-      
+
       const data = await response.json();
       console.log('✅ API Response received:', data);
       console.log('📊 API Response type:', Array.isArray(data) ? 'Array' : typeof data);
       console.log('📊 API Response keys:', Array.isArray(data) ? 'N/A (array)' : Object.keys(data));
       console.log('📊 Full API Response (first 2000 chars):', JSON.stringify(data, null, 2).substring(0, 2000));
       console.log('📊 Full API Response (complete):', JSON.stringify(data, null, 2));
-      
+
       // Handle the /v3/books/by-categories response structure
       // Response structure: { data: [{ _id, name, books: { data: [...] } }], total, pagesTotal, page, limit }
       let booksArray: any[] = [];
-      
+
       if (data.data && Array.isArray(data.data)) {
         // Extract books from all categories
         console.log('📂 Processing', data.data.length, 'categories...');
@@ -289,16 +282,16 @@ export const ApiService = {
         console.log('📚 Data is direct array of books');
         booksArray = data.data;
       }
-      
+
       console.log('📚 Total books extracted:', booksArray.length, 'items');
-      
+
       if (booksArray.length === 0) {
         console.error('❌ API returned no books after extraction');
         console.error('📊 Full API response structure:', JSON.stringify(data, null, 2));
         console.error('💡 Check if the API response structure matches expected format');
         return MOCK_BOOKS;
       }
-      
+
       // Log first 3 books to see structure
       console.log('📖 ===== RAW API BOOKS (first 3) =====');
       booksArray.slice(0, 3).forEach((book, idx) => {
@@ -325,11 +318,11 @@ export const ApiService = {
         console.log(`🆔 Book ${idx + 1} - ID:`, book._id || book.id);
       });
       console.log('📖 ===== END RAW API BOOKS =====');
-      
+
       // Transform API response to match Book interface
       const transformedBooks = transformBooks(booksArray);
       console.log('✨ Transformed books:', transformedBooks.length, 'items');
-      
+
       // Log first 3 transformed books
       console.log('📖 ===== TRANSFORMED BOOKS (first 3) =====');
       transformedBooks.slice(0, 3).forEach((book, idx) => {
@@ -339,12 +332,12 @@ export const ApiService = {
         console.log(`📖 Transformed Book ${idx + 1} - CoverUrl:`, book.coverUrl);
       });
       console.log('📖 ===== END TRANSFORMED BOOKS =====');
-      
+
       // Verify these are NOT mock books by checking titles
       const mockTitles = MOCK_BOOKS.map(b => b.title);
       const apiTitles = transformedBooks.map(b => b.title);
       const isMockData = apiTitles.every(title => mockTitles.includes(title));
-      
+
       if (isMockData && transformedBooks.length === MOCK_BOOKS.length) {
         console.error('❌ WARNING: Transformed books match MOCK_BOOKS exactly!');
         console.error('❌ This means we might be using mock data instead of API data!');
@@ -354,7 +347,7 @@ export const ApiService = {
         console.log('✅ Verified: These are REAL API books (not mock data)');
         console.log('📊 API returned', transformedBooks.length, 'books with titles:', apiTitles.slice(0, 5));
       }
-      
+
       // If no valid books after transformation, fall back to mock data
       if (transformedBooks.length === 0) {
         console.error("❌ API returned no valid books after transformation");
@@ -363,29 +356,29 @@ export const ApiService = {
         console.error('💡 Check if field mapping is correct (coverURI, minAge, etc.)');
         return MOCK_BOOKS;
       }
-      
+
       // Check if we have real cover URLs
       const booksWithCovers = transformedBooks.filter(b => b.coverUrl && b.coverUrl.length > 0);
       console.log('🖼️ Books with cover URLs:', booksWithCovers.length, 'out of', transformedBooks.length);
-      
+
       if (booksWithCovers.length === 0) {
         console.warn('⚠️ No books have cover URLs - covers might be missing in API response');
       }
-      
+
       // Check if we're getting real data (not mock)
-      const hasRealData = transformedBooks.some(book => 
-        !book.coverUrl.includes('picsum.photos') && 
+      const hasRealData = transformedBooks.some(book =>
+        !book.coverUrl.includes('picsum.photos') &&
         !book.coverUrl.includes('placeholder') &&
         book.coverUrl.length > 0
       );
-      
+
       if (hasRealData) {
         console.log('🎉 Successfully loaded', transformedBooks.length, 'REAL books from API!');
       } else {
         console.warn('⚠️ Books loaded but all have placeholder images - might still be mock data');
       }
-      
-      return transformedBooks; 
+
+      return transformedBooks;
     } catch (error) {
       console.error("❌ Failed to fetch from API, using mock data:", error);
       // Simulate network delay for realism
@@ -406,7 +399,7 @@ export const ApiService = {
         const booksArray = Array.isArray(data) ? data : (data.books || data.data || []);
         return transformBooks(booksArray).slice(0, 3);
       }
-      
+
       // Fallback to getting all books and slicing
       const books = await ApiService.getBooks();
       return books.slice(0, 3);
@@ -416,11 +409,11 @@ export const ApiService = {
       return books.slice(0, 3);
     }
   },
-  
+
   login: async (provider: 'apple' | 'google' | 'email', credentials?: { email?: string; password?: string }): Promise<{ success: boolean; token?: string; user?: any; error?: string }> => {
     try {
       const baseUrl = getApiBaseUrl();
-      
+
       // Get or generate device info
       const getDeviceId = (): string => {
         let deviceId = localStorage.getItem('device_id');
@@ -430,7 +423,7 @@ export const ApiService = {
         }
         return deviceId;
       };
-      
+
       // Detect platform
       const getPlatform = (): string => {
         const userAgent = navigator.userAgent || navigator.vendor || (window as any).opera;
@@ -438,10 +431,10 @@ export const ApiService = {
         if (/iPad|iPhone|iPod/.test(userAgent) && !(window as any).MSStream) return 'ios';
         return 'web';
       };
-      
+
       let body: any;
       let endpoint: string;
-      
+
       // Prepare request body based on provider
       if (provider === 'email' && credentials?.email && credentials?.password) {
         // Standard email/password login using /authentication/sign-in
@@ -477,12 +470,12 @@ export const ApiService = {
           }
         };
       }
-      
+
       console.log(`🔐 Attempting login with endpoint: ${endpoint}`);
       console.log(`📦 Request body:`, { ...body, password: body.password ? '***' : undefined });
       console.log(`📧 Email provided:`, !!credentials?.email);
       console.log(`🔑 Password provided:`, !!credentials?.password);
-      
+
       // Make sure we're using the correct endpoint for email login
       if (provider === 'email' && (!credentials?.email || !credentials?.password)) {
         console.error('❌ Email login requires both email and password!');
@@ -491,50 +484,50 @@ export const ApiService = {
           error: 'Email and password are required for email login'
         };
       }
-      
+
       const response = await fetchWithTimeout(endpoint, {
         method: 'POST',
         body: JSON.stringify(body),
       });
-      
+
       console.log(`📡 Login response status: ${response.status} ${response.statusText}`);
 
       if (response.ok) {
         const data = await response.json();
         console.log('✅ Login successful! Response data:', data);
-        
+
         // Extract tokens
         const token = data.accessToken;
         const refreshToken = data.refreshToken;
-        
+
         if (!token) {
           console.error('❌ No accessToken in response:', data);
-          return { 
-            success: false, 
-            error: 'Login response missing accessToken' 
+          return {
+            success: false,
+            error: 'Login response missing accessToken'
           };
         }
-        
+
         // Store token
         authService.setToken(token, undefined, refreshToken);
         console.log('✅ Auth token stored successfully');
-        
+
         // Store user data
         if (data.user) {
           authService.setUser(data.user);
           console.log('✅ User data stored:', data.user);
         }
-        
+
         // Trigger books reload by dispatching event
         if (typeof window !== 'undefined') {
           window.dispatchEvent(new Event('authTokenUpdated'));
         }
-        
-        return { 
-          success: true, 
+
+        return {
+          success: true,
           token: token,
           refreshToken: refreshToken,
-          user: data.user 
+          user: data.user
         };
       } else {
         // Handle error response
@@ -543,7 +536,7 @@ export const ApiService = {
         try {
           errorData = await response.json();
           console.error('❌ Login error response:', errorData);
-          
+
           // Handle different error formats
           if (Array.isArray(errorData.message)) {
             errorMessage = errorData.message.join(', ');
@@ -552,7 +545,7 @@ export const ApiService = {
           } else if (errorData.error) {
             errorMessage = errorData.error;
           }
-          
+
           // Check if error is about email confirmation
           const errorStr = JSON.stringify(errorData).toLowerCase();
           if (errorStr.includes('confirm') || errorStr.includes('verified') || errorStr.includes('verification')) {
@@ -573,7 +566,7 @@ export const ApiService = {
             const text = await response.text();
             console.error('❌ Error response text:', text);
             errorMessage = text || errorMessage;
-            
+
             // Check if text mentions confirmation
             if (text.toLowerCase().includes('confirm') || text.toLowerCase().includes('verified')) {
               return {
@@ -587,27 +580,27 @@ export const ApiService = {
             // Couldn't get error text either
           }
         }
-        
+
         console.error('❌ Login failed with error:', errorMessage);
-        return { 
-          success: false, 
+        return {
+          success: false,
           error: errorMessage
         };
       }
     } catch (error) {
       console.error("❌ Login error:", error);
-      return { 
-        success: false, 
-        error: error instanceof Error ? error.message : 'Network error during login' 
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Network error during login'
       };
     }
   },
-  
+
   // Sign up endpoint
   signUp: async (email: string, password: string, additionalData?: { firstName?: string; lastName?: string; age?: number }): Promise<{ success: boolean; token?: string; user?: any; error?: string }> => {
     try {
       const baseUrl = getApiBaseUrl();
-      
+
       const getDeviceId = (): string => {
         let deviceId = localStorage.getItem('device_id');
         if (!deviceId) {
@@ -616,14 +609,14 @@ export const ApiService = {
         }
         return deviceId;
       };
-      
+
       const getPlatform = (): string => {
         const userAgent = navigator.userAgent || navigator.vendor || (window as any).opera;
         if (/android/i.test(userAgent)) return 'android';
         if (/iPad|iPhone|iPod/.test(userAgent) && !(window as any).MSStream) return 'ios';
         return 'web';
       };
-      
+
       const endpoint = `${baseUrl}authentication/sign-up`;
       const body = {
         email,
@@ -635,9 +628,9 @@ export const ApiService = {
           platform: getPlatform()
         }
       };
-      
+
       console.log(`🔐 Attempting sign-up with endpoint: ${endpoint}`);
-      
+
       const response = await fetchWithTimeout(endpoint, {
         method: 'POST',
         body: JSON.stringify(body),
@@ -648,19 +641,19 @@ export const ApiService = {
         const data = await response.json();
         const token = data.accessToken;
         const refreshToken = data.refreshToken;
-        
+
         if (token) {
           authService.setToken(token, undefined, refreshToken);
           if (data.user) {
             authService.setUser(data.user);
           }
         }
-        
-        return { 
-          success: true, 
+
+        return {
+          success: true,
           token: token,
           refreshToken: refreshToken,
-          user: data.user 
+          user: data.user
         };
       } else {
         let errorData: any = { message: 'Sign-up failed' };
@@ -675,39 +668,39 @@ export const ApiService = {
             errorData = { message: `Sign-up failed: ${response.status} ${response.statusText}` };
           }
         }
-        return { 
-          success: false, 
-          error: errorData.message || `Sign-up failed: ${response.statusText}` 
+        return {
+          success: false,
+          error: errorData.message || `Sign-up failed: ${response.statusText}`
         };
       }
     } catch (error) {
       console.error("Sign-up error:", error);
-      
+
       // Handle AbortError specifically
       if (error instanceof Error && error.name === 'AbortError') {
-        return { 
-          success: false, 
-          error: 'Request timed out. Please check your internet connection and try again.' 
+        return {
+          success: false,
+          error: 'Request timed out. Please check your internet connection and try again.'
         };
       }
-      
+
       // Handle other errors
       if (error instanceof Error) {
-        return { 
-          success: false, 
-          error: error.message.includes('aborted') 
-            ? 'Request was cancelled. Please try again.' 
-            : error.message 
+        return {
+          success: false,
+          error: error.message.includes('aborted')
+            ? 'Request was cancelled. Please try again.'
+            : error.message
         };
       }
-      
-      return { 
-        success: false, 
-        error: 'Network error during sign-up. Please check your connection and try again.' 
+
+      return {
+        success: false,
+        error: 'Network error during sign-up. Please check your connection and try again.'
       };
     }
   },
-  
+
   // Dev helper: Manually set token for testing
   setDevToken: (token: string): void => {
     console.warn('⚠️ DEV MODE: Manually setting auth token');
@@ -718,7 +711,7 @@ export const ApiService = {
     try {
       const baseUrl = getApiBaseUrl();
       const token = authService.getToken();
-      
+
       if (token) {
         // Try to call logout endpoint
         await fetchWithTimeout(`${baseUrl}auth/logout`, {
@@ -738,7 +731,7 @@ export const ApiService = {
     try {
       const baseUrl = getApiBaseUrl();
       console.log(`🔍 Fetching book by ID: ${baseUrl}books/${id}`);
-      
+
       const response = await fetchWithTimeout(`${baseUrl}books/${id}`, {
         method: 'GET',
       });
@@ -748,7 +741,7 @@ export const ApiService = {
         console.log(`✅ Book data received for ID ${id}:`, data);
         return transformBook(data);
       }
-      
+
       console.warn(`⚠️ Failed to fetch book ${id}: ${response.status}`);
       // Fallback to searching in mock data
       return MOCK_BOOKS.find(book => book.id === id) || null;
@@ -763,7 +756,7 @@ export const ApiService = {
     try {
       const baseUrl = getApiBaseUrl();
       console.log(`🔍 Fetching books by category: ${category}`);
-      
+
       // Try different endpoint variations for category filtering
       const categoryEndpoints = [
         `${baseUrl}books?category=${encodeURIComponent(category)}`,
@@ -771,13 +764,13 @@ export const ApiService = {
         `${baseUrl}books?genre=${encodeURIComponent(category)}`,
         `${baseUrl}categories/${encodeURIComponent(category)}/books`,
       ];
-      
+
       for (const endpoint of categoryEndpoints) {
         try {
           const response = await fetchWithTimeout(endpoint, {
             method: 'GET',
           });
-          
+
           if (response.ok) {
             const data = await response.json();
             const booksArray = Array.isArray(data) ? data : (data.books || data.data || []);
@@ -791,15 +784,39 @@ export const ApiService = {
           console.log(`❌ Category endpoint failed: ${endpoint}`, error);
         }
       }
-      
+
       // Fallback: get all books and filter by category
       console.log(`⚠️ Category endpoint not found, filtering all books by category`);
       const allBooks = await ApiService.getBooks();
-      return allBooks.filter(book => 
+      return allBooks.filter(book =>
         book.category.toLowerCase() === category.toLowerCase()
       );
     } catch (error) {
       console.error(`❌ Failed to fetch books by category "${category}":`, error);
+      return [];
+    }
+  },
+
+  // Get pages for a book
+  getBookPages: async (bookId: string): Promise<any[]> => {
+    try {
+      const baseUrl = getApiBaseUrl();
+      console.log(`🔍 Fetching pages for book ID: ${bookId}`);
+
+      const response = await fetchWithTimeout(`${baseUrl}pages/book/${bookId}`, {
+        method: 'GET',
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        console.log(`✅ Pages received for book ${bookId}:`, data.length);
+        return data;
+      }
+
+      console.warn(`⚠️ Failed to fetch pages for book ${bookId}: ${response.status}`);
+      return [];
+    } catch (error) {
+      console.error(`❌ Failed to fetch pages for book ${bookId}:`, error);
       return [];
     }
   },
@@ -809,7 +826,7 @@ export const ApiService = {
     try {
       const baseUrl = getApiBaseUrl();
       console.log(`🔍 Fetching categories from API`);
-      
+
       // Try different endpoint variations for categories
       const categoryEndpoints = [
         `${baseUrl}categories`,
@@ -817,13 +834,13 @@ export const ApiService = {
         `${baseUrl}genres`,
         `${baseUrl}books/genres`,
       ];
-      
+
       for (const endpoint of categoryEndpoints) {
         try {
           const response = await fetchWithTimeout(endpoint, {
             method: 'GET',
           });
-          
+
           if (response.ok) {
             const data = await response.json();
             const categories = Array.isArray(data) ? data : (data.categories || data.data || []);
@@ -836,7 +853,7 @@ export const ApiService = {
           console.log(`❌ Category endpoint failed: ${endpoint}`, error);
         }
       }
-      
+
       // Fallback: extract categories from books
       console.log(`⚠️ Categories endpoint not found, extracting from books`);
       const allBooks = await ApiService.getBooks();
@@ -864,18 +881,18 @@ if (typeof window !== 'undefined') {
     ApiService.setDevToken(token);
     console.log('✅ Dev token set. Refresh the page to load books from API.');
   };
-  
+
   (window as any).testApiConnection = async () => {
     console.log('🧪 Testing API connection...');
     const baseUrl = getApiBaseUrl();
     const token = authService.getToken();
-    
+
     console.log('📍 API Base URL:', baseUrl);
     console.log('🔑 Has Token:', !!token);
     if (token) {
       console.log('🔑 Token (first 20 chars):', token.substring(0, 20) + '...');
     }
-    
+
     // Test authentication endpoint first
     console.log('\n📡 Testing Authentication Endpoint...');
     try {
@@ -894,47 +911,47 @@ if (typeof window !== 'undefined') {
           }
         })
       });
-      
+
       console.log('📡 Auth Endpoint Status:', authResponse.status, authResponse.statusText);
       const authData = await authResponse.json().catch(() => ({}));
       console.log('📡 Auth Endpoint Response:', authData);
     } catch (error) {
       console.log('❌ Auth Endpoint Error:', error);
     }
-    
+
     // Test books endpoint - try the user endpoint first
     console.log('\n📡 Testing Books Endpoints...');
-    
+
     const booksEndpoints = [
       { url: `${baseUrl}v3/books/by-categories?page=1&limit=10`, name: 'v3/books/by-categories (User endpoint)' },
       { url: `${baseUrl}books`, name: 'books (Admin endpoint)' },
     ];
-    
+
     for (const endpoint of booksEndpoints) {
       try {
         console.log(`\n🔍 Testing: ${endpoint.name}`);
         const headers: Record<string, string> = {
           'Content-Type': 'application/json',
         };
-        
+
         // Add authorization header with format: "Bearer <token>"
         if (token) {
           headers['Authorization'] = `Bearer ${token}`;
           console.log('🔑 Test: Adding Authorization header: Bearer', token.substring(0, 20) + '...');
         }
-        
+
         const response = await fetch(endpoint.url, {
           method: 'GET',
           headers,
         });
-        
+
         console.log('📡 Response Status:', response.status, response.statusText);
         console.log('📡 Response Headers:', Object.fromEntries(response.headers.entries()));
-        
+
         if (response.ok) {
           const data = await response.json();
           console.log(`✅ ${endpoint.name} Response:`, data);
-          
+
           // Handle v3/books/by-categories structure
           if (data.data && Array.isArray(data.data)) {
             let totalBooks = 0;
@@ -954,7 +971,7 @@ if (typeof window !== 'undefined') {
               console.log('📖 First book sample:', data.books[0]);
             }
           }
-          
+
           // If this endpoint worked, we're done
           console.log(`\n✅ ${endpoint.name} works! Use this endpoint.`);
           break;
@@ -971,10 +988,10 @@ if (typeof window !== 'undefined') {
         console.error(`❌ ${endpoint.name} Connection Error:`, error);
       }
     }
-    
+
     console.log('\n✅ Connection test complete!');
   };
-  
+
   console.log('💡 Dev Helpers:');
   console.log('   - window.setDevAuthToken("your-token") - Set auth token manually');
   console.log('   - window.testApiConnection() - Test API connection and see response');

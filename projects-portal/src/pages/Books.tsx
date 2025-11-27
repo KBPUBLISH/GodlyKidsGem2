@@ -73,6 +73,12 @@ const Books: React.FC = () => {
                                 >
                                     Add Page
                                 </Link>
+                                <Link
+                                    to={`/books/read/${book._id}`}
+                                    className="bg-green-600 text-white px-3 py-1 rounded hover:bg-green-700 transition"
+                                >
+                                    Read
+                                </Link>
                             </div>
                         </div>
                     ))}

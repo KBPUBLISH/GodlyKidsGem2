@@ -4,7 +4,7 @@ export const MOCK_BOOKS: Book[] = [
   {
     id: '1',
     title: 'Level 1 Christian',
-    coverUrl: 'https://picsum.photos/seed/minecraft/400/400', 
+    coverUrl: 'https://picsum.photos/seed/minecraft/400/400',
     level: '5+',
     category: 'Activity Books',
     description: 'Journey into a game like adventure book! Help our main character discover the path to the pixel Kingdom.',
@@ -121,4 +121,4 @@ export const MOCK_BOOKS: Book[] = [
 export const API_BASE_URL =
   typeof import.meta !== "undefined" && (import.meta as any).env?.VITE_API_BASE_URL
     ? (import.meta as any).env.VITE_API_BASE_URL
-    : "https://api.devgodlykids.kbpublish.org/";
+    : "http://localhost:5001/api/";

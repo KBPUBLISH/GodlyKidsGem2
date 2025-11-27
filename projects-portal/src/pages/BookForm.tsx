@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Upload, ArrowLeft, Save } from 'lucide-react';
 import axios from 'axios';
@@ -13,28 +13,40 @@ interface BookFormData {
     status: string;
 }
 
+interface Category {
+    _id: string;
+    name: string;
+}
+
 const BookForm: React.FC = () => {
     const navigate = useNavigate();
     const [loading, setLoading] = useState(false);
     const [uploading, setUploading] = useState(false);
+    const [categories, setCategories] = useState<Category[]>([]);
     const [formData, setFormData] = useState<BookFormData>({
         title: '',
         author: '',
         description: '',
         minAge: 3,
-        category: 'Bible Stories',
+        category: '',
         coverImage: '',
         status: 'draft',
     });
 
-    const categories = [
-        'Bible Stories',
-        'Prayers',
-        'Songs',
-        'Devotionals',
-        'Activities',
-        'Other',
-    ];
+    useEffect(() => {
+        const fetchCategories = async () => {
+            try {
+                const response = await axios.get('http://localhost:5001/api/categories');
+                setCategories(response.data);
+                if (response.data.length > 0 && !formData.category) {
+                    setFormData(prev => ({ ...prev, category: response.data[0].name }));
+                }
+            } catch (error) {
+                console.error('Error fetching categories:', error);
+            }
+        };
+        fetchCategories();
+    }, []);
 
     const handleInputChange = (
         e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>
@@ -216,12 +228,17 @@ const BookForm: React.FC = () => {
                             value={formData.category}
                             onChange={handleInputChange}
                             className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                            required
                         >
-                            {categories.map((cat) => (
-                                <option key={cat} value={cat}>
-                                    {cat}
-                                </option>
-                            ))}
+                            {categories.length === 0 ? (
+                                <option value="">Loading categories...</option>
+                            ) : (
+                                categories.map((cat) => (
+                                    <option key={cat._id} value={cat.name}>
+                                        {cat.name}
+                                    </option>
+                                ))
+                            )}
                         </select>
                     </div>
                 </div>

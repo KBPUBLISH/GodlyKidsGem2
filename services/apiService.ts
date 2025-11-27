@@ -821,14 +821,15 @@ export const ApiService = {
     }
   },
 
-  // Get all categories
-  getCategories: async (): Promise<string[]> => {
+  // Get all categories (returns full category objects with name, color, icon, etc.)
+  getCategories: async (): Promise<Array<{ _id: string; name: string; description?: string; color: string; icon?: string }>> => {
     try {
       const baseUrl = getApiBaseUrl();
       console.log(`🔍 Fetching categories from API`);
 
       // Try different endpoint variations for categories
       const categoryEndpoints = [
+        `${baseUrl}api/categories`, // New categories endpoint
         `${baseUrl}categories`,
         `${baseUrl}books/categories`,
         `${baseUrl}genres`,
@@ -846,7 +847,14 @@ export const ApiService = {
             const categories = Array.isArray(data) ? data : (data.categories || data.data || []);
             if (categories.length > 0) {
               console.log(`✅ Found ${categories.length} categories`);
-              return categories.map((cat: any) => String(cat.name || cat.title || cat));
+              // Return full category objects
+              return categories.map((cat: any) => ({
+                _id: cat._id || cat.id || '',
+                name: String(cat.name || cat.title || cat),
+                description: cat.description,
+                color: cat.color || '#6366f1',
+                icon: cat.icon,
+              }));
             }
           }
         } catch (error) {
@@ -858,11 +866,24 @@ export const ApiService = {
       console.log(`⚠️ Categories endpoint not found, extracting from books`);
       const allBooks = await ApiService.getBooks();
       const uniqueCategories = [...new Set(allBooks.map(book => book.category))];
-      return uniqueCategories.filter(cat => cat && cat !== 'Uncategorized');
+      // Return as category objects for consistency
+      return uniqueCategories
+        .filter(cat => cat && cat !== 'Uncategorized')
+        .map((name, index) => ({
+          _id: `fallback-${index}`,
+          name: String(name),
+          color: '#6366f1',
+        }));
     } catch (error) {
       console.error(`❌ Failed to fetch categories:`, error);
       return [];
     }
+  },
+
+  // Get category names only (for backward compatibility)
+  getCategoryNames: async (): Promise<string[]> => {
+    const categories = await ApiService.getCategories();
+    return categories.map(cat => cat.name);
   },
 };
 

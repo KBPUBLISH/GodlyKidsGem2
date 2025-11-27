@@ -8,6 +8,7 @@ interface Book {
     title: string;
     author: string;
     status: string;
+    coverImage?: string;
 }
 
 const Books: React.FC = () => {
@@ -53,6 +54,19 @@ const Books: React.FC = () => {
                     {books.map((book) => (
                         <div key={book._id} className="bg-white p-6 rounded-lg shadow-sm border border-gray-200 flex flex-col justify-between h-full">
                             <div>
+                                {book.coverImage && (
+                                    <div className="mb-4 rounded-lg overflow-hidden">
+                                        <img 
+                                            src={book.coverImage} 
+                                            alt={book.title}
+                                            className="w-full h-48 object-cover"
+                                            onError={(e) => {
+                                                // Hide image if it fails to load
+                                                e.currentTarget.style.display = 'none';
+                                            }}
+                                        />
+                                    </div>
+                                )}
                                 <h2 className="text-xl font-semibold text-gray-800">{book.title}</h2>
                                 <p className="text-gray-600">{book.author}</p>
                                 <span className={`inline-block mt-4 px-3 py-1 rounded-full text-sm ${book.status === 'published' ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'

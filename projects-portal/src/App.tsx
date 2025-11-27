@@ -7,6 +7,7 @@ import BookEdit from './pages/BookEdit';
 import Playlists from './pages/Playlists';
 import BookReader from './pages/BookReader';
 import PageEditor from './pages/PageEditor';
+import Categories from './pages/Categories';
 
 function App() {
   return (
@@ -20,6 +21,7 @@ function App() {
           <Route path="books/read/:bookId" element={<BookReader />} />
           <Route path="pages/new/:bookId" element={<PageEditor />} />
           <Route path="playlists" element={<Playlists />} />
+          <Route path="categories" element={<Categories />} />
         </Route>
       </Routes>
     </Router>

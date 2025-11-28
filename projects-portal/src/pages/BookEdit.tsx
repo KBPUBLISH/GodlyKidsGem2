@@ -66,13 +66,19 @@ const BookEdit: React.FC = () => {
             return;
         }
 
+        if (!bookId) {
+            alert('Book ID is required for upload');
+            return;
+        }
+
         setUploading(true);
         const formDataUpload = new FormData();
         formDataUpload.append('file', file);
 
         try {
+            // Organize cover images by book: books/{bookId}/cover/
             const response = await axios.post(
-                'http://localhost:5001/api/upload/image',
+                `http://localhost:5001/api/upload/image?bookId=${bookId}&type=cover`,
                 formDataUpload,
                 {
                     headers: { 'Content-Type': 'multipart/form-data' },

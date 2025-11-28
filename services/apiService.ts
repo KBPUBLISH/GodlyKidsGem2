@@ -824,18 +824,39 @@ export const ApiService = {
 
 
   // TTS: Generate Audio
-  generateTTS: async (text: string, voiceId: string): Promise<{ audioUrl: string; alignment: any } | null> => {
+  // bookId is optional - if provided, audio will be organized under books/{bookId}/audio/
+  generateTTS: async (text: string, voiceId: string, bookId?: string): Promise<{ audioUrl: string; alignment: any } | null> => {
     try {
       const baseUrl = getApiBaseUrl();
-      const response = await fetchWithTimeout(`${baseUrl}tts/generate`, {
+      const response = await fetchWithTimeout(`${baseUrl}api/tts/generate`, {
         method: 'POST',
-        body: JSON.stringify({ text, voiceId })
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ text, voiceId, bookId })
       });
 
       if (response.ok) {
-        return await response.json();
+        const result = await response.json();
+        
+        // Normalize audioUrl to ensure it's absolute
+        if (result.audioUrl) {
+          // If it's already absolute (starts with http), use as is
+          if (result.audioUrl.startsWith('http://') || result.audioUrl.startsWith('https://')) {
+            return result;
+          }
+          
+          // If it's relative, make it absolute
+          if (result.audioUrl.startsWith('/uploads/')) {
+            const backendBaseUrl = baseUrl.replace(/\/api\/?$/, ''); // Remove /api if present
+            result.audioUrl = `${backendBaseUrl}${result.audioUrl}`;
+          }
+        }
+        
+        return result;
       }
-      console.error('TTS Generation failed:', await response.text());
+      const errorText = await response.text();
+      console.error('TTS Generation failed:', response.status, errorText);
       return null;
     } catch (error) {
       console.error('TTS Error:', error);
@@ -847,7 +868,7 @@ export const ApiService = {
   getVoices: async (): Promise<any[]> => {
     try {
       const baseUrl = getApiBaseUrl();
-      const response = await fetchWithTimeout(`${baseUrl}tts/voices`, {
+      const response = await fetchWithTimeout(`${baseUrl}api/tts/voices`, {
         method: 'GET'
       });
 

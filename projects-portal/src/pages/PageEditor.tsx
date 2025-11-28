@@ -345,7 +345,8 @@ const PageEditor: React.FC = () => {
                 const formData = new FormData();
                 formData.append('file', backgroundFile);
                 const endpoint = backgroundType === 'image' ? '/api/upload/image' : '/api/upload/video';
-                const res = await axios.post(`http://localhost:5001${endpoint}`, formData, {
+                // Organize files by book: books/{bookId}/pages/ or books/{bookId}/scroll/
+                const res = await axios.post(`http://localhost:5001${endpoint}?bookId=${bookId}&type=pages&pageNumber=${pageNumber}`, formData, {
                     headers: { 'Content-Type': 'multipart/form-data' },
                 });
                 backgroundUrl = res.data.url;
@@ -360,7 +361,8 @@ const PageEditor: React.FC = () => {
             if (scrollFile) {
                 const formData = new FormData();
                 formData.append('file', scrollFile);
-                const res = await axios.post('http://localhost:5001/api/upload/image', formData, {
+                // Organize scroll files by book: books/{bookId}/scroll/
+                const res = await axios.post(`http://localhost:5001/api/upload/image?bookId=${bookId}&type=scroll`, formData, {
                     headers: { 'Content-Type': 'multipart/form-data' },
                 });
                 scrollUrl = res.data.url;

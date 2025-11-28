@@ -45,7 +45,7 @@ const saveFileLocally = (file, gcsPath) => {
 // Helper function to generate organized file path
 const generateFilePath = (bookId, type, filename, pageNumber = null) => {
     // Structure: books/{bookId}/{type}/filename
-    // type can be: cover, pages, scroll
+    // type can be: cover, pages, scroll, audio
     const timestamp = Date.now();
     const sanitizedFilename = filename.replace(/[^a-zA-Z0-9.-]/g, '_');
 
@@ -158,6 +158,67 @@ router.post('/video', upload.single('file'), async (req, res) => {
             const blobStream = blob.createWriteStream({
                 metadata: {
                     contentType: req.file.mimetype,
+                },
+            });
+
+            blobStream.on('error', (error) => {
+                console.error('GCS Upload error:', error);
+                // Fallback to local storage on GCS error
+                saveFileLocally(req.file, filePath)
+                    .then(url => res.status(200).json({ url, path: filePath }))
+                    .catch(err => res.status(500).json({ message: 'Upload failed', error: err.message }));
+            });
+
+            blobStream.on('finish', () => {
+                const publicUrl = `https://storage.googleapis.com/${bucket.name}/${filePath}`;
+                res.status(200).json({ url: publicUrl, path: filePath });
+            });
+
+            blobStream.end(req.file.buffer);
+        } else {
+            // Use local storage
+            console.log('GCS not configured, using local storage');
+            const url = await saveFileLocally(req.file, filePath);
+            res.status(200).json({ url, path: filePath });
+        }
+    } catch (error) {
+        console.error('Upload error:', error);
+        res.status(500).json({ message: error.message });
+    }
+});
+
+// Upload audio endpoint with organized structure
+// Query params: bookId (optional)
+// If bookId provided, stores in books/{bookId}/audio/, otherwise uses legacy audio/ folder
+router.post('/audio', upload.single('file'), async (req, res) => {
+    try {
+        if (!req.file) {
+            return res.status(400).json({ message: 'No file uploaded' });
+        }
+
+        const { bookId } = req.query;
+
+        let filePath;
+
+        // Check if using organized structure
+        if (bookId) {
+            // Generate organized file path: books/{bookId}/audio/{filename}
+            const timestamp = Date.now();
+            const sanitizedFilename = req.file.originalname.replace(/[^a-zA-Z0-9.-]/g, '_');
+            const finalFilename = `${timestamp}_${sanitizedFilename}`;
+            filePath = `books/${bookId}/audio/${finalFilename}`;
+        } else {
+            // Fallback to simple structure for backward compatibility
+            filePath = `audio/${Date.now()}_${req.file.originalname}`;
+        }
+
+        // Check if GCS is configured
+        if (bucket && process.env.GCS_BUCKET_NAME) {
+            // Use Google Cloud Storage
+            const blob = bucket.file(filePath);
+            const blobStream = blob.createWriteStream({
+                metadata: {
+                    contentType: req.file.mimetype || 'audio/mpeg',
                 },
             });
 

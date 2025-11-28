@@ -198,21 +198,95 @@ const BookReaderPage: React.FC = () => {
         setLoadingAudio(true);
 
         try {
-            const result = await ApiService.generateTTS(text, selectedVoiceId);
+            const result = await ApiService.generateTTS(text, selectedVoiceId, bookId);
 
             if (result && result.audioUrl) {
-                const audio = new Audio(result.audioUrl);
+                // Normalize the audio URL to ensure it's absolute
+                let audioUrl = result.audioUrl;
+                
+                // If it's a relative URL, make it absolute using the backend URL
+                if (audioUrl.startsWith('/uploads/')) {
+                    const backendUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5001';
+                    const cleanBackendUrl = backendUrl.replace(/\/$/, ''); // Remove trailing slash
+                    audioUrl = `${cleanBackendUrl}${audioUrl}`;
+                }
+
+                console.log('Loading audio from:', audioUrl);
+                
+                const audio = new Audio(audioUrl);
+
+                // Add error handlers
+                audio.onerror = (e) => {
+                    console.error('Audio loading error:', e);
+                    console.error('Audio error details:', {
+                        error: audio.error,
+                        networkState: audio.networkState,
+                        readyState: audio.readyState,
+                        src: audio.src
+                    });
+                    
+                    let errorMessage = 'Failed to load audio. ';
+                    if (audio.error) {
+                        switch (audio.error.code) {
+                            case MediaError.MEDIA_ERR_ABORTED:
+                                errorMessage += 'Playback was aborted.';
+                                break;
+                            case MediaError.MEDIA_ERR_NETWORK:
+                                errorMessage += 'Network error occurred.';
+                                break;
+                            case MediaError.MEDIA_ERR_DECODE:
+                                errorMessage += 'Audio file could not be decoded.';
+                                break;
+                            case MediaError.MEDIA_ERR_SRC_NOT_SUPPORTED:
+                                errorMessage += 'Audio format not supported or file not found.';
+                                break;
+                            default:
+                                errorMessage += 'Unknown error occurred.';
+                        }
+                    }
+                    
+                    alert(errorMessage);
+                    setPlaying(false);
+                    setActiveTextBoxIndex(null);
+                    setLoadingAudio(false);
+                };
 
                 audio.onended = () => {
                     setPlaying(false);
                     setActiveTextBoxIndex(null);
                 };
 
-                audio.onplay = () => setPlaying(true);
-                audio.onpause = () => setPlaying(false);
+                audio.onplay = () => {
+                    setPlaying(true);
+                    console.log('Audio started playing');
+                };
+                
+                audio.onpause = () => {
+                    setPlaying(false);
+                };
+
+                // Wait for audio to be ready before playing
+                audio.oncanplaythrough = () => {
+                    console.log('Audio ready to play');
+                };
 
                 setCurrentAudio(audio);
-                audio.play();
+                
+                // Attempt to play
+                const playPromise = audio.play();
+                if (playPromise !== undefined) {
+                    playPromise
+                        .then(() => {
+                            console.log('Audio playback started successfully');
+                        })
+                        .catch((playError) => {
+                            console.error('Audio play() failed:', playError);
+                            alert('Failed to start audio playback. Please try again.');
+                            setPlaying(false);
+                            setActiveTextBoxIndex(null);
+                            setLoadingAudio(false);
+                        });
+                }
             } else {
                 console.error('No audio URL returned');
                 alert('Failed to generate audio. Please check the API key.');

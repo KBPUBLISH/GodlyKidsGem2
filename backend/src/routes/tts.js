@@ -14,8 +14,16 @@ if (!fs.existsSync(uploadsDir)) {
 }
 
 // Helper to save buffer to file (Local or GCS)
-const saveAudioFile = async (buffer, filename) => {
-    const filePath = `audio/${filename}`;
+// Now organizes audio files by book: books/{bookId}/audio/{filename}
+const saveAudioFile = async (buffer, filename, req = null, bookId = null) => {
+    // Organize by book if bookId is provided, otherwise use legacy structure
+    let filePath;
+    if (bookId) {
+        filePath = `books/${bookId}/audio/${filename}`;
+    } else {
+        // Legacy structure for backward compatibility
+        filePath = `audio/${filename}`;
+    }
 
     // Check if GCS is configured
     if (bucket && process.env.GCS_BUCKET_NAME) {
@@ -30,7 +38,7 @@ const saveAudioFile = async (buffer, filename) => {
             blobStream.on('error', (error) => {
                 console.error('GCS Upload error:', error);
                 // Fallback to local
-                saveLocal(buffer, filePath).then(resolve).catch(reject);
+                saveLocal(buffer, filePath, req).then(resolve).catch(reject);
             });
 
             blobStream.on('finish', () => {
@@ -41,11 +49,11 @@ const saveAudioFile = async (buffer, filename) => {
             blobStream.end(buffer);
         });
     } else {
-        return saveLocal(buffer, filePath);
+        return saveLocal(buffer, filePath, req);
     }
 };
 
-const saveLocal = (buffer, gcsPath) => {
+const saveLocal = (buffer, gcsPath, req = null) => {
     return new Promise((resolve, reject) => {
         const localPath = path.join(uploadsDir, gcsPath);
         const dir = path.dirname(localPath);
@@ -56,15 +64,29 @@ const saveLocal = (buffer, gcsPath) => {
 
         fs.writeFile(localPath, buffer, (err) => {
             if (err) reject(err);
-            else resolve(`/uploads/${gcsPath}`);
+            else {
+                // Return absolute URL pointing to backend server
+                let backendUrl;
+                if (req) {
+                    // Use request protocol and host
+                    const protocol = req.protocol || 'http';
+                    const host = req.get('host') || `localhost:${process.env.PORT || 5001}`;
+                    backendUrl = `${protocol}://${host}`;
+                } else {
+                    // Fallback to environment variable or default
+                    backendUrl = process.env.BACKEND_URL || `http://localhost:${process.env.PORT || 5001}`;
+                }
+                resolve(`${backendUrl}/uploads/${gcsPath}`);
+            }
         });
     });
 };
 
 // POST /generate - Generate TTS audio
+// Body: { text, voiceId, bookId? } - bookId is optional for backward compatibility
 router.post('/generate', async (req, res) => {
     try {
-        const { text, voiceId } = req.body;
+        const { text, voiceId, bookId } = req.body;
 
         if (!text || !voiceId) {
             return res.status(400).json({ message: 'Text and voiceId are required' });
@@ -125,9 +147,9 @@ router.post('/generate', async (req, res) => {
             }
         );
 
-        // 3. Save Audio
+        // 3. Save Audio - now organized by book if bookId is provided
         const filename = `${Date.now()}_${textHash}.mp3`;
-        const audioUrl = await saveAudioFile(response.data, filename);
+        const audioUrl = await saveAudioFile(response.data, filename, req, bookId);
 
         // 4. Mock Alignment (since HTTP API doesn't return it easily without complex parsing)
         // We will estimate alignment based on word count and audio duration.

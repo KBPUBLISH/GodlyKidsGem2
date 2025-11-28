@@ -67,6 +67,8 @@ const BookForm: React.FC = () => {
         formDataUpload.append('file', file);
 
         try {
+            // Note: bookId is not available yet during book creation, so cover uses legacy structure
+            // After book creation, covers can be re-uploaded via BookEdit to use organized structure
             const response = await axios.post(
                 'http://localhost:5001/api/upload/image',
                 formDataUpload,

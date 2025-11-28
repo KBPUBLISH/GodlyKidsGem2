@@ -23,6 +23,8 @@ const BookForm: React.FC = () => {
     const [loading, setLoading] = useState(false);
     const [uploading, setUploading] = useState(false);
     const [categories, setCategories] = useState<Category[]>([]);
+    const [previewUrl, setPreviewUrl] = useState<string>(''); // Local preview before upload
+    const [coverFile, setCoverFile] = useState<File | null>(null); // Store file for re-upload after book creation
     const [formData, setFormData] = useState<BookFormData>({
         title: '',
         author: '',
@@ -62,25 +64,15 @@ const BookForm: React.FC = () => {
         const file = e.target.files?.[0];
         if (!file) return;
 
-        setUploading(true);
-        const formDataUpload = new FormData();
-        formDataUpload.append('file', file);
+        // Store the file for later upload (after book creation)
+        setCoverFile(file);
 
-        try {
-            const response = await axios.post(
-                'http://localhost:5001/api/upload/image',
-                formDataUpload,
-                {
-                    headers: { 'Content-Type': 'multipart/form-data' },
-                }
-            );
-            setFormData((prev) => ({ ...prev, coverImage: response.data.url }));
-        } catch (error) {
-            console.error('Upload failed:', error);
-            alert('Failed to upload image');
-        } finally {
-            setUploading(false);
-        }
+        // Show local preview immediately
+        const localPreview = URL.createObjectURL(file);
+        setPreviewUrl(localPreview);
+        
+        // Don't upload yet - we'll upload after book creation with bookId
+        // This allows us to use the organized folder structure
     };
 
     const handleSubmit = async (e: React.FormEvent) => {
@@ -88,7 +80,50 @@ const BookForm: React.FC = () => {
         setLoading(true);
 
         try {
-            await axios.post('http://localhost:5001/api/books', formData);
+            // Step 1: Create the book first (without cover image)
+            const bookData = { ...formData, coverImage: '' };
+            
+            // Create book
+            const response = await axios.post('http://localhost:5001/api/books', bookData);
+            const newBook = response.data;
+            const bookId = newBook._id;
+            
+            // Step 2: Upload cover image with bookId for organized structure
+            if (coverFile) {
+                setUploading(true);
+                const formDataUpload = new FormData();
+                formDataUpload.append('file', coverFile);
+
+                try {
+                    const uploadResponse = await axios.post(
+                        `http://localhost:5001/api/upload/image?bookId=${bookId}&type=cover`,
+                        formDataUpload,
+                        {
+                            headers: { 'Content-Type': 'multipart/form-data' },
+                        }
+                    );
+                    
+                    // Update book with the uploaded cover image URL
+                    await axios.put(`http://localhost:5001/api/books/${bookId}`, {
+                        coverImage: uploadResponse.data.url
+                    });
+                    
+                    // Clean up local preview
+                    if (previewUrl.startsWith('blob:')) {
+                        URL.revokeObjectURL(previewUrl);
+                    }
+                } catch (uploadError) {
+                    console.error('Failed to upload cover image:', uploadError);
+                    // Book is created, but cover upload failed - user can add it later via edit
+                    alert('Book created, but cover image upload failed. You can add it later by editing the book.');
+                } finally {
+                    setUploading(false);
+                }
+            } else if (formData.coverImage) {
+                // If coverImage was already set (from editing), use it but update to organized structure if possible
+                // For now, just keep the existing URL
+            }
+            
             navigate('/books');
         } catch (error) {
             console.error('Failed to create book:', error);
@@ -117,12 +152,23 @@ const BookForm: React.FC = () => {
                         Cover Image
                     </label>
                     <div className="flex items-start gap-4">
-                        {formData.coverImage ? (
-                            <img
-                                src={formData.coverImage}
-                                alt="Cover preview"
-                                className="w-32 h-48 object-cover rounded-lg border-2 border-gray-200"
-                            />
+                        {(previewUrl || formData.coverImage) ? (
+                            <div className="relative">
+                                <img
+                                    src={previewUrl || formData.coverImage}
+                                    alt="Cover preview"
+                                    className="w-32 h-48 object-cover rounded-lg border-2 border-gray-200"
+                                    onError={(e) => {
+                                        console.error('Image failed to load:', previewUrl || formData.coverImage);
+                                        e.currentTarget.style.display = 'none';
+                                    }}
+                                />
+                                {uploading && (
+                                    <div className="absolute inset-0 bg-black bg-opacity-50 rounded-lg flex items-center justify-center">
+                                        <div className="text-white text-sm">Uploading...</div>
+                                    </div>
+                                )}
+                            </div>
                         ) : (
                             <div className="w-32 h-48 bg-gray-100 rounded-lg border-2 border-dashed border-gray-300 flex items-center justify-center">
                                 <Upload className="w-8 h-8 text-gray-400" />
@@ -227,7 +273,7 @@ const BookForm: React.FC = () => {
                             name="category"
                             value={formData.category}
                             onChange={handleInputChange}
-                            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                            className="w-full px-4 py-3 text-base border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent bg-white cursor-pointer min-h-[44px]"
                             required
                         >
                             {categories.length === 0 ? (
@@ -243,18 +289,18 @@ const BookForm: React.FC = () => {
                     </div>
                 </div>
 
-                {/* Status */}
-                <div className="mb-6">
-                    <label htmlFor="status" className="block text-sm font-medium text-gray-700 mb-2">
-                        Status
-                    </label>
-                    <select
-                        id="status"
-                        name="status"
-                        value={formData.status}
-                        onChange={handleInputChange}
-                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
-                    >
+                    {/* Status */}
+                    <div className="mb-6">
+                        <label htmlFor="status" className="block text-sm font-medium text-gray-700 mb-2">
+                            Status
+                        </label>
+                        <select
+                            id="status"
+                            name="status"
+                            value={formData.status}
+                            onChange={handleInputChange}
+                            className="w-full px-4 py-3 text-base border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent bg-white cursor-pointer min-h-[44px]"
+                        >
                         <option value="draft">Draft</option>
                         <option value="published">Published</option>
                         <option value="archived">Archived</option>

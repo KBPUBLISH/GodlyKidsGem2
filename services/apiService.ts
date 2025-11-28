@@ -164,6 +164,9 @@ export const ApiService = {
           // Couldn't parse error response
         }
 
+        // For localhost backend, don't use mock data - return empty array instead
+        const isLocalBackend = baseUrl.includes('localhost');
+        
         // Handle different error status codes
         if (response.status === 401) {
           if (token) {
@@ -174,6 +177,11 @@ export const ApiService = {
             console.warn('💡 Please log in to access the API and see real data from the dev database.');
           }
 
+          if (isLocalBackend) {
+            console.warn('⚠️ Local backend returned 401 - returning empty array (no mock data for local dev)');
+            return [];
+          }
+          
           console.warn('⚠️ Returning mock data due to 401 Unauthorized');
           await new Promise(resolve => setTimeout(resolve, 300));
           return MOCK_BOOKS;
@@ -237,12 +245,22 @@ export const ApiService = {
             }
           }
 
+          if (isLocalBackend) {
+            console.warn('⚠️ Local backend returned 403 - returning empty array (no mock data for local dev)');
+            return [];
+          }
+          
           console.warn('⚠️ Returning mock data due to 403 Forbidden - no alternative endpoints worked');
           await new Promise(resolve => setTimeout(resolve, 300));
           return MOCK_BOOKS;
         }
 
-        // For other errors, also return mock data as fallback
+        // For other errors
+        if (isLocalBackend) {
+          console.warn(`⚠️ Local backend returned ${response.status} - returning empty array (no mock data for local dev)`);
+          return [];
+        }
+        
         console.warn(`⚠️ API request failed with status ${response.status}, returning mock data as fallback`);
         await new Promise(resolve => setTimeout(resolve, 300));
         return MOCK_BOOKS;
@@ -348,12 +366,19 @@ export const ApiService = {
         console.log('📊 API returned', transformedBooks.length, 'books with titles:', apiTitles.slice(0, 5));
       }
 
-      // If no valid books after transformation, fall back to mock data
+      // If no valid books after transformation
+      const isLocalBackend = baseUrl.includes('localhost');
       if (transformedBooks.length === 0) {
         console.error("❌ API returned no valid books after transformation");
         console.error('📊 Original books array length:', booksArray.length);
         console.error('📊 First original book:', booksArray[0]);
         console.error('💡 Check if field mapping is correct (coverURI, minAge, etc.)');
+        
+        if (isLocalBackend) {
+          console.warn('⚠️ Returning empty array (no mock data for local dev)');
+          return [];
+        }
+        
         return MOCK_BOOKS;
       }
 
@@ -380,6 +405,14 @@ export const ApiService = {
 
       return transformedBooks;
     } catch (error) {
+      const baseUrl = getApiBaseUrl();
+      const isLocalBackend = baseUrl.includes('localhost');
+      
+      if (isLocalBackend) {
+        console.error("❌ Failed to fetch from local API, returning empty array (no mock data for local dev):", error);
+        return [];
+      }
+      
       console.error("❌ Failed to fetch from API, using mock data:", error);
       // Simulate network delay for realism
       await new Promise(resolve => setTimeout(resolve, 800));
@@ -743,9 +776,24 @@ export const ApiService = {
       }
 
       console.warn(`⚠️ Failed to fetch book ${id}: ${response.status}`);
+      // For localhost, don't fall back to mock data
+      const isLocalBackend = baseUrl.includes('localhost');
+      
+      if (isLocalBackend) {
+        return null;
+      }
+      
       // Fallback to searching in mock data
       return MOCK_BOOKS.find(book => book.id === id) || null;
     } catch (error) {
+      const baseUrl = getApiBaseUrl();
+      const isLocalBackend = baseUrl.includes('localhost');
+      
+      if (isLocalBackend) {
+        console.warn(`❌ Failed to fetch book ${id} from local API:`, error);
+        return null;
+      }
+      
       console.warn(`❌ Failed to fetch book ${id}, using mock data:`, error);
       return MOCK_BOOKS.find(book => book.id === id) || null;
     }
@@ -824,23 +872,123 @@ export const ApiService = {
 
 
   // TTS: Generate Audio
-  generateTTS: async (text: string, voiceId: string): Promise<{ audioUrl: string; alignment: any } | null> => {
-    try {
-      const baseUrl = getApiBaseUrl();
-      const response = await fetchWithTimeout(`${baseUrl}tts/generate`, {
-        method: 'POST',
-        body: JSON.stringify({ text, voiceId })
-      });
-
-      if (response.ok) {
-        return await response.json();
+  generateTTS: async (
+    text: string, 
+    voiceId: string, 
+    bookId?: string,
+    onAudioChunk?: (audioData: string) => void,
+    onAlignment?: (alignment: { words: Array<{ word: string; start: number; end: number }> }) => void
+  ): Promise<{ audioUrl: string; alignment: any } | null> => {
+    return new Promise((resolve, reject) => {
+      try {
+        const baseUrl = getApiBaseUrl();
+        // Convert http:// to ws:// or https:// to wss://
+        const wsUrl = baseUrl.replace(/^http/, 'ws') + 'tts/ws';
+        
+        const ws = new WebSocket(wsUrl);
+        const audioChunks: string[] = [];
+        let finalAlignment: any = null;
+        let finalAudioUrl: string | null = null;
+        
+        ws.onopen = () => {
+          console.log('WebSocket connected for TTS');
+          ws.send(JSON.stringify({ text, voiceId, bookId }));
+        };
+        
+        ws.onmessage = (event) => {
+          try {
+            // Try to parse as JSON first
+            const data = JSON.parse(event.data);
+            
+            if (data.type === 'audio') {
+              // Base64 audio chunk
+              audioChunks.push(data.data);
+              if (onAudioChunk) {
+                onAudioChunk(data.data);
+              }
+            } else if (data.type === 'alignment') {
+              // Word alignment data
+              if (onAlignment) {
+                onAlignment({ words: data.words });
+              }
+              finalAlignment = { words: data.words };
+            } else if (data.type === 'complete') {
+              // Stream complete
+              console.log('✅ Received complete message from backend:', data.audioUrl);
+              finalAudioUrl = data.audioUrl;
+              finalAlignment = data.alignment;
+              resolve({
+                audioUrl: data.audioUrl,
+                alignment: data.alignment
+              });
+              // Close after a short delay to ensure message is processed
+              setTimeout(() => {
+                if (ws.readyState === WebSocket.OPEN) {
+                  ws.close();
+                }
+              }, 100);
+            } else if (data.error) {
+              console.error('❌ Error from backend:', data.error);
+              reject(new Error(data.error));
+              ws.close();
+            }
+          } catch (err) {
+            // Binary audio data - convert to base64
+            const reader = new FileReader();
+            reader.onload = () => {
+              const base64 = (reader.result as string).split(',')[1];
+              audioChunks.push(base64);
+              if (onAudioChunk) {
+                onAudioChunk(base64);
+              }
+            };
+            reader.readAsDataURL(event.data);
+          }
+        };
+        
+        ws.onerror = (error) => {
+          console.error('WebSocket error:', error);
+          // Don't reject immediately - let the backend handle the error and send a response
+          // The backend will fallback to HTTP and send a 'complete' message
+        };
+        
+        ws.onclose = (event) => {
+          console.log('WebSocket closed', event.code, event.reason);
+          // If we didn't get a complete message, the backend might still be processing
+          // Don't reject immediately - the backend might send the complete message before closing
+          if (!finalAudioUrl && !finalAlignment) {
+            // Wait a bit longer for the backend to process HTTP fallback
+            setTimeout(() => {
+              if (!finalAudioUrl) {
+                console.warn('⚠️ No audio received after WebSocket closed, rejecting');
+                reject(new Error('No audio received - backend may have failed'));
+              }
+            }, 5000); // Give backend 5 seconds to process HTTP fallback
+          }
+        };
+        
+        // Fallback to HTTP if WebSocket fails after 5 seconds
+        setTimeout(() => {
+          if (ws.readyState === WebSocket.CONNECTING) {
+            ws.close();
+            // Fallback to HTTP
+            const httpUrl = baseUrl + 'tts/generate';
+            fetchWithTimeout(httpUrl, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ text, voiceId, bookId })
+            })
+              .then(response => response.ok ? response.json() : null)
+              .then(result => resolve(result))
+              .catch(err => reject(err));
+          }
+        }, 5000);
+        
+      } catch (error) {
+        console.error('TTS WebSocket Error:', error);
+        reject(error);
       }
-      console.error('TTS Generation failed:', await response.text());
-      return null;
-    } catch (error) {
-      console.error('TTS Error:', error);
-      return null;
-    }
+    });
   },
 
   // TTS: Get Voices

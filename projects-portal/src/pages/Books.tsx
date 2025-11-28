@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Plus } from 'lucide-react';
+import { Plus, Trash2 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import axios from 'axios';
 
@@ -14,6 +14,7 @@ interface Book {
 const Books: React.FC = () => {
     const [books, setBooks] = useState<Book[]>([]);
     const [loading, setLoading] = useState(true);
+    const [deletingBookId, setDeletingBookId] = useState<string | null>(null);
 
     useEffect(() => {
         const fetchBooks = async () => {
@@ -29,6 +30,24 @@ const Books: React.FC = () => {
 
         fetchBooks();
     }, []);
+
+    const handleDeleteBook = async (bookId: string, bookTitle: string) => {
+        if (!window.confirm(`Are you sure you want to delete "${bookTitle}"? This action cannot be undone.`)) {
+            return;
+        }
+
+        setDeletingBookId(bookId);
+        try {
+            await axios.delete(`http://localhost:5001/api/books/${bookId}`);
+            // Remove the book from the list
+            setBooks(books.filter(book => book._id !== bookId));
+        } catch (error) {
+            console.error('Error deleting book:', error);
+            alert('Failed to delete book. Please try again.');
+        } finally {
+            setDeletingBookId(null);
+        }
+    };
 
     return (
         <div>
@@ -74,7 +93,7 @@ const Books: React.FC = () => {
                                     {book.status}
                                 </span>
                             </div>
-                            <div className="mt-4 flex space-x-2">
+                            <div className="mt-4 flex space-x-2 flex-wrap gap-2">
                                 <Link
                                     to={`/books/edit/${book._id}`}
                                     className="bg-indigo-600 text-white px-3 py-1 rounded hover:bg-indigo-700 transition"
@@ -93,6 +112,18 @@ const Books: React.FC = () => {
                                 >
                                     Read
                                 </Link>
+                                <button
+                                    onClick={(e) => {
+                                        e.preventDefault();
+                                        e.stopPropagation();
+                                        handleDeleteBook(book._id, book.title);
+                                    }}
+                                    disabled={deletingBookId === book._id}
+                                    className="bg-red-600 text-white px-3 py-1 rounded hover:bg-red-700 transition flex items-center gap-1 disabled:opacity-50 disabled:cursor-not-allowed"
+                                >
+                                    <Trash2 className="w-4 h-4" />
+                                    {deletingBookId === book._id ? 'Deleting...' : 'Delete'}
+                                </button>
                             </div>
                         </div>
                     ))}

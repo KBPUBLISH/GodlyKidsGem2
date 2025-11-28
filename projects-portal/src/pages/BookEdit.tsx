@@ -71,8 +71,9 @@ const BookEdit: React.FC = () => {
         formDataUpload.append('file', file);
 
         try {
+            // Upload with bookId and type=cover for organized structure
             const response = await axios.post(
-                'http://localhost:5001/api/upload/image',
+                `http://localhost:5001/api/upload/image?bookId=${bookId}&type=cover`,
                 formDataUpload,
                 {
                     headers: { 'Content-Type': 'multipart/form-data' },
@@ -267,7 +268,7 @@ const BookEdit: React.FC = () => {
                     <select
                         value={category}
                         onChange={e => setCategory(e.target.value)}
-                        className="w-full rounded-md border border-gray-300 bg-white text-gray-900 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent px-3 py-2 transition"
+                        className="w-full rounded-md border border-gray-300 bg-white text-gray-900 text-base focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent px-4 py-3 transition cursor-pointer min-h-[44px]"
                     >
                         {categories.length === 0 ? (
                             <option value="">Loading categories...</option>
@@ -285,7 +286,7 @@ const BookEdit: React.FC = () => {
                     <select
                         value={status}
                         onChange={e => setStatus(e.target.value)}
-                        className="w-full rounded-md border border-gray-300 bg-white text-gray-900 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent px-3 py-2 transition"
+                        className="w-full rounded-md border border-gray-300 bg-white text-gray-900 text-base focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent px-4 py-3 transition cursor-pointer min-h-[44px]"
                     >
                         <option value="draft">Draft</option>
                         <option value="published">Published</option>

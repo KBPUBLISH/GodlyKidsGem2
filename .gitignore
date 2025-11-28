@@ -33,3 +33,5 @@ build
 *.tsbuildinfo
 backend/service-account-key.json
 backend/uploads/
+backend/service-account-key-copy.json
+backend/service-account-key*.json

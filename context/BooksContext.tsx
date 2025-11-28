@@ -94,8 +94,14 @@ export const BooksProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       hasLoadedRef.current = true;
     } catch (error) {
       console.error("❌ BooksContext: Failed to load books", error);
-      // On error, use mock data as fallback
-      setBooks(MOCK_BOOKS);
+      // On error, check if using local backend - if so, use empty array instead of mock data
+      if (isLocalBackend) {
+        console.error("❌ BooksContext: Failed to load books from local API, using empty array (no mock data)");
+        setBooks([]);
+      } else {
+        console.error("❌ BooksContext: Failed to load books, using mock data as fallback");
+        setBooks(MOCK_BOOKS);
+      }
     } finally {
       setLoading(false);
       isLoadingRef.current = false;
@@ -121,9 +127,16 @@ export const BooksProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     if (isAuthenticated || isLocalBackend) {
       loadData();
     } else {
-      console.log('📚 BooksContext: Not authenticated, using mock data');
-      setBooks(MOCK_BOOKS);
-      setLoading(false);
+      // For non-local backends, use mock data when not authenticated
+      // For local backends, we should still try to load (backend might not require auth)
+      if (isLocalBackend) {
+        console.log('📚 BooksContext: Local backend - attempting to load books (auth may not be required)');
+        loadData();
+      } else {
+        console.log('📚 BooksContext: Not authenticated, using mock data');
+        setBooks(MOCK_BOOKS);
+        setLoading(false);
+      }
     }
   }, []);
 

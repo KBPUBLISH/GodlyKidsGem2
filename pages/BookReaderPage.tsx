@@ -68,6 +68,9 @@ const BookReaderPage: React.FC = () => {
     const [loadingAudio, setLoadingAudio] = useState(false);
     const [voices, setVoices] = useState<any[]>([]);
     const [selectedVoiceId, setSelectedVoiceId] = useState<string>('21m00Tcm4TlvDq8ikWAM'); // Default Rachel
+    const [wordAlignment, setWordAlignment] = useState<{ words: Array<{ word: string; start: number; end: number }> } | null>(null);
+    const [currentWordIndex, setCurrentWordIndex] = useState<number>(-1);
+    const wordAlignmentRef = useRef<{ words: Array<{ word: string; start: number; end: number }> } | null>(null);
 
     useEffect(() => {
         const fetchPages = async () => {
@@ -193,19 +196,68 @@ const BookReaderPage: React.FC = () => {
             return;
         }
 
-        // Otherwise, generate/fetch new audio
+        // Otherwise, generate/fetch new audio using WebSocket
         setActiveTextBoxIndex(index);
         setLoadingAudio(true);
+        setCurrentWordIndex(-1);
+        setWordAlignment(null);
+        wordAlignmentRef.current = null;
 
         try {
-            const result = await ApiService.generateTTS(text, selectedVoiceId);
+            // Use WebSocket for real-time streaming with word alignment
+            const result = await ApiService.generateTTS(
+                text, 
+                selectedVoiceId,
+                bookId || undefined,
+                // onAudioChunk callback - can be used for streaming in future
+                undefined,
+                // onAlignment callback - update word alignment in real-time
+                (alignment: { words: Array<{ word: string; start: number; end: number }> }) => {
+                    console.log('📝 Received word alignment:', alignment);
+                    setWordAlignment(alignment);
+                    wordAlignmentRef.current = alignment;
+                }
+            );
 
+            // Use final audio URL from WebSocket
             if (result && result.audioUrl) {
                 const audio = new Audio(result.audioUrl);
+                
+                const alignment = result.alignment || null;
+                if (alignment && alignment.words) {
+                    console.log('📝 Final alignment received:', alignment);
+                    setWordAlignment(alignment);
+                    wordAlignmentRef.current = alignment;
+                } else {
+                    console.warn('⚠️ No alignment data in result:', result);
+                }
+                
+                // Track audio time for word highlighting
+                // Use ref to access latest alignment data (avoids closure issues)
+                audio.ontimeupdate = () => {
+                    const currentAlignment = wordAlignmentRef.current;
+                    if (currentAlignment && currentAlignment.words && currentAlignment.words.length > 0) {
+                        const currentTime = audio.currentTime;
+                        const wordIndex = currentAlignment.words.findIndex(
+                            (w: any) => currentTime >= w.start && currentTime < w.end
+                        );
+                        if (wordIndex !== -1 && wordIndex !== currentWordIndex) {
+                            setCurrentWordIndex(wordIndex);
+                        } else if (currentTime >= (currentAlignment.words[currentAlignment.words.length - 1]?.end || 0)) {
+                            setCurrentWordIndex(-1);
+                        }
+                    } else if (!currentAlignment) {
+                        // Debug: log when alignment is missing
+                        console.warn('⚠️ No alignment data available for highlighting');
+                    }
+                };
 
                 audio.onended = () => {
                     setPlaying(false);
                     setActiveTextBoxIndex(null);
+                    setCurrentWordIndex(-1);
+                    setWordAlignment(null);
+                    wordAlignmentRef.current = null;
                 };
 
                 audio.onplay = () => setPlaying(true);
@@ -365,7 +417,45 @@ const BookReaderPage: React.FC = () => {
                                 </div>
                                 */}
 
-                                {box.text}
+                                {(() => {
+                                    // Debug logging
+                                    if (isActive) {
+                                        console.log('🔍 Rendering check:', {
+                                            isActive,
+                                            hasWordAlignment: !!wordAlignment,
+                                            wordsCount: wordAlignment?.words?.length || 0,
+                                            currentWordIndex,
+                                            boxText: box.text?.substring(0, 20)
+                                        });
+                                    }
+                                    
+                                    if (isActive && wordAlignment && wordAlignment.words && wordAlignment.words.length > 0) {
+                                        // Render text with word highlighting
+                                        return (
+                                            <span>
+                                                {wordAlignment.words.map((w: any, wordIdx: number) => {
+                                                    const isHighlighted = wordIdx === currentWordIndex;
+                                                    return (
+                                                        <span
+                                                            key={wordIdx}
+                                                            className={isHighlighted ? 'bg-yellow-300 bg-opacity-70 rounded px-1 transition-all duration-100' : ''}
+                                                            style={{
+                                                                backgroundColor: isHighlighted ? 'rgba(255, 235, 59, 0.6)' : 'transparent',
+                                                                transition: 'background-color 0.1s ease-in-out'
+                                                            }}
+                                                        >
+                                                            {w.word}
+                                                            {wordIdx < wordAlignment.words.length - 1 && ' '}
+                                                        </span>
+                                                    );
+                                                })}
+                                            </span>
+                                        );
+                                    } else {
+                                        // Regular text display when not playing or no alignment
+                                        return box.text;
+                                    }
+                                })()}
                             </div>
                         );
                     })}

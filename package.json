@@ -5,8 +5,10 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "main": "vite --port 3000",
     "build": "vite build",
     "preview": "vite preview",
+    "portal": "cd projects-portal && npm run dev",
     "sync": "./scripts/sync-from-github.sh",
     "push": "./scripts/push-to-github.sh",
     "branch": "./scripts/create-work-branch.sh"

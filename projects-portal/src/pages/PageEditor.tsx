@@ -86,19 +86,38 @@ const PageEditor: React.FC = () => {
                     // Load template from localStorage if it exists for this book
                     const savedTemplate = localStorage.getItem(`pageTemplate_${bookId}`);
                     if (savedTemplate) {
-                        const template = JSON.parse(savedTemplate);
-                        setPageTemplate(template);
+                        try {
+                            const template = JSON.parse(savedTemplate);
+                            
+                            // Clean up invalid blob URLs from template
+                            if (template.scrollUrl && (template.scrollUrl.startsWith('blob:') || template.scrollUrl.match(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i))) {
+                                console.warn('Template contains invalid URL (blob or UUID), removing it:', template.scrollUrl);
+                                template.scrollUrl = '';
+                                // Update localStorage with cleaned template
+                                localStorage.setItem(`pageTemplate_${bookId}`, JSON.stringify(template));
+                            }
+                            
+                            setPageTemplate(template);
 
-                        // Apply template to new page
-                        if (template.scrollUrl) {
-                            setScrollPreview(template.scrollUrl);
-                        }
-                        if (template.textBoxes && template.textBoxes.length > 0) {
-                            const boxesWithIds = template.textBoxes.map((box: any, idx: number) => ({
-                                ...box,
-                                id: `template-${Date.now()}-${idx}`
-                            }));
-                            setTextBoxes(boxesWithIds);
+                            // Apply template to new page
+                            if (template.scrollUrl && !template.scrollUrl.startsWith('blob:')) {
+                                // Resolve the URL to ensure it's absolute
+                                const resolvedScrollUrl = resolveUrl(template.scrollUrl);
+                                console.log('Loading template scroll:', { original: template.scrollUrl, resolved: resolvedScrollUrl });
+                                setScrollPreview(resolvedScrollUrl);
+                            }
+                            
+                            if (template.textBoxes && template.textBoxes.length > 0) {
+                                const boxesWithIds = template.textBoxes.map((box: any, idx: number) => ({
+                                    ...box,
+                                    id: `template-${Date.now()}-${idx}`
+                                }));
+                                setTextBoxes(boxesWithIds);
+                            }
+                        } catch (err) {
+                            console.error('Failed to parse template from localStorage:', err);
+                            // Clear invalid template
+                            localStorage.removeItem(`pageTemplate_${bookId}`);
                         }
                     }
                 }
@@ -111,11 +130,16 @@ const PageEditor: React.FC = () => {
         fetchPages();
     }, [bookId]);
 
-    // Cleanup object URLs
+    // Cleanup object URLs (only revoke blob URLs, not regular URLs)
     useEffect(() => {
         return () => {
-            if (backgroundPreview && !backgroundPreview.startsWith('http')) URL.revokeObjectURL(backgroundPreview);
-            if (scrollPreview && !scrollPreview.startsWith('http')) URL.revokeObjectURL(scrollPreview);
+            // Only revoke blob URLs on cleanup
+            if (backgroundPreview && backgroundPreview.startsWith('blob:')) {
+                URL.revokeObjectURL(backgroundPreview);
+            }
+            if (scrollPreview && scrollPreview.startsWith('blob:')) {
+                URL.revokeObjectURL(scrollPreview);
+            }
         };
     }, [backgroundPreview, scrollPreview]);
 
@@ -150,8 +174,19 @@ const PageEditor: React.FC = () => {
     // Helper to resolve image URLs
     const resolveUrl = (url?: string) => {
         if (!url) return '';
-        if (url.startsWith('http')) return url;
+        // Don't use blob URLs - they're temporary and will fail
+        if (url.startsWith('blob:')) {
+            console.warn('Attempted to resolve blob URL, returning empty string:', url);
+            return '';
+        }
+        // If already absolute URL, return as is
+        if (url.startsWith('http://') || url.startsWith('https://')) return url;
+        // If relative URL starting with /uploads, make it absolute
         if (url.startsWith('/uploads')) return `http://localhost:5001${url}`;
+        // If it's a relative path without leading slash, add it
+        if (url && !url.startsWith('/') && !url.startsWith('http')) {
+            return `http://localhost:5001/${url}`;
+        }
         return url;
     };
 
@@ -191,6 +226,28 @@ const PageEditor: React.FC = () => {
         setSelectedBoxId(null);
     };
 
+    // Delete page
+    const handleDeletePage = async (pageId: string, pageNumber: number) => {
+        if (!window.confirm(`Are you sure you want to delete page ${pageNumber}? This action cannot be undone.`)) {
+            return;
+        }
+
+        try {
+            await axios.delete(`http://localhost:5001/api/pages/${pageId}`);
+            
+            // Remove from existing pages list
+            setExistingPages(existingPages.filter(p => p._id !== pageId));
+            
+            // If we were editing this page, clear the editor
+            if (editingPageId === pageId) {
+                createNewPage();
+            }
+        } catch (error) {
+            console.error('Error deleting page:', error);
+            alert('Failed to delete page. Please try again.');
+        }
+    };
+
     // Create new page (reset editor)
     const createNewPage = () => {
         setEditingPageId(null);
@@ -207,7 +264,19 @@ const PageEditor: React.FC = () => {
         // Apply template if it exists
         if (pageTemplate) {
             if (pageTemplate.scrollUrl) {
-                setScrollPreview(resolveUrl(pageTemplate.scrollUrl));
+                // Don't use blob URLs from template - they're invalid
+                if (pageTemplate.scrollUrl.startsWith('blob:')) {
+                    console.error('Template contains invalid blob URL, clearing scroll:', pageTemplate.scrollUrl);
+                    setScrollPreview(null);
+                    setScrollFile(null);
+                } else {
+                    // Use the template's scrollUrl directly (it's already the saved URL)
+                    // Set preview to show it, but we'll use the template URL when saving
+                    const templateScrollUrl = pageTemplate.scrollUrl;
+                    setScrollPreview(resolveUrl(templateScrollUrl));
+                    // Clear scrollFile so we use the template URL instead of trying to upload
+                    setScrollFile(null);
+                }
             }
             if (pageTemplate.textBoxes && pageTemplate.textBoxes.length > 0) {
                 const boxesWithIds = pageTemplate.textBoxes.map((box: any, idx: number) => ({
@@ -221,6 +290,7 @@ const PageEditor: React.FC = () => {
             }
         } else {
             setScrollPreview(null);
+            setScrollFile(null);
             setTextBoxes([]);
         }
     };
@@ -345,7 +415,9 @@ const PageEditor: React.FC = () => {
                 const formData = new FormData();
                 formData.append('file', backgroundFile);
                 const endpoint = backgroundType === 'image' ? '/api/upload/image' : '/api/upload/video';
-                const res = await axios.post(`http://localhost:5001${endpoint}`, formData, {
+                // Upload with bookId and type for organized structure
+                const uploadUrl = `http://localhost:5001${endpoint}?bookId=${bookId}&type=pages&pageNumber=${pageNumber}`;
+                const res = await axios.post(uploadUrl, formData, {
                     headers: { 'Content-Type': 'multipart/form-data' },
                 });
                 backgroundUrl = res.data.url;
@@ -353,17 +425,49 @@ const PageEditor: React.FC = () => {
 
             // Upload scroll
             let scrollUrl = '';
-            if (scrollPreview && scrollPreview.startsWith('http')) {
-                scrollUrl = scrollPreview;
-            }
-
+            
+            // If there's a new file to upload, upload it
             if (scrollFile) {
                 const formData = new FormData();
                 formData.append('file', scrollFile);
-                const res = await axios.post('http://localhost:5001/api/upload/image', formData, {
+                // Upload scroll with bookId and type for organized structure
+                const scrollUploadUrl = `http://localhost:5001/api/upload/image?bookId=${bookId}&type=scroll&pageNumber=${pageNumber}`;
+                const res = await axios.post(scrollUploadUrl, formData, {
                     headers: { 'Content-Type': 'multipart/form-data' },
                 });
                 scrollUrl = res.data.url;
+                
+                // Clean up blob URL and update preview with the uploaded URL
+                if (scrollPreview && scrollPreview.startsWith('blob:')) {
+                    URL.revokeObjectURL(scrollPreview);
+                }
+                setScrollPreview(scrollUrl);
+                setScrollFile(null); // Clear the file since it's now uploaded
+            } 
+            // Otherwise, use the preview URL (could be from template or existing page)
+            else if (scrollPreview) {
+                // Don't use blob URLs - they're temporary and will fail
+                if (scrollPreview.startsWith('blob:')) {
+                    console.warn('Scroll preview is a blob URL, cannot use for saving. Using template URL if available.');
+                    if (pageTemplate && pageTemplate.scrollUrl && !pageTemplate.scrollUrl.startsWith('blob:')) {
+                        scrollUrl = pageTemplate.scrollUrl;
+                    } else {
+                        console.error('No valid template scrollUrl available and preview is blob URL');
+                        scrollUrl = ''; // Don't save invalid blob URLs
+                    }
+                }
+                // If it's from the template, prefer the template's scrollUrl (it's the saved URL)
+                else if (pageTemplate && pageTemplate.scrollUrl && !pageTemplate.scrollUrl.startsWith('blob:')) {
+                    scrollUrl = pageTemplate.scrollUrl;
+                }
+                // If it's already an absolute URL, use it directly
+                else if (scrollPreview.startsWith('http')) {
+                    scrollUrl = scrollPreview;
+                } 
+                // Otherwise, try to resolve it (might be a relative URL)
+                else {
+                    scrollUrl = resolveUrl(scrollPreview);
+                }
             }
 
             const payload = {
@@ -400,10 +504,14 @@ const PageEditor: React.FC = () => {
                 setExistingPages(res.data);
 
                 // If this is page 1 and no template exists, ask if user wants to create one
-                if (pageNumber === 1 && !pageTemplate && (scrollUrl || textBoxes.length > 0)) {
+                // Only show dialog if we have a valid scrollUrl (not blob URL)
+                if (pageNumber === 1 && !pageTemplate && (scrollUrl && !scrollUrl.startsWith('blob:')) && textBoxes.length > 0) {
+                    setShowTemplateDialog(true);
+                } else if (pageNumber === 1 && !pageTemplate && scrollUrl && !scrollUrl.startsWith('blob:') && textBoxes.length === 0) {
+                    // Only scroll, no text boxes - still offer template
                     setShowTemplateDialog(true);
                 } else {
-                    // Reset for new page
+                    // Reset for new page - template will be auto-applied if it exists
                     createNewPage();
                 }
             }
@@ -534,8 +642,37 @@ const PageEditor: React.FC = () => {
                                 htmlFor="scroll-upload"
                                 className="flex items-center justify-center w-full h-20 border-2 border-dashed border-gray-300 rounded-lg cursor-pointer hover:border-indigo-400 hover:bg-indigo-50 transition"
                             >
-                                {scrollPreview ? (
-                                    <img src={scrollPreview} className="w-full h-full object-contain rounded-lg opacity-80" />
+                                {scrollPreview && !scrollPreview.startsWith('blob:') ? (
+                                    <img 
+                                        src={resolveUrl(scrollPreview)} 
+                                        className="w-full h-full object-contain rounded-lg opacity-80" 
+                                        onError={(e) => {
+                                            console.error('Scroll preview image failed to load:', scrollPreview);
+                                            const resolved = resolveUrl(scrollPreview);
+                                            if (resolved && resolved !== scrollPreview) {
+                                                e.currentTarget.src = resolved;
+                                            } else {
+                                                // Hide if can't load
+                                                e.currentTarget.style.display = 'none';
+                                            }
+                                        }}
+                                        alt="Scroll preview"
+                                    />
+                                ) : scrollPreview && scrollPreview.startsWith('blob:') ? (
+                                    <div className="relative w-full h-full">
+                                        <img 
+                                            src={scrollPreview} 
+                                            className="w-full h-full object-contain rounded-lg opacity-80" 
+                                            alt="Scroll preview"
+                                            onError={(e) => {
+                                                console.error('Scroll preview blob URL failed to load');
+                                                e.currentTarget.style.display = 'none';
+                                            }}
+                                        />
+                                        <div className="absolute bottom-1 left-1 right-1 bg-black/50 text-white text-xs px-2 py-1 rounded text-center">
+                                            Ready to upload
+                                        </div>
+                                    </div>
                                 ) : (
                                     <div className="text-center text-gray-400">
                                         <Upload className="w-6 h-6 mx-auto mb-1" />
@@ -702,9 +839,23 @@ const PageEditor: React.FC = () => {
                     )}
 
                     {/* Scroll Overlay Layer */}
-                    {scrollPreview && (
+                    {scrollPreview && !scrollPreview.startsWith('blob:') && (
                         <div className="absolute bottom-0 left-0 right-0 h-1/3 pointer-events-none z-10">
-                            <img src={scrollPreview} className="w-full h-full object-fill" alt="Scroll" />
+                            <img 
+                                src={resolveUrl(scrollPreview)} 
+                                className="w-full h-full object-fill" 
+                                alt="Scroll"
+                                onError={(e) => {
+                                    console.error('Scroll image failed to load on canvas:', scrollPreview);
+                                    const resolved = resolveUrl(scrollPreview);
+                                    if (resolved && resolved !== scrollPreview) {
+                                        e.currentTarget.src = resolved;
+                                    } else {
+                                        // Hide the image if it can't be loaded
+                                        e.currentTarget.style.display = 'none';
+                                    }
+                                }}
+                            />
                         </div>
                     )}
 
@@ -797,43 +948,60 @@ const PageEditor: React.FC = () => {
                         existingPages.map((page) => (
                             <div
                                 key={page._id}
-                                className={`border rounded-lg overflow-hidden transition cursor-pointer group ${editingPageId === page._id
+                                className={`border rounded-lg overflow-hidden transition group ${editingPageId === page._id
                                     ? 'border-indigo-600 ring-2 ring-indigo-300'
                                     : 'border-gray-200 hover:border-indigo-400'
                                     }`}
-                                onClick={() => loadPage(page)}
                             >
-                                <div className="aspect-[4/3] bg-gray-100 relative overflow-hidden">
-                                    {page.backgroundUrl ? (
-                                        page.backgroundType === 'image' ? (
-                                            <img
-                                                src={resolveUrl(page.backgroundUrl)}
-                                                alt={`Page ${page.pageNumber}`}
-                                                className="w-full h-full object-cover"
-                                            />
+                                <div 
+                                    className="cursor-pointer"
+                                    onClick={() => loadPage(page)}
+                                >
+                                    <div className="aspect-[4/3] bg-gray-100 relative overflow-hidden">
+                                        {page.backgroundUrl ? (
+                                            page.backgroundType === 'image' ? (
+                                                <img
+                                                    src={resolveUrl(page.backgroundUrl)}
+                                                    alt={`Page ${page.pageNumber}`}
+                                                    className="w-full h-full object-cover"
+                                                />
+                                            ) : (
+                                                <video
+                                                    src={resolveUrl(page.backgroundUrl)}
+                                                    className="w-full h-full object-cover"
+                                                    muted
+                                                />
+                                            )
                                         ) : (
-                                            <video
-                                                src={resolveUrl(page.backgroundUrl)}
-                                                className="w-full h-full object-cover"
-                                                muted
-                                            />
-                                        )
-                                    ) : (
-                                        <div className="w-full h-full flex items-center justify-center text-gray-300">
-                                            <ImageIcon className="w-8 h-8" />
+                                            <div className="w-full h-full flex items-center justify-center text-gray-300">
+                                                <ImageIcon className="w-8 h-8" />
+                                            </div>
+                                        )}
+
+                                        {/* Page number badge */}
+                                        <div className="absolute top-2 left-2 bg-indigo-600 text-white text-xs font-bold px-2 py-1 rounded">
+                                            #{page.pageNumber}
                                         </div>
-                                    )}
 
-                                    {/* Page number badge */}
-                                    <div className="absolute top-2 left-2 bg-indigo-600 text-white text-xs font-bold px-2 py-1 rounded">
-                                        #{page.pageNumber}
+                                        {/* Delete button - appears on hover */}
+                                        <button
+                                            onClick={(e) => {
+                                                e.preventDefault();
+                                                e.stopPropagation();
+                                                handleDeletePage(page._id, page.pageNumber);
+                                            }}
+                                            className="absolute top-2 right-2 bg-red-600 text-white p-1.5 rounded opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-700"
+                                            title="Delete page"
+                                        >
+                                            <Trash2 className="w-4 h-4" />
+                                        </button>
                                     </div>
-                                </div>
 
-                                <div className="p-2 bg-white group-hover:bg-indigo-50 transition">
-                                    <p className="text-xs text-gray-600 truncate">
-                                        {page.textBoxes?.length || 0} text box{page.textBoxes?.length !== 1 ? 'es' : ''}
-                                    </p>
+                                    <div className="p-2 bg-white group-hover:bg-indigo-50 transition">
+                                        <p className="text-xs text-gray-600 truncate">
+                                            {page.textBoxes?.length || 0} text box{page.textBoxes?.length !== 1 ? 'es' : ''}
+                                        </p>
+                                    </div>
                                 </div>
                             </div>
                         ))
@@ -852,15 +1020,46 @@ const PageEditor: React.FC = () => {
                         </p>
                         <div className="flex gap-3">
                             <button
-                                onClick={() => {
-                                    // Save template to localStorage
+                                onClick={async () => {
+                                    // Get the actual scrollUrl from the saved page (not just preview)
+                                    // The scrollUrl should be in the payload that was just saved
+                                    let actualScrollUrl = '';
+                                    
+                                    // Always fetch from the saved page to get the real URL (not blob URL)
+                                    try {
+                                        const res = await axios.get(`http://localhost:5001/api/pages/book/${bookId}`);
+                                        const page1 = res.data.find((p: any) => p.pageNumber === 1);
+                                        if (page1 && page1.scrollUrl) {
+                                            actualScrollUrl = page1.scrollUrl;
+                                            console.log('Template: Using scrollUrl from saved page 1:', actualScrollUrl);
+                                        } else {
+                                            console.warn('Template: Page 1 not found or has no scrollUrl');
+                                        }
+                                    } catch (err) {
+                                        console.error('Failed to fetch page 1 for template:', err);
+                                        // Fallback: use scrollPreview but filter out blob URLs
+                                        if (scrollPreview && !scrollPreview.startsWith('blob:')) {
+                                            actualScrollUrl = scrollPreview;
+                                        }
+                                    }
+                                    
+                                    // Don't save blob URLs to template
+                                    if (actualScrollUrl.startsWith('blob:')) {
+                                        console.error('Template: Cannot save blob URL, skipping template creation');
+                                        alert('Cannot save template: scroll image URL is invalid. Please try again.');
+                                        setShowTemplateDialog(false);
+                                        return;
+                                    }
+                                    
+                                    // Save template to localStorage with the actual URL
                                     const template = {
-                                        scrollUrl: scrollPreview || '',
+                                        scrollUrl: actualScrollUrl,
                                         scrollHeight: 200,
                                         textBoxes: textBoxes.map(({ id, ...rest }) => rest)
                                     };
                                     localStorage.setItem(`pageTemplate_${bookId}`, JSON.stringify(template));
                                     setPageTemplate(template);
+                                    console.log('Template saved:', template);
                                     setShowTemplateDialog(false);
                                     createNewPage();
                                 }}

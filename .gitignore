@@ -35,3 +35,8 @@ backend/service-account-key.json
 backend/uploads/
 backend/service-account-key-copy.json
 backend/service-account-key*.json
+
+# Debug files that may contain sensitive information
+DEBUG-SUMMARY.md
+WORD-HIGHLIGHTING-DEBUG.md
+RESTRUCTURE-*.md

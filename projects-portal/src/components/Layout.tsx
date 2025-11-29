@@ -1,6 +1,6 @@
 import React from 'react';
 import { Link, Outlet, useLocation } from 'react-router-dom';
-import { Book, Music, Layout as LayoutIcon, Home, Tag, Volume2 } from 'lucide-react';
+import { Book, Music, Layout as LayoutIcon, Home, Tag, Volume2, Gamepad2 } from 'lucide-react';
 
 const Layout: React.FC = () => {
     const location = useLocation();
@@ -13,6 +13,7 @@ const Layout: React.FC = () => {
         { path: '/playlists', icon: Music, label: 'Playlists' },
         { path: '/categories', icon: Tag, label: 'Categories' },
         { path: '/voices', icon: Volume2, label: 'Voices' },
+        { path: '/games', icon: Gamepad2, label: 'Games' },
     ];
 
     return (

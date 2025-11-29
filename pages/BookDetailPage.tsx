@@ -1,11 +1,18 @@
 
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
-import { Heart, BookOpen, Crown, PlayCircle, Headphones, Disc } from 'lucide-react';
+import { Heart, BookOpen, Crown, PlayCircle, Headphones, Disc, Lock, Globe } from 'lucide-react';
 import { useBooks } from '../context/BooksContext';
 import { Book } from '../types';
 import { readingProgressService } from '../services/readingProgressService';
 import { useAudio } from '../context/AudioContext';
+import { ApiService } from '../services/apiService';
+import { readCountService } from '../services/readCountService';
+import { favoritesService } from '../services/favoritesService';
+import GameWebView from '../components/features/GameWebView';
+import ChallengeGameModal from '../components/features/ChallengeGameModal';
+import StrengthGameModal from '../components/features/StrengthGameModal';
+import PrayerGameModal from '../components/features/PrayerGameModal';
 
 // Default placeholder image
 const DEFAULT_COVER = 'https://via.placeholder.com/400x400/8B4513/FFFFFF?text=Book+Cover';
@@ -41,6 +48,15 @@ const BookDetailPage: React.FC = () => {
   const [book, setBook] = useState<Book | null>(null);
   const [imageError, setImageError] = useState(false);
   const [savedPageIndex, setSavedPageIndex] = useState<number | null>(null);
+  const [bookGames, setBookGames] = useState<Array<{ _id?: string; title: string; url: string; coverImage?: string; description?: string }>>([]);
+  const [associatedGames, setAssociatedGames] = useState<Array<{ gameId: string; name: string; url?: string; coverImage?: string; gameType?: 'modal' | 'webview' }>>([]);
+  const [totalPages, setTotalPages] = useState<number>(0);
+  const [selectedGame, setSelectedGame] = useState<{ title: string; url: string } | null>(null);
+  const [showChallengeGame, setShowChallengeGame] = useState(false);
+  const [showStrengthGame, setShowStrengthGame] = useState(false);
+  const [showPrayerGame, setShowPrayerGame] = useState(false);
+  const [readCount, setReadCount] = useState<number>(0);
+  const [favoriteCount, setFavoriteCount] = useState<number>(0);
   
     // Restore background music when returning from book reader
   useEffect(() => {
@@ -101,6 +117,98 @@ const BookDetailPage: React.FC = () => {
       }
     }
   }, [id, books]);
+
+  // Fetch book details including bookGames and total pages
+  useEffect(() => {
+    const fetchBookDetails = async () => {
+      if (!id) return;
+      
+      try {
+        // Fetch full book data from API
+        const fullBook = await ApiService.getBookById(id);
+        if (fullBook && (fullBook as any).rawData) {
+          const rawData = (fullBook as any).rawData;
+          if (rawData.bookGames && Array.isArray(rawData.bookGames)) {
+            setBookGames(rawData.bookGames);
+          }
+          
+          // Fetch associated games from Games management
+          if (rawData.games && Array.isArray(rawData.games) && rawData.games.length > 0) {
+            try {
+              const gamesResponse = await fetch('http://localhost:5001/api/games/enabled');
+              if (gamesResponse.ok) {
+                const allGames = await gamesResponse.json();
+                // Filter to only games that are associated with this book
+                const bookAssociatedGames = allGames.filter((game: any) => 
+                  rawData.games.includes(game.gameId)
+                );
+                setAssociatedGames(bookAssociatedGames);
+              }
+            } catch (error) {
+              console.error('Error fetching associated games:', error);
+            }
+          }
+        }
+        
+        // Fetch pages to determine total count
+        const pages = await ApiService.getBookPages(id);
+        setTotalPages(pages.length);
+      } catch (error) {
+        console.error('Error fetching book details:', error);
+      }
+    };
+    
+    fetchBookDetails();
+  }, [id]);
+
+  // Load read count and favorite count
+  useEffect(() => {
+    if (id) {
+      const count = readCountService.getReadCount(id);
+      setReadCount(count);
+      
+      // Get favorite count
+      // Note: In production, this should come from the backend API
+      // For now, we'll use a simple local storage approach
+      const favorites = favoritesService.getFavorites();
+      const isFavorited = favorites.includes(id);
+      
+      // Try to get stored favorite count for this book
+      // In production, this should come from the backend API
+      const storedCount = localStorage.getItem(`book_fav_count_${id}`);
+      if (storedCount) {
+        setFavoriteCount(parseInt(storedCount, 10));
+      } else {
+        // Initialize with 0 (in production, this comes from backend)
+        // For demo purposes, you can set a base count here if needed
+        const baseCount = 0; // Start at 0, will increment when users favorite
+        setFavoriteCount(baseCount);
+        localStorage.setItem(`book_fav_count_${id}`, baseCount.toString());
+      }
+    }
+  }, [id]);
+
+  // Update favorite count when user favorites/unfavorites
+  const handleFavoriteToggle = () => {
+    if (!id) return;
+    const isFavorited = favoritesService.isFavorite(id);
+    const newFavoriteState = favoritesService.toggleFavorite(id);
+    
+    // Update the displayed count
+    const currentCount = parseInt(localStorage.getItem(`book_fav_count_${id}`) || '0', 10);
+    const newCount = newFavoriteState ? currentCount + 1 : Math.max(0, currentCount - 1);
+    setFavoriteCount(newCount);
+    localStorage.setItem(`book_fav_count_${id}`, newCount.toString());
+  };
+  
+  // Check if book is completed (user has read all pages)
+  const isBookCompleted = () => {
+    if (!id || totalPages === 0) return false;
+    const progress = readingProgressService.getProgress(id);
+    if (!progress) return false;
+    // Consider book completed if user has reached the last page
+    return progress.currentPageIndex >= totalPages - 1;
+  };
   
   const handleContinue = () => {
     if (id && savedPageIndex !== null && savedPageIndex >= 0) {
@@ -198,12 +306,12 @@ const BookDetailPage: React.FC = () => {
               <div className="w-full max-w-sm flex justify-between items-center px-4 text-[#e2cba5] font-bold drop-shadow-md">
                 <div className="flex items-center gap-2">
                   <Headphones size={20} />
-                  <span className="text-lg">104 Listen</span>
+                  <span className="text-lg">{readCount} Listen</span>
                 </div>
                 <div className="h-6 w-px bg-white/20"></div>
                 <div className="flex items-center gap-2">
                   <Heart size={20} className="text-[#FF5252]" fill="#FF5252" />
-                  <span className="text-lg">15 Favs</span>
+                  <span className="text-lg">{favoriteCount} Favs</span>
                 </div>
               </div>
             </>
@@ -229,31 +337,130 @@ const BookDetailPage: React.FC = () => {
                 ) : null}
               </div>
 
-              {/* Game Card */}
-              <div className="w-full max-w-sm bg-[#3E1F07] rounded-2xl p-3 flex items-center gap-4 shadow-[0_6px_0_rgba(0,0,0,0.3)] border-2 border-[#5c2e0b] relative overflow-hidden">
-                <div className="absolute inset-0 opacity-40 bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-[#70380d] to-transparent"></div>
+              {/* Associated Games from Games Management */}
+              {associatedGames.length > 0 && (
+                <div className="w-full max-w-sm space-y-3">
+                  {associatedGames.map((game) => {
+                    return (
+                      <div
+                        key={game.gameId}
+                        className="w-full bg-[#3E1F07] rounded-2xl p-3 flex items-center gap-4 shadow-[0_6px_0_rgba(0,0,0,0.3)] border-2 border-[#5c2e0b] relative overflow-hidden"
+                      >
+                        <div className="absolute inset-0 opacity-40 bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-[#70380d] to-transparent"></div>
 
-                <div className="w-20 h-14 bg-[#87CEEB] rounded-lg overflow-hidden relative shrink-0 border-2 border-white/10 shadow-inner z-10">
-                  <img src="https://picsum.photos/seed/minewings/200/150" className="w-full h-full object-cover" alt="Game" />
+                        <div className="w-20 h-14 bg-[#87CEEB] rounded-lg overflow-hidden relative shrink-0 border-2 border-white/10 shadow-inner z-10">
+                          {game.coverImage ? (
+                            <img src={game.coverImage} className="w-full h-full object-cover" alt={game.name} />
+                          ) : (
+                            <div className="w-full h-full bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center">
+                              <Globe className="w-8 h-8 text-white" />
+                            </div>
+                          )}
+                        </div>
+                        <div className="flex-1 z-10 flex justify-between items-center">
+                          <div className="flex-1 min-w-0">
+                            <h3 className="text-white font-display font-bold tracking-wide text-lg drop-shadow-md truncate">
+                              {game.name}
+                            </h3>
+                          </div>
+                          <button
+                            onClick={() => {
+                              if (game.gameType === 'webview' && game.url) {
+                                // Open webview game
+                                setSelectedGame({ title: game.name, url: game.url });
+                              } else if (game.gameType === 'modal') {
+                                // Open modal games based on gameId
+                                if (game.gameId === 'challenge') {
+                                  setShowChallengeGame(true);
+                                } else if (game.gameId === 'strength') {
+                                  setShowStrengthGame(true);
+                                } else if (game.gameId === 'prayer') {
+                                  setShowPrayerGame(true);
+                                }
+                              }
+                            }}
+                            className="bg-[#6da34d] hover:bg-[#7db85b] text-white text-sm font-bold py-1.5 px-6 rounded-full shadow-[0_3px_0_#3d5c2b] active:translate-y-[3px] active:shadow-none transition-all border border-[#ffffff20] cursor-pointer"
+                          >
+                            Play
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
-                <div className="flex-1 z-10 flex justify-between items-center">
-                  <h3 className="text-white font-display font-bold tracking-wide text-lg drop-shadow-md">MineWings</h3>
-                  <button className="bg-[#6da34d] hover:bg-[#7db85b] text-white text-sm font-bold py-1.5 px-6 rounded-full shadow-[0_3px_0_#3d5c2b] active:translate-y-[3px] active:shadow-none transition-all border border-[#ffffff20]">
-                    Play
-                  </button>
+              )}
+
+              {/* Book-Specific Games */}
+              {bookGames.length > 0 && (
+                <div className="w-full max-w-sm space-y-3">
+                  {bookGames.map((game, index) => {
+                    const isUnlocked = isBookCompleted();
+                    return (
+                      <div
+                        key={index}
+                        className={`w-full bg-[#3E1F07] rounded-2xl p-3 flex items-center gap-4 shadow-[0_6px_0_rgba(0,0,0,0.3)] border-2 border-[#5c2e0b] relative overflow-hidden ${
+                          !isUnlocked ? 'opacity-75' : ''
+                        }`}
+                      >
+                        <div className="absolute inset-0 opacity-40 bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-[#70380d] to-transparent"></div>
+
+                        <div className="w-20 h-14 bg-[#87CEEB] rounded-lg overflow-hidden relative shrink-0 border-2 border-white/10 shadow-inner z-10">
+                          {game.coverImage ? (
+                            <img src={game.coverImage} className="w-full h-full object-cover" alt={game.title} />
+                          ) : (
+                            <div className="w-full h-full bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center">
+                              <Globe className="w-8 h-8 text-white" />
+                            </div>
+                          )}
+                          {!isUnlocked && (
+                            <div className="absolute inset-0 bg-black/60 flex items-center justify-center">
+                              <Lock className="w-6 h-6 text-white" />
+                            </div>
+                          )}
+                        </div>
+                        <div className="flex-1 z-10 flex justify-between items-center">
+                          <div className="flex-1 min-w-0">
+                            <h3 className="text-white font-display font-bold tracking-wide text-lg drop-shadow-md truncate">
+                              {game.title}
+                            </h3>
+                            {!isUnlocked && (
+                              <p className="text-xs text-white/70 mt-0.5">Complete book to unlock</p>
+                            )}
+                          </div>
+                          <button
+                            onClick={() => {
+                              if (isUnlocked) {
+                                setSelectedGame({ title: game.title, url: game.url });
+                              } else {
+                                alert('Please complete reading this book to unlock this game!');
+                              }
+                            }}
+                            disabled={!isUnlocked}
+                            className={`${
+                              isUnlocked
+                                ? 'bg-[#6da34d] hover:bg-[#7db85b] cursor-pointer'
+                                : 'bg-gray-600 cursor-not-allowed opacity-50'
+                            } text-white text-sm font-bold py-1.5 px-6 rounded-full shadow-[0_3px_0_#3d5c2b] active:translate-y-[3px] active:shadow-none transition-all border border-[#ffffff20]`}
+                          >
+                            {isUnlocked ? 'Play' : 'Locked'}
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
-              </div>
+              )}
 
               {/* Stats Row (Read) */}
               <div className="w-full max-w-sm bg-[#2d1809]/80 backdrop-blur-sm rounded-xl py-2 px-4 flex justify-between items-center text-[#e2cba5] font-bold shadow-inner border border-[#ffffff10]">
                 <div className="flex items-center gap-2">
                   <BookOpen size={20} />
-                  <span className="text-lg">950 Read</span>
+                  <span className="text-lg">{readCount} Read</span>
                 </div>
                 <div className="h-6 w-px bg-white/20"></div>
                 <div className="flex items-center gap-2">
                   <Heart size={20} className="text-[#FF5252]" fill="#FF5252" />
-                  <span className="text-lg">15 Fav</span>
+                  <span className="text-lg">{favoriteCount} Fav</span>
                 </div>
               </div>
             </>
@@ -318,6 +525,29 @@ const BookDetailPage: React.FC = () => {
           )}
         </div>
       </div>
+
+      {/* Game WebView Modal */}
+      {selectedGame && (
+        <GameWebView
+          url={selectedGame.url}
+          title={selectedGame.title}
+          onClose={() => setSelectedGame(null)}
+        />
+      )}
+
+      {/* Game Modals */}
+      <ChallengeGameModal
+        isOpen={showChallengeGame}
+        onClose={() => setShowChallengeGame(false)}
+      />
+      <StrengthGameModal
+        isOpen={showStrengthGame}
+        onClose={() => setShowStrengthGame(false)}
+      />
+      <PrayerGameModal
+        isOpen={showPrayerGame}
+        onClose={() => setShowPrayerGame(false)}
+      />
 
     </div>
   );

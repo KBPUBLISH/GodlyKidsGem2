@@ -1,11 +1,13 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
-import { ChevronLeft, ChevronRight, X, Play, Pause, Volume2, Mic, Check, Music } from 'lucide-react';
+import { ChevronLeft, ChevronRight, X, Play, Pause, Volume2, Mic, Check, Music, Home, Heart, Star } from 'lucide-react';
 import { ApiService } from '../services/apiService';
 import { voiceCloningService, ClonedVoice } from '../services/voiceCloningService';
 import VoiceCloningModal from '../components/features/VoiceCloningModal';
 import { useAudio } from '../context/AudioContext';
 import { readingProgressService } from '../services/readingProgressService';
+import { favoritesService } from '../services/favoritesService';
+import { readCountService } from '../services/readCountService';
 import { BookPageRenderer } from '../components/features/BookPageRenderer';
 import { processTextWithEmotionalCues, removeEmotionalCues } from '../utils/textProcessing';
 
@@ -110,6 +112,8 @@ const BookReaderPage: React.FC = () => {
     const showScrollRef = useRef<boolean>(true); // Track scroll state to avoid closure issues
     const [bookMusicEnabled, setBookMusicEnabled] = useState(true); // Default to enabled
     const [hasBookMusic, setHasBookMusic] = useState(false);
+    const [isFavorite, setIsFavorite] = useState(false);
+    const [isLiked, setIsLiked] = useState(false);
 
     // Pause background music when entering book reader
     useEffect(() => {
@@ -244,7 +248,70 @@ const BookReaderPage: React.FC = () => {
             if (!bookId) return;
             try {
                 const data = await ApiService.getBookPages(bookId);
-                setPages(data);
+                
+                // Add "The End" page as the last page
+                // Create a beautiful themed background matching the app's aesthetic
+                const theEndBackground = 'data:image/svg+xml;base64,' + btoa(`
+                    <svg width="100%" height="100%" xmlns="http://www.w3.org/2000/svg">
+                        <defs>
+                            <linearGradient id="theEndGradient" x1="0%" y1="0%" x2="0%" y2="100%">
+                                <stop offset="0%" style="stop-color:#fdf6e3;stop-opacity:1" />
+                                <stop offset="50%" style="stop-color:#f3e5ab;stop-opacity:1" />
+                                <stop offset="100%" style="stop-color:#e8d5b7;stop-opacity:1" />
+                            </linearGradient>
+                            <pattern id="woodGrain" x="0" y="0" width="100" height="100" patternUnits="userSpaceOnUse">
+                                <rect width="100" height="100" fill="#fdf6e3"/>
+                                <path d="M0,50 Q25,45 50,50 T100,50" stroke="#d4c5a0" stroke-width="1" fill="none" opacity="0.3"/>
+                                <path d="M0,75 Q25,70 50,75 T100,75" stroke="#d4c5a0" stroke-width="1" fill="none" opacity="0.2"/>
+                            </pattern>
+                        </defs>
+                        <rect width="100%" height="100%" fill="url(#theEndGradient)"/>
+                        <rect width="100%" height="100%" fill="url(#woodGrain)" opacity="0.4"/>
+                    </svg>
+                `);
+                
+                const theEndPage: Page = {
+                    _id: 'the-end-page',
+                    pageNumber: data.length + 1,
+                    backgroundUrl: theEndBackground,
+                    backgroundType: 'image',
+                    scrollUrl: '',
+                    scrollHeight: 0,
+                    textBoxes: [
+                        {
+                            text: '✨',
+                            x: 50,
+                            y: 30,
+                            width: 20,
+                            alignment: 'center',
+                            fontSize: 80,
+                            fontFamily: 'Fredoka',
+                            color: '#FFD700',
+                        },
+                        {
+                            text: 'The End',
+                            x: 50,
+                            y: 42,
+                            width: 60,
+                            alignment: 'center',
+                            fontSize: 72,
+                            fontFamily: 'Fredoka',
+                            color: '#8B4513',
+                        },
+                        {
+                            text: 'Thank you for reading!',
+                            x: 50,
+                            y: 58,
+                            width: 70,
+                            alignment: 'center',
+                            fontSize: 32,
+                            fontFamily: 'Nunito',
+                            color: '#5c2e0b',
+                        },
+                    ],
+                };
+                
+                setPages([...data, theEndPage]);
 
                 // Check if page is specified in URL (from Continue button)
                 const pageParam = searchParams.get('page');
@@ -344,6 +411,7 @@ const BookReaderPage: React.FC = () => {
     };
 
     const currentPage = mapPage(pages[currentPageIndex]);
+    const isTheEndPage = currentPage?.id === 'the-end-page' || currentPageIndex === pages.length - 1;
 
     const handleNext = (e: React.MouseEvent) => {
         e.stopPropagation();
@@ -371,6 +439,12 @@ const BookReaderPage: React.FC = () => {
                 // Save progress
                 if (bookId) {
                     readingProgressService.saveProgress(bookId, nextIndex);
+                    
+                    // Check if book is completed (reached "The End" page)
+                    if (nextIndex >= pages.length - 1) {
+                        // Increment read count when book is completed
+                        readCountService.incrementReadCount(bookId);
+                    }
                 }
             }, 600);
         }
@@ -736,6 +810,10 @@ const BookReaderPage: React.FC = () => {
                                 setAutoPlayMode(false);
                                 autoPlayModeRef.current = false;
                                 isAutoPlayingRef.current = false;
+                                // Increment read count when book is completed
+                                if (bookId) {
+                                    readCountService.incrementReadCount(bookId);
+                                }
                             } else if (isAutoPlayingRef.current) {
                                 console.log('⏸️ Auto-play: Already processing, skipping');
                             }
@@ -794,6 +872,10 @@ const BookReaderPage: React.FC = () => {
                             setAutoPlayMode(false);
                             autoPlayModeRef.current = false;
                             isAutoPlayingRef.current = false;
+                            // Increment read count when book is completed
+                            if (bookId) {
+                                readCountService.incrementReadCount(bookId);
+                            }
                         } else if (isAutoPlayingRef.current) {
                             console.log('⏸️ Auto-play: Already processing, skipping');
                         }
@@ -1215,6 +1297,86 @@ const BookReaderPage: React.FC = () => {
                     {currentPageIndex + 1} / {pages.length}
                 </div>
             </div>
+
+            {/* The End Page Buttons */}
+            {isTheEndPage && (
+                <div className="absolute bottom-20 left-1/2 transform -translate-x-1/2 z-50 flex flex-col items-center gap-3 pointer-events-auto">
+                    <div className="flex gap-3">
+                        {/* Go Home Button */}
+                        <button
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                // Restore music before navigating
+                                const wasEnabled = wasMusicEnabledRef.current || localStorage.getItem('godly_kids_music_was_enabled') === 'true';
+                                if (wasEnabled && !musicEnabled) {
+                                    toggleMusic();
+                                }
+                                setTimeout(() => {
+                                    const musicButton = document.querySelector('button[title*="Music"]') as HTMLButtonElement;
+                                    if (musicButton) {
+                                        musicButton.click();
+                                    }
+                                }, 150);
+                                navigate('/home');
+                            }}
+                            className="relative overflow-hidden font-display font-bold transition-transform active:scale-95 rounded-xl shadow-xl border-b-4 bg-[#8B4513] border-[#5c2e0b] hover:bg-[#A0522D] text-white px-6 py-3 flex items-center gap-2"
+                        >
+                            <Home className="w-5 h-5" />
+                            <span>Go Home</span>
+                            <div className="absolute inset-0 opacity-20 pointer-events-none" 
+                                 style={{ backgroundImage: 'repeating-linear-gradient(45deg, transparent, transparent 10px, #000 10px, #000 12px)' }}>
+                            </div>
+                            <div className="absolute top-0 left-0 right-0 h-1 bg-white opacity-20"></div>
+                        </button>
+
+                        {/* Save to Favs Button */}
+                        <button
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                if (bookId) {
+                                    const newFavoriteState = favoritesService.toggleFavorite(bookId);
+                                    setIsFavorite(newFavoriteState);
+                                }
+                            }}
+                            className={`relative overflow-hidden font-display font-bold transition-transform active:scale-95 rounded-xl shadow-xl border-b-4 px-6 py-3 flex items-center gap-2 ${
+                                isFavorite
+                                    ? 'bg-[#FFD700] border-[#B8860B] hover:bg-[#ffe066] text-[#5c2e0b]'
+                                    : 'bg-[#CD853F] border-[#8B4513] hover:bg-[#DEB887] text-white'
+                            }`}
+                        >
+                            <Star className={`w-5 h-5 ${isFavorite ? 'fill-current' : ''}`} />
+                            <span>{isFavorite ? 'Favorited' : 'Save to Favs'}</span>
+                            <div className="absolute inset-0 opacity-20 pointer-events-none" 
+                                 style={{ backgroundImage: 'repeating-linear-gradient(45deg, transparent, transparent 10px, #000 10px, #000 12px)' }}>
+                            </div>
+                            <div className="absolute top-0 left-0 right-0 h-1 bg-white opacity-20"></div>
+                        </button>
+
+                        {/* Like Button */}
+                        <button
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                if (bookId) {
+                                    const newLikeState = favoritesService.toggleLike(bookId);
+                                    setIsLiked(newLikeState);
+                                }
+                            }}
+                            className={`relative overflow-hidden font-display font-bold transition-transform active:scale-95 rounded-xl shadow-xl border-b-4 px-6 py-3 flex items-center gap-2 ${
+                                isLiked
+                                    ? 'bg-[#FF5252] border-[#D32F2F] hover:bg-[#FF6B6B] text-white'
+                                    : 'bg-[#CD853F] border-[#8B4513] hover:bg-[#DEB887] text-white'
+                            }`}
+                        >
+                            <Heart className={`w-5 h-5 ${isLiked ? 'fill-current' : ''}`} />
+                            <span>{isLiked ? 'Liked' : 'Like'}</span>
+                            <div className="absolute inset-0 opacity-20 pointer-events-none" 
+                                 style={{ backgroundImage: 'repeating-linear-gradient(45deg, transparent, transparent 10px, #000 10px, #000 12px)' }}>
+                            </div>
+                            <div className="absolute top-0 left-0 right-0 h-1 bg-white opacity-20"></div>
+                        </button>
+                    </div>
+                </div>
+            )}
 
             {/* Voice Cloning Modal */}
             <VoiceCloningModal

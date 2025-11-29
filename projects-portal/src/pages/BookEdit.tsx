@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import axios from 'axios';
-import { Plus, Upload, X, Music } from 'lucide-react';
+import { Plus, Upload, X, Music, Gamepad2, Globe, Trash2 } from 'lucide-react';
 
 const BookEdit: React.FC = () => {
     const { bookId } = useParams<{ bookId: string }>();
@@ -26,6 +26,13 @@ const BookEdit: React.FC = () => {
     const [audioFiles, setAudioFiles] = useState<Array<{ url: string; filename: string; uploadedAt?: string }>>([]);
     const [uploadingAudio, setUploadingAudio] = useState(false);
     const audioInputRef = useRef<HTMLInputElement>(null);
+    const [availableGames, setAvailableGames] = useState<Array<{ gameId: string; name: string; enabled: boolean }>>([]);
+    const [selectedGames, setSelectedGames] = useState<string[]>([]);
+    const [bookGames, setBookGames] = useState<Array<{ _id?: string; title: string; url: string; coverImage?: string; description?: string }>>([]);
+    const [editingBookGame, setEditingBookGame] = useState<number | null>(null);
+    const [newBookGame, setNewBookGame] = useState<{ title: string; url: string; coverImage?: string; description?: string }>({ title: '', url: '', coverImage: '', description: '' });
+    const [uploadingGameCover, setUploadingGameCover] = useState(false);
+    const gameCoverInputRef = useRef<HTMLInputElement>(null);
 
     // Load existing book data
     useEffect(() => {
@@ -49,6 +56,20 @@ const BookEdit: React.FC = () => {
                 } else {
                     setAudioFiles([]);
                 }
+                
+                // Load associated games
+                if (b.games && Array.isArray(b.games)) {
+                    setSelectedGames(b.games);
+                } else {
+                    setSelectedGames([]);
+                }
+                
+                // Load book-specific games
+                if (b.bookGames && Array.isArray(b.bookGames)) {
+                    setBookGames(b.bookGames);
+                } else {
+                    setBookGames([]);
+                }
             } catch (err) {
                 console.error('Failed to fetch book:', err);
             } finally {
@@ -68,6 +89,18 @@ const BookEdit: React.FC = () => {
             }
         };
         fetchCategories();
+    }, []);
+
+    useEffect(() => {
+        const fetchGames = async () => {
+            try {
+                const response = await axios.get('http://localhost:5001/api/games');
+                setAvailableGames(response.data);
+            } catch (error) {
+                console.error('Error fetching games:', error);
+            }
+        };
+        fetchGames();
     }, []);
 
     const handleImageUpload = async (file: File) => {
@@ -219,6 +252,8 @@ const BookEdit: React.FC = () => {
                 files: {
                     audio: audioFiles,
                 },
+                games: selectedGames,
+                bookGames: bookGames,
             };
             await axios.put(`http://localhost:5001/api/books/${bookId}`, payload);
             navigate('/books');
@@ -438,6 +473,264 @@ const BookEdit: React.FC = () => {
                                 MP3, WAV, M4A up to 50MB
                             </span>
                         </label>
+                    </div>
+                </div>
+                
+                {/* Games Section */}
+                <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                        <Gamepad2 className="w-4 h-4 inline mr-2" />
+                        Associated Games
+                    </label>
+                    <p className="text-xs text-gray-500 mb-3">
+                        Select which games should be available for this book. Users will be able to access these games from the book detail page.
+                    </p>
+                    
+                    {availableGames.length === 0 ? (
+                        <p className="text-sm text-gray-500 italic">No games available. Please create games in the Games management page first.</p>
+                    ) : (
+                        <div className="space-y-2">
+                            {availableGames
+                                .filter(game => game.enabled) // Only show enabled games
+                                .map((game) => (
+                                    <label
+                                        key={game.gameId}
+                                        className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg border border-gray-200 hover:bg-gray-100 cursor-pointer transition-colors"
+                                    >
+                                        <input
+                                            type="checkbox"
+                                            checked={selectedGames.includes(game.gameId)}
+                                            onChange={(e) => {
+                                                if (e.target.checked) {
+                                                    setSelectedGames([...selectedGames, game.gameId]);
+                                                } else {
+                                                    setSelectedGames(selectedGames.filter(id => id !== game.gameId));
+                                                }
+                                            }}
+                                            className="w-4 h-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500"
+                                        />
+                                        <div className="flex-1">
+                                            <span className="text-sm font-medium text-gray-900">{game.name}</span>
+                                            {!game.enabled && (
+                                                <span className="ml-2 text-xs text-gray-500">(Disabled)</span>
+                                            )}
+                                        </div>
+                                    </label>
+                                ))}
+                        </div>
+                    )}
+                </div>
+                
+                {/* Book-Specific Games Section */}
+                <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                        <Globe className="w-4 h-4 inline mr-2" />
+                        Book-Specific Games (Webview)
+                    </label>
+                    <p className="text-xs text-gray-500 mb-3">
+                        Add custom games that unlock after users complete reading this book. These games open in a webview with the URL you provide.
+                    </p>
+                    
+                    {/* Existing Book Games */}
+                    {bookGames.length > 0 && (
+                        <div className="mb-4 space-y-3">
+                            {bookGames.map((game, index) => (
+                                <div
+                                    key={index}
+                                    className="p-4 bg-gray-50 rounded-lg border border-gray-200 flex items-start gap-4"
+                                >
+                                    {game.coverImage && (
+                                        <img
+                                            src={game.coverImage}
+                                            alt={game.title}
+                                            className="w-20 h-20 object-cover rounded-lg border-2 border-gray-300"
+                                        />
+                                    )}
+                                    <div className="flex-1 min-w-0">
+                                        <h4 className="font-semibold text-gray-900 truncate">{game.title}</h4>
+                                        {game.description && (
+                                            <p className="text-sm text-gray-600 mt-1 line-clamp-2">{game.description}</p>
+                                        )}
+                                        <p className="text-xs text-gray-500 mt-1 truncate">
+                                            <Globe className="w-3 h-3 inline mr-1" />
+                                            {game.url}
+                                        </p>
+                                    </div>
+                                    <div className="flex gap-2">
+                                        <button
+                                            type="button"
+                                            onClick={() => {
+                                                setEditingBookGame(index);
+                                                setNewBookGame({ ...game });
+                                            }}
+                                            className="p-2 text-indigo-600 hover:bg-indigo-50 rounded transition-colors"
+                                            title="Edit game"
+                                        >
+                                            <X className="w-4 h-4 rotate-45" />
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={() => {
+                                                setBookGames(bookGames.filter((_, i) => i !== index));
+                                            }}
+                                            className="p-2 text-red-600 hover:bg-red-50 rounded transition-colors"
+                                            title="Delete game"
+                                        >
+                                            <Trash2 className="w-4 h-4" />
+                                        </button>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+                    
+                    {/* Add/Edit Book Game Form */}
+                    <div className="border-2 border-dashed border-gray-300 rounded-lg p-4 space-y-4">
+                        <h4 className="font-semibold text-gray-700">
+                            {editingBookGame !== null ? 'Edit Game' : 'Add New Game'}
+                        </h4>
+                        
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-2">Game Title *</label>
+                            <input
+                                type="text"
+                                value={newBookGame.title}
+                                onChange={(e) => setNewBookGame({ ...newBookGame, title: e.target.value })}
+                                placeholder="e.g., Memory Match Game"
+                                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                            />
+                        </div>
+                        
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-2">Game URL *</label>
+                            <input
+                                type="url"
+                                value={newBookGame.url}
+                                onChange={(e) => setNewBookGame({ ...newBookGame, url: e.target.value })}
+                                placeholder="https://example.com/game"
+                                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                            />
+                        </div>
+                        
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-2">Description</label>
+                            <textarea
+                                value={newBookGame.description}
+                                onChange={(e) => setNewBookGame({ ...newBookGame, description: e.target.value })}
+                                placeholder="Optional description of the game"
+                                rows={2}
+                                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                            />
+                        </div>
+                        
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-2">Cover Image</label>
+                            {newBookGame.coverImage && (
+                                <div className="mb-2 relative inline-block">
+                                    <img
+                                        src={newBookGame.coverImage}
+                                        alt="Game cover"
+                                        className="w-24 h-24 object-cover rounded-lg border-2 border-gray-300"
+                                    />
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            setNewBookGame({ ...newBookGame, coverImage: '' });
+                                            if (gameCoverInputRef.current) {
+                                                gameCoverInputRef.current.value = '';
+                                            }
+                                        }}
+                                        className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1 hover:bg-red-600 transition-colors"
+                                    >
+                                        <X className="w-3 h-3" />
+                                    </button>
+                                </div>
+                            )}
+                            <div className="border-2 border-dashed border-gray-300 rounded-lg p-3 text-center hover:border-indigo-400 transition-colors">
+                                <input
+                                    ref={gameCoverInputRef}
+                                    type="file"
+                                    accept="image/*"
+                                    onChange={async (e) => {
+                                        const file = e.target.files?.[0];
+                                        if (file && bookId) {
+                                            setUploadingGameCover(true);
+                                            const formData = new FormData();
+                                            formData.append('file', file);
+                                            try {
+                                                const response = await axios.post(
+                                                    `http://localhost:5001/api/upload/image?bookId=${bookId}&type=game-cover`,
+                                                    formData,
+                                                    { headers: { 'Content-Type': 'multipart/form-data' } }
+                                                );
+                                                setNewBookGame({ ...newBookGame, coverImage: response.data.url || '' });
+                                            } catch (error) {
+                                                console.error('Failed to upload game cover:', error);
+                                                alert('Failed to upload cover image');
+                                            } finally {
+                                                setUploadingGameCover(false);
+                                            }
+                                        }
+                                    }}
+                                    className="hidden"
+                                    id="game-cover-upload"
+                                />
+                                <label
+                                    htmlFor="game-cover-upload"
+                                    className="cursor-pointer flex flex-col items-center gap-2"
+                                >
+                                    <Upload className={`w-6 h-6 ${uploadingGameCover ? 'text-indigo-500 animate-pulse' : 'text-gray-400'}`} />
+                                    <span className="text-xs text-gray-600">
+                                        {uploadingGameCover ? 'Uploading...' : 'Upload cover image'}
+                                    </span>
+                                </label>
+                            </div>
+                        </div>
+                        
+                        <div className="flex gap-2">
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    if (newBookGame.title && newBookGame.url) {
+                                        if (editingBookGame !== null) {
+                                            // Update existing game
+                                            const updated = [...bookGames];
+                                            updated[editingBookGame] = { ...newBookGame };
+                                            setBookGames(updated);
+                                            setEditingBookGame(null);
+                                        } else {
+                                            // Add new game
+                                            setBookGames([...bookGames, { ...newBookGame }]);
+                                        }
+                                        setNewBookGame({ title: '', url: '', coverImage: '', description: '' });
+                                        if (gameCoverInputRef.current) {
+                                            gameCoverInputRef.current.value = '';
+                                        }
+                                    } else {
+                                        alert('Please fill in at least Title and URL');
+                                    }
+                                }}
+                                className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition flex items-center gap-2"
+                            >
+                                <Plus className="w-4 h-4" />
+                                {editingBookGame !== null ? 'Update Game' : 'Add Game'}
+                            </button>
+                            {editingBookGame !== null && (
+                                <button
+                                    type="button"
+                                    onClick={() => {
+                                        setEditingBookGame(null);
+                                        setNewBookGame({ title: '', url: '', coverImage: '', description: '' });
+                                        if (gameCoverInputRef.current) {
+                                            gameCoverInputRef.current.value = '';
+                                        }
+                                    }}
+                                    className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition"
+                                >
+                                    Cancel
+                                </button>
+                            )}
+                        </div>
                     </div>
                 </div>
                 

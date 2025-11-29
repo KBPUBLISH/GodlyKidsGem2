@@ -141,12 +141,15 @@ export const BookPageRenderer: React.FC<BookPageRendererProps> = ({
                             height: '100%',
                         }}
                     />
-                ) : (
+                ) : page.backgroundUrl ? (
                     <img
                         src={page.backgroundUrl}
                         alt={`Page ${page.pageNumber}`}
                         className="w-full h-full object-contain"
                     />
+                ) : (
+                    // Default gradient background for pages without background
+                    <div className="w-full h-full bg-gradient-to-b from-[#fdf6e3] to-[#e8d5b7]"></div>
                 )}
             </div>
 

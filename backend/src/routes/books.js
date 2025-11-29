@@ -95,6 +95,8 @@ router.post('/', async (req, res) => {
             category: req.body.category || 'Other',
             status: req.body.status || 'draft',
             text: req.body.text || '',
+            games: req.body.games || [],
+            bookGames: req.body.bookGames || [],
         };
         
         // Always initialize files structure

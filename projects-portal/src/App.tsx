@@ -9,6 +9,7 @@ import BookReader from './pages/BookReader';
 import PageEditor from './pages/PageEditor';
 import Categories from './pages/Categories';
 import Voices from './pages/Voices';
+import Games from './pages/Games';
 
 function App() {
   return (
@@ -24,6 +25,7 @@ function App() {
           <Route path="playlists" element={<Playlists />} />
           <Route path="categories" element={<Categories />} />
           <Route path="voices" element={<Voices />} />
+          <Route path="games" element={<Games />} />
         </Route>
       </Routes>
     </Router>

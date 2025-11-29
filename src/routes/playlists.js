@@ -27,8 +27,11 @@ router.get('/:id', async (req, res) => {
 router.post('/', async (req, res) => {
     const playlist = new Playlist({
         title: req.body.title,
+        author: req.body.author,
         description: req.body.description,
         coverImage: req.body.coverImage,
+        category: req.body.category,
+        type: req.body.type,
         items: req.body.items || [],
         status: req.body.status,
     });

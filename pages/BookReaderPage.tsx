@@ -422,7 +422,6 @@ const BookReaderPage: React.FC = () => {
             // Use final audio URL from WebSocket
             if (result && result.audioUrl) {
                 const audio = new Audio(result.audioUrl);
-<<<<<<< HEAD
                 
                 // Wait for audio metadata to load so we can get the actual duration
                 audio.addEventListener('loadedmetadata', () => {

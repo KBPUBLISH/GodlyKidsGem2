@@ -1278,20 +1278,31 @@ const BookReaderPage: React.FC = () => {
             {/* The End Page Overlay */}
             {isTheEndPage && (
                 <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm animate-[fadeIn_0.3s_ease-out]">
-                    <div className="relative bg-[#F5DEB3] p-8 rounded-3xl shadow-2xl border-4 border-[#8B4513] max-w-md w-full mx-4 transform animate-[scaleUp_0.4s_cubic-bezier(0.175,0.885,0.32,1.275)]">
-                        {/* Decorative Wood Texture */}
-                        <div className="absolute inset-0 rounded-[20px] opacity-10 pointer-events-none"
-                            style={{ backgroundImage: 'repeating-linear-gradient(45deg, transparent, transparent 10px, #8B4513 10px, #8B4513 12px)' }}
+                    <div className="relative bg-[#DEB887] p-8 rounded-3xl shadow-2xl border-8 border-[#5D4037] max-w-md w-full mx-4 transform animate-[scaleUp_0.4s_cubic-bezier(0.175,0.885,0.32,1.275)] overflow-hidden">
+                        {/* Realistic Wood Texture Background */}
+                        <div className="absolute inset-0 pointer-events-none"
+                            style={{
+                                backgroundImage: `
+                                    repeating-linear-gradient(45deg, rgba(93, 64, 55, 0.05) 0px, rgba(93, 64, 55, 0.05) 2px, transparent 2px, transparent 8px),
+                                    repeating-linear-gradient(-45deg, rgba(93, 64, 55, 0.05) 0px, rgba(93, 64, 55, 0.05) 2px, transparent 2px, transparent 6px),
+                                    linear-gradient(to bottom right, rgba(0,0,0,0.1), rgba(0,0,0,0.3))
+                                `,
+                                backgroundSize: '100% 100%, 100% 100%, 100% 100%'
+                            }}
                         />
 
+                        {/* Inner Bevel/Highlight */}
+                        <div className="absolute inset-0 border-4 border-[#ffffff20] rounded-[20px] pointer-events-none"></div>
+
                         {/* Content */}
-                        <div className="relative flex flex-col items-center gap-6 text-center">
+                        <div className="relative flex flex-col items-center gap-6 text-center z-10">
                             {/* Header */}
                             <div className="space-y-2">
-                                <h2 className="text-4xl font-black text-[#8B4513] drop-shadow-md font-display tracking-wide animate-bounce">
+                                <h2 className="text-5xl font-black text-[#3E2723] drop-shadow-sm font-display tracking-wide animate-bounce"
+                                    style={{ textShadow: '2px 2px 0px rgba(255,255,255,0.4)' }}>
                                     The End!
                                 </h2>
-                                <p className="text-[#5D4037] font-medium text-lg">
+                                <p className="text-[#3E2723] font-bold text-lg opacity-90">
                                     Great reading! What's next?
                                 </p>
                             </div>

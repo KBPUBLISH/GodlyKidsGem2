@@ -55,7 +55,8 @@ const saveFileLocally = (file, gcsPath, req = null) => {
 // Helper function to generate organized file path
 const generateFilePath = (bookId, type, filename, pageNumber = null) => {
     // Structure: books/{bookId}/{type}/filename
-    // type can be: cover, pages, scroll, audio
+    // Special case: if bookId is "games", use games/{type}/filename
+    // type can be: cover, pages, scroll, audio, game-cover
     const timestamp = Date.now();
     const sanitizedFilename = filename.replace(/[^a-zA-Z0-9.-]/g, '_');
 
@@ -66,6 +67,11 @@ const generateFilePath = (bookId, type, filename, pageNumber = null) => {
         finalFilename = `page-${pageNumber}${ext}`;
     } else {
         finalFilename = `${timestamp}_${sanitizedFilename}`;
+    }
+
+    // Special handling for games folder
+    if (bookId === 'games') {
+        return `games/${type}/${finalFilename}`;
     }
 
     return `books/${bookId}/${type}/${finalFilename}`;
@@ -96,8 +102,8 @@ router.post('/image', upload.single('file'), async (req, res) => {
         // Check if using organized structure
         if (bookId && type) {
             // Validate type
-            if (!['cover', 'pages', 'scroll', 'audio'].includes(type)) {
-                return res.status(400).json({ message: 'type must be one of: cover, pages, scroll, audio' });
+            if (!['cover', 'pages', 'scroll', 'audio', 'game-cover'].includes(type)) {
+                return res.status(400).json({ message: 'type must be one of: cover, pages, scroll, audio, game-cover' });
             }
 
             // Generate organized file path

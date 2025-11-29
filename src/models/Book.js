@@ -84,6 +84,25 @@ const bookSchema = new mongoose.Schema({
         type: String, // Any book-level text content
     },
     
+    // Associated games (array of game IDs)
+    games: {
+        type: [String], // Array of gameId values (e.g., ['prayer', 'challenge', 'strength'])
+        default: [],
+    },
+    
+    // Book-specific games (webview-based games that unlock after reading)
+    bookGames: {
+        type: [{
+            _id: { type: mongoose.Schema.Types.ObjectId, auto: true },
+            title: { type: String, required: true },
+            url: { type: String, required: true },
+            coverImage: { type: String }, // URL to cover image
+            description: { type: String },
+            createdAt: { type: Date, default: Date.now },
+        }],
+        default: [],
+    },
+    
     createdAt: {
         type: Date,
         default: Date.now,

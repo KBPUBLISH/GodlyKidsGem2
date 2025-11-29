@@ -5,6 +5,7 @@ import { Heart, BookOpen, Crown, PlayCircle, Headphones, Disc } from 'lucide-rea
 import { useBooks } from '../context/BooksContext';
 import { Book } from '../types';
 import { readingProgressService } from '../services/readingProgressService';
+import { useAudio } from '../context/AudioContext';
 
 // Default placeholder image
 const DEFAULT_COVER = 'https://via.placeholder.com/400x400/8B4513/FFFFFF?text=Book+Cover';
@@ -36,9 +37,53 @@ const BookDetailPage: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const { books, loading } = useBooks();
+  const { musicEnabled, toggleMusic } = useAudio();
   const [book, setBook] = useState<Book | null>(null);
   const [imageError, setImageError] = useState(false);
   const [savedPageIndex, setSavedPageIndex] = useState<number | null>(null);
+  
+    // Restore background music when returning from book reader
+  useEffect(() => {
+    // Check if music was enabled before entering book reader
+    const wasMusicEnabled = localStorage.getItem('godly_kids_music_was_enabled') === 'true';
+    
+    // Always try to restore music when entering BookDetailPage
+    // The book reader turns music off, so we should turn it back on here if it was originally on
+    const restoreMusic = setTimeout(() => {
+      if (wasMusicEnabled) {
+        console.log('🎵 BookDetailPage: Restoring background music - music was enabled before book reader');
+        
+        // First, ensure music is enabled in state
+        if (!musicEnabled) {
+          toggleMusic();
+        }
+        
+        // Then programmatically click the music button to ensure audio context is unlocked and music plays
+        setTimeout(() => {
+          const musicButton = document.querySelector('button[title*="Music"]') as HTMLButtonElement;
+          if (musicButton) {
+            console.log('🎵 BookDetailPage: Programmatically clicking music button to restore playback');
+            musicButton.click();
+          }
+        }, 50);
+        
+        // Clear the flag
+        localStorage.removeItem('godly_kids_music_was_enabled');
+      } else if (musicEnabled) {
+        // Double-check: if music is enabled but audio is paused, click button to resume
+        const bgAudio = document.querySelector('audio[src*="Seaside_Adventure"]') as HTMLAudioElement;
+        if (bgAudio && bgAudio.paused) {
+          const musicButton = document.querySelector('button[title*="Music"]') as HTMLButtonElement;
+          if (musicButton) {
+            console.log('🎵 BookDetailPage: Music enabled but paused - clicking button to resume');
+            musicButton.click();
+          }
+        }
+      }
+    }, 200); // Reduced delay for faster restoration
+    
+    return () => clearTimeout(restoreMusic);
+  }, [location.pathname, musicEnabled, toggleMusic]); // Include location.pathname to react to navigation
 
   useEffect(() => {
     if (books.length > 0) {

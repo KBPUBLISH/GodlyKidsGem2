@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import axios from 'axios';
-import { Plus, Upload, X } from 'lucide-react';
+import { Plus, Upload, X, Music } from 'lucide-react';
 
 const BookEdit: React.FC = () => {
     const { bookId } = useParams<{ bookId: string }>();
@@ -23,6 +23,9 @@ const BookEdit: React.FC = () => {
     const [categories, setCategories] = useState<Array<{ _id: string; name: string }>>([]);
     const fileInputRef = useRef<HTMLInputElement>(null);
     const dropZoneRef = useRef<HTMLDivElement>(null);
+    const [audioFiles, setAudioFiles] = useState<Array<{ url: string; filename: string; uploadedAt?: string }>>([]);
+    const [uploadingAudio, setUploadingAudio] = useState(false);
+    const audioInputRef = useRef<HTMLInputElement>(null);
 
     // Load existing book data
     useEffect(() => {
@@ -39,6 +42,13 @@ const BookEdit: React.FC = () => {
                 setMinAge(b.minAge ?? '');
                 setCategory(b.category || 'Other');
                 setStatus(b.status || 'draft');
+                
+                // Load audio files
+                if (b.files && b.files.audio && Array.isArray(b.files.audio)) {
+                    setAudioFiles(b.files.audio);
+                } else {
+                    setAudioFiles([]);
+                }
             } catch (err) {
                 console.error('Failed to fetch book:', err);
             } finally {
@@ -127,6 +137,72 @@ const BookEdit: React.FC = () => {
         }
     };
 
+    const handleAudioUpload = async (file: File) => {
+        if (!file.type.startsWith('audio/')) {
+            alert('Please select an audio file');
+            return;
+        }
+
+        if (!bookId) {
+            alert('Book ID is required');
+            return;
+        }
+
+        setUploadingAudio(true);
+        const formDataUpload = new FormData();
+        formDataUpload.append('file', file);
+
+        try {
+            const response = await axios.post(
+                `http://localhost:5001/api/upload/audio?bookId=${bookId}`,
+                formDataUpload,
+                {
+                    headers: { 'Content-Type': 'multipart/form-data' },
+                }
+            );
+            
+            // Add new audio file to the list
+            const newAudio = {
+                url: response.data.url,
+                filename: response.data.filename || file.name,
+                uploadedAt: new Date().toISOString(),
+            };
+            setAudioFiles([...audioFiles, newAudio]);
+        } catch (error: any) {
+            console.error('Audio upload failed:', error);
+            let errorMessage = 'Failed to upload audio file';
+            
+            if (error.response) {
+                // Server responded with error
+                errorMessage = error.response.data?.message || error.response.data?.error || `Server error: ${error.response.status}`;
+            } else if (error.request) {
+                // Request made but no response (network error)
+                errorMessage = 'Network error: Could not reach server. Is the backend running?';
+            } else {
+                // Something else happened
+                errorMessage = error.message || 'Unknown error occurred';
+            }
+            
+            alert(`Failed to upload audio file:\n${errorMessage}`);
+        } finally {
+            setUploadingAudio(false);
+            if (audioInputRef.current) {
+                audioInputRef.current.value = '';
+            }
+        }
+    };
+
+    const handleAudioSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (file) {
+            handleAudioUpload(file);
+        }
+    };
+
+    const handleRemoveAudio = (index: number) => {
+        setAudioFiles(audioFiles.filter((_, i) => i !== index));
+    };
+
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!bookId) return;
@@ -140,6 +216,9 @@ const BookEdit: React.FC = () => {
                 minAge: minAge === '' ? undefined : minAge,
                 category,
                 status,
+                files: {
+                    audio: audioFiles,
+                },
             };
             await axios.put(`http://localhost:5001/api/books/${bookId}`, payload);
             navigate('/books');
@@ -293,6 +372,75 @@ const BookEdit: React.FC = () => {
                         <option value="archived">Archived</option>
                     </select>
                 </div>
+                
+                {/* Background Music Section */}
+                <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Background Music
+                    </label>
+                    <p className="text-xs text-gray-500 mb-3">
+                        Upload audio files to play as background music in the book reader. The first file will be used by default.
+                    </p>
+                    
+                    {/* Existing Audio Files */}
+                    {audioFiles.length > 0 && (
+                        <div className="mb-4 space-y-2">
+                            {audioFiles.map((audio, index) => (
+                                <div
+                                    key={index}
+                                    className="flex items-center justify-between p-3 bg-gray-50 rounded-lg border border-gray-200"
+                                >
+                                    <div className="flex items-center gap-3 flex-1 min-w-0">
+                                        <Music className="w-5 h-5 text-indigo-600 flex-shrink-0" />
+                                        <div className="flex-1 min-w-0">
+                                            <p className="text-sm font-medium text-gray-900 truncate">
+                                                {audio.filename}
+                                            </p>
+                                            {audio.uploadedAt && (
+                                                <p className="text-xs text-gray-500">
+                                                    {new Date(audio.uploadedAt).toLocaleDateString()}
+                                                </p>
+                                            )}
+                                        </div>
+                                    </div>
+                                    <button
+                                        type="button"
+                                        onClick={() => handleRemoveAudio(index)}
+                                        className="ml-3 p-1 text-red-600 hover:text-red-700 hover:bg-red-50 rounded transition-colors"
+                                        title="Remove audio file"
+                                    >
+                                        <X className="w-4 h-4" />
+                                    </button>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+                    
+                    {/* Upload Audio Button */}
+                    <div className="border-2 border-dashed border-gray-300 rounded-lg p-4 text-center hover:border-indigo-400 transition-colors">
+                        <input
+                            ref={audioInputRef}
+                            type="file"
+                            accept="audio/*"
+                            onChange={handleAudioSelect}
+                            className="hidden"
+                            id="audio-upload"
+                        />
+                        <label
+                            htmlFor="audio-upload"
+                            className="cursor-pointer flex flex-col items-center gap-2"
+                        >
+                            <Music className={`w-8 h-8 ${uploadingAudio ? 'text-indigo-500 animate-pulse' : 'text-gray-400'}`} />
+                            <span className="text-sm text-gray-600">
+                                {uploadingAudio ? 'Uploading...' : 'Click to upload audio file'}
+                            </span>
+                            <span className="text-xs text-gray-500">
+                                MP3, WAV, M4A up to 50MB
+                            </span>
+                        </label>
+                    </div>
+                </div>
+                
                 <div className="flex justify-end gap-4 pt-4">
                     <button
                         type="button"

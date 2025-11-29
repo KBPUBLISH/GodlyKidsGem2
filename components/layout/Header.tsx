@@ -1,6 +1,6 @@
 
-import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import React, { useState, useEffect } from 'react';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { Crown, Music } from 'lucide-react';
 import ShopModal from '../features/ShopModal';
 import AvatarDetailModal from '../features/AvatarDetailModal';
@@ -15,10 +15,57 @@ interface HeaderProps {
 
 const Header: React.FC<HeaderProps> = ({ isVisible, title = "GODLY KIDS" }) => {
   const navigate = useNavigate();
+  const location = useLocation();
   const { coins, equippedAvatar, equippedFrame, equippedHat, equippedBody, equippedLeftArm, equippedRightArm, equippedLegs, isSubscribed, headOffset } = useUser();
   const { musicEnabled, toggleMusic, playClick } = useAudio();
   const [isShopOpen, setIsShopOpen] = useState(false);
   const [isDetailOpen, setIsDetailOpen] = useState(false);
+
+  // Restore background music when returning from book reader
+  useEffect(() => {
+    // Only restore if we're not on the book reader page
+    const isBookReader = location.pathname.startsWith('/read/');
+    if (isBookReader) return;
+
+    // Check if music was enabled before entering book reader
+    const wasMusicEnabled = localStorage.getItem('godly_kids_music_was_enabled') === 'true';
+    
+    // Restore music if it was enabled before entering book reader
+    const restoreMusic = setTimeout(() => {
+      if (wasMusicEnabled) {
+        console.log('🎵 Header: Restoring background music - music was enabled before book reader');
+        
+        // First, ensure music is enabled in state
+        if (!musicEnabled) {
+          toggleMusic();
+        }
+        
+        // Then programmatically click the music button to ensure audio context is unlocked and music plays
+        setTimeout(() => {
+          const musicButton = document.querySelector('button[title*="Music"]') as HTMLButtonElement;
+          if (musicButton) {
+            console.log('🎵 Header: Programmatically clicking music button to restore playback');
+            musicButton.click();
+          }
+        }, 50);
+        
+        // Clear the flag
+        localStorage.removeItem('godly_kids_music_was_enabled');
+      } else if (musicEnabled) {
+        // Double-check: if music is enabled but audio is paused, click button to resume
+        const bgAudio = document.querySelector('audio[src*="Seaside_Adventure"]') as HTMLAudioElement;
+        if (bgAudio && bgAudio.paused) {
+          const musicButton = document.querySelector('button[title*="Music"]') as HTMLButtonElement;
+          if (musicButton) {
+            console.log('🎵 Header: Music enabled but paused - clicking button to resume');
+            musicButton.click();
+          }
+        }
+      }
+    }, 200); // Reduced delay for faster restoration
+    
+    return () => clearTimeout(restoreMusic);
+  }, [location.pathname, musicEnabled, toggleMusic]); // React to pathname changes
 
   return (
     <>

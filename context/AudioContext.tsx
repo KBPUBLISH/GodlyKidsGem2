@@ -194,11 +194,21 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         // This loop runs periodically to ENFORCE the desired music state.
         // It handles autoplay blocking, resuming, and force pausing.
         const masterLoop = setInterval(() => {
-            // 1. FORCE PAUSED? Kill everything.
+            // 1. FORCE PAUSED? Kill everything IMMEDIATELY and DO NOT resume.
             if (musicForcePausedRef.current) {
-                if (!bg.paused) bg.pause();
-                if (!game.paused) game.pause();
-                if (!workout.paused) workout.pause();
+                if (!bg.paused) {
+                    bg.pause();
+                    bg.currentTime = 0; // Reset to beginning
+                }
+                if (!game.paused) {
+                    game.pause();
+                    game.currentTime = 0;
+                }
+                if (!workout.paused) {
+                    workout.pause();
+                    workout.currentTime = 0;
+                }
+                // CRITICAL: Return early - DO NOT continue to resume logic
                 return;
             }
 
@@ -237,27 +247,59 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
                 if (!bg.paused) bg.pause();
                 if (!game.paused) game.pause();
             }
-        }, 100); // Check every 100ms for aggressive enforcement
+        }, 50); // Check every 50ms for MORE aggressive enforcement
 
         // One-time unlock listener for initial browser autoplay policy
+        // ONLY add if music is NOT force paused
         const unlockAudio = () => {
+            // DO NOT unlock if music is force paused
+            if (musicForcePausedRef.current) {
+                console.log('🚫 Music force paused - blocking unlock');
+                return;
+            }
             if (audioContextRef.current?.state === 'suspended') {
                 audioContextRef.current.resume();
             }
             // The master loop will pick up the playing, we just need to trigger a resume context
         };
 
-        window.addEventListener('click', unlockAudio, { once: true });
-        window.addEventListener('touchstart', unlockAudio, { once: true });
-        window.addEventListener('keydown', unlockAudio, { once: true });
+        // BLOCKING LISTENER: Capture phase to prevent music from playing
+        const blockMusicOnInteraction = (e: Event) => {
+            if (musicForcePausedRef.current) {
+                console.log('🚫 Blocking music on interaction - force paused');
+                // Immediately pause all music
+                if (bgAudioRef.current && !bgAudioRef.current.paused) {
+                    bgAudioRef.current.pause();
+                }
+                if (gameAudioRef.current && !gameAudioRef.current.paused) {
+                    gameAudioRef.current.pause();
+                }
+                if (workoutAudioRef.current && !workoutAudioRef.current.paused) {
+                    workoutAudioRef.current.pause();
+                }
+            }
+        };
+
+        // Only add unlock listeners if music is NOT force paused
+        if (!musicForcePaused) {
+            window.addEventListener('click', unlockAudio, { once: true });
+            window.addEventListener('touchstart', unlockAudio, { once: true });
+            window.addEventListener('keydown', unlockAudio, { once: true });
+        }
+
+        // ALWAYS add blocking listener in capture phase to prevent music
+        window.addEventListener('click', blockMusicOnInteraction, { capture: true });
+        window.addEventListener('touchstart', blockMusicOnInteraction, { capture: true });
 
         return () => {
             clearInterval(masterLoop);
             window.removeEventListener('click', unlockAudio);
             window.removeEventListener('touchstart', unlockAudio);
             window.removeEventListener('keydown', unlockAudio);
+            window.removeEventListener('click', blockMusicOnInteraction, { capture: true });
+            window.removeEventListener('touchstart', blockMusicOnInteraction, { capture: true });
         };
-    }, [musicEnabled, musicMode, musicVolume]); // Re-create loop if config changes
+    }, [musicEnabled, musicMode, musicVolume, musicForcePaused]); // Re-create loop if config changes
 
     const toggleMusic = () => setMusicEnabled(prev => !prev);
     const toggleSfx = () => setSfxEnabled(prev => !prev);

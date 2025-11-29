@@ -772,7 +772,11 @@ export const ApiService = {
       if (response.ok) {
         const data = await response.json();
         console.log(`✅ Book data received for ID ${id}:`, data);
-        return transformBook(data);
+        // Transform the book but preserve the full raw data structure
+        const transformed = transformBook(data);
+        // Attach the raw data to preserve files.audio and other nested structures
+        (transformed as any).rawData = data;
+        return transformed;
       }
 
       console.warn(`⚠️ Failed to fetch book ${id}: ${response.status}`);

@@ -1,4 +1,6 @@
-import React from 'react';
+import React, { useEffect, useRef, useState } from 'react';
+import { removeEmotionalCues } from '../../utils/textProcessing';
+import { Music } from 'lucide-react';
 
 interface TextBox {
     id: string;
@@ -23,6 +25,7 @@ interface PageData {
     textBoxes: TextBox[];
     scrollUrl?: string;
     scrollHeight?: number;
+    soundEffectUrl?: string;
 }
 
 interface BookPageRendererProps {
@@ -44,6 +47,79 @@ export const BookPageRenderer: React.FC<BookPageRendererProps> = ({
     highlightedWordIndex,
     wordAlignment
 }) => {
+    // Refs for text box containers to enable scrolling
+    const textBoxRefs = useRef<{ [key: number]: HTMLDivElement | null }>({});
+    const soundEffectRef = useRef<HTMLAudioElement | null>(null);
+    const [bubblePopped, setBubblePopped] = useState(false);
+    const [bubblePosition, setBubblePosition] = useState({ x: 75, y: 20 }); // Default position (top right area)
+
+    // Auto-scroll to highlighted word - only when scroll is visible/open
+    useEffect(() => {
+        // Disable auto-scrolling when scroll is closed (user preference)
+        if (!showScroll) {
+            return;
+        }
+        
+        if (highlightedWordIndex !== null && highlightedWordIndex !== undefined && highlightedWordIndex >= 0 && activeTextBoxIndex !== null) {
+            const textBoxRef = textBoxRefs.current[activeTextBoxIndex];
+            if (textBoxRef) {
+                // Use a small delay to ensure the DOM has updated with the highlighted word
+                const scrollTimeout = setTimeout(() => {
+                    // Find the highlighted word span element using data attribute
+                    const highlightedSpan = textBoxRef.querySelector(`[data-word-index="${highlightedWordIndex}"]`) as HTMLElement;
+                    
+                    if (highlightedSpan) {
+                        // Scroll the highlighted word into view with some padding
+                        highlightedSpan.scrollIntoView({
+                            behavior: 'smooth',
+                            block: 'center',
+                            inline: 'nearest'
+                        });
+                    }
+                }, 50); // Small delay to ensure DOM update
+                
+                return () => clearTimeout(scrollTimeout);
+            }
+        }
+    }, [highlightedWordIndex, activeTextBoxIndex, showScroll]);
+
+    // Initialize sound effect audio
+    useEffect(() => {
+        if (page.soundEffectUrl) {
+            soundEffectRef.current = new Audio(page.soundEffectUrl);
+            soundEffectRef.current.volume = 0.7; // Set volume for sound effect
+            soundEffectRef.current.preload = 'auto';
+        }
+        
+        return () => {
+            if (soundEffectRef.current) {
+                soundEffectRef.current.pause();
+                soundEffectRef.current = null;
+            }
+        };
+    }, [page.soundEffectUrl]);
+
+    // Reset bubble when page changes
+    useEffect(() => {
+        setBubblePopped(false);
+        // Randomize bubble position slightly for variety
+        setBubblePosition({
+            x: 70 + Math.random() * 20, // 70-90% from left
+            y: 15 + Math.random() * 10  // 15-25% from top
+        });
+    }, [page.id]);
+
+    const handleBubbleClick = (e: React.MouseEvent) => {
+        e.stopPropagation();
+        if (soundEffectRef.current && !bubblePopped) {
+            setBubblePopped(true);
+            soundEffectRef.current.currentTime = 0;
+            soundEffectRef.current.play().catch(err => {
+                console.warn('Could not play sound effect:', err);
+            });
+        }
+    };
+
     return (
         <div
             className="w-full h-full relative bg-white overflow-hidden shadow-2xl"
@@ -108,6 +184,7 @@ export const BookPageRenderer: React.FC<BookPageRendererProps> = ({
                     return (
                         <div
                             key={idx}
+                            ref={(el) => { textBoxRefs.current[idx] = el; }}
                             className="absolute pointer-events-auto overflow-y-auto p-2 group"
                             style={{
                                 left: `${box.x}%`,
@@ -121,7 +198,8 @@ export const BookPageRenderer: React.FC<BookPageRendererProps> = ({
                                     ? `calc(100% - max(${box.y}%, ${scrollTopVal}) - 40px)`
                                     : `calc(100% - ${box.y}% - 40px)`,
                                 overflowY: 'auto',
-                                textShadow: '1px 1px 2px rgba(255,255,255,0.8)'
+                                textShadow: '1px 1px 2px rgba(255,255,255,0.8)',
+                                scrollBehavior: 'smooth' // Enable smooth scrolling
                             }}
                             onClick={(e) => onPlayText && onPlayText(box.text, idx, e)}
                         >
@@ -134,12 +212,13 @@ export const BookPageRenderer: React.FC<BookPageRendererProps> = ({
                             `}>
                                 <p className="leading-relaxed relative">
                                     {isActive && wordAlignment ? (
-                                        // Highlighted text rendering
+                                        // Highlighted text rendering - words are already filtered and cleaned
                                         wordAlignment.words.map((wordObj, wIdx) => {
                                             const isHighlighted = wIdx === highlightedWordIndex;
                                             return (
                                                 <span
                                                     key={wIdx}
+                                                    data-word-index={wIdx}
                                                     className={`
                                                         transition-all duration-200 rounded px-0.5
                                                         ${isHighlighted
@@ -153,8 +232,8 @@ export const BookPageRenderer: React.FC<BookPageRendererProps> = ({
                                             );
                                         })
                                     ) : (
-                                        // Standard text rendering
-                                        box.text
+                                        // Standard text rendering - remove emotional cues
+                                        removeEmotionalCues(box.text)
                                     )}
                                 </p>
 
@@ -171,6 +250,57 @@ export const BookPageRenderer: React.FC<BookPageRendererProps> = ({
                     );
                 })}
             </div>
+
+            {/* Floating Sound Effect Bubble */}
+            {page.soundEffectUrl && !bubblePopped && (
+                <div
+                    className="absolute z-30 cursor-pointer"
+                    style={{
+                        left: `${bubblePosition.x}%`,
+                        top: `${bubblePosition.y}%`,
+                        transform: 'translate(-50%, -50%)',
+                        animation: 'float 3s ease-in-out infinite'
+                    }}
+                    onClick={handleBubbleClick}
+                >
+                    <div className="relative">
+                        <div className="w-16 h-16 bg-gradient-to-br from-indigo-400 to-purple-500 rounded-full flex items-center justify-center shadow-lg hover:scale-110 transition-transform duration-200 border-2 border-white">
+                            <Music className="w-8 h-8 text-white" />
+                        </div>
+                        {/* Ripple effect */}
+                        <div className="absolute inset-0 rounded-full bg-indigo-400 animate-ping opacity-75"></div>
+                    </div>
+                    <style>{`
+                        @keyframes float {
+                            0%, 100% { transform: translate(-50%, -50%) translateY(0px); }
+                            50% { transform: translate(-50%, -50%) translateY(-10px); }
+                        }
+                    `}</style>
+                </div>
+            )}
+
+            {/* Popped bubble animation */}
+            {bubblePopped && (
+                <div
+                    className="absolute z-30 pointer-events-none"
+                    style={{
+                        left: `${bubblePosition.x}%`,
+                        top: `${bubblePosition.y}%`,
+                        transform: 'translate(-50%, -50%)',
+                        animation: 'pop 0.5s ease-out forwards'
+                    }}
+                >
+                    <div className="w-20 h-20 bg-gradient-to-br from-yellow-300 to-orange-400 rounded-full opacity-0 flex items-center justify-center">
+                        <Music className="w-10 h-10 text-white" />
+                    </div>
+                    <style>{`
+                        @keyframes pop {
+                            0% { transform: translate(-50%, -50%) scale(1); opacity: 1; }
+                            100% { transform: translate(-50%, -50%) scale(2); opacity: 0; }
+                        }
+                    `}</style>
+                </div>
+            )}
         </div>
     );
 };

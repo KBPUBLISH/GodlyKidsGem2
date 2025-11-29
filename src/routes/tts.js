@@ -72,7 +72,7 @@ router.post('/generate', async (req, res) => {
         }
 
         // 1. Check Cache
-        const textHash = crypto.createHash('md5').update(text).digest('hex');
+        const textHash = crypto.createHash('md5').update(text + voiceId).digest('hex');
         const cached = await TTSCache.findOne({ textHash, voiceId });
 
         if (cached) {
@@ -86,7 +86,6 @@ router.post('/generate', async (req, res) => {
         console.log('TTS Cache Miss - Calling ElevenLabs');
 
         // 2. Call ElevenLabs API
-        const apiKey = process.env.ELEVENLABS_API_KEY;
         console.log('TTS API Key check:', apiKey ? `Found (${apiKey.substring(0, 10)}...)` : 'NOT FOUND');
         if (!apiKey) {
             console.error('ELEVENLABS_API_KEY is missing from environment');
@@ -128,12 +127,12 @@ router.post('/generate', async (req, res) => {
         // we'll estimate word timings based on text length and average speaking rate
         const words = text.split(/\s+/).filter(w => w.length > 0);
         const totalChars = text.length;
-        
+
         // Estimate: average speaking rate is ~150 words per minute = 2.5 words per second
         // Or ~400ms per word on average (including pauses)
         const estimatedDurationPerWord = 0.4; // seconds
         const totalEstimatedDuration = words.length * estimatedDurationPerWord;
-        
+
         // Create word-level alignment data
         const alignmentData = {
             words: words.map((word, index) => {

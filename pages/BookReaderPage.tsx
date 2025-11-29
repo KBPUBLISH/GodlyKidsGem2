@@ -115,104 +115,104 @@ const BookReaderPage: React.FC = () => {
     const [isFavorite, setIsFavorite] = useState(false);
     const [isLiked, setIsLiked] = useState(false);
 
-    // Pause background music when entering book reader
+    // Effect 1: Initialization, Book Data Fetching, and Cleanup
     useEffect(() => {
         console.log('📖 BookReaderPage MOUNTED - KILLING ALL APP MUSIC');
 
-        // Pause app background music and prevent it from resuming on interaction
+        // 1. Pause app background music immediately
         setGameMode(false);
         setMusicPaused(true);
 
-        // NUCLEAR OPTION: Immediately pause ALL audio elements in the DOM
+        // 2. Nuclear Option: Kill all other audio elements
         const killAllAudio = () => {
             const allAudio = document.querySelectorAll('audio');
             allAudio.forEach(audio => {
-                if (audio !== bookBackgroundMusicRef.current) {
-                    audio.pause();
-                    audio.volume = 0;
+                // Don't kill our own book music if it exists
+                if (bookBackgroundMusicRef.current && audio === bookBackgroundMusicRef.current) {
+                    return;
                 }
+                audio.pause();
+                audio.volume = 0;
             });
         };
         killAllAudio();
 
-        // Keep killing audio every 100ms as a safety measure
+        // 3. Keep killing audio every 100ms
         const killInterval = setInterval(killAllAudio, 100);
 
-        // Fetch book data to check for book-specific background music
+        // 4. Fetch book data and setup book music
         const fetchBookData = async () => {
             if (!bookId) return;
             try {
                 const book = await ApiService.getBookById(bookId);
-                console.log('📖 Fetched book data:', book);
-
-                // Check both the rawData (from API) and the transformed book
                 const rawData = (book as any)?.rawData;
                 const files = rawData?.files || (book as any)?.files;
-                console.log('📖 Book rawData:', rawData);
 
                 if (files?.audio && Array.isArray(files.audio) && files.audio.length > 0) {
-                    // Use the first audio file as background music
                     const musicUrl = files.audio[0].url;
                     if (musicUrl) {
                         console.log('🎵 Found book music:', musicUrl);
                         setHasBookMusic(true);
 
-                        // Clean up any existing book music
+                        // Create audio object but don't play yet (handled by second effect)
                         if (bookBackgroundMusicRef.current) {
                             bookBackgroundMusicRef.current.pause();
-                            bookBackgroundMusicRef.current = null;
                         }
 
                         const audio = new Audio(musicUrl);
                         audio.loop = true;
-                        audio.volume = 0.15; // Quiet background music (15% volume)
+                        audio.volume = 0.15;
                         audio.preload = 'auto';
                         bookBackgroundMusicRef.current = audio;
 
-                        // Only play if music is enabled
-                        if (bookMusicEnabled) {
-                            // Try to play immediately
-                            const playMusic = async () => {
-                                try {
-                                    await audio.play();
-                                    console.log('✅ Book background music started');
-                                } catch (err) {
-                                    console.warn('⚠️ Could not auto-play book music, will play on user interaction:', err);
-                                }
-                            };
-
-                            // Wait for audio to be ready
-                            audio.addEventListener('canplaythrough', playMusic);
-                        }
-                    } else {
-                        setHasBookMusic(false);
+                        // Trigger a state update to notify the second effect that music is ready
+                        // We can use setHasBookMusic(true) which we already did, 
+                        // but we might need to force a re-check if it was already true.
+                        // For now, the dependency on hasBookMusic in the second effect should handle it.
                     }
-                } else {
-                    setHasBookMusic(false);
                 }
             } catch (err) {
                 console.error('Failed to fetch book data:', err);
-                setHasBookMusic(false);
             }
         };
 
         fetchBookData();
 
-        // Cleanup: stop book background music and restore app music when leaving
+        // Cleanup function
         return () => {
-            console.log('📖 BookReaderPage UNMOUNTING - Restoring music state');
+            console.log('📖 BookReaderPage UNMOUNTING - Cleanup');
             clearInterval(killInterval);
 
+            // Stop and destroy book music
             if (bookBackgroundMusicRef.current) {
                 bookBackgroundMusicRef.current.pause();
                 bookBackgroundMusicRef.current.src = '';
                 bookBackgroundMusicRef.current = null;
             }
 
-            // Allow app music to resume when leaving book reader
+            // Resume app music
             setMusicPaused(false);
         };
-    }, [bookId, setGameMode, setMusicPaused, bookMusicEnabled]);
+    }, [bookId, setGameMode, setMusicPaused]); // Removed bookMusicEnabled from dependencies
+
+    // Effect 2: Handle Music Toggle (Play/Pause)
+    useEffect(() => {
+        const audio = bookBackgroundMusicRef.current;
+        if (!audio) return;
+
+        if (bookMusicEnabled) {
+            console.log('🎵 Book music enabled - attempting to play');
+            const playPromise = audio.play();
+            if (playPromise !== undefined) {
+                playPromise.catch(err => {
+                    console.warn('⚠️ Auto-play prevented:', err);
+                });
+            }
+        } else {
+            console.log('🎵 Book music disabled - pausing');
+            audio.pause();
+        }
+    }, [bookMusicEnabled, hasBookMusic]); // Run when toggle changes or when music is loaded
 
     useEffect(() => {
         const fetchPages = async () => {

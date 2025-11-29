@@ -95,12 +95,16 @@ const BookReaderPage: React.FC = () => {
         console.log('📖 BookReaderPage MOUNTED');
 
         // NUCLEAR OPTION: Force a page reload on first mount to kill all audio
-        // Use sessionStorage to track if we've already reloaded
-        const hasReloaded = sessionStorage.getItem('bookReaderReloaded');
+        // Use URL parameter to track if we've already reloaded
+        const urlParams = new URLSearchParams(window.location.search);
+        const hasReloaded = urlParams.get('reloaded');
+
         if (!hasReloaded) {
             console.log('🔄 First time entering book reader - forcing reload to kill audio');
-            sessionStorage.setItem('bookReaderReloaded', 'true');
-            window.location.reload();
+            // Add reloaded parameter to URL
+            const newUrl = new URL(window.location.href);
+            newUrl.searchParams.set('reloaded', '1');
+            window.location.href = newUrl.toString();
             return;
         }
 
@@ -172,9 +176,6 @@ const BookReaderPage: React.FC = () => {
         return () => {
             console.log('📖 BookReaderPage UNMOUNTING - Clearing kill interval');
             clearInterval(killInterval);
-
-            // Clear the reload flag so next time we enter, it reloads again
-            sessionStorage.removeItem('bookReaderReloaded');
 
             if (bookBackgroundMusicRef.current) {
                 bookBackgroundMusicRef.current.pause();

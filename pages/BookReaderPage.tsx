@@ -92,7 +92,19 @@ const BookReaderPage: React.FC = () => {
 
     // Pause background music when entering book reader
     useEffect(() => {
-        console.log('📖 BookReaderPage MOUNTED - KILLING ALL APP MUSIC');
+        console.log('📖 BookReaderPage MOUNTED');
+
+        // NUCLEAR OPTION: Force a page reload on first mount to kill all audio
+        // Use sessionStorage to track if we've already reloaded
+        const hasReloaded = sessionStorage.getItem('bookReaderReloaded');
+        if (!hasReloaded) {
+            console.log('🔄 First time entering book reader - forcing reload to kill audio');
+            sessionStorage.setItem('bookReaderReloaded', 'true');
+            window.location.reload();
+            return;
+        }
+
+        console.log('📖 BookReaderPage - Already reloaded, proceeding normally');
 
         // Pause app background music and prevent it from resuming on interaction
         setGameMode(false);
@@ -160,6 +172,9 @@ const BookReaderPage: React.FC = () => {
         return () => {
             console.log('📖 BookReaderPage UNMOUNTING - Clearing kill interval');
             clearInterval(killInterval);
+
+            // Clear the reload flag so next time we enter, it reloads again
+            sessionStorage.removeItem('bookReaderReloaded');
 
             if (bookBackgroundMusicRef.current) {
                 bookBackgroundMusicRef.current.pause();

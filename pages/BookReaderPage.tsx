@@ -223,7 +223,7 @@ const BookReaderPage: React.FC = () => {
                 // Add "The End" page as the last page
                 // Use the same vertical wood plank background as BookDetailPage
                 const theEndBackground = 'data:image/svg+xml;base64,' + btoa(`
-                    <svg width="100%" height="100%" xmlns="http://www.w3.org/2000/svg">
+                    <svg width="100%" height="100%" viewBox="0 0 100 100" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg">
                         <defs>
                             <pattern id="woodPlanks" x="0" y="0" width="100" height="100" patternUnits="userSpaceOnUse">
                                 <rect width="100" height="100" fill="#8B4513"/>
@@ -241,8 +241,8 @@ const BookReaderPage: React.FC = () => {
                                 <feTurbulence type="fractalNoise" baseFrequency="0.5" numOctaves="3" stitchTiles="stitch"/>
                             </filter>
                         </defs>
-                        <rect width="100%" height="100%" fill="url(#woodPlanks)"/>
-                        <rect width="100%" height="100%" filter="url(#noise)" opacity="0.1"/>
+                        <rect width="100" height="100" fill="url(#woodPlanks)"/>
+                        <rect width="100" height="100" filter="url(#noise)" opacity="0.1"/>
                     </svg>
                 `);
 

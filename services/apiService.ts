@@ -166,7 +166,7 @@ export const ApiService = {
 
         // For localhost backend, don't use mock data - return empty array instead
         const isLocalBackend = baseUrl.includes('localhost');
-        
+
         // Handle different error status codes
         if (response.status === 401) {
           if (token) {
@@ -181,7 +181,7 @@ export const ApiService = {
             console.warn('⚠️ Local backend returned 401 - returning empty array (no mock data for local dev)');
             return [];
           }
-          
+
           console.warn('⚠️ Returning mock data due to 401 Unauthorized');
           await new Promise(resolve => setTimeout(resolve, 300));
           return MOCK_BOOKS;
@@ -249,7 +249,7 @@ export const ApiService = {
             console.warn('⚠️ Local backend returned 403 - returning empty array (no mock data for local dev)');
             return [];
           }
-          
+
           console.warn('⚠️ Returning mock data due to 403 Forbidden - no alternative endpoints worked');
           await new Promise(resolve => setTimeout(resolve, 300));
           return MOCK_BOOKS;
@@ -260,7 +260,7 @@ export const ApiService = {
           console.warn(`⚠️ Local backend returned ${response.status} - returning empty array (no mock data for local dev)`);
           return [];
         }
-        
+
         console.warn(`⚠️ API request failed with status ${response.status}, returning mock data as fallback`);
         await new Promise(resolve => setTimeout(resolve, 300));
         return MOCK_BOOKS;
@@ -373,12 +373,12 @@ export const ApiService = {
         console.error('📊 Original books array length:', booksArray.length);
         console.error('📊 First original book:', booksArray[0]);
         console.error('💡 Check if field mapping is correct (coverURI, minAge, etc.)');
-        
+
         if (isLocalBackend) {
           console.warn('⚠️ Returning empty array (no mock data for local dev)');
           return [];
         }
-        
+
         return MOCK_BOOKS;
       }
 
@@ -407,12 +407,12 @@ export const ApiService = {
     } catch (error) {
       const baseUrl = getApiBaseUrl();
       const isLocalBackend = baseUrl.includes('localhost');
-      
+
       if (isLocalBackend) {
         console.error("❌ Failed to fetch from local API, returning empty array (no mock data for local dev):", error);
         return [];
       }
-      
+
       console.error("❌ Failed to fetch from API, using mock data:", error);
       // Simulate network delay for realism
       await new Promise(resolve => setTimeout(resolve, 800));
@@ -778,22 +778,22 @@ export const ApiService = {
       console.warn(`⚠️ Failed to fetch book ${id}: ${response.status}`);
       // For localhost, don't fall back to mock data
       const isLocalBackend = baseUrl.includes('localhost');
-      
+
       if (isLocalBackend) {
         return null;
       }
-      
+
       // Fallback to searching in mock data
       return MOCK_BOOKS.find(book => book.id === id) || null;
     } catch (error) {
       const baseUrl = getApiBaseUrl();
       const isLocalBackend = baseUrl.includes('localhost');
-      
+
       if (isLocalBackend) {
         console.warn(`❌ Failed to fetch book ${id} from local API:`, error);
         return null;
       }
-      
+
       console.warn(`❌ Failed to fetch book ${id}, using mock data:`, error);
       return MOCK_BOOKS.find(book => book.id === id) || null;
     }

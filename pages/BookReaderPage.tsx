@@ -414,7 +414,7 @@ const BookReaderPage: React.FC = () => {
         try {
             // Use HTTP API for TTS
             const result = await ApiService.generateTTS(
-                text, 
+                text,
                 selectedVoiceId,
                 bookId || undefined
             );
@@ -422,6 +422,7 @@ const BookReaderPage: React.FC = () => {
             // Use final audio URL from WebSocket
             if (result && result.audioUrl) {
                 const audio = new Audio(result.audioUrl);
+<<<<<<< HEAD
                 
                 // Wait for audio metadata to load so we can get the actual duration
                 audio.addEventListener('loadedmetadata', () => {
@@ -466,7 +467,18 @@ const BookReaderPage: React.FC = () => {
                         const wordIndex = currentAlignment.words.findIndex(
                             (w: any) => currentTime >= w.start && currentTime < w.end
                         );
+
+                        // Log every 10th update to avoid console spam
+                        if (Math.floor(currentTime * 10) % 10 === 0) {
+                            console.log('🕐 Audio time:', currentTime.toFixed(2), 'Word index:', wordIndex);
+                            if (wordIndex !== -1) {
+                                const word = currentAlignment.words[wordIndex];
+                                console.log('📍 Current word:', word.word, `[${word.start.toFixed(2)}s - ${word.end.toFixed(2)}s]`);
+                            }
+                        }
+
                         if (wordIndex !== -1 && wordIndex !== currentWordIndex) {
+                            console.log('✨ Highlighting word', wordIndex, ':', currentAlignment.words[wordIndex].word);
                             setCurrentWordIndex(wordIndex);
                         }
                         // Don't reset highlighting when past last word - keep it on the last word
@@ -854,7 +866,7 @@ const BookReaderPage: React.FC = () => {
                                             boxText: box.text?.substring(0, 20)
                                         });
                                     }
-                                    
+
                                     if (isActive && wordAlignment && wordAlignment.words && wordAlignment.words.length > 0) {
                                         // Render text with word highlighting
                                         return (

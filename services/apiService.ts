@@ -166,7 +166,7 @@ export const ApiService = {
 
         // For localhost backend, don't use mock data - return empty array instead
         const isLocalBackend = baseUrl.includes('localhost');
-        
+
         // Handle different error status codes
         if (response.status === 401) {
           if (token) {
@@ -181,7 +181,7 @@ export const ApiService = {
             console.warn('⚠️ Local backend returned 401 - returning empty array (no mock data for local dev)');
             return [];
           }
-          
+
           console.warn('⚠️ Returning mock data due to 401 Unauthorized');
           await new Promise(resolve => setTimeout(resolve, 300));
           return MOCK_BOOKS;
@@ -249,7 +249,7 @@ export const ApiService = {
             console.warn('⚠️ Local backend returned 403 - returning empty array (no mock data for local dev)');
             return [];
           }
-          
+
           console.warn('⚠️ Returning mock data due to 403 Forbidden - no alternative endpoints worked');
           await new Promise(resolve => setTimeout(resolve, 300));
           return MOCK_BOOKS;
@@ -260,7 +260,7 @@ export const ApiService = {
           console.warn(`⚠️ Local backend returned ${response.status} - returning empty array (no mock data for local dev)`);
           return [];
         }
-        
+
         console.warn(`⚠️ API request failed with status ${response.status}, returning mock data as fallback`);
         await new Promise(resolve => setTimeout(resolve, 300));
         return MOCK_BOOKS;
@@ -373,12 +373,12 @@ export const ApiService = {
         console.error('📊 Original books array length:', booksArray.length);
         console.error('📊 First original book:', booksArray[0]);
         console.error('💡 Check if field mapping is correct (coverURI, minAge, etc.)');
-        
+
         if (isLocalBackend) {
           console.warn('⚠️ Returning empty array (no mock data for local dev)');
           return [];
         }
-        
+
         return MOCK_BOOKS;
       }
 
@@ -407,12 +407,12 @@ export const ApiService = {
     } catch (error) {
       const baseUrl = getApiBaseUrl();
       const isLocalBackend = baseUrl.includes('localhost');
-      
+
       if (isLocalBackend) {
         console.error("❌ Failed to fetch from local API, returning empty array (no mock data for local dev):", error);
         return [];
       }
-      
+
       console.error("❌ Failed to fetch from API, using mock data:", error);
       // Simulate network delay for realism
       await new Promise(resolve => setTimeout(resolve, 800));
@@ -778,22 +778,22 @@ export const ApiService = {
       console.warn(`⚠️ Failed to fetch book ${id}: ${response.status}`);
       // For localhost, don't fall back to mock data
       const isLocalBackend = baseUrl.includes('localhost');
-      
+
       if (isLocalBackend) {
         return null;
       }
-      
+
       // Fallback to searching in mock data
       return MOCK_BOOKS.find(book => book.id === id) || null;
     } catch (error) {
       const baseUrl = getApiBaseUrl();
       const isLocalBackend = baseUrl.includes('localhost');
-      
+
       if (isLocalBackend) {
         console.warn(`❌ Failed to fetch book ${id} from local API:`, error);
         return null;
       }
-      
+
       console.warn(`❌ Failed to fetch book ${id}, using mock data:`, error);
       return MOCK_BOOKS.find(book => book.id === id) || null;
     }
@@ -873,8 +873,8 @@ export const ApiService = {
 
   // TTS: Generate Audio
   generateTTS: async (
-    text: string, 
-    voiceId: string, 
+    text: string,
+    voiceId: string,
     bookId?: string,
     onAudioChunk?: (audioData: string) => void,
     onAlignment?: (alignment: { words: Array<{ word: string; start: number; end: number }> }) => void
@@ -884,22 +884,23 @@ export const ApiService = {
         const baseUrl = getApiBaseUrl();
         // Convert http:// to ws:// or https:// to wss://
         const wsUrl = baseUrl.replace(/^http/, 'ws') + 'tts/ws';
-        
+
         const ws = new WebSocket(wsUrl);
         const audioChunks: string[] = [];
         let finalAlignment: any = null;
         let finalAudioUrl: string | null = null;
-        
+
         ws.onopen = () => {
           console.log('WebSocket connected for TTS');
           ws.send(JSON.stringify({ text, voiceId, bookId }));
         };
-        
+
         ws.onmessage = (event) => {
           try {
             // Try to parse as JSON first
             const data = JSON.parse(event.data);
-            
+            console.log('📨 WebSocket message received:', data.type);
+
             if (data.type === 'audio') {
               // Base64 audio chunk
               audioChunks.push(data.data);
@@ -908,6 +909,7 @@ export const ApiService = {
               }
             } else if (data.type === 'alignment') {
               // Word alignment data
+              console.log('📝 Alignment message received:', data.words?.length, 'words');
               if (onAlignment) {
                 onAlignment({ words: data.words });
               }
@@ -915,8 +917,16 @@ export const ApiService = {
             } else if (data.type === 'complete') {
               // Stream complete
               console.log('✅ Received complete message from backend:', data.audioUrl);
+              console.log('📊 Complete message alignment:', data.alignment?.words?.length, 'words');
               finalAudioUrl = data.audioUrl;
               finalAlignment = data.alignment;
+
+              // Send alignment to callback if we have it
+              if (data.alignment && data.alignment.words && onAlignment) {
+                console.log('📤 Sending alignment from complete message to callback');
+                onAlignment(data.alignment);
+              }
+
               resolve({
                 audioUrl: data.audioUrl,
                 alignment: data.alignment
@@ -924,6 +934,7 @@ export const ApiService = {
               // Close after a short delay to ensure message is processed
               setTimeout(() => {
                 if (ws.readyState === WebSocket.OPEN) {
+                  console.log('🔌 Closing WebSocket from client side');
                   ws.close();
                 }
               }, 100);
@@ -945,31 +956,32 @@ export const ApiService = {
             reader.readAsDataURL(event.data);
           }
         };
-        
+
         ws.onerror = (error) => {
           console.error('WebSocket error:', error);
           // Don't reject immediately - let the backend handle the error and send a response
           // The backend will fallback to HTTP and send a 'complete' message
         };
-        
+
         ws.onclose = (event) => {
           console.log('WebSocket closed', event.code, event.reason);
           // If we didn't get a complete message, the backend might still be processing
           // Don't reject immediately - the backend might send the complete message before closing
           if (!finalAudioUrl && !finalAlignment) {
-            // Wait a bit longer for the backend to process HTTP fallback
+            // Wait longer for the backend to process HTTP fallback
             setTimeout(() => {
               if (!finalAudioUrl) {
                 console.warn('⚠️ No audio received after WebSocket closed, rejecting');
                 reject(new Error('No audio received - backend may have failed'));
               }
-            }, 5000); // Give backend 5 seconds to process HTTP fallback
+            }, 15000); // Give backend 15 seconds to process HTTP fallback (increased from 5s)
           }
         };
-        
-        // Fallback to HTTP if WebSocket fails after 5 seconds
+
+        // Fallback to HTTP if WebSocket fails after 15 seconds
         setTimeout(() => {
           if (ws.readyState === WebSocket.CONNECTING) {
+            console.warn('⚠️ WebSocket still connecting after 15s, falling back to HTTP');
             ws.close();
             // Fallback to HTTP
             const httpUrl = baseUrl + 'tts/generate';
@@ -982,8 +994,9 @@ export const ApiService = {
               .then(result => resolve(result))
               .catch(err => reject(err));
           }
-        }, 5000);
-        
+        }, 15000); // Increased from 5s to 15s
+
+
       } catch (error) {
         console.error('TTS WebSocket Error:', error);
         reject(error);

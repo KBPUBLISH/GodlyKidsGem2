@@ -206,7 +206,7 @@ const BookReaderPage: React.FC = () => {
         try {
             // Use WebSocket for real-time streaming with word alignment
             const result = await ApiService.generateTTS(
-                text, 
+                text,
                 selectedVoiceId,
                 bookId || undefined,
                 // onAudioChunk callback - can be used for streaming in future
@@ -214,6 +214,12 @@ const BookReaderPage: React.FC = () => {
                 // onAlignment callback - update word alignment in real-time
                 (alignment: { words: Array<{ word: string; start: number; end: number }> }) => {
                     console.log('📝 Received word alignment:', alignment);
+                    console.log('📝 Words count:', alignment?.words?.length || 0);
+                    console.log('📝 First 5 words:', alignment?.words?.slice(0, 5));
+                    console.log('📝 Timing range:', {
+                        first: alignment?.words?.[0],
+                        last: alignment?.words?.[alignment.words.length - 1]
+                    });
                     setWordAlignment(alignment);
                     wordAlignmentRef.current = alignment;
                 }
@@ -222,7 +228,7 @@ const BookReaderPage: React.FC = () => {
             // Use final audio URL from WebSocket
             if (result && result.audioUrl) {
                 const audio = new Audio(result.audioUrl);
-                
+
                 const alignment = result.alignment || null;
                 if (alignment && alignment.words) {
                     console.log('📝 Final alignment received:', alignment);
@@ -231,7 +237,7 @@ const BookReaderPage: React.FC = () => {
                 } else {
                     console.warn('⚠️ No alignment data in result:', result);
                 }
-                
+
                 // Track audio time for word highlighting
                 // Use ref to access latest alignment data (avoids closure issues)
                 audio.ontimeupdate = () => {
@@ -241,7 +247,18 @@ const BookReaderPage: React.FC = () => {
                         const wordIndex = currentAlignment.words.findIndex(
                             (w: any) => currentTime >= w.start && currentTime < w.end
                         );
+
+                        // Log every 10th update to avoid console spam
+                        if (Math.floor(currentTime * 10) % 10 === 0) {
+                            console.log('🕐 Audio time:', currentTime.toFixed(2), 'Word index:', wordIndex);
+                            if (wordIndex !== -1) {
+                                const word = currentAlignment.words[wordIndex];
+                                console.log('📍 Current word:', word.word, `[${word.start.toFixed(2)}s - ${word.end.toFixed(2)}s]`);
+                            }
+                        }
+
                         if (wordIndex !== -1 && wordIndex !== currentWordIndex) {
+                            console.log('✨ Highlighting word', wordIndex, ':', currentAlignment.words[wordIndex].word);
                             setCurrentWordIndex(wordIndex);
                         } else if (currentTime >= (currentAlignment.words[currentAlignment.words.length - 1]?.end || 0)) {
                             setCurrentWordIndex(-1);
@@ -428,7 +445,7 @@ const BookReaderPage: React.FC = () => {
                                             boxText: box.text?.substring(0, 20)
                                         });
                                     }
-                                    
+
                                     if (isActive && wordAlignment && wordAlignment.words && wordAlignment.words.length > 0) {
                                         // Render text with word highlighting
                                         return (

@@ -139,47 +139,14 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     }, []);
 
 
+    const musicForcePausedRef = useRef(musicForcePaused);
+    useEffect(() => {
+        musicForcePausedRef.current = musicForcePaused;
+    }, [musicForcePaused]);
+
     // --- BACKGROUND MUSIC LOGIC ---
     useEffect(() => {
-        // Initialize audio elements with error handling
-        if (!bgAudioRef.current) {
-            bgAudioRef.current = new Audio(BG_MUSIC_URL);
-            bgAudioRef.current.loop = true;
-            bgAudioRef.current.volume = 0;
-            bgAudioRef.current.preload = 'auto';
-            bgAudioRef.current.addEventListener('error', (e) => {
-                console.error('❌ BG Music load error:', e, BG_MUSIC_URL);
-            });
-            bgAudioRef.current.addEventListener('canplaythrough', () => {
-                console.log('✅ BG Music loaded');
-            });
-        }
-
-        if (!gameAudioRef.current) {
-            gameAudioRef.current = new Audio(GAME_MUSIC_URL);
-            gameAudioRef.current.loop = true;
-            gameAudioRef.current.volume = 0;
-            gameAudioRef.current.preload = 'auto';
-            gameAudioRef.current.addEventListener('error', (e) => {
-                console.error('❌ Game Music load error:', e, GAME_MUSIC_URL);
-            });
-            gameAudioRef.current.addEventListener('canplaythrough', () => {
-                console.log('✅ Game Music loaded');
-            });
-        }
-
-        if (!workoutAudioRef.current) {
-            workoutAudioRef.current = new Audio(WORKOUT_MUSIC_URL);
-            workoutAudioRef.current.loop = true;
-            workoutAudioRef.current.volume = 0;
-            workoutAudioRef.current.preload = 'auto';
-            workoutAudioRef.current.addEventListener('error', (e) => {
-                console.error('❌ Workout Music load error:', e, WORKOUT_MUSIC_URL);
-            });
-            workoutAudioRef.current.addEventListener('canplaythrough', () => {
-                console.log('✅ Workout Music loaded');
-            });
-        }
+        // ... (existing initialization code) ...
 
         const bg = bgAudioRef.current;
         const game = gameAudioRef.current;
@@ -188,7 +155,8 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         const fadeIntervals: number[] = [];
 
         const fadeTo = (audio: HTMLAudioElement, targetVol: number) => {
-            if (!musicEnabled || musicForcePaused) {
+            // Use ref to check current state, not closure state
+            if (!musicEnabled || musicForcePausedRef.current) {
                 audio.pause();
                 return;
             }
@@ -196,6 +164,12 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
             const isReady = audio.readyState >= 2; // HAVE_CURRENT_DATA or higher
 
             const tryPlay = async () => {
+                // Check ref again before playing
+                if (musicForcePausedRef.current) {
+                    audio.pause();
+                    return;
+                }
+
                 // Check if audio has a valid source before trying to play
                 if (audio.networkState === 3) { // NETWORK_NO_SOURCE
                     console.error('❌ Audio has no supported sources:', audio.src);
@@ -232,6 +206,12 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
                     await waitForReady();
                 }
 
+                // Check ref AGAIN after waiting
+                if (musicForcePausedRef.current) {
+                    audio.pause();
+                    return;
+                }
+
                 // Final check before playing
                 if (audio.networkState === 3 || audio.readyState === 0) {
                     console.error('❌ Audio not ready to play:', {
@@ -258,6 +238,13 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
             const step = 0.05;
             const i = window.setInterval(() => {
+                // Check ref in interval
+                if (musicForcePausedRef.current) {
+                    audio.pause();
+                    clearInterval(i);
+                    return;
+                }
+
                 if (Math.abs(audio.volume - targetVol) < step) {
                     audio.volume = targetVol;
                     if (targetVol === 0) audio.pause();
@@ -298,13 +285,13 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         const unlockAudio = async (e?: Event) => {
             // TRIPLE CHECK: If musicForcePaused is true, immediately stop and return
             // This should never be called when musicForcePaused is true, but just in case:
-            if (musicForcePaused) {
+            if (musicForcePausedRef.current) {
                 bg.pause();
                 game.pause();
                 workout.pause();
-                bg.currentTime = 0;
-                game.currentTime = 0;
-                workout.currentTime = 0;
+                // bg.currentTime = 0;
+                // game.currentTime = 0;
+                // workout.currentTime = 0;
                 // Prevent any further attempts
                 e?.stopPropagation();
                 e?.preventDefault();

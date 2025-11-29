@@ -1,9 +1,38 @@
 const mongoose = require('mongoose');
 
+const audioItemSchema = new mongoose.Schema({
+    title: {
+        type: String,
+        required: true,
+    },
+    author: {
+        type: String,
+        default: 'Kingdom Builders Publishing',
+    },
+    coverImage: {
+        type: String, // URL to GCS
+    },
+    audioUrl: {
+        type: String, // URL to GCS
+        required: true,
+    },
+    duration: {
+        type: Number, // Duration in seconds
+    },
+    order: {
+        type: Number,
+        default: 0,
+    },
+}, { _id: true });
+
 const playlistSchema = new mongoose.Schema({
     title: {
         type: String,
         required: true,
+    },
+    author: {
+        type: String,
+        default: 'Kingdom Builders Publishing',
     },
     description: {
         type: String,
@@ -11,20 +40,41 @@ const playlistSchema = new mongoose.Schema({
     coverImage: {
         type: String, // URL to GCS
     },
-    items: [{
-        title: String,
-        audioUrl: String, // URL to GCS
-        duration: Number, // in seconds
-    }],
+    category: {
+        type: String,
+        enum: ['Music', 'Stories', 'Devotionals', 'Other'],
+        default: 'Music',
+    },
+    type: {
+        type: String,
+        enum: ['Song', 'Audiobook'],
+        required: true,
+        default: 'Song',
+    },
+    items: [audioItemSchema], // Embedded audio items (songs or episodes)
     status: {
         type: String,
         enum: ['draft', 'published'],
         default: 'draft',
     },
+    playCount: {
+        type: Number,
+        default: 0,
+    },
     createdAt: {
         type: Date,
         default: Date.now,
     },
+    updatedAt: {
+        type: Date,
+        default: Date.now,
+    },
+});
+
+// Update updatedAt on save
+playlistSchema.pre('save', function (next) {
+    this.updatedAt = Date.now();
+    next();
 });
 
 module.exports = mongoose.model('Playlist', playlistSchema);

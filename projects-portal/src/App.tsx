@@ -5,6 +5,7 @@ import Books from './pages/Books';
 import BookForm from './pages/BookForm';
 import BookEdit from './pages/BookEdit';
 import Playlists from './pages/Playlists';
+import PlaylistForm from './pages/PlaylistForm';
 import BookReader from './pages/BookReader';
 import PageEditor from './pages/PageEditor';
 import Categories from './pages/Categories';
@@ -23,6 +24,8 @@ function App() {
           <Route path="books/read/:bookId" element={<BookReader />} />
           <Route path="pages/new/:bookId" element={<PageEditor />} />
           <Route path="playlists" element={<Playlists />} />
+          <Route path="playlists/new" element={<PlaylistForm />} />
+          <Route path="playlists/edit/:id" element={<PlaylistForm />} />
           <Route path="categories" element={<Categories />} />
           <Route path="voices" element={<Voices />} />
           <Route path="games" element={<Games />} />

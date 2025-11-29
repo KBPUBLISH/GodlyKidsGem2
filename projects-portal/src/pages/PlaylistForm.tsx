@@ -1,0 +1,376 @@
+import React, { useEffect, useState } from 'react';
+import { useNavigate, useParams } from 'react-router-dom';
+import { ArrowLeft, Upload, Plus, Trash2, GripVertical, Music, Save } from 'lucide-react';
+import axios from 'axios';
+
+interface AudioItem {
+    _id?: string;
+    title: string;
+    author: string;
+    coverImage?: string;
+    audioUrl: string;
+    duration?: number;
+    order: number;
+}
+
+interface PlaylistFormData {
+    title: string;
+    author: string;
+    description: string;
+    coverImage: string;
+    category: 'Music' | 'Stories' | 'Devotionals' | 'Other';
+    type: 'Song' | 'Audiobook';
+    items: AudioItem[];
+    status: 'draft' | 'published';
+}
+
+const PlaylistForm: React.FC = () => {
+    const { id } = useParams();
+    const navigate = useNavigate();
+    const [loading, setLoading] = useState(false);
+    const [uploading, setUploading] = useState(false);
+    const [formData, setFormData] = useState<PlaylistFormData>({
+        title: '',
+        author: 'Kingdom Builders Publishing',
+        description: '',
+        coverImage: '',
+        category: 'Music',
+        type: 'Song',
+        items: [],
+        status: 'draft',
+    });
+
+    useEffect(() => {
+        if (id) {
+            fetchPlaylist();
+        }
+    }, [id]);
+
+    const fetchPlaylist = async () => {
+        try {
+            const response = await axios.get(`http://localhost:5001/api/playlists/${id}`);
+            setFormData(response.data);
+        } catch (error) {
+            console.error('Error fetching playlist:', error);
+            alert('Failed to load playlist');
+        }
+    };
+
+    const handleSubmit = async (e: React.FormEvent) => {
+        e.preventDefault();
+        setLoading(true);
+
+        try {
+            if (id) {
+                await axios.put(`http://localhost:5001/api/playlists/${id}`, formData);
+            } else {
+                await axios.post('http://localhost:5001/api/playlists', formData);
+            }
+            navigate('/playlists');
+        } catch (error) {
+            console.error('Error saving playlist:', error);
+            alert('Failed to save playlist');
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const handleFileUpload = async (file: File, type: 'cover' | 'audio', itemIndex?: number) => {
+        setUploading(true);
+        const formDataUpload = new FormData();
+        formDataUpload.append('file', file);
+
+        try {
+            const response = await axios.post('http://localhost:5001/api/upload', formDataUpload, {
+                headers: { 'Content-Type': 'multipart/form-data' },
+            });
+
+            if (type === 'cover') {
+                setFormData({ ...formData, coverImage: response.data.url });
+            } else if (type === 'audio' && itemIndex !== undefined) {
+                const newItems = [...formData.items];
+                newItems[itemIndex].audioUrl = response.data.url;
+                setFormData({ ...formData, items: newItems });
+            }
+        } catch (error) {
+            console.error('Error uploading file:', error);
+            alert('Failed to upload file');
+        } finally {
+            setUploading(false);
+        }
+    };
+
+    const addItem = () => {
+        setFormData({
+            ...formData,
+            items: [
+                ...formData.items,
+                {
+                    title: '',
+                    author: formData.author,
+                    audioUrl: '',
+                    order: formData.items.length,
+                },
+            ],
+        });
+    };
+
+    const removeItem = (index: number) => {
+        setFormData({
+            ...formData,
+            items: formData.items.filter((_, i) => i !== index),
+        });
+    };
+
+    const updateItem = (index: number, field: keyof AudioItem, value: any) => {
+        const newItems = [...formData.items];
+        newItems[index] = { ...newItems[index], [field]: value };
+        setFormData({ ...formData, items: newItems });
+    };
+
+    return (
+        <div className="max-w-4xl mx-auto">
+            <div className="flex items-center gap-4 mb-6">
+                <button
+                    onClick={() => navigate('/playlists')}
+                    className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+                >
+                    <ArrowLeft className="w-6 h-6" />
+                </button>
+                <h1 className="text-3xl font-bold text-gray-800">
+                    {id ? 'Edit Playlist' : 'Create Playlist'}
+                </h1>
+            </div>
+
+            <form onSubmit={handleSubmit} className="space-y-6">
+                {/* Basic Info Card */}
+                <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
+                    <h2 className="text-xl font-semibold text-gray-800 mb-4">Basic Information</h2>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-2">
+                                Title *
+                            </label>
+                            <input
+                                type="text"
+                                required
+                                value={formData.title}
+                                onChange={(e) => setFormData({ ...formData, title: e.target.value })}
+                                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                                placeholder="My Awesome Playlist"
+                            />
+                        </div>
+
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-2">
+                                Author
+                            </label>
+                            <input
+                                type="text"
+                                value={formData.author}
+                                onChange={(e) => setFormData({ ...formData, author: e.target.value })}
+                                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                            />
+                        </div>
+
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-2">
+                                Type *
+                            </label>
+                            <select
+                                required
+                                value={formData.type}
+                                onChange={(e) => setFormData({ ...formData, type: e.target.value as 'Song' | 'Audiobook' })}
+                                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                            >
+                                <option value="Song">Song</option>
+                                <option value="Audiobook">Audiobook</option>
+                            </select>
+                        </div>
+
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-2">
+                                Category
+                            </label>
+                            <select
+                                value={formData.category}
+                                onChange={(e) => setFormData({ ...formData, category: e.target.value as any })}
+                                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                            >
+                                <option value="Music">Music</option>
+                                <option value="Stories">Stories</option>
+                                <option value="Devotionals">Devotionals</option>
+                                <option value="Other">Other</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div className="mt-4">
+                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                            Description
+                        </label>
+                        <textarea
+                            value={formData.description}
+                            onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                            rows={3}
+                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                            placeholder="A brief description of this playlist..."
+                        />
+                    </div>
+
+                    {/* Cover Image */}
+                    <div className="mt-4">
+                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                            Cover Image
+                        </label>
+                        <div className="flex items-start gap-4">
+                            {formData.coverImage && (
+                                <img
+                                    src={formData.coverImage}
+                                    alt="Cover"
+                                    className="w-32 h-32 object-cover rounded-lg border border-gray-300"
+                                />
+                            )}
+                            <label className="flex-1 flex flex-col items-center justify-center border-2 border-dashed border-gray-300 rounded-lg p-6 cursor-pointer hover:border-indigo-500 transition-colors">
+                                <Upload className="w-8 h-8 text-gray-400 mb-2" />
+                                <span className="text-sm text-gray-600">Click to upload cover image</span>
+                                <input
+                                    type="file"
+                                    accept="image/*"
+                                    onChange={(e) => e.target.files?.[0] && handleFileUpload(e.target.files[0], 'cover')}
+                                    className="hidden"
+                                />
+                            </label>
+                        </div>
+                    </div>
+                </div>
+
+                {/* Audio Items Card */}
+                <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
+                    <div className="flex justify-between items-center mb-4">
+                        <h2 className="text-xl font-semibold text-gray-800">
+                            {formData.type === 'Song' ? 'Songs' : 'Episodes'}
+                        </h2>
+                        <button
+                            type="button"
+                            onClick={addItem}
+                            className="bg-indigo-600 text-white px-4 py-2 rounded-lg flex items-center gap-2 hover:bg-indigo-700 transition-colors"
+                        >
+                            <Plus className="w-4 h-4" />
+                            Add {formData.type === 'Song' ? 'Song' : 'Episode'}
+                        </button>
+                    </div>
+
+                    {formData.items.length === 0 ? (
+                        <div className="text-center py-12 text-gray-500">
+                            <Music className="w-12 h-12 mx-auto mb-2 opacity-50" />
+                            <p>No {formData.type === 'Song' ? 'songs' : 'episodes'} added yet</p>
+                        </div>
+                    ) : (
+                        <div className="space-y-4">
+                            {formData.items.map((item, index) => (
+                                <div key={index} className="border border-gray-200 rounded-lg p-4">
+                                    <div className="flex items-start gap-3">
+                                        <GripVertical className="w-5 h-5 text-gray-400 mt-2 cursor-move" />
+                                        <div className="flex-1 grid grid-cols-1 md:grid-cols-2 gap-3">
+                                            <div>
+                                                <label className="block text-sm font-medium text-gray-700 mb-1">
+                                                    Title *
+                                                </label>
+                                                <input
+                                                    type="text"
+                                                    required
+                                                    value={item.title}
+                                                    onChange={(e) => updateItem(index, 'title', e.target.value)}
+                                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                                                    placeholder={formData.type === 'Song' ? 'Song title' : 'Episode title'}
+                                                />
+                                            </div>
+                                            <div>
+                                                <label className="block text-sm font-medium text-gray-700 mb-1">
+                                                    Author
+                                                </label>
+                                                <input
+                                                    type="text"
+                                                    value={item.author}
+                                                    onChange={(e) => updateItem(index, 'author', e.target.value)}
+                                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                                                />
+                                            </div>
+                                            <div className="md:col-span-2">
+                                                <label className="block text-sm font-medium text-gray-700 mb-1">
+                                                    Audio File *
+                                                </label>
+                                                <div className="flex gap-2">
+                                                    <input
+                                                        type="text"
+                                                        value={item.audioUrl}
+                                                        onChange={(e) => updateItem(index, 'audioUrl', e.target.value)}
+                                                        className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                                                        placeholder="Audio file URL"
+                                                        readOnly
+                                                    />
+                                                    <label className="bg-gray-100 hover:bg-gray-200 px-4 py-2 rounded-lg cursor-pointer flex items-center gap-2 transition-colors">
+                                                        <Upload className="w-4 h-4" />
+                                                        Upload
+                                                        <input
+                                                            type="file"
+                                                            accept="audio/*"
+                                                            onChange={(e) => e.target.files?.[0] && handleFileUpload(e.target.files[0], 'audio', index)}
+                                                            className="hidden"
+                                                        />
+                                                    </label>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <button
+                                            type="button"
+                                            onClick={() => removeItem(index)}
+                                            className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                                        >
+                                            <Trash2 className="w-5 h-5" />
+                                        </button>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+                </div>
+
+                {/* Actions */}
+                <div className="flex justify-between items-center">
+                    <button
+                        type="button"
+                        onClick={() => navigate('/playlists')}
+                        className="px-6 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+                    >
+                        Cancel
+                    </button>
+                    <div className="flex gap-3">
+                        <button
+                            type="submit"
+                            onClick={() => setFormData({ ...formData, status: 'draft' })}
+                            disabled={loading || uploading}
+                            className="px-6 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors disabled:opacity-50 flex items-center gap-2"
+                        >
+                            <Save className="w-4 h-4" />
+                            Save as Draft
+                        </button>
+                        <button
+                            type="submit"
+                            onClick={() => setFormData({ ...formData, status: 'published' })}
+                            disabled={loading || uploading}
+                            className="px-6 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors disabled:opacity-50 flex items-center gap-2"
+                        >
+                            <Save className="w-4 h-4" />
+                            {loading ? 'Saving...' : 'Save & Publish'}
+                        </button>
+                    </div>
+                </div>
+            </form>
+        </div>
+    );
+};
+
+export default PlaylistForm;

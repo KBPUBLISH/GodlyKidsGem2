@@ -221,7 +221,7 @@ const BookReaderPage: React.FC = () => {
                 const data = await ApiService.getBookPages(bookId);
 
                 // Add "The End" page as the last page
-                // Use the same vertical wood plank background as BookDetailPage
+                // Simple wood plank background only - modal will appear on top
                 const theEndBackground = 'data:image/svg+xml;base64,' + btoa(`
                     <svg width="100%" height="100%" viewBox="0 0 100 100" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg">
                         <defs>
@@ -253,38 +253,7 @@ const BookReaderPage: React.FC = () => {
                     backgroundType: 'image',
                     scrollUrl: '',
                     scrollHeight: 0,
-                    textBoxes: [
-                        {
-                            text: '✨',
-                            x: 50,
-                            y: 30,
-                            width: 20,
-                            alignment: 'center',
-                            fontSize: 80,
-                            fontFamily: 'Fredoka',
-                            color: '#FFD700',
-                        },
-                        {
-                            text: 'The End',
-                            x: 50,
-                            y: 42,
-                            width: 60,
-                            alignment: 'center',
-                            fontSize: 72,
-                            fontFamily: 'Fredoka',
-                            color: '#8B4513',
-                        },
-                        {
-                            text: 'Thank you for reading!',
-                            x: 50,
-                            y: 58,
-                            width: 70,
-                            alignment: 'center',
-                            fontSize: 32,
-                            fontFamily: 'Nunito',
-                            color: '#5c2e0b',
-                        },
-                    ],
+                    textBoxes: [], // Empty - no text on the page itself, modal will show on top
                 };
 
                 setPages([...data, theEndPage]);

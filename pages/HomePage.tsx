@@ -165,7 +165,7 @@ const HomePage: React.FC = () => {
 
         {/* --- Stories Section --- */}
         <div className="w-full overflow-x-auto no-scrollbar pb-6 pt-2 -mt-2 -mx-4">
-          <div className="flex space-x-4 px-4 min-w-min">
+          <div className="flex space-x-4 px-4">
 
             {/* SPECIAL: Daily Key Story */}
             <button
@@ -244,7 +244,7 @@ const HomePage: React.FC = () => {
 
             {/* SPECIAL: Prayer Challenge Story */}
             <button
-              className="flex flex-col items-center gap-2 group min-w-[76px] md:min-w-[110px] outline-none"
+              className="flex flex-col items-center gap-2 group min-w-[76px] md:min-w-[110px] outline-none mr-8"
               onClick={handlePrayerClick}
             >
               {/* Ring */}
@@ -276,7 +276,7 @@ const HomePage: React.FC = () => {
 
         <section>
           <SectionTitle title="Activity Books" />
-          <div className="flex overflow-x-auto space-x-4 pb-4 no-scrollbar">
+          <div className="flex overflow-x-auto space-x-4 pb-4 no-scrollbar pr-4">
             {loading ? <div className="text-white p-4 font-display">Loading treasures...</div> :
               (activityBooks.length > 0 ? activityBooks : books.slice(0, 3)).map(book => (
                 <BookCard key={book.id} book={book} onClick={handleBookClick} />
@@ -287,7 +287,7 @@ const HomePage: React.FC = () => {
 
         <section>
           <SectionTitle title="Books Gone Free" />
-          <div className="flex overflow-x-auto space-x-4 pb-4 no-scrollbar">
+          <div className="flex overflow-x-auto space-x-4 pb-4 no-scrollbar pr-4">
             {loading ? null :
               (freeBooks.length > 0 ? freeBooks : books.slice(3, 5)).map(book => (
                 <BookCard key={book.id} book={book} onClick={handleBookClick} />
@@ -298,7 +298,7 @@ const HomePage: React.FC = () => {
 
         <section>
           <SectionTitle title="Young Readers" />
-          <div className="flex overflow-x-auto space-x-4 pb-4 no-scrollbar">
+          <div className="flex overflow-x-auto space-x-4 pb-4 no-scrollbar pr-4">
             {loading ? null :
               (youngReaders.length > 0 ? youngReaders : books.slice(2, 6)).map(book => (
                 <BookCard key={book.id} book={book} onClick={handleBookClick} />

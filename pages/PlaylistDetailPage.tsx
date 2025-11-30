@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { ChevronLeft, Crown, Play, Music, Headphones } from 'lucide-react';
+import { ChevronLeft, Crown, Play, Music, Headphones, Heart, Bookmark, Eye, Hammer, Wrench } from 'lucide-react';
 import { getApiBaseUrl } from '../services/apiService';
 
 interface AudioItem {
@@ -24,6 +24,7 @@ interface Playlist {
     items: AudioItem[];
     status: 'draft' | 'published';
     playCount?: number;
+    likeCount?: number;
 }
 
 const PlaylistDetailPage: React.FC = () => {
@@ -31,9 +32,17 @@ const PlaylistDetailPage: React.FC = () => {
     const navigate = useNavigate();
     const [playlist, setPlaylist] = useState<Playlist | null>(null);
     const [loading, setLoading] = useState(true);
+    const [isFavorited, setIsFavorited] = useState(false);
+    const [isLiked, setIsLiked] = useState(false);
+    const [localLikeCount, setLocalLikeCount] = useState(0);
 
     useEffect(() => {
         fetchPlaylist();
+        // Check if favorited/liked from localStorage
+        const favorites = JSON.parse(localStorage.getItem('favorited_playlists') || '[]');
+        const likes = JSON.parse(localStorage.getItem('liked_playlists') || '[]');
+        setIsFavorited(favorites.includes(playlistId));
+        setIsLiked(likes.includes(playlistId));
     }, [playlistId]);
 
     const fetchPlaylist = async () => {
@@ -49,10 +58,39 @@ const PlaylistDetailPage: React.FC = () => {
                 data.items.sort((a: AudioItem, b: AudioItem) => (a.order || 0) - (b.order || 0));
             }
             setPlaylist(data);
+            setLocalLikeCount(data.likeCount || 0);
         } catch (error) {
             console.error('Error fetching playlist:', error);
         } finally {
             setLoading(false);
+        }
+    };
+
+    const handleFavorite = () => {
+        const favorites = JSON.parse(localStorage.getItem('favorited_playlists') || '[]');
+        if (isFavorited) {
+            const updated = favorites.filter((id: string) => id !== playlistId);
+            localStorage.setItem('favorited_playlists', JSON.stringify(updated));
+            setIsFavorited(false);
+        } else {
+            favorites.push(playlistId);
+            localStorage.setItem('favorited_playlists', JSON.stringify(favorites));
+            setIsFavorited(true);
+        }
+    };
+
+    const handleLike = () => {
+        const likes = JSON.parse(localStorage.getItem('liked_playlists') || '[]');
+        if (isLiked) {
+            const updated = likes.filter((id: string) => id !== playlistId);
+            localStorage.setItem('liked_playlists', JSON.stringify(updated));
+            setIsLiked(false);
+            setLocalLikeCount(prev => Math.max(0, prev - 1));
+        } else {
+            likes.push(playlistId);
+            localStorage.setItem('liked_playlists', JSON.stringify(likes));
+            setIsLiked(true);
+            setLocalLikeCount(prev => prev + 1);
         }
     };
 
@@ -124,18 +162,13 @@ const PlaylistDetailPage: React.FC = () => {
                     >
                         <div className="w-0 h-0 border-t-[8px] border-t-transparent border-r-[12px] border-r-white border-b-[8px] border-b-transparent mr-1"></div>
                     </button>
-
-                    {/* Crown Icon */}
-                    <div className="bg-[#fdf6e3] px-4 py-1 rounded-full border-b-4 border-[#d4c5a0] shadow-lg flex items-center justify-center">
-                        <Crown className="text-[#8B4513]" size={24} fill="#8B4513" />
-                    </div>
                 </div>
 
                 {/* Playlist Info */}
                 <div className="relative z-20 px-6 pt-4 pb-6">
-                    {/* Cover Image */}
+                    {/* Cover Image - SIGNIFICANTLY INCREASED SIZE */}
                     {playlist.coverImage && (
-                        <div className="w-32 h-32 mx-auto mb-4 rounded-xl overflow-hidden border-4 border-[#d4c5a0] shadow-lg">
+                        <div className="w-72 h-72 mx-auto mb-6 rounded-3xl overflow-hidden border-4 border-[#d4c5a0] shadow-2xl">
                             <img
                                 src={playlist.coverImage}
                                 alt={playlist.title}
@@ -143,7 +176,7 @@ const PlaylistDetailPage: React.FC = () => {
                             />
                         </div>
                     )}
-                    
+
                     {/* Title and Info */}
                     <div className="text-center">
                         <h1 className="text-3xl font-black text-[#fdf6e3] drop-shadow-lg font-display mb-2">
@@ -155,13 +188,46 @@ const PlaylistDetailPage: React.FC = () => {
                             </p>
                         )}
                         {playlist.description && (
-                            <p className="text-[#e2cba5] text-sm mb-2">
+                            <p className="text-[#e2cba5] text-sm mb-3">
                                 {playlist.description}
                             </p>
                         )}
-                        <p className="text-[#e2cba5] text-sm">
+                        <p className="text-[#e2cba5] text-sm mb-4">
                             {playlist.items.length} {playlist.type === 'Song' ? 'songs' : 'episodes'}
                         </p>
+
+                        {/* Action Buttons */}
+                        <div className="flex items-center justify-center gap-3 mt-4">
+                            {/* Favorite Button */}
+                            <button
+                                onClick={handleFavorite}
+                                className={`flex items-center gap-2 px-4 py-2 rounded-full border-2 transition-all active:scale-95 ${isFavorited
+                                    ? 'bg-[#FFD700] border-[#B8860B] text-[#5c2e0b]'
+                                    : 'bg-[#fdf6e3] border-[#d4c5a0] text-[#8B4513]'
+                                    }`}
+                            >
+                                <Bookmark size={18} fill={isFavorited ? '#5c2e0b' : 'none'} />
+                                <span className="text-sm font-bold">{isFavorited ? 'Saved' : 'Save'}</span>
+                            </button>
+
+                            {/* Like Button */}
+                            <button
+                                onClick={handleLike}
+                                className={`flex items-center gap-2 px-4 py-2 rounded-full border-2 transition-all active:scale-95 ${isLiked
+                                    ? 'bg-[#ff6b6b] border-[#c92a2a] text-white'
+                                    : 'bg-[#fdf6e3] border-[#d4c5a0] text-[#8B4513]'
+                                    }`}
+                            >
+                                <Heart size={18} fill={isLiked ? 'white' : 'none'} />
+                                <span className="text-sm font-bold">{localLikeCount}</span>
+                            </button>
+
+                            {/* Play Counter */}
+                            <div className="flex items-center gap-2 px-4 py-2 rounded-full border-2 border-[#d4c5a0] bg-[#fdf6e3] text-[#8B4513]">
+                                <Eye size={18} />
+                                <span className="text-sm font-bold">{playlist.playCount || 0}</span>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>

@@ -57,23 +57,23 @@ const BookDetailPage: React.FC = () => {
   const [showPrayerGame, setShowPrayerGame] = useState(false);
   const [readCount, setReadCount] = useState<number>(0);
   const [favoriteCount, setFavoriteCount] = useState<number>(0);
-  
-    // Restore background music when returning from book reader
+
+  // Restore background music when returning from book reader
   useEffect(() => {
     // Check if music was enabled before entering book reader
     const wasMusicEnabled = localStorage.getItem('godly_kids_music_was_enabled') === 'true';
-    
+
     // Always try to restore music when entering BookDetailPage
     // The book reader turns music off, so we should turn it back on here if it was originally on
     const restoreMusic = setTimeout(() => {
       if (wasMusicEnabled) {
         console.log('🎵 BookDetailPage: Restoring background music - music was enabled before book reader');
-        
+
         // First, ensure music is enabled in state
         if (!musicEnabled) {
           toggleMusic();
         }
-        
+
         // Then programmatically click the music button to ensure audio context is unlocked and music plays
         setTimeout(() => {
           const musicButton = document.querySelector('button[title*="Music"]') as HTMLButtonElement;
@@ -82,7 +82,7 @@ const BookDetailPage: React.FC = () => {
             musicButton.click();
           }
         }, 50);
-        
+
         // Clear the flag
         localStorage.removeItem('godly_kids_music_was_enabled');
       } else if (musicEnabled) {
@@ -97,7 +97,7 @@ const BookDetailPage: React.FC = () => {
         }
       }
     }, 200); // Reduced delay for faster restoration
-    
+
     return () => clearTimeout(restoreMusic);
   }, [location.pathname, musicEnabled, toggleMusic]); // Include location.pathname to react to navigation
 
@@ -105,7 +105,7 @@ const BookDetailPage: React.FC = () => {
     if (books.length > 0) {
       const found = books.find(b => b.id === id);
       setBook(found || null);
-      
+
       // Load reading progress for this book
       if (id) {
         const progress = readingProgressService.getProgress(id);
@@ -122,7 +122,7 @@ const BookDetailPage: React.FC = () => {
   useEffect(() => {
     const fetchBookDetails = async () => {
       if (!id) return;
-      
+
       try {
         // Fetch full book data from API
         const fullBook = await ApiService.getBookById(id);
@@ -131,7 +131,7 @@ const BookDetailPage: React.FC = () => {
           if (rawData.bookGames && Array.isArray(rawData.bookGames)) {
             setBookGames(rawData.bookGames);
           }
-          
+
           // Fetch associated games from Games management
           if (rawData.games && Array.isArray(rawData.games) && rawData.games.length > 0) {
             try {
@@ -139,7 +139,7 @@ const BookDetailPage: React.FC = () => {
               if (gamesResponse.ok) {
                 const allGames = await gamesResponse.json();
                 // Filter to only games that are associated with this book
-                const bookAssociatedGames = allGames.filter((game: any) => 
+                const bookAssociatedGames = allGames.filter((game: any) =>
                   rawData.games.includes(game.gameId)
                 );
                 setAssociatedGames(bookAssociatedGames);
@@ -149,7 +149,7 @@ const BookDetailPage: React.FC = () => {
             }
           }
         }
-        
+
         // Fetch pages to determine total count
         const pages = await ApiService.getBookPages(id);
         setTotalPages(pages.length);
@@ -157,7 +157,7 @@ const BookDetailPage: React.FC = () => {
         console.error('Error fetching book details:', error);
       }
     };
-    
+
     fetchBookDetails();
   }, [id]);
 
@@ -166,13 +166,13 @@ const BookDetailPage: React.FC = () => {
     if (id) {
       const count = readCountService.getReadCount(id);
       setReadCount(count);
-      
+
       // Get favorite count
       // Note: In production, this should come from the backend API
       // For now, we'll use a simple local storage approach
       const favorites = favoritesService.getFavorites();
       const isFavorited = favorites.includes(id);
-      
+
       // Try to get stored favorite count for this book
       // In production, this should come from the backend API
       const storedCount = localStorage.getItem(`book_fav_count_${id}`);
@@ -193,14 +193,14 @@ const BookDetailPage: React.FC = () => {
     if (!id) return;
     const isFavorited = favoritesService.isFavorite(id);
     const newFavoriteState = favoritesService.toggleFavorite(id);
-    
+
     // Update the displayed count
     const currentCount = parseInt(localStorage.getItem(`book_fav_count_${id}`) || '0', 10);
     const newCount = newFavoriteState ? currentCount + 1 : Math.max(0, currentCount - 1);
     setFavoriteCount(newCount);
     localStorage.setItem(`book_fav_count_${id}`, newCount.toString());
   };
-  
+
   // Check if book is completed (user has read all pages)
   const isBookCompleted = () => {
     if (!id || totalPages === 0) return false;
@@ -209,7 +209,7 @@ const BookDetailPage: React.FC = () => {
     // Consider book completed if user has reached the last page
     return progress.currentPageIndex >= totalPages - 1;
   };
-  
+
   const handleContinue = () => {
     if (id && savedPageIndex !== null && savedPageIndex >= 0) {
       // Navigate to book reader with the saved page
@@ -327,7 +327,7 @@ const BookDetailPage: React.FC = () => {
                   Read
                 </button>
                 {savedPageIndex !== null && savedPageIndex >= 0 ? (
-                  <button 
+                  <button
                     onClick={handleContinue}
                     className="flex-1 bg-[#FCEBB6] hover:bg-[#fff5cc] text-[#5c2e0b] font-display font-bold text-xl py-3 rounded-2xl shadow-[0_4px_0_#D4B483] border-2 border-[#D4B483] active:translate-y-[4px] active:shadow-none transition-all text-center leading-none flex flex-col items-center justify-center gap-0.5"
                   >
@@ -344,7 +344,7 @@ const BookDetailPage: React.FC = () => {
                     return (
                       <div
                         key={game.gameId}
-                        className="w-full bg-[#3E1F07] rounded-2xl p-3 flex items-center gap-4 shadow-[0_6px_0_rgba(0,0,0,0.3)] border-2 border-[#5c2e0b] relative overflow-hidden"
+                        className="w-full bg-[#3E1F07] rounded-2xl p-3 pr-4 flex items-center gap-4 shadow-[0_6px_0_rgba(0,0,0,0.3)] border-2 border-[#5c2e0b] relative overflow-hidden"
                       >
                         <div className="absolute inset-0 opacity-40 bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-[#70380d] to-transparent"></div>
 
@@ -358,8 +358,8 @@ const BookDetailPage: React.FC = () => {
                           )}
                         </div>
                         <div className="flex-1 z-10 flex justify-between items-center">
-                          <div className="flex-1 min-w-0">
-                            <h3 className="text-white font-display font-bold tracking-wide text-lg drop-shadow-md truncate">
+                          <div className="flex-1 min-w-0 mr-2">
+                            <h3 className="text-white font-display font-bold tracking-wide text-sm drop-shadow-md truncate">
                               {game.name}
                             </h3>
                           </div>
@@ -379,7 +379,7 @@ const BookDetailPage: React.FC = () => {
                                 }
                               }
                             }}
-                            className="bg-[#6da34d] hover:bg-[#7db85b] text-white text-sm font-bold py-1.5 px-6 rounded-full shadow-[0_3px_0_#3d5c2b] active:translate-y-[3px] active:shadow-none transition-all border border-[#ffffff20] cursor-pointer"
+                            className="bg-[#6da34d] hover:bg-[#7db85b] text-white text-sm font-bold py-1.5 px-5 rounded-full shadow-[0_3px_0_#3d5c2b] active:translate-y-[3px] active:shadow-none transition-all border border-[#ffffff20] cursor-pointer shrink-0"
                           >
                             Play
                           </button>
@@ -398,9 +398,8 @@ const BookDetailPage: React.FC = () => {
                     return (
                       <div
                         key={index}
-                        className={`w-full bg-[#3E1F07] rounded-2xl p-3 flex items-center gap-4 shadow-[0_6px_0_rgba(0,0,0,0.3)] border-2 border-[#5c2e0b] relative overflow-hidden ${
-                          !isUnlocked ? 'opacity-75' : ''
-                        }`}
+                        className={`w-full bg-[#3E1F07] rounded-2xl p-3 pr-4 flex items-center gap-4 shadow-[0_6px_0_rgba(0,0,0,0.3)] border-2 border-[#5c2e0b] relative overflow-hidden ${!isUnlocked ? 'opacity-75' : ''
+                          }`}
                       >
                         <div className="absolute inset-0 opacity-40 bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-[#70380d] to-transparent"></div>
 
@@ -419,8 +418,8 @@ const BookDetailPage: React.FC = () => {
                           )}
                         </div>
                         <div className="flex-1 z-10 flex justify-between items-center">
-                          <div className="flex-1 min-w-0">
-                            <h3 className="text-white font-display font-bold tracking-wide text-lg drop-shadow-md truncate">
+                          <div className="flex-1 min-w-0 mr-2">
+                            <h3 className="text-white font-display font-bold tracking-wide text-sm drop-shadow-md truncate">
                               {game.title}
                             </h3>
                             {!isUnlocked && (
@@ -436,11 +435,10 @@ const BookDetailPage: React.FC = () => {
                               }
                             }}
                             disabled={!isUnlocked}
-                            className={`${
-                              isUnlocked
-                                ? 'bg-[#6da34d] hover:bg-[#7db85b] cursor-pointer'
-                                : 'bg-gray-600 cursor-not-allowed opacity-50'
-                            } text-white text-sm font-bold py-1.5 px-6 rounded-full shadow-[0_3px_0_#3d5c2b] active:translate-y-[3px] active:shadow-none transition-all border border-[#ffffff20]`}
+                            className={`${isUnlocked
+                              ? 'bg-[#6da34d] hover:bg-[#7db85b] cursor-pointer'
+                              : 'bg-gray-600 cursor-not-allowed opacity-50'
+                              } text-white text-sm font-bold py-1.5 px-5 rounded-full shadow-[0_3px_0_#3d5c2b] active:translate-y-[3px] active:shadow-none transition-all border border-[#ffffff20] shrink-0`}
                           >
                             {isUnlocked ? 'Play' : 'Locked'}
                           </button>

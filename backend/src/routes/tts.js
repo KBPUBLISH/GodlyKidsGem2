@@ -71,14 +71,6 @@ router.post('/generate', async (req, res) => {
             return res.status(400).json({ message: 'Text and voiceId are required' });
         }
 
-        // Get API key from environment
-        const apiKey = process.env.ELEVENLABS_API_KEY;
-        console.log('TTS API Key check:', apiKey ? `Found (${apiKey.substring(0, 10)}...)` : 'NOT FOUND');
-        if (!apiKey) {
-            console.error('ELEVENLABS_API_KEY is missing from environment');
-            return res.status(500).json({ message: 'TTS Generation Failed', error: 'apiKey is not defined' });
-        }
-
         // 1. Check Cache
         const textHash = crypto.createHash('md5').update(text + voiceId).digest('hex');
         const cached = await TTSCache.findOne({ textHash, voiceId });
@@ -91,75 +83,98 @@ router.post('/generate', async (req, res) => {
             });
         }
 
-        console.log('TTS Cache Miss - Calling ElevenLabs');
+        console.log('TTS Cache Miss - Generating Audio');
+        let audioBuffer;
 
-        // 2. Call ElevenLabs API
+        // CHECK IF LOCAL VOICE (Custom Clone)
+        if (voiceId.startsWith('local_')) {
+            console.log('🎤 Using Local Python AI Service for Voice Clone:', voiceId);
 
-        // Use the non-stream endpoint to get word-level timestamps
-        // ElevenLabs supports word-level timestamps via the standard endpoint with enable_logging
-        // Use ElevenLabs v3 model which supports audio tags (emotional cues in brackets like [excited], [whispers])
-        // v3 model provides advanced emotional control and expressiveness
-        const modelId = "eleven_v3"; // Official v3 model ID
-        
-        console.log('🎤 Generating TTS with model:', modelId);
-        console.log('📝 Text length:', text.length);
-        console.log('📝 Text preview:', text.substring(0, 100));
-        
-        let response;
-        try {
-            response = await axios.post(
-                `https://api.elevenlabs.io/v1/text-to-speech/${voiceId}`,
-                {
-                    text,
-                    model_id: modelId,
-                    voice_settings: {
-                        stability: 0.5,
-                        similarity_boost: 0.75
-                    }
-                },
-                {
-                    headers: {
-                        'xi-api-key': apiKey,
-                        'Content-Type': 'application/json',
-                        'Accept': 'application/json'
-                    },
-                    responseType: 'arraybuffer',
-                    params: {
-                        output_format: 'mp3_44100_128',
-                        enable_logging: false // Set to true if you want detailed logs
-                    }
-                }
-            );
-        } catch (error) {
-            console.error('❌ ElevenLabs API Error:', error.response?.status, error.response?.statusText);
-            console.error('❌ Error details:', error.response?.data ? Buffer.from(error.response.data).toString() : error.message);
-            if (error.response?.status === 400) {
-                const errorText = error.response.data ? Buffer.from(error.response.data).toString() : 'Unknown error';
-                console.error('❌ 400 Bad Request - Error details:', errorText);
-                return res.status(500).json({ 
-                    message: 'TTS Generation Failed', 
-                    error: `ElevenLabs API error: ${errorText}` 
-                });
+            // Find the reference audio file
+            const voicesDir = path.join(uploadsDir, 'voices');
+            const files = fs.readdirSync(voicesDir);
+            const referenceFile = files.find(f => f.startsWith(voiceId));
+
+            if (!referenceFile) {
+                throw new Error(`Local voice reference file not found for ID: ${voiceId}`);
             }
-            throw error;
+
+            const referencePath = path.join(voicesDir, referenceFile);
+            console.log('📄 Reference Audio:', referencePath);
+
+            // Call Python Service
+            const formData = new FormData();
+            formData.append('text', text);
+            formData.append('language', 'en');
+            formData.append('speaker_wav', fs.createReadStream(referencePath));
+
+            try {
+                const pythonResponse = await axios.post('http://localhost:8000/generate', formData, {
+                    headers: {
+                        ...formData.getHeaders()
+                    },
+                    responseType: 'arraybuffer'
+                });
+
+                audioBuffer = pythonResponse.data;
+                console.log('✅ Python Service Generation Successful');
+            } catch (pyError) {
+                console.error('❌ Python Service Error:', pyError.message);
+                if (pyError.code === 'ECONNREFUSED') {
+                    throw new Error('Local AI Service is offline. Please start the Python service.');
+                }
+                throw pyError;
+            }
+
+        } else {
+            // ELEVENLABS GENERATION
+            const apiKey = process.env.ELEVENLABS_API_KEY;
+            if (!apiKey) {
+                return res.status(500).json({ message: 'TTS Generation Failed', error: 'apiKey is not defined' });
+            }
+
+            const modelId = "eleven_v3";
+            console.log('🎤 Generating TTS with ElevenLabs model:', modelId);
+
+            try {
+                const response = await axios.post(
+                    `https://api.elevenlabs.io/v1/text-to-speech/${voiceId}`,
+                    {
+                        text,
+                        model_id: modelId,
+                        voice_settings: {
+                            stability: 0.5,
+                            similarity_boost: 0.75
+                        }
+                    },
+                    {
+                        headers: {
+                            'xi-api-key': apiKey,
+                            'Content-Type': 'application/json',
+                            'Accept': 'application/json'
+                        },
+                        responseType: 'arraybuffer',
+                        params: {
+                            output_format: 'mp3_44100_128',
+                            enable_logging: false
+                        }
+                    }
+                );
+                audioBuffer = response.data;
+            } catch (error) {
+                console.error('❌ ElevenLabs API Error:', error.response?.status);
+                throw error;
+            }
         }
 
         // 3. Save Audio
         const filename = `${Date.now()}_${textHash}.mp3`;
-        const audioUrl = await saveAudioFile(response.data, filename, bookId);
+        const audioUrl = await saveAudioFile(audioBuffer, filename, bookId);
 
-        // 4. Generate word-level alignment data
-        // Since ElevenLabs doesn't return timestamps in the standard API response,
-        // we'll estimate word timings based on text length and average speaking rate
+        // 4. Generate word-level alignment data (Estimate)
         const words = text.split(/\s+/).filter(w => w.length > 0);
-        const totalChars = text.length;
-
-        // Estimate: average speaking rate is ~150 words per minute = 2.5 words per second
-        // Or ~400ms per word on average (including pauses)
         const estimatedDurationPerWord = 0.4; // seconds
-        const totalEstimatedDuration = words.length * estimatedDurationPerWord;
 
-        // Create word-level alignment data
         const alignmentData = {
             words: words.map((word, index) => {
                 const startTime = index * estimatedDurationPerWord;
@@ -170,7 +185,6 @@ router.post('/generate', async (req, res) => {
                     end: endTime
                 };
             }),
-            // Keep character-level for backward compatibility (empty for now)
             characters: [],
             character_start_times_seconds: [],
             character_end_times_seconds: []

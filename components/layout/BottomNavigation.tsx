@@ -1,15 +1,7 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { Compass, Headphones, BookOpen, Hammer, Wrench } from 'lucide-react';
+import { Compass, Headphones, BookOpen, Library } from 'lucide-react';
 import { useAudio } from '../../context/AudioContext';
-
-// Builder's Shop Icon Component (Crossed Hammer & Wrench)
-const BuildersShopIcon: React.FC<{ size?: number; className?: string }> = ({ size = 24, className = '' }) => (
-  <div className={`relative inline-flex items-center justify-center ${className}`} style={{ width: size, height: size }}>
-    <Hammer size={size * 0.7} className="absolute rotate-[-45deg]" style={{ transform: 'rotate(-45deg) translate(-10%, -10%)' }} />
-    <Wrench size={size * 0.7} className="absolute rotate-[45deg]" style={{ transform: 'rotate(45deg) translate(10%, -10%)' }} />
-  </div>
-);
 
 const BottomNavigation: React.FC = () => {
   const navigate = useNavigate();
@@ -21,13 +13,13 @@ const BottomNavigation: React.FC = () => {
   // ... (existing code)
 
   // Configuration for the wheel
-  const ITEM_ANGLE = 45; // Degrees between items
+  const ITEM_ANGLE = 45; // Degrees between items;
 
   const navItems = [
     { id: 'explore', label: 'Explore', icon: Compass, path: '/home', index: 0 },
     { id: 'listen', label: 'Listen', icon: Headphones, path: '/listen', index: 1 },
     { id: 'read', label: 'Read', icon: BookOpen, path: '/read', index: 2 },
-    { id: 'library', label: 'Library', icon: BuildersShopIcon, path: '/library', index: 3 },
+    { id: 'library', label: 'Library', icon: Library, path: '/library', index: 3 },
   ];
 
   useEffect(() => {

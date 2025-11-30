@@ -1,7 +1,31 @@
 
 import React, { createContext, useContext, useState, useEffect, useRef, useCallback } from 'react';
 
+// --- Interfaces ---
+export interface AudioItem {
+    _id?: string;
+    title: string;
+    author?: string;
+    coverImage?: string;
+    audioUrl: string;
+    duration?: number;
+    order: number;
+}
+
+export interface Playlist {
+    _id: string;
+    title: string;
+    author?: string;
+    description?: string;
+    coverImage?: string;
+    category?: string;
+    type?: 'Song' | 'Audiobook';
+    items: AudioItem[];
+    playCount?: number;
+}
+
 interface AudioContextType {
+    // Background Music & SFX
     musicEnabled: boolean;
     sfxEnabled: boolean;
     musicVolume: number;
@@ -14,6 +38,20 @@ interface AudioContextType {
     playTab: () => void;
     setGameMode: (active: boolean, type?: 'default' | 'workout') => void;
     setMusicPaused: (paused: boolean) => void;
+
+    // Playlist Player
+    currentPlaylist: Playlist | null;
+    currentTrackIndex: number;
+    isPlaying: boolean;
+    progress: number;
+    currentTime: number;
+    duration: number;
+    playPlaylist: (playlist: Playlist, startIndex?: number) => void;
+    togglePlayPause: () => void;
+    nextTrack: () => void;
+    prevTrack: () => void;
+    seek: (time: number) => void;
+    closePlayer: () => void;
 }
 
 const AudioContext = createContext<AudioContextType>({
@@ -29,21 +67,32 @@ const AudioContext = createContext<AudioContextType>({
     playTab: () => { },
     setGameMode: () => { },
     setMusicPaused: () => { },
+
+    currentPlaylist: null,
+    currentTrackIndex: 0,
+    isPlaying: false,
+    progress: 0,
+    currentTime: 0,
+    duration: 0,
+    playPlaylist: () => { },
+    togglePlayPause: () => { },
+    nextTrack: () => { },
+    prevTrack: () => { },
+    seek: () => { },
+    closePlayer: () => { },
 });
 
 export const useAudio = () => useContext(AudioContext);
 
-// Ambient Ocean Sound (Main App) - "Seaside Adventure" from Cloudinary
+// Ambient Ocean Sound (Main App)
 const BG_MUSIC_URL = "https://res.cloudinary.com/dxh8fuq7b/video/upload/v1763747567/Seaside_Adventure_2025-11-21T174503_i3p43n.mp3";
-
-// Upbeat Game Music (Daily Verse, Challenge) - "Happy Pop"
+// Upbeat Game Music
 const GAME_MUSIC_URL = "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-2.mp3";
-
-// Energetic Workout Music (Strength Game) - "Jump and Spin" from Cloudinary
+// Energetic Workout Music
 const WORKOUT_MUSIC_URL = "https://res.cloudinary.com/dxh8fuq7b/video/upload/v1763747567/Jump_and_Spin_pczce5.mp3";
 
 export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-    // Load music volume from localStorage or default to 0.5 (half)
+    // --- Background Music State ---
     const [musicVolume, setMusicVolumeState] = useState<number>(() => {
         const saved = localStorage.getItem('godly_kids_music_volume');
         return saved ? parseFloat(saved) : 0.5;
@@ -52,14 +101,22 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     const [sfxEnabled, setSfxEnabled] = useState(true);
     const [musicMode, setMusicMode] = useState<'bg' | 'game' | 'workout'>('bg');
     const [musicForcePaused, setMusicForcePaused] = useState(() => {
-        // Check if we are starting on the book reader page
         return window.location.pathname.includes('/book-reader') || window.location.pathname.includes('/read/');
     });
 
+    // --- Playlist Player State ---
+    const [currentPlaylist, setCurrentPlaylist] = useState<Playlist | null>(null);
+    const [currentTrackIndex, setCurrentTrackIndex] = useState(0);
+    const [isPlaying, setIsPlaying] = useState(false);
+    const [progress, setProgress] = useState(0);
+    const [currentTime, setCurrentTime] = useState(0);
+    const [duration, setDuration] = useState(0);
+
+    // Refs
     const bgAudioRef = useRef<HTMLAudioElement | null>(null);
     const gameAudioRef = useRef<HTMLAudioElement | null>(null);
     const workoutAudioRef = useRef<HTMLAudioElement | null>(null);
-
+    const playlistAudioRef = useRef<HTMLAudioElement | null>(null); // New ref for playlist audio
     const audioContextRef = useRef<AudioContext | null>(null);
 
     // Initialize Audio Context lazily
@@ -71,49 +128,29 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     }, []);
 
     // --- SOUND GENERATORS (Synthesizers) ---
-
     const playTone = useCallback((freq: number, type: OscillatorType, duration: number, vol: number = 0.1) => {
         if (!sfxEnabled) return;
         const ctx = getAudioContext();
-
-        if (ctx.state === 'suspended') {
-            ctx.resume();
-        }
-
+        if (ctx.state === 'suspended') ctx.resume();
         const osc = ctx.createOscillator();
         const gain = ctx.createGain();
-
         osc.type = type;
         osc.frequency.setValueAtTime(freq, ctx.currentTime);
-
         gain.gain.setValueAtTime(vol, ctx.currentTime);
         gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + duration);
-
         osc.connect(gain);
         gain.connect(ctx.destination);
-
         osc.start();
         osc.stop(ctx.currentTime + duration);
     }, [sfxEnabled, getAudioContext]);
 
-    const playClick = useCallback(() => {
-        playTone(300, 'sine', 0.1, 0.15);
-        playTone(400, 'triangle', 0.05, 0.05);
-    }, [playTone]);
-
-    const playBack = useCallback(() => {
-        playTone(200, 'sine', 0.15, 0.1);
-    }, [playTone]);
-
-    const playTab = useCallback(() => {
-        playTone(600, 'sine', 0.05, 0.05);
-    }, [playTone]);
-
+    const playClick = useCallback(() => { playTone(300, 'sine', 0.1, 0.15); playTone(400, 'triangle', 0.05, 0.05); }, [playTone]);
+    const playBack = useCallback(() => { playTone(200, 'sine', 0.15, 0.1); }, [playTone]);
+    const playTab = useCallback(() => { playTone(600, 'sine', 0.05, 0.05); }, [playTone]);
     const playSuccess = useCallback(() => {
         if (!sfxEnabled) return;
         const ctx = getAudioContext();
         if (ctx.state === 'suspended') ctx.resume();
-
         const now = ctx.currentTime;
         [440, 554, 659, 880].forEach((freq, i) => {
             const osc = ctx.createOscillator();
@@ -129,10 +166,130 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         });
     }, [sfxEnabled, getAudioContext]);
 
+    // --- PLAYLIST PLAYER LOGIC ---
+
+    // Initialize playlist audio element
+    useEffect(() => {
+        if (!playlistAudioRef.current) {
+            playlistAudioRef.current = new Audio();
+            playlistAudioRef.current.preload = 'auto';
+
+            // Event listeners
+            playlistAudioRef.current.addEventListener('timeupdate', () => {
+                if (playlistAudioRef.current) {
+                    setCurrentTime(playlistAudioRef.current.currentTime);
+                    const dur = playlistAudioRef.current.duration;
+                    if (!isNaN(dur)) {
+                        setDuration(dur);
+                        setProgress((playlistAudioRef.current.currentTime / dur) * 100);
+                    }
+                }
+            });
+
+            playlistAudioRef.current.addEventListener('loadedmetadata', () => {
+                if (playlistAudioRef.current) {
+                    setDuration(playlistAudioRef.current.duration);
+                }
+            });
+
+            playlistAudioRef.current.addEventListener('ended', () => {
+                // Auto-advance logic handled in a separate effect or function
+                // We'll trigger it via state change or direct call
+                handleTrackEnd();
+            });
+        }
+    }, []);
+
+    const handleTrackEnd = useCallback(() => {
+        setCurrentPlaylist(prevPlaylist => {
+            if (!prevPlaylist) return null;
+            setCurrentTrackIndex(prevIndex => {
+                if (prevIndex < prevPlaylist.items.length - 1) {
+                    return prevIndex + 1;
+                } else {
+                    setIsPlaying(false);
+                    return prevIndex; // Stop at end
+                }
+            });
+            return prevPlaylist;
+        });
+    }, []);
+
+    // Sync audio source when track changes
+    useEffect(() => {
+        if (currentPlaylist && playlistAudioRef.current) {
+            const track = currentPlaylist.items[currentTrackIndex];
+            if (track && playlistAudioRef.current.src !== track.audioUrl) {
+                playlistAudioRef.current.src = track.audioUrl;
+                if (isPlaying) {
+                    playlistAudioRef.current.play().catch(e => console.error("Play error:", e));
+                }
+            }
+        }
+    }, [currentPlaylist, currentTrackIndex]);
+
+    // Sync play/pause state
+    useEffect(() => {
+        if (playlistAudioRef.current) {
+            if (isPlaying) {
+                playlistAudioRef.current.play().catch(e => console.error("Play error:", e));
+            } else {
+                playlistAudioRef.current.pause();
+            }
+        }
+    }, [isPlaying]);
+
+    const playPlaylist = useCallback((playlist: Playlist, startIndex: number = 0) => {
+        setCurrentPlaylist(playlist);
+        setCurrentTrackIndex(startIndex);
+        setIsPlaying(true);
+        // Ensure background music is paused when playlist starts
+        setMusicPaused(true);
+    }, []);
+
+    const togglePlayPause = useCallback(() => {
+        setIsPlaying(prev => !prev);
+    }, []);
+
+    const nextTrack = useCallback(() => {
+        if (currentPlaylist && currentTrackIndex < currentPlaylist.items.length - 1) {
+            setCurrentTrackIndex(prev => prev + 1);
+            setIsPlaying(true);
+        }
+    }, [currentPlaylist, currentTrackIndex]);
+
+    const prevTrack = useCallback(() => {
+        if (currentTrackIndex > 0) {
+            setCurrentTrackIndex(prev => prev - 1);
+            setIsPlaying(true);
+        }
+    }, [currentTrackIndex]);
+
+    const seek = useCallback((time: number) => {
+        if (playlistAudioRef.current) {
+            playlistAudioRef.current.currentTime = time;
+            setCurrentTime(time);
+        }
+    }, []);
+
+    const closePlayer = useCallback(() => {
+        setIsPlaying(false);
+        setCurrentPlaylist(null);
+        setCurrentTrackIndex(0);
+        if (playlistAudioRef.current) {
+            playlistAudioRef.current.pause();
+            playlistAudioRef.current.currentTime = 0;
+        }
+        // Resume background music if it was enabled
+        setMusicPaused(false);
+    }, []);
+
+
+    // --- BACKGROUND MUSIC LOGIC ---
+
     const setGameMode = useCallback((active: boolean, type: 'default' | 'workout' = 'default') => {
         if (!active) {
             setMusicMode('bg');
-            // If explicitly stopping (e.g., for prayer), pause all music immediately
             if (bgAudioRef.current) bgAudioRef.current.pause();
             if (gameAudioRef.current) gameAudioRef.current.pause();
             if (workoutAudioRef.current) workoutAudioRef.current.pause();
@@ -141,81 +298,44 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         }
     }, []);
 
-
     const musicForcePausedRef = useRef(musicForcePaused);
     useEffect(() => {
         musicForcePausedRef.current = musicForcePaused;
     }, [musicForcePaused]);
 
-    // --- BACKGROUND MUSIC LOGIC ---
     useEffect(() => {
-        // Initialize audio elements with error handling
+        // Initialize BG audio elements (same as before)
         if (!bgAudioRef.current) {
             bgAudioRef.current = new Audio(BG_MUSIC_URL);
             bgAudioRef.current.loop = true;
             bgAudioRef.current.volume = 0;
-            bgAudioRef.current.preload = 'auto';
-            bgAudioRef.current.addEventListener('error', (e) => {
-                console.error('❌ BG Music load error:', e, BG_MUSIC_URL);
-            });
-            bgAudioRef.current.addEventListener('canplaythrough', () => {
-                console.log('✅ BG Music loaded');
-            });
         }
-
         if (!gameAudioRef.current) {
             gameAudioRef.current = new Audio(GAME_MUSIC_URL);
             gameAudioRef.current.loop = true;
             gameAudioRef.current.volume = 0;
-            gameAudioRef.current.preload = 'auto';
-            gameAudioRef.current.addEventListener('error', (e) => {
-                console.error('❌ Game Music load error:', e, GAME_MUSIC_URL);
-            });
-            gameAudioRef.current.addEventListener('canplaythrough', () => {
-                console.log('✅ Game Music loaded');
-            });
         }
-
         if (!workoutAudioRef.current) {
             workoutAudioRef.current = new Audio(WORKOUT_MUSIC_URL);
             workoutAudioRef.current.loop = true;
             workoutAudioRef.current.volume = 0;
-            workoutAudioRef.current.preload = 'auto';
-            workoutAudioRef.current.addEventListener('error', (e) => {
-                console.error('❌ Workout Music load error:', e, WORKOUT_MUSIC_URL);
-            });
-            workoutAudioRef.current.addEventListener('canplaythrough', () => {
-                console.log('✅ Workout Music loaded');
-            });
         }
 
         const bg = bgAudioRef.current;
         const game = gameAudioRef.current;
         const workout = workoutAudioRef.current;
 
-        // MASTER CONTROL LOOP
-        // This loop runs periodically to ENFORCE the desired music state.
-        // It handles autoplay blocking, resuming, and force pausing.
         const masterLoop = setInterval(() => {
-            // 1. FORCE PAUSED? Kill everything IMMEDIATELY and DO NOT resume.
+            // 1. FORCE PAUSED? (e.g. Book Reader OR Playlist Player Active)
+            // Note: We use musicForcePaused to suppress BG music when Playlist is playing
             if (musicForcePausedRef.current) {
-                if (!bg.paused) {
-                    bg.pause();
-                    bg.currentTime = 0; // Reset to beginning
-                }
-                if (!game.paused) {
-                    game.pause();
-                    game.currentTime = 0;
-                }
-                if (!workout.paused) {
-                    workout.pause();
-                    workout.currentTime = 0;
-                }
-                // CRITICAL: Return early - DO NOT continue to resume logic
+                if (!bg.paused) bg.pause();
+                if (!game.paused) game.pause();
+                if (!workout.paused) workout.pause();
                 return;
             }
 
-            // 2. Music Disabled? Kill everything.
+            // 2. Music Disabled?
             if (!musicEnabled) {
                 if (!bg.paused) bg.pause();
                 if (!game.paused) game.pause();
@@ -223,86 +343,43 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
                 return;
             }
 
-            // 3. Music Enabled & Not Paused -> Ensure correct track is playing
-            // We use .catch() to ignore "Autoplay failed" errors, as the user interaction will eventually trigger it.
-
+            // 3. Normal BG Music Logic
             if (musicMode === 'bg') {
-                // Target: BG playing, others paused
                 if (bg.paused && bg.readyState >= 2) bg.play().catch(() => { });
-                bg.volume = musicVolume * 0.25; // Set volume directly
-
+                bg.volume = musicVolume * 0.25;
                 if (!game.paused) game.pause();
                 if (!workout.paused) workout.pause();
             }
             else if (musicMode === 'game') {
-                // Target: Game playing, others paused
                 if (game.paused && game.readyState >= 2) game.play().catch(() => { });
                 game.volume = musicVolume * 0.3;
-
                 if (!bg.paused) bg.pause();
                 if (!workout.paused) workout.pause();
             }
             else if (musicMode === 'workout') {
-                // Target: Workout playing, others paused
                 if (workout.paused && workout.readyState >= 2) workout.play().catch(() => { });
                 workout.volume = musicVolume * 0.4;
-
                 if (!bg.paused) bg.pause();
                 if (!game.paused) game.pause();
             }
-        }, 50); // Check every 50ms for MORE aggressive enforcement
+        }, 100);
 
-        // One-time unlock listener for initial browser autoplay policy
-        // ONLY add if music is NOT force paused
         const unlockAudio = () => {
-            // DO NOT unlock if music is force paused
-            if (musicForcePausedRef.current) {
-                console.log('🚫 Music force paused - blocking unlock');
-                return;
-            }
-            if (audioContextRef.current?.state === 'suspended') {
-                audioContextRef.current.resume();
-            }
-            // The master loop will pick up the playing, we just need to trigger a resume context
+            if (musicForcePausedRef.current) return;
+            if (audioContextRef.current?.state === 'suspended') audioContextRef.current.resume();
         };
 
-        // BLOCKING LISTENER: Capture phase to prevent music from playing
-        const blockMusicOnInteraction = (e: Event) => {
-            if (musicForcePausedRef.current) {
-                console.log('🚫 Blocking music on interaction - force paused');
-                // Immediately pause all music
-                if (bgAudioRef.current && !bgAudioRef.current.paused) {
-                    bgAudioRef.current.pause();
-                }
-                if (gameAudioRef.current && !gameAudioRef.current.paused) {
-                    gameAudioRef.current.pause();
-                }
-                if (workoutAudioRef.current && !workoutAudioRef.current.paused) {
-                    workoutAudioRef.current.pause();
-                }
-            }
-        };
-
-        // Only add unlock listeners if music is NOT force paused
         if (!musicForcePaused) {
             window.addEventListener('click', unlockAudio, { once: true });
             window.addEventListener('touchstart', unlockAudio, { once: true });
-            window.addEventListener('keydown', unlockAudio, { once: true });
         }
-
-        // ALWAYS add blocking listener in capture phase to prevent music
-        window.addEventListener('click', blockMusicOnInteraction, { capture: true });
-        window.addEventListener('touchstart', blockMusicOnInteraction, { capture: true });
 
         return () => {
             clearInterval(masterLoop);
             window.removeEventListener('click', unlockAudio);
             window.removeEventListener('touchstart', unlockAudio);
-            window.removeEventListener('keydown', unlockAudio);
-            window.removeEventListener('click', blockMusicOnInteraction, { capture: true });
-            window.removeEventListener('touchstart', blockMusicOnInteraction, { capture: true });
         };
-    }, [musicEnabled, musicMode, musicVolume, musicForcePaused]); // Re-create loop if config changes
+    }, [musicEnabled, musicMode, musicVolume, musicForcePaused]);
 
     const toggleMusic = () => setMusicEnabled(prev => !prev);
     const toggleSfx = () => setSfxEnabled(prev => !prev);
@@ -314,45 +391,21 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     }, []);
 
     const setMusicPaused = useCallback((paused: boolean) => {
-        console.log('🎵 setMusicPaused called:', paused);
         setMusicForcePaused(paused);
         if (paused) {
-            // Immediately pause all music and ensure it stays paused
-            if (bgAudioRef.current) {
-                bgAudioRef.current.pause();
-                // Do NOT reset to beginning so it can resume later
-                // bgAudioRef.current.currentTime = 0; 
-                // Remove any event listeners that might try to resume
-                bgAudioRef.current.onplay = null;
-            }
-            if (gameAudioRef.current) {
-                gameAudioRef.current.pause();
-                // gameAudioRef.current.currentTime = 0;
-                gameAudioRef.current.onplay = null;
-            }
-            if (workoutAudioRef.current) {
-                workoutAudioRef.current.pause();
-                // workoutAudioRef.current.currentTime = 0;
-                workoutAudioRef.current.onplay = null;
-            }
-            console.log('🎵 All music paused and reset - listeners removed');
+            if (bgAudioRef.current) bgAudioRef.current.pause();
+            if (gameAudioRef.current) gameAudioRef.current.pause();
+            if (workoutAudioRef.current) workoutAudioRef.current.pause();
         }
     }, []);
 
     return (
         <AudioContext.Provider value={{
-            musicEnabled,
-            sfxEnabled,
-            musicVolume,
-            toggleMusic,
-            toggleSfx,
-            setMusicVolume,
-            playClick,
-            playBack,
-            playSuccess,
-            playTab,
-            setGameMode,
-            setMusicPaused
+            musicEnabled, sfxEnabled, musicVolume, toggleMusic, toggleSfx, setMusicVolume,
+            playClick, playBack, playSuccess, playTab, setGameMode, setMusicPaused,
+            // Playlist Player
+            currentPlaylist, currentTrackIndex, isPlaying, progress, currentTime, duration,
+            playPlaylist, togglePlayPause, nextTrack, prevTrack, seek, closePlayer
         }}>
             {children}
         </AudioContext.Provider>

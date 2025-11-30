@@ -18,6 +18,7 @@ import BookReaderPage from './pages/BookReaderPage';
 import AudioPage from './pages/AudioPage';
 import PlaylistPlayerPage from './pages/PlaylistPlayerPage';
 import PlaylistDetailPage from './pages/PlaylistDetailPage';
+import MiniPlayer from './components/audio/MiniPlayer';
 import BottomNavigation from './components/layout/BottomNavigation';
 import { BooksProvider } from './context/BooksContext';
 import { UserProvider } from './context/UserContext';
@@ -163,6 +164,9 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
       <div className="relative z-10 flex-1 overflow-hidden">
         {children}
       </div>
+
+      {/* Mini Player */}
+      <MiniPlayer />
 
       {/* Only show BottomNavigation on main tab pages */}
       {!isLanding && !isSignIn && !isOnboarding && !isBookDetail && !isPlayer && !isProfile && !isCreateProfile && !isPaywall && !isSettings && !isBookReader && !isAudioPage && <BottomNavigation />}

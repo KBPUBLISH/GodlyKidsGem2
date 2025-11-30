@@ -8,11 +8,14 @@ const BottomNavigation: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const [activeTab, setActiveTab] = useState('explore');
-  const { playTab } = useAudio();
+  const { playTab, currentPlaylist } = useAudio();
+  const isPlayerActive = !!currentPlaylist;
+
+  // ... (existing code)
 
   // Configuration for the wheel
   const ITEM_ANGLE = 45; // Degrees between items
-  
+
   const navItems = [
     { id: 'explore', label: 'Explore', icon: Compass, path: '/home', index: 0 },
     { id: 'listen', label: 'Listen', icon: Headphones, path: '/listen', index: 1 },
@@ -42,7 +45,7 @@ const BottomNavigation: React.FC = () => {
   const wheelRef = useRef<HTMLDivElement>(null);
   const startAngleRef = useRef(0);
   const startRotationRef = useRef(0);
-  const totalMoveRef = useRef(0); 
+  const totalMoveRef = useRef(0);
 
   const getAngle = (clientX: number, clientY: number) => {
     if (!wheelRef.current) return 0;
@@ -56,7 +59,7 @@ const BottomNavigation: React.FC = () => {
     startAngleRef.current = getAngle(clientX, clientY);
     // Positive rotation aligns with index when items are on the left/CCW side
     startRotationRef.current = (activeItem.index * ITEM_ANGLE);
-    
+
     setDragRotation(startRotationRef.current);
     setIsDragging(true);
     totalMoveRef.current = 0;
@@ -64,9 +67,9 @@ const BottomNavigation: React.FC = () => {
 
   const onMove = (clientX: number, clientY: number) => {
     if (!isDragging) return;
-    
+
     const currentAngle = getAngle(clientX, clientY);
-    
+
     // Standard physics: Dragging right (CW) increases rotation
     let delta = currentAngle - startAngleRef.current;
 
@@ -103,9 +106,9 @@ const BottomNavigation: React.FC = () => {
   const handleMouseDown = (e: React.MouseEvent) => onStart(e.clientX, e.clientY);
   const handleMouseMove = (e: React.MouseEvent) => onMove(e.clientX, e.clientY);
 
-  const WHEEL_SIZE = 400; 
-  const RADIUS = 115; 
-  const CENTER = WHEEL_SIZE / 2; 
+  const WHEEL_SIZE = 400;
+  const RADIUS = 115;
+  const CENTER = WHEEL_SIZE / 2;
 
   // Positive target rotation
   const targetRotation = (activeItem.index * ITEM_ANGLE);
@@ -113,18 +116,25 @@ const BottomNavigation: React.FC = () => {
 
   return (
     <div className="fixed bottom-0 left-0 right-0 z-50 h-0 flex justify-center pointer-events-none">
-      
+
       {/* Active Indicator Jewel */}
-      <div className="absolute bottom-[135px] md:bottom-[230px] z-[60] animate-bounce duration-[2000ms]">
-         <div className="w-0 h-0 border-l-[8px] border-l-transparent border-r-[8px] border-r-transparent border-t-[12px] border-t-[#FFD700]"></div>
+      <div
+        className={`absolute z-[60] animate-bounce duration-[2000ms] transition-all duration-500 ease-in-out ${isPlayerActive ? 'bottom-[215px] md:bottom-[310px]' : 'bottom-[135px] md:bottom-[230px]'
+          }`}
+      >
+        <div className="w-0 h-0 border-l-[8px] border-l-transparent border-r-[8px] border-r-transparent border-t-[12px] border-t-[#FFD700]"></div>
       </div>
 
       {/* Static CSS Shadow */}
-      <div className="absolute bottom-[-195px] md:bottom-[-170px] w-[340px] h-[340px] rounded-full bg-black/40 blur-xl pointer-events-none md:scale-[1.6]"></div>
+      <div
+        className={`absolute w-[340px] h-[340px] rounded-full bg-black/40 blur-xl pointer-events-none md:scale-[1.6] transition-all duration-500 ease-in-out ${isPlayerActive ? 'bottom-[-115px] md:bottom-[-90px]' : 'bottom-[-195px] md:bottom-[-170px]'
+          }`}
+      ></div>
 
-      <div 
+      <div
         ref={wheelRef}
-        className="absolute bottom-[-190px] md:bottom-[-165px] w-[400px] h-[400px] md:scale-[1.6] origin-center pointer-events-auto touch-none select-none flex items-center justify-center"
+        className={`absolute w-[400px] h-[400px] md:scale-[1.6] origin-center pointer-events-auto touch-none select-none flex items-center justify-center transition-all duration-500 ease-in-out ${isPlayerActive ? 'bottom-[-110px] md:bottom-[-85px]' : 'bottom-[-190px] md:bottom-[-165px]'
+          }`}
         onTouchStart={handleTouchStart}
         onTouchMove={handleTouchMove}
         onTouchEnd={onEnd}
@@ -133,67 +143,67 @@ const BottomNavigation: React.FC = () => {
         onMouseUp={onEnd}
         onMouseLeave={onEnd}
       >
-        <div 
-            className="w-full h-full relative will-change-transform"
-            style={{ 
-                transform: `rotate(${visualRotation}deg)`,
-                transition: isDragging ? 'none' : 'transform 0.5s cubic-bezier(0.2, 0.8, 0.2, 1)', 
-                cursor: isDragging ? 'grabbing' : 'grab'
-            }}
+        <div
+          className="w-full h-full relative will-change-transform"
+          style={{
+            transform: `rotate(${visualRotation}deg)`,
+            transition: isDragging ? 'none' : 'transform 0.5s cubic-bezier(0.2, 0.8, 0.2, 1)',
+            cursor: isDragging ? 'grabbing' : 'grab'
+          }}
         >
-            {/* SVG Wheel */}
-            <svg viewBox="0 0 400 400" className="w-full h-full relative z-10 pointer-events-none">
+          {/* SVG Wheel */}
+          <svg viewBox="0 0 400 400" className="w-full h-full relative z-10 pointer-events-none">
             <g transform="translate(200, 200)">
-                
-                {/* --- 1. HANDLES --- */}
-                {[...Array(8)].map((_, i) => (
-                    <g key={`handle-${i}`} transform={`rotate(${i * 45})`}>
-                        <path 
-                            d="M-6,-130 L-6,-145 C-8,-146 -12,-150 -12,-160 C-12,-170 -5,-175 0,-175 C5,-175 12,-170 12,-160 C12,-150 8,-146 6,-145 L6,-130 Z" 
-                            fill="#5e3006" 
-                            stroke="#3d1e03" 
-                            strokeWidth="1"
-                        />
-                    </g>
-                ))}
 
-                {/* --- 2. SPOKES --- */}
-                {[...Array(8)].map((_, i) => (
-                    <path 
-                        key={`spoke-${i}`}
-                        d="M-7,-40 L-5,-130 L5,-130 L7,-40 Z" 
-                        fill="#5e3006"
-                        stroke="#2a1201"
-                        strokeWidth="0.5"
-                        transform={`rotate(${i * 45})`}
-                    />
-                ))}
+              {/* --- 1. HANDLES --- */}
+              {[...Array(8)].map((_, i) => (
+                <g key={`handle-${i}`} transform={`rotate(${i * 45})`}>
+                  <path
+                    d="M-6,-130 L-6,-145 C-8,-146 -12,-150 -12,-160 C-12,-170 -5,-175 0,-175 C5,-175 12,-170 12,-160 C12,-150 8,-146 6,-145 L6,-130 Z"
+                    fill="#5e3006"
+                    stroke="#3d1e03"
+                    strokeWidth="1"
+                  />
+                </g>
+              ))}
 
-                {/* --- 3. OUTER RIM --- */}
-                <circle r="125" fill="none" stroke="#5e3006" strokeWidth="28" />
-                <circle r="138" fill="none" stroke="#4A2810" strokeWidth="2" />
-                <circle r="112" fill="none" stroke="#4A2810" strokeWidth="2" />
-                
-                {/* Gold Studs */}
-                {[...Array(16)].map((_, i) => (
-                    <circle 
-                        key={`stud-${i}`}
-                        cx="0" cy="-125" r="3" 
-                        fill="#FFD700" 
-                        stroke="#5e3006" strokeWidth="0.5"
-                        transform={`rotate(${i * 22.5 + 22.5})`} 
-                    />
-                ))}
+              {/* --- 2. SPOKES --- */}
+              {[...Array(8)].map((_, i) => (
+                <path
+                  key={`spoke-${i}`}
+                  d="M-7,-40 L-5,-130 L5,-130 L7,-40 Z"
+                  fill="#5e3006"
+                  stroke="#2a1201"
+                  strokeWidth="0.5"
+                  transform={`rotate(${i * 45})`}
+                />
+              ))}
 
-                {/* --- 4. HUB --- */}
-                <circle r="45" fill="#5e3006" stroke="#3d1e03" strokeWidth="2" />
-                <circle r="18" fill="#FFD700" stroke="#B8860B" strokeWidth="1" />
+              {/* --- 3. OUTER RIM --- */}
+              <circle r="125" fill="none" stroke="#5e3006" strokeWidth="28" />
+              <circle r="138" fill="none" stroke="#4A2810" strokeWidth="2" />
+              <circle r="112" fill="none" stroke="#4A2810" strokeWidth="2" />
+
+              {/* Gold Studs */}
+              {[...Array(16)].map((_, i) => (
+                <circle
+                  key={`stud-${i}`}
+                  cx="0" cy="-125" r="3"
+                  fill="#FFD700"
+                  stroke="#5e3006" strokeWidth="0.5"
+                  transform={`rotate(${i * 22.5 + 22.5})`}
+                />
+              ))}
+
+              {/* --- 4. HUB --- */}
+              <circle r="45" fill="#5e3006" stroke="#3d1e03" strokeWidth="2" />
+              <circle r="18" fill="#FFD700" stroke="#B8860B" strokeWidth="1" />
 
             </g>
-            </svg>
+          </svg>
 
-            {/* Icons */}
-            {navItems.map((item) => {
+          {/* Icons */}
+          {navItems.map((item) => {
             // PLACEMENT LOGIC:
             // Index 0 -> -90 (Top)
             // Index 1 -> -135 (Top Left)
@@ -201,52 +211,52 @@ const BottomNavigation: React.FC = () => {
             // Index 3 -> -225 (Bottom Left)
             const angleDeg = -90 - (item.index * ITEM_ANGLE);
             const angleRad = angleDeg * (Math.PI / 180);
-            
+
             const x = CENTER + RADIUS * Math.cos(angleRad);
             const y = CENTER + RADIUS * Math.sin(angleRad);
 
             const isActive = activeTab === item.id;
 
             return (
-                <button
+              <button
                 key={item.id}
                 onClick={(e) => {
-                    e.stopPropagation(); 
-                    if (totalMoveRef.current < 5) {
-                        handleNav(item.id, item.path);
-                    }
+                  e.stopPropagation();
+                  if (totalMoveRef.current < 5) {
+                    handleNav(item.id, item.path);
+                  }
                 }}
                 className="absolute w-14 h-14 -ml-7 -mt-7 flex flex-col items-center justify-center z-20 transition-transform outline-none pointer-events-auto"
                 style={{
-                    left: `${x}px`,
-                    top: `${y}px`,
-                    // Counter-rotate icon so it stays upright while wheel spins
-                    transform: `rotate(${-visualRotation}deg) scale(${isActive ? 1.1 : 0.9})`, 
+                  left: `${x}px`,
+                  top: `${y}px`,
+                  // Counter-rotate icon so it stays upright while wheel spins
+                  transform: `rotate(${-visualRotation}deg) scale(${isActive ? 1.1 : 0.9})`,
                 }}
-                >
+              >
                 <div className={`absolute inset-0 rounded-full border-4 border-[#B8860B] bg-[#3d1e03] shadow-sm transition-colors ${isActive ? 'border-[#FFD700]' : ''}`}></div>
 
-                <div 
-                    className={`
+                <div
+                  className={`
                     relative z-10 w-10 h-10 rounded-full flex items-center justify-center
                     ${isActive ? 'text-[#FFD700]' : 'text-[#cd853f]'}
                     `}
                 >
-                    <item.icon size={isActive ? 22 : 18} strokeWidth={2.5} />
+                  <item.icon size={isActive ? 22 : 18} strokeWidth={2.5} />
                 </div>
-                
-                <span 
-                    className={`
+
+                <span
+                  className={`
                     absolute top-12 w-24 text-center
                     text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full
                     ${isActive ? 'text-[#FFD700] bg-black/60 backdrop-blur-sm' : 'hidden'}
                     `}
                 >
-                    {item.label}
+                  {item.label}
                 </span>
-                </button>
+              </button>
             );
-            })}
+          })}
         </div>
       </div>
     </div>
@@ -254,4 +264,3 @@ const BottomNavigation: React.FC = () => {
 };
 
 export default BottomNavigation;
-    

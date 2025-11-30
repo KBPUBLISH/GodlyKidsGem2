@@ -164,8 +164,8 @@ const HomePage: React.FC = () => {
       <div className="px-4 pt-28 space-y-2 pb-52">
 
         {/* --- Stories Section --- */}
-        <div className="w-full overflow-x-auto no-scrollbar pb-6 pt-2 -mt-2">
-          <div className="flex space-x-4 px-1 min-w-min">
+        <div className="w-full overflow-x-auto no-scrollbar pb-6 pt-2 -mt-2 -mx-4">
+          <div className="flex space-x-4 px-4 min-w-min">
 
             {/* SPECIAL: Daily Key Story */}
             <button

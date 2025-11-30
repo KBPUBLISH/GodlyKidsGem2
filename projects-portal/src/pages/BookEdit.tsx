@@ -82,7 +82,8 @@ const BookEdit: React.FC = () => {
     useEffect(() => {
         const fetchCategories = async () => {
             try {
-                const response = await axios.get('http://localhost:5001/api/categories');
+                // Only fetch book categories
+                const response = await axios.get('http://localhost:5001/api/categories?type=book');
                 setCategories(response.data);
             } catch (error) {
                 console.error('Error fetching categories:', error);

@@ -13,12 +13,18 @@ interface AudioItem {
     order: number;
 }
 
+interface Category {
+    _id: string;
+    name: string;
+    type: 'book' | 'audio';
+}
+
 interface PlaylistFormData {
     title: string;
     author: string;
     description: string;
     coverImage: string;
-    category: 'Music' | 'Stories' | 'Devotionals' | 'Other';
+    category: string; // Category name
     type: 'Song' | 'Audiobook';
     items: AudioItem[];
     status: 'draft' | 'published';
@@ -29,22 +35,37 @@ const PlaylistForm: React.FC = () => {
     const navigate = useNavigate();
     const [loading, setLoading] = useState(false);
     const [uploading, setUploading] = useState(false);
+    const [categories, setCategories] = useState<Category[]>([]);
     const [formData, setFormData] = useState<PlaylistFormData>({
         title: '',
         author: 'Kingdom Builders Publishing',
         description: '',
         coverImage: '',
-        category: 'Music',
+        category: '',
         type: 'Song',
         items: [],
         status: 'draft',
     });
 
     useEffect(() => {
+        fetchCategories();
         if (id) {
             fetchPlaylist();
         }
     }, [id]);
+
+    const fetchCategories = async () => {
+        try {
+            // Only fetch audio categories
+            const response = await axios.get('http://localhost:5001/api/categories?type=audio');
+            setCategories(response.data);
+            if (response.data.length > 0 && !formData.category) {
+                setFormData(prev => ({ ...prev, category: response.data[0].name }));
+            }
+        } catch (error) {
+            console.error('Error fetching categories:', error);
+        }
+    };
 
     const fetchPlaylist = async () => {
         try {
@@ -58,6 +79,22 @@ const PlaylistForm: React.FC = () => {
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
+        
+        // Validate that all items have required fields
+        const missingFields = formData.items.some(item => 
+            !item.title || !item.audioUrl || !item.coverImage
+        );
+        
+        if (missingFields) {
+            alert('Please ensure all songs/episodes have a title, audio file (MP3), and cover image.');
+            return;
+        }
+        
+        if (!formData.coverImage) {
+            alert('Please upload a cover image for the playlist.');
+            return;
+        }
+        
         setLoading(true);
 
         try {
@@ -67,26 +104,51 @@ const PlaylistForm: React.FC = () => {
                 await axios.post('http://localhost:5001/api/playlists', formData);
             }
             navigate('/playlists');
-        } catch (error) {
+        } catch (error: any) {
             console.error('Error saving playlist:', error);
-            alert('Failed to save playlist');
+            const errorMessage = error.response?.data?.message || error.response?.data?.error || error.message || 'Failed to save playlist';
+            const errorDetails = error.response?.data?.details ? JSON.stringify(error.response.data.details, null, 2) : '';
+            alert(`Failed to save playlist: ${errorMessage}${errorDetails ? '\n\nDetails: ' + errorDetails : ''}`);
         } finally {
             setLoading(false);
         }
     };
 
-    const handleFileUpload = async (file: File, type: 'cover' | 'audio', itemIndex?: number) => {
+    const handleFileUpload = async (file: File, type: 'cover' | 'audio' | 'itemCover', itemIndex?: number) => {
         setUploading(true);
         const formDataUpload = new FormData();
         formDataUpload.append('file', file);
 
         try {
-            const response = await axios.post('http://localhost:5001/api/upload', formDataUpload, {
+            let endpoint: string;
+            let queryParams = '';
+
+            if (type === 'cover') {
+                // Playlist cover image - always use playlists folder
+                endpoint = 'http://localhost:5001/api/upload/image';
+                queryParams = `?bookId=playlists&type=cover`;
+            } else if (type === 'itemCover' && itemIndex !== undefined) {
+                // Song/episode cover image - always use playlists folder
+                endpoint = 'http://localhost:5001/api/upload/image';
+                queryParams = `?bookId=playlists&type=cover`;
+            } else if (type === 'audio' && itemIndex !== undefined) {
+                // Audio file (MP3) - always use playlists folder
+                endpoint = 'http://localhost:5001/api/upload/audio';
+                queryParams = `?bookId=playlists&type=audio`;
+            } else {
+                throw new Error('Invalid upload type or missing parameters');
+            }
+            
+            const response = await axios.post(`${endpoint}${queryParams}`, formDataUpload, {
                 headers: { 'Content-Type': 'multipart/form-data' },
             });
 
             if (type === 'cover') {
                 setFormData({ ...formData, coverImage: response.data.url });
+            } else if (type === 'itemCover' && itemIndex !== undefined) {
+                const newItems = [...formData.items];
+                newItems[itemIndex].coverImage = response.data.url;
+                setFormData({ ...formData, items: newItems });
             } else if (type === 'audio' && itemIndex !== undefined) {
                 const newItems = [...formData.items];
                 newItems[itemIndex].audioUrl = response.data.url;
@@ -195,13 +257,18 @@ const PlaylistForm: React.FC = () => {
                             </label>
                             <select
                                 value={formData.category}
-                                onChange={(e) => setFormData({ ...formData, category: e.target.value as any })}
+                                onChange={(e) => setFormData({ ...formData, category: e.target.value })}
                                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
                             >
-                                <option value="Music">Music</option>
-                                <option value="Stories">Stories</option>
-                                <option value="Devotionals">Devotionals</option>
-                                <option value="Other">Other</option>
+                                {categories.length === 0 ? (
+                                    <option value="">No categories available</option>
+                                ) : (
+                                    categories.map((cat) => (
+                                        <option key={cat._id} value={cat.name}>
+                                            {cat.name}
+                                        </option>
+                                    ))
+                                )}
                             </select>
                         </div>
                     </div>
@@ -222,7 +289,7 @@ const PlaylistForm: React.FC = () => {
                     {/* Cover Image */}
                     <div className="mt-4">
                         <label className="block text-sm font-medium text-gray-700 mb-2">
-                            Cover Image
+                            Cover Image *
                         </label>
                         <div className="flex items-start gap-4">
                             {formData.coverImage && (
@@ -238,7 +305,7 @@ const PlaylistForm: React.FC = () => {
                                 <input
                                     type="file"
                                     accept="image/*"
-                                    onChange={(e) => e.target.files?.[0] && handleFileUpload(e.target.files[0], 'cover')}
+                                    onChange={(e) => e.target.files?.[0] && handleFileUpload(e.target.files[0], 'cover', undefined)}
                                     className="hidden"
                                 />
                             </label>
@@ -300,7 +367,31 @@ const PlaylistForm: React.FC = () => {
                                             </div>
                                             <div className="md:col-span-2">
                                                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                                                    Audio File *
+                                                    Cover Image *
+                                                </label>
+                                                <div className="flex items-center gap-3 mb-3">
+                                                    {item.coverImage && (
+                                                        <img
+                                                            src={item.coverImage}
+                                                            alt="Cover"
+                                                            className="w-16 h-16 object-cover rounded-lg border border-gray-300"
+                                                        />
+                                                    )}
+                                                    <label className="flex-1 flex items-center justify-center border-2 border-dashed border-gray-300 rounded-lg p-3 cursor-pointer hover:border-indigo-500 transition-colors">
+                                                        <Upload className="w-4 h-4 text-gray-400 mr-2" />
+                                                        <span className="text-sm text-gray-600">Upload cover</span>
+                                                        <input
+                                                            type="file"
+                                                            accept="image/*"
+                                                            onChange={(e) => e.target.files?.[0] && handleFileUpload(e.target.files[0], 'itemCover', index)}
+                                                            className="hidden"
+                                                        />
+                                                    </label>
+                                                </div>
+                                            </div>
+                                            <div className="md:col-span-2">
+                                                <label className="block text-sm font-medium text-gray-700 mb-1">
+                                                    Audio File (MP3) *
                                                 </label>
                                                 <div className="flex gap-2">
                                                     <input
@@ -313,11 +404,21 @@ const PlaylistForm: React.FC = () => {
                                                     />
                                                     <label className="bg-gray-100 hover:bg-gray-200 px-4 py-2 rounded-lg cursor-pointer flex items-center gap-2 transition-colors">
                                                         <Upload className="w-4 h-4" />
-                                                        Upload
+                                                        Upload MP3
                                                         <input
                                                             type="file"
-                                                            accept="audio/*"
-                                                            onChange={(e) => e.target.files?.[0] && handleFileUpload(e.target.files[0], 'audio', index)}
+                                                            accept="audio/mpeg,audio/mp3,.mp3"
+                                                            onChange={(e) => {
+                                                                const file = e.target.files?.[0];
+                                                                if (file) {
+                                                                    // Validate file type
+                                                                    if (!file.type.includes('audio') && !file.name.toLowerCase().endsWith('.mp3')) {
+                                                                        alert('Please upload an MP3 audio file');
+                                                                        return;
+                                                                    }
+                                                                    handleFileUpload(file, 'audio', index);
+                                                                }
+                                                            }}
                                                             className="hidden"
                                                         />
                                                     </label>

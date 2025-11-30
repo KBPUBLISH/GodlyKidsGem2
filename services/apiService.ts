@@ -34,6 +34,7 @@ const normalizeCoverUrl = (url: string | undefined | null): string => {
 const transformBook = (apiBook: any): Book => {
   // Handle cover URL - try multiple possible field names
   // From /v3/books/by-categories: coverURI, coverMiniURI
+  // Also check nested files.coverImage for new schema structure
   const rawCoverUrl = apiBook.coverURI ||
     apiBook.coverUri ||
     apiBook.coverMiniURI ||
@@ -43,6 +44,7 @@ const transformBook = (apiBook: any): Book => {
     apiBook.cover ||
     apiBook.coverImage ||
     apiBook.cover_image ||
+    (apiBook.files && apiBook.files.coverImage) ||
     apiBook.image ||
     apiBook.imageUrl ||
     apiBook.image_url ||
@@ -143,6 +145,7 @@ export const ApiService = {
       const token = authService.getToken();
 
       // Use the correct endpoint for local backend
+      // baseUrl already includes /api/ (e.g., http://localhost:5001/api/)
       const endpoint = `${baseUrl}books`;
       console.log('🔍 Fetching books from API:', endpoint);
       console.log('🔑 Has auth token:', !!token);

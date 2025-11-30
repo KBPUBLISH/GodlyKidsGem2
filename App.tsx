@@ -17,6 +17,7 @@ import SettingsPage from './pages/SettingsPage';
 import BookReaderPage from './pages/BookReaderPage';
 import AudioPage from './pages/AudioPage';
 import PlaylistPlayerPage from './pages/PlaylistPlayerPage';
+import PlaylistDetailPage from './pages/PlaylistDetailPage';
 import BottomNavigation from './components/layout/BottomNavigation';
 import { BooksProvider } from './context/BooksContext';
 import { UserProvider } from './context/UserContext';
@@ -188,7 +189,8 @@ const App: React.FC = () => {
                 <Route path="/read/:bookId" element={<BookReaderPage />} />
                 <Route path="/player/:bookId/:chapterId" element={<AudioPlayerPage />} />
                 <Route path="/audio" element={<AudioPage />} />
-                <Route path="/audio/playlist/:playlistId" element={<PlaylistPlayerPage />} />
+                <Route path="/audio/playlist/:playlistId" element={<PlaylistDetailPage />} />
+                <Route path="/audio/playlist/:playlistId/play/:itemIndex" element={<PlaylistPlayerPage />} />
                 <Route path="/profile" element={<ProfileSelectionPage />} />
                 <Route path="/create-profile" element={<CreateProfilePage />} />
                 <Route path="/paywall" element={<PaywallPage />} />

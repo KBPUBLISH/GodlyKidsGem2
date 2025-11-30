@@ -5,6 +5,7 @@ import axios from 'axios';
 interface Category {
     _id: string;
     name: string;
+    type: 'book' | 'audio';
     description?: string;
     color: string;
     icon?: string;
@@ -17,20 +18,22 @@ const Categories: React.FC = () => {
     const [editingCategory, setEditingCategory] = useState<Category | null>(null);
     const [formData, setFormData] = useState({
         name: '',
+        type: 'book' as 'book' | 'audio',
         description: '',
         color: '#6366f1',
         icon: '',
     });
+    const [filterType, setFilterType] = useState<'all' | 'book' | 'audio'>('all');
     const [saving, setSaving] = useState(false);
     const [deleting, setDeleting] = useState<string | null>(null);
 
-    useEffect(() => {
-        fetchCategories();
-    }, []);
-
     const fetchCategories = async () => {
+        setLoading(true);
         try {
-            const response = await axios.get('http://localhost:5001/api/categories');
+            const url = filterType === 'all' 
+                ? 'http://localhost:5001/api/categories'
+                : `http://localhost:5001/api/categories?type=${filterType}`;
+            const response = await axios.get(url);
             setCategories(response.data);
         } catch (error) {
             console.error('Error fetching categories:', error);
@@ -39,11 +42,20 @@ const Categories: React.FC = () => {
         }
     };
 
+    useEffect(() => {
+        fetchCategories();
+    }, [filterType]);
+
+    useEffect(() => {
+        fetchCategories();
+    }, [filterType]);
+
     const handleOpenModal = (category?: Category) => {
         if (category) {
             setEditingCategory(category);
             setFormData({
                 name: category.name,
+                type: category.type,
                 description: category.description || '',
                 color: category.color,
                 icon: category.icon || '',
@@ -52,6 +64,7 @@ const Categories: React.FC = () => {
             setEditingCategory(null);
             setFormData({
                 name: '',
+                type: 'book' as 'book' | 'audio',
                 description: '',
                 color: '#6366f1',
                 icon: '',
@@ -65,6 +78,7 @@ const Categories: React.FC = () => {
         setEditingCategory(null);
         setFormData({
             name: '',
+            type: 'book' as 'book' | 'audio',
             description: '',
             color: '#6366f1',
             icon: '',
@@ -114,13 +128,41 @@ const Categories: React.FC = () => {
         <div>
             <div className="flex justify-between items-center mb-6">
                 <h1 className="text-3xl font-bold text-gray-800">Categories</h1>
-                <button
-                    onClick={() => handleOpenModal()}
-                    className="bg-indigo-600 text-white px-4 py-2 rounded-lg flex items-center gap-2 hover:bg-indigo-700 transition-colors"
-                >
-                    <Plus className="w-5 h-5" />
-                    Add Category
-                </button>
+                <div className="flex items-center gap-4">
+                    <div className="flex gap-2 bg-gray-100 rounded-lg p-1">
+                        <button
+                            onClick={() => setFilterType('all')}
+                            className={`px-3 py-1 rounded transition-colors ${
+                                filterType === 'all' ? 'bg-white shadow-sm text-indigo-600' : 'text-gray-600'
+                            }`}
+                        >
+                            All
+                        </button>
+                        <button
+                            onClick={() => setFilterType('book')}
+                            className={`px-3 py-1 rounded transition-colors ${
+                                filterType === 'book' ? 'bg-white shadow-sm text-indigo-600' : 'text-gray-600'
+                            }`}
+                        >
+                            Books
+                        </button>
+                        <button
+                            onClick={() => setFilterType('audio')}
+                            className={`px-3 py-1 rounded transition-colors ${
+                                filterType === 'audio' ? 'bg-white shadow-sm text-indigo-600' : 'text-gray-600'
+                            }`}
+                        >
+                            Audio
+                        </button>
+                    </div>
+                    <button
+                        onClick={() => handleOpenModal()}
+                        className="bg-indigo-600 text-white px-4 py-2 rounded-lg flex items-center gap-2 hover:bg-indigo-700 transition-colors"
+                    >
+                        <Plus className="w-5 h-5" />
+                        Add Category
+                    </button>
+                </div>
             </div>
 
             {categories.length === 0 ? (
@@ -144,7 +186,16 @@ const Categories: React.FC = () => {
                                         {category.icon || <Tag className="w-6 h-6" />}
                                     </div>
                                     <div>
-                                        <h3 className="text-xl font-semibold text-gray-800">{category.name}</h3>
+                                        <div className="flex items-center gap-2">
+                                            <h3 className="text-xl font-semibold text-gray-800">{category.name}</h3>
+                                            <span className={`text-xs px-2 py-0.5 rounded ${
+                                                category.type === 'book' 
+                                                    ? 'bg-blue-100 text-blue-700' 
+                                                    : 'bg-purple-100 text-purple-700'
+                                            }`}>
+                                                {category.type === 'book' ? 'Book' : 'Audio'}
+                                            </span>
+                                        </div>
                                         {category.description && (
                                             <p className="text-sm text-gray-600 mt-1">{category.description}</p>
                                         )}
@@ -192,6 +243,20 @@ const Categories: React.FC = () => {
                                     className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
                                     required
                                 />
+                            </div>
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-2">
+                                    Type *
+                                </label>
+                                <select
+                                    value={formData.type}
+                                    onChange={(e) => setFormData({ ...formData, type: e.target.value as 'book' | 'audio' })}
+                                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                                    required
+                                >
+                                    <option value="book">Book</option>
+                                    <option value="audio">Audio</option>
+                                </select>
                             </div>
                             <div>
                                 <label className="block text-sm font-medium text-gray-700 mb-2">

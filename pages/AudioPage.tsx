@@ -2,28 +2,29 @@ import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Music, BookOpen, Play, ChevronLeft, Crown, Headphones } from 'lucide-react';
 import { ApiService } from '../services/apiService';
+import { getApiBaseUrl } from '../services/apiService';
 
 interface AudioItem {
     _id?: string;
     title: string;
-    author: string;
+    author?: string;
     coverImage?: string;
     audioUrl: string;
     duration?: number;
-    order: number;
+    order?: number;
 }
 
 interface Playlist {
     _id: string;
     title: string;
-    author: string;
+    author?: string;
     description?: string;
     coverImage?: string;
-    category: 'Music' | 'Stories' | 'Devotionals' | 'Other';
-    type: 'Song' | 'Audiobook';
+    category?: string;
+    type?: 'Song' | 'Audiobook';
     items: AudioItem[];
     status: 'draft' | 'published';
-    playCount: number;
+    playCount?: number;
 }
 
 const AudioPage: React.FC = () => {
@@ -32,28 +33,136 @@ const AudioPage: React.FC = () => {
     const [selectedCategory, setSelectedCategory] = useState<string>('All');
     const navigate = useNavigate();
 
+    console.log('📻 AudioPage: Component rendered');
+
     useEffect(() => {
+        console.log('📻 AudioPage: useEffect triggered, calling fetchPlaylists');
         fetchPlaylists();
     }, []);
 
+    // Debug: Log playlists state changes
+    useEffect(() => {
+        console.log('📻 AudioPage: playlists state changed:', playlists.length, 'playlists');
+        console.log('📻 AudioPage: playlists:', playlists);
+        console.log('📻 AudioPage: selectedCategory:', selectedCategory);
+    }, [playlists, selectedCategory]);
+
     const fetchPlaylists = async () => {
+        console.log('📻 AudioPage: fetchPlaylists function called');
         try {
-            const response = await fetch('http://localhost:5001/api/playlists');
+            setLoading(true);
+            const baseUrl = getApiBaseUrl();
+            const endpoint = `${baseUrl}playlists?status=published`;
+            console.log('📻 AudioPage: Fetching playlists from:', endpoint);
+            console.log('📻 AudioPage: baseUrl:', baseUrl);
+            
+            // Fetch only published playlists from the backend
+            const response = await fetch(endpoint, {
+                method: 'GET',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+            });
+            
+            console.log('📻 AudioPage: Response status:', response.status, response.statusText);
+            
+            if (!response.ok) {
+                const errorText = await response.text();
+                console.error('📻 AudioPage: Failed to fetch playlists:', response.status, errorText);
+                throw new Error(`Failed to fetch playlists: ${response.status} ${response.statusText}`);
+            }
+            
             const data = await response.json();
-            // Only show published playlists
-            setPlaylists(data.filter((p: Playlist) => p.status === 'published'));
+            console.log('📻 AudioPage: Raw API response:', data);
+            console.log('📻 AudioPage: Response type:', Array.isArray(data) ? 'Array' : typeof data);
+            console.log('📻 AudioPage: Fetched playlists count:', Array.isArray(data) ? data.length : 'Not an array');
+            
+            // Ensure data is an array
+            const playlistsArray = Array.isArray(data) ? data : [];
+            
+            // Filter out any playlists without required fields
+            const validPlaylists = playlistsArray.filter((p: any) => {
+                const hasId = !!p._id;
+                const hasTitle = !!p.title && p.title.trim().length > 0;
+                const isPublished = p.status === 'published';
+                const hasItems = p.items && Array.isArray(p.items) && p.items.length > 0;
+                
+                const isValid = hasId && hasTitle && isPublished && hasItems;
+                
+                if (!isValid) {
+                    console.warn('📻 AudioPage: Filtered out invalid playlist:', {
+                        _id: p._id,
+                        title: p.title,
+                        status: p.status,
+                        itemsCount: p.items?.length || 0,
+                        hasId,
+                        hasTitle,
+                        isPublished,
+                        hasItems
+                    });
+                } else {
+                    console.log('📻 AudioPage: Valid playlist:', {
+                        _id: p._id,
+                        title: p.title,
+                        status: p.status,
+                        itemsCount: p.items.length,
+                        hasCover: !!p.coverImage
+                    });
+                }
+                return isValid;
+            });
+            
+            console.log('📻 AudioPage: Valid playlists after filtering:', validPlaylists.length);
+            if (validPlaylists.length > 0) {
+                console.log('📻 AudioPage: First valid playlist details:', {
+                    id: validPlaylists[0]._id,
+                    title: validPlaylists[0].title,
+                    status: validPlaylists[0].status,
+                    itemsCount: validPlaylists[0].items?.length,
+                    hasCover: !!validPlaylists[0].coverImage,
+                    category: validPlaylists[0].category,
+                    type: validPlaylists[0].type
+                });
+                console.log('📻 AudioPage: Setting playlists state with', validPlaylists.length, 'playlists');
+            } else {
+                console.warn('📻 AudioPage: No valid playlists found after filtering');
+                console.warn('📻 AudioPage: Total playlists received:', playlistsArray.length);
+                if (playlistsArray.length > 0) {
+                    console.warn('📻 AudioPage: First playlist (invalid) details:', {
+                        _id: playlistsArray[0]._id,
+                        title: playlistsArray[0].title,
+                        status: playlistsArray[0].status,
+                        items: playlistsArray[0].items,
+                        hasId: !!playlistsArray[0]._id,
+                        hasTitle: !!playlistsArray[0].title && playlistsArray[0].title.trim().length > 0,
+                        isPublished: playlistsArray[0].status === 'published',
+                        hasItems: playlistsArray[0].items && Array.isArray(playlistsArray[0].items) && playlistsArray[0].items.length > 0
+                    });
+                }
+            }
+            
+            console.log('📻 AudioPage: About to set playlists state');
+            setPlaylists(validPlaylists);
+            console.log('📻 AudioPage: Playlists state set');
         } catch (error) {
-            console.error('Error fetching playlists:', error);
+            console.error('📻 AudioPage: Error fetching playlists:', error);
+            setPlaylists([]);
         } finally {
             setLoading(false);
         }
     };
 
-    const categories = ['All', 'Music', 'Stories', 'Devotionals', 'Other'];
+    // Get unique categories from playlists, or use default ones
+    const defaultCategories = ['All', 'Music', 'Stories', 'Devotionals', 'Other'];
+    const playlistCategories = ['All', ...new Set(playlists.map(p => p.category).filter(Boolean))];
+    const categories = playlistCategories.length > 1 ? playlistCategories : defaultCategories;
 
     const filteredPlaylists = selectedCategory === 'All'
         ? playlists
         : playlists.filter(p => p.category === selectedCategory);
+
+    // Debug logging
+    console.log('📻 AudioPage: Render - playlists:', playlists.length, 'filtered:', filteredPlaylists.length, 'category:', selectedCategory);
 
     const handlePlaylistClick = (playlistId: string) => {
         navigate(`/audio/playlist/${playlistId}`);
@@ -142,7 +251,12 @@ const AudioPage: React.FC = () => {
                     <div className="bg-white p-12 rounded-2xl shadow-sm border-2 border-[#d4c5a0] text-center">
                         <Music className="w-16 h-16 text-[#8B4513] mx-auto mb-4 opacity-50" />
                         <p className="text-[#5c2e0b] text-lg font-bold mb-2">No playlists found</p>
-                        <p className="text-[#8B4513]">Check back soon for new audio content!</p>
+                        <p className="text-[#8B4513] mb-4">Check back soon for new audio content!</p>
+                        <div className="text-xs text-gray-500 mt-4">
+                            <p>Debug: Total playlists in state: {playlists.length}</p>
+                            <p>Debug: Selected category: {selectedCategory}</p>
+                            <p>Debug: Filtered count: {filteredPlaylists.length}</p>
+                        </div>
                     </div>
                 ) : (
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 max-w-4xl mx-auto">
@@ -178,11 +292,13 @@ const AudioPage: React.FC = () => {
                                     </div>
 
                                     {/* Type Badge */}
-                                    <div className="absolute top-3 right-3">
-                                        <span className="px-3 py-1 rounded-full text-xs font-bold bg-black/60 text-white backdrop-blur-sm">
-                                            {playlist.type}
-                                        </span>
-                                    </div>
+                                    {playlist.type && (
+                                        <div className="absolute top-3 right-3">
+                                            <span className="px-3 py-1 rounded-full text-xs font-bold bg-black/60 text-white backdrop-blur-sm">
+                                                {playlist.type}
+                                            </span>
+                                        </div>
+                                    )}
                                 </div>
 
                                 {/* Info */}
@@ -190,10 +306,12 @@ const AudioPage: React.FC = () => {
                                     <h3 className="text-lg font-bold text-[#3E1F07] mb-1 truncate font-display">
                                         {playlist.title}
                                     </h3>
-                                    <p className="text-sm text-[#8B4513] mb-2">{playlist.author}</p>
+                                    {playlist.author && (
+                                        <p className="text-sm text-[#8B4513] mb-2">{playlist.author}</p>
+                                    )}
                                     <div className="flex items-center justify-between text-xs text-[#5c2e0b] opacity-75">
-                                        <span>{playlist.items.length} {playlist.type === 'Song' ? 'songs' : 'episodes'}</span>
-                                        <span>{playlist.category}</span>
+                                        <span>{playlist.items?.length || 0} {playlist.type === 'Song' ? 'songs' : playlist.type === 'Audiobook' ? 'episodes' : 'tracks'}</span>
+                                        {playlist.category && <span>{playlist.category}</span>}
                                     </div>
                                 </div>
                             </div>

@@ -1,11 +1,13 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { ChevronLeft, Crown, Pause, Play, SkipBack, SkipForward, Music, Volume2 } from 'lucide-react';
+import { ChevronLeft, Crown, Pause, Play, SkipBack, SkipForward, Music, Volume2, Heart, RotateCcw } from 'lucide-react';
+import { favoritesService } from '../services/favoritesService';
+import { getApiBaseUrl } from '../services/apiService';
 
 interface AudioItem {
     _id?: string;
     title: string;
-    author: string;
+    author?: string;
     coverImage?: string;
     audioUrl: string;
     duration?: number;
@@ -15,27 +17,29 @@ interface AudioItem {
 interface Playlist {
     _id: string;
     title: string;
-    author: string;
+    author?: string;
     description?: string;
     coverImage?: string;
-    category: string;
-    type: 'Song' | 'Audiobook';
+    category?: string;
+    type?: 'Song' | 'Audiobook';
     items: AudioItem[];
-    playCount: number;
+    playCount?: number;
 }
 
 const PlaylistPlayerPage: React.FC = () => {
-    const { playlistId } = useParams();
+    const { playlistId, itemIndex } = useParams();
     const navigate = useNavigate();
     const audioRef = useRef<HTMLAudioElement>(null);
 
     const [playlist, setPlaylist] = useState<Playlist | null>(null);
-    const [currentTrackIndex, setCurrentTrackIndex] = useState(0);
+    const [currentTrackIndex, setCurrentTrackIndex] = useState(itemIndex ? parseInt(itemIndex) : 0);
     const [isPlaying, setIsPlaying] = useState(false);
     const [progress, setProgress] = useState(0);
     const [currentTime, setCurrentTime] = useState(0);
     const [duration, setDuration] = useState(0);
     const [loading, setLoading] = useState(true);
+    const [playCount, setPlayCount] = useState(0);
+    const [isLiked, setIsLiked] = useState(false);
 
     useEffect(() => {
         fetchPlaylist();
@@ -43,15 +47,30 @@ const PlaylistPlayerPage: React.FC = () => {
 
     useEffect(() => {
         if (playlist && playlist.items.length > 0 && audioRef.current) {
-            audioRef.current.src = playlist.items[currentTrackIndex].audioUrl;
+            const track = playlist.items[currentTrackIndex];
+            audioRef.current.src = track.audioUrl;
             audioRef.current.load();
+            
+            // Load play count and like status for current track
+            const trackId = track._id || `${playlistId}_${currentTrackIndex}`;
+            const count = parseInt(localStorage.getItem(`playlist_track_play_count_${trackId}`) || '0', 10);
+            setPlayCount(count);
+            setIsLiked(favoritesService.getLikes().includes(trackId));
         }
-    }, [currentTrackIndex, playlist]);
+    }, [currentTrackIndex, playlist, playlistId]);
 
     const fetchPlaylist = async () => {
         try {
-            const response = await fetch(`http://localhost:5001/api/playlists/${playlistId}`);
+            const baseUrl = getApiBaseUrl();
+            const response = await fetch(`${baseUrl}playlists/${playlistId}`);
+            if (!response.ok) {
+                throw new Error('Failed to fetch playlist');
+            }
             const data = await response.json();
+            // Sort items by order
+            if (data.items && Array.isArray(data.items)) {
+                data.items.sort((a: AudioItem, b: AudioItem) => (a.order || 0) - (b.order || 0));
+            }
             setPlaylist(data);
         } catch (error) {
             console.error('Error fetching playlist:', error);
@@ -83,6 +102,34 @@ const PlaylistPlayerPage: React.FC = () => {
             setCurrentTrackIndex(currentTrackIndex + 1);
             setIsPlaying(false);
         }
+    };
+
+    const handleSkipBackward = () => {
+        if (!audioRef.current) return;
+        audioRef.current.currentTime = Math.max(0, audioRef.current.currentTime - 30);
+    };
+
+    const handleSkipForward = () => {
+        if (!audioRef.current) return;
+        audioRef.current.currentTime = Math.min(audioRef.current.duration, audioRef.current.currentTime + 30);
+    };
+
+    const handleLike = () => {
+        if (!playlist || !playlist.items[currentTrackIndex]) return;
+        const trackId = playlist.items[currentTrackIndex]._id || `${playlistId}_${currentTrackIndex}`;
+        favoritesService.toggleLike(trackId);
+        setIsLiked(favoritesService.getLikes().includes(trackId));
+    };
+
+    const handleTrackEnd = () => {
+        // Increment play count when track ends
+        if (playlist && playlist.items[currentTrackIndex]) {
+            const trackId = playlist.items[currentTrackIndex]._id || `${playlistId}_${currentTrackIndex}`;
+            const currentCount = parseInt(localStorage.getItem(`playlist_track_play_count_${trackId}`) || '0', 10);
+            localStorage.setItem(`playlist_track_play_count_${trackId}`, (currentCount + 1).toString());
+            setPlayCount(currentCount + 1);
+        }
+        handleNext();
     };
 
     const handleTimeUpdate = () => {
@@ -143,20 +190,45 @@ const PlaylistPlayerPage: React.FC = () => {
                 ref={audioRef}
                 onTimeUpdate={handleTimeUpdate}
                 onLoadedMetadata={handleLoadedMetadata}
-                onEnded={handleNext}
+                onEnded={handleTrackEnd}
             />
 
             {/* Top Bar */}
             <div className="absolute top-0 left-0 right-0 p-6 z-30 flex justify-between items-center pt-8">
                 <button
-                    onClick={() => navigate('/audio')}
+                    onClick={() => navigate(`/audio/playlist/${playlistId}`)}
                     className="w-12 h-12 bg-[#e67e22] rounded-2xl border-b-4 border-[#d35400] shadow-lg flex items-center justify-center active:translate-y-1 active:border-b-0 active:shadow-none transition-all"
                 >
                     <ChevronLeft size={32} className="text-[#5c2e0b]" strokeWidth={3} />
                 </button>
 
-                <div className="w-12 h-12 bg-black/30 backdrop-blur-md rounded-full border border-white/20 flex items-center justify-center shadow-lg">
-                    <Crown className="text-white/90" size={24} />
+                <div className="flex items-center gap-3">
+                    {/* Play Count */}
+                    <div className="bg-black/30 backdrop-blur-md rounded-full px-3 py-1.5 border border-white/20 flex items-center gap-2 shadow-lg">
+                        <Play size={16} className="text-white/90" />
+                        <span className="text-white/90 text-sm font-bold">{playCount}</span>
+                    </div>
+
+                    {/* Like Button */}
+                    <button
+                        onClick={handleLike}
+                        className={`w-12 h-12 rounded-full border-2 flex items-center justify-center shadow-lg transition-all ${
+                            isLiked 
+                                ? 'bg-red-500/80 border-red-600' 
+                                : 'bg-black/30 backdrop-blur-md border-white/20'
+                        }`}
+                    >
+                        <Heart 
+                            size={24} 
+                            className={isLiked ? 'text-white fill-white' : 'text-white/90'} 
+                            fill={isLiked ? 'white' : 'none'}
+                        />
+                    </button>
+
+                    {/* Crown Icon */}
+                    <div className="w-12 h-12 bg-black/30 backdrop-blur-md rounded-full border border-white/20 flex items-center justify-center shadow-lg">
+                        <Crown className="text-white/90" size={24} />
+                    </div>
                 </div>
             </div>
 
@@ -242,14 +314,24 @@ const PlaylistPlayerPage: React.FC = () => {
                 </div>
 
                 {/* Controls Row */}
-                <div className="flex items-center justify-center gap-10 relative z-40">
-                    {/* Previous */}
+                <div className="flex items-center justify-center gap-6 relative z-40">
+                    {/* Previous Track */}
                     <button
                         onClick={handlePrevious}
                         disabled={currentTrackIndex === 0}
                         className="text-[#d4a373] hover:text-[#e6b88a] disabled:opacity-30 disabled:cursor-not-allowed transition-colors transform active:scale-90"
                     >
-                        <SkipBack size={32} fill="currentColor" />
+                        <SkipBack size={28} fill="currentColor" />
+                    </button>
+
+                    {/* Skip Backward 30s */}
+                    <button
+                        onClick={handleSkipBackward}
+                        className="w-12 h-12 bg-[#5c2e0b]/50 rounded-full border-2 border-[#8B4513] flex items-center justify-center text-[#d4a373] hover:bg-[#5c2e0b]/70 transition-colors transform active:scale-90"
+                        title="Skip backward 30 seconds"
+                    >
+                        <RotateCcw size={20} />
+                        <span className="absolute text-xs font-bold">30</span>
                     </button>
 
                     {/* Play/Pause Button */}
@@ -264,13 +346,23 @@ const PlaylistPlayerPage: React.FC = () => {
                         )}
                     </button>
 
-                    {/* Next */}
+                    {/* Skip Forward 30s */}
+                    <button
+                        onClick={handleSkipForward}
+                        className="w-12 h-12 bg-[#5c2e0b]/50 rounded-full border-2 border-[#8B4513] flex items-center justify-center text-[#d4a373] hover:bg-[#5c2e0b]/70 transition-colors transform active:scale-90"
+                        title="Skip forward 30 seconds"
+                    >
+                        <RotateCcw size={20} className="rotate-180" />
+                        <span className="absolute text-xs font-bold">30</span>
+                    </button>
+
+                    {/* Next Track */}
                     <button
                         onClick={handleNext}
                         disabled={currentTrackIndex === playlist.items.length - 1}
                         className="text-[#d4a373] hover:text-[#e6b88a] disabled:opacity-30 disabled:cursor-not-allowed transition-colors transform active:scale-90"
                     >
-                        <SkipForward size={32} fill="currentColor" />
+                        <SkipForward size={28} fill="currentColor" />
                     </button>
                 </div>
             </div>

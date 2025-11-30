@@ -38,7 +38,8 @@ const BookForm: React.FC = () => {
     useEffect(() => {
         const fetchCategories = async () => {
             try {
-                const response = await axios.get('http://localhost:5001/api/categories');
+                // Only fetch book categories
+                const response = await axios.get('http://localhost:5001/api/categories?type=book');
                 setCategories(response.data);
                 if (response.data.length > 0 && !formData.category) {
                     setFormData(prev => ({ ...prev, category: response.data[0].name }));

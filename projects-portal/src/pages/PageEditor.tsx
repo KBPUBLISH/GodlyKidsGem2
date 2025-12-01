@@ -90,7 +90,7 @@ const PageEditor: React.FC = () => {
                     if (savedTemplate) {
                         try {
                             const template = JSON.parse(savedTemplate);
-                            
+
                             // Clean up invalid blob URLs from template
                             if (template.scrollUrl && (template.scrollUrl.startsWith('blob:') || template.scrollUrl.match(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i))) {
                                 console.warn('Template contains invalid URL (blob or UUID), removing it:', template.scrollUrl);
@@ -98,7 +98,7 @@ const PageEditor: React.FC = () => {
                                 // Update localStorage with cleaned template
                                 localStorage.setItem(`pageTemplate_${bookId}`, JSON.stringify(template));
                             }
-                            
+
                             setPageTemplate(template);
 
                             // Apply template to new page
@@ -108,7 +108,7 @@ const PageEditor: React.FC = () => {
                                 console.log('Loading template scroll:', { original: template.scrollUrl, resolved: resolvedScrollUrl });
                                 setScrollPreview(resolvedScrollUrl);
                             }
-                            
+
                             if (template.textBoxes && template.textBoxes.length > 0) {
                                 const boxesWithIds = template.textBoxes.map((box: any, idx: number) => ({
                                     ...box,
@@ -196,7 +196,7 @@ const PageEditor: React.FC = () => {
     const loadPage = (page: any) => {
         setEditingPageId(page._id);
         setPageNumber(page.pageNumber);
-        
+
         // Get background type from legacy field or new structure
         const bgType = page.backgroundType || page.files?.background?.type || 'image';
         setBackgroundType(bgType);
@@ -256,10 +256,10 @@ const PageEditor: React.FC = () => {
 
         try {
             await axios.delete(`http://localhost:5001/api/pages/${pageId}`);
-            
+
             // Remove from existing pages list
             setExistingPages(existingPages.filter(p => p._id !== pageId));
-            
+
             // If we were editing this page, clear the editor
             if (editingPageId === pageId) {
                 createNewPage();
@@ -313,7 +313,17 @@ const PageEditor: React.FC = () => {
                 setTextBoxes([]);
             }
         } else {
-            setScrollPreview(null);
+            // No template, but try to inherit scroll from previous page
+            const lastPage = existingPages.find((p: any) => p.pageNumber === nextPageNum - 1);
+            const lastScrollUrl = lastPage ? (lastPage.scrollUrl || lastPage.files?.scroll?.url) : null;
+
+            if (lastScrollUrl) {
+                console.log('Inheriting scroll from previous page:', lastScrollUrl);
+                setScrollPreview(resolveUrl(lastScrollUrl));
+            } else {
+                setScrollPreview(null);
+            }
+
             setScrollFile(null);
             setTextBoxes([]);
         }
@@ -431,13 +441,13 @@ const PageEditor: React.FC = () => {
         try {
             // Upload background
             let backgroundUrl = '';
-            
+
             // Prioritize uploading new file over using existing preview
             if (backgroundFile) {
-                console.log('Uploading new background file:', { 
-                    filename: backgroundFile.name, 
+                console.log('Uploading new background file:', {
+                    filename: backgroundFile.name,
                     type: backgroundType,
-                    currentPreview: backgroundPreview 
+                    currentPreview: backgroundPreview
                 });
                 const formData = new FormData();
                 formData.append('file', backgroundFile);
@@ -449,7 +459,7 @@ const PageEditor: React.FC = () => {
                 });
                 backgroundUrl = res.data.url;
                 console.log('Background uploaded successfully:', backgroundUrl);
-                
+
                 // Clean up blob URL and update preview with the uploaded URL
                 if (backgroundPreview && backgroundPreview.startsWith('blob:')) {
                     URL.revokeObjectURL(backgroundPreview);
@@ -492,7 +502,7 @@ const PageEditor: React.FC = () => {
 
             // Upload scroll
             let scrollUrl = '';
-            
+
             // If there's a new file to upload, upload it
             if (scrollFile) {
                 const formData = new FormData();
@@ -503,14 +513,14 @@ const PageEditor: React.FC = () => {
                     headers: { 'Content-Type': 'multipart/form-data' },
                 });
                 scrollUrl = res.data.url;
-                
+
                 // Clean up blob URL and update preview with the uploaded URL
                 if (scrollPreview && scrollPreview.startsWith('blob:')) {
                     URL.revokeObjectURL(scrollPreview);
                 }
                 setScrollPreview(scrollUrl);
                 setScrollFile(null); // Clear the file since it's now uploaded
-            } 
+            }
             // Otherwise, use the preview URL (could be from template or existing page)
             else if (scrollPreview) {
                 // Don't use blob URLs - they're temporary and will fail
@@ -530,7 +540,7 @@ const PageEditor: React.FC = () => {
                 // If it's already an absolute URL, use it directly
                 else if (scrollPreview.startsWith('http')) {
                     scrollUrl = scrollPreview;
-                } 
+                }
                 // Otherwise, try to resolve it (might be a relative URL)
                 else {
                     scrollUrl = resolveUrl(scrollPreview);
@@ -546,7 +556,7 @@ const PageEditor: React.FC = () => {
                 scrollHeight: 200, // Fixed for now, could make dynamic
                 textBoxes: textBoxes.map(({ id, ...rest }) => rest), // Remove ID before sending
             };
-            
+
             console.log('Final payload before sending:', {
                 backgroundUrl: payload.backgroundUrl,
                 backgroundType: payload.backgroundType,
@@ -735,9 +745,9 @@ const PageEditor: React.FC = () => {
                                 className="flex items-center justify-center w-full h-20 border-2 border-dashed border-gray-300 rounded-lg cursor-pointer hover:border-indigo-400 hover:bg-indigo-50 transition"
                             >
                                 {scrollPreview && !scrollPreview.startsWith('blob:') ? (
-                                    <img 
-                                        src={resolveUrl(scrollPreview)} 
-                                        className="w-full h-full object-contain rounded-lg opacity-80" 
+                                    <img
+                                        src={resolveUrl(scrollPreview)}
+                                        className="w-full h-full object-contain rounded-lg opacity-80"
                                         onError={(e) => {
                                             console.error('Scroll preview image failed to load:', scrollPreview);
                                             const resolved = resolveUrl(scrollPreview);
@@ -752,9 +762,9 @@ const PageEditor: React.FC = () => {
                                     />
                                 ) : scrollPreview && scrollPreview.startsWith('blob:') ? (
                                     <div className="relative w-full h-full">
-                                        <img 
-                                            src={scrollPreview} 
-                                            className="w-full h-full object-contain rounded-lg opacity-80" 
+                                        <img
+                                            src={scrollPreview}
+                                            className="w-full h-full object-contain rounded-lg opacity-80"
                                             alt="Scroll preview"
                                             onError={(e) => {
                                                 console.error('Scroll preview blob URL failed to load');
@@ -1006,11 +1016,11 @@ const PageEditor: React.FC = () => {
                     )}
 
                     {/* Scroll Overlay Layer */}
-                    {scrollPreview && !scrollPreview.startsWith('blob:') && (
+                    {scrollPreview && (
                         <div className="absolute bottom-0 left-0 right-0 h-1/3 pointer-events-none z-10">
-                            <img 
-                                src={resolveUrl(scrollPreview)} 
-                                className="w-full h-full object-fill" 
+                            <img
+                                src={resolveUrl(scrollPreview)}
+                                className="w-full h-full object-fill"
                                 alt="Scroll"
                                 onError={(e) => {
                                     console.error('Scroll image failed to load on canvas:', scrollPreview);
@@ -1120,7 +1130,7 @@ const PageEditor: React.FC = () => {
                                     : 'border-gray-200 hover:border-indigo-400'
                                     }`}
                             >
-                                <div 
+                                <div
                                     className="cursor-pointer"
                                     onClick={() => loadPage(page)}
                                 >
@@ -1191,7 +1201,7 @@ const PageEditor: React.FC = () => {
                                     // Get the actual scrollUrl from the saved page (not just preview)
                                     // The scrollUrl should be in the payload that was just saved
                                     let actualScrollUrl = '';
-                                    
+
                                     // Always fetch from the saved page to get the real URL (not blob URL)
                                     try {
                                         const res = await axios.get(`http://localhost:5001/api/pages/book/${bookId}`);
@@ -1209,7 +1219,7 @@ const PageEditor: React.FC = () => {
                                             actualScrollUrl = scrollPreview;
                                         }
                                     }
-                                    
+
                                     // Don't save blob URLs to template
                                     if (actualScrollUrl.startsWith('blob:')) {
                                         console.error('Template: Cannot save blob URL, skipping template creation');
@@ -1217,7 +1227,7 @@ const PageEditor: React.FC = () => {
                                         setShowTemplateDialog(false);
                                         return;
                                     }
-                                    
+
                                     // Save template to localStorage with the actual URL
                                     const template = {
                                         scrollUrl: actualScrollUrl,

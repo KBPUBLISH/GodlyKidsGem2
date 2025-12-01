@@ -20,6 +20,7 @@ import PlaylistPlayerPage from './pages/PlaylistPlayerPage';
 import PlaylistDetailPage from './pages/PlaylistDetailPage';
 import LessonsPage from './pages/LessonsPage';
 import LessonPlayerPage from './pages/LessonPlayerPage';
+import VideoLessonDemo from './pages/VideoLessonDemo';
 import MiniPlayer from './components/audio/MiniPlayer';
 import BottomNavigation from './components/layout/BottomNavigation';
 import { BooksProvider } from './context/BooksContext';
@@ -155,9 +156,9 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const isCreateProfile = location.pathname === '/create-profile';
   const isPaywall = location.pathname === '/paywall';
   const isSettings = location.pathname === '/settings';
-    const isBookReader = location.pathname.startsWith('/read/');
-    const isAudioPage = location.pathname.startsWith('/audio/');
-    const isLessonPage = location.pathname.startsWith('/lesson/');
+  const isBookReader = location.pathname.startsWith('/read/');
+  const isAudioPage = location.pathname.startsWith('/audio/');
+  const isLessonPage = location.pathname.startsWith('/lesson/');
 
   return (
     <div className="relative h-screen w-full overflow-hidden text-white flex flex-col">
@@ -205,6 +206,7 @@ const App: React.FC = () => {
                 <Route path="/create-profile" element={<CreateProfilePage />} />
                 <Route path="/paywall" element={<PaywallPage />} />
                 <Route path="/settings" element={<SettingsPage />} />
+                <Route path="/demo/video-lesson" element={<VideoLessonDemo />} />
               </Routes>
             </Layout>
           </HashRouter>

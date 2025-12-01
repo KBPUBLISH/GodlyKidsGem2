@@ -10,7 +10,20 @@ import DailyRewardModal from '../components/features/DailyRewardModal';
 import ChallengeGameModal from '../components/features/ChallengeGameModal';
 import StrengthGameModal from '../components/features/StrengthGameModal';
 import PrayerGameModal from '../components/features/PrayerGameModal';
-import { BookOpen, Key, Brain, Dumbbell, Heart } from 'lucide-react';
+import { BookOpen, Key, Brain, Dumbbell, Heart, Video, ChevronRight, Lock, Check, Play } from 'lucide-react';
+import { ApiService } from '../services/apiService';
+import { isCompleted, isLocked } from '../services/lessonService';
+
+// Inline getLessonStatus to avoid circular dependency
+const getLessonStatus = (lesson: any): 'available' | 'locked' | 'completed' => {
+  if (isCompleted(lesson._id || lesson.id)) {
+    return 'completed';
+  }
+  if (isLocked(lesson)) {
+    return 'locked';
+  }
+  return 'available';
+};
 
 const MEMORY_GAME_ENGAGED_KEY = 'memory_game_engaged';
 const DAILY_KEY_ENGAGED_KEY = 'daily_key_engaged';
@@ -31,6 +44,11 @@ const HomePage: React.FC = () => {
   const [hasEngagedDailyKey, setHasEngagedDailyKey] = useState(false);
   const [hasEngagedStrength, setHasEngagedStrength] = useState(false);
   const [hasEngagedPrayer, setHasEngagedPrayer] = useState(false);
+  
+  // Lessons state
+  const [lessons, setLessons] = useState<any[]>([]);
+  const [lessonsLoading, setLessonsLoading] = useState(true);
+  const [weekLessons, setWeekLessons] = useState<Map<string, any>>(new Map());
 
   const scrollRef = useRef<HTMLDivElement>(null);
   const lastScrollY = useRef(0);
@@ -126,6 +144,79 @@ const HomePage: React.FC = () => {
   const handleBookClick = (id: string) => {
     // Pass state to know where to return
     navigate(`/book/${id}`, { state: { from: '/home' } });
+  };
+
+  // Fetch lessons
+  useEffect(() => {
+    fetchLessons();
+  }, []);
+
+  const fetchLessons = async () => {
+    try {
+      console.log('📚 Fetching lessons from API...');
+      const data = await ApiService.getLessons();
+      console.log('📚 Lessons received:', data.length, data);
+      setLessons(data);
+      
+      // Organize lessons by day for the next 7 days
+      const weekMap = new Map<string, any>();
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      
+      // Also include published lessons without scheduled dates (show them as available)
+      const publishedLessons = data.filter((l: any) => 
+        l.status === 'published' && !l.scheduledDate
+      );
+      
+      for (let i = 0; i < 7; i++) {
+        const date = new Date(today);
+        date.setDate(date.getDate() + i);
+        date.setHours(0, 0, 0, 0);
+        
+        const dateKey = date.toISOString().split('T')[0];
+        
+        // Find lesson scheduled for this date
+        let lesson = data.find((l: any) => {
+          if (!l.scheduledDate) return false;
+          const scheduled = new Date(l.scheduledDate);
+          scheduled.setHours(0, 0, 0, 0);
+          return scheduled.getTime() === date.getTime();
+        });
+        
+        // If no scheduled lesson for this day and it's today, use first available published lesson
+        if (!lesson && i === 0 && publishedLessons.length > 0) {
+          lesson = publishedLessons[0];
+        }
+        
+        if (lesson) {
+          weekMap.set(dateKey, lesson);
+        }
+      }
+      
+      console.log('📚 Week lessons map:', Array.from(weekMap.entries()));
+      setWeekLessons(weekMap);
+    } catch (error) {
+      console.error('❌ Error fetching lessons:', error);
+    } finally {
+      setLessonsLoading(false);
+    }
+  };
+
+  const getDayLabel = (date: Date): string => {
+    const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+    return days[date.getDay()];
+  };
+
+  const getDayNumber = (date: Date): number => {
+    return date.getDate();
+  };
+
+  const handleLessonClick = (lesson: any) => {
+    const status = getLessonStatus(lesson);
+    if (status === 'locked') {
+      return; // Don't navigate if locked
+    }
+    navigate(`/lesson/${lesson._id}`);
   };
 
   const featuredBooks = books.slice(0, 5); // Top 5 featured
@@ -273,6 +364,115 @@ const HomePage: React.FC = () => {
         {!loading && featuredBooks.length > 0 && (
           <FeaturedCarousel books={featuredBooks} onBookClick={handleBookClick} />
         )}
+
+        {/* Daily Lessons Section */}
+        <section>
+          <SectionTitle title="Daily Lessons" />
+          {lessonsLoading ? (
+            <div className="text-white/70 text-center py-4 px-4">Loading lessons...</div>
+          ) : (
+            <div className="w-screen overflow-x-auto no-scrollbar pb-6 -mx-4">
+              <div className="flex space-x-3 px-4">
+                {(() => {
+                  const today = new Date();
+                  const weekDays: Date[] = [];
+                  for (let i = 0; i < 7; i++) {
+                    const date = new Date(today);
+                    date.setDate(date.getDate() + i);
+                    date.setHours(0, 0, 0, 0);
+                    weekDays.push(date);
+                  }
+                  
+                  return weekDays.map((date) => {
+                    const dateKey = date.toISOString().split('T')[0];
+                    const lesson = weekLessons.get(dateKey);
+                    const status = lesson ? getLessonStatus(lesson) : 'empty';
+                    const isToday = date.toDateString() === today.toDateString();
+                    
+                    return (
+                      <div
+                        key={dateKey}
+                        className={`relative w-[calc((100vw-48px-60px)/5)] flex-shrink-0 ${status === 'locked' ? 'cursor-not-allowed' : status !== 'empty' ? 'cursor-pointer' : ''}`}
+                        onClick={() => lesson && status !== 'locked' && handleLessonClick(lesson)}
+                      >
+                        {/* Day Label */}
+                        <div className="text-center mb-1.5">
+                          <div className={`text-[10px] font-semibold ${isToday ? 'text-[#FFD700]' : 'text-white/70'}`}>
+                            {getDayLabel(date)}
+                          </div>
+                          <div className={`text-sm font-bold ${isToday ? 'text-[#FFD700]' : 'text-white'}`}>
+                            {getDayNumber(date)}
+                          </div>
+                        </div>
+
+                        {/* Portrait Thumbnail Container */}
+                        <div className={`relative aspect-[9/16] rounded-lg overflow-hidden bg-gray-800/50 border transition-all ${
+                          isToday ? 'border-2 border-[#FFD700]' : 'border border-white/20'
+                        }`}>
+                          {status === 'empty' ? (
+                            <div className="w-full h-full flex items-center justify-center">
+                              <div className="text-white/20 text-[10px] text-center px-1">
+                                No lesson
+                              </div>
+                            </div>
+                          ) : lesson ? (
+                            <>
+                              {/* Thumbnail */}
+                              {lesson.video?.thumbnail ? (
+                                <img
+                                  src={lesson.video.thumbnail}
+                                  alt={lesson.title}
+                                  className="w-full h-full object-cover"
+                                />
+                              ) : (
+                                <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-indigo-600 to-purple-600">
+                                  <Video className="w-8 h-8 text-white/50" />
+                                </div>
+                              )}
+
+                              {/* Overlay */}
+                              <div className={`absolute inset-0 ${
+                                status === 'locked' 
+                                    ? 'bg-black/70' 
+                                    : status === 'completed' 
+                                        ? 'bg-green-500/30' 
+                                        : 'bg-black/20'
+                              }`} />
+
+                              {/* Status Icons */}
+                              <div className="absolute top-2 right-2">
+                                {status === 'locked' ? (
+                                  <div className="bg-black/60 rounded-full p-1.5">
+                                    <Lock className="w-4 h-4 text-white" />
+                                  </div>
+                                ) : status === 'completed' ? (
+                                  <div className="bg-green-500 rounded-full p-1.5">
+                                    <Check className="w-4 h-4 text-white" />
+                                  </div>
+                                ) : (
+                                  <div className="bg-white/20 backdrop-blur-sm rounded-full p-1.5">
+                                    <Play className="w-4 h-4 text-white" />
+                                  </div>
+                                )}
+                              </div>
+
+                              {/* Title Overlay */}
+                              <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent p-2">
+                                <p className="text-white text-[10px] font-semibold line-clamp-2 leading-tight">
+                                  {lesson.title}
+                                </p>
+                              </div>
+                            </>
+                          ) : null}
+                        </div>
+                      </div>
+                    );
+                  });
+                })()}
+              </div>
+            </div>
+          )}
+        </section>
 
         <section>
           <SectionTitle title="Activity Books" />

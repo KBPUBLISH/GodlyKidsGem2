@@ -18,6 +18,8 @@ import BookReaderPage from './pages/BookReaderPage';
 import AudioPage from './pages/AudioPage';
 import PlaylistPlayerPage from './pages/PlaylistPlayerPage';
 import PlaylistDetailPage from './pages/PlaylistDetailPage';
+import LessonsPage from './pages/LessonsPage';
+import LessonPlayerPage from './pages/LessonPlayerPage';
 import MiniPlayer from './components/audio/MiniPlayer';
 import BottomNavigation from './components/layout/BottomNavigation';
 import { BooksProvider } from './context/BooksContext';
@@ -92,6 +94,7 @@ const PanoramaBackground: React.FC = () => {
     if (path === '/read') return 3;
     if (path === '/library') return 4;
     if (path === '/audio' || path.startsWith('/audio/')) return 2; // Use same as listen
+    if (path === '/lessons' || path.startsWith('/lesson/')) return 1; // Use same as home/explore
     if (path.startsWith('/book/')) return 5;
     if (path === '/profile') return 5;
     if (path === '/create-profile') return 5;
@@ -152,8 +155,9 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const isCreateProfile = location.pathname === '/create-profile';
   const isPaywall = location.pathname === '/paywall';
   const isSettings = location.pathname === '/settings';
-  const isBookReader = location.pathname.startsWith('/read/');
-  const isAudioPage = location.pathname.startsWith('/audio/');
+    const isBookReader = location.pathname.startsWith('/read/');
+    const isAudioPage = location.pathname.startsWith('/audio/');
+    const isLessonPage = location.pathname.startsWith('/lesson/');
 
   return (
     <div className="relative h-screen w-full overflow-hidden text-white flex flex-col">
@@ -169,7 +173,7 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
       <MiniPlayer />
 
       {/* Only show BottomNavigation on main tab pages */}
-      {!isLanding && !isSignIn && !isOnboarding && !isBookDetail && !isPlayer && !isProfile && !isCreateProfile && !isPaywall && !isSettings && !isBookReader && !isAudioPage && <BottomNavigation />}
+      {!isLanding && !isSignIn && !isOnboarding && !isBookDetail && !isPlayer && !isProfile && !isCreateProfile && !isPaywall && !isSettings && !isBookReader && !isAudioPage && !isLessonPage && <BottomNavigation />}
     </div>
   );
 };
@@ -195,6 +199,8 @@ const App: React.FC = () => {
                 <Route path="/audio" element={<AudioPage />} />
                 <Route path="/audio/playlist/:playlistId" element={<PlaylistDetailPage />} />
                 <Route path="/audio/playlist/:playlistId/play/:itemIndex" element={<PlaylistPlayerPage />} />
+                <Route path="/lessons" element={<LessonsPage />} />
+                <Route path="/lesson/:lessonId" element={<LessonPlayerPage />} />
                 <Route path="/profile" element={<ProfileSelectionPage />} />
                 <Route path="/create-profile" element={<CreateProfilePage />} />
                 <Route path="/paywall" element={<PaywallPage />} />

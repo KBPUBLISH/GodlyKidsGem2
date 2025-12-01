@@ -5,6 +5,7 @@ import { ApiService } from '../services/apiService';
 import { voiceCloningService, ClonedVoice } from '../services/voiceCloningService';
 import VoiceCloningModal from '../components/features/VoiceCloningModal';
 import { useAudio } from '../context/AudioContext';
+import { useUser } from '../context/UserContext';
 import { readingProgressService } from '../services/readingProgressService';
 import { favoritesService } from '../services/favoritesService';
 import { readCountService } from '../services/readCountService';
@@ -72,6 +73,7 @@ const BookReaderPage: React.FC = () => {
     const navigate = useNavigate();
     const [searchParams] = useSearchParams();
     const { setGameMode, setMusicPaused, musicEnabled, toggleMusic } = useAudio();
+    const { isOwned } = useUser();
     const wasMusicEnabledRef = useRef<boolean>(false);
     const [pages, setPages] = useState<Page[]>([]);
     const [currentPageIndex, setCurrentPageIndex] = useState(0);
@@ -96,7 +98,9 @@ const BookReaderPage: React.FC = () => {
     const [showVoiceCloningModal, setShowVoiceCloningModal] = useState(false);
     const [showVoiceDropdown, setShowVoiceDropdown] = useState(false);
     const wordAlignmentRef = useRef<{ words: Array<{ word: string; start: number; end: number }> } | null>(null);
+    const lastWordIndexRef = useRef<number>(-1); // Track last highlighted word to prevent flickering
     const bookBackgroundMusicRef = useRef<HTMLAudioElement | null>(null);
+    const bookMusicEnabledRef = useRef<boolean>(true); // Track current state in ref for kill loop
     const voiceDropdownRef = useRef<HTMLDivElement>(null);
     const [autoPlayMode, setAutoPlayMode] = useState(false);
     const autoPlayModeRef = useRef(false);
@@ -164,8 +168,8 @@ const BookReaderPage: React.FC = () => {
         let killCount = 0;
         let killInterval: NodeJS.Timeout | null = setInterval(() => {
             killAllAudio();
-            // Ensure book music continues playing if it should be
-            if (bookBackgroundMusicRef.current && bookMusicEnabled && bookBackgroundMusicRef.current.paused) {
+            // Ensure book music continues playing if it should be (use ref to get current state)
+            if (bookBackgroundMusicRef.current && bookMusicEnabledRef.current && bookBackgroundMusicRef.current.paused) {
                 bookBackgroundMusicRef.current.play().catch(() => {
                     // Ignore play errors - might be user interaction required
                 });
@@ -176,8 +180,8 @@ const BookReaderPage: React.FC = () => {
                 clearInterval(killInterval);
                 killInterval = setInterval(() => {
                     killAllAudio();
-                    // Keep book music playing
-                    if (bookBackgroundMusicRef.current && bookMusicEnabled && bookBackgroundMusicRef.current.paused) {
+                    // Keep book music playing (use ref to get current state)
+                    if (bookBackgroundMusicRef.current && bookMusicEnabledRef.current && bookBackgroundMusicRef.current.paused) {
                         bookBackgroundMusicRef.current.play().catch(() => {});
                     }
                 }, 200);
@@ -259,10 +263,15 @@ const BookReaderPage: React.FC = () => {
     // Effect 2: Handle Music Toggle (Play/Pause)
     useEffect(() => {
         const audio = bookBackgroundMusicRef.current;
-        if (!audio) return;
+        if (!audio || !hasBookMusic) return;
+
+        // Update ref to match state
+        bookMusicEnabledRef.current = bookMusicEnabled;
 
         if (bookMusicEnabled) {
             console.log('🎵 Book music enabled - attempting to play');
+            // Set volume before playing
+            audio.volume = 0.15;
             const playPromise = audio.play();
             if (playPromise !== undefined) {
                 playPromise.catch(err => {
@@ -272,6 +281,10 @@ const BookReaderPage: React.FC = () => {
         } else {
             console.log('🎵 Book music disabled - pausing');
             audio.pause();
+            // Ensure it's actually paused
+            if (!audio.paused) {
+                audio.pause();
+            }
         }
     }, [bookMusicEnabled, hasBookMusic]); // Run when toggle changes or when music is loaded
 
@@ -350,31 +363,51 @@ const BookReaderPage: React.FC = () => {
         const fetchVoices = async () => {
             const voiceList = await ApiService.getVoices();
             if (voiceList.length > 0) {
-                setVoices(voiceList);
-                // Try to find a kid-friendly voice or use first available
-                const kidVoice = voiceList.find((v: any) =>
-                    v.name === 'Domi' || v.name === 'Bella' || v.name === 'Elli' || v.name === 'Rachel'
-                );
-                if (kidVoice) {
-                    setSelectedVoiceId(kidVoice.voice_id);
-                } else if (voiceList.length > 0) {
-                    // Use first available voice if no kid-friendly voice found
-                    setSelectedVoiceId(voiceList[0].voice_id);
+                // Get default voice from onboarding
+                const defaultVoiceId = localStorage.getItem('godlykids_default_voice');
+                
+                // Filter voices to only show:
+                // 1. The default voice from onboarding
+                // 2. Voices that are owned/unlocked (from shop)
+                const availableVoices = voiceList.filter((v: any) => {
+                    // Always show the default voice
+                    if (defaultVoiceId && v.voice_id === defaultVoiceId) {
+                        return true;
+                    }
+                    // Show voices that are owned (check shop ID format: voice-{voice_id})
+                    const shopId = `voice-${v.voice_id}`;
+                    return isOwned(shopId);
+                });
+                
+                setVoices(availableVoices);
+                
+                // Set selected voice to default from onboarding, or first available owned voice
+                if (defaultVoiceId && availableVoices.find((v: any) => v.voice_id === defaultVoiceId)) {
+                    setSelectedVoiceId(defaultVoiceId);
+                } else if (availableVoices.length > 0) {
+                    setSelectedVoiceId(availableVoices[0].voice_id);
+                } else {
+                    // No voices available - use fallback
+                    setSelectedVoiceId('21m00Tcm4TlvDq8ikWAM'); // Rachel fallback
                 }
-                console.log(`✅ Loaded ${voiceList.length} enabled voice(s) from portal`);
+                console.log(`✅ Loaded ${availableVoices.length} available voice(s) (${voiceList.length} total enabled)`);
             } else {
                 console.warn('⚠️ No voices enabled in portal. Please enable voices in the portal first.');
-                // Don't use fallback - show empty state so users know to enable voices in portal
                 setVoices([]);
             }
         };
         fetchVoices();
 
-        // Load cloned voices from local storage
+        // Load cloned voices from local storage (filter out DD voice)
         const loadClonedVoices = () => {
             const cloned = voiceCloningService.getClonedVoices();
-            setClonedVoices(cloned);
-            console.log(`✅ Loaded ${cloned.length} cloned voice(s) from local storage`);
+            // Filter out DD cloned voice
+            const filtered = cloned.filter(v => 
+                !v.name.toLowerCase().includes('dd') && 
+                !v.voice_id.toLowerCase().includes('dd')
+            );
+            setClonedVoices(filtered);
+            console.log(`✅ Loaded ${filtered.length} cloned voice(s) from local storage (filtered out DD)`);
         };
         loadClonedVoices();
     }, [bookId]);
@@ -646,6 +679,7 @@ const BookReaderPage: React.FC = () => {
         setCurrentWordIndex(-1);
         setWordAlignment(null);
         wordAlignmentRef.current = null;
+        lastWordIndexRef.current = -1; // Reset last word index for new audio
         alignmentWarningShownRef.current = false; // Reset warning flag for new audio
 
         try {
@@ -723,31 +757,50 @@ const BookReaderPage: React.FC = () => {
                     }
                 });
 
-                // Track audio time for word highlighting
+                // Track audio time for word highlighting with improved synchronization
                 // Use ref to access latest alignment data (avoids closure issues)
                 audio.ontimeupdate = () => {
                     const currentAlignment = wordAlignmentRef.current;
                     if (currentAlignment && currentAlignment.words && currentAlignment.words.length > 0) {
                         const currentTime = audio.currentTime;
-                        const wordIndex = currentAlignment.words.findIndex(
-                            (w: any) => currentTime >= w.start && currentTime < w.end
-                        );
+                        // Add a small offset (0.1s) to account for audio latency and improve sync
+                        // This helps the highlighting appear slightly ahead of the actual word
+                        const adjustedTime = currentTime + 0.1;
+                        
+                        // Find the current word with adjusted timing
+                        // Also check if we're close to the next word (within 0.15s) to highlight early
+                        let wordIndex = -1;
+                        for (let i = 0; i < currentAlignment.words.length; i++) {
+                            const word = currentAlignment.words[i];
+                            // Check if we're in the word's time range, or close to it
+                            if (adjustedTime >= word.start - 0.15 && adjustedTime < word.end) {
+                                wordIndex = i;
+                                break;
+                            }
+                        }
 
                         // Log every 10th update to avoid console spam
                         if (Math.floor(currentTime * 10) % 10 === 0) {
-                            console.log('🕐 Audio time:', currentTime.toFixed(2), 'Word index:', wordIndex);
+                            console.log('🕐 Audio time:', currentTime.toFixed(2), 'Adjusted:', adjustedTime.toFixed(2), 'Word index:', wordIndex);
                             if (wordIndex !== -1) {
                                 const word = currentAlignment.words[wordIndex];
                                 console.log('📍 Current word:', word.word, `[${word.start.toFixed(2)}s - ${word.end.toFixed(2)}s]`);
                             }
                         }
 
-                        if (wordIndex !== -1 && wordIndex !== currentWordIndex) {
+                        // Only update if word changed to prevent flickering
+                        if (wordIndex !== -1 && wordIndex !== lastWordIndexRef.current) {
                             console.log('✨ Highlighting word', wordIndex, ':', currentAlignment.words[wordIndex].word);
                             setCurrentWordIndex(wordIndex);
+                            lastWordIndexRef.current = wordIndex;
+                        } else if (wordIndex === -1 && currentTime >= currentAlignment.words[currentAlignment.words.length - 1].end) {
+                            // Keep highlighting the last word if we've passed it
+                            const lastIndex = currentAlignment.words.length - 1;
+                            if (lastIndex !== lastWordIndexRef.current) {
+                                setCurrentWordIndex(lastIndex);
+                                lastWordIndexRef.current = lastIndex;
+                            }
                         }
-                        // Don't reset highlighting when past last word - keep it on the last word
-                        // This ensures all words get highlighted even if timing is slightly off
                     } else if (!currentAlignment && !alignmentWarningShownRef.current && loadingAudio) {
                         // Only warn once while loading, not continuously
                         alignmentWarningShownRef.current = true;
@@ -1024,20 +1077,8 @@ const BookReaderPage: React.FC = () => {
                         <button
                             onClick={(e) => {
                                 e.stopPropagation();
-                                const newState = !bookMusicEnabled;
-                                setBookMusicEnabled(newState);
-
-                                if (bookBackgroundMusicRef.current) {
-                                    if (newState) {
-                                        // Update volume when playing
-                                        bookBackgroundMusicRef.current.volume = 0.15;
-                                        bookBackgroundMusicRef.current.play().catch(err => {
-                                            console.warn('Could not play book music:', err);
-                                        });
-                                    } else {
-                                        bookBackgroundMusicRef.current.pause();
-                                    }
-                                }
+                                // Just toggle the state - let useEffect handle the actual play/pause
+                                setBookMusicEnabled(prev => !prev);
                             }}
                             className={`bg-black/50 backdrop-blur-md rounded-full p-3 hover:bg-black/70 transition-all border ${bookMusicEnabled
                                 ? 'border-yellow-400/50 shadow-lg shadow-yellow-400/20'
@@ -1136,18 +1177,20 @@ const BookReaderPage: React.FC = () => {
                                         <div className="border-t border-white/20 my-1"></div>
                                     )}
 
-                                    {/* Create Voice Option */}
-                                    <button
-                                        onClick={(e) => {
-                                            e.stopPropagation();
-                                            setShowVoiceDropdown(false);
-                                            setShowVoiceCloningModal(true);
-                                        }}
-                                        className="w-full text-left px-4 py-2 text-sm text-[#FFD700] font-bold hover:bg-white/10 transition-colors flex items-center gap-2"
-                                    >
-                                        <Mic className="w-4 h-4" />
-                                        Create Your Voice
-                                    </button>
+                                    {/* Create Voice Option - Hidden */}
+                                    {false && (
+                                        <button
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                setShowVoiceDropdown(false);
+                                                setShowVoiceCloningModal(true);
+                                            }}
+                                            className="w-full text-left px-4 py-2 text-sm text-[#FFD700] font-bold hover:bg-white/10 transition-colors flex items-center gap-2"
+                                        >
+                                            <Mic className="w-4 h-4" />
+                                            Create Your Voice
+                                        </button>
+                                    )}
 
                                     {/* No voices message */}
                                     {voices.length === 0 && clonedVoices.length === 0 && (
@@ -1345,7 +1388,22 @@ const BookReaderPage: React.FC = () => {
                                 <button
                                     onClick={(e) => {
                                         e.stopPropagation();
+                                        // Stop any playing audio
+                                        stopAudio();
+                                        // Reset to first page
                                         setCurrentPageIndex(0);
+                                        currentPageIndexRef.current = 0;
+                                        // Reset scroll state
+                                        setShowScroll(true);
+                                        showScrollRef.current = true;
+                                        // Reset active text box
+                                        setActiveTextBoxIndex(null);
+                                        // Reset word alignment
+                                        setWordAlignment(null);
+                                        setCurrentWordIndex(-1);
+                                        // Reset auto-play mode
+                                        setAutoPlayMode(false);
+                                        autoPlayModeRef.current = false;
                                     }}
                                     className="bg-[#4CAF50] hover:bg-[#43A047] text-white p-4 rounded-xl font-bold shadow-lg border-b-4 border-[#2E7D32] active:border-b-0 active:translate-y-1 transition-all flex items-center justify-center gap-2 group"
                                 >
@@ -1415,18 +1473,20 @@ const BookReaderPage: React.FC = () => {
                 </div>
             )}
 
-            {/* Voice Cloning Modal */}
-            <VoiceCloningModal
-                isOpen={showVoiceCloningModal}
-                onClose={() => setShowVoiceCloningModal(false)}
-                onVoiceCloned={(voice) => {
-                    // Reload cloned voices
-                    const cloned = voiceCloningService.getClonedVoices();
-                    setClonedVoices(cloned);
-                    // Optionally select the newly cloned voice
-                    setSelectedVoiceId(voice.voice_id);
-                }}
-            />
+            {/* Voice Cloning Modal - Hidden */}
+            {false && (
+                <VoiceCloningModal
+                    isOpen={showVoiceCloningModal}
+                    onClose={() => setShowVoiceCloningModal(false)}
+                    onVoiceCloned={(voice) => {
+                        // Reload cloned voices
+                        const cloned = voiceCloningService.getClonedVoices();
+                        setClonedVoices(cloned);
+                        // Optionally select the newly cloned voice
+                        setSelectedVoiceId(voice.voice_id);
+                    }}
+                />
+            )}
         </div>
     );
 };

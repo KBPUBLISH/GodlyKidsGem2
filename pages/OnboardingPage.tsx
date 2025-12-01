@@ -8,6 +8,9 @@ import { AVATAR_ASSETS } from '../components/avatar/AvatarAssets';
 import ParentGateModal from '../components/features/ParentGateModal';
 import VoiceCloningModal from '../components/features/VoiceCloningModal';
 import { voiceCloningService, ClonedVoice } from '../services/voiceCloningService';
+import { ApiService } from '../services/apiService';
+import { filterVisibleVoices } from '../services/voiceManagementService';
+import { cleanVoiceDescription, cleanVoiceCategory } from '../utils/voiceUtils';
 
 // Use Funny Heads instead of generic human seeds
 const FUNNY_HEADS = [
@@ -36,7 +39,7 @@ const OnboardingPage: React.FC = () => {
   const { setParentName, setEquippedAvatar, addKid, kids, removeKid, subscribe, resetUser } = useUser();
   const { playClick, playSuccess } = useAudio();
   
-  const [step, setStep] = useState<1 | 2 | 3>(1); // Removed step 3 (voice cloning) - ElevenLabs limit reached
+  const [step, setStep] = useState<1 | 2 | 3 | 4>(1); // Steps: 1=Parent, 2=Family, 3=Voice Selection, 4=Unlock
 
   // Step 1 State (Parent)
   const [pName, setPName] = useState('');
@@ -47,11 +50,18 @@ const OnboardingPage: React.FC = () => {
   const [kidAge, setKidAge] = useState('');
   const [kidAvatar, setKidAvatar] = useState(FUNNY_HEADS[1]);
   
-  // Step 3 State (Paywall)
+  // Step 3 State (Voice Selection)
+  const [availableVoices, setAvailableVoices] = useState<any[]>([]);
+  const [selectedVoiceId, setSelectedVoiceId] = useState<string | null>(null);
+  const [loadingVoices, setLoadingVoices] = useState(false);
+  const [previewingVoiceId, setPreviewingVoiceId] = useState<string | null>(null);
+  const [previewAudio, setPreviewAudio] = useState<HTMLAudioElement | null>(null);
+  
+  // Step 4 State (Paywall)
   const [selectedPlan, setSelectedPlan] = useState<'annual' | 'monthly'>('annual');
   const [showParentGate, setShowParentGate] = useState(false);
   
-  // Step 4 State (Voice Cloning - Optional)
+  // Voice Cloning (Optional - hidden)
   const [showVoiceCloningModal, setShowVoiceCloningModal] = useState(false);
   const [voiceCloned, setVoiceCloned] = useState(false);
 
@@ -90,8 +100,111 @@ const OnboardingPage: React.FC = () => {
 
   const handleStep2Continue = () => {
     playClick();
-    setStep(3); // Go directly to unlock/paywall step (was step 4, now step 3)
+    setStep(3); // Go to voice selection step
   };
+  
+  // Load available voices for step 3
+  useEffect(() => {
+    if (step === 3) {
+      setLoadingVoices(true);
+      ApiService.getVoices()
+        .then(voices => {
+          const visibleVoices = filterVisibleVoices(voices);
+          setAvailableVoices(visibleVoices);
+          // Auto-select first voice if available
+          if (visibleVoices.length > 0 && !selectedVoiceId) {
+            setSelectedVoiceId(visibleVoices[0].voice_id);
+          }
+        })
+        .catch(error => {
+          console.error('Error loading voices:', error);
+        })
+        .finally(() => {
+          setLoadingVoices(false);
+        });
+    }
+  }, [step]);
+  
+  const handleStep3Continue = () => {
+    if (!selectedVoiceId) return;
+    playClick();
+    // Stop any playing preview
+    if (previewAudio) {
+      previewAudio.pause();
+      previewAudio.src = '';
+      setPreviewAudio(null);
+    }
+    // Save selected voice preference (could store in UserContext or localStorage)
+    localStorage.setItem('godlykids_default_voice', selectedVoiceId);
+    setStep(4); // Go to unlock/paywall step
+  };
+  
+  const handleVoiceClick = async (voiceId: string) => {
+    playClick();
+    setSelectedVoiceId(voiceId);
+    
+    // Stop any currently playing preview
+    if (previewAudio) {
+      previewAudio.pause();
+      previewAudio.src = '';
+      setPreviewAudio(null);
+    }
+    
+    // Generate and play preview
+    setPreviewingVoiceId(voiceId);
+    try {
+      const previewText = "Hello Godly Kid! Are you ready for an adventure?[chuckle]";
+      const result = await ApiService.generateTTS(previewText, voiceId);
+      
+      if (result && result.audioUrl) {
+        const audio = new Audio(result.audioUrl);
+        
+        audio.onended = () => {
+          setPreviewingVoiceId(null);
+          setPreviewAudio(null);
+        };
+        
+        audio.onerror = (e) => {
+          console.error('Audio playback error:', e, 'URL:', result.audioUrl);
+          setPreviewingVoiceId(null);
+          setPreviewAudio(null);
+        };
+        
+        // Wait for audio to be ready before playing
+        audio.oncanplaythrough = async () => {
+          try {
+            await audio.play();
+          } catch (playError: any) {
+            console.error('Error playing audio:', playError);
+            setPreviewingVoiceId(null);
+            setPreviewAudio(null);
+          }
+        };
+        
+        audio.onloadstart = () => {
+          // Audio is loading
+        };
+        
+        setPreviewAudio(audio);
+      } else {
+        console.error('No audio URL returned from TTS generation');
+        setPreviewingVoiceId(null);
+      }
+    } catch (error) {
+      console.error('Error playing voice preview:', error);
+      setPreviewingVoiceId(null);
+    }
+  };
+  
+  // Cleanup audio on unmount
+  useEffect(() => {
+    return () => {
+      if (previewAudio) {
+        previewAudio.pause();
+        previewAudio.src = '';
+      }
+    };
+  }, [previewAudio]);
 
   const handleSubscribeClick = () => {
     setShowParentGate(true);
@@ -99,12 +212,12 @@ const OnboardingPage: React.FC = () => {
 
   const handleSkipVoiceCloning = () => {
     playClick();
-    setStep(3); // Move to unlock/paywall step (was step 4, now step 3)
+    setStep(4); // Move to unlock/paywall step
   };
 
   const handleVoiceCloningContinue = () => {
     playClick();
-    setStep(3); // Move to unlock/paywall step (was step 4, now step 3)
+    setStep(4); // Move to unlock/paywall step
   };
 
   const handleGateSuccess = () => {
@@ -121,13 +234,14 @@ const OnboardingPage: React.FC = () => {
   // --- RENDERERS ---
 
   const renderProgress = () => {
-    const totalSteps = 3; // Parent, Family, Unlock (Voice cloning removed - ElevenLabs limit)
+    const totalSteps = 4; // Parent, Family, Voice Selection, Unlock
     return (
     <div className="w-full max-w-md px-8 mb-8">
        <div className="flex justify-between mb-2 text-[#eecaa0] font-display font-bold text-xs uppercase tracking-widest">
           <span className={step >= 1 ? "text-[#FFD700]" : "opacity-50"}>Parent</span>
           <span className={step >= 2 ? "text-[#FFD700]" : "opacity-50"}>Family</span>
-          <span className={step >= 3 ? "text-[#FFD700]" : "opacity-50"}>Unlock</span>
+          <span className={step >= 3 ? "text-[#FFD700]" : "opacity-50"}>Voice</span>
+          <span className={step >= 4 ? "text-[#FFD700]" : "opacity-50"}>Unlock</span>
        </div>
        <div className="h-3 bg-[#3E1F07] rounded-full overflow-hidden border border-[#5c2e0b] shadow-inner">
           <div 
@@ -413,8 +527,86 @@ const OnboardingPage: React.FC = () => {
           </div>
         )}
 
-        {/* --- STEP 3: PAYWALL / DEAL --- */}
+        {/* --- STEP 3: VOICE SELECTION --- */}
         {step === 3 && (
+          <div className="w-full max-w-md px-6 animate-in slide-in-from-right-10 duration-500">
+            <div className="text-center mb-6">
+              <div className="w-20 h-20 mx-auto mb-4 rounded-full bg-gradient-to-br from-[#FFD700] to-[#FFA500] flex items-center justify-center shadow-2xl border-4 border-[#8B4513]">
+                <Mic className="text-[#8B4513]" size={40} />
+              </div>
+              <h2 className="text-2xl font-bold text-white mb-2">
+                Choose Your First Voice!
+              </h2>
+              <p className="text-[#eecaa0] text-sm mb-1">
+                Select a voice to read stories and devotionals
+              </p>
+              <p className="text-[#eecaa0]/70 text-xs">
+                Don't worry, more voices can be unlocked in the shop!
+              </p>
+            </div>
+
+            {loadingVoices ? (
+              <div className="text-center text-[#eecaa0] py-8">Loading voices...</div>
+            ) : availableVoices.length === 0 ? (
+              <div className="text-center text-[#eecaa0] py-8">No voices available</div>
+            ) : (
+              <div className="space-y-3 mb-6 max-h-[400px] overflow-y-auto">
+                {availableVoices.map((voice) => (
+                  <button
+                    key={voice.voice_id}
+                    onClick={() => handleVoiceClick(voice.voice_id)}
+                    disabled={previewingVoiceId === voice.voice_id}
+                    className={`w-full p-4 rounded-xl border-2 transition-all ${
+                      selectedVoiceId === voice.voice_id
+                        ? 'bg-[#FFD700]/20 border-[#FFD700] shadow-lg'
+                        : 'bg-[#3E1F07]/50 border-[#5c2e0b] hover:border-[#FFD700]/50'
+                    } ${previewingVoiceId === voice.voice_id ? 'opacity-75 cursor-wait' : ''}`}
+                  >
+                    <div className="flex items-center gap-4">
+                      {voice.characterImage ? (
+                        <img 
+                          src={voice.characterImage} 
+                          alt={voice.name}
+                          className="w-16 h-16 rounded-full object-cover border-2 border-white/20"
+                        />
+                      ) : (
+                        <div className="w-16 h-16 rounded-full bg-[#5c2e0b] flex items-center justify-center border-2 border-white/20">
+                          <Mic className="text-[#eecaa0]" size={24} />
+                        </div>
+                      )}
+                      <div className="flex-1 text-left">
+                        <div className="text-white font-bold text-lg">{voice.name}</div>
+                        {cleanVoiceDescription(voice.description) && (
+                          <div className="text-[#eecaa0] text-sm mt-1">{cleanVoiceDescription(voice.description)}</div>
+                        )}
+                        {cleanVoiceCategory(voice.category) && (
+                          <div className="text-[#eecaa0]/70 text-xs mt-1 capitalize">{cleanVoiceCategory(voice.category)}</div>
+                        )}
+                      </div>
+                      {previewingVoiceId === voice.voice_id ? (
+                        <div className="w-6 h-6 border-2 border-[#FFD700] border-t-transparent rounded-full animate-spin"></div>
+                      ) : selectedVoiceId === voice.voice_id ? (
+                        <Check className="text-[#FFD700]" size={24} />
+                      ) : null}
+                    </div>
+                  </button>
+                ))}
+              </div>
+            )}
+
+            <WoodButton
+              fullWidth
+              onClick={handleStep3Continue}
+              disabled={!selectedVoiceId}
+              className={`py-4 text-xl ${!selectedVoiceId ? 'opacity-50 grayscale' : ''}`}
+            >
+              CONTINUE
+            </WoodButton>
+          </div>
+        )}
+
+        {/* --- STEP 4: PAYWALL / DEAL --- */}
+        {step === 4 && (
             <div className="w-full max-w-md px-4 animate-in slide-in-from-right-10 duration-500 pb-10">
                  
                  {/* Main Card */}
@@ -517,11 +709,14 @@ const OnboardingPage: React.FC = () => {
             onSuccess={handleGateSuccess} 
         />
 
-        <VoiceCloningModal
-          isOpen={showVoiceCloningModal}
-          onClose={() => setShowVoiceCloningModal(false)}
-          onVoiceCloned={handleVoiceCloned}
-        />
+        {/* Voice Cloning Modal - Hidden */}
+        {false && (
+          <VoiceCloningModal
+            isOpen={showVoiceCloningModal}
+            onClose={() => setShowVoiceCloningModal(false)}
+            onVoiceCloned={handleVoiceCloned}
+          />
+        )}
 
       </div>
     </div>

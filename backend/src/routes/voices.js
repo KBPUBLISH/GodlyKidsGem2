@@ -58,7 +58,10 @@ router.get('/sync', async (req, res) => {
             
             if (existing) {
                 // Update existing voice
-                existing.name = voice.name;
+                // Only update name if customName is not set (preserve custom names)
+                if (!existing.customName) {
+                    existing.name = voice.name;
+                }
                 existing.category = voice.category || 'premade';
                 existing.previewUrl = voice.preview_url;
                 existing.updatedAt = Date.now();
@@ -154,6 +157,8 @@ router.put('/:voiceId', async (req, res) => {
         if (req.body.description !== undefined) voice.description = req.body.description;
         if (req.body.ageGroup !== undefined) voice.ageGroup = req.body.ageGroup;
         if (req.body.language !== undefined) voice.language = req.body.language;
+        if (req.body.characterImage !== undefined) voice.characterImage = req.body.characterImage;
+        if (req.body.customName !== undefined) voice.customName = req.body.customName || null; // Allow clearing custom name
         
         voice.updatedAt = Date.now();
         await voice.save();

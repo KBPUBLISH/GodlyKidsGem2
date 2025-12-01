@@ -12,14 +12,23 @@ export interface ClonedVoice {
 }
 
 class VoiceCloningService {
-  // Get all cloned voices from local storage
+  // Get all cloned voices from local storage (filter out DD voice)
   getClonedVoices(): ClonedVoice[] {
     try {
       const stored = localStorage.getItem(CLONED_VOICES_KEY);
       if (!stored) return [];
       const voices = JSON.parse(stored) as ClonedVoice[];
+      // Filter out DD cloned voice
+      const filtered = voices.filter(v => 
+        !v.name.toLowerCase().includes('dd') && 
+        !v.voice_id.toLowerCase().includes('dd')
+      );
+      // If DD was found and filtered, save the updated list
+      if (filtered.length < voices.length) {
+        localStorage.setItem(CLONED_VOICES_KEY, JSON.stringify(filtered));
+      }
       // Sort by creation date (newest first)
-      return voices.sort((a, b) => b.createdAt - a.createdAt);
+      return filtered.sort((a, b) => b.createdAt - a.createdAt);
     } catch (error) {
       console.error('Error reading cloned voices:', error);
       return [];

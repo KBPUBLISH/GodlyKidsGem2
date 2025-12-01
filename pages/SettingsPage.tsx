@@ -6,6 +6,8 @@ import { useUser } from '../context/UserContext';
 import { useAudio } from '../context/AudioContext';
 import { voiceCloningService, ClonedVoice } from '../services/voiceCloningService';
 import { ApiService } from '../services/apiService';
+import { getHiddenVoices, isVoiceHidden, toggleVoiceVisibility } from '../services/voiceManagementService';
+import { cleanVoiceDescription } from '../utils/voiceUtils';
 
 const SettingsPage: React.FC = () => {
   const navigate = useNavigate();
@@ -13,11 +15,28 @@ const SettingsPage: React.FC = () => {
   const { musicEnabled, sfxEnabled, musicVolume, toggleMusic, toggleSfx, setMusicVolume, playBack } = useAudio();
   const [clonedVoices, setClonedVoices] = useState<ClonedVoice[]>([]);
   const [deletingVoiceId, setDeletingVoiceId] = useState<string | null>(null);
+  const [availableVoices, setAvailableVoices] = useState<any[]>([]);
+  const [loadingVoices, setLoadingVoices] = useState(false);
   
   // Load cloned voices
   useEffect(() => {
     const voices = voiceCloningService.getClonedVoices();
     setClonedVoices(voices);
+  }, []);
+  
+  // Load available voices for management
+  useEffect(() => {
+    setLoadingVoices(true);
+    ApiService.getVoices()
+      .then(voices => {
+        setAvailableVoices(voices);
+      })
+      .catch(error => {
+        console.error('Error loading voices:', error);
+      })
+      .finally(() => {
+        setLoadingVoices(false);
+      });
   }, []);
   
   // Robust back handler - Explicitly goes to Profile as requested
@@ -156,8 +175,8 @@ const SettingsPage: React.FC = () => {
                 </div>
             </section>
 
-            {/* Voice Library */}
-            {clonedVoices.length > 0 && (
+            {/* Voice Library - Hidden */}
+            {false && clonedVoices.length > 0 && (
               <section className="bg-[#fff8e1] rounded-2xl p-5 border-2 border-[#eecaa0] shadow-sm">
                 <h3 className="font-display font-bold text-[#8B4513] text-lg mb-4 uppercase tracking-wide opacity-80">Voice Library</h3>
                 
@@ -173,8 +192,8 @@ const SettingsPage: React.FC = () => {
                         </div>
                         <div className="flex-1 min-w-0">
                           <div className="font-bold text-[#5c2e0b] text-sm truncate">{voice.name}</div>
-                          {voice.description && (
-                            <div className="text-xs text-[#8B4513]/70 truncate">{voice.description}</div>
+                          {cleanVoiceDescription(voice.description) && (
+                            <div className="text-xs text-[#8B4513]/70 truncate">{cleanVoiceDescription(voice.description)}</div>
                           )}
                         </div>
                       </div>
@@ -195,6 +214,61 @@ const SettingsPage: React.FC = () => {
                 </div>
               </section>
             )}
+
+            {/* Voice Management */}
+            <section className="bg-[#fff8e1] rounded-2xl p-5 border-2 border-[#eecaa0] shadow-sm">
+                <h3 className="font-display font-bold text-[#8B4513] text-lg mb-4 uppercase tracking-wide opacity-80">Voice Management</h3>
+                <p className="text-[#5c2e0b] text-sm mb-4 opacity-70">Hide voices you don't want to see in the app</p>
+                
+                {loadingVoices ? (
+                    <div className="text-center text-[#5c2e0b] py-4">Loading voices...</div>
+                ) : availableVoices.length === 0 ? (
+                    <div className="text-center text-[#5c2e0b] py-4">No voices available</div>
+                ) : (
+                    <div className="space-y-2 max-h-[300px] overflow-y-auto">
+                        {availableVoices.map((voice) => {
+                            const isHidden = isVoiceHidden(voice.voice_id);
+                            return (
+                                <div
+                                    key={voice.voice_id}
+                                    className="flex items-center gap-3 p-3 bg-white/50 rounded-lg border border-[#eecaa0]/50 hover:bg-white/80 transition-colors"
+                                >
+                                    {voice.characterImage ? (
+                                        <img 
+                                            src={voice.characterImage} 
+                                            alt={voice.name}
+                                            className="w-12 h-12 rounded-full object-cover border-2 border-[#eecaa0]"
+                                        />
+                                    ) : (
+                                        <div className="w-12 h-12 rounded-full bg-[#eecaa0] flex items-center justify-center border-2 border-[#8B4513]/20">
+                                            <Mic size={20} className="text-[#8B4513]" />
+                                        </div>
+                                    )}
+                                    <div className="flex-1">
+                                        <div className="text-[#5c2e0b] font-bold text-sm">{voice.name}</div>
+                                        {cleanVoiceDescription(voice.description) && (
+                                            <div className="text-[#5c2e0b]/60 text-xs">{cleanVoiceDescription(voice.description)}</div>
+                                        )}
+                                    </div>
+                                    <button
+                                        onClick={() => {
+                                            toggleVoiceVisibility(voice.voice_id);
+                                            setAvailableVoices([...availableVoices]); // Trigger re-render
+                                        }}
+                                        className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-colors ${
+                                            isHidden
+                                                ? 'bg-gray-200 text-gray-600 hover:bg-gray-300'
+                                                : 'bg-green-100 text-green-700 hover:bg-green-200'
+                                        }`}
+                                    >
+                                        {isHidden ? 'Hidden' : 'Visible'}
+                                    </button>
+                                </div>
+                            );
+                        })}
+                    </div>
+                )}
+            </section>
 
             {/* Account / Subscription */}
             <section className="bg-[#fff8e1] rounded-2xl p-5 border-2 border-[#eecaa0] shadow-sm">

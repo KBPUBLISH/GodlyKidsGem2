@@ -6,8 +6,8 @@ export interface ShopItem {
   id: string;
   name: string;
   price: number;
-  type: 'avatar' | 'frame' | 'hat' | 'body' | 'leftArm' | 'rightArm' | 'legs' | 'animation';
-  value: string; // URL for avatar, Color Class/Hex for frame, Asset ID for parts, or Animation Class
+  type: 'avatar' | 'frame' | 'hat' | 'body' | 'leftArm' | 'rightArm' | 'legs' | 'animation' | 'voice';
+  value: string; // URL for avatar, Color Class/Hex for frame, Asset ID for parts, Animation Class, or Voice ID
   previewColor?: string; // For displaying frame colors in shop
   isPremium?: boolean; // Locked for non-subscribers
 }

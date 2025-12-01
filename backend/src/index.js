@@ -29,6 +29,7 @@ app.use('/api/tts', require('./routes/tts'));
 app.use('/api/voices', require('./routes/voices'));
 app.use('/api/voice-cloning', require('./routes/voiceCloning'));
 app.use('/api/games', require('./routes/games'));
+app.use('/api/lessons', require('./routes/lessons'));
 
 app.get('/', (req, res) => {
   res.send('Godly Kids Backend API is running');

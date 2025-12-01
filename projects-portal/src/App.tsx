@@ -11,6 +11,8 @@ import PageEditor from './pages/PageEditor';
 import Categories from './pages/Categories';
 import Voices from './pages/Voices';
 import Games from './pages/Games';
+import Lessons from './pages/Lessons';
+import LessonForm from './pages/LessonForm';
 
 function App() {
   return (
@@ -29,6 +31,9 @@ function App() {
           <Route path="categories" element={<Categories />} />
           <Route path="voices" element={<Voices />} />
           <Route path="games" element={<Games />} />
+          <Route path="lessons" element={<Lessons />} />
+          <Route path="lessons/new" element={<LessonForm />} />
+          <Route path="lessons/edit/:id" element={<LessonForm />} />
         </Route>
       </Routes>
     </Router>

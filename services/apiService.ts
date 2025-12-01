@@ -889,7 +889,8 @@ export const ApiService = {
       const response = await fetchWithTimeout(`${baseUrl}tts/generate`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text, voiceId, bookId })
+        body: JSON.stringify({ text, voiceId, bookId }),
+        timeout: 60000 // 60 seconds for TTS generation (can take longer for longer texts)
       });
 
       if (response.ok) {
@@ -898,7 +899,12 @@ export const ApiService = {
       }
       console.error('TTS Generation failed:', await response.text());
       return null;
-    } catch (error) {
+    } catch (error: any) {
+      // Handle AbortError gracefully (expected when request is cancelled or times out)
+      if (error?.name === 'AbortError' || error?.message?.includes('aborted')) {
+        // Silently handle abort - this is expected behavior
+        return null;
+      }
       console.error('TTS Error:', error);
       return null;
     }
@@ -920,9 +926,10 @@ export const ApiService = {
         // Map to expected format for backward compatibility
         const mappedVoices = voices.map((v: any) => ({
           voice_id: v.voiceId,
-          name: v.name,
+          name: v.customName || v.name, // Use customName if available, otherwise use name
           preview_url: v.previewUrl,
-          category: v.category
+          category: v.category,
+          characterImage: v.characterImage // Include character image
         }));
         
         if (mappedVoices.length === 0) {
@@ -1107,6 +1114,96 @@ export const ApiService = {
     } catch (error) {
       console.error('Delete Cloned Voice Error:', error);
       return false;
+    }
+  },
+
+  // Lessons API
+  getLessons: async (): Promise<any[]> => {
+    try {
+      const baseUrl = getApiBaseUrl();
+      console.log('📚 Fetching lessons from:', `${baseUrl}lessons?published=true`);
+      const response = await fetchWithTimeout(`${baseUrl}lessons?published=true`, {
+        method: 'GET',
+      });
+
+      console.log('📚 Lessons API response status:', response.status);
+
+      if (response.ok) {
+        const data = await response.json();
+        console.log('📚 Lessons API response data:', data);
+        return Array.isArray(data) ? data : [];
+      }
+
+      const errorText = await response.text().catch(() => 'Unknown error');
+      console.warn('⚠️ Failed to fetch lessons:', response.status, errorText);
+      return [];
+    } catch (error) {
+      console.error('❌ Failed to fetch lessons:', error);
+      return [];
+    }
+  },
+
+  getLesson: async (lessonId: string): Promise<any | null> => {
+    try {
+      const baseUrl = getApiBaseUrl();
+      const response = await fetchWithTimeout(`${baseUrl}lessons/${lessonId}`, {
+        method: 'GET',
+      });
+
+      if (response.ok) {
+        return await response.json();
+      }
+
+      console.warn(`⚠️ Failed to fetch lesson ${lessonId}:`, response.status);
+      return null;
+    } catch (error) {
+      console.error(`❌ Failed to fetch lesson ${lessonId}:`, error);
+      return null;
+    }
+  },
+
+  completeLesson: async (
+    lessonId: string,
+    userId: string,
+    progress: { videoWatched: boolean; devotionalRead: boolean; activityCompleted: boolean },
+    activityResponse?: any,
+    coinsAwarded?: number
+  ): Promise<{ completion: any; coinsAwarded: number } | null> => {
+    try {
+      const baseUrl = getApiBaseUrl();
+      const response = await fetchWithTimeout(`${baseUrl}lessons/${lessonId}/complete`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId, progress, activityResponse, coinsAwarded }),
+      });
+
+      if (response.ok) {
+        return await response.json();
+      }
+
+      console.warn(`⚠️ Failed to complete lesson ${lessonId}:`, response.status);
+      return null;
+    } catch (error) {
+      console.error(`❌ Failed to complete lesson ${lessonId}:`, error);
+      return null;
+    }
+  },
+
+  getLessonCompletion: async (lessonId: string, userId: string): Promise<any | null> => {
+    try {
+      const baseUrl = getApiBaseUrl();
+      const response = await fetchWithTimeout(`${baseUrl}lessons/${lessonId}/completion?userId=${userId}`, {
+        method: 'GET',
+      });
+
+      if (response.ok) {
+        return await response.json();
+      }
+
+      return null;
+    } catch (error) {
+      console.error(`❌ Failed to fetch lesson completion:`, error);
+      return null;
     }
   },
 };

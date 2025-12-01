@@ -1,16 +1,19 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import WoodButton from '../ui/WoodButton';
-import { X, ShoppingBag, Check, Trash2, Crown, Wrench, Play, Pause, ArrowUpToLine, ArrowDownToLine, MoveHorizontal, RotateCcw, RotateCw, ArrowLeftRight, Activity, Save, User, ZoomIn, ZoomOut } from 'lucide-react';
+import { X, ShoppingBag, Check, Trash2, Crown, Wrench, Play, Pause, ArrowUpToLine, ArrowDownToLine, MoveHorizontal, RotateCcw, RotateCw, ArrowLeftRight, Activity, Save, User, ZoomIn, ZoomOut, Mic } from 'lucide-react';
 import { useUser, ShopItem, SavedCharacter } from '../../context/UserContext';
 import AvatarCompositor from '../avatar/AvatarCompositor';
 import { AVATAR_ASSETS } from '../avatar/AvatarAssets';
+import { ApiService } from '../../services/apiService';
+import { filterVisibleVoices } from '../../services/voiceManagementService';
 
 interface ShopModalProps {
   isOpen: boolean;
   onClose: () => void;
+  initialTab?: ShopTab;
 }
 
 // --- SHOP DATA ---
@@ -163,16 +166,128 @@ const SHOP_ANIMATIONS: ShopItem[] = [
     { id: 'anim6', name: 'Spin', price: 600, type: 'animation', value: 'anim-spin', isPremium: true },
 ];
 
-type ShopTab = 'head' | 'hat' | 'body' | 'arms' | 'legs' | 'moves' | 'saves';
+type ShopTab = 'head' | 'hat' | 'body' | 'arms' | 'legs' | 'moves' | 'voices' | 'saves';
 
-const ShopModal: React.FC<ShopModalProps> = ({ isOpen, onClose }) => {
+const ShopModal: React.FC<ShopModalProps> = ({ isOpen, onClose, initialTab }) => {
   const navigate = useNavigate();
-  const [activeTab, setActiveTab] = useState<ShopTab>('head');
+  const [activeTab, setActiveTab] = useState<ShopTab>(initialTab || 'head');
+  const [availableVoices, setAvailableVoices] = useState<any[]>([]);
+  const [loadingVoices, setLoadingVoices] = useState(false);
+  
+  // Update tab when initialTab changes
+  useEffect(() => {
+    if (initialTab) {
+      setActiveTab(initialTab);
+    }
+  }, [initialTab]);
+  
+  // Fetch voices when voices tab is active
+  useEffect(() => {
+    if (!isOpen || activeTab !== 'voices') {
+      return;
+    }
+    
+    setLoadingVoices(true);
+    let isMounted = true;
+    
+    ApiService.getVoices()
+      .then(voices => {
+        if (!isMounted) return;
+        
+        // Safety check for filterVisibleVoices
+        if (typeof filterVisibleVoices !== 'function') {
+          console.error('filterVisibleVoices is not a function');
+          setAvailableVoices([]);
+          return;
+        }
+        
+        const visibleVoices = filterVisibleVoices(voices);
+        // Calculate 30% threshold for coin-purchasable voices
+        const totalVoices = visibleVoices.length;
+        const coinPurchasableCount = Math.ceil(totalVoices * 0.3); // 30% available for coins
+        
+        // Convert to ShopItem format
+        const voiceItems: ShopItem[] = visibleVoices.map((voice, index) => {
+          // First 30% are purchasable with coins, rest require premium
+          const isCoinPurchasable = index < coinPurchasableCount;
+          
+          return {
+            id: `voice-${voice.voice_id}`,
+            name: voice.name,
+            price: isCoinPurchasable ? 200 : 0, // 200 coins for purchasable, 0 for premium-only
+            type: 'voice',
+            value: voice.voice_id,
+            isPremium: !isCoinPurchasable, // Premium-only if not in first 30%
+            characterImage: voice.characterImage, // Add character image
+          };
+        });
+        setAvailableVoices(voiceItems);
+      })
+      .catch(error => {
+        if (!isMounted) return;
+        console.error('Error loading voices:', error);
+        setAvailableVoices([]);
+      })
+      .finally(() => {
+        if (isMounted) {
+          setLoadingVoices(false);
+        }
+      });
+    
+    return () => {
+      isMounted = false;
+    };
+  }, [isOpen, activeTab]);
+
+  // Check if tabs are scrollable and show hint on first visit
+  useEffect(() => {
+    if (!isOpen) return;
+
+    const hasSeenHint = localStorage.getItem('godlykids_shop_scroll_hint_seen') === 'true';
+    if (hasSeenHint) return;
+
+    // Wait for DOM to render
+    const checkScrollable = setTimeout(() => {
+      const container = tabsContainerRef.current;
+      if (container) {
+        const isScrollable = container.scrollWidth > container.clientWidth;
+        if (isScrollable) {
+          setShowScrollHint(true);
+          // Auto-hide after 5 seconds
+          setTimeout(() => {
+            setShowScrollHint(false);
+            localStorage.setItem('godlykids_shop_scroll_hint_seen', 'true');
+          }, 5000);
+        }
+      }
+    }, 500);
+
+    return () => clearTimeout(checkScrollable);
+  }, [isOpen]);
+
+  // Hide hint when user scrolls tabs
+  useEffect(() => {
+    if (!showScrollHint) return;
+
+    const container = tabsContainerRef.current;
+    if (!container) return;
+
+    const handleScroll = () => {
+      setShowScrollHint(false);
+      localStorage.setItem('godlykids_shop_scroll_hint_seen', 'true');
+    };
+
+    container.addEventListener('scroll', handleScroll, { once: true });
+    return () => container.removeEventListener('scroll', handleScroll);
+  }, [showScrollHint]);
+  
   const [isMenuMinimized, setIsMenuMinimized] = useState(false);
   const [isBuilderMode, setIsBuilderMode] = useState(false);
   const [isPlaying, setIsPlaying] = useState(false);
   const [selectedPart, setSelectedPart] = useState<'leftArm' | 'rightArm' | 'legs' | 'head' | 'body' | 'hat' | null>(null);
   const [isSavedFeedback, setIsSavedFeedback] = useState(false);
+  const [showScrollHint, setShowScrollHint] = useState(false);
+  const tabsContainerRef = useRef<HTMLDivElement>(null);
 
   const { 
       coins, 
@@ -232,6 +347,10 @@ const ShopModal: React.FC<ShopModalProps> = ({ isOpen, onClose }) => {
 
   const handleCardClick = (item: ShopItem) => {
       if (isOwned(item.id)) {
+          if (item.type === 'voice') {
+              // Voices don't need to be equipped, they're just unlocked
+              return;
+          }
           if (isEquipped(item)) {
              // Animations cannot be unequipped to null, only swapped
              if (item.type !== 'animation') {
@@ -243,8 +362,18 @@ const ShopModal: React.FC<ShopModalProps> = ({ isOpen, onClose }) => {
              handleEquip(item);
           }
       } else if (item.isPremium && !isSubscribed) {
+          // Premium voices require subscription
           onClose();
           navigate('/paywall');
+      } else if (item.type === 'voice') {
+          // Handle voice purchase
+          if (item.isPremium && isSubscribed) {
+              // Premium voices are free for subscribed users
+              handleBuy(item);
+          } else if (item.price > 0 && coins >= item.price) {
+              // Coin-purchasable voices
+              handleBuy(item);
+          }
       }
   };
 
@@ -256,6 +385,7 @@ const ShopModal: React.FC<ShopModalProps> = ({ isOpen, onClose }) => {
           case 'arms': return SHOP_ARMS;
           case 'legs': return SHOP_LEGS;
           case 'moves': return SHOP_ANIMATIONS;
+          case 'voices': return availableVoices;
           case 'saves': return []; // Handled separately
           default: return [];
       }
@@ -270,6 +400,7 @@ const ShopModal: React.FC<ShopModalProps> = ({ isOpen, onClose }) => {
           case 'rightArm': return equippedRightArm === item.value;
           case 'legs': return equippedLegs === item.value;
           case 'animation': return equippedAnimation === item.value;
+          case 'voice': return false; // Voices don't have an "equipped" state
           default: return false;
       }
   };
@@ -358,6 +489,21 @@ const ShopModal: React.FC<ShopModalProps> = ({ isOpen, onClose }) => {
                         <Activity size={32} className="animate-pulse" />
                     </div>
                 )}
+                {item.type === 'voice' && (
+                    <>
+                        {(item as any).characterImage ? (
+                            <img 
+                                src={(item as any).characterImage} 
+                                alt={item.name}
+                                className="w-full h-full object-cover rounded-lg"
+                            />
+                        ) : (
+                            <div className="flex flex-col items-center justify-center text-[#8B4513]">
+                                <Mic size={32} className="text-[#8B4513]" />
+                            </div>
+                        )}
+                    </>
+                )}
                 {(['hat', 'body', 'leftArm', 'rightArm', 'legs'].includes(item.type)) && AVATAR_ASSETS[item.value] && (
                     <svg viewBox="0 0 100 100" className="w-full h-full p-2 overflow-visible">
                         {AVATAR_ASSETS[item.value]}
@@ -425,7 +571,7 @@ const ShopModal: React.FC<ShopModalProps> = ({ isOpen, onClose }) => {
                     onClick={(e) => { e.stopPropagation(); handleBuy(item); }}
                     disabled={coins < item.price || isDisabled}
                 >
-                    {isDisabled ? 'NEED BODY' : `${item.price} gold`}
+                    {isDisabled ? 'NEED BODY' : item.price === 0 ? 'FREE' : `${item.price} gold`}
                 </WoodButton>
             )}
         </div>
@@ -644,15 +790,55 @@ const ShopModal: React.FC<ShopModalProps> = ({ isOpen, onClose }) => {
                  <div className="absolute inset-y-0 left-0 w-6 bg-gradient-to-r from-[#eecaa0] to-transparent z-20 pointer-events-none"></div>
                  <div className="absolute inset-y-0 right-0 w-6 bg-gradient-to-l from-[#eecaa0] to-transparent z-20 pointer-events-none"></div>
                  
-                 <div className="flex overflow-x-auto p-2 gap-1 no-scrollbar relative z-10 px-4">
+                 <div 
+                    ref={tabsContainerRef}
+                    className="flex overflow-x-auto p-2 gap-1 no-scrollbar relative z-10 px-4"
+                 >
                     {renderTab('head', 'HEADS')}
                     {renderTab('hat', 'HATS')}
                     {renderTab('body', 'BODIES')}
                     {renderTab('arms', 'ARMS')}
                     {renderTab('legs', 'LEGS')}
                     {renderTab('moves', 'MOVES')}
+                    {renderTab('voices', 'VOICES')}
                     {renderTab('saves', 'MY SAVES')}
                  </div>
+
+                 {/* Scroll Hint Animation */}
+                 {showScrollHint && (
+                     <div className="absolute top-0 left-0 right-0 bottom-0 pointer-events-none z-30 flex items-center justify-center">
+                         <div className="animate-scroll-hint">
+                             <div className="relative flex items-center gap-2">
+                                 {/* Pointing finger emoji with arrow */}
+                                 <div className="text-4xl drop-shadow-2xl">👉</div>
+                                 <div className="text-2xl text-[#FFD700] animate-pulse">→</div>
+                             </div>
+                         </div>
+                         <style>{`
+                             @keyframes scroll-hint {
+                                 0%, 100% { 
+                                     transform: translateX(-30px) scale(1);
+                                     opacity: 0.6;
+                                 }
+                                 25% { 
+                                     transform: translateX(30px) scale(1.2);
+                                     opacity: 1;
+                                 }
+                                 50% { 
+                                     transform: translateX(90px) scale(1);
+                                     opacity: 0.6;
+                                 }
+                                 75% { 
+                                     transform: translateX(30px) scale(1.2);
+                                     opacity: 1;
+                                 }
+                             }
+                             .animate-scroll-hint {
+                                 animation: scroll-hint 2.5s ease-in-out infinite;
+                             }
+                         `}</style>
+                     </div>
+                 )}
              </div>
 
              {/* Scrollable Items Content */}

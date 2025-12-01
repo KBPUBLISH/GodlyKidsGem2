@@ -1,6 +1,6 @@
 
-import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import React, { useState, useEffect } from 'react';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { Plus, User as UserIcon, Settings, ChevronLeft, ShoppingBag, Crown } from 'lucide-react';
 import WoodButton from '../components/ui/WoodButton';
 import ShopModal from '../components/features/ShopModal';
@@ -13,6 +13,7 @@ const PROFILE_BG_COLORS = ['bg-[#F8BBD0]', 'bg-[#4FC3F7]', 'bg-[#C5E1A5]', 'bg-[
 
 const ProfileSelectionPage: React.FC = () => {
   const navigate = useNavigate();
+  const location = useLocation();
   const { 
     isSubscribed, 
     parentName,
@@ -44,6 +45,15 @@ const ProfileSelectionPage: React.FC = () => {
     hatScale
   } = useUser();
   const [isShopOpen, setIsShopOpen] = useState(false);
+  
+  // Open shop if requested via navigation state
+  useEffect(() => {
+    if (location.state?.openShop) {
+      setIsShopOpen(true);
+      // Clear the state to prevent reopening on re-render
+      navigate(location.pathname, { replace: true, state: {} });
+    }
+  }, [location.state, navigate]);
 
   // Helper to pick a color based on index (consistent for same kid order)
   const getKidColor = (index: number) => PROFILE_BG_COLORS[index % PROFILE_BG_COLORS.length];
@@ -247,7 +257,11 @@ const ProfileSelectionPage: React.FC = () => {
              </WoodButton>
           </div>
           
-          <ShopModal isOpen={isShopOpen} onClose={() => setIsShopOpen(false)} />
+          <ShopModal 
+            isOpen={isShopOpen} 
+            onClose={() => setIsShopOpen(false)}
+            initialTab={location.state?.shopTab || undefined}
+          />
 
       </div>
     </div>

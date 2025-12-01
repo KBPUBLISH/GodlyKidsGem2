@@ -188,18 +188,20 @@ export const BookPageRenderer: React.FC<BookPageRendererProps> = ({
                         <div
                             key={idx}
                             ref={(el) => { textBoxRefs.current[idx] = el; }}
-                            className="absolute pointer-events-auto overflow-y-auto p-2 group"
+                            className="absolute pointer-events-auto overflow-y-auto p-2 pt-6 group"
                             style={{
                                 left: `${box.x}%`,
-                                top: page.scrollUrl ? `max(${box.y}%, ${scrollTopVal})` : `${box.y}%`,
+                                top: page.scrollUrl 
+                                    ? `max(${box.y}%, calc(${scrollTopVal} + 8px))` 
+                                    : `${box.y}%`,
                                 width: `${box.width || 30}%`,
                                 textAlign: box.alignment || 'left',
                                 color: box.color || '#4a3b2a',
                                 fontFamily: box.fontFamily || 'Comic Sans MS',
                                 fontSize: `${box.fontSize || 24}px`,
                                 maxHeight: page.scrollUrl
-                                    ? `calc(100% - max(${box.y}%, ${scrollTopVal}) - 40px)`
-                                    : `calc(100% - ${box.y}% - 40px)`,
+                                    ? `calc(100% - max(${box.y}%, ${scrollTopVal}) - 60px)`
+                                    : `calc(100% - ${box.y}% - 60px)`,
                                 overflowY: 'auto',
                                 textShadow: '1px 1px 2px rgba(255,255,255,0.8)',
                                 scrollBehavior: 'smooth' // Enable smooth scrolling

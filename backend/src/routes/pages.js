@@ -6,7 +6,7 @@ const Page = require('../models/Page');
 router.get('/book/:bookId', async (req, res) => {
     try {
         const pages = await Page.find({ bookId: req.params.bookId }).sort({ pageNumber: 1 });
-        
+
         // Map pages to include textBoxes and legacy fields at root level for backward compatibility
         const pagesWithTextBoxes = pages.map(page => {
             const pageObj = page.toObject();
@@ -14,7 +14,7 @@ router.get('/book/:bookId', async (req, res) => {
             if (pageObj.content && pageObj.content.textBoxes) {
                 pageObj.textBoxes = pageObj.content.textBoxes;
             }
-            
+
             // Map files.background to legacy backgroundUrl and backgroundType
             if (pageObj.files && pageObj.files.background) {
                 if (pageObj.files.background.url !== undefined) {
@@ -24,7 +24,7 @@ router.get('/book/:bookId', async (req, res) => {
                     pageObj.backgroundType = pageObj.files.background.type;
                 }
             }
-            
+
             // Map files.scroll to legacy scrollUrl and scrollHeight
             if (pageObj.files && pageObj.files.scroll) {
                 if (pageObj.files.scroll.url !== undefined) {
@@ -34,10 +34,10 @@ router.get('/book/:bookId', async (req, res) => {
                     pageObj.scrollHeight = pageObj.files.scroll.height;
                 }
             }
-            
+
             return pageObj;
         });
-        
+
         res.json(pagesWithTextBoxes);
     } catch (error) {
         res.status(500).json({ message: error.message });
@@ -50,16 +50,32 @@ router.post('/', async (req, res) => {
         bookId: req.body.bookId,
         pageNumber: req.body.pageNumber,
     };
-    
+
     // New organized structure - always initialize content
     pageData.content = {
         text: req.body.content?.text || req.body.content || req.body.text || '',
         textBoxes: req.body.content?.textBoxes || req.body.textBoxes || [],
     };
-    
+
     // Files structure
     if (req.body.files) {
         pageData.files = req.body.files;
+
+        // Ensure background is set if provided at top level
+        if (req.body.backgroundUrl && (!pageData.files.background || !pageData.files.background.url)) {
+            pageData.files.background = {
+                url: req.body.backgroundUrl,
+                type: req.body.backgroundType
+            };
+        }
+
+        // Ensure scroll is set if provided at top level
+        if (req.body.scrollUrl && (!pageData.files.scroll || !pageData.files.scroll.url)) {
+            pageData.files.scroll = {
+                url: req.body.scrollUrl,
+                height: req.body.scrollHeight
+            };
+        }
     } else {
         // Map legacy fields to new structure for backward compatibility
         pageData.files = {
@@ -78,7 +94,7 @@ router.post('/', async (req, res) => {
             },
         };
     }
-    
+
     // Legacy fields (for backward compatibility)
     pageData.imageUrl = req.body.imageUrl;
     pageData.audioUrl = req.body.audioUrl;
@@ -89,13 +105,13 @@ router.post('/', async (req, res) => {
     pageData.textBoxes = req.body.textBoxes; // Legacy
 
     // Check if page with this pageNumber already exists for this book
-    const existingPage = await Page.findOne({ 
-        bookId: pageData.bookId, 
-        pageNumber: pageData.pageNumber 
+    const existingPage = await Page.findOne({
+        bookId: pageData.bookId,
+        pageNumber: pageData.pageNumber
     });
-    
+
     if (existingPage) {
-        return res.status(400).json({ 
+        return res.status(400).json({
             message: `Page number ${pageData.pageNumber} already exists for this book. Please choose a different page number or update the existing page.`,
             error: 'DUPLICATE_PAGE_NUMBER',
             existingPageId: existingPage._id
@@ -106,7 +122,7 @@ router.post('/', async (req, res) => {
 
     try {
         const newPage = await page.save();
-        
+
         // Map response for backward compatibility
         const pageObj = newPage.toObject();
         if (pageObj.content) {
@@ -118,13 +134,13 @@ router.post('/', async (req, res) => {
                 pageObj.textBoxes = pageObj.content.textBoxes || [];
             }
         }
-        
+
         res.status(201).json(pageObj);
     } catch (error) {
         console.error('Error saving page:', error);
         if (error.code === 11000) {
             // Duplicate key error
-            return res.status(400).json({ 
+            return res.status(400).json({
                 message: `Page number ${pageData.pageNumber} already exists for this book. Please choose a different page number.`,
                 error: 'DUPLICATE_PAGE_NUMBER'
             });
@@ -141,14 +157,14 @@ router.put('/:id', async (req, res) => {
 
         // Check if pageNumber is being changed and if it would create a duplicate
         if (req.body.pageNumber !== undefined && req.body.pageNumber !== page.pageNumber) {
-            const existingPage = await Page.findOne({ 
-                bookId: page.bookId, 
+            const existingPage = await Page.findOne({
+                bookId: page.bookId,
                 pageNumber: req.body.pageNumber,
                 _id: { $ne: page._id } // Exclude current page
             });
             if (existingPage) {
-                return res.status(400).json({ 
-                    message: `Page number ${req.body.pageNumber} already exists for this book. Please choose a different page number.` 
+                return res.status(400).json({
+                    message: `Page number ${req.body.pageNumber} already exists for this book. Please choose a different page number.`
                 });
             }
         }
@@ -161,8 +177,8 @@ router.put('/:id', async (req, res) => {
             hasFiles: !!req.body.files,
             pageId: req.params.id
         });
-        
-        if (req.body.backgroundUrl !== undefined && !req.body.files) {
+
+        if (req.body.backgroundUrl !== undefined) {
             if (!page.files) {
                 page.files = { images: [], videos: [], audio: {} };
             }
@@ -179,16 +195,16 @@ router.put('/:id', async (req, res) => {
             if (req.body.backgroundType !== undefined) {
                 page.backgroundType = req.body.backgroundType;
             }
-            console.log('Updated background:', { 
-                url: page.files.background.url, 
+            console.log('Updated background:', {
+                url: page.files.background.url,
                 type: page.files.background.type,
                 legacyUrl: page.backgroundUrl,
                 legacyType: page.backgroundType
             });
         }
-        
+
         // Handle scrollUrl - check if it's explicitly provided (even if empty)
-        if (req.body.scrollUrl !== undefined && !req.body.files) {
+        if (req.body.scrollUrl !== undefined) {
             if (!page.files) {
                 page.files = { images: [], videos: [], audio: {} };
             }
@@ -234,10 +250,10 @@ router.put('/:id', async (req, res) => {
         }
 
         // Update all other fields (but don't overwrite what we just set)
-        // Exclude backgroundUrl and backgroundType from otherFields since we've already handled them
-        const { textBoxes, content, backgroundUrl, backgroundType, scrollUrl, scrollHeight, ...otherFields } = req.body;
+        // Exclude backgroundUrl, backgroundType, scrollUrl, scrollHeight, and files from otherFields
+        const { textBoxes, content, backgroundUrl, backgroundType, scrollUrl, scrollHeight, files, ...otherFields } = req.body;
         Object.assign(page, otherFields);
-        
+
         // Handle content.text if provided
         if (content && content.text !== undefined) {
             if (!page.content) {
@@ -247,13 +263,13 @@ router.put('/:id', async (req, res) => {
         }
 
         const updatedPage = await page.save();
-        
+
         // Map response for backward compatibility
         const pageObj = updatedPage.toObject();
         if (pageObj.content && pageObj.content.textBoxes) {
             pageObj.textBoxes = pageObj.content.textBoxes;
         }
-        
+
         // Map files.background to legacy backgroundUrl and backgroundType
         if (pageObj.files && pageObj.files.background) {
             if (pageObj.files.background.url !== undefined) {
@@ -263,7 +279,7 @@ router.put('/:id', async (req, res) => {
                 pageObj.backgroundType = pageObj.files.background.type;
             }
         }
-        
+
         // Map files.scroll to legacy scrollUrl and scrollHeight
         if (pageObj.files && pageObj.files.scroll) {
             if (pageObj.files.scroll.url !== undefined) {
@@ -273,20 +289,20 @@ router.put('/:id', async (req, res) => {
                 pageObj.scrollHeight = pageObj.files.scroll.height;
             }
         }
-        
+
         console.log('Sending updated page response:', {
             id: pageObj._id,
             backgroundUrl: pageObj.backgroundUrl,
             backgroundType: pageObj.backgroundType,
             filesBackground: pageObj.files?.background?.url
         });
-        
+
         res.json(pageObj);
     } catch (error) {
         console.error('Error updating page:', error);
         if (error.code === 11000) {
             // Duplicate key error
-            return res.status(400).json({ 
+            return res.status(400).json({
                 message: `Page number ${req.body.pageNumber} already exists for this book. Please choose a different page number.`,
                 error: 'DUPLICATE_PAGE_NUMBER'
             });

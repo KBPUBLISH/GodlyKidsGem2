@@ -164,8 +164,8 @@ const HomePage: React.FC = () => {
       <div className="px-4 pt-28 space-y-2 pb-52">
 
         {/* --- Stories Section --- */}
-        <div className="w-full overflow-x-auto no-scrollbar pb-6 pt-2 -mt-2 -mx-4">
-          <div className="flex space-x-4 px-4">
+        <div className="w-screen overflow-x-auto no-scrollbar pb-6 pt-2 -mt-2 -mx-4">
+          <div className="flex space-x-4 px-4 pr-8">
 
             {/* SPECIAL: Daily Key Story */}
             <button
@@ -244,7 +244,7 @@ const HomePage: React.FC = () => {
 
             {/* SPECIAL: Prayer Challenge Story */}
             <button
-              className="flex flex-col items-center gap-2 group min-w-[76px] md:min-w-[110px] outline-none mr-8"
+              className="flex flex-col items-center gap-2 group min-w-[76px] md:min-w-[110px] outline-none"
               onClick={handlePrayerClick}
             >
               {/* Ring */}

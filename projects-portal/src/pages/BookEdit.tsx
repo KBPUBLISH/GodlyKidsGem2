@@ -251,15 +251,18 @@ const BookEdit: React.FC = () => {
                 category,
                 status,
                 files: {
+                    coverImage: coverImage || null,
                     audio: audioFiles,
                 },
                 games: selectedGames,
                 bookGames: bookGames,
             };
+            console.log('Updating book with payload:', payload);
             await axios.put(`http://localhost:5001/api/books/${bookId}`, payload);
             navigate('/books');
         } catch (err) {
             console.error('Error updating book:', err);
+            alert('Failed to update book. Please check the console for details.');
         } finally {
             setLoading(false);
         }

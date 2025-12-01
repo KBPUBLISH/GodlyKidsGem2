@@ -64,3 +64,4 @@ class ReadingProgressService {
 
 export const readingProgressService = new ReadingProgressService();
 
+

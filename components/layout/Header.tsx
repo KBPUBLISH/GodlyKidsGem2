@@ -20,6 +20,10 @@ const Header: React.FC<HeaderProps> = ({ isVisible, title = "GODLY KIDS" }) => {
   const { musicEnabled, toggleMusic, playClick } = useAudio();
   const [isShopOpen, setIsShopOpen] = useState(false);
   const [isDetailOpen, setIsDetailOpen] = useState(false);
+  
+  // Check if we're on book reader page - music should appear muted
+  const isBookReader = location.pathname.startsWith('/read/');
+  const displayMusicEnabled = isBookReader ? false : musicEnabled;
 
   // Restore background music when returning from book reader
   useEffect(() => {
@@ -135,17 +139,22 @@ const Header: React.FC<HeaderProps> = ({ isVisible, title = "GODLY KIDS" }) => {
               {/* Music Toggle Button */}
               <button
                 onClick={() => {
+                  if (isBookReader) {
+                    // Don't allow toggling music while in book reader
+                    return;
+                  }
                   playClick();
                   toggleMusic();
                 }}
-                className={`bg-black/30 hover:bg-black/40 rounded-full p-2 border transition-colors active:scale-95 ${musicEnabled ? 'border-[#FFD700]/40' : 'border-white/20'
-                  }`}
-                title={musicEnabled ? "Music On - Click to turn off" : "Music Off - Click to turn on"}
+                className={`bg-black/30 hover:bg-black/40 rounded-full p-2 border transition-colors active:scale-95 ${displayMusicEnabled ? 'border-[#FFD700]/40' : 'border-white/20'
+                  } ${isBookReader ? 'opacity-60 cursor-not-allowed' : ''}`}
+                title={isBookReader ? "Music paused - Book has its own background music" : (musicEnabled ? "Music On - Click to turn off" : "Music Off - Click to turn on")}
+                disabled={isBookReader}
               >
                 <Music
                   size={18}
-                  className={musicEnabled ? "text-[#FFD700]" : "text-white/50"}
-                  fill={musicEnabled ? "#FFD700" : "none"}
+                  className={displayMusicEnabled ? "text-[#FFD700]" : "text-white/50"}
+                  fill={displayMusicEnabled ? "#FFD700" : "none"}
                 />
               </button>
 

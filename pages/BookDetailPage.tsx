@@ -1,7 +1,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
-import { Heart, BookOpen, Crown, PlayCircle, Headphones, Disc, Lock, Globe } from 'lucide-react';
+import { Heart, BookOpen, Crown, PlayCircle, Headphones, Disc, Lock, Globe, Bookmark, Plus } from 'lucide-react';
 import { useBooks } from '../context/BooksContext';
 import { Book } from '../types';
 import { readingProgressService } from '../services/readingProgressService';
@@ -9,6 +9,7 @@ import { useAudio } from '../context/AudioContext';
 import { ApiService } from '../services/apiService';
 import { readCountService } from '../services/readCountService';
 import { favoritesService } from '../services/favoritesService';
+import { libraryService } from '../services/libraryService';
 import GameWebView from '../components/features/GameWebView';
 import ChallengeGameModal from '../components/features/ChallengeGameModal';
 import StrengthGameModal from '../components/features/StrengthGameModal';
@@ -57,6 +58,8 @@ const BookDetailPage: React.FC = () => {
   const [showPrayerGame, setShowPrayerGame] = useState(false);
   const [readCount, setReadCount] = useState<number>(0);
   const [favoriteCount, setFavoriteCount] = useState<number>(0);
+  const [isFavorited, setIsFavorited] = useState<boolean>(false);
+  const [isInLibrary, setIsInLibrary] = useState<boolean>(false);
 
   // Restore background music when returning from book reader
   useEffect(() => {
@@ -167,11 +170,14 @@ const BookDetailPage: React.FC = () => {
       const count = readCountService.getReadCount(id);
       setReadCount(count);
 
-      // Get favorite count
-      // Note: In production, this should come from the backend API
-      // For now, we'll use a simple local storage approach
+      // Get favorite status
       const favorites = favoritesService.getFavorites();
-      const isFavorited = favorites.includes(id);
+      const favorited = favorites.includes(id);
+      setIsFavorited(favorited);
+
+      // Get library status
+      const inLibrary = libraryService.isInLibrary(id);
+      setIsInLibrary(inLibrary);
 
       // Try to get stored favorite count for this book
       // In production, this should come from the backend API
@@ -180,25 +186,69 @@ const BookDetailPage: React.FC = () => {
         setFavoriteCount(parseInt(storedCount, 10));
       } else {
         // Initialize with 0 (in production, this comes from backend)
-        // For demo purposes, you can set a base count here if needed
-        const baseCount = 0; // Start at 0, will increment when users favorite
+        const baseCount = 0;
         setFavoriteCount(baseCount);
         localStorage.setItem(`book_fav_count_${id}`, baseCount.toString());
       }
     }
   }, [id]);
 
+  // Refresh read count when returning from book reader
+  useEffect(() => {
+    const handleFocus = () => {
+      if (id) {
+        const count = readCountService.getReadCount(id);
+        setReadCount(count);
+      }
+    };
+    window.addEventListener('focus', handleFocus);
+    return () => window.removeEventListener('focus', handleFocus);
+  }, [id]);
+
   // Update favorite count when user favorites/unfavorites
-  const handleFavoriteToggle = () => {
-    if (!id) return;
-    const isFavorited = favoritesService.isFavorite(id);
+  const handleFavoriteToggle = (e: React.MouseEvent) => {
+    e.stopPropagation(); // Prevent navigation
+    e.preventDefault(); // Prevent any default behavior
+    if (!id) {
+      console.warn('No book ID for favorite toggle');
+      return;
+    }
+    console.log('❤️ Toggling favorite for book:', id);
     const newFavoriteState = favoritesService.toggleFavorite(id);
+    setIsFavorited(newFavoriteState);
+    console.log('❤️ New favorite state:', newFavoriteState);
 
     // Update the displayed count
     const currentCount = parseInt(localStorage.getItem(`book_fav_count_${id}`) || '0', 10);
     const newCount = newFavoriteState ? currentCount + 1 : Math.max(0, currentCount - 1);
     setFavoriteCount(newCount);
     localStorage.setItem(`book_fav_count_${id}`, newCount.toString());
+    console.log('❤️ Updated favorite count:', newCount);
+  };
+
+  // Handle save to library
+  const handleSaveToLibrary = (e: React.MouseEvent) => {
+    e.stopPropagation(); // Prevent navigation
+    e.preventDefault(); // Prevent any default behavior
+    if (!id) {
+      console.warn('No book ID for save to library');
+      return;
+    }
+    console.log('📚 Saving to library:', id);
+    const newLibraryState = libraryService.toggleLibrary(id);
+    setIsInLibrary(newLibraryState);
+    console.log('📚 New library state:', newLibraryState);
+    
+    // Also add to favorites when saving to library
+    if (newLibraryState && !isFavorited) {
+      const favState = favoritesService.toggleFavorite(id);
+      setIsFavorited(favState);
+      const currentCount = parseInt(localStorage.getItem(`book_fav_count_${id}`) || '0', 10);
+      const newCount = favState ? currentCount + 1 : currentCount;
+      setFavoriteCount(newCount);
+      localStorage.setItem(`book_fav_count_${id}`, newCount.toString());
+      console.log('📚 Also added to favorites, new count:', newCount);
+    }
   };
 
   // Check if book is completed (user has read all pages)
@@ -270,10 +320,6 @@ const BookDetailPage: React.FC = () => {
             <div className="w-0 h-0 border-t-[8px] border-t-transparent border-r-[12px] border-r-white border-b-[8px] border-b-transparent mr-1"></div>
           </button>
 
-          {/* Crown Icon */}
-          <div className="bg-[#fdf6e3] px-4 py-1 rounded-full border-b-4 border-[#d4c5a0] shadow-lg flex items-center justify-center">
-            <Crown className="text-[#8B4513]" size={24} fill="#8B4513" />
-          </div>
         </div>
 
         {/* Main Content Area - Swaps based on type */}
@@ -297,22 +343,48 @@ const BookDetailPage: React.FC = () => {
             <>
               {/* Add to Library Button */}
               <div className="w-full max-w-sm">
-                <button className="w-full bg-gradient-to-b from-[#8B4513] to-[#5c2e0b] hover:from-[#A0522D] hover:to-[#70380d] text-[#f3e5ab] font-display font-bold text-xl py-3 rounded-full shadow-[0_4px_0_#3e1f07,0_8px_15px_rgba(0,0,0,0.4)] border-2 border-[#a05f2c] active:translate-y-[4px] active:shadow-[0_0_0_#3e1f07] transition-all text-center flex items-center justify-center gap-2">
-                  <span>Add to library</span>
+                <button
+                  onClick={handleSaveToLibrary}
+                  className={`w-full bg-gradient-to-b ${isInLibrary 
+                    ? 'from-[#6da34d] to-[#5a8a3f] hover:from-[#7db85b] hover:to-[#6a9a4f]' 
+                    : 'from-[#8B4513] to-[#5c2e0b] hover:from-[#A0522D] hover:to-[#70380d]'
+                  } text-[#f3e5ab] font-display font-bold text-xl py-3 rounded-full shadow-[0_4px_0_#3e1f07,0_8px_15px_rgba(0,0,0,0.4)] border-2 border-[#a05f2c] active:translate-y-[4px] active:shadow-[0_0_0_#3e1f07] transition-all text-center flex items-center justify-center gap-2`}
+                >
+                  {isInLibrary ? (
+                    <>
+                      <Bookmark size={20} fill="currentColor" />
+                      <span>Saved to Library</span>
+                    </>
+                  ) : (
+                    <>
+                      <Plus size={20} />
+                      <span>Save to Library</span>
+                    </>
+                  )}
                 </button>
               </div>
 
               {/* Stats Row (Audio) */}
               <div className="w-full max-w-sm flex justify-between items-center px-4 text-[#e2cba5] font-bold drop-shadow-md">
-                <div className="flex items-center gap-2">
+                <button
+                  onClick={(e) => e.stopPropagation()}
+                  className="flex items-center gap-2 hover:opacity-80 transition-opacity cursor-default"
+                >
                   <Headphones size={20} />
                   <span className="text-lg">{readCount} Listen</span>
-                </div>
+                </button>
                 <div className="h-6 w-px bg-white/20"></div>
-                <div className="flex items-center gap-2">
-                  <Heart size={20} className="text-[#FF5252]" fill="#FF5252" />
+                <button
+                  onClick={handleFavoriteToggle}
+                  className="flex items-center gap-2 hover:opacity-80 transition-opacity active:scale-95 cursor-pointer"
+                >
+                  <Heart 
+                    size={20} 
+                    className={`${isFavorited ? 'text-[#FF5252] fill-[#FF5252]' : 'text-[#FF5252]'}`}
+                    fill={isFavorited ? '#FF5252' : 'none'}
+                  />
                   <span className="text-lg">{favoriteCount} Favs</span>
-                </div>
+                </button>
               </div>
             </>
           ) : (
@@ -450,17 +522,50 @@ const BookDetailPage: React.FC = () => {
               )}
 
               {/* Stats Row (Read) */}
-              <div className="w-full max-w-sm bg-[#2d1809]/80 backdrop-blur-sm rounded-xl py-2 px-4 flex justify-between items-center text-[#e2cba5] font-bold shadow-inner border border-[#ffffff10]">
-                <div className="flex items-center gap-2">
+              <div className="w-full max-w-sm bg-[#2d1809]/80 backdrop-blur-sm rounded-xl py-2 px-4 flex justify-between items-center text-[#e2cba5] font-bold shadow-inner border border-[#ffffff10] relative z-10">
+                <button
+                  onClick={(e) => e.stopPropagation()}
+                  className="flex items-center gap-2 hover:opacity-80 transition-opacity cursor-default pointer-events-auto"
+                >
                   <BookOpen size={20} />
                   <span className="text-lg">{readCount} Read</span>
-                </div>
+                </button>
                 <div className="h-6 w-px bg-white/20"></div>
-                <div className="flex items-center gap-2">
-                  <Heart size={20} className="text-[#FF5252]" fill="#FF5252" />
+                <button
+                  onClick={handleFavoriteToggle}
+                  className="flex items-center gap-2 hover:opacity-80 transition-opacity active:scale-95 cursor-pointer pointer-events-auto relative z-20"
+                  type="button"
+                >
+                  <Heart 
+                    size={20} 
+                    className={`${isFavorited ? 'text-[#FF5252] fill-[#FF5252]' : 'text-[#FF5252]'}`}
+                    fill={isFavorited ? '#FF5252' : 'none'}
+                  />
                   <span className="text-lg">{favoriteCount} Fav</span>
-                </div>
+                </button>
               </div>
+
+              {/* Save to Library Button */}
+              <button
+                onClick={handleSaveToLibrary}
+                type="button"
+                className={`w-full max-w-sm bg-gradient-to-b ${isInLibrary 
+                  ? 'from-[#6da34d] to-[#5a8a3f] hover:from-[#7db85b] hover:to-[#6a9a4f]' 
+                  : 'from-[#8B4513] to-[#5c2e0b] hover:from-[#A0522D] hover:to-[#70380d]'
+                } text-[#f3e5ab] font-display font-bold text-lg py-2.5 rounded-full shadow-[0_4px_0_#3e1f07,0_8px_15px_rgba(0,0,0,0.4)] border-2 border-[#a05f2c] active:translate-y-[4px] active:shadow-[0_0_0_#3e1f07] transition-all text-center flex items-center justify-center gap-2 relative z-20 pointer-events-auto`}
+              >
+                {isInLibrary ? (
+                  <>
+                    <Bookmark size={18} fill="currentColor" />
+                    <span>Saved to Library</span>
+                  </>
+                ) : (
+                  <>
+                    <Plus size={18} />
+                    <span>Save to Library</span>
+                  </>
+                )}
+              </button>
             </>
           )}
         </div>

@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
-import { ChevronLeft, ChevronRight, X, Play, Pause, Volume2, Mic, Check, Music, Home, Heart, Star, RotateCcw, Gamepad2 } from 'lucide-react';
+import { ChevronLeft, ChevronRight, X, Play, Pause, Volume2, Mic, Check, Music, Home, Heart, Star, RotateCcw } from 'lucide-react';
 import { ApiService } from '../services/apiService';
 import { voiceCloningService, ClonedVoice } from '../services/voiceCloningService';
 import VoiceCloningModal from '../components/features/VoiceCloningModal';
@@ -119,28 +119,72 @@ const BookReaderPage: React.FC = () => {
     useEffect(() => {
         console.log('📖 BookReaderPage MOUNTED - KILLING ALL APP MUSIC');
 
-        // 1. Pause app background music immediately
+        // 1. Save current music state before muting
+        const currentMusicState = musicEnabled;
+        wasMusicEnabledRef.current = currentMusicState;
+        localStorage.setItem('godly_kids_music_was_enabled', currentMusicState.toString());
+
+        // 2. Pause app background music immediately
         setGameMode(false);
         setMusicPaused(true);
 
-        // 2. Nuclear Option: Kill all other audio elements
+        // 3. Force mute background music by directly toggling if enabled
+        if (currentMusicState) {
+            console.log('🎵 BookReader: Force muting background music');
+            // Directly toggle music off (this updates the state and stops audio)
+            toggleMusic();
+            
+            // Also try clicking the button to ensure UI reflects the state
+            setTimeout(() => {
+                const musicButton = document.querySelector('button[title*="Music"], button[title*="music"]') as HTMLButtonElement;
+                if (musicButton && !musicButton.disabled) {
+                    musicButton.click();
+                }
+            }, 50);
+        }
+
+        // 4. Nuclear Option: Kill all other audio elements (more aggressive)
+        // BUT preserve book background music
         const killAllAudio = () => {
             const allAudio = document.querySelectorAll('audio');
             allAudio.forEach(audio => {
-                // Don't kill our own book music if it exists
+                // Don't kill our own book music - it should play!
                 if (bookBackgroundMusicRef.current && audio === bookBackgroundMusicRef.current) {
                     return;
                 }
+                // Force pause and mute only app background music
                 audio.pause();
                 audio.volume = 0;
+                audio.currentTime = 0; // Reset position
             });
         };
         killAllAudio();
 
-        // 3. Keep killing audio every 100ms
-        const killInterval = setInterval(killAllAudio, 100);
+        // 5. Keep killing app background audio aggressively, but preserve book music
+        let killCount = 0;
+        let killInterval: NodeJS.Timeout | null = setInterval(() => {
+            killAllAudio();
+            // Ensure book music continues playing if it should be
+            if (bookBackgroundMusicRef.current && bookMusicEnabled && bookBackgroundMusicRef.current.paused) {
+                bookBackgroundMusicRef.current.play().catch(() => {
+                    // Ignore play errors - might be user interaction required
+                });
+            }
+            killCount++;
+            // After 1 second (20 iterations at 50ms), slow down to 200ms
+            if (killCount === 20 && killInterval) {
+                clearInterval(killInterval);
+                killInterval = setInterval(() => {
+                    killAllAudio();
+                    // Keep book music playing
+                    if (bookBackgroundMusicRef.current && bookMusicEnabled && bookBackgroundMusicRef.current.paused) {
+                        bookBackgroundMusicRef.current.play().catch(() => {});
+                    }
+                }, 200);
+            }
+        }, 50);
 
-        // 4. Fetch book data and setup book music
+        // 6. Fetch book data and setup book music
         const fetchBookData = async () => {
             if (!bookId) return;
             try {
@@ -165,6 +209,23 @@ const BookReaderPage: React.FC = () => {
                         audio.preload = 'auto';
                         bookBackgroundMusicRef.current = audio;
 
+                        // Start playing book music automatically when loaded
+                        audio.addEventListener('canplaythrough', () => {
+                            if (bookMusicEnabled) {
+                                console.log('🎵 Book music ready - starting playback');
+                                audio.play().catch(err => {
+                                    console.warn('⚠️ Book music auto-play prevented:', err);
+                                });
+                            }
+                        }, { once: true });
+
+                        // Try to play immediately if already loaded
+                        if (audio.readyState >= 3 && bookMusicEnabled) {
+                            audio.play().catch(err => {
+                                console.warn('⚠️ Book music immediate play prevented:', err);
+                            });
+                        }
+
                         // Trigger a state update to notify the second effect that music is ready
                         // We can use setHasBookMusic(true) which we already did, 
                         // but we might need to force a re-check if it was already true.
@@ -181,7 +242,7 @@ const BookReaderPage: React.FC = () => {
         // Cleanup function
         return () => {
             console.log('📖 BookReaderPage UNMOUNTING - Cleanup');
-            clearInterval(killInterval);
+            if (killInterval) clearInterval(killInterval);
 
             // Stop and destroy book music
             if (bookBackgroundMusicRef.current) {
@@ -1070,14 +1131,12 @@ const BookReaderPage: React.FC = () => {
                                         </>
                                     )}
 
-                                    {/* Voice Cloning Feature Disabled - ElevenLabs Limit Reached */}
                                     {/* Separator */}
                                     {(voices.length > 0 || clonedVoices.length > 0) && (
                                         <div className="border-t border-white/20 my-1"></div>
                                     )}
 
-                                    {/* Create Voice Option - DISABLED */}
-                                    {/* 
+                                    {/* Create Voice Option */}
                                     <button
                                         onClick={(e) => {
                                             e.stopPropagation();
@@ -1089,7 +1148,6 @@ const BookReaderPage: React.FC = () => {
                                         <Mic className="w-4 h-4" />
                                         Create Your Voice
                                     </button>
-                                    */}
 
                                     {/* No voices message */}
                                     {voices.length === 0 && clonedVoices.length === 0 && (
@@ -1282,14 +1340,14 @@ const BookReaderPage: React.FC = () => {
                             </div>
 
                             {/* Action Buttons Grid */}
-                            <div className="grid grid-cols-2 gap-4 w-full">
+                            <div className="flex flex-col gap-4 w-full">
                                 {/* Read Again */}
                                 <button
                                     onClick={(e) => {
                                         e.stopPropagation();
                                         setCurrentPageIndex(0);
                                     }}
-                                    className="col-span-2 bg-[#4CAF50] hover:bg-[#43A047] text-white p-4 rounded-xl font-bold shadow-lg border-b-4 border-[#2E7D32] active:border-b-0 active:translate-y-1 transition-all flex items-center justify-center gap-2 group"
+                                    className="bg-[#4CAF50] hover:bg-[#43A047] text-white p-4 rounded-xl font-bold shadow-lg border-b-4 border-[#2E7D32] active:border-b-0 active:translate-y-1 transition-all flex items-center justify-center gap-2 group"
                                 >
                                     <RotateCcw className="w-5 h-5 group-hover:-rotate-180 transition-transform duration-500" />
                                     Read Again
@@ -1312,22 +1370,10 @@ const BookReaderPage: React.FC = () => {
                                         }, 150);
                                         navigate('/home');
                                     }}
-                                    className="bg-[#2196F3] hover:bg-[#1E88E5] text-white p-4 rounded-xl font-bold shadow-lg border-b-4 border-[#1565C0] active:border-b-0 active:translate-y-1 transition-all flex flex-col items-center gap-1 group"
+                                    className="bg-[#2196F3] hover:bg-[#1E88E5] text-white p-4 rounded-xl font-bold shadow-lg border-b-4 border-[#1565C0] active:border-b-0 active:translate-y-1 transition-all flex items-center justify-center gap-2 group"
                                 >
                                     <Home className="w-6 h-6 group-hover:scale-110 transition-transform" />
-                                    <span className="text-sm">Home</span>
-                                </button>
-
-                                {/* Play Game */}
-                                <button
-                                    onClick={(e) => {
-                                        e.stopPropagation();
-                                        navigate('/games');
-                                    }}
-                                    className="bg-[#9C27B0] hover:bg-[#8E24AA] text-white p-4 rounded-xl font-bold shadow-lg border-b-4 border-[#7B1FA2] active:border-b-0 active:translate-y-1 transition-all flex flex-col items-center gap-1 group"
-                                >
-                                    <Gamepad2 className="w-6 h-6 group-hover:rotate-12 transition-transform" />
-                                    <span className="text-sm">Play Games</span>
+                                    <span>Home</span>
                                 </button>
                             </div>
 

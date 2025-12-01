@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { ChevronLeft, Crown, Play, Music, Headphones, Heart, Bookmark, Eye, Hammer, Wrench } from 'lucide-react';
 import { getApiBaseUrl } from '../services/apiService';
+import { libraryService } from '../services/libraryService';
 
 interface AudioItem {
     _id?: string;
@@ -35,15 +36,39 @@ const PlaylistDetailPage: React.FC = () => {
     const [isFavorited, setIsFavorited] = useState(false);
     const [isLiked, setIsLiked] = useState(false);
     const [localLikeCount, setLocalLikeCount] = useState(0);
+    const [isInLibrary, setIsInLibrary] = useState(false);
+    const [viewCount, setViewCount] = useState(0);
 
     useEffect(() => {
         fetchPlaylist();
         // Check if favorited/liked from localStorage
         const favorites = JSON.parse(localStorage.getItem('favorited_playlists') || '[]');
         const likes = JSON.parse(localStorage.getItem('liked_playlists') || '[]');
+        const isLocallyLiked = likes.includes(playlistId);
         setIsFavorited(favorites.includes(playlistId));
-        setIsLiked(likes.includes(playlistId));
+        setIsLiked(isLocallyLiked);
+        
+        // Check if in library
+        if (playlistId) {
+            setIsInLibrary(libraryService.isInLibrary(playlistId));
+        }
     }, [playlistId]);
+    
+    // Calculate total play count from all tracks in the playlist
+    useEffect(() => {
+        if (playlistId && playlist && playlist.items) {
+            let totalPlays = 0;
+            playlist.items.forEach((item) => {
+                const trackId = item._id || `${playlistId}_${item.order || 0}`;
+                const trackPlayCount = parseInt(
+                    localStorage.getItem(`playlist_track_play_count_${trackId}`) || '0',
+                    10
+                );
+                totalPlays += trackPlayCount;
+            });
+            setViewCount(totalPlays);
+        }
+    }, [playlistId, playlist]);
 
     const fetchPlaylist = async () => {
         try {
@@ -58,7 +83,13 @@ const PlaylistDetailPage: React.FC = () => {
                 data.items.sort((a: AudioItem, b: AudioItem) => (a.order || 0) - (b.order || 0));
             }
             setPlaylist(data);
-            setLocalLikeCount(data.likeCount || 0);
+            // Initialize like count from backend, but ensure it's at least 1 if locally liked
+            const likes = JSON.parse(localStorage.getItem('liked_playlists') || '[]');
+            const isLocallyLiked = likes.includes(playlistId);
+            const backendLikeCount = data.likeCount || 0;
+            // If locally liked and backend count is 0, show at least 1
+            // Otherwise use backend count (which should include local like)
+            setLocalLikeCount(isLocallyLiked && backendLikeCount === 0 ? 1 : backendLikeCount);
         } catch (error) {
             console.error('Error fetching playlist:', error);
         } finally {
@@ -66,16 +97,27 @@ const PlaylistDetailPage: React.FC = () => {
         }
     };
 
-    const handleFavorite = () => {
+    const handleSave = () => {
+        if (!playlistId) return;
+        
+        // Toggle library status
+        const newLibraryState = libraryService.toggleLibrary(playlistId);
+        setIsInLibrary(newLibraryState);
+        
+        // Also update favorite status to match
         const favorites = JSON.parse(localStorage.getItem('favorited_playlists') || '[]');
-        if (isFavorited) {
+        if (newLibraryState) {
+            // Add to favorites if not already
+            if (!favorites.includes(playlistId)) {
+                favorites.push(playlistId);
+                localStorage.setItem('favorited_playlists', JSON.stringify(favorites));
+                setIsFavorited(true);
+            }
+        } else {
+            // Remove from favorites
             const updated = favorites.filter((id: string) => id !== playlistId);
             localStorage.setItem('favorited_playlists', JSON.stringify(updated));
             setIsFavorited(false);
-        } else {
-            favorites.push(playlistId);
-            localStorage.setItem('favorited_playlists', JSON.stringify(favorites));
-            setIsFavorited(true);
         }
     };
 
@@ -85,11 +127,13 @@ const PlaylistDetailPage: React.FC = () => {
             const updated = likes.filter((id: string) => id !== playlistId);
             localStorage.setItem('liked_playlists', JSON.stringify(updated));
             setIsLiked(false);
+            // Decrement, but don't go below 0
             setLocalLikeCount(prev => Math.max(0, prev - 1));
         } else {
             likes.push(playlistId);
             localStorage.setItem('liked_playlists', JSON.stringify(likes));
             setIsLiked(true);
+            // Increment like count
             setLocalLikeCount(prev => prev + 1);
         }
     };
@@ -198,16 +242,16 @@ const PlaylistDetailPage: React.FC = () => {
 
                         {/* Action Buttons */}
                         <div className="flex items-center justify-center gap-3 mt-4">
-                            {/* Favorite Button */}
+                            {/* Save Button */}
                             <button
-                                onClick={handleFavorite}
-                                className={`flex items-center gap-2 px-4 py-2 rounded-full border-2 transition-all active:scale-95 ${isFavorited
+                                onClick={handleSave}
+                                className={`flex items-center gap-2 px-4 py-2 rounded-full border-2 transition-all active:scale-95 ${isInLibrary
                                     ? 'bg-[#FFD700] border-[#B8860B] text-[#5c2e0b]'
                                     : 'bg-[#fdf6e3] border-[#d4c5a0] text-[#8B4513]'
                                     }`}
                             >
-                                <Bookmark size={18} fill={isFavorited ? '#5c2e0b' : 'none'} />
-                                <span className="text-sm font-bold">{isFavorited ? 'Saved' : 'Save'}</span>
+                                <Bookmark size={18} fill={isInLibrary ? '#5c2e0b' : 'none'} />
+                                <span className="text-sm font-bold">{isInLibrary ? 'Saved' : 'Save'}</span>
                             </button>
 
                             {/* Like Button */}
@@ -222,11 +266,14 @@ const PlaylistDetailPage: React.FC = () => {
                                 <span className="text-sm font-bold">{localLikeCount}</span>
                             </button>
 
-                            {/* Play Counter */}
-                            <div className="flex items-center gap-2 px-4 py-2 rounded-full border-2 border-[#d4c5a0] bg-[#fdf6e3] text-[#8B4513]">
+                            {/* View Counter */}
+                            <button
+                                onClick={(e) => e.stopPropagation()}
+                                className="flex items-center gap-2 px-4 py-2 rounded-full border-2 border-[#d4c5a0] bg-[#fdf6e3] text-[#8B4513] cursor-default"
+                            >
                                 <Eye size={18} />
-                                <span className="text-sm font-bold">{playlist.playCount || 0}</span>
-                            </div>
+                                <span className="text-sm font-bold">{viewCount}</span>
+                            </button>
                         </div>
                     </div>
                 </div>
@@ -290,4 +337,5 @@ const PlaylistDetailPage: React.FC = () => {
 };
 
 export default PlaylistDetailPage;
+
 

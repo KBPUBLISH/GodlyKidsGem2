@@ -196,17 +196,28 @@ const PageEditor: React.FC = () => {
     const loadPage = (page: any) => {
         setEditingPageId(page._id);
         setPageNumber(page.pageNumber);
-        setBackgroundType(page.backgroundType || 'image');
+        
+        // Get background type from legacy field or new structure
+        const bgType = page.backgroundType || page.files?.background?.type || 'image';
+        setBackgroundType(bgType);
 
-        // Set background preview if URL exists
-        if (page.backgroundUrl) {
-            setBackgroundPreview(resolveUrl(page.backgroundUrl));
+        // Set background preview if URL exists - check both legacy and new structure
+        const backgroundUrl = page.backgroundUrl || page.files?.background?.url;
+        if (backgroundUrl) {
+            setBackgroundPreview(resolveUrl(backgroundUrl));
             setBackgroundFile(null); // Clear file since we're using existing URL
+        } else {
+            setBackgroundPreview(null);
+            setBackgroundFile(null);
         }
 
-        // Set scroll preview if URL exists
-        if (page.scrollUrl) {
-            setScrollPreview(resolveUrl(page.scrollUrl));
+        // Set scroll preview if URL exists - check both legacy and new structure
+        const scrollUrl = page.scrollUrl || page.files?.scroll?.url;
+        if (scrollUrl) {
+            setScrollPreview(resolveUrl(scrollUrl));
+            setScrollFile(null);
+        } else {
+            setScrollPreview(null);
             setScrollFile(null);
         }
 
@@ -420,11 +431,14 @@ const PageEditor: React.FC = () => {
         try {
             // Upload background
             let backgroundUrl = '';
-            if (backgroundPreview && backgroundPreview.startsWith('http')) {
-                backgroundUrl = backgroundPreview;
-            }
-
+            
+            // Prioritize uploading new file over using existing preview
             if (backgroundFile) {
+                console.log('Uploading new background file:', { 
+                    filename: backgroundFile.name, 
+                    type: backgroundType,
+                    currentPreview: backgroundPreview 
+                });
                 const formData = new FormData();
                 formData.append('file', backgroundFile);
                 const endpoint = backgroundType === 'image' ? '/api/upload/image' : '/api/upload/video';
@@ -434,6 +448,29 @@ const PageEditor: React.FC = () => {
                     headers: { 'Content-Type': 'multipart/form-data' },
                 });
                 backgroundUrl = res.data.url;
+                console.log('Background uploaded successfully:', backgroundUrl);
+                
+                // Clean up blob URL and update preview with the uploaded URL
+                if (backgroundPreview && backgroundPreview.startsWith('blob:')) {
+                    URL.revokeObjectURL(backgroundPreview);
+                }
+                setBackgroundPreview(backgroundUrl);
+                setBackgroundFile(null); // Clear the file since it's now uploaded
+            } else if (backgroundPreview) {
+                // No new file, use existing preview URL
+                // Don't use blob URLs - they're temporary and will fail
+                if (backgroundPreview.startsWith('blob:')) {
+                    console.warn('Background preview is a blob URL, cannot use for saving.');
+                    backgroundUrl = ''; // Don't save invalid blob URLs
+                } else if (backgroundPreview.startsWith('http')) {
+                    backgroundUrl = backgroundPreview;
+                } else {
+                    // Try to resolve relative URLs
+                    backgroundUrl = resolveUrl(backgroundPreview);
+                }
+                console.log('Using existing background preview:', backgroundUrl);
+            } else {
+                console.log('No background file or preview, backgroundUrl will be empty');
             }
 
             // Upload sound effect
@@ -503,12 +540,19 @@ const PageEditor: React.FC = () => {
             const payload: any = {
                 bookId,
                 pageNumber,
-                backgroundUrl,
+                backgroundUrl: backgroundUrl || null, // Explicitly set to null if empty
                 backgroundType,
-                scrollUrl,
+                scrollUrl: scrollUrl || null,
                 scrollHeight: 200, // Fixed for now, could make dynamic
                 textBoxes: textBoxes.map(({ id, ...rest }) => rest), // Remove ID before sending
             };
+            
+            console.log('Final payload before sending:', {
+                backgroundUrl: payload.backgroundUrl,
+                backgroundType: payload.backgroundType,
+                pageNumber: payload.pageNumber,
+                editingPageId
+            });
 
             // Only include soundEffect if it exists
             if (uploadedSoundEffectUrl) {
@@ -532,7 +576,15 @@ const PageEditor: React.FC = () => {
                 // Reload the updated page into the editor to keep state in sync
                 const updatedPage = res.data.find((p: any) => p._id === editingPageId);
                 if (updatedPage) {
+                    console.log('Reloading updated page:', {
+                        id: updatedPage._id,
+                        backgroundUrl: updatedPage.backgroundUrl,
+                        filesBackground: updatedPage.files?.background?.url,
+                        backgroundType: updatedPage.backgroundType
+                    });
                     loadPage(updatedPage);
+                } else {
+                    console.error('Updated page not found in response');
                 }
 
                 alert('Page updated successfully!');

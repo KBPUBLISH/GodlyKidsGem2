@@ -6,6 +6,8 @@ import Header from '../components/layout/Header';
 import SectionTitle from '../components/ui/SectionTitle';
 import { useBooks } from '../context/BooksContext';
 import { Search } from 'lucide-react';
+import { libraryService } from '../services/libraryService';
+import { favoritesService } from '../services/favoritesService';
 
 const LibraryPage: React.FC = () => {
   const navigate = useNavigate();
@@ -33,9 +35,12 @@ const LibraryPage: React.FC = () => {
     lastScrollY.current = currentScrollY;
   };
 
-  // Filter for user's books (mock logic: isRead or favorites)
-  const myBooks = books.filter(b => b.isRead);
-  const displayBooks = myBooks.length > 0 ? myBooks : books.slice(0, 2); // Fallback for demo
+  // Filter for user's books (from library or favorites)
+  const libraryBookIds = libraryService.getLibrary();
+  const favoriteBookIds = favoritesService.getFavorites();
+  const allUserBookIds = [...new Set([...libraryBookIds, ...favoriteBookIds])];
+  const myBooks = books.filter(b => allUserBookIds.includes(b.id));
+  const displayBooks = myBooks.length > 0 ? myBooks : []; // Show empty if no saved books
 
   // Apply Search Filter
   const filteredBooks = displayBooks.filter(b => 

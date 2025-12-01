@@ -1,19 +1,55 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ChevronLeft, Volume2, Music, Bell, Shield, FileText, LogOut, Crown, HelpCircle } from 'lucide-react';
+import { ChevronLeft, Volume2, Music, Bell, Shield, FileText, LogOut, Crown, HelpCircle, Mic, Trash2 } from 'lucide-react';
 import WoodButton from '../components/ui/WoodButton';
 import { useUser } from '../context/UserContext';
 import { useAudio } from '../context/AudioContext';
+import { voiceCloningService, ClonedVoice } from '../services/voiceCloningService';
+import { ApiService } from '../services/apiService';
 
 const SettingsPage: React.FC = () => {
   const navigate = useNavigate();
   const { isSubscribed } = useUser();
   const { musicEnabled, sfxEnabled, musicVolume, toggleMusic, toggleSfx, setMusicVolume, playBack } = useAudio();
+  const [clonedVoices, setClonedVoices] = useState<ClonedVoice[]>([]);
+  const [deletingVoiceId, setDeletingVoiceId] = useState<string | null>(null);
+  
+  // Load cloned voices
+  useEffect(() => {
+    const voices = voiceCloningService.getClonedVoices();
+    setClonedVoices(voices);
+  }, []);
   
   // Robust back handler - Explicitly goes to Profile as requested
   const handleBack = () => {
       playBack();
       navigate('/profile');
+  };
+
+  const handleDeleteVoice = async (voiceId: string) => {
+    if (!confirm(`Are you sure you want to delete this voice? This action cannot be undone.`)) {
+      return;
+    }
+
+    setDeletingVoiceId(voiceId);
+    try {
+      // Delete from ElevenLabs API
+      const success = await ApiService.deleteClonedVoice(voiceId);
+      
+      if (success) {
+        // Remove from local storage
+        voiceCloningService.removeClonedVoice(voiceId);
+        // Update state
+        setClonedVoices(voiceCloningService.getClonedVoices());
+      } else {
+        alert('Failed to delete voice. Please try again.');
+      }
+    } catch (error) {
+      console.error('Error deleting voice:', error);
+      alert('Failed to delete voice. Please try again.');
+    } finally {
+      setDeletingVoiceId(null);
+    }
   };
 
   return (
@@ -119,6 +155,46 @@ const SettingsPage: React.FC = () => {
                     </div>
                 </div>
             </section>
+
+            {/* Voice Library */}
+            {clonedVoices.length > 0 && (
+              <section className="bg-[#fff8e1] rounded-2xl p-5 border-2 border-[#eecaa0] shadow-sm">
+                <h3 className="font-display font-bold text-[#8B4513] text-lg mb-4 uppercase tracking-wide opacity-80">Voice Library</h3>
+                
+                <div className="space-y-3">
+                  {clonedVoices.map((voice) => (
+                    <div
+                      key={voice.voice_id}
+                      className="bg-white/60 rounded-xl p-4 border border-[#eecaa0] flex items-center justify-between group hover:bg-white/80 transition-colors"
+                    >
+                      <div className="flex items-center gap-3 flex-1 min-w-0">
+                        <div className="w-10 h-10 rounded-full bg-gradient-to-br from-[#FFD700] to-[#ffb300] flex items-center justify-center border border-[#B8860B] shadow-sm shrink-0">
+                          <Mic size={18} className="text-white" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="font-bold text-[#5c2e0b] text-sm truncate">{voice.name}</div>
+                          {voice.description && (
+                            <div className="text-xs text-[#8B4513]/70 truncate">{voice.description}</div>
+                          )}
+                        </div>
+                      </div>
+                      <button
+                        onClick={() => handleDeleteVoice(voice.voice_id)}
+                        disabled={deletingVoiceId === voice.voice_id}
+                        className="ml-3 w-10 h-10 rounded-full bg-red-100 hover:bg-red-200 border-2 border-red-300 flex items-center justify-center transition-colors disabled:opacity-50 disabled:cursor-not-allowed shrink-0"
+                        title="Delete voice"
+                      >
+                        {deletingVoiceId === voice.voice_id ? (
+                          <div className="w-5 h-5 border-2 border-red-600 border-t-transparent rounded-full animate-spin"></div>
+                        ) : (
+                          <Trash2 size={16} className="text-red-600" />
+                        )}
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </section>
+            )}
 
             {/* Account / Subscription */}
             <section className="bg-[#fff8e1] rounded-2xl p-5 border-2 border-[#eecaa0] shadow-sm">

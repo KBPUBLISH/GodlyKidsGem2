@@ -1,7 +1,8 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { ChevronLeft, Crown, Pause, Play, SkipBack, SkipForward, Music, Heart, RotateCcw } from 'lucide-react';
 import { favoritesService } from '../services/favoritesService';
+import { libraryService } from '../services/libraryService';
 import { getApiBaseUrl } from '../services/apiService';
 import { useAudio, Playlist } from '../context/AudioContext';
 
@@ -26,6 +27,8 @@ const PlaylistPlayerPage: React.FC = () => {
     const [localPlaylist, setLocalPlaylist] = useState<Playlist | null>(null);
     const [playCount, setPlayCount] = useState(0);
     const [isLiked, setIsLiked] = useState(false);
+    const [isSaved, setIsSaved] = useState(false);
+    const hasIncrementedPlayCountRef = useRef(false);
 
     // Fetch playlist data on mount or when params change
     useEffect(() => {
@@ -79,9 +82,15 @@ const PlaylistPlayerPage: React.FC = () => {
                 const count = parseInt(localStorage.getItem(`playlist_track_play_count_${trackId}`) || '0', 10);
                 setPlayCount(count);
                 setIsLiked(favoritesService.getLikes().includes(trackId));
+                setIsSaved(libraryService.isInLibrary(trackId));
+                // Reset play count increment flag when track changes
+                hasIncrementedPlayCountRef.current = false;
             }
         }
     }, [currentTrackIndex, currentPlaylist, localPlaylist]);
+
+    // Note: Play count is now incremented when play button is clicked (in handlePlayPause)
+    // Removed auto-increment at 90% progress to avoid double-counting
 
     const handleSkipBackward = () => {
         seek(Math.max(0, currentTime - 30));
@@ -91,12 +100,41 @@ const PlaylistPlayerPage: React.FC = () => {
         seek(Math.min(duration, currentTime + 30));
     };
 
+    const handlePlayPause = () => {
+        const playlistToUse = currentPlaylist || localPlaylist;
+        if (!playlistToUse || !playlistToUse.items[currentTrackIndex]) return;
+        
+        const track = playlistToUse.items[currentTrackIndex];
+        const trackId = track._id || `${playlistToUse._id}_${currentTrackIndex}`;
+        
+        // If starting to play (was paused, now playing), increment play count
+        if (!isPlaying) {
+            const currentCount = parseInt(localStorage.getItem(`playlist_track_play_count_${trackId}`) || '0', 10);
+            const newCount = currentCount + 1;
+            localStorage.setItem(`playlist_track_play_count_${trackId}`, newCount.toString());
+            setPlayCount(newCount);
+            // Reset the auto-increment flag so it can increment again on next play
+            hasIncrementedPlayCountRef.current = false;
+        }
+        
+        // Toggle play/pause
+        togglePlayPause();
+    };
+
     const handleLike = () => {
         const playlistToUse = currentPlaylist || localPlaylist;
         if (!playlistToUse || !playlistToUse.items[currentTrackIndex]) return;
         const trackId = playlistToUse.items[currentTrackIndex]._id || `${playlistToUse._id}_${currentTrackIndex}`;
         favoritesService.toggleLike(trackId);
         setIsLiked(favoritesService.getLikes().includes(trackId));
+    };
+
+    const handleSave = () => {
+        const playlistToUse = currentPlaylist || localPlaylist;
+        if (!playlistToUse || !playlistToUse.items[currentTrackIndex]) return;
+        const trackId = playlistToUse.items[currentTrackIndex]._id || `${playlistToUse._id}_${currentTrackIndex}`;
+        const newSavedState = libraryService.toggleLibrary(trackId);
+        setIsSaved(newSavedState);
     };
 
     const handleSeek = (e: React.MouseEvent<HTMLDivElement>) => {
@@ -178,10 +216,21 @@ const PlaylistPlayerPage: React.FC = () => {
                         />
                     </button>
 
-                    {/* Crown Icon */}
-                    <div className="w-12 h-12 bg-[#f3e5ab] rounded-full border-2 border-[#d4c5a0] flex items-center justify-center shadow-lg">
-                        <Crown className="text-[#8B4513]" size={24} fill="#8B4513" />
-                    </div>
+                    {/* Save/Bookmark Button (Crown Icon) */}
+                    <button
+                        onClick={handleSave}
+                        className={`w-12 h-12 rounded-full border-2 flex items-center justify-center shadow-lg transition-all active:scale-95 ${isSaved
+                            ? 'bg-[#FFD700] border-[#B8860B]'
+                            : 'bg-[#f3e5ab] border-[#d4c5a0]'
+                            }`}
+                        title={isSaved ? "Saved to Library" : "Save to Library"}
+                    >
+                        <Crown 
+                            className={isSaved ? "text-[#5c2e0b]" : "text-[#8B4513]"} 
+                            size={24} 
+                            fill={isSaved ? "#5c2e0b" : "#8B4513"} 
+                        />
+                    </button>
                 </div>
             </div>
 
@@ -286,7 +335,7 @@ const PlaylistPlayerPage: React.FC = () => {
 
                     {/* Play/Pause Button */}
                     <button
-                        onClick={togglePlayPause}
+                        onClick={handlePlayPause}
                         className="w-20 h-20 bg-gradient-to-b from-[#FFD700] to-[#FFA000] rounded-full border-[4px] border-[#5c2e0b] shadow-[0_4px_0_#3e1f07] active:translate-y-1 active:shadow-none flex items-center justify-center transition-all hover:brightness-110"
                     >
                         {isPlaying ? (

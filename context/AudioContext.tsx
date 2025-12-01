@@ -222,7 +222,15 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
             if (track && playlistAudioRef.current.src !== track.audioUrl) {
                 playlistAudioRef.current.src = track.audioUrl;
                 if (isPlaying) {
-                    playlistAudioRef.current.play().catch(e => console.error("Play error:", e));
+                    const playPromise = playlistAudioRef.current.play();
+                    if (playPromise !== undefined) {
+                        playPromise.catch((e) => {
+                            // Ignore AbortError - it's expected when audio is paused before play completes
+                            if (e.name !== 'AbortError' && e.name !== 'NotAllowedError') {
+                                console.error("Play error:", e);
+                            }
+                        });
+                    }
                 }
             }
         }
@@ -343,21 +351,40 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
                 return;
             }
 
+            // Helper function to safely play audio
+            const safePlay = (audio: HTMLAudioElement) => {
+                // Double-check conditions before playing
+                if (musicForcePausedRef.current || !musicEnabled) {
+                    return;
+                }
+                if (audio.paused && audio.readyState >= 2) {
+                    const playPromise = audio.play();
+                    if (playPromise !== undefined) {
+                        playPromise.catch((error) => {
+                            // Ignore AbortError - it's expected when audio is paused before play completes
+                            if (error.name !== 'AbortError' && error.name !== 'NotAllowedError') {
+                                console.warn('Audio play error:', error);
+                            }
+                        });
+                    }
+                }
+            };
+
             // 3. Normal BG Music Logic
             if (musicMode === 'bg') {
-                if (bg.paused && bg.readyState >= 2) bg.play().catch(() => { });
+                safePlay(bg);
                 bg.volume = musicVolume * 0.25;
                 if (!game.paused) game.pause();
                 if (!workout.paused) workout.pause();
             }
             else if (musicMode === 'game') {
-                if (game.paused && game.readyState >= 2) game.play().catch(() => { });
+                safePlay(game);
                 game.volume = musicVolume * 0.3;
                 if (!bg.paused) bg.pause();
                 if (!workout.paused) workout.pause();
             }
             else if (musicMode === 'workout') {
-                if (workout.paused && workout.readyState >= 2) workout.play().catch(() => { });
+                safePlay(workout);
                 workout.volume = musicVolume * 0.4;
                 if (!bg.paused) bg.pause();
                 if (!game.paused) game.pause();

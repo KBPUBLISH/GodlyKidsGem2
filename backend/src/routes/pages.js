@@ -7,13 +7,34 @@ router.get('/book/:bookId', async (req, res) => {
     try {
         const pages = await Page.find({ bookId: req.params.bookId }).sort({ pageNumber: 1 });
         
-        // Map pages to include textBoxes at root level for backward compatibility
+        // Map pages to include textBoxes and legacy fields at root level for backward compatibility
         const pagesWithTextBoxes = pages.map(page => {
             const pageObj = page.toObject();
             // Map content.textBoxes to textBoxes for backward compatibility
             if (pageObj.content && pageObj.content.textBoxes) {
                 pageObj.textBoxes = pageObj.content.textBoxes;
             }
+            
+            // Map files.background to legacy backgroundUrl and backgroundType
+            if (pageObj.files && pageObj.files.background) {
+                if (pageObj.files.background.url !== undefined) {
+                    pageObj.backgroundUrl = pageObj.files.background.url;
+                }
+                if (pageObj.files.background.type !== undefined) {
+                    pageObj.backgroundType = pageObj.files.background.type;
+                }
+            }
+            
+            // Map files.scroll to legacy scrollUrl and scrollHeight
+            if (pageObj.files && pageObj.files.scroll) {
+                if (pageObj.files.scroll.url !== undefined) {
+                    pageObj.scrollUrl = pageObj.files.scroll.url;
+                }
+                if (pageObj.files.scroll.height !== undefined) {
+                    pageObj.scrollHeight = pageObj.files.scroll.height;
+                }
+            }
+            
             return pageObj;
         });
         
@@ -133,26 +154,56 @@ router.put('/:id', async (req, res) => {
         }
 
         // Map legacy fields to new structure if needed
-        if (req.body.backgroundUrl && !req.body.files) {
+        // Handle backgroundUrl - check if it's explicitly provided (even if empty)
+        console.log('PUT /api/pages/:id - Request body:', {
+            backgroundUrl: req.body.backgroundUrl,
+            backgroundType: req.body.backgroundType,
+            hasFiles: !!req.body.files,
+            pageId: req.params.id
+        });
+        
+        if (req.body.backgroundUrl !== undefined && !req.body.files) {
             if (!page.files) {
                 page.files = { images: [], videos: [], audio: {} };
             }
             if (!page.files.background) {
                 page.files.background = {};
             }
-            page.files.background.url = req.body.backgroundUrl;
-            page.files.background.type = req.body.backgroundType;
+            const newBackgroundUrl = req.body.backgroundUrl || null;
+            page.files.background.url = newBackgroundUrl;
+            if (req.body.backgroundType !== undefined) {
+                page.files.background.type = req.body.backgroundType;
+            }
+            // Also update legacy field for backward compatibility
+            page.backgroundUrl = newBackgroundUrl;
+            if (req.body.backgroundType !== undefined) {
+                page.backgroundType = req.body.backgroundType;
+            }
+            console.log('Updated background:', { 
+                url: page.files.background.url, 
+                type: page.files.background.type,
+                legacyUrl: page.backgroundUrl,
+                legacyType: page.backgroundType
+            });
         }
         
-        if (req.body.scrollUrl && !req.body.files) {
+        // Handle scrollUrl - check if it's explicitly provided (even if empty)
+        if (req.body.scrollUrl !== undefined && !req.body.files) {
             if (!page.files) {
                 page.files = { images: [], videos: [], audio: {} };
             }
             if (!page.files.scroll) {
                 page.files.scroll = {};
             }
-            page.files.scroll.url = req.body.scrollUrl;
-            page.files.scroll.height = req.body.scrollHeight;
+            page.files.scroll.url = req.body.scrollUrl || null;
+            if (req.body.scrollHeight !== undefined) {
+                page.files.scroll.height = req.body.scrollHeight;
+            }
+            // Also update legacy field for backward compatibility
+            page.scrollUrl = req.body.scrollUrl || null;
+            if (req.body.scrollHeight !== undefined) {
+                page.scrollHeight = req.body.scrollHeight;
+            }
         }
 
         // Handle textBoxes - map to content.textBoxes in new structure
@@ -183,7 +234,8 @@ router.put('/:id', async (req, res) => {
         }
 
         // Update all other fields (but don't overwrite what we just set)
-        const { textBoxes, content, ...otherFields } = req.body;
+        // Exclude backgroundUrl and backgroundType from otherFields since we've already handled them
+        const { textBoxes, content, backgroundUrl, backgroundType, scrollUrl, scrollHeight, ...otherFields } = req.body;
         Object.assign(page, otherFields);
         
         // Handle content.text if provided
@@ -201,6 +253,33 @@ router.put('/:id', async (req, res) => {
         if (pageObj.content && pageObj.content.textBoxes) {
             pageObj.textBoxes = pageObj.content.textBoxes;
         }
+        
+        // Map files.background to legacy backgroundUrl and backgroundType
+        if (pageObj.files && pageObj.files.background) {
+            if (pageObj.files.background.url !== undefined) {
+                pageObj.backgroundUrl = pageObj.files.background.url;
+            }
+            if (pageObj.files.background.type !== undefined) {
+                pageObj.backgroundType = pageObj.files.background.type;
+            }
+        }
+        
+        // Map files.scroll to legacy scrollUrl and scrollHeight
+        if (pageObj.files && pageObj.files.scroll) {
+            if (pageObj.files.scroll.url !== undefined) {
+                pageObj.scrollUrl = pageObj.files.scroll.url;
+            }
+            if (pageObj.files.scroll.height !== undefined) {
+                pageObj.scrollHeight = pageObj.files.scroll.height;
+            }
+        }
+        
+        console.log('Sending updated page response:', {
+            id: pageObj._id,
+            backgroundUrl: pageObj.backgroundUrl,
+            backgroundType: pageObj.backgroundType,
+            filesBackground: pageObj.files?.background?.url
+        });
         
         res.json(pageObj);
     } catch (error) {

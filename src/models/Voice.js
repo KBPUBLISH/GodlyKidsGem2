@@ -11,6 +11,9 @@ const voiceSchema = new mongoose.Schema({
         type: String,
         required: true
     },
+    customName: {
+        type: String, // Custom name set by admin (overrides name if set)
+    },
     category: {
         type: String,
         default: 'premade'
@@ -34,6 +37,9 @@ const voiceSchema = new mongoose.Schema({
     language: {
         type: String,
         default: 'en'
+    },
+    characterImage: {
+        type: String, // URL to character image (stored in GCS)
     },
     createdAt: {
         type: Date,

@@ -5,6 +5,7 @@ const axios = require('axios');
 const crypto = require('crypto');
 const path = require('path');
 const fs = require('fs');
+const FormData = require('form-data');
 const { bucket } = require('../config/storage');
 const TTSCache = require('../models/TTSCache');
 
@@ -86,85 +87,43 @@ router.post('/generate', async (req, res) => {
         console.log('TTS Cache Miss - Generating Audio');
         let audioBuffer;
 
-        // CHECK IF LOCAL VOICE (Custom Clone)
-        if (voiceId.startsWith('local_')) {
-            console.log('🎤 Using Local Python AI Service for Voice Clone:', voiceId);
+        // ELEVENLABS GENERATION (for all voices including cloned)
+        const apiKey = process.env.ELEVENLABS_API_KEY;
+        if (!apiKey) {
+            return res.status(500).json({ message: 'TTS Generation Failed', error: 'apiKey is not defined' });
+        }
 
-            // Find the reference audio file
-            const voicesDir = path.join(uploadsDir, 'voices');
-            const files = fs.readdirSync(voicesDir);
-            const referenceFile = files.find(f => f.startsWith(voiceId));
+        const modelId = "eleven_v3";
+        console.log('🎤 Generating TTS with ElevenLabs model:', modelId);
 
-            if (!referenceFile) {
-                throw new Error(`Local voice reference file not found for ID: ${voiceId}`);
-            }
-
-            const referencePath = path.join(voicesDir, referenceFile);
-            console.log('📄 Reference Audio:', referencePath);
-
-            // Call Python Service
-            const formData = new FormData();
-            formData.append('text', text);
-            formData.append('language', 'en');
-            formData.append('speaker_wav', fs.createReadStream(referencePath));
-
-            try {
-                const pythonResponse = await axios.post('http://localhost:8000/generate', formData, {
-                    headers: {
-                        ...formData.getHeaders()
-                    },
-                    responseType: 'arraybuffer'
-                });
-
-                audioBuffer = pythonResponse.data;
-                console.log('✅ Python Service Generation Successful');
-            } catch (pyError) {
-                console.error('❌ Python Service Error:', pyError.message);
-                if (pyError.code === 'ECONNREFUSED') {
-                    throw new Error('Local AI Service is offline. Please start the Python service.');
-                }
-                throw pyError;
-            }
-
-        } else {
-            // ELEVENLABS GENERATION
-            const apiKey = process.env.ELEVENLABS_API_KEY;
-            if (!apiKey) {
-                return res.status(500).json({ message: 'TTS Generation Failed', error: 'apiKey is not defined' });
-            }
-
-            const modelId = "eleven_v3";
-            console.log('🎤 Generating TTS with ElevenLabs model:', modelId);
-
-            try {
-                const response = await axios.post(
-                    `https://api.elevenlabs.io/v1/text-to-speech/${voiceId}`,
-                    {
-                        text,
-                        model_id: modelId,
-                        voice_settings: {
-                            stability: 0.5,
-                            similarity_boost: 0.75
-                        }
-                    },
-                    {
-                        headers: {
-                            'xi-api-key': apiKey,
-                            'Content-Type': 'application/json',
-                            'Accept': 'application/json'
-                        },
-                        responseType: 'arraybuffer',
-                        params: {
-                            output_format: 'mp3_44100_128',
-                            enable_logging: false
-                        }
+        try {
+            const response = await axios.post(
+                `https://api.elevenlabs.io/v1/text-to-speech/${voiceId}`,
+                {
+                    text,
+                    model_id: modelId,
+                    voice_settings: {
+                        stability: 0.5,
+                        similarity_boost: 0.75
                     }
-                );
-                audioBuffer = response.data;
-            } catch (error) {
-                console.error('❌ ElevenLabs API Error:', error.response?.status);
-                throw error;
-            }
+                },
+                {
+                    headers: {
+                        'xi-api-key': apiKey,
+                        'Content-Type': 'application/json',
+                        'Accept': 'application/json'
+                    },
+                    responseType: 'arraybuffer',
+                    params: {
+                        output_format: 'mp3_44100_128',
+                        enable_logging: false
+                    }
+                }
+            );
+            audioBuffer = response.data;
+        } catch (error) {
+            console.error('❌ ElevenLabs API Error:', error.response?.status);
+            throw error;
         }
 
         // 3. Save Audio

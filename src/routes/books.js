@@ -97,6 +97,7 @@ router.post('/', async (req, res) => {
             text: req.body.text || '',
             games: req.body.games || [],
             bookGames: req.body.bookGames || [],
+            pages: req.body.pages || [],
         };
         
         // Always initialize files structure
@@ -157,27 +158,30 @@ router.post('/', async (req, res) => {
 // PUT update book
 router.put('/:id', async (req, res) => {
     try {
+        console.log('PUT /api/books/:id - Updating book:', req.params.id);
+        console.log('Request body:', JSON.stringify(req.body, null, 2));
+        
         const book = await Book.findById(req.params.id);
         if (!book) return res.status(404).json({ message: 'Book not found' });
 
-        // Handle coverImage - support both old and new structure
-        if (req.body.coverImage !== undefined && !req.body.files) {
-            // If coverImage is provided but files is not, update files.coverImage
-            if (!book.files) {
-                book.files = { coverImage: null, images: [], videos: [], audio: [] };
-            }
-            book.files.coverImage = req.body.coverImage || null;
-            delete req.body.coverImage; // Remove from body to avoid duplicate
+        // Initialize files object if it doesn't exist
+        if (!book.files) {
+            book.files = { coverImage: null, images: [], videos: [], audio: [] };
         }
 
         // Handle files object - ensure proper structure
         if (req.body.files) {
-            if (!book.files) {
-                book.files = { coverImage: null, images: [], videos: [], audio: [] };
-            }
+            // If files.coverImage is explicitly provided, use it
             if (req.body.files.coverImage !== undefined) {
-                book.files.coverImage = req.body.files.coverImage;
+                book.files.coverImage = req.body.files.coverImage || null;
+                console.log('Updated coverImage from files.coverImage:', book.files.coverImage);
             }
+            // Otherwise, if root coverImage is provided, use it
+            else if (req.body.coverImage !== undefined) {
+                book.files.coverImage = req.body.coverImage || null;
+                console.log('Updated coverImage from root coverImage:', book.files.coverImage);
+            }
+            
             if (req.body.files.images !== undefined) {
                 book.files.images = req.body.files.images;
             }
@@ -189,10 +193,27 @@ router.put('/:id', async (req, res) => {
             }
             delete req.body.files; // Remove from body to avoid duplicate assignment
         }
+        // Handle coverImage at root level if files object was not provided
+        else if (req.body.coverImage !== undefined) {
+            book.files.coverImage = req.body.coverImage || null;
+            console.log('Updated coverImage from root (no files object):', book.files.coverImage);
+        }
+        
+        // Remove coverImage from body to avoid duplicate assignment
+        delete req.body.coverImage;
+
+        // Handle pages array
+        if (req.body.pages !== undefined) {
+            book.pages = req.body.pages || [];
+            delete req.body.pages; // Remove from body to avoid duplicate assignment
+        }
 
         // Update all other fields
         Object.assign(book, req.body);
+        
+        console.log('Book before save - files.coverImage:', book.files?.coverImage);
         const updatedBook = await book.save();
+        console.log('Book after save - files.coverImage:', updatedBook.files?.coverImage);
         
         // Map coverImage for backward compatibility in response
         const bookObj = updatedBook.toObject();
@@ -200,6 +221,7 @@ router.put('/:id', async (req, res) => {
             bookObj.coverImage = bookObj.files.coverImage;
         }
         
+        console.log('Sending response - coverImage:', bookObj.coverImage);
         res.json(bookObj);
     } catch (error) {
         res.status(400).json({ message: error.message });

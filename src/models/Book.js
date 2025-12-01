@@ -75,9 +75,96 @@ const bookSchema = new mongoose.Schema({
         }),
     },
     
-    // Pages subfolder - references to Page documents
-    // Pages are stored in separate collection but organized by bookId
-    // This is handled via the Page model's bookId reference
+    // Pages array - embedded pages for this book
+    pages: {
+        type: [{
+            pageNumber: {
+                type: Number,
+                required: true,
+            },
+            
+            // Page content - organized structure
+            content: {
+                // Text content on the page
+                text: {
+                    type: String,
+                },
+                
+                // Text boxes with styling
+                textBoxes: [{
+                    text: String,
+                    x: Number, // percentage (0-100)
+                    y: Number, // percentage (0-100)
+                    width: { type: Number, default: 30 }, // percentage (0-100)
+                    alignment: { type: String, enum: ['left', 'center', 'right'], default: 'left' },
+                    fontFamily: { type: String, default: 'Comic Sans MS' },
+                    fontSize: { type: Number, default: 24 },
+                    color: { type: String, default: '#4a3b2a' },
+                }],
+            },
+            
+            // Page files - organized per page
+            files: {
+                // Background (image or video)
+                background: {
+                    url: { type: String }, // URL to GCS: books/{bookId}/pages/page-{pageNumber}.{ext}
+                    type: { type: String, enum: ['image', 'video'] },
+                },
+                
+                // Scroll overlay image
+                scroll: {
+                    url: { type: String }, // URL to GCS: books/{bookId}/scroll/filename
+                    height: { type: Number }, // Height in px for scroll overlay
+                },
+                
+                // Page-specific images
+                images: [{
+                    url: { type: String }, // URL to GCS: books/{bookId}/pages/images/filename
+                    filename: { type: String },
+                    uploadedAt: { type: Date, default: Date.now },
+                }],
+                
+                // Page-specific videos
+                videos: [{
+                    url: { type: String }, // URL to GCS: books/{bookId}/pages/videos/filename
+                    filename: { type: String },
+                    uploadedAt: { type: Date, default: Date.now },
+                }],
+                
+                // Audio narration for this page
+                audio: {
+                    url: { type: String }, // URL to GCS: books/{bookId}/audio/page-{pageNumber}.mp3
+                    filename: { type: String },
+                    uploadedAt: { type: Date, default: Date.now },
+                },
+                
+                // Sound effect for this page (1-3 seconds, plays on bubble tap)
+                soundEffect: {
+                    url: { type: String }, // URL to GCS: books/{bookId}/sound-effects/page-{pageNumber}.mp3
+                    filename: { type: String },
+                    uploadedAt: { type: Date, default: Date.now },
+                },
+            },
+            
+            // Legacy fields (for backward compatibility)
+            imageUrl: { type: String },
+            audioUrl: { type: String },
+            backgroundUrl: { type: String },
+            backgroundType: { type: String, enum: ['image', 'video'] },
+            scrollUrl: { type: String },
+            scrollHeight: { type: Number },
+            
+            createdAt: {
+                type: Date,
+                default: Date.now,
+            },
+            updatedAt: {
+                type: Date,
+                default: Date.now,
+            },
+        }],
+        default: [],
+    },
     
     // Book-level text content
     text: {

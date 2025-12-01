@@ -96,11 +96,16 @@ const needsConversion = (mimetype, filename) => {
     return true; // Needs conversion
 };
 
-// POST /clone - Clone a voice from audio samples (LOCAL STORAGE VERSION)
+// POST /clone - Clone a voice from audio samples using ElevenLabs
 router.post('/clone', upload.array('samples', 10), async (req, res) => {
     try {
         const { name, description } = req.body;
         const files = req.files;
+        const apiKey = process.env.ELEVENLABS_API_KEY;
+
+        if (!apiKey) {
+            return res.status(500).json({ message: 'ElevenLabs API key not configured' });
+        }
 
         if (!name || !name.trim()) {
             return res.status(400).json({ message: 'Voice name is required' });
@@ -110,43 +115,75 @@ router.post('/clone', upload.array('samples', 10), async (req, res) => {
             return res.status(400).json({ message: 'At least one audio sample is required' });
         }
 
-        // Ensure voices directory exists
-        const voicesDir = path.join(uploadsDir, 'voices');
-        if (!fs.existsSync(voicesDir)) {
-            fs.mkdirSync(voicesDir, { recursive: true });
+        // Prepare files for ElevenLabs API
+        // ElevenLabs expects files in a specific format
+        const processedFiles = [];
+        for (const file of files) {
+            // Check if file needs conversion
+            const needsConv = needsConversion(file.mimetype, file.originalname);
+            let fileBuffer = file.buffer;
+            let fileName = file.originalname;
+
+            if (needsConv) {
+                // Convert to MP3
+                const inputFormat = path.extname(file.originalname).slice(1) || 'wav';
+                try {
+                    fileBuffer = await convertToMP3(file.buffer, inputFormat);
+                    fileName = fileName.replace(/\.[^/.]+$/, '.mp3');
+                } catch (convError) {
+                    console.warn(`Failed to convert ${file.originalname}, using original:`, convError);
+                }
+            }
+
+            processedFiles.push({
+                name: fileName,
+                data: fileBuffer
+            });
         }
 
-        // Generate a unique local voice ID
-        const voiceId = `local_${Date.now()}_${Math.random().toString(36).substring(7)}`;
+        // Create FormData for ElevenLabs
+        const formData = new FormData();
+        formData.append('name', name);
+        if (description) {
+            formData.append('description', description);
+        }
+        
+        // Add all audio files
+        processedFiles.forEach((file) => {
+            formData.append('files', file.data, {
+                filename: file.name,
+                contentType: 'audio/mpeg'
+            });
+        });
 
-        // We'll use the first file as the reference audio for XTTS
-        // In a more advanced version, we could merge them or pick the best one
-        const referenceFile = files[0];
-        const fileExt = path.extname(referenceFile.originalname) || '.wav';
-        const fileName = `${voiceId}${fileExt}`;
-        const filePath = path.join(voicesDir, fileName);
+        // Call ElevenLabs API to clone voice
+        console.log(`🎤 Cloning voice "${name}" with ${processedFiles.length} sample(s) via ElevenLabs...`);
+        const response = await axios.post('https://api.elevenlabs.io/v1/voices/add', formData, {
+            headers: {
+                'xi-api-key': apiKey,
+                ...formData.getHeaders()
+            }
+        });
 
-        // Write the file to disk
-        fs.writeFileSync(filePath, referenceFile.buffer);
-        console.log(`✅ Saved local voice reference: ${filePath}`);
+        const voiceData = response.data;
+        console.log(`✅ Voice cloned successfully: ${voiceData.voice_id}`);
 
-        // Return success with the local voice ID
         res.json({
             success: true,
             voice: {
-                voice_id: voiceId,
-                name: name,
-                description: description || 'Custom local voice',
+                voice_id: voiceData.voice_id,
+                name: voiceData.name || name,
+                description: voiceData.description || description || 'Custom cloned voice',
                 category: 'cloned',
-                preview_url: null // We could generate one later
+                preview_url: voiceData.preview_url || null
             }
         });
 
     } catch (error) {
-        console.error('❌ Local Voice Cloning Error:', error);
+        console.error('❌ ElevenLabs Voice Cloning Error:', error.response?.data || error.message);
         res.status(500).json({
-            message: 'Failed to save local voice',
-            error: error.message
+            message: 'Failed to clone voice',
+            error: error.response?.data?.message || error.message
         });
     }
 });
@@ -155,8 +192,30 @@ router.post('/clone', upload.array('samples', 10), async (req, res) => {
 router.delete('/clone/:voiceId', async (req, res) => {
     try {
         const { voiceId } = req.params;
-        const apiKey = process.env.ELEVENLABS_API_KEY;
 
+        // Check if this is an old local voice (starts with 'local_')
+        if (voiceId.startsWith('local_')) {
+            // For old local voices, just delete the local file and return success
+            // (The frontend will handle removing it from localStorage)
+            const voicesDir = path.join(uploadsDir, 'voices');
+            if (fs.existsSync(voicesDir)) {
+                const files = fs.readdirSync(voicesDir);
+                const voiceFile = files.find(f => f.startsWith(voiceId));
+                if (voiceFile) {
+                    const filePath = path.join(voicesDir, voiceFile);
+                    try {
+                        fs.unlinkSync(filePath);
+                        console.log(`✅ Deleted local voice file: ${filePath}`);
+                    } catch (fileError) {
+                        console.warn(`⚠️ Could not delete local voice file: ${fileError.message}`);
+                    }
+                }
+            }
+            return res.json({ success: true, message: 'Local voice deleted successfully' });
+        }
+
+        // For ElevenLabs voices, delete from their API
+        const apiKey = process.env.ELEVENLABS_API_KEY;
         if (!apiKey) {
             return res.status(500).json({ message: 'ElevenLabs API key not configured' });
         }
@@ -171,6 +230,14 @@ router.delete('/clone/:voiceId', async (req, res) => {
         res.json({ success: true, message: 'Voice deleted successfully' });
     } catch (error) {
         console.error('Delete Voice Error:', error.response?.data || error.message);
+        
+        // If it's a 404, the voice might not exist in ElevenLabs (could be old local voice)
+        // Still return success so frontend can clean up localStorage
+        if (error.response?.status === 404) {
+            console.warn(`⚠️ Voice ${req.params.voiceId} not found in ElevenLabs, treating as deleted`);
+            return res.json({ success: true, message: 'Voice deleted successfully' });
+        }
+
         res.status(500).json({
             message: 'Failed to delete voice',
             error: error.response?.data?.message || error.message

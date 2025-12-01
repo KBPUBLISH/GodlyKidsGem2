@@ -1,0 +1,23 @@
+services:
+  - type: web
+    name: godlykids-backend
+    env: node
+    region: oregon
+    plan: free
+    nodeVersion: 20.x
+    buildCommand: npm install
+    startCommand: npm start
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: MONGO_URI
+        sync: false  # Set this in Render dashboard
+      - key: PORT
+        value: 5001
+      - key: ELEVENLABS_API_KEY
+        sync: false  # Set this in Render dashboard
+      - key: GCS_BUCKET_NAME
+        sync: false  # Set this in Render dashboard
+      - key: GOOGLE_APPLICATION_CREDENTIALS
+        sync: false  # Set this in Render dashboard or use service account JSON
+

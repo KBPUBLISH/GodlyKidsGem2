@@ -78,6 +78,12 @@ const PlaylistForm: React.FC = () => {
         try {
             const response = await axios.get(`http://localhost:5001/api/playlists/${id}`);
             setFormData(response.data);
+            // Initialize selectedCategories from the playlist data
+            if (response.data.categories && Array.isArray(response.data.categories)) {
+                setSelectedCategories(response.data.categories);
+            } else if (response.data.category) {
+                setSelectedCategories([response.data.category]);
+            }
         } catch (error) {
             console.error('Error fetching playlist:', error);
             alert('Failed to load playlist');
@@ -105,10 +111,16 @@ const PlaylistForm: React.FC = () => {
         setLoading(true);
 
         try {
+            // Include selectedCategories in the payload
+            const payload = {
+                ...formData,
+                categories: selectedCategories,
+            };
+            
             if (id) {
-                await axios.put(`http://localhost:5001/api/playlists/${id}`, formData);
+                await axios.put(`http://localhost:5001/api/playlists/${id}`, payload);
             } else {
-                await axios.post('http://localhost:5001/api/playlists', formData);
+                await axios.post('http://localhost:5001/api/playlists', payload);
             }
             navigate('/playlists');
         } catch (error: any) {

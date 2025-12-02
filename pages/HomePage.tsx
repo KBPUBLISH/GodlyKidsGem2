@@ -278,12 +278,27 @@ const HomePage: React.FC = () => {
   };
 
   const getPlaylistsByCategory = (categoryName: string) => {
-    return playlists.filter(playlist => {
-      const playlistCategories = (playlist as any).categories && Array.isArray((playlist as any).categories) 
-        ? (playlist as any).categories 
-        : (playlist.category ? [playlist.category] : []);
-      return playlistCategories.includes(categoryName);
-    });
+    return playlists
+      .filter(playlist => {
+        const playlistCategories = (playlist as any).categories && Array.isArray((playlist as any).categories) 
+          ? (playlist as any).categories 
+          : (playlist.category ? [playlist.category] : []);
+        return playlistCategories.includes(categoryName);
+      })
+      .map(playlist => ({
+        // Transform playlist to match Book interface for BookCard
+        id: playlist._id || playlist.id,
+        _id: playlist._id,
+        title: playlist.title,
+        coverUrl: playlist.coverImage, // Map coverImage to coverUrl
+        author: playlist.author,
+        level: 'All',
+        category: playlist.category,
+        isAudio: true,
+        isRead: false,
+        description: playlist.description,
+        items: playlist.items, // Keep items for navigation detection
+      }));
   };
 
   const featuredBooks = books.slice(0, 5); // Top 5 featured
@@ -316,7 +331,7 @@ const HomePage: React.FC = () => {
         onClose={() => setShowPrayerGame(false)}
       />
 
-      <div className="px-4 pt-20 space-y-2 pb-52">
+      <div className="px-4 pt-28 space-y-2 pb-52">
 
         {/* --- Stories Section --- */}
         <div className="w-screen overflow-x-auto no-scrollbar pb-6 pt-2 -mt-2 -mx-4">

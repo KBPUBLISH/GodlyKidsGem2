@@ -34,7 +34,9 @@ const Categories: React.FC = () => {
         try {
             const url = filterType === 'all' 
                 ? 'http://localhost:5001/api/categories'
-                : `http://localhost:5001/api/categories?type=${filterType}`;
+                : filterType === 'explore'
+                    ? 'http://localhost:5001/api/categories?explore=true'
+                    : `http://localhost:5001/api/categories?type=${filterType}`;
             const response = await axios.get(url);
             setCategories(response.data);
         } catch (error) {
@@ -43,10 +45,6 @@ const Categories: React.FC = () => {
             setLoading(false);
         }
     };
-
-    useEffect(() => {
-        fetchCategories();
-    }, [filterType]);
 
     useEffect(() => {
         fetchCategories();

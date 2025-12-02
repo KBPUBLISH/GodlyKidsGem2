@@ -6,8 +6,9 @@ interface SectionTitleProps {
   color?: string;
 }
 
-const SectionTitle: React.FC<SectionTitleProps> = ({ title, icon, color }) => {
-  const backgroundColor = color || '#8B4513';
+const SectionTitle: React.FC<SectionTitleProps> = ({ title, icon }) => {
+  // Always use wood-plank brown style for consistency
+  const backgroundColor = '#8B4513';
   
   return (
     <div className="relative py-2 my-4 mx-[-10px]">
@@ -17,9 +18,9 @@ const SectionTitle: React.FC<SectionTitleProps> = ({ title, icon, color }) => {
         style={{
             backgroundColor: backgroundColor,
             backgroundImage: `repeating-linear-gradient(90deg, transparent, transparent 50px, rgba(0,0,0,0.1) 50px, rgba(0,0,0,0.1) 53px), 
-                              linear-gradient(to bottom, ${backgroundColor}, ${color ? backgroundColor : '#654321'})`,
-            borderColor: color ? `${color}CC` : '#A0522D',
-            borderBottomColor: color ? `${color}99` : '#5c2e0b'
+                              linear-gradient(to bottom, #8B5A2B, #654321)`,
+            borderColor: '#A0522D',
+            borderBottomColor: '#5c2e0b'
         }}
       ></div>
       

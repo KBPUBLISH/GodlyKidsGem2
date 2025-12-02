@@ -571,9 +571,20 @@ const LessonPlayerPage: React.FC = () => {
                     {/* Content */}
                     <div className="flex-1 overflow-y-auto">
                         {currentScreen === 'devotional' && (
-                            <div className="h-full flex flex-col bg-gradient-to-b from-indigo-900 to-purple-900 p-6">
-                                {/* Audio Controls */}
-                                <div className="mb-4 flex justify-center items-center gap-3">
+                            <div className="h-full flex flex-col p-4 relative overflow-hidden"
+                                style={{
+                                    backgroundColor: '#8B4513',
+                                    backgroundImage: `repeating-linear-gradient(90deg, transparent, transparent 50px, rgba(0,0,0,0.1) 50px, rgba(0,0,0,0.1) 53px), 
+                                                      linear-gradient(to bottom, #8B5A2B, #654321)`
+                                }}>
+                                {/* Decorative background elements - Nails/Bolts */}
+                                <div className="absolute top-4 left-4 w-3 h-3 rounded-full bg-[#4a2810] shadow-inner opacity-60"></div>
+                                <div className="absolute top-4 right-4 w-3 h-3 rounded-full bg-[#4a2810] shadow-inner opacity-60"></div>
+                                <div className="absolute bottom-4 left-4 w-3 h-3 rounded-full bg-[#4a2810] shadow-inner opacity-60"></div>
+                                <div className="absolute bottom-4 right-4 w-3 h-3 rounded-full bg-[#4a2810] shadow-inner opacity-60"></div>
+                                
+                                {/* Audio Controls - Wood style */}
+                                <div className="mb-6 flex justify-center items-center gap-3 relative z-10">
                                     {/* Voice Selector */}
                                     <div
                                         ref={voiceDropdownRef}
@@ -585,10 +596,10 @@ const LessonPlayerPage: React.FC = () => {
                                                 e.stopPropagation();
                                                 setShowVoiceDropdown(!showVoiceDropdown);
                                             }}
-                                            className="bg-white/20 backdrop-blur-md rounded-full px-3 py-2 flex items-center gap-2 hover:bg-white/30 transition-colors w-full"
+                                            className="bg-[#5D4037] hover:bg-[#4E342E] text-white rounded-lg px-4 py-2 flex items-center gap-2 transition-colors border-2 border-[#3E2723] shadow-md"
                                         >
-                                            <Mic className="w-4 h-4 text-white flex-shrink-0" />
-                                            <span className="text-white text-sm truncate flex-1 text-center">
+                                            <Mic className="w-5 h-5 text-[#FFD700] flex-shrink-0" />
+                                            <span className="text-[#FFD700] text-sm font-bold truncate font-display tracking-wide">
                                                 {voices.find(v => v.voice_id === selectedVoiceId)?.name ||
                                                     clonedVoices.find(v => v.voice_id === selectedVoiceId)?.name ||
                                                     'Voice'}
@@ -597,7 +608,7 @@ const LessonPlayerPage: React.FC = () => {
 
                                         {/* Dropdown Menu */}
                                         {showVoiceDropdown && (
-                                            <div className="absolute top-full left-0 right-0 mt-2 bg-black/95 backdrop-blur-md rounded-xl border border-white/20 shadow-2xl z-50 max-h-[300px] overflow-y-auto">
+                                            <div className="absolute top-full left-0 right-0 mt-2 bg-[#5D4037] rounded-lg border-2 border-[#3E2723] shadow-xl z-50 max-h-[300px] overflow-y-auto">
                                                 <div className="py-2">
                                                     {/* Portal voices */}
                                                     {voices.length > 0 && (
@@ -606,7 +617,7 @@ const LessonPlayerPage: React.FC = () => {
                                                                 const unlocked = isVoiceUnlocked(v.voice_id);
                                                                 const shopId = getVoiceShopId(v.voice_id, v.name);
                                                                 return (
-                                                                    <div key={v.voice_id} className="flex items-center gap-2">
+                                                                    <div key={v.voice_id} className="flex items-center gap-2 px-2">
                                                                         <button
                                                                             onClick={(e) => {
                                                                                 e.stopPropagation();
@@ -621,7 +632,7 @@ const LessonPlayerPage: React.FC = () => {
                                                                                 }
                                                                             }}
                                                                             disabled={!unlocked}
-                                                                            className={`flex-1 text-left px-4 py-2 text-sm text-white hover:bg-white/10 transition-colors flex items-center gap-2 ${selectedVoiceId === v.voice_id ? 'bg-white/20' : ''} ${!unlocked ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                                                            className={`flex-1 text-left px-3 py-2 text-sm text-[#FFD700] hover:bg-[#4E342E] transition-colors flex items-center gap-2 rounded-md ${selectedVoiceId === v.voice_id ? 'bg-[#4E342E]' : ''} ${!unlocked ? 'opacity-50 cursor-not-allowed' : ''}`}
                                                                         >
                                                                             {selectedVoiceId === v.voice_id && unlocked && (
                                                                                 <Check className="w-4 h-4 text-[#FFD700]" />
@@ -629,7 +640,7 @@ const LessonPlayerPage: React.FC = () => {
                                                                             {!unlocked && (
                                                                                 <Lock className="w-4 h-4 text-gray-400" />
                                                                             )}
-                                                                            <span className={selectedVoiceId === v.voice_id ? 'font-bold' : ''}>
+                                                                            <span className={`font-display tracking-wide ${selectedVoiceId === v.voice_id ? 'font-bold' : ''}`}>
                                                                                 {v.name}
                                                                             </span>
                                                                         </button>
@@ -640,7 +651,7 @@ const LessonPlayerPage: React.FC = () => {
                                                                                     setShowVoiceDropdown(false);
                                                                                     navigate('/profile', { state: { openShop: true, shopTab: 'voices' } });
                                                                                 }}
-                                                                                className="px-3 py-1 text-xs bg-[#FFD700] text-black rounded hover:bg-[#FFC700] transition-colors font-semibold"
+                                                                                className="px-2 py-1 text-xs bg-[#FFD700] text-[#3E2723] rounded hover:bg-[#FFC107] transition-colors font-bold font-display"
                                                                             >
                                                                                 Unlock
                                                                             </button>
@@ -667,13 +678,13 @@ const LessonPlayerPage: React.FC = () => {
                                                                             generateDevotionalAudio();
                                                                         }
                                                                     }}
-                                                                    className={`w-full text-left px-4 py-2 text-sm text-white hover:bg-white/10 transition-colors flex items-center gap-2 ${selectedVoiceId === v.voice_id ? 'bg-white/20' : ''
+                                                                    className={`w-full text-left px-4 py-2 text-sm text-[#FFD700] hover:bg-[#4E342E] transition-colors flex items-center gap-2 ${selectedVoiceId === v.voice_id ? 'bg-[#4E342E]' : ''
                                                                         }`}
                                                                 >
                                                                     {selectedVoiceId === v.voice_id && (
                                                                         <Check className="w-4 h-4 text-[#FFD700]" />
                                                                     )}
-                                                                    <span className={selectedVoiceId === v.voice_id ? 'font-bold' : ''}>
+                                                                    <span className={`font-display tracking-wide ${selectedVoiceId === v.voice_id ? 'font-bold' : ''}`}>
                                                                         {v.name} (Cloned)
                                                                     </span>
                                                                 </button>
@@ -682,7 +693,7 @@ const LessonPlayerPage: React.FC = () => {
                                                     )}
 
                                                     {voices.length === 0 && clonedVoices.length === 0 && (
-                                                        <div className="px-4 py-2 text-sm text-gray-400 text-center">
+                                                        <div className="px-4 py-2 text-sm text-white/50 text-center">
                                                             No voices available
                                                         </div>
                                                     )}
@@ -691,58 +702,84 @@ const LessonPlayerPage: React.FC = () => {
                                         )}
                                     </div>
 
-                                    {/* Audio Play Button */}
+                                    {/* Audio Play Button - Wood style */}
                                     <button
                                         onClick={toggleAudio}
                                         disabled={isGeneratingAudio}
-                                        className={`flex items-center gap-3 px-6 py-3 rounded-lg font-semibold transition-all ${isGeneratingAudio
-                                                ? 'bg-gray-600 text-gray-300 cursor-not-allowed'
+                                        className={`flex items-center gap-3 px-6 py-3 rounded-lg font-bold text-lg transition-all transform hover:scale-105 shadow-lg border-2 ${isGeneratingAudio
+                                                ? 'bg-[#5D4037] text-white/50 border-[#3E2723] cursor-not-allowed'
                                                 : isAudioPlaying
-                                                    ? 'bg-red-500 text-white hover:bg-red-600'
-                                                    : 'bg-[#FFD700] text-black hover:bg-[#FFC700]'
+                                                    ? 'bg-[#3E2723] text-[#FFD700] border-[#FFD700]'
+                                                    : 'bg-[#5D4037] text-[#FFD700] border-[#3E2723] hover:bg-[#4E342E]'
                                             }`}
                                     >
                                         {isGeneratingAudio ? (
                                             <>
-                                                <Loader2 className="w-5 h-5 animate-spin" />
-                                                <span>Generating Audio...</span>
+                                                <Loader2 className="w-6 h-6 animate-spin" />
+                                                <span className="font-display">Loading...</span>
                                             </>
                                         ) : isAudioPlaying ? (
                                             <>
-                                                <Pause className="w-5 h-5" />
-                                                <span>Pause Reading</span>
+                                                <Pause className="w-6 h-6" />
+                                                <span className="font-display">Pause</span>
                                             </>
                                         ) : (
                                             <>
-                                                <Volume2 className="w-5 h-5" />
-                                                <span>Listen to Devotional</span>
+                                                <Volume2 className="w-6 h-6" />
+                                                <span className="font-display">Listen</span>
                                             </>
                                         )}
                                     </button>
                                 </div>
 
-                                <div className="flex-1 overflow-y-auto">
-                                    {lesson.devotional.title && (
-                                        <h2 className="text-white text-2xl font-bold mb-4">{lesson.devotional.title}</h2>
-                                    )}
-                                    {lesson.devotional.content && (
-                                        <div className="text-white text-lg leading-relaxed mb-6 whitespace-pre-line">
-                                            {lesson.devotional.content}
-                                        </div>
-                                    )}
-                                    {lesson.devotional.verse && (
-                                        <div className="bg-white/10 backdrop-blur-sm rounded-lg p-4 mb-4">
-                                            <p className="text-[#FFD700] font-semibold mb-2">{lesson.devotional.verse}</p>
-                                            {lesson.devotional.verseText && (
-                                                <p className="text-white italic">{lesson.devotional.verseText}</p>
-                                            )}
-                                        </div>
-                                    )}
+                                {/* Main Content - Parchment on Wood */}
+                                <div className="flex-1 overflow-y-auto relative z-10 px-2">
+                                    {/* Parchment Container */}
+                                    <div className="bg-[#f3e5ab] rounded-sm shadow-lg p-6 transform rotate-[-1deg] border-2 border-[#d4c59a] relative">
+                                        {/* Parchment texture overlay */}
+                                        <div className="absolute inset-0 opacity-10 pointer-events-none mix-blend-multiply"
+                                            style={{ backgroundImage: `url("https://www.transparenttextures.com/patterns/aged-paper.png")` }}
+                                        ></div>
+                                        
+                                        {/* Title */}
+                                        {lesson.devotional.title && (
+                                            <div className="text-center mb-6 relative z-10">
+                                                <h2 className="text-[#5D4037] text-3xl md:text-4xl font-black font-display drop-shadow-sm tracking-wide">
+                                                    {lesson.devotional.title}
+                                                </h2>
+                                                <div className="w-32 h-1 bg-[#8B4513] mx-auto mt-2 rounded-full opacity-50"></div>
+                                            </div>
+                                        )}
+                                        
+                                        {/* Content */}
+                                        {lesson.devotional.content && (
+                                            <div className="mb-6 relative z-10">
+                                                <div className="text-[#3E2723] text-xl md:text-2xl leading-relaxed whitespace-pre-line font-medium font-serif">
+                                                    {lesson.devotional.content}
+                                                </div>
+                                            </div>
+                                        )}
+                                        
+                                        {/* Bible Verse - Wax Seal Style */}
+                                        {lesson.devotional.verse && (
+                                            <div className="relative z-10 mt-8 border-t-2 border-[#d4c59a] pt-6">
+                                                <div className="flex flex-col items-center text-center">
+                                                    <span className="text-2xl mb-2">📜</span>
+                                                    <p className="text-[#8B4513] font-black text-lg font-display mb-2">{lesson.devotional.verse}</p>
+                                                    {lesson.devotional.verseText && (
+                                                        <p className="text-[#5D4037] text-xl italic font-serif leading-relaxed max-w-lg">"{lesson.devotional.verseText}"</p>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        )}
+                                    </div>
                                 </div>
-                                <div className="flex items-center justify-between pt-4 border-t border-white/20">
+                                
+                                {/* Navigation buttons - Wood Signs */}
+                                <div className="flex items-center justify-between pt-6 gap-4 relative z-10">
                                     <button
                                         onClick={handleBack}
-                                        className="text-white/80 hover:text-white flex items-center gap-2"
+                                        className="bg-[#5D4037] hover:bg-[#4E342E] text-[#FFD700] px-6 py-3 rounded-lg font-bold font-display flex items-center gap-2 shadow-lg border-2 border-[#3E2723] transition-transform active:scale-95"
                                     >
                                         <ChevronLeft className="w-5 h-5" />
                                         Back
@@ -756,72 +793,109 @@ const LessonPlayerPage: React.FC = () => {
                                             setDevotionalRead(true);
                                             handleNext();
                                         }}
-                                        className="bg-[#FFD700] text-black px-6 py-3 rounded-lg font-semibold"
+                                        className="bg-[#8B4513] hover:bg-[#A0522D] text-white px-8 py-3 rounded-lg font-bold font-display text-lg shadow-lg border-2 border-[#5D4037] transition-transform active:scale-95 flex items-center gap-2"
                                     >
                                         Continue
+                                        <ChevronRight className="w-6 h-6" />
                                     </button>
                                 </div>
                             </div>
                         )}
 
                         {currentScreen === 'activity' && (
-                            <div className="h-full flex flex-col bg-gradient-to-b from-blue-900 to-indigo-900 p-4 md:p-6 overflow-hidden">
+                            <div className="h-full flex flex-col p-4 md:p-6 overflow-hidden"
+                                style={{
+                                    backgroundColor: '#8B4513',
+                                    backgroundImage: `repeating-linear-gradient(90deg, transparent, transparent 50px, rgba(0,0,0,0.1) 50px, rgba(0,0,0,0.1) 53px), 
+                                                      linear-gradient(to bottom, #8B5A2B, #654321)`
+                                }}>
+                                {/* Decorative background elements */}
+                                <div className="absolute top-4 left-4 w-3 h-3 rounded-full bg-[#4a2810] shadow-inner opacity-60"></div>
+                                <div className="absolute top-4 right-4 w-3 h-3 rounded-full bg-[#4a2810] shadow-inner opacity-60"></div>
+                                <div className="absolute bottom-4 left-4 w-3 h-3 rounded-full bg-[#4a2810] shadow-inner opacity-60"></div>
+                                <div className="absolute bottom-4 right-4 w-3 h-3 rounded-full bg-[#4a2810] shadow-inner opacity-60"></div>
+
                                 {lesson.activity.type === 'quiz' && questions.length > 0 ? (
                                     <>
-                                        <div className="flex-1 overflow-y-auto">
-                                            <h2 className="text-white text-2xl font-bold mb-6">
-                                                {lesson.activity.title || 'Quiz'}
-                                            </h2>
+                                        <div className="flex-1 overflow-y-auto px-2">
+                                            {/* Parchment Container */}
+                                            <div className="bg-[#f3e5ab] rounded-sm shadow-lg p-6 transform rotate-[1deg] border-2 border-[#d4c59a] relative min-h-full">
+                                                {/* Parchment texture overlay */}
+                                                <div className="absolute inset-0 opacity-10 pointer-events-none mix-blend-multiply"
+                                                    style={{ backgroundImage: `url("https://www.transparenttextures.com/patterns/aged-paper.png")` }}
+                                                ></div>
 
-                                            {/* Question Progress */}
-                                            <div className="mb-6">
-                                                <div className="text-white/70 text-sm mb-2">
-                                                    Question {currentQuestionIndex + 1} of {questions.length}
-                                                </div>
-                                                <div className="w-full h-2 bg-white/20 rounded-full overflow-hidden">
-                                                    <div
-                                                        className="h-full bg-[#FFD700] transition-all duration-300"
-                                                        style={{ width: `${((currentQuestionIndex + 1) / questions.length) * 100}%` }}
-                                                    />
-                                                </div>
-                                            </div>
+                                                <div className="relative z-10">
+                                                    <h2 className="text-[#5D4037] text-3xl font-black font-display mb-6 text-center drop-shadow-sm tracking-wide">
+                                                        {lesson.activity.title || 'Quiz Time!'}
+                                                    </h2>
 
-                                            {/* Current Question */}
-                                            <div className="mb-6">
-                                                <h3 className="text-white text-xl font-semibold mb-4">
-                                                    {questions[currentQuestionIndex].question}
-                                                </h3>
-
-                                                <div className="space-y-3">
-                                                    {questions[currentQuestionIndex].options.map((option, optIndex) => {
-                                                        const isSelected = selectedAnswers.get(currentQuestionIndex) === optIndex;
-                                                        const isCorrect = option.isCorrect;
-                                                        const showResult = quizSubmitted;
-
-                                                        return (
-                                                            <button
-                                                                key={optIndex}
-                                                                onClick={() => handleQuizAnswer(currentQuestionIndex, optIndex)}
-                                                                disabled={quizSubmitted}
-                                                                className={`w-full p-4 rounded-lg text-left transition-all ${showResult && isCorrect
-                                                                        ? 'bg-green-500 border-2 border-green-400'
-                                                                        : showResult && isSelected && !isCorrect
-                                                                            ? 'bg-red-500 border-2 border-red-400'
-                                                                            : isSelected
-                                                                                ? 'bg-[#FFD700] border-2 border-[#FFD700]'
-                                                                                : 'bg-white/10 border-2 border-white/20 hover:bg-white/20'
-                                                                    } ${quizSubmitted ? 'cursor-not-allowed' : 'cursor-pointer'}`}
+                                                    {/* Question Progress */}
+                                                    <div className="mb-8 px-4">
+                                                        <div className="flex justify-between text-[#8B4513] text-sm font-bold mb-2 font-display">
+                                                            <span>Question {currentQuestionIndex + 1}</span>
+                                                            <span>{questions.length} total</span>
+                                                        </div>
+                                                        <div className="w-full h-4 bg-[#d4c59a] rounded-full overflow-hidden border border-[#8B4513]/30">
+                                                            <div
+                                                                className="h-full bg-[#8B4513] transition-all duration-300 relative"
+                                                                style={{ width: `${((currentQuestionIndex + 1) / questions.length) * 100}%` }}
                                                             >
-                                                                <span className="text-white font-medium">{option.text}</span>
-                                                            </button>
-                                                        );
-                                                    })}
+                                                                <div className="absolute inset-0 bg-white/20" style={{ backgroundImage: 'linear-gradient(45deg,rgba(255,255,255,.15) 25%,transparent 25%,transparent 50%,rgba(255,255,255,.15) 50%,rgba(255,255,255,.15) 75%,transparent 75%,transparent)', backgroundSize: '1rem 1rem' }}></div>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+
+                                                    {/* Current Question */}
+                                                    <div className="mb-8">
+                                                        <h3 className="text-[#3E2723] text-2xl font-bold mb-6 text-center font-serif leading-relaxed">
+                                                            {questions[currentQuestionIndex].question}
+                                                        </h3>
+
+                                                        <div className="space-y-4">
+                                                            {questions[currentQuestionIndex].options.map((option, optIndex) => {
+                                                                const isSelected = selectedAnswers.get(currentQuestionIndex) === optIndex;
+                                                                const isCorrect = option.isCorrect;
+                                                                const showResult = quizSubmitted;
+
+                                                                return (
+                                                                    <button
+                                                                        key={optIndex}
+                                                                        onClick={() => handleQuizAnswer(currentQuestionIndex, optIndex)}
+                                                                        disabled={quizSubmitted}
+                                                                        className={`w-full p-4 rounded-lg text-left transition-all border-2 transform active:scale-[0.98] ${showResult && isCorrect
+                                                                                ? 'bg-green-100 border-green-500 text-green-900 shadow-md'
+                                                                                : showResult && isSelected && !isCorrect
+                                                                                    ? 'bg-red-100 border-red-500 text-red-900 shadow-md'
+                                                                                    : isSelected
+                                                                                        ? 'bg-[#FFD700] border-[#B8860B] text-[#3E2723] shadow-md font-bold'
+                                                                                        : 'bg-white/60 border-[#d4c59a] text-[#5D4037] hover:bg-white hover:border-[#8B4513] hover:shadow-md'
+                                                                            } ${quizSubmitted ? 'cursor-not-allowed' : 'cursor-pointer'}`}
+                                                                    >
+                                                                        <div className="flex items-center gap-3">
+                                                                            <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold border ${
+                                                                                showResult && isCorrect ? 'bg-green-500 border-green-600 text-white' :
+                                                                                showResult && isSelected && !isCorrect ? 'bg-red-500 border-red-600 text-white' :
+                                                                                isSelected ? 'bg-[#B8860B] border-[#8B4513] text-white' :
+                                                                                'bg-[#d4c59a] border-[#8B4513] text-[#5D4037]'
+                                                                            }`}>
+                                                                                {String.fromCharCode(65 + optIndex)}
+                                                                            </div>
+                                                                            <span className="text-lg font-medium">{option.text}</span>
+                                                                            {showResult && isCorrect && <Check className="w-6 h-6 text-green-600 ml-auto" />}
+                                                                            {showResult && isSelected && !isCorrect && <X className="w-6 h-6 text-red-600 ml-auto" />}
+                                                                        </div>
+                                                                    </button>
+                                                                );
+                                                            })}
+                                                        </div>
+                                                    </div>
                                                 </div>
                                             </div>
 
-                                            {/* Navigation */}
+                                            {/* Navigation - Wood Signs */}
                                             {!quizSubmitted && (
-                                                <div className="flex items-center justify-between">
+                                                <div className="flex items-center justify-between pt-6 gap-4 relative z-10 pb-4">
                                                     <button
                                                         onClick={() => {
                                                             if (currentQuestionIndex > 0) {
@@ -830,7 +904,7 @@ const LessonPlayerPage: React.FC = () => {
                                                                 handleBack();
                                                             }
                                                         }}
-                                                        className="text-white/80 hover:text-white flex items-center gap-2"
+                                                        className="bg-[#5D4037] hover:bg-[#4E342E] text-[#FFD700] px-6 py-3 rounded-lg font-bold font-display flex items-center gap-2 shadow-lg border-2 border-[#3E2723] transition-transform active:scale-95"
                                                     >
                                                         <ChevronLeft className="w-5 h-5" />
                                                         {currentQuestionIndex > 0 ? 'Previous' : 'Back'}
@@ -844,18 +918,18 @@ const LessonPlayerPage: React.FC = () => {
                                                                 }
                                                             }}
                                                             disabled={!selectedAnswers.has(currentQuestionIndex)}
-                                                            className="bg-[#FFD700] text-black px-6 py-3 rounded-lg font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
+                                                            className="bg-[#8B4513] hover:bg-[#A0522D] text-white px-8 py-3 rounded-lg font-bold font-display text-lg shadow-lg border-2 border-[#5D4037] transition-transform active:scale-95 flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
                                                         >
                                                             Next
-                                                            <ChevronRight className="w-5 h-5 inline ml-2" />
+                                                            <ChevronRight className="w-6 h-6" />
                                                         </button>
                                                     ) : (
                                                         <button
                                                             onClick={handleSubmitQuiz}
                                                             disabled={!selectedAnswers.has(currentQuestionIndex)}
-                                                            className="bg-[#FFD700] text-black px-6 py-3 rounded-lg font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
+                                                            className="bg-[#2E7D32] hover:bg-[#1B5E20] text-white px-8 py-3 rounded-lg font-bold font-display text-lg shadow-lg border-2 border-[#1B5E20] transition-transform active:scale-95 flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
                                                         >
-                                                            Submit
+                                                            Submit!
                                                         </button>
                                                     )}
                                                 </div>
@@ -863,20 +937,35 @@ const LessonPlayerPage: React.FC = () => {
 
                                             {/* Results */}
                                             {quizSubmitted && (
-                                                <div className="mt-6 bg-white/10 backdrop-blur-sm rounded-lg p-6">
-                                                    <h3 className="text-white text-xl font-bold mb-2">Quiz Complete!</h3>
-                                                    <p className="text-white/80 mb-4">
-                                                        You got {correctAnswers} out of {questions.length} correct!
-                                                    </p>
-                                                    <p className="text-[#FFD700] font-semibold text-lg">
-                                                        🪙 You earned {correctAnswers * 10} coins!
-                                                    </p>
-                                                    <button
-                                                        onClick={() => navigate(-1)}
-                                                        className="mt-4 bg-[#FFD700] text-black px-6 py-3 rounded-lg font-semibold w-full"
-                                                    >
-                                                        Done
-                                                    </button>
+                                                <div className="absolute inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+                                                    <div className="bg-[#f3e5ab] rounded-lg shadow-2xl p-8 max-w-md w-full border-4 border-[#8B4513] text-center animate-in zoom-in duration-300 relative">
+                                                        {/* Confetti/Stars */}
+                                                        <div className="absolute -top-6 -left-6 text-4xl animate-bounce">⭐</div>
+                                                        <div className="absolute -top-6 -right-6 text-4xl animate-bounce" style={{animationDelay: '0.5s'}}>⭐</div>
+                                                        
+                                                        <h3 className="text-[#5D4037] text-3xl font-black font-display mb-4">Quiz Complete!</h3>
+                                                        
+                                                        <div className="text-6xl mb-4">
+                                                            {correctAnswers === questions.length ? '🏆' : correctAnswers > questions.length / 2 ? '🌟' : '👍'}
+                                                        </div>
+                                                        
+                                                        <p className="text-[#3E2723] text-xl mb-6 font-serif">
+                                                            You got <span className="font-bold text-[#8B4513]">{correctAnswers}</span> out of <span className="font-bold text-[#8B4513]">{questions.length}</span> correct!
+                                                        </p>
+                                                        
+                                                        <div className="bg-[#FFF8E1] p-4 rounded-lg border-2 border-[#d4c59a] mb-6 inline-block">
+                                                            <p className="text-[#FF8F00] font-black text-2xl flex items-center gap-2 justify-center">
+                                                                <span>🪙</span> +{correctAnswers * 10} Coins!
+                                                            </p>
+                                                        </div>
+                                                        
+                                                        <button
+                                                            onClick={() => navigate(-1)}
+                                                            className="w-full bg-[#8B4513] hover:bg-[#A0522D] text-white px-6 py-4 rounded-lg font-bold font-display text-xl shadow-lg border-2 border-[#5D4037] transition-transform active:scale-95"
+                                                        >
+                                                            Awesome!
+                                                        </button>
+                                                    </div>
                                                 </div>
                                             )}
                                         </div>

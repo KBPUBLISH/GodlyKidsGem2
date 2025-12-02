@@ -493,4 +493,70 @@ router.post('/sound-effect', upload.single('file'), async (req, res) => {
     }
 });
 
+// Simple MP3 upload - just upload and return URL (for hardcoding in app)
+router.post('/mp3', upload.single('audio'), async (req, res) => {
+    try {
+        if (!req.file) {
+            return res.status(400).json({ message: 'No audio file provided' });
+        }
+
+        console.log('📤 Simple MP3 upload:', req.file.originalname, req.file.size, 'bytes');
+
+        const timestamp = Date.now();
+        const ext = path.extname(req.file.originalname) || '.mp3';
+        const sanitizedName = req.file.originalname.replace(/[^a-zA-Z0-9.-]/g, '_');
+        const filename = `${timestamp}_${sanitizedName}`;
+        const filePath = `music/${filename}`;
+
+        if (bucket) {
+            // Upload to GCS
+            const blob = bucket.file(filePath);
+            const blobStream = blob.createWriteStream({
+                resumable: false,
+                contentType: req.file.mimetype || 'audio/mpeg',
+                metadata: {
+                    cacheControl: 'public, max-age=31536000',
+                }
+            });
+
+            blobStream.on('error', (error) => {
+                console.error('❌ GCS upload error:', error);
+                res.status(500).json({ message: 'Failed to upload to storage', error: error.message });
+            });
+
+            blobStream.on('finish', async () => {
+                try {
+                    await blob.makePublic();
+                    const publicUrl = `https://storage.googleapis.com/${bucket.name}/${filePath}`;
+                    console.log('✅ MP3 uploaded:', publicUrl);
+                    res.status(200).json({ 
+                        url: publicUrl, 
+                        filename: req.file.originalname,
+                        size: req.file.size,
+                        message: 'Copy this URL and use it in the app!'
+                    });
+                } catch (err) {
+                    console.error('❌ Error making file public:', err);
+                    res.status(500).json({ message: 'Upload succeeded but failed to make public', error: err.message });
+                }
+            });
+
+            blobStream.end(req.file.buffer);
+        } else {
+            // Fallback to local storage
+            console.log('GCS not configured, using local storage');
+            const url = await saveFileLocally(req.file, filePath, req);
+            res.status(200).json({ 
+                url, 
+                filename: req.file.originalname,
+                size: req.file.size,
+                message: 'Copy this URL and use it in the app!'
+            });
+        }
+    } catch (error) {
+        console.error('❌ MP3 upload error:', error);
+        res.status(500).json({ message: error.message });
+    }
+});
+
 module.exports = router;

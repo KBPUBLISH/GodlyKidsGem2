@@ -114,6 +114,75 @@ const BookReaderPage: React.FC = () => {
     const [hasBookMusic, setHasBookMusic] = useState(false);
     const [isFavorite, setIsFavorite] = useState(false);
     const [isLiked, setIsLiked] = useState(false);
+    
+    // Page turn sound effect using Web Audio API for a synthetic paper sound
+    const audioContextRef = useRef<AudioContext | null>(null);
+    
+    // Function to play page turn sound using Web Audio API (synthetic paper rustle)
+    const playPageTurnSound = () => {
+        try {
+            // Create or reuse AudioContext
+            if (!audioContextRef.current) {
+                audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
+            }
+            const ctx = audioContextRef.current;
+            
+            // Resume context if suspended (required for autoplay policy)
+            if (ctx.state === 'suspended') {
+                ctx.resume();
+            }
+            
+            const now = ctx.currentTime;
+            
+            // Create noise buffer for paper rustle sound
+            const bufferSize = ctx.sampleRate * 0.15; // 150ms of sound
+            const noiseBuffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
+            const output = noiseBuffer.getChannelData(0);
+            
+            // Generate filtered noise that sounds like paper
+            for (let i = 0; i < bufferSize; i++) {
+                // Pink-ish noise with envelope
+                const t = i / bufferSize;
+                const envelope = Math.sin(t * Math.PI) * Math.pow(1 - t, 0.5); // Quick attack, natural decay
+                output[i] = (Math.random() * 2 - 1) * envelope * 0.3;
+            }
+            
+            // Create noise source
+            const noiseSource = ctx.createBufferSource();
+            noiseSource.buffer = noiseBuffer;
+            
+            // High-pass filter to make it sound more like paper
+            const highPass = ctx.createBiquadFilter();
+            highPass.type = 'highpass';
+            highPass.frequency.value = 800;
+            highPass.Q.value = 0.5;
+            
+            // Low-pass filter to remove harsh highs
+            const lowPass = ctx.createBiquadFilter();
+            lowPass.type = 'lowpass';
+            lowPass.frequency.value = 4000;
+            lowPass.Q.value = 0.7;
+            
+            // Gain for volume control
+            const gainNode = ctx.createGain();
+            gainNode.gain.setValueAtTime(0.25, now);
+            gainNode.gain.exponentialRampToValueAtTime(0.01, now + 0.15);
+            
+            // Connect the audio graph
+            noiseSource.connect(highPass);
+            highPass.connect(lowPass);
+            lowPass.connect(gainNode);
+            gainNode.connect(ctx.destination);
+            
+            // Play the sound
+            noiseSource.start(now);
+            noiseSource.stop(now + 0.15);
+            
+        } catch (err) {
+            // Silently fail if Web Audio API is not available
+            console.log('Page turn sound not available');
+        }
+    };
 
     // Effect 1: Initialization, Book Data Fetching, and Cleanup
     useEffect(() => {
@@ -432,6 +501,7 @@ const BookReaderPage: React.FC = () => {
 
             setIsPageTurning(true);
             setFlipState({ direction: 'next', isFlipping: true });
+            playPageTurnSound(); // Play page turn sound effect
 
             setTimeout(() => {
                 const nextIndex = currentPageIndex + 1;
@@ -452,7 +522,7 @@ const BookReaderPage: React.FC = () => {
                         readCountService.incrementReadCount(bookId);
                     }
                 }
-            }, 600);
+            }, 400); // Reduced from 600ms to match new animation duration
         }
     };
 
@@ -466,6 +536,7 @@ const BookReaderPage: React.FC = () => {
 
             setIsPageTurning(true);
             setFlipState({ direction: 'prev', isFlipping: true });
+            playPageTurnSound(); // Play page turn sound effect
 
             setTimeout(() => {
                 const prevIndex = currentPageIndex - 1;
@@ -480,7 +551,7 @@ const BookReaderPage: React.FC = () => {
                 if (bookId) {
                     readingProgressService.saveProgress(bookId, prevIndex);
                 }
-            }, 600);
+            }, 400); // Reduced from 600ms to match new animation duration
         }
     };
 
@@ -1164,33 +1235,108 @@ const BookReaderPage: React.FC = () => {
 
             {/* Main Reading Area */}
             <div
-                className="flex-1 w-full h-full relative perspective-[2000px] overflow-hidden bg-gray-900"
+                className="flex-1 w-full h-full relative overflow-hidden bg-gray-900"
                 onClick={handleBackgroundTap}
                 onTouchStart={handleTouchStart}
                 onTouchMove={handleTouchMove}
                 onTouchEnd={handleTouchEnd}
             >
-                {/* Style for animations */}
+                {/* Style for smooth slide + curl page turn animations */}
                 <style>{`
-                    @keyframes flipNext {
-                        0% { transform: rotateY(0deg); }
-                        100% { transform: rotateY(-180deg); }
+                    /* Slide out to left with curl effect (going to next page) */
+                    @keyframes slideOutLeft {
+                        0% { 
+                            transform: translateX(0) rotateY(0deg) scale(1);
+                            opacity: 1;
+                            filter: brightness(1);
+                        }
+                        50% {
+                            transform: translateX(-25%) rotateY(-15deg) scale(0.95);
+                            opacity: 1;
+                            filter: brightness(0.9);
+                        }
+                        100% { 
+                            transform: translateX(-100%) rotateY(-25deg) scale(0.9);
+                            opacity: 0;
+                            filter: brightness(0.7);
+                        }
                     }
-                    @keyframes flipPrev {
-                        0% { transform: rotateY(-180deg); }
-                        100% { transform: rotateY(0deg); }
+                    
+                    /* Slide in from right (new page appearing) */
+                    @keyframes slideInRight {
+                        0% { 
+                            transform: translateX(30%) scale(0.95);
+                            opacity: 0.5;
+                        }
+                        100% { 
+                            transform: translateX(0) scale(1);
+                            opacity: 1;
+                        }
                     }
-                    .animate-flip-next {
-                        animation: flipNext 0.6s cubic-bezier(0.645, 0.045, 0.355, 1.000) forwards;
+                    
+                    /* Slide out to right with curl effect (going to previous page) */
+                    @keyframes slideOutRight {
+                        0% { 
+                            transform: translateX(0) rotateY(0deg) scale(1);
+                            opacity: 1;
+                            filter: brightness(1);
+                        }
+                        50% {
+                            transform: translateX(25%) rotateY(15deg) scale(0.95);
+                            opacity: 1;
+                            filter: brightness(0.9);
+                        }
+                        100% { 
+                            transform: translateX(100%) rotateY(25deg) scale(0.9);
+                            opacity: 0;
+                            filter: brightness(0.7);
+                        }
                     }
-                    .animate-flip-prev {
-                        animation: flipPrev 0.6s cubic-bezier(0.645, 0.045, 0.355, 1.000) forwards;
+                    
+                    /* Slide in from left (previous page appearing) */
+                    @keyframes slideInLeft {
+                        0% { 
+                            transform: translateX(-30%) scale(0.95);
+                            opacity: 0.5;
+                        }
+                        100% { 
+                            transform: translateX(0) scale(1);
+                            opacity: 1;
+                        }
                     }
-                    .book-page {
-                        backface-visibility: hidden;
-                        transform-style: preserve-3d;
+                    
+                    .page-slide-out-left {
+                        animation: slideOutLeft 0.4s cubic-bezier(0.4, 0, 0.2, 1) forwards;
                         transform-origin: left center;
                     }
+                    
+                    .page-slide-in-right {
+                        animation: slideInRight 0.4s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+                    }
+                    
+                    .page-slide-out-right {
+                        animation: slideOutRight 0.4s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+                        transform-origin: right center;
+                    }
+                    
+                    .page-slide-in-left {
+                        animation: slideInLeft 0.4s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+                    }
+                    
+                    /* Shadow overlay for depth effect */
+                    .page-shadow {
+                        position: absolute;
+                        inset: 0;
+                        pointer-events: none;
+                        background: linear-gradient(to right, rgba(0,0,0,0.3) 0%, transparent 15%, transparent 85%, rgba(0,0,0,0.1) 100%);
+                        opacity: 0;
+                        transition: opacity 0.3s ease;
+                    }
+                    
+                    .page-turning .page-shadow {
+                        opacity: 1;
+                    }
+                    
                     @keyframes fadeIn {
                         from { opacity: 0; }
                         to { opacity: 1; }
@@ -1201,10 +1347,10 @@ const BookReaderPage: React.FC = () => {
                     }
                 `}</style>
 
-                {/* 3D Scene Container */}
-                <div className="relative w-full h-full" style={{ transformStyle: 'preserve-3d' }}>
+                {/* Page Container with perspective for subtle 3D effect */}
+                <div className={`relative w-full h-full ${flipState ? 'page-turning' : ''}`} style={{ perspective: '1200px' }}>
 
-                    {/* CASE 1: Normal View (No Flip) */}
+                    {/* CASE 1: Normal View (No Page Turn) */}
                     {!flipState && (
                         <div className="absolute inset-0 z-10">
                             <BookPageRenderer
@@ -1219,19 +1365,19 @@ const BookReaderPage: React.FC = () => {
                         </div>
                     )}
 
-                    {/* CASE 2: Flipping NEXT */}
+                    {/* CASE 2: Turning to NEXT page */}
                     {flipState?.direction === 'next' && (
                         <>
-                            {/* Bottom Layer: Next Page (Destination) */}
-                            <div className="absolute inset-0 z-0">
+                            {/* Bottom Layer: Next Page (slides in from right) */}
+                            <div className="absolute inset-0 z-10 page-slide-in-right">
                                 <BookPageRenderer
                                     page={mapPage(pages[currentPageIndex + 1]) || currentPage}
                                     activeTextBoxIndex={null}
                                     showScroll={true}
                                 />
                             </div>
-                            {/* Top Layer: Current Page (Animating) */}
-                            <div className="absolute inset-0 z-20 book-page animate-flip-next">
+                            {/* Top Layer: Current Page (slides out to left with curl) */}
+                            <div className="absolute inset-0 z-20 page-slide-out-left">
                                 <BookPageRenderer
                                     page={currentPage}
                                     activeTextBoxIndex={activeTextBoxIndex}
@@ -1239,17 +1385,17 @@ const BookReaderPage: React.FC = () => {
                                     highlightedWordIndex={currentWordIndex}
                                     wordAlignment={wordAlignment}
                                 />
-                                {/* Back of the page */}
-                                <div className="absolute inset-0 bg-white" style={{ transform: 'rotateY(180deg)', backfaceVisibility: 'hidden' }}></div>
+                                {/* Curl shadow effect on the edge */}
+                                <div className="absolute right-0 top-0 bottom-0 w-8 bg-gradient-to-l from-black/20 to-transparent pointer-events-none" />
                             </div>
                         </>
                     )}
 
-                    {/* CASE 3: Flipping PREV */}
+                    {/* CASE 3: Turning to PREV page */}
                     {flipState?.direction === 'prev' && (
                         <>
-                            {/* Bottom Layer: Current Page (Destination) */}
-                            <div className="absolute inset-0 z-0">
+                            {/* Bottom Layer: Current Page (slides in from left) */}
+                            <div className="absolute inset-0 z-10 page-slide-in-left">
                                 <BookPageRenderer
                                     page={currentPage}
                                     activeTextBoxIndex={activeTextBoxIndex}
@@ -1258,16 +1404,21 @@ const BookReaderPage: React.FC = () => {
                                     wordAlignment={wordAlignment}
                                 />
                             </div>
-                            {/* Top Layer: Prev Page (Animating) */}
-                            <div className="absolute inset-0 z-20 book-page animate-flip-prev" style={{ transform: 'rotateY(-180deg)' }}>
+                            {/* Top Layer: Next Page (slides out to right with curl) */}
+                            <div className="absolute inset-0 z-20 page-slide-out-right">
                                 <BookPageRenderer
-                                    page={mapPage(pages[currentPageIndex - 1]) || currentPage}
+                                    page={mapPage(pages[currentPageIndex + 1]) || currentPage}
                                     activeTextBoxIndex={null}
                                     showScroll={true}
                                 />
+                                {/* Curl shadow effect on the edge */}
+                                <div className="absolute left-0 top-0 bottom-0 w-8 bg-gradient-to-r from-black/20 to-transparent pointer-events-none" />
                             </div>
                         </>
                     )}
+                    
+                    {/* Ambient shadow during page turn */}
+                    <div className="page-shadow" />
                 </div>
 
                 {/* Navigation is now swipe-only - removed click zones */}

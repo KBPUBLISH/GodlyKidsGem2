@@ -111,3 +111,4 @@ After setting up, you should be able to:
 The configuration is also saved in `.cursor-mcp-config.json` in your project root for reference.
 
 
+

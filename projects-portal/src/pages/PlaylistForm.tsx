@@ -29,6 +29,7 @@ interface PlaylistFormData {
     type: 'Song' | 'Audiobook';
     items: AudioItem[];
     status: 'draft' | 'published';
+    isMembersOnly?: boolean;
     minAge?: number;
     level?: string;
 }
@@ -49,6 +50,7 @@ const PlaylistForm: React.FC = () => {
         type: 'Song',
         items: [],
         status: 'draft',
+        isMembersOnly: false,
         minAge: undefined,
         level: '',
     });
@@ -268,6 +270,36 @@ const PlaylistForm: React.FC = () => {
                                 <option value="Song">Song</option>
                                 <option value="Audiobook">Audiobook</option>
                             </select>
+                        </div>
+
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-2">
+                                Access
+                            </label>
+                            <div 
+                                onClick={() => setFormData({ ...formData, isMembersOnly: !formData.isMembersOnly })}
+                                className={`w-full rounded-lg border text-base px-3 py-2 transition cursor-pointer flex items-center justify-between ${
+                                    formData.isMembersOnly 
+                                        ? 'bg-amber-50 border-amber-300 text-amber-800' 
+                                        : 'bg-green-50 border-green-300 text-green-800'
+                                }`}
+                            >
+                                <span className="font-medium text-sm">
+                                    {formData.isMembersOnly ? '👑 Members Only' : '🆓 Free for All'}
+                                </span>
+                                <div className={`w-10 h-5 rounded-full relative transition-colors ${
+                                    formData.isMembersOnly ? 'bg-amber-400' : 'bg-green-400'
+                                }`}>
+                                    <div className={`absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform ${
+                                        formData.isMembersOnly ? 'translate-x-5' : 'translate-x-0.5'
+                                    }`} />
+                                </div>
+                            </div>
+                            <p className="text-xs text-gray-500 mt-1">
+                                {formData.isMembersOnly 
+                                    ? 'Only subscribers can access' 
+                                    : 'Everyone can access'}
+                            </p>
                         </div>
 
                         <div>

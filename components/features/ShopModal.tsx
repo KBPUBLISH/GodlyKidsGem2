@@ -297,6 +297,8 @@ const ShopModal: React.FC<ShopModalProps> = ({ isOpen, onClose, initialTab }) =>
         unequipItem,
         isOwned,
         isSubscribed,
+        isVoiceUnlocked,
+        unlockVoice,
         equippedFrame,
         equippedAvatar,
         equippedHat,
@@ -323,7 +325,17 @@ const ShopModal: React.FC<ShopModalProps> = ({ isOpen, onClose, initialTab }) =>
     if (!isOpen) return null;
 
     const handleBuy = (item: ShopItem) => {
-        purchaseItem(item);
+        // For voices, use the unlock system
+        if (item.type === 'voice') {
+            if (coins >= item.price) {
+                // Deduct coins and unlock voice
+                purchaseItem(item); // This handles coin deduction
+                unlockVoice(item.value); // Unlock the voice
+                console.log(`🎤 Voice unlocked via shop: ${item.name}`);
+            }
+        } else {
+            purchaseItem(item);
+        }
     };
 
     const handleEquip = (item: ShopItem) => {
@@ -464,7 +476,13 @@ const ShopModal: React.FC<ShopModalProps> = ({ isOpen, onClose, initialTab }) =>
         const equipped = isEquipped(item);
         const isLimb = ['leftArm', 'rightArm', 'legs'].includes(item.type);
         const isDisabled = isLimb && !isBodyEquipped;
-        const isLocked = item.isPremium && !isSubscribed;
+        
+        // For voices, check if unlocked; for other items, check premium status
+        const isVoice = item.type === 'voice';
+        const voiceUnlocked = isVoice ? isVoiceUnlocked(item.value) : false;
+        const isLocked = isVoice 
+            ? (!voiceUnlocked && !isSubscribed) // Voice is locked if not unlocked AND not subscribed
+            : (item.isPremium && !isSubscribed); // Other items use premium check
 
         return (
             <div
@@ -535,9 +553,18 @@ const ShopModal: React.FC<ShopModalProps> = ({ isOpen, onClose, initialTab }) =>
                     >
                         <Crown size={10} fill="currentColor" /> PREMIUM
                     </WoodButton>
-                ) : owned ? (
+                ) : (owned || (isVoice && voiceUnlocked)) ? (
                     <div className="flex w-full gap-1">
-                        {equipped ? (
+                        {isVoice ? (
+                            // Voices show "Unlocked" status
+                            <button
+                                disabled
+                                className="flex-1 bg-[#2e7d32] text-white font-bold text-[10px] py-1.5 rounded-lg flex items-center justify-center gap-1 border border-white/20 shadow-inner"
+                            >
+                                <Check size={12} />
+                                <span>UNLOCKED</span>
+                            </button>
+                        ) : equipped ? (
                             <button
                                 onClick={(e) => {
                                     e.stopPropagation();

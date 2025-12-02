@@ -35,6 +35,11 @@ interface UserContextType {
   addCoins: (amount: number) => void;
   ownedItems: string[];
   
+  // Unlocked Voices
+  unlockedVoices: string[]; // Array of voice_id strings
+  unlockVoice: (voiceId: string) => void;
+  isVoiceUnlocked: (voiceId: string) => boolean;
+  
   // Parent Profile
   parentName: string;
   setParentName: (name: string) => void;
@@ -107,6 +112,9 @@ const UserContext = createContext<UserContextType>({
   coins: 2650,
   addCoins: () => {},
   ownedItems: [],
+  unlockedVoices: [],
+  unlockVoice: () => {},
+  isVoiceUnlocked: () => false,
   parentName: 'Parent',
   setParentName: () => {},
   kids: [],
@@ -174,6 +182,7 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const [coins, setCoins] = useState(saved?.coins ?? 2650); // Start with 2650 for testing
   const [ownedItems, setOwnedItems] = useState<string[]>(saved?.ownedItems ?? ['f1', 'anim1']); // anim1 is default breathe
+  const [unlockedVoices, setUnlockedVoices] = useState<string[]>(saved?.unlockedVoices ?? []); // Voices unlocked by user
   
   // Profile Data
 
@@ -279,6 +288,7 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const stateToSave = {
       coins,
       ownedItems,
+      unlockedVoices,
       parentName,
       kids,
       currentProfileId,
@@ -311,7 +321,7 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
     localStorage.setItem(STORAGE_KEY, JSON.stringify(stateToSave));
   }, [
-    coins, ownedItems, parentName, kids, currentProfileId,
+    coins, ownedItems, unlockedVoices, parentName, kids, currentProfileId,
       equippedAvatar, equippedFrame, equippedHat, equippedBody,
     equippedLeftArm, equippedRightArm, equippedLegs, equippedAnimation,
     equippedLeftArmRotation, equippedRightArmRotation, equippedLegsRotation,
@@ -551,6 +561,21 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return ownedItems.includes(id);
   };
 
+  // Voice unlock functions
+  const unlockVoice = (voiceId: string) => {
+    if (!unlockedVoices.includes(voiceId)) {
+      setUnlockedVoices(prev => [...prev, voiceId]);
+      console.log(`🎤 Voice unlocked: ${voiceId}`);
+    }
+  };
+
+  const isVoiceUnlocked = (voiceId: string): boolean => {
+    // Premium users have all voices unlocked
+    if (isSubscribed) return true;
+    // Otherwise check if voice is in unlocked list
+    return unlockedVoices.includes(voiceId);
+  };
+
   const purchaseItem = (item: ShopItem): boolean => {
     if (ownedItems.includes(item.id)) return true;
     if (coins >= item.price) {
@@ -726,6 +751,9 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
       coins,
       addCoins,
       ownedItems,
+      unlockedVoices,
+      unlockVoice,
+      isVoiceUnlocked,
       parentName,
       setParentName,
       kids,

@@ -97,11 +97,16 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         const saved = localStorage.getItem('godly_kids_music_volume');
         return saved ? parseFloat(saved) : 0.5;
     });
-    const [musicEnabled, setMusicEnabled] = useState(true);
+    const [musicEnabled, setMusicEnabled] = useState<boolean>(() => {
+        const saved = localStorage.getItem('godly_kids_music_enabled');
+        // Default to true if not set
+        return saved !== null ? saved === 'true' : true;
+    });
     const [sfxEnabled, setSfxEnabled] = useState(true);
     const [musicMode, setMusicMode] = useState<'bg' | 'game' | 'workout'>('bg');
     const [musicForcePaused, setMusicForcePaused] = useState(() => {
-        return window.location.pathname.includes('/book-reader') || window.location.pathname.includes('/read/');
+        const path = window.location.pathname + window.location.hash;
+        return path.includes('/book-reader') || path.includes('/read/');
     });
 
     // --- Playlist Player State ---
@@ -311,22 +316,45 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         musicForcePausedRef.current = musicForcePaused;
     }, [musicForcePaused]);
 
+    // Use ref to track musicEnabled to avoid stale closure in interval
+    const musicEnabledRef = useRef(musicEnabled);
+    useEffect(() => {
+        musicEnabledRef.current = musicEnabled;
+        console.log('🎵 musicEnabled ref updated:', musicEnabled);
+    }, [musicEnabled]);
+
+    // Use ref to track musicMode and musicVolume
+    const musicModeRef = useRef(musicMode);
+    const musicVolumeRef = useRef(musicVolume);
+    useEffect(() => {
+        musicModeRef.current = musicMode;
+    }, [musicMode]);
+    useEffect(() => {
+        musicVolumeRef.current = musicVolume;
+    }, [musicVolume]);
+
     useEffect(() => {
         // Initialize BG audio elements (same as before)
         if (!bgAudioRef.current) {
             bgAudioRef.current = new Audio(BG_MUSIC_URL);
             bgAudioRef.current.loop = true;
             bgAudioRef.current.volume = 0;
+            bgAudioRef.current.preload = 'auto';
+            bgAudioRef.current.crossOrigin = 'anonymous';
         }
         if (!gameAudioRef.current) {
             gameAudioRef.current = new Audio(GAME_MUSIC_URL);
             gameAudioRef.current.loop = true;
             gameAudioRef.current.volume = 0;
+            gameAudioRef.current.preload = 'auto';
+            gameAudioRef.current.crossOrigin = 'anonymous';
         }
         if (!workoutAudioRef.current) {
             workoutAudioRef.current = new Audio(WORKOUT_MUSIC_URL);
             workoutAudioRef.current.loop = true;
             workoutAudioRef.current.volume = 0;
+            workoutAudioRef.current.preload = 'auto';
+            workoutAudioRef.current.crossOrigin = 'anonymous';
         }
 
         const bg = bgAudioRef.current;
@@ -334,9 +362,14 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         const workout = workoutAudioRef.current;
 
         const masterLoop = setInterval(() => {
+            // Read current values from refs to avoid stale closures
+            const isMusicEnabled = musicEnabledRef.current;
+            const isForcePaused = musicForcePausedRef.current;
+            const currentMode = musicModeRef.current;
+            const currentVolume = musicVolumeRef.current;
+
             // 1. FORCE PAUSED? (e.g. Book Reader OR Playlist Player Active)
-            // Note: We use musicForcePaused to suppress BG music when Playlist is playing
-            if (musicForcePausedRef.current) {
+            if (isForcePaused) {
                 if (!bg.paused) bg.pause();
                 if (!game.paused) game.pause();
                 if (!workout.paused) workout.pause();
@@ -344,8 +377,11 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
             }
 
             // 2. Music Disabled?
-            if (!musicEnabled) {
-                if (!bg.paused) bg.pause();
+            if (!isMusicEnabled) {
+                if (!bg.paused) {
+                    console.log('🔇 Pausing BG music - musicEnabled is false');
+                    bg.pause();
+                }
                 if (!game.paused) game.pause();
                 if (!workout.paused) workout.pause();
                 return;
@@ -353,8 +389,8 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
             // Helper function to safely play audio
             const safePlay = (audio: HTMLAudioElement) => {
-                // Double-check conditions before playing
-                if (musicForcePausedRef.current || !musicEnabled) {
+                // Double-check conditions before playing using refs
+                if (musicForcePausedRef.current || !musicEnabledRef.current) {
                     return;
                 }
                 if (audio.paused && audio.readyState >= 2) {
@@ -371,21 +407,21 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
             };
 
             // 3. Normal BG Music Logic
-            if (musicMode === 'bg') {
+            if (currentMode === 'bg') {
                 safePlay(bg);
-                bg.volume = musicVolume * 0.25;
+                bg.volume = currentVolume * 0.25;
                 if (!game.paused) game.pause();
                 if (!workout.paused) workout.pause();
             }
-            else if (musicMode === 'game') {
+            else if (currentMode === 'game') {
                 safePlay(game);
-                game.volume = musicVolume * 0.3;
+                game.volume = currentVolume * 0.3;
                 if (!bg.paused) bg.pause();
                 if (!workout.paused) workout.pause();
             }
-            else if (musicMode === 'workout') {
+            else if (currentMode === 'workout') {
                 safePlay(workout);
-                workout.volume = musicVolume * 0.4;
+                workout.volume = currentVolume * 0.4;
                 if (!bg.paused) bg.pause();
                 if (!game.paused) game.pause();
             }
@@ -406,9 +442,17 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
             window.removeEventListener('click', unlockAudio);
             window.removeEventListener('touchstart', unlockAudio);
         };
-    }, [musicEnabled, musicMode, musicVolume, musicForcePaused]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []); // Only run once on mount - refs handle state changes
 
-    const toggleMusic = () => setMusicEnabled(prev => !prev);
+    const toggleMusic = () => {
+        setMusicEnabled(prev => {
+            const newState = !prev;
+            localStorage.setItem('godly_kids_music_enabled', newState.toString());
+            console.log('🎵 Music toggled:', newState ? 'ON' : 'OFF');
+            return newState;
+        });
+    };
     const toggleSfx = () => setSfxEnabled(prev => !prev);
 
     const setMusicVolume = useCallback((volume: number) => {

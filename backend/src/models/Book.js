@@ -32,6 +32,12 @@ const bookSchema = new mongoose.Schema({
         default: 'draft',
     },
     
+    // Access control - whether content requires membership
+    isMembersOnly: {
+        type: Boolean,
+        default: false,
+    },
+    
     // Organized file structure per book
     files: {
         type: {

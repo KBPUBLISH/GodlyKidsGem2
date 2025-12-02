@@ -36,7 +36,7 @@ const FUNNY_HEADS = [
 
 const OnboardingPage: React.FC = () => {
   const navigate = useNavigate();
-  const { setParentName, setEquippedAvatar, addKid, kids, removeKid, subscribe, resetUser } = useUser();
+  const { setParentName, setEquippedAvatar, addKid, kids, removeKid, subscribe, resetUser, unlockVoice } = useUser();
   const { playClick, playSuccess } = useAudio();
   
   const [step, setStep] = useState<1 | 2 | 3 | 4>(1); // Steps: 1=Parent, 2=Family, 3=Voice Selection, 4=Unlock
@@ -134,8 +134,10 @@ const OnboardingPage: React.FC = () => {
       previewAudio.src = '';
       setPreviewAudio(null);
     }
-    // Save selected voice preference (could store in UserContext or localStorage)
+    // Save selected voice preference and unlock it
     localStorage.setItem('godlykids_default_voice', selectedVoiceId);
+    unlockVoice(selectedVoiceId); // Unlock the selected voice for free
+    console.log(`🎤 Onboarding: Unlocked voice ${selectedVoiceId}`);
     setStep(4); // Go to unlock/paywall step
   };
   

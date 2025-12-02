@@ -1,10 +1,11 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
-import { ChevronLeft, ChevronRight, X, Play, Pause, Volume2, Mic, Check, Music, Home, Heart, Star, RotateCcw } from 'lucide-react';
+import { ChevronLeft, ChevronRight, X, Play, Pause, Volume2, Mic, Check, Music, Home, Heart, Star, RotateCcw, Lock } from 'lucide-react';
 import { ApiService } from '../services/apiService';
 import { voiceCloningService, ClonedVoice } from '../services/voiceCloningService';
 import VoiceCloningModal from '../components/features/VoiceCloningModal';
 import { useAudio } from '../context/AudioContext';
+import { useUser } from '../context/UserContext';
 import { readingProgressService } from '../services/readingProgressService';
 import { favoritesService } from '../services/favoritesService';
 import { readCountService } from '../services/readCountService';
@@ -72,6 +73,7 @@ const BookReaderPage: React.FC = () => {
     const navigate = useNavigate();
     const [searchParams] = useSearchParams();
     const { setGameMode, setMusicPaused, musicEnabled, toggleMusic } = useAudio();
+    const { isVoiceUnlocked, isSubscribed } = useUser();
     const wasMusicEnabledRef = useRef<boolean>(false);
     const [pages, setPages] = useState<Page[]>([]);
     const [currentPageIndex, setCurrentPageIndex] = useState(0);
@@ -111,6 +113,13 @@ const BookReaderPage: React.FC = () => {
     const desiredScrollStateRef = useRef<boolean | null>(null); // Track desired scroll state for next page turn
     const showScrollRef = useRef<boolean>(true); // Track scroll state to avoid closure issues
     const [bookMusicEnabled, setBookMusicEnabled] = useState(true); // Default to enabled
+
+    // Use ref to track music enabled state for intervals/callbacks
+    const bookMusicEnabledRef = useRef<boolean>(bookMusicEnabled);
+    useEffect(() => {
+        bookMusicEnabledRef.current = bookMusicEnabled;
+    }, [bookMusicEnabled]);
+
     const [hasBookMusic, setHasBookMusic] = useState(false);
     const [isFavorite, setIsFavorite] = useState(false);
     const [isLiked, setIsLiked] = useState(false);
@@ -234,7 +243,7 @@ const BookReaderPage: React.FC = () => {
         let killInterval: NodeJS.Timeout | null = setInterval(() => {
             killAllAudio();
             // Ensure book music continues playing if it should be
-            if (bookBackgroundMusicRef.current && bookMusicEnabled && bookBackgroundMusicRef.current.paused) {
+            if (bookBackgroundMusicRef.current && bookMusicEnabledRef.current && bookBackgroundMusicRef.current.paused) {
                 bookBackgroundMusicRef.current.play().catch(() => {
                     // Ignore play errors - might be user interaction required
                 });
@@ -246,7 +255,7 @@ const BookReaderPage: React.FC = () => {
                 killInterval = setInterval(() => {
                     killAllAudio();
                     // Keep book music playing
-                    if (bookBackgroundMusicRef.current && bookMusicEnabled && bookBackgroundMusicRef.current.paused) {
+                    if (bookBackgroundMusicRef.current && bookMusicEnabledRef.current && bookBackgroundMusicRef.current.paused) {
                         bookBackgroundMusicRef.current.play().catch(() => { });
                     }
                 }, 200);
@@ -274,13 +283,13 @@ const BookReaderPage: React.FC = () => {
 
                         const audio = new Audio(musicUrl);
                         audio.loop = true;
-                        audio.volume = 0.15;
+                        audio.volume = 0.10; // Lowered from 0.15 to 0.10 (approx 33% lower, close to requested 20%)
                         audio.preload = 'auto';
                         bookBackgroundMusicRef.current = audio;
 
                         // Start playing book music automatically when loaded
                         audio.addEventListener('canplaythrough', () => {
-                            if (bookMusicEnabled) {
+                            if (bookMusicEnabledRef.current) {
                                 console.log('🎵 Book music ready - starting playback');
                                 audio.play().catch(err => {
                                     console.warn('⚠️ Book music auto-play prevented:', err);
@@ -289,7 +298,7 @@ const BookReaderPage: React.FC = () => {
                         }, { once: true });
 
                         // Try to play immediately if already loaded
-                        if (audio.readyState >= 3 && bookMusicEnabled) {
+                        if (audio.readyState >= 3 && bookMusicEnabledRef.current) {
                             audio.play().catch(err => {
                                 console.warn('⚠️ Book music immediate play prevented:', err);
                             });
@@ -415,25 +424,32 @@ const BookReaderPage: React.FC = () => {
         };
         fetchPages();
 
-        // Fetch voices (only enabled voices from portal)
+        // Fetch voices (only enabled voices from portal, filtered by unlock status)
         const fetchVoices = async () => {
             const voiceList = await ApiService.getVoices();
             if (voiceList.length > 0) {
+                // Store all voices for display (locked/unlocked)
                 setVoices(voiceList);
-                // Try to find a kid-friendly voice or use first available
-                const kidVoice = voiceList.find((v: any) =>
-                    v.name === 'Domi' || v.name === 'Bella' || v.name === 'Elli' || v.name === 'Rachel'
-                );
-                if (kidVoice) {
-                    setSelectedVoiceId(kidVoice.voice_id);
+                
+                // Get default voice from localStorage (set during onboarding)
+                const defaultVoiceId = localStorage.getItem('godlykids_default_voice');
+                
+                // Find an unlocked voice to use as default
+                const unlockedVoices = voiceList.filter((v: any) => isVoiceUnlocked(v.voice_id));
+                
+                if (defaultVoiceId && isVoiceUnlocked(defaultVoiceId)) {
+                    // Use the default voice if it's unlocked
+                    setSelectedVoiceId(defaultVoiceId);
+                } else if (unlockedVoices.length > 0) {
+                    // Use first unlocked voice
+                    setSelectedVoiceId(unlockedVoices[0].voice_id);
                 } else if (voiceList.length > 0) {
-                    // Use first available voice if no kid-friendly voice found
+                    // Fallback: use first voice (will show as locked in UI)
                     setSelectedVoiceId(voiceList[0].voice_id);
                 }
-                console.log(`✅ Loaded ${voiceList.length} enabled voice(s) from portal`);
+                console.log(`✅ Loaded ${voiceList.length} voice(s), ${unlockedVoices.length} unlocked`);
             } else {
                 console.warn('⚠️ No voices enabled in portal. Please enable voices in the portal first.');
-                // Don't use fallback - show empty state so users know to enable voices in portal
                 setVoices([]);
             }
         };
@@ -503,6 +519,7 @@ const BookReaderPage: React.FC = () => {
             setFlipState({ direction: 'next', isFlipping: true });
             playPageTurnSound(); // Play page turn sound effect
 
+            // Change page content at the halfway point (when page is perpendicular - 90deg)
             setTimeout(() => {
                 const nextIndex = currentPageIndex + 1;
                 setCurrentPageIndex(nextIndex);
@@ -510,9 +527,14 @@ const BookReaderPage: React.FC = () => {
                 // Use the determined scroll state
                 setShowScroll(scrollStateToUse);
                 showScrollRef.current = scrollStateToUse; // Update ref
+            }, 700); // Halfway through 1.4s animation
+
+            // End the flip animation
+            setTimeout(() => {
                 setIsPageTurning(false);
                 setFlipState(null);
                 // Save progress
+                const nextIndex = currentPageIndex + 1;
                 if (bookId) {
                     readingProgressService.saveProgress(bookId, nextIndex);
 
@@ -522,7 +544,7 @@ const BookReaderPage: React.FC = () => {
                         readCountService.incrementReadCount(bookId);
                     }
                 }
-            }, 400); // Reduced from 600ms to match new animation duration
+            }, 1500); // Slightly after 1.4s animation completes
         }
     };
 
@@ -538,6 +560,7 @@ const BookReaderPage: React.FC = () => {
             setFlipState({ direction: 'prev', isFlipping: true });
             playPageTurnSound(); // Play page turn sound effect
 
+            // Change page content at the halfway point (when page is perpendicular - 90deg)
             setTimeout(() => {
                 const prevIndex = currentPageIndex - 1;
                 setCurrentPageIndex(prevIndex);
@@ -545,13 +568,18 @@ const BookReaderPage: React.FC = () => {
                 // Preserve the scroll state from previous page
                 setShowScroll(currentScrollState);
                 showScrollRef.current = currentScrollState; // Update ref
+            }, 700); // Halfway through 1.4s animation
+
+            // End the flip animation
+            setTimeout(() => {
                 setIsPageTurning(false);
                 setFlipState(null);
                 // Save progress
+                const prevIndex = currentPageIndex - 1;
                 if (bookId) {
                     readingProgressService.saveProgress(bookId, prevIndex);
                 }
-            }, 400); // Reduced from 600ms to match new animation duration
+            }, 1500); // Slightly after 1.4s animation completes
         }
     };
 
@@ -1101,7 +1129,7 @@ const BookReaderPage: React.FC = () => {
                                 if (bookBackgroundMusicRef.current) {
                                     if (newState) {
                                         // Update volume when playing
-                                        bookBackgroundMusicRef.current.volume = 0.15;
+                                        bookBackgroundMusicRef.current.volume = 0.10;
                                         bookBackgroundMusicRef.current.play().catch(err => {
                                             console.warn('Could not play book music:', err);
                                         });
@@ -1152,10 +1180,11 @@ const BookReaderPage: React.FC = () => {
                         {showVoiceDropdown && (
                             <div className="absolute top-full right-0 mt-2 bg-black/95 backdrop-blur-md rounded-xl border border-white/20 shadow-2xl z-50 min-w-[200px] max-w-[280px] max-h-[400px] overflow-y-auto">
                                 <div className="py-2">
-                                    {/* Portal voices */}
-                                    {voices.length > 0 && (
+                                    {/* Unlocked Voices Section */}
+                                    {voices.filter(v => isVoiceUnlocked(v.voice_id)).length > 0 && (
                                         <>
-                                            {voices.map(v => (
+                                            <div className="px-4 py-1 text-xs text-white/50 uppercase tracking-wider">Unlocked</div>
+                                            {voices.filter(v => isVoiceUnlocked(v.voice_id)).map(v => (
                                                 <button
                                                     key={v.voice_id}
                                                     onClick={(e) => {
@@ -1177,7 +1206,7 @@ const BookReaderPage: React.FC = () => {
                                         </>
                                     )}
 
-                                    {/* Cloned voices */}
+                                    {/* Cloned voices (always unlocked) */}
                                     {clonedVoices.length > 0 && (
                                         <>
                                             {clonedVoices.map(v => (
@@ -1197,6 +1226,30 @@ const BookReaderPage: React.FC = () => {
                                                     <span className={selectedVoiceId === v.voice_id ? 'font-bold' : ''}>
                                                         {v.name} (Cloned)
                                                     </span>
+                                                </button>
+                                            ))}
+                                        </>
+                                    )}
+
+                                    {/* Locked Voices Section (only show if not premium) */}
+                                    {!isSubscribed && voices.filter(v => !isVoiceUnlocked(v.voice_id)).length > 0 && (
+                                        <>
+                                            <div className="border-t border-white/20 my-1"></div>
+                                            <div className="px-4 py-1 text-xs text-white/50 uppercase tracking-wider">Locked</div>
+                                            {voices.filter(v => !isVoiceUnlocked(v.voice_id)).map(v => (
+                                                <button
+                                                    key={v.voice_id}
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        // Navigate to shop to unlock
+                                                        setShowVoiceDropdown(false);
+                                                        navigate('/shop?tab=voices');
+                                                    }}
+                                                    className="w-full text-left px-4 py-2 text-sm text-white/50 hover:bg-white/5 transition-colors flex items-center gap-2"
+                                                >
+                                                    <Lock className="w-4 h-4 text-white/30" />
+                                                    <span>{v.name}</span>
+                                                    <span className="ml-auto text-xs text-[#FFD700]">Unlock</span>
                                                 </button>
                                             ))}
                                         </>
@@ -1241,100 +1294,173 @@ const BookReaderPage: React.FC = () => {
                 onTouchMove={handleTouchMove}
                 onTouchEnd={handleTouchEnd}
             >
-                {/* Style for smooth slide + curl page turn animations */}
+                {/* Style for high-sheen 3D glossy white page curl animation */}
                 <style>{`
-                    /* Slide out to left with curl effect (going to next page) */
-                    @keyframes slideOutLeft {
+                    /* Enhanced 3D page curl with more dramatic rotation */
+                    @keyframes pageCurlNext {
                         0% { 
-                            transform: translateX(0) rotateY(0deg) scale(1);
-                            opacity: 1;
-                            filter: brightness(1);
+                            transform: perspective(2000px) rotateY(0deg) rotateX(0deg) translateZ(0px);
                         }
-                        50% {
-                            transform: translateX(-25%) rotateY(-15deg) scale(0.95);
-                            opacity: 1;
-                            filter: brightness(0.9);
+                        15% {
+                            transform: perspective(2000px) rotateY(-20deg) rotateX(2deg) translateZ(30px);
+                        }
+                        35% { 
+                            transform: perspective(2000px) rotateY(-60deg) rotateX(3deg) translateZ(60px);
+                        }
+                        50% { 
+                            transform: perspective(2000px) rotateY(-90deg) rotateX(4deg) translateZ(80px);
+                        }
+                        65% {
+                            transform: perspective(2000px) rotateY(-120deg) rotateX(3deg) translateZ(60px);
+                        }
+                        85% {
+                            transform: perspective(2000px) rotateY(-160deg) rotateX(2deg) translateZ(30px);
                         }
                         100% { 
-                            transform: translateX(-100%) rotateY(-25deg) scale(0.9);
+                            transform: perspective(2000px) rotateY(-180deg) rotateX(0deg) translateZ(0px);
+                        }
+                    }
+                    
+                    @keyframes pageCurlPrev {
+                        0% { 
+                            transform: perspective(2000px) rotateY(180deg) rotateX(0deg) translateZ(0px);
+                        }
+                        15% {
+                            transform: perspective(2000px) rotateY(160deg) rotateX(2deg) translateZ(30px);
+                        }
+                        35% { 
+                            transform: perspective(2000px) rotateY(120deg) rotateX(3deg) translateZ(60px);
+                        }
+                        50% { 
+                            transform: perspective(2000px) rotateY(90deg) rotateX(4deg) translateZ(80px);
+                        }
+                        65% {
+                            transform: perspective(2000px) rotateY(60deg) rotateX(3deg) translateZ(60px);
+                        }
+                        85% {
+                            transform: perspective(2000px) rotateY(20deg) rotateX(2deg) translateZ(30px);
+                        }
+                        100% { 
+                            transform: perspective(2000px) rotateY(0deg) rotateX(0deg) translateZ(0px);
+                        }
+                    }
+                    
+                    /* Multiple shimmer waves for high sheen effect */
+                    @keyframes shimmerWave1 {
+                        0% { 
+                            left: -50%;
                             opacity: 0;
-                            filter: brightness(0.7);
                         }
-                    }
-                    
-                    /* Slide in from right (new page appearing) */
-                    @keyframes slideInRight {
-                        0% { 
-                            transform: translateX(30%) scale(0.95);
-                            opacity: 0.5;
+                        15% {
+                            opacity: 0.8;
+                        }
+                        85% {
+                            opacity: 0.8;
                         }
                         100% { 
-                            transform: translateX(0) scale(1);
-                            opacity: 1;
-                        }
-                    }
-                    
-                    /* Slide out to right with curl effect (going to previous page) */
-                    @keyframes slideOutRight {
-                        0% { 
-                            transform: translateX(0) rotateY(0deg) scale(1);
-                            opacity: 1;
-                            filter: brightness(1);
-                        }
-                        50% {
-                            transform: translateX(25%) rotateY(15deg) scale(0.95);
-                            opacity: 1;
-                            filter: brightness(0.9);
-                        }
-                        100% { 
-                            transform: translateX(100%) rotateY(25deg) scale(0.9);
+                            left: 120%;
                             opacity: 0;
-                            filter: brightness(0.7);
                         }
                     }
                     
-                    /* Slide in from left (previous page appearing) */
-                    @keyframes slideInLeft {
+                    @keyframes shimmerWave2 {
                         0% { 
-                            transform: translateX(-30%) scale(0.95);
-                            opacity: 0.5;
+                            left: -30%;
+                            opacity: 0;
+                        }
+                        20% {
+                            opacity: 0.6;
+                        }
+                        80% {
+                            opacity: 0.6;
                         }
                         100% { 
-                            transform: translateX(0) scale(1);
-                            opacity: 1;
+                            left: 130%;
+                            opacity: 0;
                         }
                     }
                     
-                    .page-slide-out-left {
-                        animation: slideOutLeft 0.4s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+                    @keyframes shimmerWave3 {
+                        0% { 
+                            left: -70%;
+                            opacity: 0;
+                        }
+                        25% {
+                            opacity: 0.4;
+                        }
+                        75% {
+                            opacity: 0.4;
+                        }
+                        100% { 
+                            left: 110%;
+                            opacity: 0;
+                        }
+                    }
+                    
+                    /* Pulsing glow effect */
+                    @keyframes sheenPulse {
+                        0%, 100% { 
+                            opacity: 0.3;
+                        }
+                        50% { 
+                            opacity: 0.7;
+                        }
+                    }
+                    
+                    /* Shadow that grows and moves during curl */
+                    @keyframes curlShadowGrow {
+                        0% { 
+                            opacity: 0;
+                            width: 0px;
+                        }
+                        30% { 
+                            opacity: 0.5;
+                            width: 120px;
+                        }
+                        50% { 
+                            opacity: 0.6;
+                            width: 150px;
+                        }
+                        70% {
+                            opacity: 0.5;
+                            width: 120px;
+                        }
+                        100% { 
+                            opacity: 0;
+                            width: 0px;
+                        }
+                    }
+                    
+                    .page-curl-next {
+                        animation: pageCurlNext 1.4s cubic-bezier(0.4, 0.0, 0.2, 1) forwards;
                         transform-origin: left center;
+                        transform-style: preserve-3d;
                     }
                     
-                    .page-slide-in-right {
-                        animation: slideInRight 0.4s cubic-bezier(0.4, 0, 0.2, 1) forwards;
-                    }
-                    
-                    .page-slide-out-right {
-                        animation: slideOutRight 0.4s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+                    .page-curl-prev {
+                        animation: pageCurlPrev 1.4s cubic-bezier(0.4, 0.0, 0.2, 1) forwards;
                         transform-origin: right center;
+                        transform-style: preserve-3d;
                     }
                     
-                    .page-slide-in-left {
-                        animation: slideInLeft 0.4s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+                    .shimmer-wave-1 {
+                        animation: shimmerWave1 1.4s ease-out forwards;
                     }
                     
-                    /* Shadow overlay for depth effect */
-                    .page-shadow {
-                        position: absolute;
-                        inset: 0;
-                        pointer-events: none;
-                        background: linear-gradient(to right, rgba(0,0,0,0.3) 0%, transparent 15%, transparent 85%, rgba(0,0,0,0.1) 100%);
-                        opacity: 0;
-                        transition: opacity 0.3s ease;
+                    .shimmer-wave-2 {
+                        animation: shimmerWave2 1.4s ease-out 0.1s forwards;
                     }
                     
-                    .page-turning .page-shadow {
-                        opacity: 1;
+                    .shimmer-wave-3 {
+                        animation: shimmerWave3 1.4s ease-out 0.05s forwards;
+                    }
+                    
+                    .sheen-pulse {
+                        animation: sheenPulse 0.7s ease-in-out infinite;
+                    }
+                    
+                    .curl-shadow {
+                        animation: curlShadowGrow 1.4s ease-in-out forwards;
                     }
                     
                     @keyframes fadeIn {
@@ -1347,78 +1473,184 @@ const BookReaderPage: React.FC = () => {
                     }
                 `}</style>
 
-                {/* Page Container with perspective for subtle 3D effect */}
-                <div className={`relative w-full h-full ${flipState ? 'page-turning' : ''}`} style={{ perspective: '1200px' }}>
+                {/* Page Container with deep perspective for realistic 3D curl */}
+                <div className="relative w-full h-full" style={{ perspective: '1800px', perspectiveOrigin: 'center center' }}>
 
-                    {/* CASE 1: Normal View (No Page Turn) */}
-                    {!flipState && (
-                        <div className="absolute inset-0 z-10">
-                            <BookPageRenderer
-                                page={currentPage}
-                                activeTextBoxIndex={activeTextBoxIndex}
-                                showScroll={showScroll}
-                                onToggleScroll={toggleScroll}
-                                onPlayText={handlePlayText}
-                                highlightedWordIndex={currentWordIndex}
-                                wordAlignment={wordAlignment}
+                    {/* The actual page content - always visible underneath */}
+                    <div className="absolute inset-0 z-10">
+                        <BookPageRenderer
+                            page={currentPage}
+                            activeTextBoxIndex={activeTextBoxIndex}
+                            showScroll={showScroll}
+                            onToggleScroll={toggleScroll}
+                            onPlayText={handlePlayText}
+                            highlightedWordIndex={currentWordIndex}
+                            wordAlignment={wordAlignment}
+                        />
+                    </div>
+
+                    {/* High-sheen glossy white page that curls over */}
+                    {flipState && (
+                        <>
+                            {/* Dynamic shadow cast by the curling page */}
+                            <div 
+                                className="absolute top-0 bottom-0 z-40 pointer-events-none curl-shadow"
+                                style={{
+                                    left: flipState.direction === 'next' ? 0 : 'auto',
+                                    right: flipState.direction === 'prev' ? 0 : 'auto',
+                                    background: flipState.direction === 'next'
+                                        ? 'linear-gradient(to right, rgba(0,0,0,0.4) 0%, rgba(0,0,0,0.2) 30%, rgba(0,0,0,0.05) 70%, transparent 100%)'
+                                        : 'linear-gradient(to left, rgba(0,0,0,0.4) 0%, rgba(0,0,0,0.2) 30%, rgba(0,0,0,0.05) 70%, transparent 100%)',
+                                }}
                             />
-                        </div>
-                    )}
-
-                    {/* CASE 2: Turning to NEXT page */}
-                    {flipState?.direction === 'next' && (
-                        <>
-                            {/* Bottom Layer: Next Page (slides in from right) */}
-                            <div className="absolute inset-0 z-10 page-slide-in-right">
-                                <BookPageRenderer
-                                    page={mapPage(pages[currentPageIndex + 1]) || currentPage}
-                                    activeTextBoxIndex={null}
-                                    showScroll={true}
-                                />
-                            </div>
-                            {/* Top Layer: Current Page (slides out to left with curl) */}
-                            <div className="absolute inset-0 z-20 page-slide-out-left">
-                                <BookPageRenderer
-                                    page={currentPage}
-                                    activeTextBoxIndex={activeTextBoxIndex}
-                                    showScroll={showScroll}
-                                    highlightedWordIndex={currentWordIndex}
-                                    wordAlignment={wordAlignment}
-                                />
-                                {/* Curl shadow effect on the edge */}
-                                <div className="absolute right-0 top-0 bottom-0 w-8 bg-gradient-to-l from-black/20 to-transparent pointer-events-none" />
+                            
+                            {/* The curling glossy white page */}
+                            <div 
+                                className={`absolute inset-0 z-50 pointer-events-none ${
+                                    flipState.direction === 'next' ? 'page-curl-next' : 'page-curl-prev'
+                                }`}
+                            >
+                                {/* Front of page - HIGH SHEEN glossy white */}
+                                <div 
+                                    className="absolute inset-0"
+                                    style={{
+                                        background: 'linear-gradient(155deg, #ffffff 0%, #fefefe 15%, #fcfcfa 30%, #fafaf8 45%, #f8f8f5 60%, #f5f5f2 75%, #f2f2ef 90%, #efefec 100%)',
+                                        backfaceVisibility: 'hidden',
+                                        boxShadow: `
+                                            inset 0 0 150px rgba(255,255,255,0.8),
+                                            inset 0 0 50px rgba(255,255,255,0.5),
+                                            ${flipState.direction === 'next' ? '-' : ''}12px 0 35px rgba(0,0,0,0.2),
+                                            ${flipState.direction === 'next' ? '-' : ''}4px 0 15px rgba(0,0,0,0.15),
+                                            ${flipState.direction === 'next' ? '-' : ''}1px 0 5px rgba(0,0,0,0.1)
+                                        `,
+                                    }}
+                                >
+                                    {/* Fine paper texture */}
+                                    <div 
+                                        className="absolute inset-0 opacity-[0.015]"
+                                        style={{
+                                            backgroundImage: `url("data:image/svg+xml,%3Csvg viewBox='0 0 512 512' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='1.2' numOctaves='6' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E")`,
+                                        }}
+                                    />
+                                    
+                                    {/* Base glossy sheen layer */}
+                                    <div 
+                                        className="absolute inset-0 sheen-pulse"
+                                        style={{
+                                            background: 'linear-gradient(120deg, rgba(255,255,255,0) 0%, rgba(255,255,255,0.4) 25%, rgba(255,255,255,0.6) 50%, rgba(255,255,255,0.4) 75%, rgba(255,255,255,0) 100%)',
+                                        }}
+                                    />
+                                    
+                                    {/* Multiple shimmer waves for high sheen effect */}
+                                    <div className="absolute inset-0 overflow-hidden">
+                                        {/* Primary shimmer wave - bright and wide */}
+                                        <div 
+                                            className="absolute top-0 bottom-0 shimmer-wave-1"
+                                            style={{
+                                                width: '35%',
+                                                background: 'linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.2) 15%, rgba(255,255,255,0.7) 45%, rgba(255,255,255,0.9) 50%, rgba(255,255,255,0.7) 55%, rgba(255,255,255,0.2) 85%, transparent 100%)',
+                                                transform: 'skewX(-15deg)',
+                                            }}
+                                        />
+                                        {/* Secondary shimmer wave - softer */}
+                                        <div 
+                                            className="absolute top-0 bottom-0 shimmer-wave-2"
+                                            style={{
+                                                width: '25%',
+                                                background: 'linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.1) 20%, rgba(255,255,255,0.4) 50%, rgba(255,255,255,0.1) 80%, transparent 100%)',
+                                                transform: 'skewX(-25deg)',
+                                            }}
+                                        />
+                                        {/* Tertiary shimmer wave - subtle accent */}
+                                        <div 
+                                            className="absolute top-0 bottom-0 shimmer-wave-3"
+                                            style={{
+                                                width: '15%',
+                                                background: 'linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.3) 50%, transparent 100%)',
+                                                transform: 'skewX(-10deg)',
+                                            }}
+                                        />
+                                    </div>
+                                    
+                                    {/* Bright curl edge highlight */}
+                                    <div 
+                                        className="absolute top-0 bottom-0"
+                                        style={{
+                                            width: '6px',
+                                            right: flipState.direction === 'next' ? 0 : 'auto',
+                                            left: flipState.direction === 'prev' ? 0 : 'auto',
+                                            background: 'linear-gradient(to bottom, rgba(255,255,255,1), rgba(255,255,255,0.9) 30%, rgba(255,255,255,0.95) 50%, rgba(255,255,255,0.9) 70%, rgba(255,255,255,1))',
+                                            boxShadow: '0 0 20px rgba(255,255,255,0.8), 0 0 40px rgba(255,255,255,0.4)',
+                                        }}
+                                    />
+                                    
+                                    {/* Gradient shadow near curl edge for depth */}
+                                    <div 
+                                        className="absolute top-0 bottom-0"
+                                        style={{
+                                            width: '100px',
+                                            right: flipState.direction === 'next' ? '6px' : 'auto',
+                                            left: flipState.direction === 'prev' ? '6px' : 'auto',
+                                            background: flipState.direction === 'next'
+                                                ? 'linear-gradient(to left, rgba(0,0,0,0.12) 0%, rgba(0,0,0,0.05) 40%, transparent 100%)'
+                                                : 'linear-gradient(to right, rgba(0,0,0,0.12) 0%, rgba(0,0,0,0.05) 40%, transparent 100%)',
+                                        }}
+                                    />
+                                    
+                                    {/* Opposite edge subtle highlight */}
+                                    <div 
+                                        className="absolute top-0 bottom-0"
+                                        style={{
+                                            width: '2px',
+                                            left: flipState.direction === 'next' ? 0 : 'auto',
+                                            right: flipState.direction === 'prev' ? 0 : 'auto',
+                                            background: 'linear-gradient(to bottom, rgba(200,200,200,0.3), rgba(200,200,200,0.2) 50%, rgba(200,200,200,0.3))',
+                                        }}
+                                    />
+                                </div>
+                                
+                                {/* Back of page - slightly darker with subtle sheen */}
+                                <div 
+                                    className="absolute inset-0"
+                                    style={{
+                                        background: 'linear-gradient(155deg, #f8f8f5 0%, #f5f5f2 20%, #f0f0ed 40%, #ebebea 60%, #e8e8e5 80%, #e5e5e2 100%)',
+                                        backfaceVisibility: 'hidden',
+                                        transform: 'rotateY(180deg)',
+                                        boxShadow: 'inset 0 0 100px rgba(0,0,0,0.06)',
+                                    }}
+                                >
+                                    {/* Paper texture on back */}
+                                    <div 
+                                        className="absolute inset-0 opacity-[0.02]"
+                                        style={{
+                                            backgroundImage: `url("data:image/svg+xml,%3Csvg viewBox='0 0 512 512' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='1.2' numOctaves='6' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E")`,
+                                        }}
+                                    />
+                                    
+                                    {/* Subtle matte sheen on back */}
+                                    <div 
+                                        className="absolute inset-0"
+                                        style={{
+                                            background: 'linear-gradient(135deg, rgba(255,255,255,0) 0%, rgba(255,255,255,0.2) 40%, rgba(255,255,255,0.25) 50%, rgba(255,255,255,0.2) 60%, rgba(255,255,255,0) 100%)',
+                                        }}
+                                    />
+                                    
+                                    {/* Edge shadow on back */}
+                                    <div 
+                                        className="absolute top-0 bottom-0"
+                                        style={{
+                                            width: '60px',
+                                            left: flipState.direction === 'next' ? 0 : 'auto',
+                                            right: flipState.direction === 'prev' ? 0 : 'auto',
+                                            background: flipState.direction === 'next'
+                                                ? 'linear-gradient(to right, rgba(0,0,0,0.12) 0%, rgba(0,0,0,0.05) 50%, transparent 100%)'
+                                                : 'linear-gradient(to left, rgba(0,0,0,0.12) 0%, rgba(0,0,0,0.05) 50%, transparent 100%)',
+                                        }}
+                                    />
+                                </div>
                             </div>
                         </>
                     )}
-
-                    {/* CASE 3: Turning to PREV page */}
-                    {flipState?.direction === 'prev' && (
-                        <>
-                            {/* Bottom Layer: Current Page (slides in from left) */}
-                            <div className="absolute inset-0 z-10 page-slide-in-left">
-                                <BookPageRenderer
-                                    page={currentPage}
-                                    activeTextBoxIndex={activeTextBoxIndex}
-                                    showScroll={showScroll}
-                                    highlightedWordIndex={currentWordIndex}
-                                    wordAlignment={wordAlignment}
-                                />
-                            </div>
-                            {/* Top Layer: Next Page (slides out to right with curl) */}
-                            <div className="absolute inset-0 z-20 page-slide-out-right">
-                                <BookPageRenderer
-                                    page={mapPage(pages[currentPageIndex + 1]) || currentPage}
-                                    activeTextBoxIndex={null}
-                                    showScroll={true}
-                                />
-                                {/* Curl shadow effect on the edge */}
-                                <div className="absolute left-0 top-0 bottom-0 w-8 bg-gradient-to-r from-black/20 to-transparent pointer-events-none" />
-                            </div>
-                        </>
-                    )}
-                    
-                    {/* Ambient shadow during page turn */}
-                    <div className="page-shadow" />
                 </div>
 
                 {/* Navigation is now swipe-only - removed click zones */}

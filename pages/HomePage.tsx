@@ -153,10 +153,10 @@ const HomePage: React.FC = () => {
   };
 
   const handleItemClick = (item: any) => {
-    // Check if it's a playlist (has items array) or a book
-    if (item.items && Array.isArray(item.items)) {
-      // It's a playlist
-      navigate(`/playlist/${item._id || item.id}`);
+    // Check if it's a playlist (has items array or isAudio flag) or a book
+    if (item.isAudio || (item.items && Array.isArray(item.items))) {
+      // It's a playlist - use the correct route
+      navigate(`/audio/playlist/${item._id || item.id}`);
     } else {
       // It's a book
       handleBookClick(item.id || item._id);
@@ -247,6 +247,14 @@ const HomePage: React.FC = () => {
       const exploreOnly = categories.filter(cat => cat.showOnExplore === true);
       setExploreCategories(exploreOnly);
       console.log(`✅ Loaded ${exploreOnly.length} explore categories:`, exploreOnly.map(c => c.name));
+      
+      // Debug: Log all books and their categories
+      console.log('📚 All books:', books.map(b => ({ 
+        title: b.title, 
+        category: (b as any).category, 
+        categories: (b as any).categories,
+        status: (b as any).status 
+      })));
     } catch (error) {
       console.error('❌ Error fetching explore categories:', error);
     } finally {
@@ -269,22 +277,32 @@ const HomePage: React.FC = () => {
 
   // Group books and playlists by category
   const getBooksByCategory = (categoryName: string) => {
-    return books.filter(book => {
+    const matchedBooks = books.filter(book => {
       const bookCategories = (book as any).categories && Array.isArray((book as any).categories) 
         ? (book as any).categories 
         : (book.category ? [book.category] : []);
-      return bookCategories.includes(categoryName);
+      const matches = bookCategories.some((cat: string) => 
+        cat.toLowerCase() === categoryName.toLowerCase()
+      );
+      return matches;
     });
+    console.log(`📖 Books in category "${categoryName}":`, matchedBooks.map(b => b.title));
+    return matchedBooks;
   };
 
   const getPlaylistsByCategory = (categoryName: string) => {
-    return playlists
+    const matchedPlaylists = playlists
       .filter(playlist => {
         const playlistCategories = (playlist as any).categories && Array.isArray((playlist as any).categories) 
           ? (playlist as any).categories 
           : (playlist.category ? [playlist.category] : []);
-        return playlistCategories.includes(categoryName);
-      })
+        const matches = playlistCategories.some((cat: string) => 
+          cat.toLowerCase() === categoryName.toLowerCase()
+        );
+        return matches;
+      });
+    console.log(`🎵 Playlists in category "${categoryName}":`, matchedPlaylists.map(p => p.title));
+    return matchedPlaylists
       .map(playlist => ({
         // Transform playlist to match Book interface for BookCard
         id: playlist._id || playlist.id,

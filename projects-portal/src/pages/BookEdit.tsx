@@ -16,6 +16,7 @@ const BookEdit: React.FC = () => {
     const [category, setCategory] = useState('Other');
     const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
     const [status, setStatus] = useState('draft');
+    const [isMembersOnly, setIsMembersOnly] = useState(false);
     const [loading, setLoading] = useState(false);
     const [fetching, setFetching] = useState(true);
     const [uploading, setUploading] = useState(false);
@@ -57,6 +58,7 @@ const BookEdit: React.FC = () => {
                 setMinAge(b.minAge ?? '');
                 setCategory(b.category || 'Other');
                 setStatus(b.status || 'draft');
+                setIsMembersOnly(b.isMembersOnly || false);
                 
                 // Load audio files
                 if (b.files && b.files.audio && Array.isArray(b.files.audio)) {
@@ -318,6 +320,7 @@ const BookEdit: React.FC = () => {
                 category: selectedCategories.length > 0 ? selectedCategories[0] : category, // Keep for backward compatibility
                 categories: selectedCategories.length > 0 ? selectedCategories : (category ? [category] : []),
                 status,
+                isMembersOnly,
                 files: {
                     coverImage: coverImage || null,
                     audio: audioFiles,
@@ -498,17 +501,46 @@ const BookEdit: React.FC = () => {
                         </div>
                     )}
                 </div>
-                <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Status</label>
-                    <select
-                        value={status}
-                        onChange={e => setStatus(e.target.value)}
-                        className="w-full rounded-md border border-gray-300 bg-white text-gray-900 text-base focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent px-4 py-3 transition cursor-pointer min-h-[44px]"
-                    >
-                        <option value="draft">Draft</option>
-                        <option value="published">Published</option>
-                        <option value="archived">Archived</option>
-                    </select>
+                <div className="grid grid-cols-2 gap-4">
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">Status</label>
+                        <select
+                            value={status}
+                            onChange={e => setStatus(e.target.value)}
+                            className="w-full rounded-md border border-gray-300 bg-white text-gray-900 text-base focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent px-4 py-3 transition cursor-pointer min-h-[44px]"
+                        >
+                            <option value="draft">Draft</option>
+                            <option value="published">Published</option>
+                            <option value="archived">Archived</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">Access</label>
+                        <div 
+                            onClick={() => setIsMembersOnly(!isMembersOnly)}
+                            className={`w-full rounded-md border text-base px-4 py-3 transition cursor-pointer min-h-[44px] flex items-center justify-between ${
+                                isMembersOnly 
+                                    ? 'bg-amber-50 border-amber-300 text-amber-800' 
+                                    : 'bg-green-50 border-green-300 text-green-800'
+                            }`}
+                        >
+                            <span className="font-medium">
+                                {isMembersOnly ? '👑 Members Only' : '🆓 Free for All'}
+                            </span>
+                            <div className={`w-12 h-6 rounded-full relative transition-colors ${
+                                isMembersOnly ? 'bg-amber-400' : 'bg-green-400'
+                            }`}>
+                                <div className={`absolute top-1 w-4 h-4 rounded-full bg-white shadow transition-transform ${
+                                    isMembersOnly ? 'translate-x-7' : 'translate-x-1'
+                                }`} />
+                            </div>
+                        </div>
+                        <p className="text-xs text-gray-500 mt-1">
+                            {isMembersOnly 
+                                ? 'Only subscribers can access this book' 
+                                : 'Everyone can access this book'}
+                        </p>
+                    </div>
                 </div>
                 
                 {/* Background Music Section */}

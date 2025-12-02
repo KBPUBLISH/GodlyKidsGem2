@@ -71,3 +71,4 @@ lessonCompletionSchema.index({ userId: 1, completedAt: -1 });
 
 module.exports = mongoose.model('LessonCompletion', lessonCompletionSchema);
 
+

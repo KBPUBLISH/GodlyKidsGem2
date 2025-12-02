@@ -11,6 +11,7 @@ interface BookFormData {
     category: string;
     coverImage: string;
     status: string;
+    isMembersOnly: boolean;
 }
 
 interface Category {
@@ -33,6 +34,7 @@ const BookForm: React.FC = () => {
         category: '',
         coverImage: '',
         status: 'draft',
+        isMembersOnly: false,
     });
 
     useEffect(() => {
@@ -290,22 +292,53 @@ const BookForm: React.FC = () => {
                     </div>
                 </div>
 
-                {/* Status */}
-                <div className="mb-6">
-                    <label htmlFor="status" className="block text-sm font-medium text-gray-700 mb-2">
-                        Status
-                    </label>
-                    <select
-                        id="status"
-                        name="status"
-                        value={formData.status}
-                        onChange={handleInputChange}
+                {/* Status & Access */}
+                <div className="grid grid-cols-2 gap-4 mb-6">
+                    <div>
+                        <label htmlFor="status" className="block text-sm font-medium text-gray-700 mb-2">
+                            Status
+                        </label>
+                        <select
+                            id="status"
+                            name="status"
+                            value={formData.status}
+                            onChange={handleInputChange}
                             className="w-full px-4 py-3 text-base border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent bg-white cursor-pointer min-h-[44px]"
-                    >
-                        <option value="draft">Draft</option>
-                        <option value="published">Published</option>
-                        <option value="archived">Archived</option>
-                    </select>
+                        >
+                            <option value="draft">Draft</option>
+                            <option value="published">Published</option>
+                            <option value="archived">Archived</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                            Access
+                        </label>
+                        <div 
+                            onClick={() => setFormData({ ...formData, isMembersOnly: !formData.isMembersOnly })}
+                            className={`w-full rounded-lg border text-base px-4 py-3 transition cursor-pointer min-h-[44px] flex items-center justify-between ${
+                                formData.isMembersOnly 
+                                    ? 'bg-amber-50 border-amber-300 text-amber-800' 
+                                    : 'bg-green-50 border-green-300 text-green-800'
+                            }`}
+                        >
+                            <span className="font-medium">
+                                {formData.isMembersOnly ? '👑 Members Only' : '🆓 Free for All'}
+                            </span>
+                            <div className={`w-12 h-6 rounded-full relative transition-colors ${
+                                formData.isMembersOnly ? 'bg-amber-400' : 'bg-green-400'
+                            }`}>
+                                <div className={`absolute top-1 w-4 h-4 rounded-full bg-white shadow transition-transform ${
+                                    formData.isMembersOnly ? 'translate-x-7' : 'translate-x-1'
+                                }`} />
+                            </div>
+                        </div>
+                        <p className="text-xs text-gray-500 mt-1">
+                            {formData.isMembersOnly 
+                                ? 'Only subscribers can access this book' 
+                                : 'Everyone can access this book'}
+                        </p>
+                    </div>
                 </div>
 
                 {/* Submit Button */}

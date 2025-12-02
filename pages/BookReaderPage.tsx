@@ -1197,7 +1197,13 @@ const BookReaderPage: React.FC = () => {
                             
                             {/* Volume Slider - Only show when music is enabled */}
                             {bookMusicEnabled && (
-                                <div className="flex items-center gap-2 bg-black/50 backdrop-blur-md rounded-full px-3 py-2 border border-white/20">
+                                <div 
+                                    className="flex items-center gap-2 bg-black/50 backdrop-blur-md rounded-full px-3 py-2 border border-white/20"
+                                    onClick={(e) => e.stopPropagation()}
+                                    onTouchStart={(e) => e.stopPropagation()}
+                                    onTouchMove={(e) => e.stopPropagation()}
+                                    onTouchEnd={(e) => e.stopPropagation()}
+                                >
                                     <Volume2 className="w-4 h-4 text-white/70" />
                                     <input
                                         type="range"
@@ -1213,23 +1219,35 @@ const BookReaderPage: React.FC = () => {
                                                 bookBackgroundMusicRef.current.volume = newVolume;
                                             }
                                         }}
+                                        onInput={(e) => {
+                                            e.stopPropagation();
+                                            const newVolume = parseFloat((e.target as HTMLInputElement).value);
+                                            setBookMusicVolume(newVolume);
+                                            if (bookBackgroundMusicRef.current) {
+                                                bookBackgroundMusicRef.current.volume = newVolume;
+                                            }
+                                        }}
                                         onClick={(e) => e.stopPropagation()}
-                                        className="w-20 h-1.5 bg-white/30 rounded-full appearance-none cursor-pointer
+                                        onTouchStart={(e) => e.stopPropagation()}
+                                        onTouchMove={(e) => e.stopPropagation()}
+                                        onTouchEnd={(e) => e.stopPropagation()}
+                                        className="w-24 h-2 bg-white/30 rounded-full appearance-none cursor-pointer touch-none
                                             [&::-webkit-slider-thumb]:appearance-none
-                                            [&::-webkit-slider-thumb]:w-4
-                                            [&::-webkit-slider-thumb]:h-4
+                                            [&::-webkit-slider-thumb]:w-5
+                                            [&::-webkit-slider-thumb]:h-5
                                             [&::-webkit-slider-thumb]:rounded-full
                                             [&::-webkit-slider-thumb]:bg-yellow-400
                                             [&::-webkit-slider-thumb]:shadow-md
                                             [&::-webkit-slider-thumb]:cursor-pointer
-                                            [&::-moz-range-thumb]:w-4
-                                            [&::-moz-range-thumb]:h-4
+                                            [&::-moz-range-thumb]:w-5
+                                            [&::-moz-range-thumb]:h-5
                                             [&::-moz-range-thumb]:rounded-full
                                             [&::-moz-range-thumb]:bg-yellow-400
                                             [&::-moz-range-thumb]:border-0
                                             [&::-moz-range-thumb]:cursor-pointer"
                                         title={`Volume: ${Math.round(bookMusicVolume * 100)}%`}
                                     />
+                                    <span className="text-white/60 text-xs min-w-[28px]">{Math.round(bookMusicVolume * 100)}%</span>
                                 </div>
                             )}
                         </>
@@ -1263,14 +1281,17 @@ const BookReaderPage: React.FC = () => {
                             </span>
                         </button>
 
-                        {/* Dropdown Menu */}
+                        {/* Dropdown Menu - Opens BELOW the button */}
                         {showVoiceDropdown && (
-                            <div className="absolute top-full right-0 mt-2 bg-black/95 backdrop-blur-md rounded-xl border border-white/20 shadow-2xl z-50 min-w-[200px] max-w-[280px] max-h-[400px] overflow-y-auto">
+                            <div className="absolute top-full right-0 mt-2 bg-black/95 backdrop-blur-md rounded-xl border border-white/20 shadow-2xl z-[100] min-w-[220px] max-w-[300px] max-h-[350px] overflow-y-auto">
                                 <div className="py-2">
-                                    {/* Unlocked Voices Section */}
+                                    {/* Unlocked Voices Section - with green checkmark indicator */}
                                     {voices.filter(v => isVoiceUnlocked(v.voice_id)).length > 0 && (
                                         <>
-                                            <div className="px-4 py-1 text-xs text-white/50 uppercase tracking-wider">Unlocked</div>
+                                            <div className="px-4 py-1.5 text-xs text-green-400 uppercase tracking-wider font-bold flex items-center gap-1">
+                                                <Check className="w-3 h-3" />
+                                                Your Voices
+                                            </div>
                                             {voices.filter(v => isVoiceUnlocked(v.voice_id)).map(v => (
                                                 <button
                                                     key={v.voice_id}
@@ -1279,11 +1300,12 @@ const BookReaderPage: React.FC = () => {
                                                         setSelectedVoiceId(v.voice_id);
                                                         setShowVoiceDropdown(false);
                                                     }}
-                                                    className={`w-full text-left px-4 py-2 text-sm text-white hover:bg-white/10 transition-colors flex items-center gap-2 ${selectedVoiceId === v.voice_id ? 'bg-white/20' : ''
-                                                        }`}
+                                                    className={`w-full text-left px-4 py-2.5 text-sm text-white hover:bg-white/10 transition-colors flex items-center gap-2 ${selectedVoiceId === v.voice_id ? 'bg-white/20' : ''}`}
                                                 >
-                                                    {selectedVoiceId === v.voice_id && (
+                                                    {selectedVoiceId === v.voice_id ? (
                                                         <Check className="w-4 h-4 text-[#FFD700]" />
+                                                    ) : (
+                                                        <div className="w-4 h-4" />
                                                     )}
                                                     <span className={selectedVoiceId === v.voice_id ? 'font-bold' : ''}>
                                                         {v.name}
@@ -1304,11 +1326,12 @@ const BookReaderPage: React.FC = () => {
                                                         setSelectedVoiceId(v.voice_id);
                                                         setShowVoiceDropdown(false);
                                                     }}
-                                                    className={`w-full text-left px-4 py-2 text-sm text-white hover:bg-white/10 transition-colors flex items-center gap-2 ${selectedVoiceId === v.voice_id ? 'bg-white/20' : ''
-                                                        }`}
+                                                    className={`w-full text-left px-4 py-2.5 text-sm text-white hover:bg-white/10 transition-colors flex items-center gap-2 ${selectedVoiceId === v.voice_id ? 'bg-white/20' : ''}`}
                                                 >
-                                                    {selectedVoiceId === v.voice_id && (
+                                                    {selectedVoiceId === v.voice_id ? (
                                                         <Check className="w-4 h-4 text-[#FFD700]" />
+                                                    ) : (
+                                                        <div className="w-4 h-4" />
                                                     )}
                                                     <span className={selectedVoiceId === v.voice_id ? 'font-bold' : ''}>
                                                         {v.name} (Cloned)
@@ -1321,8 +1344,11 @@ const BookReaderPage: React.FC = () => {
                                     {/* Locked Voices Section (only show if not premium) */}
                                     {!isSubscribed && voices.filter(v => !isVoiceUnlocked(v.voice_id)).length > 0 && (
                                         <>
-                                            <div className="border-t border-white/20 my-1"></div>
-                                            <div className="px-4 py-1 text-xs text-white/50 uppercase tracking-wider">Locked</div>
+                                            <div className="border-t border-white/20 my-2"></div>
+                                            <div className="px-4 py-1.5 text-xs text-white/40 uppercase tracking-wider font-bold flex items-center gap-1">
+                                                <Lock className="w-3 h-3" />
+                                                Locked
+                                            </div>
                                             {voices.filter(v => !isVoiceUnlocked(v.voice_id)).map(v => (
                                                 <button
                                                     key={v.voice_id}
@@ -1330,39 +1356,21 @@ const BookReaderPage: React.FC = () => {
                                                         e.stopPropagation();
                                                         // Navigate to shop to unlock
                                                         setShowVoiceDropdown(false);
-                                                        navigate('/shop?tab=voices');
+                                                        navigate('/profile', { state: { openShop: true, shopTab: 'voices' } });
                                                     }}
-                                                    className="w-full text-left px-4 py-2 text-sm text-white/50 hover:bg-white/5 transition-colors flex items-center gap-2"
+                                                    className="w-full text-left px-4 py-2.5 text-sm text-white/40 hover:bg-white/5 transition-colors flex items-center gap-2"
                                                 >
                                                     <Lock className="w-4 h-4 text-white/30" />
                                                     <span>{v.name}</span>
-                                                    <span className="ml-auto text-xs text-[#FFD700]">Unlock</span>
+                                                    <span className="ml-auto text-xs text-[#FFD700] font-bold">Unlock</span>
                                                 </button>
                                             ))}
                                         </>
                                     )}
 
-                                    {/* Separator */}
-                                    {(voices.length > 0 || clonedVoices.length > 0) && (
-                                        <div className="border-t border-white/20 my-1"></div>
-                                    )}
-
-                                    {/* Create Voice Option */}
-                                    <button
-                                        onClick={(e) => {
-                                            e.stopPropagation();
-                                            setShowVoiceDropdown(false);
-                                            setShowVoiceCloningModal(true);
-                                        }}
-                                        className="w-full text-left px-4 py-2 text-sm text-[#FFD700] font-bold hover:bg-white/10 transition-colors flex items-center gap-2"
-                                    >
-                                        <Mic className="w-4 h-4" />
-                                        Create Your Voice
-                                    </button>
-
                                     {/* No voices message */}
                                     {voices.length === 0 && clonedVoices.length === 0 && (
-                                        <div className="px-4 py-2 text-sm text-white/70 text-center">
+                                        <div className="px-4 py-3 text-sm text-white/70 text-center">
                                             No voices available
                                         </div>
                                     )}
@@ -1408,27 +1416,28 @@ const BookReaderPage: React.FC = () => {
                         }
                     }
                     
+                    /* Previous page animation - page comes from LEFT side */
                     @keyframes pageCurlPrev {
                         0% { 
-                            transform: perspective(2000px) rotateY(180deg) rotateX(0deg) translateZ(0px);
+                            transform: perspective(2000px) rotateY(0deg) rotateX(0deg) translateZ(0px);
                         }
                         15% {
-                            transform: perspective(2000px) rotateY(160deg) rotateX(2deg) translateZ(30px);
+                            transform: perspective(2000px) rotateY(20deg) rotateX(2deg) translateZ(30px);
                         }
                         35% { 
-                            transform: perspective(2000px) rotateY(120deg) rotateX(3deg) translateZ(60px);
+                            transform: perspective(2000px) rotateY(60deg) rotateX(3deg) translateZ(60px);
                         }
                         50% { 
                             transform: perspective(2000px) rotateY(90deg) rotateX(4deg) translateZ(80px);
                         }
                         65% {
-                            transform: perspective(2000px) rotateY(60deg) rotateX(3deg) translateZ(60px);
+                            transform: perspective(2000px) rotateY(120deg) rotateX(3deg) translateZ(60px);
                         }
                         85% {
-                            transform: perspective(2000px) rotateY(20deg) rotateX(2deg) translateZ(30px);
+                            transform: perspective(2000px) rotateY(160deg) rotateX(2deg) translateZ(30px);
                         }
                         100% { 
-                            transform: perspective(2000px) rotateY(0deg) rotateX(0deg) translateZ(0px);
+                            transform: perspective(2000px) rotateY(180deg) rotateX(0deg) translateZ(0px);
                         }
                     }
                     
@@ -1526,7 +1535,7 @@ const BookReaderPage: React.FC = () => {
                     
                     .page-curl-prev {
                         animation: pageCurlPrev 1.4s cubic-bezier(0.4, 0.0, 0.2, 1) forwards;
-                        transform-origin: right center;
+                        transform-origin: left center;
                         transform-style: preserve-3d;
                     }
                     
@@ -1583,11 +1592,10 @@ const BookReaderPage: React.FC = () => {
                             <div 
                                 className="absolute top-0 bottom-0 z-40 pointer-events-none curl-shadow"
                                 style={{
-                                    left: flipState.direction === 'next' ? 0 : 'auto',
-                                    right: flipState.direction === 'prev' ? 0 : 'auto',
-                                    background: flipState.direction === 'next'
-                                        ? 'linear-gradient(to right, rgba(0,0,0,0.4) 0%, rgba(0,0,0,0.2) 30%, rgba(0,0,0,0.05) 70%, transparent 100%)'
-                                        : 'linear-gradient(to left, rgba(0,0,0,0.4) 0%, rgba(0,0,0,0.2) 30%, rgba(0,0,0,0.05) 70%, transparent 100%)',
+                                    /* For both directions, shadow starts from the left (where the page lifts from) */
+                                    left: 0,
+                                    right: 'auto',
+                                    background: 'linear-gradient(to right, rgba(0,0,0,0.4) 0%, rgba(0,0,0,0.2) 30%, rgba(0,0,0,0.05) 70%, transparent 100%)',
                                 }}
                             />
                             
@@ -1606,9 +1614,9 @@ const BookReaderPage: React.FC = () => {
                                         boxShadow: `
                                             inset 0 0 150px rgba(255,255,255,0.8),
                                             inset 0 0 50px rgba(255,255,255,0.5),
-                                            ${flipState.direction === 'next' ? '-' : ''}12px 0 35px rgba(0,0,0,0.2),
-                                            ${flipState.direction === 'next' ? '-' : ''}4px 0 15px rgba(0,0,0,0.15),
-                                            ${flipState.direction === 'next' ? '-' : ''}1px 0 5px rgba(0,0,0,0.1)
+                                            -12px 0 35px rgba(0,0,0,0.2),
+                                            -4px 0 15px rgba(0,0,0,0.15),
+                                            -1px 0 5px rgba(0,0,0,0.1)
                                         `,
                                     }}
                                 >
@@ -1659,13 +1667,12 @@ const BookReaderPage: React.FC = () => {
                                         />
                                     </div>
                                     
-                                    {/* Bright curl edge highlight */}
+                                    {/* Bright curl edge highlight - always on right side (lifting edge) */}
                                     <div 
                                         className="absolute top-0 bottom-0"
                                         style={{
                                             width: '6px',
-                                            right: flipState.direction === 'next' ? 0 : 'auto',
-                                            left: flipState.direction === 'prev' ? 0 : 'auto',
+                                            right: 0,
                                             background: 'linear-gradient(to bottom, rgba(255,255,255,1), rgba(255,255,255,0.9) 30%, rgba(255,255,255,0.95) 50%, rgba(255,255,255,0.9) 70%, rgba(255,255,255,1))',
                                             boxShadow: '0 0 20px rgba(255,255,255,0.8), 0 0 40px rgba(255,255,255,0.4)',
                                         }}
@@ -1676,11 +1683,8 @@ const BookReaderPage: React.FC = () => {
                                         className="absolute top-0 bottom-0"
                                         style={{
                                             width: '100px',
-                                            right: flipState.direction === 'next' ? '6px' : 'auto',
-                                            left: flipState.direction === 'prev' ? '6px' : 'auto',
-                                            background: flipState.direction === 'next'
-                                                ? 'linear-gradient(to left, rgba(0,0,0,0.12) 0%, rgba(0,0,0,0.05) 40%, transparent 100%)'
-                                                : 'linear-gradient(to right, rgba(0,0,0,0.12) 0%, rgba(0,0,0,0.05) 40%, transparent 100%)',
+                                            right: '6px',
+                                            background: 'linear-gradient(to left, rgba(0,0,0,0.12) 0%, rgba(0,0,0,0.05) 40%, transparent 100%)',
                                         }}
                                     />
                                     
@@ -1689,8 +1693,7 @@ const BookReaderPage: React.FC = () => {
                                         className="absolute top-0 bottom-0"
                                         style={{
                                             width: '2px',
-                                            left: flipState.direction === 'next' ? 0 : 'auto',
-                                            right: flipState.direction === 'prev' ? 0 : 'auto',
+                                            left: 0,
                                             background: 'linear-gradient(to bottom, rgba(200,200,200,0.3), rgba(200,200,200,0.2) 50%, rgba(200,200,200,0.3))',
                                         }}
                                     />
@@ -1727,11 +1730,8 @@ const BookReaderPage: React.FC = () => {
                                         className="absolute top-0 bottom-0"
                                         style={{
                                             width: '60px',
-                                            left: flipState.direction === 'next' ? 0 : 'auto',
-                                            right: flipState.direction === 'prev' ? 0 : 'auto',
-                                            background: flipState.direction === 'next'
-                                                ? 'linear-gradient(to right, rgba(0,0,0,0.12) 0%, rgba(0,0,0,0.05) 50%, transparent 100%)'
-                                                : 'linear-gradient(to left, rgba(0,0,0,0.12) 0%, rgba(0,0,0,0.05) 50%, transparent 100%)',
+                                            left: 0,
+                                            background: 'linear-gradient(to right, rgba(0,0,0,0.12) 0%, rgba(0,0,0,0.05) 50%, transparent 100%)',
                                         }}
                                     />
                                 </div>

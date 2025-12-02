@@ -11,11 +11,12 @@ import { cleanVoiceDescription } from '../utils/voiceUtils';
 
 const SettingsPage: React.FC = () => {
   const navigate = useNavigate();
-  const { isSubscribed } = useUser();
+  const { isSubscribed, isVoiceUnlocked } = useUser();
   const { musicEnabled, sfxEnabled, musicVolume, toggleMusic, toggleSfx, setMusicVolume, playBack } = useAudio();
   const [clonedVoices, setClonedVoices] = useState<ClonedVoice[]>([]);
   const [deletingVoiceId, setDeletingVoiceId] = useState<string | null>(null);
   const [availableVoices, setAvailableVoices] = useState<any[]>([]);
+  const [unlockedVoices, setUnlockedVoices] = useState<any[]>([]);
   const [loadingVoices, setLoadingVoices] = useState(false);
   
   // Load cloned voices
@@ -24,12 +25,16 @@ const SettingsPage: React.FC = () => {
     setClonedVoices(voices);
   }, []);
   
-  // Load available voices for management
+  // Load available voices for management - only show unlocked voices
   useEffect(() => {
     setLoadingVoices(true);
     ApiService.getVoices()
       .then(voices => {
         setAvailableVoices(voices);
+        // Filter to only show unlocked voices
+        const unlocked = voices.filter((v: any) => isVoiceUnlocked(v.voice_id));
+        setUnlockedVoices(unlocked);
+        console.log(`🎤 Settings: ${unlocked.length} unlocked voices out of ${voices.length} total`);
       })
       .catch(error => {
         console.error('Error loading voices:', error);
@@ -37,7 +42,7 @@ const SettingsPage: React.FC = () => {
       .finally(() => {
         setLoadingVoices(false);
       });
-  }, []);
+  }, [isVoiceUnlocked]);
   
   // Robust back handler - Explicitly goes to Profile as requested
   const handleBack = () => {
@@ -215,18 +220,26 @@ const SettingsPage: React.FC = () => {
               </section>
             )}
 
-            {/* Voice Management */}
+            {/* Voice Management - Only show unlocked voices */}
             <section className="bg-[#fff8e1] rounded-2xl p-5 border-2 border-[#eecaa0] shadow-sm">
-                <h3 className="font-display font-bold text-[#8B4513] text-lg mb-4 uppercase tracking-wide opacity-80">Voice Management</h3>
-                <p className="text-[#5c2e0b] text-sm mb-4 opacity-70">Hide voices you don't want to see in the app</p>
+                <h3 className="font-display font-bold text-[#8B4513] text-lg mb-4 uppercase tracking-wide opacity-80">Your Voices</h3>
+                <p className="text-[#5c2e0b] text-sm mb-4 opacity-70">Manage voices you've unlocked. Hide voices you don't want to see in the reader.</p>
                 
                 {loadingVoices ? (
                     <div className="text-center text-[#5c2e0b] py-4">Loading voices...</div>
-                ) : availableVoices.length === 0 ? (
-                    <div className="text-center text-[#5c2e0b] py-4">No voices available</div>
+                ) : unlockedVoices.length === 0 ? (
+                    <div className="text-center text-[#5c2e0b] py-4">
+                        <p className="mb-2">No voices unlocked yet</p>
+                        <button
+                            onClick={() => navigate('/profile', { state: { openShop: true, shopTab: 'voices' } })}
+                            className="text-[#FFD700] font-bold underline"
+                        >
+                            Unlock voices in the Shop
+                        </button>
+                    </div>
                 ) : (
                     <div className="space-y-2 max-h-[300px] overflow-y-auto">
-                        {availableVoices.map((voice) => {
+                        {unlockedVoices.map((voice) => {
                             const isHidden = isVoiceHidden(voice.voice_id);
                             return (
                                 <div
@@ -253,7 +266,7 @@ const SettingsPage: React.FC = () => {
                                     <button
                                         onClick={() => {
                                             toggleVoiceVisibility(voice.voice_id);
-                                            setAvailableVoices([...availableVoices]); // Trigger re-render
+                                            setUnlockedVoices([...unlockedVoices]); // Trigger re-render
                                         }}
                                         className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-colors ${
                                             isHidden

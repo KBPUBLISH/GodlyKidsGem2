@@ -167,8 +167,9 @@ export const ApiService = {
           // Couldn't parse error response
         }
 
-        // For localhost backend, don't use mock data - return empty array instead
+        // For localhost or production backend, don't use mock data - return empty array instead
         const isLocalBackend = baseUrl.includes('localhost');
+        const isProductionBackend = baseUrl.includes('render.com') || baseUrl.includes('backendgk');
 
         // Handle different error status codes
         if (response.status === 401) {
@@ -180,8 +181,8 @@ export const ApiService = {
             console.warn('💡 Please log in to access the API and see real data from the dev database.');
           }
 
-          if (isLocalBackend) {
-            console.warn('⚠️ Local backend returned 401 - returning empty array (no mock data for local dev)');
+          if (isLocalBackend || isProductionBackend) {
+            console.warn('⚠️ Backend returned 401 - returning empty array (no mock data for local/production)');
             return [];
           }
 
@@ -310,6 +311,12 @@ export const ApiService = {
         console.error('❌ API returned no books after extraction');
         console.error('📊 Full API response structure:', JSON.stringify(data, null, 2));
         console.error('💡 Check if the API response structure matches expected format');
+        // For production backend, return empty array instead of mock data
+        const isProductionBackend = baseUrl.includes('render.com') || baseUrl.includes('backendgk');
+        if (isProductionBackend) {
+          console.warn('⚠️ Production backend returned no books - returning empty array');
+          return [];
+        }
         return MOCK_BOOKS;
       }
 

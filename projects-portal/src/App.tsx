@@ -1,5 +1,8 @@
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
+import { AuthProvider } from './contexts/AuthContext';
+import ProtectedRoute from './components/ProtectedRoute';
 import Layout from './components/Layout';
+import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
 import Books from './pages/Books';
 import BookForm from './pages/BookForm';
@@ -16,27 +19,37 @@ import LessonForm from './pages/LessonForm';
 
 function App() {
   return (
-    <Router>
-      <Routes>
-        <Route path="/" element={<Layout />}>
-          <Route index element={<Dashboard />} />
-          <Route path="books" element={<Books />} />
-          <Route path="books/new" element={<BookForm />} />
-          <Route path="books/edit/:bookId" element={<BookEdit />} />
-          <Route path="books/read/:bookId" element={<BookReader />} />
-          <Route path="pages/new/:bookId" element={<PageEditor />} />
-          <Route path="playlists" element={<Playlists />} />
-          <Route path="playlists/new" element={<PlaylistForm />} />
-          <Route path="playlists/edit/:id" element={<PlaylistForm />} />
-          <Route path="categories" element={<Categories />} />
-          <Route path="voices" element={<Voices />} />
-          <Route path="games" element={<Games />} />
-          <Route path="lessons" element={<Lessons />} />
-          <Route path="lessons/new" element={<LessonForm />} />
-          <Route path="lessons/edit/:id" element={<LessonForm />} />
-        </Route>
-      </Routes>
-    </Router>
+    <AuthProvider>
+      <Router>
+        <Routes>
+          {/* Public Route */}
+          <Route path="/login" element={<Login />} />
+          
+          {/* Protected Routes */}
+          <Route path="/" element={
+            <ProtectedRoute>
+              <Layout />
+            </ProtectedRoute>
+          }>
+            <Route index element={<Dashboard />} />
+            <Route path="books" element={<Books />} />
+            <Route path="books/new" element={<BookForm />} />
+            <Route path="books/edit/:bookId" element={<BookEdit />} />
+            <Route path="books/read/:bookId" element={<BookReader />} />
+            <Route path="pages/new/:bookId" element={<PageEditor />} />
+            <Route path="playlists" element={<Playlists />} />
+            <Route path="playlists/new" element={<PlaylistForm />} />
+            <Route path="playlists/edit/:id" element={<PlaylistForm />} />
+            <Route path="categories" element={<Categories />} />
+            <Route path="voices" element={<Voices />} />
+            <Route path="games" element={<Games />} />
+            <Route path="lessons" element={<Lessons />} />
+            <Route path="lessons/new" element={<LessonForm />} />
+            <Route path="lessons/edit/:id" element={<LessonForm />} />
+          </Route>
+        </Routes>
+      </Router>
+    </AuthProvider>
   );
 }
 

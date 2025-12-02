@@ -1,11 +1,19 @@
 import React from 'react';
-import { Link, Outlet, useLocation } from 'react-router-dom';
-import { Book, Music, Layout as LayoutIcon, Home, Tag, Volume2, Gamepad2, Video } from 'lucide-react';
+import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom';
+import { Book, Music, Layout as LayoutIcon, Home, Tag, Volume2, Gamepad2, Video, LogOut } from 'lucide-react';
+import { useAuth } from '../contexts/AuthContext';
 
 const Layout: React.FC = () => {
     const location = useLocation();
+    const navigate = useNavigate();
+    const { logout } = useAuth();
 
     const isActive = (path: string) => location.pathname === path;
+
+    const handleLogout = () => {
+        logout();
+        navigate('/login');
+    };
 
     const navItems = [
         { path: '/', icon: Home, label: 'Dashboard' },
@@ -20,14 +28,14 @@ const Layout: React.FC = () => {
     return (
         <div className="flex h-screen bg-gray-100">
             {/* Sidebar */}
-            <aside className="w-64 bg-white shadow-md">
+            <aside className="w-64 bg-white shadow-md flex flex-col">
                 <div className="p-6">
                     <h1 className="text-2xl font-bold text-indigo-600 flex items-center gap-2">
                         <LayoutIcon className="w-8 h-8" />
                         Portal
                     </h1>
                 </div>
-                <nav className="mt-6">
+                <nav className="mt-6 flex-1">
                     {navItems.map((item) => (
                         <Link
                             key={item.path}
@@ -40,6 +48,17 @@ const Layout: React.FC = () => {
                         </Link>
                     ))}
                 </nav>
+                
+                {/* Logout Button */}
+                <div className="p-4 border-t border-gray-200">
+                    <button
+                        onClick={handleLogout}
+                        className="flex items-center w-full px-4 py-2 text-gray-600 hover:bg-red-50 hover:text-red-600 rounded-lg transition-colors"
+                    >
+                        <LogOut className="w-5 h-5 mr-3" />
+                        <span className="font-medium">Sign Out</span>
+                    </button>
+                </div>
             </aside>
 
             {/* Main Content */}

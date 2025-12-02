@@ -9,6 +9,7 @@ import { useUser } from '../context/UserContext';
 import { readingProgressService } from '../services/readingProgressService';
 import { favoritesService } from '../services/favoritesService';
 import { readCountService } from '../services/readCountService';
+import { bookCompletionService } from '../services/bookCompletionService';
 import { BookPageRenderer } from '../components/features/BookPageRenderer';
 import { processTextWithEmotionalCues, removeEmotionalCues } from '../utils/textProcessing';
 
@@ -546,6 +547,8 @@ const BookReaderPage: React.FC = () => {
                     if (nextIndex >= pages.length - 1) {
                         // Increment read count when book is completed
                         readCountService.incrementReadCount(bookId);
+                        // Mark book as permanently completed (unlocks games forever)
+                        bookCompletionService.markBookCompleted(bookId);
                     }
                 }
             }, 1500); // Slightly after 1.4s animation completes
@@ -949,6 +952,8 @@ const BookReaderPage: React.FC = () => {
                                 // Increment read count when book is completed
                                 if (bookId) {
                                     readCountService.incrementReadCount(bookId);
+                                    // Mark book as permanently completed (unlocks games forever)
+                                    bookCompletionService.markBookCompleted(bookId);
                                 }
                             } else if (isAutoPlayingRef.current) {
                                 console.log('⏸️ Auto-play: Already processing, skipping');
@@ -1023,6 +1028,8 @@ const BookReaderPage: React.FC = () => {
                             // Increment read count when book is completed
                             if (bookId) {
                                 readCountService.incrementReadCount(bookId);
+                                // Mark book as permanently completed (unlocks games forever)
+                                bookCompletionService.markBookCompleted(bookId);
                             }
                         } else if (isAutoPlayingRef.current) {
                             console.log('⏸️ Auto-play: Already processing, skipping');

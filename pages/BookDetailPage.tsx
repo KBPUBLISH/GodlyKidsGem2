@@ -8,6 +8,7 @@ import { readingProgressService } from '../services/readingProgressService';
 import { useAudio } from '../context/AudioContext';
 import { ApiService } from '../services/apiService';
 import { readCountService } from '../services/readCountService';
+import { bookCompletionService } from '../services/bookCompletionService';
 import { favoritesService } from '../services/favoritesService';
 import { libraryService } from '../services/libraryService';
 import GameWebView from '../components/features/GameWebView';
@@ -251,13 +252,11 @@ const BookDetailPage: React.FC = () => {
     }
   };
 
-  // Check if book is completed (user has read all pages)
+  // Check if book has EVER been completed (permanent unlock for games)
+  // Once a book is completed, games stay unlocked forever regardless of re-reading progress
   const isBookCompleted = () => {
-    if (!id || totalPages === 0) return false;
-    const progress = readingProgressService.getProgress(id);
-    if (!progress) return false;
-    // Consider book completed if user has reached the last page
-    return progress.currentPageIndex >= totalPages - 1;
+    if (!id) return false;
+    return bookCompletionService.isBookCompleted(id);
   };
 
   const handleContinue = () => {

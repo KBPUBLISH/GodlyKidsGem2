@@ -716,6 +716,7 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const resetUser = () => {
     setCoins(2650);
     setOwnedItems(['f1', 'anim1']);
+    setUnlockedVoices([]);
     setParentName('');
     setKids([]);
     setEquippedAvatar('head-toast');
@@ -744,6 +745,30 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setSavedCharacters([]);
     setIsSubscribed(false);
     localStorage.removeItem(STORAGE_KEY);
+    
+    // Clear all progress-related data for a fresh start
+    localStorage.removeItem('godlykids_lesson_completions');
+    localStorage.removeItem('godlykids_lesson_streak');
+    localStorage.removeItem('godlykids_last_week_start');
+    localStorage.removeItem('godlykids_read_counts');
+    localStorage.removeItem('godlykids_completed_books');
+    localStorage.removeItem('godlykids_reading_progress');
+    localStorage.removeItem('godlykids_favorites');
+    localStorage.removeItem('godlykids_library');
+    localStorage.removeItem('godlykids_play_counts');
+    localStorage.removeItem('godlykids_default_voice');
+    
+    // Clear game engagement flags
+    localStorage.removeItem('memory_game_engaged');
+    localStorage.removeItem('daily_key_engaged');
+    localStorage.removeItem('strength_game_engaged');
+    localStorage.removeItem('prayer_game_engaged');
+    
+    // Clear game cooldowns
+    localStorage.removeItem('daily_verse_last_completion');
+    localStorage.removeItem('challenge_game_last_completion');
+    localStorage.removeItem('strength_game_last_completion');
+    localStorage.removeItem('prayer_game_last_completion');
   };
 
   return (

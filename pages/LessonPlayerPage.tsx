@@ -42,7 +42,7 @@ type Screen = 'video' | 'devotional' | 'activity';
 const LessonPlayerPage: React.FC = () => {
     const { lessonId } = useParams<{ lessonId: string }>();
     const navigate = useNavigate();
-    const { addCoins, isOwned, purchaseItem, coins, isSubscribed } = useUser();
+    const { addCoins, isOwned, purchaseItem, coins, isSubscribed, isVoiceUnlocked } = useUser();
     const { setMusicPaused, musicEnabled } = useAudio();
 
     const [lesson, setLesson] = useState<Lesson | null>(null);
@@ -106,29 +106,7 @@ const LessonPlayerPage: React.FC = () => {
         };
     }, [lessonId, musicEnabled, setMusicPaused]);
 
-    // Helper to check if a voice is unlocked
-    const isVoiceUnlocked = (voiceId: string): boolean => {
-        // Free voices (Rachel, Domi, Bella, Elli)
-        const freeVoices = ['21m00Tcm4TlvDq8ikWAM', 'AZnzlk1XvdvUeBnXmlld', 'EXAVITQu4vr4xnSDxMaL', 'MF3mGyEYCl7XYWbV9V6O'];
-        if (freeVoices.includes(voiceId)) return true;
-
-        // Check if voice is purchased
-        const voiceShopId = `voice-${voiceId}`;
-        // Also check by voice name pattern
-        const voiceName = voices.find(v => v.voice_id === voiceId)?.name?.toLowerCase() || '';
-        const shopIdPatterns = [
-            voiceShopId,
-            `voice-${voiceName.replace(/\s+/g, '-').toLowerCase()}`,
-        ];
-
-        return shopIdPatterns.some(id => isOwned(id)) || isSubscribed;
-    };
-
-    // Helper to get voice shop item ID
-    const getVoiceShopId = (voiceId: string, voiceName: string): string => {
-        const nameSlug = voiceName.toLowerCase().replace(/\s+/g, '-');
-        return `voice-${nameSlug}`;
-    };
+    // Note: isVoiceUnlocked comes from UserContext - uses the same unlock system as BookReader
 
     const loadDefaultVoice = async () => {
         try {
@@ -137,22 +115,25 @@ const LessonPlayerPage: React.FC = () => {
                 // Filter out hidden voices
                 const visibleVoices = filterVisibleVoices(voiceList);
                 setVoices(visibleVoices);
-                // Try to find a kid-friendly voice or use first available unlocked voice
-                const kidVoice = visibleVoices.find((v: any) => {
-                    const isKidFriendly = ['Domi', 'Bella', 'Elli', 'Rachel'].includes(v.name);
-                    return isKidFriendly && isVoiceUnlocked(v.voice_id);
-                });
-                if (kidVoice) {
-                    setSelectedVoiceId(kidVoice.voice_id);
-                } else {
-                    // Find first unlocked voice
-                    const firstUnlocked = visibleVoices.find((v: any) => isVoiceUnlocked(v.voice_id));
-                    if (firstUnlocked) {
-                        setSelectedVoiceId(firstUnlocked.voice_id);
-                    } else if (visibleVoices.length > 0) {
-                        setSelectedVoiceId(visibleVoices[0].voice_id);
-                    }
+                
+                // Get user's default voice from localStorage (set during onboarding)
+                const defaultVoiceId = localStorage.getItem('godlykids_default_voice');
+                
+                // Find unlocked voices
+                const unlockedVoices = visibleVoices.filter((v: any) => isVoiceUnlocked(v.voice_id));
+                
+                if (defaultVoiceId && isVoiceUnlocked(defaultVoiceId)) {
+                    // Use the user's default voice if it's unlocked
+                    setSelectedVoiceId(defaultVoiceId);
+                } else if (unlockedVoices.length > 0) {
+                    // Use first unlocked voice
+                    setSelectedVoiceId(unlockedVoices[0].voice_id);
+                } else if (visibleVoices.length > 0) {
+                    // Fallback to first visible voice
+                    setSelectedVoiceId(visibleVoices[0].voice_id);
                 }
+                
+                console.log(`✅ Loaded ${visibleVoices.length} voice(s), ${unlockedVoices.length} unlocked`);
             } else {
                 // Fallback to a common ElevenLabs voice ID
                 setSelectedVoiceId('21m00Tcm4TlvDq8ikWAM'); // Rachel - a popular ElevenLabs voice
@@ -606,63 +587,40 @@ const LessonPlayerPage: React.FC = () => {
                                             </span>
                                         </button>
 
-                                        {/* Dropdown Menu */}
+                                        {/* Dropdown Menu - higher z-index to appear above devotional content */}
                                         {showVoiceDropdown && (
-                                            <div className="absolute top-full left-0 right-0 mt-2 bg-[#5D4037] rounded-lg border-2 border-[#3E2723] shadow-xl z-50 max-h-[300px] overflow-y-auto">
+                                            <div className="absolute bottom-full left-0 right-0 mb-2 bg-[#5D4037] rounded-lg border-2 border-[#3E2723] shadow-xl z-[100] max-h-[300px] overflow-y-auto min-w-[200px]">
                                                 <div className="py-2">
-                                                    {/* Portal voices */}
-                                                    {voices.length > 0 && (
+                                                    {/* Unlocked Voices Section - show first */}
+                                                    {voices.filter(v => isVoiceUnlocked(v.voice_id)).length > 0 && (
                                                         <>
-                                                            {voices.map(v => {
-                                                                const unlocked = isVoiceUnlocked(v.voice_id);
-                                                                const shopId = getVoiceShopId(v.voice_id, v.name);
-                                                                return (
-                                                                    <div key={v.voice_id} className="flex items-center gap-2 px-2">
-                                                                        <button
-                                                                            onClick={(e) => {
-                                                                                e.stopPropagation();
-                                                                                if (unlocked) {
-                                                                                    setSelectedVoiceId(v.voice_id);
-                                                                                    setShowVoiceDropdown(false);
-                                                                                    // Regenerate audio with new voice if audio was already generated
-                                                                                    if (audioUrl) {
-                                                                                        setAudioUrl(null);
-                                                                                        generateDevotionalAudio();
-                                                                                    }
-                                                                                }
-                                                                            }}
-                                                                            disabled={!unlocked}
-                                                                            className={`flex-1 text-left px-3 py-2 text-sm text-[#FFD700] hover:bg-[#4E342E] transition-colors flex items-center gap-2 rounded-md ${selectedVoiceId === v.voice_id ? 'bg-[#4E342E]' : ''} ${!unlocked ? 'opacity-50 cursor-not-allowed' : ''}`}
-                                                                        >
-                                                                            {selectedVoiceId === v.voice_id && unlocked && (
-                                                                                <Check className="w-4 h-4 text-[#FFD700]" />
-                                                                            )}
-                                                                            {!unlocked && (
-                                                                                <Lock className="w-4 h-4 text-gray-400" />
-                                                                            )}
-                                                                            <span className={`font-display tracking-wide ${selectedVoiceId === v.voice_id ? 'font-bold' : ''}`}>
-                                                                                {v.name}
-                                                                            </span>
-                                                                        </button>
-                                                                        {!unlocked && (
-                                                                            <button
-                                                                                onClick={(e) => {
-                                                                                    e.stopPropagation();
-                                                                                    setShowVoiceDropdown(false);
-                                                                                    navigate('/profile', { state: { openShop: true, shopTab: 'voices' } });
-                                                                                }}
-                                                                                className="px-2 py-1 text-xs bg-[#FFD700] text-[#3E2723] rounded hover:bg-[#FFC107] transition-colors font-bold font-display"
-                                                                            >
-                                                                                Unlock
-                                                                            </button>
-                                                                        )}
-                                                                    </div>
-                                                                );
-                                                            })}
+                                                            <div className="px-4 py-1 text-xs text-[#FFD700]/60 uppercase tracking-wider font-display">Unlocked</div>
+                                                            {voices.filter(v => isVoiceUnlocked(v.voice_id)).map(v => (
+                                                                <button
+                                                                    key={v.voice_id}
+                                                                    onClick={(e) => {
+                                                                        e.stopPropagation();
+                                                                        setSelectedVoiceId(v.voice_id);
+                                                                        setShowVoiceDropdown(false);
+                                                                        // Regenerate audio with new voice if audio was already generated
+                                                                        if (audioUrl) {
+                                                                            setAudioUrl(null);
+                                                                        }
+                                                                    }}
+                                                                    className={`w-full text-left px-4 py-2 text-sm text-[#FFD700] hover:bg-[#4E342E] transition-colors flex items-center gap-2 ${selectedVoiceId === v.voice_id ? 'bg-[#4E342E]' : ''}`}
+                                                                >
+                                                                    {selectedVoiceId === v.voice_id && (
+                                                                        <Check className="w-4 h-4 text-[#FFD700]" />
+                                                                    )}
+                                                                    <span className={`font-display tracking-wide ${selectedVoiceId === v.voice_id ? 'font-bold' : ''}`}>
+                                                                        {v.name}
+                                                                    </span>
+                                                                </button>
+                                                            ))}
                                                         </>
                                                     )}
 
-                                                    {/* Cloned voices */}
+                                                    {/* Cloned voices (always unlocked) */}
                                                     {clonedVoices.length > 0 && (
                                                         <>
                                                             {clonedVoices.map(v => (
@@ -675,11 +633,9 @@ const LessonPlayerPage: React.FC = () => {
                                                                         // Regenerate audio with new voice if audio was already generated
                                                                         if (audioUrl) {
                                                                             setAudioUrl(null);
-                                                                            generateDevotionalAudio();
                                                                         }
                                                                     }}
-                                                                    className={`w-full text-left px-4 py-2 text-sm text-[#FFD700] hover:bg-[#4E342E] transition-colors flex items-center gap-2 ${selectedVoiceId === v.voice_id ? 'bg-[#4E342E]' : ''
-                                                                        }`}
+                                                                    className={`w-full text-left px-4 py-2 text-sm text-[#FFD700] hover:bg-[#4E342E] transition-colors flex items-center gap-2 ${selectedVoiceId === v.voice_id ? 'bg-[#4E342E]' : ''}`}
                                                                 >
                                                                     {selectedVoiceId === v.voice_id && (
                                                                         <Check className="w-4 h-4 text-[#FFD700]" />
@@ -688,6 +644,32 @@ const LessonPlayerPage: React.FC = () => {
                                                                         {v.name} (Cloned)
                                                                     </span>
                                                                 </button>
+                                                            ))}
+                                                        </>
+                                                    )}
+
+                                                    {/* Locked Voices Section (only show if not premium) */}
+                                                    {!isSubscribed && voices.filter(v => !isVoiceUnlocked(v.voice_id)).length > 0 && (
+                                                        <>
+                                                            <div className="border-t border-[#3E2723] my-1"></div>
+                                                            <div className="px-4 py-1 text-xs text-white/40 uppercase tracking-wider font-display">Locked</div>
+                                                            {voices.filter(v => !isVoiceUnlocked(v.voice_id)).map(v => (
+                                                                <div key={v.voice_id} className="flex items-center gap-2 px-2 py-1">
+                                                                    <div className="flex-1 flex items-center gap-2 px-2 py-1 text-sm text-white/50">
+                                                                        <Lock className="w-4 h-4 text-white/30" />
+                                                                        <span className="font-display tracking-wide">{v.name}</span>
+                                                                    </div>
+                                                                    <button
+                                                                        onClick={(e) => {
+                                                                            e.stopPropagation();
+                                                                            setShowVoiceDropdown(false);
+                                                                            navigate('/profile', { state: { openShop: true, shopTab: 'voices' } });
+                                                                        }}
+                                                                        className="px-2 py-1 text-xs bg-[#FFD700] text-[#3E2723] rounded hover:bg-[#FFC107] transition-colors font-bold font-display"
+                                                                    >
+                                                                        Unlock
+                                                                    </button>
+                                                                </div>
                                                             ))}
                                                         </>
                                                     )}

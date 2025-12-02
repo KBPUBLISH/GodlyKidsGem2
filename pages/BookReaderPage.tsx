@@ -109,10 +109,14 @@ const BookReaderPage: React.FC = () => {
     const [flipState, setFlipState] = useState<{ direction: 'next' | 'prev', isFlipping: boolean } | null>(null);
     const touchStartX = useRef<number>(0);
     const touchEndX = useRef<number>(0);
+    const touchStartY = useRef<number>(0);
+    const touchEndY = useRef<number>(0);
+    const touchStartTime = useRef<number>(0);
     const swipeDetectedRef = useRef<boolean>(false);
     const desiredScrollStateRef = useRef<boolean | null>(null); // Track desired scroll state for next page turn
     const showScrollRef = useRef<boolean>(true); // Track scroll state to avoid closure issues
     const [bookMusicEnabled, setBookMusicEnabled] = useState(true); // Default to enabled
+    const [bookMusicVolume, setBookMusicVolume] = useState(0.5); // Default to 50% (halfway)
 
     // Use ref to track music enabled state for intervals/callbacks
     const bookMusicEnabledRef = useRef<boolean>(bookMusicEnabled);
@@ -283,7 +287,7 @@ const BookReaderPage: React.FC = () => {
 
                         const audio = new Audio(musicUrl);
                         audio.loop = true;
-                        audio.volume = 0.10; // Lowered from 0.15 to 0.10 (approx 33% lower, close to requested 20%)
+                        audio.volume = bookMusicVolume; // Use slider volume (default 0.5 = 50%)
                         audio.preload = 'auto';
                         bookBackgroundMusicRef.current = audio;
 
@@ -583,23 +587,43 @@ const BookReaderPage: React.FC = () => {
         }
     };
 
-    // Swipe gesture handlers
+    // Swipe gesture handlers - more sensitive to prevent accidental page turns
     const handleTouchStart = (e: React.TouchEvent) => {
         touchStartX.current = e.touches[0].clientX;
+        touchStartY.current = e.touches[0].clientY;
+        touchEndX.current = e.touches[0].clientX;
+        touchEndY.current = e.touches[0].clientY;
+        touchStartTime.current = Date.now();
         swipeDetectedRef.current = false; // Reset swipe detection
     };
 
     const handleTouchMove = (e: React.TouchEvent) => {
         touchEndX.current = e.touches[0].clientX;
+        touchEndY.current = e.touches[0].clientY;
     };
 
     const handleTouchEnd = () => {
-        const swipeThreshold = 50;
-        const diff = touchStartX.current - touchEndX.current;
+        const swipeThresholdX = 100; // Increased from 50 - require more deliberate horizontal swipe
+        const swipeThresholdY = 80; // Max vertical movement allowed (prevents diagonal swipes)
+        const minSwipeTime = 100; // Minimum time in ms for a valid swipe (prevents accidental taps)
+        const maxSwipeTime = 800; // Maximum time for swipe (too slow = not a swipe)
+        
+        const diffX = touchStartX.current - touchEndX.current;
+        const diffY = Math.abs(touchStartY.current - touchEndY.current);
+        const swipeTime = Date.now() - touchStartTime.current;
 
-        if (Math.abs(diff) > swipeThreshold) {
+        // Only trigger page turn if:
+        // 1. Horizontal swipe is significant (> threshold)
+        // 2. Vertical movement is minimal (primarily horizontal gesture)
+        // 3. Swipe duration is within valid range (not too fast/accidental, not too slow)
+        const isValidSwipe = Math.abs(diffX) > swipeThresholdX && 
+                             diffY < swipeThresholdY && 
+                             swipeTime > minSwipeTime && 
+                             swipeTime < maxSwipeTime;
+
+        if (isValidSwipe) {
             swipeDetectedRef.current = true; // Mark that a swipe was detected
-            if (diff > 0) {
+            if (diffX > 0) {
                 // Swipe left - next page
                 if (currentPageIndex < pages.length - 1) {
                     stopAudio();
@@ -617,7 +641,7 @@ const BookReaderPage: React.FC = () => {
                 swipeDetectedRef.current = false;
             }, 300);
         } else {
-            // Small movement - not a swipe, allow tap to proceed
+            // Not a valid swipe - allow tap/click to proceed
             swipeDetectedRef.current = false;
         }
     };
@@ -874,19 +898,30 @@ const BookReaderPage: React.FC = () => {
                                 isAutoPlayingRef.current = true; // Prevent multiple calls
                                 const nextPageIndex = currentPageIdx + 1;
                                 console.log('🔄 Auto-play: Moving to page', nextPageIndex + 1, `(from page ${currentPageIdx + 1})`);
+                                
+                                // Trigger the page flip animation
                                 setIsPageTurning(true);
+                                setFlipState({ direction: 'next', isFlipping: true });
+                                playPageTurnSound(); // Play page turn sound effect
+                                
+                                // Change page content at the halfway point (700ms into 1.4s animation)
                                 setTimeout(() => {
                                     setCurrentPageIndex(nextPageIndex);
                                     currentPageIndexRef.current = nextPageIndex; // Update ref
                                     // Preserve scroll state during page turns (both manual and auto-play)
                                     setShowScroll(showScrollRef.current);
-                                    setIsPageTurning(false);
                                     // Save progress
                                     if (bookId) {
                                         readingProgressService.saveProgress(bookId, nextPageIndex);
                                     }
+                                }, 700);
+                                
+                                // End animation and start next page audio
+                                setTimeout(() => {
+                                    setIsPageTurning(false);
+                                    setFlipState(null);
 
-                                    // Wait for page to render, then auto-play next page
+                                    // Wait a moment for page to render, then auto-play next page
                                     setTimeout(() => {
                                         // Check again if auto-play is still enabled and we're on the correct page
                                         if (autoPlayModeRef.current && currentPageIndexRef.current === nextPageIndex) {
@@ -907,8 +942,8 @@ const BookReaderPage: React.FC = () => {
                                             console.log('⏹️ Auto-play: Cancelled or page changed');
                                             isAutoPlayingRef.current = false;
                                         }
-                                    }, 300);
-                                }, 300);
+                                    }, 200);
+                                }, 1500); // After 1.4s animation completes
                             } else if (autoPlayModeRef.current && currentPageIndexRef.current >= pages.length - 1) {
                                 // Reached end of book, stop auto-play
                                 console.log('🏁 Auto-play: Reached end of book, stopping');
@@ -937,18 +972,30 @@ const BookReaderPage: React.FC = () => {
                             isAutoPlayingRef.current = true; // Prevent multiple calls
                             const nextPageIndex = currentPageIdx + 1;
                             console.log('🔄 Auto-play: Moving to page', nextPageIndex + 1, `(from page ${currentPageIdx + 1})`);
+                            
+                            // Trigger the page flip animation
                             setIsPageTurning(true);
+                            setFlipState({ direction: 'next', isFlipping: true });
+                            playPageTurnSound(); // Play page turn sound effect
+                            
+                            // Change page content at the halfway point (700ms into 1.4s animation)
                             setTimeout(() => {
                                 setCurrentPageIndex(nextPageIndex);
                                 currentPageIndexRef.current = nextPageIndex; // Update ref
                                 // Preserve scroll state during page turns (both manual and auto-play)
                                 setShowScroll(showScrollRef.current);
-                                setIsPageTurning(false);
                                 // Save progress
                                 if (bookId) {
                                     readingProgressService.saveProgress(bookId, nextPageIndex);
                                 }
+                            }, 700);
+                            
+                            // End animation and start next page audio
+                            setTimeout(() => {
+                                setIsPageTurning(false);
+                                setFlipState(null);
 
+                                // Wait a moment for page to render, then auto-play next page
                                 setTimeout(() => {
                                     // Check again if auto-play is still enabled and we're on the correct page
                                     if (autoPlayModeRef.current && currentPageIndexRef.current === nextPageIndex) {
@@ -969,8 +1016,8 @@ const BookReaderPage: React.FC = () => {
                                         console.log('⏹️ Auto-play: Cancelled or page changed');
                                         isAutoPlayingRef.current = false;
                                     }
-                                }, 300);
-                            }, 300);
+                                }, 200);
+                            }, 1500); // After 1.4s animation completes
                         } else if (autoPlayModeRef.current && currentPageIndexRef.current >= pages.length - 1) {
                             // Reached end of book, stop auto-play
                             console.log('🏁 Auto-play: Reached end of book, stopping');
@@ -1120,32 +1167,72 @@ const BookReaderPage: React.FC = () => {
                 <div className="pointer-events-auto flex items-center gap-2">
                     {/* Background Music Toggle - Only show if book has music */}
                     {hasBookMusic ? (
-                        <button
-                            onClick={(e) => {
-                                e.stopPropagation();
-                                const newState = !bookMusicEnabled;
-                                setBookMusicEnabled(newState);
+                        <>
+                            <button
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    const newState = !bookMusicEnabled;
+                                    setBookMusicEnabled(newState);
 
-                                if (bookBackgroundMusicRef.current) {
-                                    if (newState) {
-                                        // Update volume when playing
-                                        bookBackgroundMusicRef.current.volume = 0.10;
-                                        bookBackgroundMusicRef.current.play().catch(err => {
-                                            console.warn('Could not play book music:', err);
-                                        });
-                                    } else {
-                                        bookBackgroundMusicRef.current.pause();
+                                    if (bookBackgroundMusicRef.current) {
+                                        if (newState) {
+                                            // Update volume when playing
+                                            bookBackgroundMusicRef.current.volume = bookMusicVolume;
+                                            bookBackgroundMusicRef.current.play().catch(err => {
+                                                console.warn('Could not play book music:', err);
+                                            });
+                                        } else {
+                                            bookBackgroundMusicRef.current.pause();
+                                        }
                                     }
-                                }
-                            }}
-                            className={`bg-black/50 backdrop-blur-md rounded-full p-3 hover:bg-black/70 transition-all border ${bookMusicEnabled
-                                ? 'border-yellow-400/50 shadow-lg shadow-yellow-400/20'
-                                : 'border-white/20'
-                                }`}
-                            title={bookMusicEnabled ? "Disable background music" : "Enable background music"}
-                        >
-                            <Music className={`w-6 h-6 ${bookMusicEnabled ? 'text-yellow-300' : 'text-white/50'}`} />
-                        </button>
+                                }}
+                                className={`bg-black/50 backdrop-blur-md rounded-full p-3 hover:bg-black/70 transition-all border ${bookMusicEnabled
+                                    ? 'border-yellow-400/50 shadow-lg shadow-yellow-400/20'
+                                    : 'border-white/20'
+                                    }`}
+                                title={bookMusicEnabled ? "Disable background music" : "Enable background music"}
+                            >
+                                <Music className={`w-6 h-6 ${bookMusicEnabled ? 'text-yellow-300' : 'text-white/50'}`} />
+                            </button>
+                            
+                            {/* Volume Slider - Only show when music is enabled */}
+                            {bookMusicEnabled && (
+                                <div className="flex items-center gap-2 bg-black/50 backdrop-blur-md rounded-full px-3 py-2 border border-white/20">
+                                    <Volume2 className="w-4 h-4 text-white/70" />
+                                    <input
+                                        type="range"
+                                        min="0"
+                                        max="1"
+                                        step="0.05"
+                                        value={bookMusicVolume}
+                                        onChange={(e) => {
+                                            e.stopPropagation();
+                                            const newVolume = parseFloat(e.target.value);
+                                            setBookMusicVolume(newVolume);
+                                            if (bookBackgroundMusicRef.current) {
+                                                bookBackgroundMusicRef.current.volume = newVolume;
+                                            }
+                                        }}
+                                        onClick={(e) => e.stopPropagation()}
+                                        className="w-20 h-1.5 bg-white/30 rounded-full appearance-none cursor-pointer
+                                            [&::-webkit-slider-thumb]:appearance-none
+                                            [&::-webkit-slider-thumb]:w-4
+                                            [&::-webkit-slider-thumb]:h-4
+                                            [&::-webkit-slider-thumb]:rounded-full
+                                            [&::-webkit-slider-thumb]:bg-yellow-400
+                                            [&::-webkit-slider-thumb]:shadow-md
+                                            [&::-webkit-slider-thumb]:cursor-pointer
+                                            [&::-moz-range-thumb]:w-4
+                                            [&::-moz-range-thumb]:h-4
+                                            [&::-moz-range-thumb]:rounded-full
+                                            [&::-moz-range-thumb]:bg-yellow-400
+                                            [&::-moz-range-thumb]:border-0
+                                            [&::-moz-range-thumb]:cursor-pointer"
+                                        title={`Volume: ${Math.round(bookMusicVolume * 100)}%`}
+                                    />
+                                </div>
+                            )}
+                        </>
                     ) : (
                         <div className="text-xs text-white/50 px-2">
                             {/* Debug: Show why button isn't showing */}

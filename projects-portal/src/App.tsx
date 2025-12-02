@@ -17,6 +17,7 @@ import Games from './pages/Games';
 import Lessons from './pages/Lessons';
 import LessonForm from './pages/LessonForm';
 import Notifications from './pages/Notifications';
+import MusicManagement from './pages/MusicManagement';
 
 function App() {
   return (
@@ -48,6 +49,7 @@ function App() {
             <Route path="lessons/new" element={<LessonForm />} />
             <Route path="lessons/edit/:id" element={<LessonForm />} />
             <Route path="notifications" element={<Notifications />} />
+            <Route path="music" element={<MusicManagement />} />
           </Route>
         </Routes>
       </Router>

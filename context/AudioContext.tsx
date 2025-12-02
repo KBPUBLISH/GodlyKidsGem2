@@ -1,5 +1,6 @@
 
 import React, { createContext, useContext, useState, useEffect, useRef, useCallback } from 'react';
+import { ApiService } from '../services/apiService';
 
 // --- Interfaces ---
 export interface AudioItem {
@@ -84,12 +85,19 @@ const AudioContext = createContext<AudioContextType>({
 
 export const useAudio = () => useContext(AudioContext);
 
-// Ambient Ocean Sound (Main App)
-const BG_MUSIC_URL = "https://res.cloudinary.com/dxh8fuq7b/video/upload/v1763747567/Seaside_Adventure_2025-11-21T174503_i3p43n.mp3";
-// Upbeat Game Music
-const GAME_MUSIC_URL = "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-2.mp3";
-// Energetic Workout Music
-const WORKOUT_MUSIC_URL = "https://res.cloudinary.com/dxh8fuq7b/video/upload/v1763747567/Jump_and_Spin_pczce5.mp3";
+// Default fallback URLs (used if backend music not configured)
+const DEFAULT_BG_MUSIC_URL = "https://res.cloudinary.com/dxh8fuq7b/video/upload/v1763747567/Seaside_Adventure_2025-11-21T174503_i3p43n.mp3";
+const DEFAULT_GAME_MUSIC_URL = "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-2.mp3";
+const DEFAULT_WORKOUT_MUSIC_URL = "https://res.cloudinary.com/dxh8fuq7b/video/upload/v1763747567/Jump_and_Spin_pczce5.mp3";
+
+// Music URLs (will be fetched from backend)
+let BG_MUSIC_URL = DEFAULT_BG_MUSIC_URL;
+let GAME_MUSIC_URL = DEFAULT_GAME_MUSIC_URL;
+let WORKOUT_MUSIC_URL = DEFAULT_WORKOUT_MUSIC_URL;
+
+// Music volumes from backend
+let BG_MUSIC_VOLUME = 0.5;
+let GAME_MUSIC_VOLUME = 0.5;
 
 export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     // --- Background Music State ---
@@ -333,14 +341,53 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         musicVolumeRef.current = musicVolume;
     }, [musicVolume]);
 
+    // State to track if music URLs have been loaded from backend
+    const [musicUrlsLoaded, setMusicUrlsLoaded] = useState(false);
+    
+    // Fetch music URLs from backend on mount
     useEffect(() => {
-        // Initialize BG audio elements (same as before)
+        const fetchMusicUrls = async () => {
+            try {
+                console.log('🎵 Fetching music URLs from backend...');
+                const musicData = await ApiService.getActiveMusic();
+                
+                if (musicData) {
+                    // Update music URLs if configured in backend
+                    if (musicData['app-background']?.audioUrl) {
+                        BG_MUSIC_URL = musicData['app-background'].audioUrl;
+                        BG_MUSIC_VOLUME = musicData['app-background'].defaultVolume || 0.5;
+                        console.log('✅ App background music:', BG_MUSIC_URL);
+                    }
+                    if (musicData['game-strength']?.audioUrl) {
+                        GAME_MUSIC_URL = musicData['game-strength'].audioUrl;
+                        GAME_MUSIC_VOLUME = musicData['game-strength'].defaultVolume || 0.5;
+                        console.log('✅ Game strength music:', GAME_MUSIC_URL);
+                    }
+                    // Note: workout music can be added as a target in the portal later
+                }
+                
+                setMusicUrlsLoaded(true);
+            } catch (error) {
+                console.warn('⚠️ Could not fetch music from backend, using defaults:', error);
+                setMusicUrlsLoaded(true); // Continue with defaults
+            }
+        };
+        
+        fetchMusicUrls();
+    }, []);
+
+    useEffect(() => {
+        // Wait for music URLs to be loaded before initializing audio
+        if (!musicUrlsLoaded) return;
+        
+        // Initialize BG audio elements
         if (!bgAudioRef.current) {
             bgAudioRef.current = new Audio(BG_MUSIC_URL);
             bgAudioRef.current.loop = true;
             bgAudioRef.current.volume = 0;
             bgAudioRef.current.preload = 'auto';
             bgAudioRef.current.crossOrigin = 'anonymous';
+            console.log('🎵 BG audio initialized with:', BG_MUSIC_URL);
         }
         if (!gameAudioRef.current) {
             gameAudioRef.current = new Audio(GAME_MUSIC_URL);
@@ -348,6 +395,7 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
             gameAudioRef.current.volume = 0;
             gameAudioRef.current.preload = 'auto';
             gameAudioRef.current.crossOrigin = 'anonymous';
+            console.log('🎵 Game audio initialized with:', GAME_MUSIC_URL);
         }
         if (!workoutAudioRef.current) {
             workoutAudioRef.current = new Audio(WORKOUT_MUSIC_URL);

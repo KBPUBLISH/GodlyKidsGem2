@@ -965,6 +965,29 @@ export const ApiService = {
     }
   },
 
+  // Get active music from backend (for background music, game music, etc.)
+  getActiveMusic: async (): Promise<Record<string, { audioUrl: string; defaultVolume: number; loop: boolean; name: string }> | null> => {
+    try {
+      const baseUrl = getApiBaseUrl();
+      console.log('🎵 Fetching active music from backend...');
+      const response = await fetchWithTimeout(`${baseUrl}music/active`, {
+        method: 'GET',
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        console.log('✅ Active music loaded:', Object.keys(data));
+        return data;
+      }
+      
+      console.warn('⚠️ Music endpoint returned non-OK status');
+      return null;
+    } catch (error) {
+      console.warn('⚠️ Could not fetch music from backend:', error);
+      return null;
+    }
+  },
+
   // Get all playlists (optionally filtered by status)
   getPlaylists: async (status?: 'draft' | 'published'): Promise<any[]> => {
     try {

@@ -152,8 +152,20 @@ router.post('/', async (req, res) => {
 // PUT update page
 router.put('/:id', async (req, res) => {
     try {
+        console.log('PUT /api/pages/:id - Updating page:', req.params.id);
+        console.log('PUT /api/pages/:id - Full request body:', JSON.stringify(req.body, null, 2));
+        
         const page = await Page.findById(req.params.id);
-        if (!page) return res.status(404).json({ message: 'Page not found' });
+        if (!page) {
+            console.error('PUT /api/pages/:id - Page not found:', req.params.id);
+            return res.status(404).json({ message: 'Page not found' });
+        }
+        
+        console.log('PUT /api/pages/:id - Found existing page:', {
+            id: page._id,
+            bookId: page.bookId,
+            pageNumber: page.pageNumber
+        });
 
         // Check if pageNumber is being changed and if it would create a duplicate
         if (req.body.pageNumber !== undefined && req.body.pageNumber !== page.pageNumber) {
@@ -300,6 +312,10 @@ router.put('/:id', async (req, res) => {
         res.json(pageObj);
     } catch (error) {
         console.error('Error updating page:', error);
+        console.error('Error name:', error.name);
+        console.error('Error message:', error.message);
+        console.error('Error stack:', error.stack);
+        
         if (error.code === 11000) {
             // Duplicate key error
             return res.status(400).json({
@@ -307,6 +323,22 @@ router.put('/:id', async (req, res) => {
                 error: 'DUPLICATE_PAGE_NUMBER'
             });
         }
+        
+        // Check for validation errors
+        if (error.name === 'ValidationError') {
+            const validationErrors = Object.keys(error.errors).map(key => ({
+                field: key,
+                message: error.errors[key].message,
+                value: error.errors[key].value
+            }));
+            console.error('Validation errors:', validationErrors);
+            return res.status(400).json({ 
+                message: 'Validation error', 
+                errors: validationErrors,
+                details: error.message 
+            });
+        }
+        
         res.status(400).json({ message: error.message });
     }
 });

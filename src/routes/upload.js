@@ -63,9 +63,9 @@ const generateFilePath = (bookId, type, filename, pageNumber = null) => {
 
     let finalFilename;
     if (type === 'pages' && pageNumber !== null) {
-        // For pages, include page number: page-1.jpg, page-2.jpg, etc.
+        // For pages, include page number AND timestamp for cache busting: page-1-1234567890.mp4
         const ext = path.extname(sanitizedFilename);
-        finalFilename = `page-${pageNumber}${ext}`;
+        finalFilename = `page-${pageNumber}-${timestamp}${ext}`;
     } else {
         finalFilename = `${timestamp}_${sanitizedFilename}`;
     }

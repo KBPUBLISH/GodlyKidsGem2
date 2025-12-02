@@ -38,6 +38,18 @@ const bookSchema = new mongoose.Schema({
         default: false,
     },
     
+    // Global read count (incremented when any user completes the book)
+    readCount: {
+        type: Number,
+        default: 0,
+    },
+    
+    // Global favorite count
+    favoriteCount: {
+        type: Number,
+        default: 0,
+    },
+    
     // Organized file structure per book
     files: {
         type: {

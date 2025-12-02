@@ -193,4 +193,58 @@ router.delete('/:id', async (req, res) => {
     }
 });
 
+// POST increment playlist play count
+router.post('/:id/play', async (req, res) => {
+    try {
+        const playlist = await Playlist.findByIdAndUpdate(
+            req.params.id,
+            { $inc: { playCount: 1 } },
+            { new: true }
+        );
+        
+        if (!playlist) {
+            return res.status(404).json({ message: 'Playlist not found' });
+        }
+        
+        console.log(`🎵 Playlist "${playlist.title}" play count incremented to ${playlist.playCount}`);
+        res.json({ playCount: playlist.playCount });
+    } catch (error) {
+        console.error('Error incrementing playlist play count:', error);
+        res.status(500).json({ message: error.message });
+    }
+});
+
+// POST increment individual song/episode play count
+router.post('/:playlistId/items/:itemId/play', async (req, res) => {
+    try {
+        const playlist = await Playlist.findById(req.params.playlistId);
+        
+        if (!playlist) {
+            return res.status(404).json({ message: 'Playlist not found' });
+        }
+        
+        const item = playlist.items.id(req.params.itemId);
+        if (!item) {
+            return res.status(404).json({ message: 'Item not found in playlist' });
+        }
+        
+        // Increment item play count
+        item.playCount = (item.playCount || 0) + 1;
+        
+        // Also increment playlist total play count
+        playlist.playCount = (playlist.playCount || 0) + 1;
+        
+        await playlist.save();
+        
+        console.log(`🎵 Song "${item.title}" play count: ${item.playCount}, Playlist total: ${playlist.playCount}`);
+        res.json({ 
+            itemPlayCount: item.playCount,
+            playlistPlayCount: playlist.playCount 
+        });
+    } catch (error) {
+        console.error('Error incrementing item play count:', error);
+        res.status(500).json({ message: error.message });
+    }
+});
+
 module.exports = router;

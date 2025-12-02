@@ -24,6 +24,11 @@ const audioItemSchema = new mongoose.Schema({
         type: Number,
         default: 0,
     },
+    // Play count for this specific song/episode
+    playCount: {
+        type: Number,
+        default: 0,
+    },
 }, { _id: true });
 
 const playlistSchema = new mongoose.Schema({

@@ -86,7 +86,15 @@ router.get('/active', async (req, res) => {
 });
 
 // Create or update music entry with file upload
-router.post('/upload', upload.single('audio'), async (req, res) => {
+router.post('/upload', (req, res, next) => {
+  upload.single('audio')(req, res, (err) => {
+    if (err) {
+      console.error('❌ Multer error:', err);
+      return res.status(400).json({ error: 'File upload error', details: err.message });
+    }
+    next();
+  });
+}, async (req, res) => {
   try {
     console.log('📤 Music upload request received');
     console.log('Body:', req.body);
@@ -173,8 +181,9 @@ router.post('/upload', upload.single('audio'), async (req, res) => {
     blobStream.end(req.file.buffer);
     
   } catch (error) {
-    console.error('Error uploading music:', error);
-    res.status(500).json({ error: 'Failed to upload music' });
+    console.error('❌ Error uploading music:', error);
+    console.error('Stack:', error.stack);
+    res.status(500).json({ error: 'Failed to upload music', details: error.message });
   }
 });
 

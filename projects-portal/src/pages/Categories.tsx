@@ -9,6 +9,7 @@ interface Category {
     description?: string;
     color: string;
     icon?: string;
+    showOnExplore?: boolean;
 }
 
 const Categories: React.FC = () => {
@@ -22,8 +23,9 @@ const Categories: React.FC = () => {
         description: '',
         color: '#6366f1',
         icon: '',
+        showOnExplore: false,
     });
-    const [filterType, setFilterType] = useState<'all' | 'book' | 'audio'>('all');
+    const [filterType, setFilterType] = useState<'all' | 'book' | 'audio' | 'explore'>('all');
     const [saving, setSaving] = useState(false);
     const [deleting, setDeleting] = useState<string | null>(null);
 
@@ -59,6 +61,7 @@ const Categories: React.FC = () => {
                 description: category.description || '',
                 color: category.color,
                 icon: category.icon || '',
+                showOnExplore: Boolean(category.showOnExplore),
             });
         } else {
             setEditingCategory(null);
@@ -68,6 +71,7 @@ const Categories: React.FC = () => {
                 description: '',
                 color: '#6366f1',
                 icon: '',
+                showOnExplore: false,
             });
         }
         setShowModal(true);
@@ -82,6 +86,7 @@ const Categories: React.FC = () => {
             description: '',
             color: '#6366f1',
             icon: '',
+            showOnExplore: false,
         });
     };
 
@@ -89,16 +94,38 @@ const Categories: React.FC = () => {
         e.preventDefault();
         setSaving(true);
         try {
+            // Ensure showOnExplore is always included as a boolean
+            const payload = {
+                ...formData,
+                showOnExplore: Boolean(formData.showOnExplore), // Explicitly convert to boolean
+            };
+            console.log('Submitting category form data:', payload);
+            console.log('showOnExplore value:', formData.showOnExplore, 'type:', typeof formData.showOnExplore);
             if (editingCategory) {
-                await axios.put(`http://localhost:5001/api/categories/${editingCategory._id}`, formData);
+                const response = await axios.put(`http://localhost:5001/api/categories/${editingCategory._id}`, payload);
+                console.log('Update response full:', JSON.stringify(response.data, null, 2));
+                console.log('showOnExplore in response:', response.data.showOnExplore, 'type:', typeof response.data.showOnExplore);
+                
+                // Verify by fetching the category again
+                const verifyResponse = await axios.get(`http://localhost:5001/api/categories/${editingCategory._id}`);
+                console.log('Verified category after update:', JSON.stringify(verifyResponse.data, null, 2));
+                console.log('Verified showOnExplore:', verifyResponse.data.showOnExplore);
             } else {
-                await axios.post('http://localhost:5001/api/categories', formData);
+                const response = await axios.post('http://localhost:5001/api/categories', payload);
+                console.log('Create response:', response.data);
+                console.log('showOnExplore in response:', response.data.showOnExplore);
             }
             await fetchCategories();
             handleCloseModal();
         } catch (error: any) {
             console.error('Error saving category:', error);
-            alert(error.response?.data?.error || 'Failed to save category');
+            const errorMessage = error.response?.data?.error || error.message || 'Failed to save category';
+            console.error('Error details:', {
+                status: error.response?.status,
+                data: error.response?.data,
+                message: errorMessage
+            });
+            alert(errorMessage);
         } finally {
             setSaving(false);
         }
@@ -154,6 +181,14 @@ const Categories: React.FC = () => {
                         >
                             Audio
                         </button>
+                        <button
+                            onClick={() => setFilterType('explore')}
+                            className={`px-3 py-1 rounded transition-colors ${
+                                filterType === 'explore' ? 'bg-white shadow-sm text-indigo-600' : 'text-gray-600'
+                            }`}
+                        >
+                            Explore
+                        </button>
                     </div>
                     <button
                         onClick={() => handleOpenModal()}
@@ -188,13 +223,20 @@ const Categories: React.FC = () => {
                                     <div>
                                         <div className="flex items-center gap-2">
                                             <h3 className="text-xl font-semibold text-gray-800">{category.name}</h3>
-                                            <span className={`text-xs px-2 py-0.5 rounded ${
-                                                category.type === 'book' 
-                                                    ? 'bg-blue-100 text-blue-700' 
-                                                    : 'bg-purple-100 text-purple-700'
-                                            }`}>
-                                                {category.type === 'book' ? 'Book' : 'Audio'}
-                                            </span>
+                                            <div className="flex items-center gap-2">
+                                                <span className={`text-xs px-2 py-0.5 rounded ${
+                                                    category.type === 'book' 
+                                                        ? 'bg-blue-100 text-blue-700' 
+                                                        : 'bg-purple-100 text-purple-700'
+                                                }`}>
+                                                    {category.type === 'book' ? 'Book' : 'Audio'}
+                                                </span>
+                                                {category.showOnExplore && (
+                                                    <span className="text-xs px-2 py-0.5 rounded bg-green-100 text-green-700">
+                                                        Explore
+                                                    </span>
+                                                )}
+                                            </div>
                                         </div>
                                         {category.description && (
                                             <p className="text-sm text-gray-600 mt-1">{category.description}</p>
@@ -257,6 +299,24 @@ const Categories: React.FC = () => {
                                     <option value="book">Book</option>
                                     <option value="audio">Audio</option>
                                 </select>
+                            </div>
+                            <div>
+                                <label className="flex items-center gap-2 cursor-pointer mb-2">
+                                    <input
+                                        type="checkbox"
+                                        checked={formData.showOnExplore === true}
+                                        onChange={(e) => {
+                                            const newValue = e.target.checked;
+                                            console.log('Checkbox changed:', newValue, 'Current formData:', formData.showOnExplore);
+                                            setFormData({ ...formData, showOnExplore: newValue });
+                                        }}
+                                        className="w-4 h-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500"
+                                    />
+                                    <span className="text-sm font-medium text-gray-700">Show on Explore Page</span>
+                                </label>
+                                <p className="text-xs text-gray-500 mt-1 ml-6">
+                                    When enabled, this category will appear on the explore page for organizing content
+                                </p>
                             </div>
                             <div>
                                 <label className="block text-sm font-medium text-gray-700 mb-2">

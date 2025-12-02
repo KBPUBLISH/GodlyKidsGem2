@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeft, Upload, Plus, Trash2, GripVertical, Music, Save } from 'lucide-react';
+import { ArrowLeft, Upload, Plus, Trash2, GripVertical, Music, Save, X } from 'lucide-react';
 import axios from 'axios';
 
 interface AudioItem {
@@ -24,10 +24,13 @@ interface PlaylistFormData {
     author: string;
     description: string;
     coverImage: string;
-    category: string; // Category name
+    category: string; // Category name (for backward compatibility)
+    categories?: string[]; // Multiple categories
     type: 'Song' | 'Audiobook';
     items: AudioItem[];
     status: 'draft' | 'published';
+    minAge?: number;
+    level?: string;
 }
 
 const PlaylistForm: React.FC = () => {
@@ -42,10 +45,14 @@ const PlaylistForm: React.FC = () => {
         description: '',
         coverImage: '',
         category: '',
+        categories: [],
         type: 'Song',
         items: [],
         status: 'draft',
+        minAge: undefined,
+        level: '',
     });
+    const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
 
     useEffect(() => {
         fetchCategories();
@@ -253,23 +260,81 @@ const PlaylistForm: React.FC = () => {
 
                         <div>
                             <label className="block text-sm font-medium text-gray-700 mb-2">
-                                Category
+                                Categories (Select Multiple)
                             </label>
-                            <select
-                                value={formData.category}
-                                onChange={(e) => setFormData({ ...formData, category: e.target.value })}
-                                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
-                            >
+                            <div className="border border-gray-300 rounded-lg p-3 max-h-48 overflow-y-auto bg-white">
                                 {categories.length === 0 ? (
-                                    <option value="">No categories available</option>
+                                    <p className="text-sm text-gray-500">No categories available</p>
                                 ) : (
                                     categories.map((cat) => (
-                                        <option key={cat._id} value={cat.name}>
-                                            {cat.name}
-                                        </option>
+                                        <label
+                                            key={cat._id}
+                                            className="flex items-center gap-2 p-2 hover:bg-gray-50 rounded cursor-pointer"
+                                        >
+                                            <input
+                                                type="checkbox"
+                                                checked={selectedCategories.includes(cat.name)}
+                                                onChange={(e) => {
+                                                    if (e.target.checked) {
+                                                        setSelectedCategories([...selectedCategories, cat.name]);
+                                                    } else {
+                                                        setSelectedCategories(selectedCategories.filter(c => c !== cat.name));
+                                                    }
+                                                }}
+                                                className="w-4 h-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500"
+                                            />
+                                            <span className="text-sm text-gray-700">{cat.name}</span>
+                                        </label>
                                     ))
                                 )}
-                            </select>
+                            </div>
+                            {selectedCategories.length > 0 && (
+                                <div className="mt-2 flex flex-wrap gap-2">
+                                    {selectedCategories.map((catName) => (
+                                        <span
+                                            key={catName}
+                                            className="inline-flex items-center gap-1 px-2 py-1 bg-indigo-100 text-indigo-700 rounded text-xs"
+                                        >
+                                            {catName}
+                                            <button
+                                                type="button"
+                                                onClick={() => setSelectedCategories(selectedCategories.filter(c => c !== catName))}
+                                                className="hover:text-indigo-900"
+                                            >
+                                                <X className="w-3 h-3" />
+                                            </button>
+                                        </span>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
+
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-2">
+                                Age Level (e.g., "3+", "5+")
+                            </label>
+                            <input
+                                type="text"
+                                value={formData.level || ''}
+                                onChange={(e) => setFormData({ ...formData, level: e.target.value })}
+                                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                                placeholder="3+"
+                            />
+                        </div>
+
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-2">
+                                Minimum Age
+                            </label>
+                            <input
+                                type="number"
+                                min={0}
+                                max={18}
+                                value={formData.minAge || ''}
+                                onChange={(e) => setFormData({ ...formData, minAge: e.target.value === '' ? undefined : parseInt(e.target.value, 10) })}
+                                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                                placeholder="3"
+                            />
                         </div>
                     </div>
 

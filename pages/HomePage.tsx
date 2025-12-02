@@ -49,6 +49,12 @@ const HomePage: React.FC = () => {
   const [lessons, setLessons] = useState<any[]>([]);
   const [lessonsLoading, setLessonsLoading] = useState(true);
   const [weekLessons, setWeekLessons] = useState<Map<string, any>>(new Map());
+  
+  // Explore categories state
+  const [exploreCategories, setExploreCategories] = useState<any[]>([]);
+  const [categoriesLoading, setCategoriesLoading] = useState(true);
+  const [playlists, setPlaylists] = useState<any[]>([]);
+  const [playlistsLoading, setPlaylistsLoading] = useState(true);
 
   const scrollRef = useRef<HTMLDivElement>(null);
   const lastScrollY = useRef(0);
@@ -146,9 +152,22 @@ const HomePage: React.FC = () => {
     navigate(`/book/${id}`, { state: { from: '/home' } });
   };
 
-  // Fetch lessons
+  const handleItemClick = (item: any) => {
+    // Check if it's a playlist (has items array) or a book
+    if (item.items && Array.isArray(item.items)) {
+      // It's a playlist
+      navigate(`/playlist/${item._id || item.id}`);
+    } else {
+      // It's a book
+      handleBookClick(item.id || item._id);
+    }
+  };
+
+  // Fetch lessons, categories, and playlists
   useEffect(() => {
     fetchLessons();
+    fetchExploreCategories();
+    fetchPlaylists();
   }, []);
 
   const fetchLessons = async () => {
@@ -219,10 +238,55 @@ const HomePage: React.FC = () => {
     navigate(`/lesson/${lesson._id}`);
   };
 
+  // Fetch explore categories
+  const fetchExploreCategories = async () => {
+    try {
+      setCategoriesLoading(true);
+      const categories = await ApiService.getCategories(undefined, true); // Get categories with showOnExplore=true
+      // Double-check: filter to only include categories with showOnExplore: true
+      const exploreOnly = categories.filter(cat => cat.showOnExplore === true);
+      setExploreCategories(exploreOnly);
+      console.log(`✅ Loaded ${exploreOnly.length} explore categories:`, exploreOnly.map(c => c.name));
+    } catch (error) {
+      console.error('❌ Error fetching explore categories:', error);
+    } finally {
+      setCategoriesLoading(false);
+    }
+  };
+
+  // Fetch playlists
+  const fetchPlaylists = async () => {
+    try {
+      setPlaylistsLoading(true);
+      const data = await ApiService.getPlaylists('published');
+      setPlaylists(data);
+    } catch (error) {
+      console.error('❌ Error fetching playlists:', error);
+    } finally {
+      setPlaylistsLoading(false);
+    }
+  };
+
+  // Group books and playlists by category
+  const getBooksByCategory = (categoryName: string) => {
+    return books.filter(book => {
+      const bookCategories = (book as any).categories && Array.isArray((book as any).categories) 
+        ? (book as any).categories 
+        : (book.category ? [book.category] : []);
+      return bookCategories.includes(categoryName);
+    });
+  };
+
+  const getPlaylistsByCategory = (categoryName: string) => {
+    return playlists.filter(playlist => {
+      const playlistCategories = (playlist as any).categories && Array.isArray((playlist as any).categories) 
+        ? (playlist as any).categories 
+        : (playlist.category ? [playlist.category] : []);
+      return playlistCategories.includes(categoryName);
+    });
+  };
+
   const featuredBooks = books.slice(0, 5); // Top 5 featured
-  const activityBooks = books.filter(b => b.category === 'Activity Books');
-  const freeBooks = books.filter(b => b.category === 'Books Gone Free');
-  const youngReaders = books.filter(b => b.category === 'Young Readers');
 
   return (
     <div
@@ -392,15 +456,15 @@ const HomePage: React.FC = () => {
                     return (
                       <div
                         key={dateKey}
-                        className={`relative w-[calc((100vw-48px-60px)/5)] flex-shrink-0 ${status === 'locked' ? 'cursor-not-allowed' : status !== 'empty' ? 'cursor-pointer' : ''}`}
+                        className={`relative w-[calc((100vw-48px-40px)/4)] flex-shrink-0 ${status === 'locked' ? 'cursor-not-allowed' : status !== 'empty' ? 'cursor-pointer' : ''}`}
                         onClick={() => lesson && status !== 'locked' && handleLessonClick(lesson)}
                       >
-                        {/* Day Label */}
+                        {/* Day Label - Back to top */}
                         <div className="text-center mb-1.5">
-                          <div className={`text-[10px] font-semibold ${isToday ? 'text-[#FFD700]' : 'text-white/70'}`}>
+                          <div className={`text-xs font-semibold ${isToday ? 'text-[#FFD700]' : 'text-white/70'}`}>
                             {getDayLabel(date)}
                           </div>
-                          <div className={`text-sm font-bold ${isToday ? 'text-[#FFD700]' : 'text-white'}`}>
+                          <div className={`text-base font-bold ${isToday ? 'text-[#FFD700]' : 'text-white'}`}>
                             {getDayNumber(date)}
                           </div>
                         </div>
@@ -454,12 +518,6 @@ const HomePage: React.FC = () => {
                                 )}
                               </div>
 
-                              {/* Title Overlay */}
-                              <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent p-2">
-                                <p className="text-white text-[10px] font-semibold line-clamp-2 leading-tight">
-                                  {lesson.title}
-                                </p>
-                              </div>
                             </>
                           ) : null}
                         </div>
@@ -472,38 +530,42 @@ const HomePage: React.FC = () => {
           )}
         </section>
 
-        <section>
-          <SectionTitle title="Activity Books" />
-          <div className="flex overflow-x-auto space-x-4 pb-4 no-scrollbar pr-4">
-            {loading ? <div className="text-white p-4 font-display">Loading treasures...</div> :
-              (activityBooks.length > 0 ? activityBooks : books.slice(0, 3)).map(book => (
-                <BookCard key={book.id} book={book} onClick={handleBookClick} />
-              ))
-            }
-          </div>
-        </section>
+        {/* Explore Categories Sections */}
+        {categoriesLoading ? (
+          <div className="text-white/70 text-center py-4 px-4">Loading categories...</div>
+        ) : exploreCategories.length === 0 ? (
+          <div className="text-white/70 text-center py-4 px-4">No explore categories available</div>
+        ) : (
+          exploreCategories
+            .filter(category => category.showOnExplore === true) // Additional safety filter
+            .map((category) => {
+              const categoryBooks = getBooksByCategory(category.name);
+              const categoryPlaylists = getPlaylistsByCategory(category.name);
+              const allItems = [...categoryBooks, ...categoryPlaylists];
+              
+              if (allItems.length === 0) return null;
+              
+              return (
+                <section key={category._id} className="mt-6">
+                  <SectionTitle 
+                    title={category.name} 
+                    icon={category.icon}
+                    color={category.color}
+                  />
+                  <div className="grid grid-cols-2 gap-4 mt-4">
+                    {allItems.map((item) => (
+                      <BookCard
+                        key={item.id || item._id}
+                        book={item}
+                        onClick={() => handleItemClick(item)}
+                      />
+                    ))}
+                  </div>
+                </section>
+              );
+            })
+        )}
 
-        <section>
-          <SectionTitle title="Books Gone Free" />
-          <div className="flex overflow-x-auto space-x-4 pb-4 no-scrollbar pr-4">
-            {loading ? null :
-              (freeBooks.length > 0 ? freeBooks : books.slice(3, 5)).map(book => (
-                <BookCard key={book.id} book={book} onClick={handleBookClick} />
-              ))
-            }
-          </div>
-        </section>
-
-        <section>
-          <SectionTitle title="Young Readers" />
-          <div className="flex overflow-x-auto space-x-4 pb-4 no-scrollbar pr-4">
-            {loading ? null :
-              (youngReaders.length > 0 ? youngReaders : books.slice(2, 6)).map(book => (
-                <BookCard key={book.id} book={book} onClick={handleBookClick} />
-              ))
-            }
-          </div>
-        </section>
       </div>
 
       <style>{`

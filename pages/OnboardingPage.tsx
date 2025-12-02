@@ -636,16 +636,15 @@ const OnboardingPage: React.FC = () => {
                             }`}
                         >
                             <div className="absolute top-0 right-0 bg-[#FFD700] text-[#3E1F07] text-[10px] font-extrabold px-3 py-1 rounded-bl-lg">
-                                SAVE 70%
+                                BEST VALUE
                             </div>
                             <div className="px-4 py-4 flex items-center justify-between">
                                 <div className="flex flex-col text-left">
                                     <span className="font-display font-bold text-lg text-[#3E1F07]">Annual Plan</span>
-                                    <span className="text-xs text-[#8B4513]">$0.55 / week</span>
+                                    <span className="text-xs text-[#8B4513]">$1.54 / week</span>
                                 </div>
                                 <div className="flex flex-col items-end pr-2">
-                                        <span className="font-display font-extrabold text-2xl text-[#3E1F07]">$29</span>
-                                        <span className="text-[10px] text-red-500 line-through font-bold opacity-70">$99.99</span>
+                                        <span className="font-display font-extrabold text-2xl text-[#3E1F07]">$79.99</span>
                                 </div>
                             </div>
                             {selectedPlan === 'annual' && (
@@ -669,7 +668,7 @@ const OnboardingPage: React.FC = () => {
                                     <span className="font-display font-bold text-lg text-[#3E1F07]">Monthly</span>
                                 </div>
                                 <div className="flex flex-col items-end">
-                                     <span className="font-display font-extrabold text-2xl text-[#3E1F07]">$7.99</span>
+                                     <span className="font-display font-extrabold text-2xl text-[#3E1F07]">$11.99</span>
                                 </div>
                             </div>
                             {selectedPlan === 'monthly' && (

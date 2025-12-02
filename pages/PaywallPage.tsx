@@ -72,22 +72,19 @@ const PaywallPage: React.FC = () => {
                     >
                         {selectedPlan === 'annual' && (
                             <div className="bg-[#fdd835] py-1 text-center shadow-sm absolute top-0 left-0 right-0 z-10">
-                                <span className="text-[#3e2723] text-[10px] font-extrabold uppercase tracking-widest">SAVE 70% • BEST VALUE</span>
+                                <span className="text-[#3e2723] text-[10px] font-extrabold uppercase tracking-widest">BEST VALUE</span>
                             </div>
                         )}
                         <div className={`px-4 ${selectedPlan === 'annual' ? 'pt-8 pb-3' : 'py-4'} flex items-center justify-between`}>
                             <div className="flex flex-col text-left">
                                 <span className={`font-display font-bold text-lg ${selectedPlan === 'annual' ? 'text-[#004d40]' : 'text-[#546e7a]'}`}>Annual</span>
-                                <span className="text-xs text-[#00796b] font-semibold bg-[#b2dfdb]/50 px-1.5 py-0.5 rounded-md w-fit">$0.55 / week</span>
+                                <span className="text-xs text-[#00796b] font-semibold bg-[#b2dfdb]/50 px-1.5 py-0.5 rounded-md w-fit">$1.54 / week</span>
                             </div>
                             <div className="flex flex-col items-end">
                                  <div className="flex items-center gap-1">
-                                    <span className="font-display font-extrabold text-2xl text-[#00695c]">$29</span>
+                                    <span className="font-display font-extrabold text-2xl text-[#00695c]">$79.99</span>
                                     <span className="text-xs text-[#004d40] font-bold">/yr</span>
                                  </div>
-                                 {selectedPlan === 'annual' && (
-                                     <span className="text-[10px] text-[#d32f2f] line-through font-bold opacity-70">$99.99</span>
-                                 )}
                             </div>
                         </div>
                         
@@ -116,7 +113,7 @@ const PaywallPage: React.FC = () => {
                             </div>
                             <div className="flex flex-col items-end">
                                 <div className="flex items-center gap-1">
-                                     <span className="font-display font-extrabold text-2xl text-[#00695c]">$7.99</span>
+                                     <span className="font-display font-extrabold text-2xl text-[#00695c]">$11.99</span>
                                      <span className="text-xs text-[#004d40] font-bold">/mo</span>
                                 </div>
                             </div>
@@ -139,7 +136,7 @@ const PaywallPage: React.FC = () => {
                     className="w-full bg-gradient-to-b from-[#009688] to-[#00796b] hover:from-[#26a69a] hover:to-[#00897b] text-white font-display font-bold text-lg py-4 rounded-2xl shadow-[0_4px_0_#004d40,0_8px_15px_rgba(0,0,0,0.2)] active:translate-y-[4px] active:shadow-[0_0_0_#004d40] transition-all mb-8 border-t border-[#4db6ac] relative overflow-hidden group"
                 >
                     <span className="relative z-10">
-                        {selectedPlan === 'annual' ? 'Start Free Trial & Save 70%' : 'Subscribe Monthly'}
+                        {selectedPlan === 'annual' ? 'Start Free Trial' : 'Subscribe Monthly'}
                     </span>
                     {/* Shine effect */}
                     <div className="absolute top-0 -left-full w-full h-full bg-gradient-to-r from-transparent via-white/20 to-transparent skew-x-[-20deg] group-hover:animate-[shimmer_1s_infinite]"></div>

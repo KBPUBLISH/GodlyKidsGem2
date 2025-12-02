@@ -12,6 +12,10 @@ const categorySchema = new mongoose.Schema({
         required: true,
         default: 'book',
     },
+    showOnExplore: {
+        type: Boolean,
+        default: false,
+    },
     description: {
         type: String,
     },

@@ -22,6 +22,10 @@ const bookSchema = new mongoose.Schema({
         type: String,
         default: 'Other',
     },
+    categories: {
+        type: [String],
+        default: [],
+    },
     status: {
         type: String,
         enum: ['draft', 'published', 'archived'],
@@ -184,6 +188,19 @@ const bookSchema = new mongoose.Schema({
             title: { type: String, required: true },
             url: { type: String, required: true },
             coverImage: { type: String }, // URL to cover image
+            description: { type: String },
+            createdAt: { type: Date, default: Date.now },
+        }],
+        default: [],
+    },
+    
+    // Book-specific videos (MP4 videos that unlock after reading)
+    bookVideos: {
+        type: [{
+            _id: { type: mongoose.Schema.Types.ObjectId, auto: true },
+            title: { type: String, required: true },
+            videoUrl: { type: String, required: true }, // URL to MP4 video file
+            thumbnailUrl: { type: String }, // URL to thumbnail image
             description: { type: String },
             createdAt: { type: Date, default: Date.now },
         }],

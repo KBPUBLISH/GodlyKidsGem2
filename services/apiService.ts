@@ -958,16 +958,44 @@ export const ApiService = {
     }
   },
 
-  // Get all categories (returns full category objects with name, color, icon, etc.)
-  getCategories: async (): Promise<Array<{ _id: string; name: string; description?: string; color: string; icon?: string }>> => {
+  // Get all playlists (optionally filtered by status)
+  getPlaylists: async (status?: 'draft' | 'published'): Promise<any[]> => {
     try {
       const baseUrl = getApiBaseUrl();
-      console.log(`🔍 Fetching categories from API`);
+      const queryParam = status ? `?status=${status}` : '';
+      const response = await fetchWithTimeout(`${baseUrl}playlists${queryParam}`, {
+        method: 'GET',
+      });
 
+      if (response.ok) {
+        const data = await response.json();
+        return Array.isArray(data) ? data : [];
+      }
+      return [];
+    } catch (error) {
+      console.error('❌ Failed to fetch playlists:', error);
+      return [];
+    }
+  },
+
+  // Get all categories (returns full category objects with name, color, icon, etc.)
+  // Optional type parameter: 'book' or 'audio' to filter categories
+  // Optional explore parameter: true to get only categories that show on explore page
+  getCategories: async (type?: 'book' | 'audio', explore?: boolean): Promise<Array<{ _id: string; name: string; description?: string; color: string; icon?: string; showOnExplore?: boolean }>> => {
+    try {
+      const baseUrl = getApiBaseUrl();
+      console.log(`🔍 Fetching categories from API${type ? ` (type: ${type})` : ''}${explore ? ' (explore: true)' : ''}`);
+
+      // Build endpoint with filters if provided
+      const queryParams = [];
+      if (type) queryParams.push(`type=${type}`);
+      if (explore) queryParams.push(`explore=true`);
+      const queryString = queryParams.length > 0 ? `?${queryParams.join('&')}` : '';
+      
       // Try different endpoint variations for categories
       const categoryEndpoints = [
-        `${baseUrl}categories`, // New categories endpoint
-        `${baseUrl}categories`,
+        `${baseUrl}categories${queryString}`, // New categories endpoint with filters
+        `${baseUrl}categories${queryString}`,
         `${baseUrl}books/categories`,
         `${baseUrl}genres`,
         `${baseUrl}books/genres`,
@@ -983,7 +1011,7 @@ export const ApiService = {
             const data = await response.json();
             const categories = Array.isArray(data) ? data : (data.categories || data.data || []);
             if (categories.length > 0) {
-              console.log(`✅ Found ${categories.length} categories`);
+              console.log(`✅ Found ${categories.length} categories${type ? ` (filtered by type: ${type})` : ''}${explore ? ' (explore page)' : ''}`);
               // Return full category objects
               return categories.map((cat: any) => ({
                 _id: cat._id || cat.id || '',
@@ -991,6 +1019,7 @@ export const ApiService = {
                 description: cat.description,
                 color: cat.color || '#6366f1',
                 icon: cat.icon,
+                showOnExplore: cat.showOnExplore || false,
               }));
             }
           }

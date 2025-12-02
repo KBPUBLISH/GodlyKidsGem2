@@ -1,7 +1,8 @@
-import React, { useState, useEffect } from 'react';
+
+import React, { useState, useEffect, lazy, Suspense } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { Crown, Music, Hammer, Wrench, User } from 'lucide-react';
-import ShopModal from '../features/ShopModal';
+import { Crown, Music, Hammer, Wrench } from 'lucide-react';
+const ShopModal = lazy(() => import('../features/ShopModal'));
 import AvatarDetailModal from '../features/AvatarDetailModal';
 import { useUser } from '../../context/UserContext';
 import ErrorBoundary from '../common/ErrorBoundary';
@@ -189,9 +190,11 @@ const Header: React.FC<HeaderProps> = ({ isVisible, title = "GODLY KIDS" }) => {
         </div>
       </header>
 
-      <ErrorBoundary>
-        <ShopModal isOpen={isShopOpen} onClose={() => setIsShopOpen(false)} />
-      </ErrorBoundary>
+      {isShopOpen && (
+        <Suspense fallback={null}>
+          <ShopModal isOpen={isShopOpen} onClose={() => setIsShopOpen(false)} />
+        </Suspense>
+      )}
       <AvatarDetailModal isOpen={isDetailOpen} onClose={() => setIsDetailOpen(false)} onEdit={() => setIsShopOpen(true)} />
     </>
   );

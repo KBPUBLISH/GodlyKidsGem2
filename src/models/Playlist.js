@@ -63,6 +63,11 @@ const playlistSchema = new mongoose.Schema({
         enum: ['draft', 'published'],
         default: 'draft',
     },
+    // Access control - whether content requires membership
+    isMembersOnly: {
+        type: Boolean,
+        default: false,
+    },
     minAge: {
         type: Number,
         min: 0,

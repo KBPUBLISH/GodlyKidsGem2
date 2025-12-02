@@ -47,6 +47,10 @@ const playlistSchema = new mongoose.Schema({
         default: 'Music',
         // No enum restriction - allows any category name from the Categories collection
     },
+    categories: {
+        type: [String],
+        default: [],
+    },
     type: {
         type: String,
         enum: ['Song', 'Audiobook'],
@@ -58,6 +62,14 @@ const playlistSchema = new mongoose.Schema({
         type: String,
         enum: ['draft', 'published'],
         default: 'draft',
+    },
+    minAge: {
+        type: Number,
+        min: 0,
+        max: 18,
+    },
+    level: {
+        type: String, // e.g., "3+", "5+"
     },
     playCount: {
         type: Number,

@@ -208,6 +208,18 @@ router.put('/:id', async (req, res) => {
             delete req.body.pages; // Remove from body to avoid duplicate assignment
         }
 
+        // Handle bookVideos separately
+        if (req.body.bookVideos !== undefined) {
+            book.bookVideos = req.body.bookVideos;
+            delete req.body.bookVideos;
+        }
+        
+        // Handle bookGames separately
+        if (req.body.bookGames !== undefined) {
+            book.bookGames = req.body.bookGames;
+            delete req.body.bookGames;
+        }
+        
         // Update all other fields
         Object.assign(book, req.body);
         

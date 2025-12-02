@@ -56,10 +56,13 @@ router.post('/', async (req, res) => {
             description: req.body.description || '',
             coverImage: (req.body.coverImage && req.body.coverImage.trim() !== '') ? req.body.coverImage : null, // Convert empty strings to null
             category: req.body.category || 'Music',
+            categories: req.body.categories || [],
             type: req.body.type,
             items: processedItems,
             status: req.body.status || 'draft',
         });
+        
+        console.log('📝 Creating playlist with categories:', req.body.categories);
 
         console.log('📝 About to save new playlist...');
         const newPlaylist = await playlist.save();
@@ -96,6 +99,11 @@ router.put('/:id', async (req, res) => {
         if (req.body.description !== undefined) playlist.description = req.body.description;
         if (req.body.coverImage !== undefined) playlist.coverImage = req.body.coverImage;
         if (req.body.category !== undefined) playlist.category = req.body.category;
+        if (req.body.categories !== undefined) {
+            playlist.categories = req.body.categories;
+            playlist.markModified('categories');
+            console.log('📝 Setting categories:', req.body.categories);
+        }
         if (req.body.type !== undefined) playlist.type = req.body.type;
         if (req.body.status !== undefined) playlist.status = req.body.status;
         if (req.body.items !== undefined) {

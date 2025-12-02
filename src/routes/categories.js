@@ -112,6 +112,7 @@ router.put('/:id', async (req, res) => {
     try {
         const { name, type, description, color, icon, showOnExplore } = req.body;
         
+        // Fetch the existing category
         const category = await Category.findById(req.params.id);
         if (!category) {
             return res.status(404).json({ error: 'Category not found' });
@@ -135,63 +136,50 @@ router.put('/:id', async (req, res) => {
                 _id: { $ne: category._id } 
             });
             if (existing) {
-            return res.status(400).json({ 
-                error: `Category "${newName}" already exists for ${newType} categories. Each category type (book, audio) can have its own set of categories with the same names.` 
-            });
+                return res.status(400).json({ 
+                    error: `Category "${newName}" already exists for ${newType} categories. Each category type (book, audio) can have its own set of categories with the same names.` 
+                });
             }
         }
 
+        // Convert showOnExplore to boolean
+        const showOnExploreBool = showOnExplore === true || showOnExplore === 'true' || showOnExplore === 1 || showOnExplore === '1';
+        
+        console.log('Updating category:', {
+            id: req.params.id,
+            showOnExplore: showOnExploreBool,
+            showOnExploreFromBody: showOnExplore,
+            showOnExploreType: typeof showOnExplore
+        });
+
+        // Explicitly set all fields on the document
         category.name = newName;
         category.type = newType;
         category.description = description !== undefined ? description : category.description;
         category.color = color || category.color;
         category.icon = icon !== undefined ? icon : category.icon;
-        // Always update showOnExplore if provided in request body
-        // Handle both true and false values explicitly
-        console.log('showOnExplore from req.body:', showOnExplore, 'type:', typeof showOnExplore, 'undefined?', showOnExplore === undefined, 'null?', showOnExplore === null);
-        if (showOnExplore !== undefined && showOnExplore !== null) {
-            // Convert various truthy/falsy values to boolean
-            const boolValue = showOnExplore === true || showOnExplore === 'true' || showOnExplore === 1 || showOnExplore === '1';
-            category.showOnExplore = boolValue;
-            console.log('Setting showOnExplore to:', boolValue, 'from input:', showOnExplore);
-            console.log('Category.showOnExplore after setting:', category.showOnExplore);
-        } else {
-            console.log('showOnExplore not provided in request, keeping existing value:', category.showOnExplore);
-        }
+        
+        // Force set showOnExplore and mark as modified to ensure Mongoose saves it
+        category.showOnExplore = showOnExploreBool;
+        category.markModified('showOnExplore');
+        
         category.updatedAt = Date.now();
         
-        console.log('Updating category:', {
+        // Save the document
+        await category.save();
+
+        console.log('Category saved:', {
             id: category._id,
             name: category.name,
             showOnExplore: category.showOnExplore,
-            showOnExploreFromBody: showOnExplore,
-            showOnExploreType: typeof showOnExplore
-        });
-
-        // Save the category
-        const saved = await category.save();
-        console.log('Category saved, showOnExplore:', saved.showOnExplore);
-        
-        // Verify the saved value by fetching fresh from database
-        const savedCategory = await Category.findById(category._id).lean();
-        console.log('Category after save (lean):', {
-            id: savedCategory._id,
-            name: savedCategory.name,
-            showOnExplore: savedCategory.showOnExplore,
-            showOnExploreType: typeof savedCategory.showOnExplore,
-            allFields: Object.keys(savedCategory)
+            showOnExploreType: typeof category.showOnExplore
         });
         
-        // Ensure showOnExplore is explicitly included in response
-        const responseData = {
-            ...savedCategory,
-            showOnExplore: savedCategory.showOnExplore !== undefined ? savedCategory.showOnExplore : false
-        };
-        console.log('Response data before sending:', responseData);
-        console.log('showOnExplore in responseData:', responseData.showOnExplore);
-        
+        // Return the saved document as plain object
+        const responseData = category.toObject();
         res.json(responseData);
     } catch (error) {
+        console.error('Category update error:', error);
         if (error.code === 11000) {
             res.status(400).json({ error: 'Category name must be unique' });
         } else {

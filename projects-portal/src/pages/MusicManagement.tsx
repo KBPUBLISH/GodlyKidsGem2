@@ -39,6 +39,11 @@ const MusicManagement: React.FC = () => {
   const [loop, setLoop] = useState(true);
   const [audioFile, setAudioFile] = useState<File | null>(null);
   
+  // Quick upload state
+  const [quickUploading, setQuickUploading] = useState(false);
+  const [quickUploadUrl, setQuickUploadUrl] = useState<string | null>(null);
+  const quickFileInputRef = useRef<HTMLInputElement>(null);
+  
   // Audio preview
   const [playingId, setPlayingId] = useState<string | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
@@ -197,6 +202,38 @@ const MusicManagement: React.FC = () => {
     return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
   };
 
+  // Quick upload - just get URL
+  const handleQuickUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    
+    setQuickUploading(true);
+    setQuickUploadUrl(null);
+    setError(null);
+    
+    try {
+      const formData = new FormData();
+      formData.append('audio', file);
+      
+      const response = await apiClient.post('/api/upload/mp3', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+        timeout: 60000, // 60 second timeout for large files
+      });
+      
+      setQuickUploadUrl(response.data.url);
+      setSuccess(`Uploaded! Copy the URL below.`);
+    } catch (err: any) {
+      console.error('Quick upload error:', err);
+      setError(err.response?.data?.message || 'Failed to upload file');
+    } finally {
+      setQuickUploading(false);
+      // Reset file input
+      if (quickFileInputRef.current) {
+        quickFileInputRef.current.value = '';
+      }
+    }
+  };
+
   const getTargetLabel = (targetValue: string) => {
     const target = targets.find(t => t.value === targetValue);
     return target?.label || targetValue;
@@ -221,6 +258,44 @@ const MusicManagement: React.FC = () => {
         <p className="text-gray-600 mt-1">
           Upload and manage background music and sound effects for different parts of the app.
         </p>
+      </div>
+
+      {/* Quick Upload Section */}
+      <div className="bg-gradient-to-r from-purple-50 to-indigo-50 border border-purple-200 rounded-lg p-6">
+        <h2 className="text-lg font-semibold text-purple-900 mb-2">🚀 Quick Upload (Get URL)</h2>
+        <p className="text-sm text-purple-700 mb-4">
+          Upload an MP3 file and get a URL to hardcode in the app. No database required.
+        </p>
+        
+        <div className="flex items-center gap-4">
+          <input
+            ref={quickFileInputRef}
+            type="file"
+            accept=".mp3,.wav,.ogg,.m4a,.aac,audio/*"
+            onChange={handleQuickUpload}
+            disabled={quickUploading}
+            className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-purple-100 file:text-purple-700 hover:file:bg-purple-200 disabled:opacity-50"
+          />
+          {quickUploading && (
+            <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-purple-600"></div>
+          )}
+        </div>
+        
+        {quickUploadUrl && (
+          <div className="mt-4 p-3 bg-white rounded-lg border border-purple-300">
+            <p className="text-sm text-gray-600 mb-2">✅ Your URL (click to copy):</p>
+            <div 
+              onClick={() => {
+                navigator.clipboard.writeText(quickUploadUrl);
+                setSuccess('URL copied to clipboard!');
+              }}
+              className="p-2 bg-gray-100 rounded font-mono text-sm break-all cursor-pointer hover:bg-gray-200 transition-colors"
+              title="Click to copy"
+            >
+              {quickUploadUrl}
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Alerts */}

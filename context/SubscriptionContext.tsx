@@ -1,0 +1,159 @@
+import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
+import RevenueCatService, { PREMIUM_ENTITLEMENT_ID } from '../services/revenueCatService';
+
+interface SubscriptionContextType {
+  // State
+  isInitialized: boolean;
+  isLoading: boolean;
+  isPremium: boolean;
+  isNativeApp: boolean;
+  
+  // Actions
+  checkPremiumStatus: () => Promise<boolean>;
+  purchase: (plan: 'annual' | 'monthly') => Promise<{ success: boolean; error?: string }>;
+  restorePurchases: () => Promise<{ success: boolean; error?: string }>;
+  
+  // For testing in web browser
+  setTestPremium: (isPremium: boolean) => void;
+}
+
+const SubscriptionContext = createContext<SubscriptionContextType | undefined>(undefined);
+
+interface SubscriptionProviderProps {
+  children: ReactNode;
+}
+
+export const SubscriptionProvider: React.FC<SubscriptionProviderProps> = ({ children }) => {
+  const [isInitialized, setIsInitialized] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isPremium, setIsPremium] = useState(false);
+  const [isNativeApp, setIsNativeApp] = useState(false);
+
+  // Initialize on mount
+  useEffect(() => {
+    const initialize = async () => {
+      setIsLoading(true);
+      
+      try {
+        // Check if running in native app
+        const native = RevenueCatService.isNativeApp();
+        setIsNativeApp(native);
+        
+        // Initialize RevenueCat (DeSpia handles this for native)
+        await RevenueCatService.init();
+        setIsInitialized(true);
+        
+        // Check premium status
+        const hasPremium = await RevenueCatService.checkPremiumAccess();
+        setIsPremium(hasPremium);
+        
+        console.log('🔐 Subscription initialized:', { native, isPremium: hasPremium });
+      } catch (error) {
+        console.error('Error initializing subscription context:', error);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    initialize();
+
+    // Listen for premium status changes from DeSpia
+    const handlePremiumChange = (event: CustomEvent) => {
+      console.log('📱 Premium status changed:', event.detail);
+      setIsPremium(event.detail?.isPremium ?? false);
+    };
+
+    window.addEventListener('revenuecat:premiumChanged' as any, handlePremiumChange);
+    window.addEventListener('despia:subscriptionChanged' as any, handlePremiumChange);
+
+    return () => {
+      window.removeEventListener('revenuecat:premiumChanged' as any, handlePremiumChange);
+      window.removeEventListener('despia:subscriptionChanged' as any, handlePremiumChange);
+    };
+  }, []);
+
+  // Check premium status
+  const checkPremiumStatus = useCallback(async (): Promise<boolean> => {
+    try {
+      const hasPremium = await RevenueCatService.checkPremiumAccess();
+      setIsPremium(hasPremium);
+      return hasPremium;
+    } catch (error) {
+      console.error('Error checking premium status:', error);
+      return false;
+    }
+  }, []);
+
+  // Purchase a subscription
+  const purchase = useCallback(async (plan: 'annual' | 'monthly'): Promise<{ success: boolean; error?: string }> => {
+    setIsLoading(true);
+    
+    try {
+      const result = await RevenueCatService.purchase(plan);
+      
+      if (result.success) {
+        // Re-check premium status after purchase
+        const hasPremium = await RevenueCatService.checkPremiumAccess();
+        setIsPremium(hasPremium);
+      }
+      
+      return result;
+    } catch (error: any) {
+      return { success: false, error: error.message || 'Purchase failed' };
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
+  // Restore purchases
+  const restorePurchases = useCallback(async (): Promise<{ success: boolean; error?: string }> => {
+    setIsLoading(true);
+    
+    try {
+      const result = await RevenueCatService.restorePurchases();
+      
+      if (result.success) {
+        setIsPremium(result.isPremium);
+      }
+      
+      return { success: result.success, error: result.error };
+    } catch (error: any) {
+      return { success: false, error: error.message || 'Restore failed' };
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
+  // For web testing
+  const setTestPremium = useCallback((premium: boolean) => {
+    RevenueCatService.setTestPremium(premium);
+    setIsPremium(premium);
+  }, []);
+
+  const value: SubscriptionContextType = {
+    isInitialized,
+    isLoading,
+    isPremium,
+    isNativeApp,
+    checkPremiumStatus,
+    purchase,
+    restorePurchases,
+    setTestPremium,
+  };
+
+  return (
+    <SubscriptionContext.Provider value={value}>
+      {children}
+    </SubscriptionContext.Provider>
+  );
+};
+
+export const useSubscription = (): SubscriptionContextType => {
+  const context = useContext(SubscriptionContext);
+  if (context === undefined) {
+    throw new Error('useSubscription must be used within a SubscriptionProvider');
+  }
+  return context;
+};
+
+export default SubscriptionContext;

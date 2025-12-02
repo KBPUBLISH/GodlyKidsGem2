@@ -1,26 +1,87 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Check, X } from 'lucide-react';
+import { Check, X, Loader2, RefreshCw } from 'lucide-react';
 import { useUser } from '../context/UserContext';
+import { useSubscription } from '../context/SubscriptionContext';
 import ParentGateModal from '../components/features/ParentGateModal';
 
 const PaywallPage: React.FC = () => {
   const navigate = useNavigate();
   const { subscribe } = useUser();
+  const { 
+    isLoading, 
+    isPremium,
+    isNativeApp,
+    purchase, 
+    restorePurchases,
+  } = useSubscription();
+  
   const [selectedPlan, setSelectedPlan] = useState<'annual' | 'monthly'>('annual');
   const [showParentGate, setShowParentGate] = useState(false);
+  const [isPurchasing, setIsPurchasing] = useState(false);
+  const [isRestoring, setIsRestoring] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  // If user already has premium, redirect to home
+  useEffect(() => {
+    if (isPremium) {
+      subscribe(); // Update local state
+      navigate('/home');
+    }
+  }, [isPremium, navigate, subscribe]);
 
   const handleSubscribeClick = () => {
+    setError(null);
     // Show parent gate before processing
     setShowParentGate(true);
   };
 
-  const handleGateSuccess = () => {
-    // Simulate subscription process
-    subscribe();
-    // Navigate to home to show the "Gold Crown"
-    navigate('/home');
+  const handleGateSuccess = async () => {
+    setShowParentGate(false);
+    setIsPurchasing(true);
+    setError(null);
+
+    try {
+      // Purchase through DeSpia/RevenueCat native integration
+      const result = await purchase(selectedPlan);
+
+      if (result.success) {
+        // Update local state
+        subscribe();
+        navigate('/home');
+      } else if (result.error && result.error !== 'Purchase cancelled') {
+        setError(result.error);
+      }
+    } catch (err: any) {
+      console.error('Purchase error:', err);
+      setError(err.message || 'An error occurred during purchase');
+    } finally {
+      setIsPurchasing(false);
+    }
+  };
+
+  const handleRestorePurchases = async () => {
+    setIsRestoring(true);
+    setError(null);
+
+    try {
+      const result = await restorePurchases();
+
+      if (result.success) {
+        // isPremium state will be updated by the context
+        // If premium was restored, useEffect will redirect
+        if (!isPremium) {
+          setError('No previous purchases found');
+        }
+      } else if (result.error) {
+        setError(result.error);
+      }
+    } catch (err: any) {
+      setError(err.message || 'Failed to restore purchases');
+    } finally {
+      setIsRestoring(false);
+    }
   };
 
   return (
@@ -58,6 +119,13 @@ const PaywallPage: React.FC = () => {
                     Safe, ad-free Christian stories kids love.
                 </p>
 
+                {/* Error Message */}
+                {error && (
+                  <div className="w-full bg-red-100 border border-red-300 text-red-700 px-4 py-2 rounded-lg mb-4 text-sm">
+                    {error}
+                  </div>
+                )}
+
                 {/* Pricing Options */}
                 <div className="w-full space-y-3 mb-6">
                     
@@ -78,11 +146,15 @@ const PaywallPage: React.FC = () => {
                         <div className={`px-4 ${selectedPlan === 'annual' ? 'pt-8 pb-3' : 'py-4'} flex items-center justify-between`}>
                             <div className="flex flex-col text-left">
                                 <span className={`font-display font-bold text-lg ${selectedPlan === 'annual' ? 'text-[#004d40]' : 'text-[#546e7a]'}`}>Annual</span>
-                                <span className="text-xs text-[#00796b] font-semibold bg-[#b2dfdb]/50 px-1.5 py-0.5 rounded-md w-fit">$1.54 / week</span>
+                                <span className="text-xs text-[#00796b] font-semibold bg-[#b2dfdb]/50 px-1.5 py-0.5 rounded-md w-fit">
+                                  $1.54 / week
+                                </span>
                             </div>
                             <div className="flex flex-col items-end">
                                  <div className="flex items-center gap-1">
-                                    <span className="font-display font-extrabold text-2xl text-[#00695c]">$79.99</span>
+                                    <span className="font-display font-extrabold text-2xl text-[#00695c]">
+                                      $79.99
+                                    </span>
                                     <span className="text-xs text-[#004d40] font-bold">/yr</span>
                                  </div>
                             </div>
@@ -113,7 +185,9 @@ const PaywallPage: React.FC = () => {
                             </div>
                             <div className="flex flex-col items-end">
                                 <div className="flex items-center gap-1">
-                                     <span className="font-display font-extrabold text-2xl text-[#00695c]">$11.99</span>
+                                     <span className="font-display font-extrabold text-2xl text-[#00695c]">
+                                       $11.99
+                                     </span>
                                      <span className="text-xs text-[#004d40] font-bold">/mo</span>
                                 </div>
                             </div>
@@ -133,13 +207,40 @@ const PaywallPage: React.FC = () => {
                 {/* CTA Button */}
                 <button 
                     onClick={handleSubscribeClick}
-                    className="w-full bg-gradient-to-b from-[#009688] to-[#00796b] hover:from-[#26a69a] hover:to-[#00897b] text-white font-display font-bold text-lg py-4 rounded-2xl shadow-[0_4px_0_#004d40,0_8px_15px_rgba(0,0,0,0.2)] active:translate-y-[4px] active:shadow-[0_0_0_#004d40] transition-all mb-8 border-t border-[#4db6ac] relative overflow-hidden group"
+                    disabled={isPurchasing || isRestoring || isLoading}
+                    className="w-full bg-gradient-to-b from-[#009688] to-[#00796b] hover:from-[#26a69a] hover:to-[#00897b] text-white font-display font-bold text-lg py-4 rounded-2xl shadow-[0_4px_0_#004d40,0_8px_15px_rgba(0,0,0,0.2)] active:translate-y-[4px] active:shadow-[0_0_0_#004d40] transition-all mb-4 border-t border-[#4db6ac] relative overflow-hidden group disabled:opacity-70 disabled:cursor-not-allowed"
                 >
-                    <span className="relative z-10">
-                        {selectedPlan === 'annual' ? 'Start Free Trial' : 'Subscribe Monthly'}
+                    <span className="relative z-10 flex items-center justify-center gap-2">
+                        {isPurchasing ? (
+                          <>
+                            <Loader2 className="w-5 h-5 animate-spin" />
+                            Processing...
+                          </>
+                        ) : (
+                          selectedPlan === 'annual' ? 'Start Free Trial' : 'Subscribe Monthly'
+                        )}
                     </span>
                     {/* Shine effect */}
                     <div className="absolute top-0 -left-full w-full h-full bg-gradient-to-r from-transparent via-white/20 to-transparent skew-x-[-20deg] group-hover:animate-[shimmer_1s_infinite]"></div>
+                </button>
+
+                {/* Restore Purchases Button */}
+                <button
+                  onClick={handleRestorePurchases}
+                  disabled={isPurchasing || isRestoring || isLoading}
+                  className="text-[#00796b] text-sm font-semibold flex items-center gap-2 mb-6 hover:text-[#004d40] transition-colors disabled:opacity-50"
+                >
+                  {isRestoring ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      Restoring...
+                    </>
+                  ) : (
+                    <>
+                      <RefreshCw className="w-4 h-4" />
+                      Restore Purchases
+                    </>
+                  )}
                 </button>
 
                 {/* Features */}
@@ -163,6 +264,13 @@ const PaywallPage: React.FC = () => {
             <p className="text-[#006064]/50 text-[10px] font-medium mt-8 text-center px-6 max-w-xs">
                 Subscription automatically renews unless auto-renew is turned off at least 24-hours before the end of the current period.
             </p>
+
+            {/* Debug info for development */}
+            {!isNativeApp && (
+              <p className="text-[#006064]/30 text-[10px] mt-4">
+                Running in web mode (DeSpia will handle native purchases)
+              </p>
+            )}
         </div>
 
         <ParentGateModal 

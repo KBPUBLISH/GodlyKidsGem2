@@ -26,6 +26,7 @@ import BottomNavigation from './components/layout/BottomNavigation';
 import { BooksProvider } from './context/BooksContext';
 import { UserProvider } from './context/UserContext';
 import { AudioProvider } from './context/AudioContext';
+import { SubscriptionProvider } from './context/SubscriptionContext';
 import NotificationService from './services/notificationService';
 
 // --- ASSETS & HELPERS ---
@@ -189,8 +190,9 @@ const App: React.FC = () => {
   return (
     <AudioProvider>
       <UserProvider>
-        <BooksProvider>
-          <HashRouter>
+        <SubscriptionProvider>
+          <BooksProvider>
+            <HashRouter>
             <Layout>
               <Routes>
                 <Route path="/" element={<LandingPage />} />
@@ -216,7 +218,8 @@ const App: React.FC = () => {
               </Routes>
             </Layout>
           </HashRouter>
-        </BooksProvider>
+          </BooksProvider>
+        </SubscriptionProvider>
       </UserProvider>
     </AudioProvider>
   );

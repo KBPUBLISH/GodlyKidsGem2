@@ -11,6 +11,7 @@ interface BookFormData {
     category: string;
     coverImage: string;
     status: string;
+    orientation: 'portrait' | 'landscape';
     isMembersOnly: boolean;
 }
 
@@ -34,6 +35,7 @@ const BookForm: React.FC = () => {
         category: '',
         coverImage: '',
         status: 'draft',
+        orientation: 'portrait',
         isMembersOnly: false,
     });
 
@@ -292,8 +294,8 @@ const BookForm: React.FC = () => {
                     </div>
                 </div>
 
-                {/* Status & Access */}
-                <div className="grid grid-cols-2 gap-4 mb-6">
+                {/* Status, Orientation & Access */}
+                <div className="grid grid-cols-3 gap-4 mb-6">
                     <div>
                         <label htmlFor="status" className="block text-sm font-medium text-gray-700 mb-2">
                             Status
@@ -309,6 +311,35 @@ const BookForm: React.FC = () => {
                             <option value="published">Published</option>
                             <option value="archived">Archived</option>
                         </select>
+                    </div>
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                            Orientation
+                        </label>
+                        <div 
+                            onClick={() => setFormData({ ...formData, orientation: formData.orientation === 'portrait' ? 'landscape' : 'portrait' })}
+                            className={`w-full rounded-lg border text-base px-4 py-3 transition cursor-pointer min-h-[44px] flex items-center justify-between ${
+                                formData.orientation === 'landscape' 
+                                    ? 'bg-blue-50 border-blue-300 text-blue-800' 
+                                    : 'bg-purple-50 border-purple-300 text-purple-800'
+                            }`}
+                        >
+                            <span className="font-medium">
+                                {formData.orientation === 'landscape' ? '📺 Landscape' : '📱 Portrait'}
+                            </span>
+                            <div className={`w-12 h-6 rounded-full relative transition-colors ${
+                                formData.orientation === 'landscape' ? 'bg-blue-400' : 'bg-purple-400'
+                            }`}>
+                                <div className={`absolute top-1 w-4 h-4 rounded-full bg-white shadow transition-transform ${
+                                    formData.orientation === 'landscape' ? 'translate-x-7' : 'translate-x-1'
+                                }`} />
+                            </div>
+                        </div>
+                        <p className="text-xs text-gray-500 mt-1">
+                            {formData.orientation === 'landscape' 
+                                ? 'Horizontal view for wider videos' 
+                                : 'Vertical view (default)'}
+                        </p>
                     </div>
                     <div>
                         <label className="block text-sm font-medium text-gray-700 mb-2">

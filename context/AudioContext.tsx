@@ -85,23 +85,13 @@ const AudioContext = createContext<AudioContextType>({
 
 export const useAudio = () => useContext(AudioContext);
 
-// Default fallback URLs (used if backend music not configured)
-// All music hosted on GCS for better native app compatibility
-const DEFAULT_BG_MUSIC_URL = "https://storage.googleapis.com/productiongk/music/1764719601331_app-background.mp3";
-const DEFAULT_GAME_MUSIC_URL = "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-2.mp3";
-const DEFAULT_WORKOUT_MUSIC_URL = "https://storage.googleapis.com/productiongk/music/1764719639973_workout.mp3";
-
-// Music URLs (will be fetched from backend)
-let BG_MUSIC_URL = DEFAULT_BG_MUSIC_URL;
-let GAME_MUSIC_URL = DEFAULT_GAME_MUSIC_URL;
-let WORKOUT_MUSIC_URL = DEFAULT_WORKOUT_MUSIC_URL;
-
-// Music volumes from backend
-let BG_MUSIC_VOLUME = 0.5;
-let GAME_MUSIC_VOLUME = 0.5;
+// Hardcoded Music URLs (GCS for reliability)
+const BG_MUSIC_URL = "https://storage.googleapis.com/productiongk/music/1764722776514_app-background.mp3";
+const GAME_MUSIC_URL = "https://storage.googleapis.com/productiongk/music/1764719639973_workout.mp3"; // Using workout music as game fallback if needed
+const WORKOUT_MUSIC_URL = "https://storage.googleapis.com/productiongk/music/1764719639973_workout.mp3";
 
 export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-    // --- Background Music State ---
+    // --- State ---
     const [musicVolume, setMusicVolumeState] = useState<number>(() => {
         const saved = localStorage.getItem('godly_kids_music_volume');
         return saved ? parseFloat(saved) : 0.5;
@@ -113,6 +103,8 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     });
     const [sfxEnabled, setSfxEnabled] = useState(true);
     const [musicMode, setMusicMode] = useState<'bg' | 'game' | 'workout'>('bg');
+    
+    // Initialize force paused based on URL (e.g. if landing directly on book reader)
     const [musicForcePaused, setMusicForcePaused] = useState(() => {
         const path = window.location.pathname + window.location.hash;
         return path.includes('/book-reader') || path.includes('/read/');
@@ -126,11 +118,11 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     const [currentTime, setCurrentTime] = useState(0);
     const [duration, setDuration] = useState(0);
 
-    // Refs
+    // --- Refs ---
     const bgAudioRef = useRef<HTMLAudioElement | null>(null);
     const gameAudioRef = useRef<HTMLAudioElement | null>(null);
     const workoutAudioRef = useRef<HTMLAudioElement | null>(null);
-    const playlistAudioRef = useRef<HTMLAudioElement | null>(null); // New ref for playlist audio
+    const playlistAudioRef = useRef<HTMLAudioElement | null>(null);
     const audioContextRef = useRef<AudioContext | null>(null);
 
     // Initialize Audio Context lazily
@@ -140,6 +132,106 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         }
         return audioContextRef.current;
     }, []);
+
+    // --- Initialization of Background Audio ---
+    useEffect(() => {
+        // BG Audio
+        bgAudioRef.current = new Audio(BG_MUSIC_URL);
+        bgAudioRef.current.loop = true;
+        bgAudioRef.current.volume = 0.15;
+        bgAudioRef.current.preload = 'auto';
+        bgAudioRef.current.crossOrigin = 'anonymous';
+
+        // Game Audio
+        gameAudioRef.current = new Audio(GAME_MUSIC_URL);
+        gameAudioRef.current.loop = true;
+        gameAudioRef.current.volume = 0.25;
+        gameAudioRef.current.preload = 'auto';
+        gameAudioRef.current.crossOrigin = 'anonymous';
+
+        // Workout Audio
+        workoutAudioRef.current = new Audio(WORKOUT_MUSIC_URL);
+        workoutAudioRef.current.loop = true;
+        workoutAudioRef.current.volume = 0.3;
+        workoutAudioRef.current.preload = 'auto';
+        workoutAudioRef.current.crossOrigin = 'anonymous';
+
+        console.log('🎵 Audio System Initialized with hardcoded URLs');
+
+        return () => {
+            bgAudioRef.current?.pause();
+            gameAudioRef.current?.pause();
+            workoutAudioRef.current?.pause();
+        };
+    }, []);
+
+    // --- Reactive Playback Logic ---
+    // This replaces the complex interval loop
+    useEffect(() => {
+        const bg = bgAudioRef.current;
+        const game = gameAudioRef.current;
+        const workout = workoutAudioRef.current;
+
+        if (!bg || !game || !workout) return;
+
+        const shouldPlay = musicEnabled && !musicForcePaused;
+
+        if (!shouldPlay) {
+            // Pause all if disabled or force paused
+            bg.pause();
+            game.pause();
+            workout.pause();
+            return;
+        }
+
+        // Helper to play one and pause others
+        const playSelected = (toPlay: HTMLAudioElement, others: HTMLAudioElement[]) => {
+            others.forEach(a => a.pause());
+            if (toPlay.paused) {
+                toPlay.play().catch(e => {
+                    // Auto-play might be blocked until user interaction
+                    // console.warn('Autoplay prevented:', e); 
+                });
+            }
+        };
+
+        if (musicMode === 'bg') {
+            playSelected(bg, [game, workout]);
+        } else if (musicMode === 'game') {
+            playSelected(game, [bg, workout]);
+        } else if (musicMode === 'workout') {
+            playSelected(workout, [bg, game]);
+        }
+
+    }, [musicEnabled, musicForcePaused, musicMode]);
+
+    // --- User Interaction Unlock ---
+    useEffect(() => {
+        const unlock = () => {
+            // Resume AudioContext if suspended
+            if (audioContextRef.current?.state === 'suspended') {
+                audioContextRef.current.resume();
+            }
+
+            // Try to play background music if it should be playing
+            if (musicEnabled && !musicForcePaused) {
+                const bg = bgAudioRef.current;
+                if (bg && musicMode === 'bg' && bg.paused) {
+                    bg.play().then(() => {
+                        console.log('🎵 BG Music unlocked by user interaction');
+                    }).catch(e => console.warn('Unlock failed:', e));
+                }
+            }
+        };
+
+        const events = ['click', 'touchstart', 'keydown'];
+        events.forEach(evt => window.addEventListener(evt, unlock, { once: true }));
+
+        return () => {
+            events.forEach(evt => window.removeEventListener(evt, unlock));
+        };
+    }, [musicEnabled, musicForcePaused, musicMode]);
+
 
     // --- SOUND GENERATORS (Synthesizers) ---
     const playTone = useCallback((freq: number, type: OscillatorType, duration: number, vol: number = 0.1) => {
@@ -207,8 +299,6 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
             });
 
             playlistAudioRef.current.addEventListener('ended', () => {
-                // Auto-advance logic handled in a separate effect or function
-                // We'll trigger it via state change or direct call
                 handleTrackEnd();
             });
         }
@@ -239,7 +329,6 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
                     const playPromise = playlistAudioRef.current.play();
                     if (playPromise !== undefined) {
                         playPromise.catch((e) => {
-                            // Ignore AbortError - it's expected when audio is paused before play completes
                             if (e.name !== 'AbortError' && e.name !== 'NotAllowedError') {
                                 console.error("Play error:", e);
                             }
@@ -268,7 +357,7 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         // Ensure background music is paused when playlist starts
         setMusicPaused(true);
         
-        // Increment play count in database
+        // Increment play count
         const playlistId = (playlist as any)._id || (playlist as any).id;
         const track = playlist.items[startIndex];
         const trackId = (track as any)._id || (track as any).id;
@@ -317,240 +406,22 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         setMusicPaused(false);
     }, []);
 
-
-    // --- BACKGROUND MUSIC LOGIC ---
-
     const setGameMode = useCallback((active: boolean, type: 'default' | 'workout' = 'default') => {
         if (!active) {
             setMusicMode('bg');
-            if (bgAudioRef.current) bgAudioRef.current.pause();
-            if (gameAudioRef.current) gameAudioRef.current.pause();
-            if (workoutAudioRef.current) workoutAudioRef.current.pause();
         } else {
             setMusicMode(type === 'workout' ? 'workout' : 'game');
         }
     }, []);
 
-    const musicForcePausedRef = useRef(musicForcePaused);
-    useEffect(() => {
-        musicForcePausedRef.current = musicForcePaused;
-    }, [musicForcePaused]);
-
-    // Use ref to track musicEnabled to avoid stale closure in interval
-    const musicEnabledRef = useRef(musicEnabled);
-    useEffect(() => {
-        musicEnabledRef.current = musicEnabled;
-        console.log('🎵 musicEnabled ref updated:', musicEnabled);
-    }, [musicEnabled]);
-
-    // Use ref to track musicMode and musicVolume
-    const musicModeRef = useRef(musicMode);
-    const musicVolumeRef = useRef(musicVolume);
-    useEffect(() => {
-        musicModeRef.current = musicMode;
-    }, [musicMode]);
-    useEffect(() => {
-        musicVolumeRef.current = musicVolume;
-    }, [musicVolume]);
-
-    // State to track if music URLs have been loaded from backend
-    const [musicUrlsLoaded, setMusicUrlsLoaded] = useState(false);
-    
-    // Fetch music URLs from backend on mount
-    useEffect(() => {
-        const fetchMusicUrls = async () => {
-            try {
-                console.log('🎵 Fetching music URLs from backend...');
-                const musicData = await ApiService.getActiveMusic();
-                
-                if (musicData) {
-                    // Update music URLs if configured in backend
-                    if (musicData['app-background']?.audioUrl) {
-                        BG_MUSIC_URL = musicData['app-background'].audioUrl;
-                        BG_MUSIC_VOLUME = musicData['app-background'].defaultVolume || 0.5;
-                        console.log('✅ App background music:', BG_MUSIC_URL);
-                    }
-                    if (musicData['game-strength']?.audioUrl) {
-                        GAME_MUSIC_URL = musicData['game-strength'].audioUrl;
-                        GAME_MUSIC_VOLUME = musicData['game-strength'].defaultVolume || 0.5;
-                        console.log('✅ Game strength music:', GAME_MUSIC_URL);
-                    }
-                    // Note: workout music can be added as a target in the portal later
-                }
-                
-                setMusicUrlsLoaded(true);
-            } catch (error) {
-                console.warn('⚠️ Could not fetch music from backend, using defaults:', error);
-                setMusicUrlsLoaded(true); // Continue with defaults
-            }
-        };
-        
-        fetchMusicUrls();
-    }, []);
-
-    useEffect(() => {
-        // Wait for music URLs to be loaded before initializing audio
-        if (!musicUrlsLoaded) return;
-        
-        // Initialize BG audio elements
-        if (!bgAudioRef.current) {
-            bgAudioRef.current = new Audio(BG_MUSIC_URL);
-            bgAudioRef.current.loop = true;
-            bgAudioRef.current.volume = 0;
-            bgAudioRef.current.preload = 'auto';
-            bgAudioRef.current.crossOrigin = 'anonymous';
-            console.log('🎵 BG audio initialized with:', BG_MUSIC_URL);
-        }
-        if (!gameAudioRef.current) {
-            gameAudioRef.current = new Audio(GAME_MUSIC_URL);
-            gameAudioRef.current.loop = true;
-            gameAudioRef.current.volume = 0;
-            gameAudioRef.current.preload = 'auto';
-            gameAudioRef.current.crossOrigin = 'anonymous';
-            console.log('🎵 Game audio initialized with:', GAME_MUSIC_URL);
-        }
-        if (!workoutAudioRef.current) {
-            workoutAudioRef.current = new Audio(WORKOUT_MUSIC_URL);
-            workoutAudioRef.current.loop = true;
-            workoutAudioRef.current.volume = 0;
-            workoutAudioRef.current.preload = 'auto';
-            workoutAudioRef.current.crossOrigin = 'anonymous';
-        }
-
-        const bg = bgAudioRef.current;
-        const game = gameAudioRef.current;
-        const workout = workoutAudioRef.current;
-
-        // Log initial state
-        console.log('🎵 Audio master loop starting...', {
-            musicEnabled: musicEnabledRef.current,
-            musicForcePaused: musicForcePausedRef.current,
-            musicMode: musicModeRef.current,
-            bgUrl: BG_MUSIC_URL
-        });
-
-        const masterLoop = setInterval(() => {
-            // Read current values from refs to avoid stale closures
-            const isMusicEnabled = musicEnabledRef.current;
-            const isForcePaused = musicForcePausedRef.current;
-            const currentMode = musicModeRef.current;
-            const currentVolume = musicVolumeRef.current;
-
-            // 1. FORCE PAUSED? (e.g. Book Reader OR Playlist Player Active)
-            if (isForcePaused) {
-                if (!bg.paused) bg.pause();
-                if (!game.paused) game.pause();
-                if (!workout.paused) workout.pause();
-                return;
-            }
-
-            // 2. Music Disabled?
-            if (!isMusicEnabled) {
-                if (!bg.paused) {
-                    bg.pause();
-                }
-                if (!game.paused) game.pause();
-                if (!workout.paused) workout.pause();
-                return;
-            }
-
-            // Helper function to safely play audio
-            const safePlay = (audio: HTMLAudioElement, name: string) => {
-                // Double-check conditions before playing using refs
-                if (musicForcePausedRef.current || !musicEnabledRef.current) {
-                    return;
-                }
-                if (audio.paused) {
-                    // Log readyState for debugging
-                    if (audio.readyState < 2) {
-                        console.log(`🎵 ${name} audio not ready yet (readyState: ${audio.readyState})`);
-                    }
-                    // Try to play even if readyState is low - browser will handle buffering
-                    const playPromise = audio.play();
-                    if (playPromise !== undefined) {
-                        playPromise
-                            .then(() => {
-                                console.log(`🎵 ${name} audio started playing successfully`);
-                            })
-                            .catch((error) => {
-                                // Ignore AbortError - it's expected when audio is paused before play completes
-                                if (error.name !== 'AbortError') {
-                                    console.warn(`🎵 ${name} audio play error:`, error.name, error.message);
-                                }
-                            });
-                    }
-                }
-            };
-
-            // 3. Normal BG Music Logic
-            if (currentMode === 'bg') {
-                safePlay(bg, 'BG');
-                bg.volume = currentVolume * 0.25;
-                if (!game.paused) game.pause();
-                if (!workout.paused) workout.pause();
-            }
-            else if (currentMode === 'game') {
-                safePlay(game, 'Game');
-                game.volume = currentVolume * 0.3;
-                if (!bg.paused) bg.pause();
-                if (!workout.paused) workout.pause();
-            }
-            else if (currentMode === 'workout') {
-                safePlay(workout, 'Workout');
-                workout.volume = currentVolume * 0.4;
-                if (!bg.paused) bg.pause();
-                if (!game.paused) game.pause();
-            }
-        }, 500); // Increased interval to reduce console spam
-
-        const unlockAudio = () => {
-            console.log('🎵 User interaction detected, attempting to unlock audio...');
-            if (musicForcePausedRef.current) {
-                console.log('🎵 Music force paused, not unlocking');
-                return;
-            }
-            if (audioContextRef.current?.state === 'suspended') {
-                audioContextRef.current.resume();
-            }
-            // Try to play the appropriate audio based on current mode
-            if (musicEnabledRef.current) {
-                const currentMode = musicModeRef.current;
-                if (currentMode === 'bg' && bg) {
-                    bg.play().then(() => {
-                        console.log('🎵 BG music unlocked and playing after user interaction');
-                    }).catch(e => console.warn('🎵 BG play after interaction failed:', e.message));
-                } else if (currentMode === 'game' && game) {
-                    game.play().catch(e => console.warn('🎵 Game play after interaction failed:', e.message));
-                } else if (currentMode === 'workout' && workout) {
-                    workout.play().catch(e => console.warn('🎵 Workout play after interaction failed:', e.message));
-                }
-            }
-        };
-
-        // Add multiple event listeners for user interaction
-        const interactionEvents = ['click', 'touchstart', 'keydown'];
-        interactionEvents.forEach(event => {
-            window.addEventListener(event, unlockAudio, { once: true });
-        });
-
-        return () => {
-            clearInterval(masterLoop);
-            interactionEvents.forEach(event => {
-                window.removeEventListener(event, unlockAudio);
-            });
-        };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, []); // Only run once on mount - refs handle state changes
-
-    const toggleMusic = () => {
+    const toggleMusic = useCallback(() => {
         setMusicEnabled(prev => {
             const newState = !prev;
             localStorage.setItem('godly_kids_music_enabled', newState.toString());
             console.log('🎵 Music toggled:', newState ? 'ON' : 'OFF');
             return newState;
         });
-    };
-    const toggleSfx = () => setSfxEnabled(prev => !prev);
+    }, []);
 
     const setMusicVolume = useCallback((volume: number) => {
         const clampedVolume = Math.max(0, Math.min(1, volume));
@@ -560,18 +431,13 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
     const setMusicPaused = useCallback((paused: boolean) => {
         setMusicForcePaused(paused);
-        if (paused) {
-            if (bgAudioRef.current) bgAudioRef.current.pause();
-            if (gameAudioRef.current) gameAudioRef.current.pause();
-            if (workoutAudioRef.current) workoutAudioRef.current.pause();
-        }
+        // The reactive useEffect will handle pausing/playing
     }, []);
 
     return (
         <AudioContext.Provider value={{
             musicEnabled, sfxEnabled, musicVolume, toggleMusic, toggleSfx, setMusicVolume,
             playClick, playBack, playSuccess, playTab, setGameMode, setMusicPaused,
-            // Playlist Player
             currentPlaylist, currentTrackIndex, isPlaying, progress, currentTime, duration,
             playPlaylist, togglePlayPause, nextTrack, prevTrack, seek, closePlayer
         }}>

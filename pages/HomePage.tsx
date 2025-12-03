@@ -10,7 +10,7 @@ import DailyRewardModal from '../components/features/DailyRewardModal';
 import ChallengeGameModal from '../components/features/ChallengeGameModal';
 import StrengthGameModal from '../components/features/StrengthGameModal';
 import PrayerGameModal from '../components/features/PrayerGameModal';
-import { Key, Brain, Dumbbell, Heart, Video, Lock, Check, Play, CheckCircle, ChevronDown, ChevronUp } from 'lucide-react';
+import { Key, Brain, Dumbbell, Heart, Video, Lock, Check, Play, CheckCircle } from 'lucide-react';
 import { ApiService } from '../services/apiService';
 import { isCompleted, isLocked, getWeekDays } from '../services/lessonService';
 import { readingProgressService } from '../services/readingProgressService';
@@ -66,11 +66,6 @@ const HomePage: React.FC = () => {
   const [recentlyReadBooks, setRecentlyReadBooks] = useState<any[]>([]);
   const [recentlyPlayedPlaylists, setRecentlyPlayedPlaylists] = useState<any[]>([]);
   
-  // Category expansion state - tracks which categories are expanded
-  const [expandedCategories, setExpandedCategories] = useState<Set<string>>(new Set());
-  
-  // Number of items to show when collapsed (shows 2 rows on mobile, adapts on larger screens)
-  const COLLAPSED_ITEM_COUNT = 6;
 
   const scrollRef = useRef<HTMLDivElement>(null);
   const lastScrollY = useRef(0);
@@ -328,19 +323,6 @@ const HomePage: React.FC = () => {
       console.log('🎵 Recently played playlists:', recentPlaylists.length);
     }
   }, [playlists]);
-
-  // Toggle category expansion
-  const toggleCategoryExpansion = (categoryId: string) => {
-    setExpandedCategories(prev => {
-      const newSet = new Set(prev);
-      if (newSet.has(categoryId)) {
-        newSet.delete(categoryId);
-      } else {
-        newSet.add(categoryId);
-      }
-      return newSet;
-    });
-  };
 
   // Group books and playlists by category
   const getBooksByCategory = (categoryName: string) => {
@@ -728,25 +710,23 @@ const HomePage: React.FC = () => {
           </div>
         </section>
 
-        {/* Recently Read Section */}
-        {recentlyReadBooks.length > 0 && (() => {
-          const isExpanded = expandedCategories.has('recently-read');
-          const hasMoreItems = recentlyReadBooks.length > COLLAPSED_ITEM_COUNT;
-          const displayItems = isExpanded ? recentlyReadBooks : recentlyReadBooks.slice(0, COLLAPSED_ITEM_COUNT);
-          const hiddenCount = recentlyReadBooks.length - COLLAPSED_ITEM_COUNT;
-          
-          return (
-            <section className="mt-6">
-              <SectionTitle 
-                title="Recently Read" 
-                icon="📖"
-                color="#4CAF50"
-              />
-              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 mt-4">
-                {displayItems.map((book) => {
+        {/* Recently Read Section - Horizontal Carousel */}
+        {recentlyReadBooks.length > 0 && (
+          <section className="mt-6">
+            <SectionTitle 
+              title="Recently Read" 
+              icon="📖"
+              color="#4CAF50"
+            />
+            <div className="w-screen overflow-x-auto no-scrollbar pb-4 -mx-4">
+              <div className="flex space-x-3 px-4">
+                {recentlyReadBooks.map((book) => {
                   const isComplete = bookCompletionService.isBookCompleted(book.id || book._id);
                   return (
-                    <div key={book.id || book._id} className="relative">
+                    <div 
+                      key={book.id || book._id} 
+                      className="relative flex-shrink-0 w-[140px] md:w-[160px]"
+                    >
                       <BookCard
                         book={book}
                         onClick={() => handleBookClick(book.id || book._id)}
@@ -760,50 +740,21 @@ const HomePage: React.FC = () => {
                   );
                 })}
               </div>
-              
-              {/* Collapse/Expand Button */}
-              {hasMoreItems && (
-                <button
-                  onClick={() => toggleCategoryExpansion('recently-read')}
-                  className="w-full mt-4 py-3 px-4 bg-gradient-to-r from-[#4CAF50]/80 to-[#45a049]/80 hover:from-[#4CAF50] hover:to-[#45a049] rounded-xl border-2 border-[#2e7d32]/50 shadow-lg flex items-center justify-center gap-2 transition-all active:scale-[0.98]"
-                >
-                  {isExpanded ? (
-                    <>
-                      <ChevronUp className="w-5 h-5 text-white" />
-                      <span className="text-white font-display font-bold text-sm">
-                        Show Less
-                      </span>
-                    </>
-                  ) : (
-                    <>
-                      <ChevronDown className="w-5 h-5 text-white" />
-                      <span className="text-white font-display font-bold text-sm">
-                        Show {hiddenCount} More
-                      </span>
-                    </>
-                  )}
-                </button>
-              )}
-            </section>
-          );
-        })()}
+            </div>
+          </section>
+        )}
 
-        {/* Recently Played Section */}
-        {recentlyPlayedPlaylists.length > 0 && (() => {
-          const isExpanded = expandedCategories.has('recently-played');
-          const hasMoreItems = recentlyPlayedPlaylists.length > COLLAPSED_ITEM_COUNT;
-          const displayItems = isExpanded ? recentlyPlayedPlaylists : recentlyPlayedPlaylists.slice(0, COLLAPSED_ITEM_COUNT);
-          const hiddenCount = recentlyPlayedPlaylists.length - COLLAPSED_ITEM_COUNT;
-          
-          return (
-            <section className="mt-6">
-              <SectionTitle 
-                title="Recently Played" 
-                icon="🎵"
-                color="#9C27B0"
-              />
-              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 mt-4">
-                {displayItems.map((playlist) => {
+        {/* Recently Played Section - Horizontal Carousel */}
+        {recentlyPlayedPlaylists.length > 0 && (
+          <section className="mt-6">
+            <SectionTitle 
+              title="Recently Played" 
+              icon="🎵"
+              color="#9C27B0"
+            />
+            <div className="w-screen overflow-x-auto no-scrollbar pb-4 -mx-4">
+              <div className="flex space-x-3 px-4">
+                {recentlyPlayedPlaylists.map((playlist) => {
                   const playlistItem = {
                     id: playlist._id || playlist.id,
                     title: playlist.title,
@@ -812,7 +763,10 @@ const HomePage: React.FC = () => {
                     isAudio: true,
                   };
                   return (
-                    <div key={playlist._id || playlist.id} className="relative">
+                    <div 
+                      key={playlist._id || playlist.id} 
+                      className="relative flex-shrink-0 w-[140px] md:w-[160px]"
+                    >
                       <BookCard
                         book={playlistItem}
                         onClick={() => navigate(`/audio/playlist/${playlist._id || playlist.id}`)}
@@ -824,53 +778,24 @@ const HomePage: React.FC = () => {
                   );
                 })}
               </div>
-              
-              {/* Collapse/Expand Button */}
-              {hasMoreItems && (
-                <button
-                  onClick={() => toggleCategoryExpansion('recently-played')}
-                  className="w-full mt-4 py-3 px-4 bg-gradient-to-r from-[#9C27B0]/80 to-[#7B1FA2]/80 hover:from-[#9C27B0] hover:to-[#7B1FA2] rounded-xl border-2 border-[#6A1B9A]/50 shadow-lg flex items-center justify-center gap-2 transition-all active:scale-[0.98]"
-                >
-                  {isExpanded ? (
-                    <>
-                      <ChevronUp className="w-5 h-5 text-white" />
-                      <span className="text-white font-display font-bold text-sm">
-                        Show Less
-                      </span>
-                    </>
-                  ) : (
-                    <>
-                      <ChevronDown className="w-5 h-5 text-white" />
-                      <span className="text-white font-display font-bold text-sm">
-                        Show {hiddenCount} More
-                      </span>
-                    </>
-                  )}
-                </button>
-              )}
-            </section>
-          );
-        })()}
+            </div>
+          </section>
+        )}
 
-        {/* Explore Categories Sections */}
+        {/* Explore Categories Sections - Horizontal Carousels */}
         {categoriesLoading ? (
           <div className="text-white/70 text-center py-4 px-4">Loading categories...</div>
         ) : exploreCategories.length === 0 ? (
           <div className="text-white/70 text-center py-4 px-4">No explore categories available</div>
         ) : (
           exploreCategories
-            .filter(category => category.showOnExplore === true) // Additional safety filter
+            .filter(category => category.showOnExplore === true)
             .map((category) => {
               const categoryBooks = getBooksByCategory(category.name);
               const categoryPlaylists = getPlaylistsByCategory(category.name);
               const allItems = [...categoryBooks, ...categoryPlaylists];
               
               if (allItems.length === 0) return null;
-              
-              const isExpanded = expandedCategories.has(category._id);
-              const hasMoreItems = allItems.length > COLLAPSED_ITEM_COUNT;
-              const displayItems = isExpanded ? allItems : allItems.slice(0, COLLAPSED_ITEM_COUNT);
-              const hiddenCount = allItems.length - COLLAPSED_ITEM_COUNT;
               
               return (
                 <section key={category._id} className="mt-6">
@@ -879,39 +804,21 @@ const HomePage: React.FC = () => {
                     icon={category.icon}
                     color={category.color}
                   />
-                  <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 mt-4">
-                    {displayItems.map((item) => (
-                      <BookCard
-                        key={item.id || item._id}
-                        book={item}
-                        onClick={() => handleItemClick(item)}
-                      />
-                    ))}
+                  <div className="w-screen overflow-x-auto no-scrollbar pb-4 -mx-4">
+                    <div className="flex space-x-3 px-4">
+                      {allItems.map((item) => (
+                        <div 
+                          key={item.id || item._id}
+                          className="flex-shrink-0 w-[140px] md:w-[160px]"
+                        >
+                          <BookCard
+                            book={item}
+                            onClick={() => handleItemClick(item)}
+                          />
+                        </div>
+                      ))}
+                    </div>
                   </div>
-                  
-                  {/* Collapse/Expand Button */}
-                  {hasMoreItems && (
-                    <button
-                      onClick={() => toggleCategoryExpansion(category._id)}
-                      className="w-full mt-4 py-3 px-4 bg-gradient-to-r from-[#8B4513]/80 to-[#A0522D]/80 hover:from-[#8B4513] hover:to-[#A0522D] rounded-xl border-2 border-[#5c2e0b]/50 shadow-lg flex items-center justify-center gap-2 transition-all active:scale-[0.98]"
-                    >
-                      {isExpanded ? (
-                        <>
-                          <ChevronUp className="w-5 h-5 text-[#FFD700]" />
-                          <span className="text-white font-display font-bold text-sm">
-                            Show Less
-                          </span>
-                        </>
-                      ) : (
-                        <>
-                          <ChevronDown className="w-5 h-5 text-[#FFD700]" />
-                          <span className="text-white font-display font-bold text-sm">
-                            Show {hiddenCount} More
-                          </span>
-                        </>
-                      )}
-                    </button>
-                  )}
                 </section>
               );
             })

@@ -42,8 +42,12 @@ const ProfileSelectionPage: React.FC = () => {
     legsScale,
     headScale,
     bodyScale,
-    hatScale
+    hatScale,
+    getParentAvatar
   } = useUser();
+  
+  // Get the correct parent avatar (works even when viewing as kid profile)
+  const parentAvatar = getParentAvatar();
   const [isShopOpen, setIsShopOpen] = useState(false);
   
   // Open shop if requested via navigation state
@@ -129,7 +133,9 @@ const ProfileSelectionPage: React.FC = () => {
                     {/* Full Avatar with Animation - Contained in Circle */}
                     <div className="w-32 h-32 rounded-full bg-[#f3e5ab] border-4 border-white shadow-[0_8px_15px_rgba(0,0,0,0.3)] overflow-hidden flex items-center justify-center relative z-10 transition-transform duration-200 group-active:scale-95 group-hover:scale-105">
                         <div className="w-full h-full flex items-center justify-center relative">
-                            <AvatarCompositor
+                            {/* Use parent's saved avatar when viewing as kid profile */}
+                            {currentProfileId === null ? (
+                              <AvatarCompositor
                                 headUrl={equippedAvatar}
                                 hat={equippedHat}
                                 body={equippedBody}
@@ -154,7 +160,19 @@ const ProfileSelectionPage: React.FC = () => {
                                 hatScale={hatScale}
                                 isAnimating={true}
                                 className="w-full h-full"
-                            />
+                              />
+                            ) : (
+                              /* Show just head when viewing as kid profile (simplified) */
+                              <div className="w-[90%] h-[90%]">
+                                {AVATAR_ASSETS[parentAvatar] ? (
+                                  <svg viewBox="0 0 100 100" className="w-full h-full overflow-visible">
+                                    {AVATAR_ASSETS[parentAvatar]}
+                                  </svg>
+                                ) : (
+                                  <img src={parentAvatar} alt="Parent" className="w-full h-full object-cover rounded-full" />
+                                )}
+                              </div>
+                            )}
                         </div>
                     </div>
                     {/* Crown Badge */}
@@ -174,34 +192,39 @@ const ProfileSelectionPage: React.FC = () => {
               </div>
 
             {/* KIDS PROFILES */}
-            {kids.map((profile, index) => (
-              <div 
-                key={profile.id} 
-                onClick={() => {
-                  switchProfile(profile.id); // Switch to this kid's profile
-                  navigate('/home');
-                }}
-                className="flex flex-col items-center gap-3 cursor-pointer group"
-              >
-                <div className="relative">
-                    <div className={`w-28 h-28 rounded-full ${getKidColor(index)} p-1 shadow-[0_8px_15px_rgba(0,0,0,0.3)] transition-transform duration-200 group-active:scale-95 group-hover:scale-105 border-4 border-white flex items-center justify-center overflow-hidden`}>
-                        <div className="w-[90%] h-[90%]">
-                             {AVATAR_ASSETS[profile.avatarSeed] ? (
-                                 <svg viewBox="0 0 100 100" className="w-full h-full overflow-visible">
-                                     {AVATAR_ASSETS[profile.avatarSeed]}
-                                 </svg>
-                             ) : (
-                                 <img src={profile.avatarSeed} alt={profile.name} className="w-full h-full object-cover rounded-full" />
-                             )}
-                        </div>
-                    </div>
-                </div>
+            {kids.map((profile, index) => {
+              // Use the kid's current avatar (updated in shop) or fall back to initial avatarSeed
+              const kidAvatar = profile.avatar || profile.avatarSeed;
+              
+              return (
+                <div 
+                  key={profile.id} 
+                  onClick={() => {
+                    switchProfile(profile.id); // Switch to this kid's profile
+                    navigate('/home');
+                  }}
+                  className="flex flex-col items-center gap-3 cursor-pointer group"
+                >
+                  <div className="relative">
+                      <div className={`w-28 h-28 rounded-full ${getKidColor(index)} p-1 shadow-[0_8px_15px_rgba(0,0,0,0.3)] transition-transform duration-200 group-active:scale-95 group-hover:scale-105 border-4 border-white flex items-center justify-center overflow-hidden`}>
+                          <div className="w-[90%] h-[90%]">
+                               {AVATAR_ASSETS[kidAvatar] ? (
+                                   <svg viewBox="0 0 100 100" className="w-full h-full overflow-visible">
+                                       {AVATAR_ASSETS[kidAvatar]}
+                                   </svg>
+                               ) : (
+                                   <img src={kidAvatar} alt={profile.name} className="w-full h-full object-cover rounded-full" />
+                               )}
+                          </div>
+                      </div>
+                  </div>
 
-                <span className="font-display font-bold text-white text-lg tracking-wide drop-shadow-md text-center leading-tight break-words w-32">
-                  {profile.name}
-                </span>
-              </div>
-            ))}
+                  <span className="font-display font-bold text-white text-lg tracking-wide drop-shadow-md text-center leading-tight break-words w-32">
+                    {profile.name}
+                  </span>
+                </div>
+              );
+            })}
 
           </div>
 

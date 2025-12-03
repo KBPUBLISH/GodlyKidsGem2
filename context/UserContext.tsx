@@ -132,6 +132,9 @@ interface UserContextType {
   subscribe: () => void;
 
   resetUser: () => void; // New method to wipe data
+  
+  // Get parent's avatar (for profile selection page display)
+  getParentAvatar: () => string;
 }
 
 const UserContext = createContext<UserContextType>({
@@ -190,6 +193,7 @@ const UserContext = createContext<UserContextType>({
   isSubscribed: false,
   subscribe: () => {},
   resetUser: () => {},
+  getParentAvatar: () => 'head-toast',
 });
 
 export const useUser = () => useContext(UserContext);
@@ -446,7 +450,15 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const addKid = (kid: KidProfile) => {
-    setKids(prev => [...prev, kid]);
+    // Kids inherit parent's unlocked voices when created
+    const kidWithInheritedVoices = {
+      ...kid,
+      // If kid doesn't have voices specified, inherit from parent
+      unlockedVoices: kid.unlockedVoices && kid.unlockedVoices.length > 0 
+        ? kid.unlockedVoices 
+        : [...unlockedVoices]
+    };
+    setKids(prev => [...prev, kidWithInheritedVoices]);
   };
 
   const removeKid = (id: string) => {
@@ -878,6 +890,17 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setIsSubscribed(true);
   };
 
+  // Get parent's avatar regardless of which profile is active
+  const getParentAvatar = useCallback(() => {
+    if (currentProfileId === null) {
+      // Currently on parent, use current equipped avatar
+      return equippedAvatar;
+    } else {
+      // Currently on a kid, use saved parent avatar data
+      return parentAvatarData?.avatar || 'head-toast';
+    }
+  }, [currentProfileId, equippedAvatar, parentAvatarData]);
+
   const resetUser = () => {
     setCoins(500); // New users start with 500 gold coins
     setCoinTransactions([]);
@@ -996,7 +1019,8 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
       equipSavedCharacter,
       isSubscribed,
       subscribe,
-      resetUser
+      resetUser,
+      getParentAvatar
     }}>
       {children}
     </UserContext.Provider>

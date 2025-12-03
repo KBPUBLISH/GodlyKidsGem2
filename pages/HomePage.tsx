@@ -10,7 +10,7 @@ import DailyRewardModal from '../components/features/DailyRewardModal';
 import ChallengeGameModal from '../components/features/ChallengeGameModal';
 import StrengthGameModal from '../components/features/StrengthGameModal';
 import PrayerGameModal from '../components/features/PrayerGameModal';
-import { BookOpen, Key, Brain, Dumbbell, Heart, Video, ChevronRight, Lock, Check, Play, CheckCircle, ChevronDown, ChevronUp } from 'lucide-react';
+import { Key, Brain, Dumbbell, Heart, Video, Lock, Check, Play, CheckCircle, ChevronDown, ChevronUp } from 'lucide-react';
 import { ApiService } from '../services/apiService';
 import { isCompleted, isLocked, getWeekDays } from '../services/lessonService';
 import { readingProgressService } from '../services/readingProgressService';
@@ -425,133 +425,13 @@ const HomePage: React.FC = () => {
 
       <div className="px-4 pt-28 space-y-2 pb-52">
 
-        {/* --- Stories Section --- */}
-        <div className="w-screen overflow-x-auto no-scrollbar pb-6 pt-2 -mt-2 -mx-4">
-          <div className="flex space-x-4 px-4 pr-8">
-
-            {/* SPECIAL: Daily Key Story */}
-            <button
-              className="flex flex-col items-center gap-2 group min-w-[76px] md:min-w-[110px] outline-none"
-              onClick={handleDailyKeyClick}
-            >
-              {/* Ring */}
-              <div className={`p-[3px] rounded-full bg-gradient-to-tr from-[#FFD700] via-[#fff] to-[#FFD700] shadow-[0_0_15px_rgba(255,215,0,0.6)] relative transition-transform group-active:scale-95 ${!hasEngagedDailyKey
-                ? 'animate-[spin_4s_linear_infinite]'
-                : 'animate-pulse'
-                }`}>
-                {/* Avatar Container - Counter-rotates to keep icon static */}
-                <div className={`w-[70px] h-[70px] md:w-[100px] md:h-[100px] rounded-full border-[3px] border-[#8B4513] overflow-hidden bg-[#8B4513] flex items-center justify-center relative ${!hasEngagedDailyKey
-                  ? 'animate-[spin_4s_linear_infinite_reverse]'
-                  : ''
-                  }`}>
-                  <div className="absolute inset-0 opacity-30" style={{ backgroundImage: 'radial-gradient(circle, #fff 10%, transparent 80%)' }}></div>
-                  <Key size={32} className="text-[#FFD700] relative z-10 animate-[bounce_2s_infinite]" fill="#B8860B" />
-                </div>
-              </div>
-              {/* Name */}
-              <span className="text-[#FFD700] text-[11px] md:text-sm font-bold font-display tracking-wide drop-shadow-[0_1.5px_1.5px_rgba(0,0,0,0.8)] truncate w-20 md:w-28 text-center opacity-100 group-hover:scale-105 transition-transform">
-                Daily Key
-              </span>
-            </button>
-
-            {/* SPECIAL: Memory Challenge Story */}
-            <button
-              className="flex flex-col items-center gap-2 group min-w-[76px] md:min-w-[110px] outline-none"
-              onClick={handleMemoryClick}
-            >
-              {/* Ring */}
-              <div className={`p-[3px] rounded-full bg-gradient-to-tr from-[#3949ab] via-[#5c6bc0] to-[#3949ab] shadow-[0_0_15px_rgba(57,73,171,0.6)] relative transition-transform group-active:scale-95 ${!hasEngagedMemory
-                ? 'animate-[spin_4s_linear_infinite]'
-                : 'animate-pulse'
-                }`}>
-                {/* Avatar Container - Counter-rotates to keep icon static */}
-                <div className={`w-[70px] h-[70px] md:w-[100px] md:h-[100px] rounded-full border-[3px] border-[#1a237e] overflow-hidden bg-[#1a237e] flex items-center justify-center relative ${!hasEngagedMemory
-                  ? 'animate-[spin_4s_linear_infinite_reverse]'
-                  : ''
-                  }`}>
-                  <div className="absolute inset-0 opacity-30" style={{ backgroundImage: 'radial-gradient(circle, #fff 10%, transparent 80%)' }}></div>
-                  <Brain size={32} className="text-[#90caf9] relative z-10 animate-[bounce_2s_infinite]" fill="#64b5f6" />
-                </div>
-              </div>
-              {/* Name */}
-              <span className="text-[#90caf9] text-[11px] md:text-sm font-bold font-display tracking-wide drop-shadow-[0_1.5px_1.5px_rgba(0,0,0,0.8)] truncate w-20 md:w-28 text-center opacity-100 group-hover:scale-105 transition-transform">
-                Memory
-              </span>
-            </button>
-
-            {/* SPECIAL: Strength Challenge Story */}
-            <button
-              className="flex flex-col items-center gap-2 group min-w-[76px] md:min-w-[110px] outline-none"
-              onClick={handleStrengthClick}
-            >
-              {/* Ring */}
-              <div className={`p-[3px] rounded-full bg-gradient-to-tr from-[#FF6B35] via-[#F7931E] to-[#FF6B35] shadow-[0_0_15px_rgba(255,107,53,0.6)] relative transition-transform group-active:scale-95 ${!hasEngagedStrength
-                ? 'animate-[spin_4s_linear_infinite]'
-                : 'animate-pulse'
-                }`}>
-                {/* Avatar Container - Counter-rotates to keep icon static */}
-                <div className={`w-[70px] h-[70px] md:w-[100px] md:h-[100px] rounded-full border-[3px] border-[#E64A19] overflow-hidden bg-[#E64A19] flex items-center justify-center relative ${!hasEngagedStrength
-                  ? 'animate-[spin_4s_linear_infinite_reverse]'
-                  : ''
-                  }`}>
-                  <div className="absolute inset-0 opacity-30" style={{ backgroundImage: 'radial-gradient(circle, #fff 10%, transparent 80%)' }}></div>
-                  <Dumbbell size={32} className="text-[#FFD700] relative z-10 animate-[bounce_2s_infinite]" fill="#FFB300" />
-                </div>
-              </div>
-              {/* Name */}
-              <span className="text-[#FFD700] text-[11px] md:text-sm font-bold font-display tracking-wide drop-shadow-[0_1.5px_1.5px_rgba(0,0,0,0.8)] truncate w-20 md:w-28 text-center opacity-100 group-hover:scale-105 transition-transform">
-                Strength
-              </span>
-            </button>
-
-            {/* SPECIAL: Prayer Challenge Story */}
-            <button
-              className="flex flex-col items-center gap-2 group min-w-[76px] md:min-w-[110px] outline-none"
-              onClick={handlePrayerClick}
-            >
-              {/* Ring */}
-              <div className={`p-[3px] rounded-full bg-gradient-to-tr from-[#AB47BC] via-[#BA68C8] to-[#AB47BC] shadow-[0_0_15px_rgba(171,71,188,0.6)] relative transition-transform group-active:scale-95 ${!hasEngagedPrayer
-                ? 'animate-[spin_4s_linear_infinite]'
-                : 'animate-pulse'
-                }`}>
-                {/* Avatar Container - Counter-rotates to keep icon static */}
-                <div className={`w-[70px] h-[70px] md:w-[100px] md:h-[100px] rounded-full border-[3px] border-[#7B1FA2] overflow-hidden bg-[#7B1FA2] flex items-center justify-center relative ${!hasEngagedPrayer
-                  ? 'animate-[spin_4s_linear_infinite_reverse]'
-                  : ''
-                  }`}>
-                  <div className="absolute inset-0 opacity-30" style={{ backgroundImage: 'radial-gradient(circle, #fff 10%, transparent 80%)' }}></div>
-                  <Heart size={32} className="text-[#F06292] relative z-10 animate-[bounce_2s_infinite]" fill="#EC407A" />
-                </div>
-              </div>
-              {/* Name */}
-              <span className="text-[#F06292] text-[11px] md:text-sm font-bold font-display tracking-wide drop-shadow-[0_1.5px_1.5px_rgba(0,0,0,0.8)] truncate w-20 md:w-28 text-center opacity-100 group-hover:scale-105 transition-transform">
-                Prayer
-              </span>
-            </button>
-          </div>
-        </div>
-
-        {/* Featured Carousel */}
-        {!loading && featuredBooks.length > 0 && (
-          <FeaturedCarousel 
-            books={featuredBooks} 
-            onBookClick={(id, isPlaylist) => {
-              if (isPlaylist) {
-                navigate(`/audio/playlist/${id}`);
-              } else {
-                handleBookClick(id);
-              }
-            }} 
-          />
-        )}
-
-        {/* Daily Lessons Section */}
-        <section>
+        {/* Daily Lessons Section - MOVED TO TOP */}
+        <section className="pb-2">
           <SectionTitle title="Daily Lessons" />
           {lessonsLoading ? (
             <div className="text-white/70 text-center py-4 px-4">Loading lessons...</div>
           ) : (
-            <div className="w-screen overflow-x-auto no-scrollbar pb-6 -mx-4">
+            <div className="w-screen overflow-x-auto no-scrollbar pb-4 -mx-4">
               <div className="flex space-x-3 px-4">
                 {(() => {
                   const today = new Date();
@@ -563,7 +443,6 @@ const HomePage: React.FC = () => {
                     const lesson = weekLessons.get(dateKey);
                     const status = lesson ? getLessonStatus(lesson) : 'empty';
                     const isToday = date.toDateString() === today.toDateString();
-                    const isPast = date < today;
 
                     return (
                       <div
@@ -571,7 +450,7 @@ const HomePage: React.FC = () => {
                         className={`relative w-[calc((100vw-48px-40px)/4)] flex-shrink-0 ${status === 'locked' ? 'cursor-not-allowed' : status !== 'empty' ? 'cursor-pointer' : ''}`}
                         onClick={() => lesson && status !== 'locked' && handleLessonClick(lesson)}
                       >
-                        {/* Day Label - Back to top */}
+                        {/* Day Label */}
                         <div className="text-center mb-1.5">
                           <div className={`text-xs font-semibold ${isToday ? 'text-[#FFD700]' : 'text-white/70'}`}>
                             {getDayLabel(date)}
@@ -640,6 +519,194 @@ const HomePage: React.FC = () => {
               </div>
             </div>
           )}
+        </section>
+
+        {/* Featured Carousel */}
+        {!loading && featuredBooks.length > 0 && (
+          <FeaturedCarousel 
+            books={featuredBooks} 
+            onBookClick={(id, isPlaylist) => {
+              if (isPlaylist) {
+                navigate(`/audio/playlist/${id}`);
+              } else {
+                handleBookClick(id);
+              }
+            }} 
+          />
+        )}
+
+        {/* Games Section - Portrait Thumbnail Carousel Style */}
+        <section className="mt-4">
+          <SectionTitle 
+            title="Games" 
+            icon="🎮"
+            color="#FFD700"
+          />
+          <div className="w-screen overflow-x-auto no-scrollbar pb-4 -mx-4">
+            <div className="flex space-x-3 px-4">
+              
+              {/* Daily Key Game */}
+              <div
+                className="relative w-[calc((100vw-48px-40px)/4)] flex-shrink-0 cursor-pointer"
+                onClick={handleDailyKeyClick}
+              >
+                <div className={`relative aspect-[9/16] rounded-xl overflow-hidden transition-all border-2 ${
+                  hasEngagedDailyKey ? 'border-[#FFD700]/50' : 'border-[#FFD700] animate-pulse'
+                }`}>
+                  {/* Background Gradient */}
+                  <div className="absolute inset-0 bg-gradient-to-br from-[#8B4513] to-[#5c2e0b]" />
+                  
+                  {/* Decorative Pattern */}
+                  <div className="absolute inset-0 opacity-20" style={{ 
+                    backgroundImage: 'radial-gradient(circle at 30% 20%, #FFD700 2%, transparent 8%), radial-gradient(circle at 70% 80%, #FFD700 2%, transparent 8%)'
+                  }} />
+                  
+                  {/* Icon */}
+                  <div className="absolute inset-0 flex flex-col items-center justify-center">
+                    <div className={`w-16 h-16 rounded-full bg-[#FFD700]/20 flex items-center justify-center mb-2 ${
+                      !hasEngagedDailyKey ? 'animate-bounce' : ''
+                    }`}>
+                      <Key size={36} className="text-[#FFD700]" fill="#B8860B" />
+                    </div>
+                    <span className="text-[#FFD700] text-sm font-bold font-display text-center px-2">
+                      Daily Key
+                    </span>
+                    <span className="text-white/60 text-[10px] text-center px-2 mt-1">
+                      Unlock rewards
+                    </span>
+                  </div>
+                  
+                  {/* Engaged Indicator */}
+                  {hasEngagedDailyKey && (
+                    <div className="absolute top-2 right-2 bg-green-500 rounded-full p-1">
+                      <Check className="w-3 h-3 text-white" />
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Memory Game */}
+              <div
+                className="relative w-[calc((100vw-48px-40px)/4)] flex-shrink-0 cursor-pointer"
+                onClick={handleMemoryClick}
+              >
+                <div className={`relative aspect-[9/16] rounded-xl overflow-hidden transition-all border-2 ${
+                  hasEngagedMemory ? 'border-[#3949ab]/50' : 'border-[#5c6bc0] animate-pulse'
+                }`}>
+                  {/* Background Gradient */}
+                  <div className="absolute inset-0 bg-gradient-to-br from-[#1a237e] to-[#0d1442]" />
+                  
+                  {/* Decorative Pattern */}
+                  <div className="absolute inset-0 opacity-20" style={{ 
+                    backgroundImage: 'radial-gradient(circle at 20% 30%, #90caf9 2%, transparent 8%), radial-gradient(circle at 80% 70%, #90caf9 2%, transparent 8%)'
+                  }} />
+                  
+                  {/* Icon */}
+                  <div className="absolute inset-0 flex flex-col items-center justify-center">
+                    <div className={`w-16 h-16 rounded-full bg-[#5c6bc0]/30 flex items-center justify-center mb-2 ${
+                      !hasEngagedMemory ? 'animate-bounce' : ''
+                    }`}>
+                      <Brain size={36} className="text-[#90caf9]" fill="#64b5f6" />
+                    </div>
+                    <span className="text-[#90caf9] text-sm font-bold font-display text-center px-2">
+                      Memory
+                    </span>
+                    <span className="text-white/60 text-[10px] text-center px-2 mt-1">
+                      Bible challenge
+                    </span>
+                  </div>
+                  
+                  {/* Engaged Indicator */}
+                  {hasEngagedMemory && (
+                    <div className="absolute top-2 right-2 bg-green-500 rounded-full p-1">
+                      <Check className="w-3 h-3 text-white" />
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Strength Game */}
+              <div
+                className="relative w-[calc((100vw-48px-40px)/4)] flex-shrink-0 cursor-pointer"
+                onClick={handleStrengthClick}
+              >
+                <div className={`relative aspect-[9/16] rounded-xl overflow-hidden transition-all border-2 ${
+                  hasEngagedStrength ? 'border-[#FF6B35]/50' : 'border-[#F7931E] animate-pulse'
+                }`}>
+                  {/* Background Gradient */}
+                  <div className="absolute inset-0 bg-gradient-to-br from-[#E64A19] to-[#BF360C]" />
+                  
+                  {/* Decorative Pattern */}
+                  <div className="absolute inset-0 opacity-20" style={{ 
+                    backgroundImage: 'radial-gradient(circle at 25% 25%, #FFD700 2%, transparent 8%), radial-gradient(circle at 75% 75%, #FFD700 2%, transparent 8%)'
+                  }} />
+                  
+                  {/* Icon */}
+                  <div className="absolute inset-0 flex flex-col items-center justify-center">
+                    <div className={`w-16 h-16 rounded-full bg-[#FFD700]/20 flex items-center justify-center mb-2 ${
+                      !hasEngagedStrength ? 'animate-bounce' : ''
+                    }`}>
+                      <Dumbbell size={36} className="text-[#FFD700]" fill="#FFB300" />
+                    </div>
+                    <span className="text-[#FFD700] text-sm font-bold font-display text-center px-2">
+                      Strength
+                    </span>
+                    <span className="text-white/60 text-[10px] text-center px-2 mt-1">
+                      Build faith
+                    </span>
+                  </div>
+                  
+                  {/* Engaged Indicator */}
+                  {hasEngagedStrength && (
+                    <div className="absolute top-2 right-2 bg-green-500 rounded-full p-1">
+                      <Check className="w-3 h-3 text-white" />
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Prayer Game */}
+              <div
+                className="relative w-[calc((100vw-48px-40px)/4)] flex-shrink-0 cursor-pointer"
+                onClick={handlePrayerClick}
+              >
+                <div className={`relative aspect-[9/16] rounded-xl overflow-hidden transition-all border-2 ${
+                  hasEngagedPrayer ? 'border-[#AB47BC]/50' : 'border-[#BA68C8] animate-pulse'
+                }`}>
+                  {/* Background Gradient */}
+                  <div className="absolute inset-0 bg-gradient-to-br from-[#7B1FA2] to-[#4A148C]" />
+                  
+                  {/* Decorative Pattern */}
+                  <div className="absolute inset-0 opacity-20" style={{ 
+                    backgroundImage: 'radial-gradient(circle at 30% 40%, #F06292 2%, transparent 8%), radial-gradient(circle at 70% 60%, #F06292 2%, transparent 8%)'
+                  }} />
+                  
+                  {/* Icon */}
+                  <div className="absolute inset-0 flex flex-col items-center justify-center">
+                    <div className={`w-16 h-16 rounded-full bg-[#F06292]/20 flex items-center justify-center mb-2 ${
+                      !hasEngagedPrayer ? 'animate-bounce' : ''
+                    }`}>
+                      <Heart size={36} className="text-[#F06292]" fill="#EC407A" />
+                    </div>
+                    <span className="text-[#F06292] text-sm font-bold font-display text-center px-2">
+                      Prayer
+                    </span>
+                    <span className="text-white/60 text-[10px] text-center px-2 mt-1">
+                      Connect with God
+                    </span>
+                  </div>
+                  
+                  {/* Engaged Indicator */}
+                  {hasEngagedPrayer && (
+                    <div className="absolute top-2 right-2 bg-green-500 rounded-full p-1">
+                      <Check className="w-3 h-3 text-white" />
+                    </div>
+                  )}
+                </div>
+              </div>
+
+            </div>
+          </div>
         </section>
 
         {/* Recently Read Section */}

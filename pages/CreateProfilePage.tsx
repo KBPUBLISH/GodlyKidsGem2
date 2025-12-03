@@ -35,13 +35,28 @@ const CreateProfilePage: React.FC = () => {
   const [selectedHead, setSelectedHead] = useState(FUNNY_HEADS[0]);
 
   const handleCreate = () => {
-    if (!name.trim()) return;
+    if (!name.trim() || !age) return;
     
+    // Create kid with their own initial data - completely separate from parent
     addKid({
       id: Date.now().toString(),
       name: name,
-      age: age,
-      avatarSeed: selectedHead
+      age: parseInt(age, 10),
+      avatarSeed: selectedHead,
+      // Initialize kid's own economy data
+      coins: 500, // Kids start with 500 coins
+      coinTransactions: [],
+      ownedItems: ['f1', 'anim1'], // Default owned items
+      unlockedVoices: [],
+      // Initialize kid's avatar to their selected head
+      avatar: selectedHead,
+      frame: 'border-[#8B4513]',
+      hat: null,
+      body: null,
+      leftArm: null,
+      rightArm: null,
+      legs: null,
+      animation: 'anim-breathe',
     });
     
     navigate('/profile');
@@ -98,16 +113,19 @@ const CreateProfilePage: React.FC = () => {
             />
           </div>
 
-           {/* Age Input */}
+           {/* Age Input - Required for age-appropriate content */}
            <div className="w-full mb-8 space-y-2">
-            <label className="text-[#eecaa0] font-display font-bold ml-2 text-sm tracking-wide">AGE (Optional)</label>
+            <label className="text-[#eecaa0] font-display font-bold ml-2 text-sm tracking-wide">AGE *</label>
             <input 
               type="number" 
+              min="1"
+              max="18"
               value={age}
               onChange={(e) => setAge(e.target.value)}
-              placeholder="Age..."
+              placeholder="How old are you?"
               className="w-full bg-black/30 backdrop-blur-sm border-2 border-[#eecaa0]/50 rounded-xl px-5 py-4 text-white font-display text-lg placeholder:text-white/40 focus:outline-none focus:border-[#eecaa0] transition-colors shadow-inner text-center"
             />
+            <p className="text-[#eecaa0]/60 text-xs text-center">Used for age-appropriate quizzes and content</p>
           </div>
 
           {/* Avatar Selection Grid */}
@@ -139,8 +157,8 @@ const CreateProfilePage: React.FC = () => {
             fullWidth 
             variant="primary" 
             onClick={handleCreate} 
-            disabled={!name.trim()}
-            className={`py-4 text-xl transition-opacity ${!name.trim() ? 'opacity-50 grayscale' : 'opacity-100'}`}
+            disabled={!name.trim() || !age}
+            className={`py-4 text-xl transition-opacity ${!name.trim() || !age ? 'opacity-50 grayscale' : 'opacity-100'}`}
           >
             START ADVENTURE
           </WoodButton>

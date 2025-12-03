@@ -135,7 +135,7 @@ interface UserContextType {
 }
 
 const UserContext = createContext<UserContextType>({
-  coins: 2650,
+  coins: 500,
   addCoins: () => {},
   spendCoins: () => false,
   coinTransactions: [],
@@ -211,7 +211,7 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const saved = loadState();
 
-  const [coins, setCoins] = useState(saved?.coins ?? 2650); // Start with 2650 for testing
+  const [coins, setCoins] = useState(saved?.coins ?? 500); // New users start with 500 coins
   const [coinTransactions, setCoinTransactions] = useState<CoinTransaction[]>(saved?.coinTransactions ?? []);
   const [referralCode] = useState<string>(saved?.referralCode ?? generateReferralCode());
   const [redeemedCodes, setRedeemedCodes] = useState<string[]>(saved?.redeemedCodes ?? []);
@@ -646,7 +646,7 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (kid) {
         // Restore kid's economy data (or defaults for new profiles)
         applyEconomyState({
-          coins: kid.coins ?? 100, // New kids start with 100 coins
+          coins: kid.coins ?? 500, // New kids start with 500 coins
           coinTransactions: kid.coinTransactions ?? [],
           ownedItems: kid.ownedItems ?? ['f1', 'anim1'],
           unlockedVoices: kid.unlockedVoices ?? [],

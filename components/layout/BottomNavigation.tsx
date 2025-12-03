@@ -114,11 +114,11 @@ const BottomNavigation: React.FC = () => {
   const visualRotation = isDragging && dragRotation !== null ? dragRotation : targetRotation;
 
   return (
-    <div className="fixed bottom-0 left-0 right-0 z-50 h-0 flex justify-center pointer-events-none">
+    <div className="fixed bottom-0 left-0 right-0 z-40 h-0 flex justify-center pointer-events-none">
 
       {/* Active Indicator Jewel */}
       <div
-        className={`absolute z-[60] animate-bounce duration-[2000ms] transition-all duration-500 ease-in-out ${isPlayerActive ? 'bottom-[215px] md:bottom-[310px]' : 'bottom-[135px] md:bottom-[230px]'
+        className={`absolute z-[45] animate-bounce duration-[2000ms] transition-all duration-500 ease-in-out ${isPlayerActive ? 'bottom-[215px] md:bottom-[310px]' : 'bottom-[135px] md:bottom-[230px]'
           }`}
       >
         <div className="w-0 h-0 border-l-[8px] border-l-transparent border-r-[8px] border-r-transparent border-t-[12px] border-t-[#FFD700]"></div>

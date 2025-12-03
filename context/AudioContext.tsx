@@ -421,6 +421,14 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         const game = gameAudioRef.current;
         const workout = workoutAudioRef.current;
 
+        // Log initial state
+        console.log('🎵 Audio master loop starting...', {
+            musicEnabled: musicEnabledRef.current,
+            musicForcePaused: musicForcePausedRef.current,
+            musicMode: musicModeRef.current,
+            bgUrl: BG_MUSIC_URL
+        });
+
         const masterLoop = setInterval(() => {
             // Read current values from refs to avoid stale closures
             const isMusicEnabled = musicEnabledRef.current;
@@ -439,7 +447,6 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
             // 2. Music Disabled?
             if (!isMusicEnabled) {
                 if (!bg.paused) {
-                    console.log('🔇 Pausing BG music - musicEnabled is false');
                     bg.pause();
                 }
                 if (!game.paused) game.pause();
@@ -448,59 +455,89 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
             }
 
             // Helper function to safely play audio
-            const safePlay = (audio: HTMLAudioElement) => {
+            const safePlay = (audio: HTMLAudioElement, name: string) => {
                 // Double-check conditions before playing using refs
                 if (musicForcePausedRef.current || !musicEnabledRef.current) {
                     return;
                 }
-                if (audio.paused && audio.readyState >= 2) {
+                if (audio.paused) {
+                    // Log readyState for debugging
+                    if (audio.readyState < 2) {
+                        console.log(`🎵 ${name} audio not ready yet (readyState: ${audio.readyState})`);
+                    }
+                    // Try to play even if readyState is low - browser will handle buffering
                     const playPromise = audio.play();
                     if (playPromise !== undefined) {
-                        playPromise.catch((error) => {
-                            // Ignore AbortError - it's expected when audio is paused before play completes
-                            if (error.name !== 'AbortError' && error.name !== 'NotAllowedError') {
-                                console.warn('Audio play error:', error);
-                            }
-                        });
+                        playPromise
+                            .then(() => {
+                                console.log(`🎵 ${name} audio started playing successfully`);
+                            })
+                            .catch((error) => {
+                                // Ignore AbortError - it's expected when audio is paused before play completes
+                                if (error.name !== 'AbortError') {
+                                    console.warn(`🎵 ${name} audio play error:`, error.name, error.message);
+                                }
+                            });
                     }
                 }
             };
 
             // 3. Normal BG Music Logic
             if (currentMode === 'bg') {
-                safePlay(bg);
+                safePlay(bg, 'BG');
                 bg.volume = currentVolume * 0.25;
                 if (!game.paused) game.pause();
                 if (!workout.paused) workout.pause();
             }
             else if (currentMode === 'game') {
-                safePlay(game);
+                safePlay(game, 'Game');
                 game.volume = currentVolume * 0.3;
                 if (!bg.paused) bg.pause();
                 if (!workout.paused) workout.pause();
             }
             else if (currentMode === 'workout') {
-                safePlay(workout);
+                safePlay(workout, 'Workout');
                 workout.volume = currentVolume * 0.4;
                 if (!bg.paused) bg.pause();
                 if (!game.paused) game.pause();
             }
-        }, 100);
+        }, 500); // Increased interval to reduce console spam
 
         const unlockAudio = () => {
-            if (musicForcePausedRef.current) return;
-            if (audioContextRef.current?.state === 'suspended') audioContextRef.current.resume();
+            console.log('🎵 User interaction detected, attempting to unlock audio...');
+            if (musicForcePausedRef.current) {
+                console.log('🎵 Music force paused, not unlocking');
+                return;
+            }
+            if (audioContextRef.current?.state === 'suspended') {
+                audioContextRef.current.resume();
+            }
+            // Try to play the appropriate audio based on current mode
+            if (musicEnabledRef.current) {
+                const currentMode = musicModeRef.current;
+                if (currentMode === 'bg' && bg) {
+                    bg.play().then(() => {
+                        console.log('🎵 BG music unlocked and playing after user interaction');
+                    }).catch(e => console.warn('🎵 BG play after interaction failed:', e.message));
+                } else if (currentMode === 'game' && game) {
+                    game.play().catch(e => console.warn('🎵 Game play after interaction failed:', e.message));
+                } else if (currentMode === 'workout' && workout) {
+                    workout.play().catch(e => console.warn('🎵 Workout play after interaction failed:', e.message));
+                }
+            }
         };
 
-        if (!musicForcePaused) {
-            window.addEventListener('click', unlockAudio, { once: true });
-            window.addEventListener('touchstart', unlockAudio, { once: true });
-        }
+        // Add multiple event listeners for user interaction
+        const interactionEvents = ['click', 'touchstart', 'keydown'];
+        interactionEvents.forEach(event => {
+            window.addEventListener(event, unlockAudio, { once: true });
+        });
 
         return () => {
             clearInterval(masterLoop);
-            window.removeEventListener('click', unlockAudio);
-            window.removeEventListener('touchstart', unlockAudio);
+            interactionEvents.forEach(event => {
+                window.removeEventListener(event, unlockAudio);
+            });
         };
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []); // Only run once on mount - refs handle state changes

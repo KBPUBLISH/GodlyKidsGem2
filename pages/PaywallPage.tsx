@@ -115,9 +115,16 @@ const PaywallPage: React.FC = () => {
                     <span className="text-[#00695c]">& Adventures</span>
                 </h2>
 
-                <p className="text-[#006064] font-sans font-semibold text-sm mb-6 leading-tight px-4">
+                <p className="text-[#006064] font-sans font-semibold text-sm mb-2 leading-tight px-4">
                     Safe, ad-free Christian stories kids love.
                 </p>
+                
+                {/* Free Trial Badge */}
+                <div className="bg-gradient-to-r from-[#fdd835] to-[#ffeb3b] px-4 py-2 rounded-full mb-4 shadow-md animate-pulse">
+                    <span className="text-[#3e2723] font-extrabold text-sm tracking-wide">
+                        🎁 3-DAY FREE TRIAL
+                    </span>
+                </div>
 
                 {/* Error Message */}
                 {error && (
@@ -138,16 +145,16 @@ const PaywallPage: React.FC = () => {
                             : 'bg-white/60 border-[#b2dfdb] opacity-90 hover:opacity-100'
                         }`}
                     >
-                        {selectedPlan === 'annual' && (
-                            <div className="bg-[#fdd835] py-1 text-center shadow-sm absolute top-0 left-0 right-0 z-10">
-                                <span className="text-[#3e2723] text-[10px] font-extrabold uppercase tracking-widest">BEST VALUE</span>
-                            </div>
-                        )}
-                        <div className={`px-4 ${selectedPlan === 'annual' ? 'pt-8 pb-3' : 'py-4'} flex items-center justify-between`}>
+                        <div className="bg-gradient-to-r from-[#fdd835] to-[#ffeb3b] py-1 text-center shadow-sm absolute top-0 left-0 right-0 z-10">
+                            <span className="text-[#3e2723] text-[10px] font-extrabold uppercase tracking-widest">
+                                ✨ 3-DAY FREE TRIAL + BEST VALUE
+                            </span>
+                        </div>
+                        <div className="px-4 pt-8 pb-3 flex items-center justify-between">
                             <div className="flex flex-col text-left">
                                 <span className={`font-display font-bold text-lg ${selectedPlan === 'annual' ? 'text-[#004d40]' : 'text-[#546e7a]'}`}>Annual</span>
                                 <span className="text-xs text-[#00796b] font-semibold bg-[#b2dfdb]/50 px-1.5 py-0.5 rounded-md w-fit">
-                                  $1.54 / week
+                                  $1.54 / week after trial
                                 </span>
                             </div>
                             <div className="flex flex-col items-end">
@@ -161,7 +168,7 @@ const PaywallPage: React.FC = () => {
                         </div>
                         
                         {/* Checkmark circle */}
-                        <div className={`absolute ${selectedPlan === 'annual' ? 'top-8' : 'top-1/2 -translate-y-1/2'} right-2 transition-all`}>
+                        <div className="absolute top-8 right-2 transition-all">
                             <div className={`rounded-full p-1 ${selectedPlan === 'annual' ? 'bg-[#009688] text-white' : 'bg-transparent border-2 border-[#b2dfdb]'}`}>
                                 {selectedPlan === 'annual' && <Check size={12} strokeWidth={4} />}
                                 {selectedPlan !== 'annual' && <div className="w-3 h-3" />}
@@ -178,10 +185,19 @@ const PaywallPage: React.FC = () => {
                             : 'bg-white/60 border-[#b2dfdb] opacity-90 hover:opacity-100'
                         }`}
                     >
-                        <div className="px-4 py-4 flex items-center justify-between">
+                        {selectedPlan === 'monthly' && (
+                            <div className="bg-[#b2dfdb] py-1 text-center shadow-sm absolute top-0 left-0 right-0 z-10">
+                                <span className="text-[#004d40] text-[10px] font-extrabold uppercase tracking-widest">
+                                    3-DAY FREE TRIAL INCLUDED
+                                </span>
+                            </div>
+                        )}
+                        <div className={`px-4 ${selectedPlan === 'monthly' ? 'pt-8 pb-3' : 'py-4'} flex items-center justify-between`}>
                             <div className="flex flex-col text-left">
                                 <span className={`font-display font-bold text-lg ${selectedPlan === 'monthly' ? 'text-[#004d40]' : 'text-[#546e7a]'}`}>Monthly</span>
-                                <span className="text-xs text-[#00796b] font-semibold bg-[#b2dfdb]/50 px-1.5 py-0.5 rounded-md w-fit">Flexible</span>
+                                <span className="text-xs text-[#00796b] font-semibold bg-[#b2dfdb]/50 px-1.5 py-0.5 rounded-md w-fit">
+                                    {selectedPlan === 'monthly' ? 'Flexible, after trial' : 'Flexible'}
+                                </span>
                             </div>
                             <div className="flex flex-col items-end">
                                 <div className="flex items-center gap-1">
@@ -194,7 +210,7 @@ const PaywallPage: React.FC = () => {
                         </div>
 
                          {/* Checkmark circle */}
-                        <div className="absolute top-1/2 -translate-y-1/2 right-2">
+                        <div className={`absolute ${selectedPlan === 'monthly' ? 'top-8' : 'top-1/2 -translate-y-1/2'} right-2`}>
                             <div className={`rounded-full p-1 ${selectedPlan === 'monthly' ? 'bg-[#009688] text-white' : 'bg-transparent border-2 border-[#b2dfdb]'}`}>
                                 {selectedPlan === 'monthly' && <Check size={12} strokeWidth={4} />}
                                 {selectedPlan !== 'monthly' && <div className="w-3 h-3" />}
@@ -217,7 +233,7 @@ const PaywallPage: React.FC = () => {
                             Processing...
                           </>
                         ) : (
-                          selectedPlan === 'annual' ? 'Start Free Trial' : 'Subscribe Monthly'
+                          '🎁 Start 3-Day Free Trial'
                         )}
                     </span>
                     {/* Shine effect */}
@@ -262,7 +278,7 @@ const PaywallPage: React.FC = () => {
             </div>
             
             <p className="text-[#006064]/50 text-[10px] font-medium mt-8 text-center px-6 max-w-xs">
-                Subscription automatically renews unless auto-renew is turned off at least 24-hours before the end of the current period.
+                Free trial for 3 days, then subscription automatically renews unless cancelled at least 24-hours before the trial ends. Cancel anytime.
             </p>
 
             {/* Debug info for development */}

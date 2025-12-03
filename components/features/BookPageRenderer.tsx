@@ -102,11 +102,19 @@ export const BookPageRenderer: React.FC<BookPageRendererProps> = ({
     // Reset bubble when page changes
     useEffect(() => {
         setBubblePopped(false);
-        // Randomize bubble position slightly for variety
-        setBubblePosition({
-            x: 70 + Math.random() * 20, // 70-90% from left
-            y: 15 + Math.random() * 10  // 15-25% from top
-        });
+        // Randomize bubble position across different areas of the screen
+        // Avoid the very center where text usually is, and edges where controls are
+        const positions = [
+            { x: 15 + Math.random() * 15, y: 15 + Math.random() * 15 },  // Top left area
+            { x: 70 + Math.random() * 15, y: 15 + Math.random() * 15 },  // Top right area
+            { x: 15 + Math.random() * 15, y: 45 + Math.random() * 15 },  // Middle left area
+            { x: 70 + Math.random() * 15, y: 45 + Math.random() * 15 },  // Middle right area
+            { x: 20 + Math.random() * 20, y: 20 + Math.random() * 20 },  // Upper left quadrant
+            { x: 60 + Math.random() * 20, y: 20 + Math.random() * 20 },  // Upper right quadrant
+        ];
+        // Pick a random position from the array
+        const randomPosition = positions[Math.floor(Math.random() * positions.length)];
+        setBubblePosition(randomPosition);
     }, [page.id]);
 
     const handleBubbleClick = (e: React.MouseEvent) => {

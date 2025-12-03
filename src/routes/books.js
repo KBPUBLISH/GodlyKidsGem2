@@ -79,6 +79,40 @@ router.get('/featured', async (req, res) => {
     }
 });
 
+// GET top-rated books (15% or more likes/favorites to reads ratio)
+router.get('/top-rated', async (req, res) => {
+    try {
+        const minRatio = parseFloat(req.query.minRatio) || 0.15; // Default 15%
+        const minReads = parseInt(req.query.minReads) || 5; // Minimum reads to qualify
+        
+        const books = await Book.find({ 
+            status: 'published',
+            readCount: { $gte: minReads } // At least minReads to be considered
+        });
+        
+        // Calculate rating ratio and filter
+        const topRatedBooks = books
+            .map(book => {
+                const bookObj = book.toObject();
+                const totalEngagement = (bookObj.likeCount || 0) + (bookObj.favoriteCount || 0);
+                const ratio = bookObj.readCount > 0 ? totalEngagement / bookObj.readCount : 0;
+                bookObj.ratingRatio = ratio;
+                
+                // Add coverImage for backward compatibility
+                if (bookObj.files && bookObj.files.coverImage) {
+                    bookObj.coverImage = bookObj.files.coverImage;
+                }
+                return bookObj;
+            })
+            .filter(book => book.ratingRatio >= minRatio)
+            .sort((a, b) => b.ratingRatio - a.ratingRatio); // Sort by highest ratio first
+        
+        res.json(topRatedBooks);
+    } catch (error) {
+        res.status(500).json({ message: error.message });
+    }
+});
+
 // GET single book
 router.get('/:id', async (req, res) => {
     try {

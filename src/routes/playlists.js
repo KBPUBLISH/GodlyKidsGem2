@@ -28,6 +28,35 @@ router.get('/featured', async (req, res) => {
     }
 });
 
+// GET top-rated playlists (15% or more likes/favorites to plays ratio)
+router.get('/top-rated', async (req, res) => {
+    try {
+        const minRatio = parseFloat(req.query.minRatio) || 0.15; // Default 15%
+        const minPlays = parseInt(req.query.minPlays) || 5; // Minimum plays to qualify
+        
+        const playlists = await Playlist.find({ 
+            status: 'published',
+            playCount: { $gte: minPlays } // At least minPlays to be considered
+        });
+        
+        // Calculate rating ratio and filter
+        const topRatedPlaylists = playlists
+            .map(playlist => {
+                const playlistObj = playlist.toObject();
+                const totalEngagement = (playlistObj.likeCount || 0) + (playlistObj.favoriteCount || 0);
+                const ratio = playlistObj.playCount > 0 ? totalEngagement / playlistObj.playCount : 0;
+                playlistObj.ratingRatio = ratio;
+                return playlistObj;
+            })
+            .filter(playlist => playlist.ratingRatio >= minRatio)
+            .sort((a, b) => b.ratingRatio - a.ratingRatio); // Sort by highest ratio first
+        
+        res.json(topRatedPlaylists);
+    } catch (error) {
+        res.status(500).json({ message: error.message });
+    }
+});
+
 // GET single playlist
 router.get('/:id', async (req, res) => {
     try {

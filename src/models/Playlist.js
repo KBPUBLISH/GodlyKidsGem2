@@ -97,6 +97,16 @@ const playlistSchema = new mongoose.Schema({
         type: Number,
         default: 0,
     },
+    // Global favorite count
+    favoriteCount: {
+        type: Number,
+        default: 0,
+    },
+    // Global like count (for top rated calculation)
+    likeCount: {
+        type: Number,
+        default: 0,
+    },
     createdAt: {
         type: Date,
         default: Date.now,

@@ -69,6 +69,12 @@ const bookSchema = new mongoose.Schema({
         default: 0,
     },
     
+    // Global like count (for top rated calculation)
+    likeCount: {
+        type: Number,
+        default: 0,
+    },
+    
     // Organized file structure per book
     files: {
         type: {

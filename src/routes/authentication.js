@@ -14,8 +14,20 @@ router.post('/sign-up', async (req, res) => {
             return res.status(400).json({ message: 'User already exists' });
         }
 
-        // Create username from email if not provided
-        const username = firstName || email.split('@')[0];
+        // Create unique username from email prefix + random suffix
+        // This ensures uniqueness even if firstName is generic like "User"
+        const emailPrefix = email.split('@')[0].replace(/[^a-zA-Z0-9]/g, '');
+        const randomSuffix = Math.random().toString(36).substring(2, 8);
+        const baseUsername = firstName && firstName !== 'User' ? firstName : emailPrefix;
+        let username = `${baseUsername}_${randomSuffix}`;
+        
+        // Double-check username is unique (in case of collision)
+        let existingUser = await User.findOne({ username });
+        while (existingUser) {
+            const newSuffix = Math.random().toString(36).substring(2, 8);
+            username = `${baseUsername}_${newSuffix}`;
+            existingUser = await User.findOne({ username });
+        }
 
         // Create new user
         user = new User({

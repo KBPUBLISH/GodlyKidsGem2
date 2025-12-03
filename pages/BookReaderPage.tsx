@@ -152,6 +152,7 @@ const BookReaderPage: React.FC = () => {
     const [quizAttemptCount, setQuizAttemptCount] = useState(0);
     const [quizLoading, setQuizLoading] = useState(false);
     const [bookTitle, setBookTitle] = useState('');
+    const [bookOrientation, setBookOrientation] = useState<'portrait' | 'landscape'>('portrait');
     const [congratsAudioPlayed, setCongratsAudioPlayed] = useState(false);
     const congratsAudioRef = useRef<HTMLAudioElement | null>(null);
     
@@ -349,6 +350,11 @@ const BookReaderPage: React.FC = () => {
                 // Store book title for quiz modal
                 const title = (book as any)?.title || rawData?.title || 'This Book';
                 setBookTitle(title);
+                
+                // Get book orientation (portrait or landscape)
+                const orientation = (book as any)?.orientation || rawData?.orientation || 'portrait';
+                setBookOrientation(orientation);
+                console.log('📐 Book orientation:', orientation);
 
                 // Fetch quiz attempt count
                 const userId = localStorage.getItem('godlykids_user_id') || 'anonymous';
@@ -1260,9 +1266,19 @@ const BookReaderPage: React.FC = () => {
         );
     }
 
+    // Determine if we should show landscape mode
+    const isLandscape = bookOrientation === 'landscape';
+
     return (
         <div
-            className="relative w-full h-screen bg-gray-900 overflow-hidden flex flex-col"
+            className={`relative bg-gray-900 overflow-hidden flex flex-col ${
+                isLandscape 
+                    ? 'w-screen h-screen landscape-book' 
+                    : 'w-full h-screen'
+            }`}
+            style={isLandscape ? {
+                // Force landscape orientation hint for supported browsers
+            } : undefined}
             onTouchStart={(e) => {
                 // Block any music from playing on touch
                 e.stopPropagation();
@@ -1273,7 +1289,9 @@ const BookReaderPage: React.FC = () => {
             }}
         >
             {/* Top Toolbar - Clean and Compact */}
-            <div className="absolute top-0 left-0 right-0 h-14 flex items-center justify-between px-3 z-50 pointer-events-none">
+            <div className={`absolute top-0 left-0 right-0 h-14 flex items-center justify-between px-3 z-50 pointer-events-none ${
+                isLandscape ? 'landscape-toolbar' : ''
+            }`}>
                 {/* Back Button */}
                 <button
                     onClick={(e) => {
@@ -1652,6 +1670,19 @@ const BookReaderPage: React.FC = () => {
                     @keyframes scaleUp {
                         from { transform: scale(0.8); opacity: 0; }
                         to { transform: scale(1); opacity: 1; }
+                    }
+                    
+                    /* Landscape book styles */
+                    .landscape-book {
+                        /* Hint for landscape orientation */
+                    }
+                    
+                    /* Show rotate prompt on portrait phones for landscape books */
+                    @media screen and (orientation: portrait) and (max-width: 768px) {
+                        .landscape-book::before {
+                            content: '';
+                            /* Optional: Add rotate phone icon hint */
+                        }
                     }
                 `}</style>
 

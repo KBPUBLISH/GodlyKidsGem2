@@ -1,5 +1,5 @@
 
-import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 // Removed import of KidProfile due to missing export in ../types
 
 export interface ShopItem {
@@ -578,15 +578,10 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   // Helper to save current avatar state to active profile
   const saveCurrentProfileAvatar = useCallback(() => {
-    // Don't save if we're not on any profile yet (initial load)
-    if (currentProfileId === null && parentAvatarData === null) {
-      return;
-    }
-    
     const currentState = getCurrentAvatarState();
     
     if (currentProfileId === null) {
-      // Currently on parent - save parent's state
+      // Currently on parent - always save parent's state
       setParentAvatarData(currentState);
     } else {
       // Currently on a kid - save kid's state to their profile
@@ -596,16 +591,20 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
           : kid
       ));
     }
-  }, [currentProfileId, parentAvatarData, equippedAvatar, equippedFrame, equippedHat, equippedBody, 
+  }, [currentProfileId, equippedAvatar, equippedFrame, equippedHat, equippedBody, 
       equippedLeftArm, equippedRightArm, equippedLegs, equippedAnimation,
       equippedLeftArmRotation, equippedRightArmRotation, equippedLegsRotation,
       leftArmOffset, rightArmOffset, legsOffset, headOffset, bodyOffset, hatOffset,
       leftArmScale, rightArmScale, legsScale, headScale, bodyScale, hatScale]);
 
+  // Track if this is the initial mount to avoid unnecessary saves
+  const isInitialMount = useRef(true);
+
   // Auto-save avatar changes to current profile (with debounce to avoid excessive saves)
   useEffect(() => {
-    // Don't save on initial mount or if no profile is active
-    if (currentProfileId === null && parentAvatarData === null) {
+    // Skip the very first render to avoid saving default values
+    if (isInitialMount.current) {
+      isInitialMount.current = false;
       return;
     }
     
@@ -880,7 +879,7 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const resetUser = () => {
-    setCoins(2650);
+    setCoins(500); // New users start with 500 gold coins
     setCoinTransactions([]);
     setRedeemedCodes([]);
     setOwnedItems(['f1', 'anim1']);

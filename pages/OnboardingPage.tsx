@@ -86,11 +86,26 @@ const OnboardingPage: React.FC = () => {
   const handleAddKid = () => {
     if (!kidName.trim()) return;
     playSuccess();
+    // Create kid with their own fully initialized data - completely separate from parent
     addKid({
       id: Date.now().toString(),
       name: kidName,
-      age: kidAge,
-      avatarSeed: kidAvatar
+      age: kidAge ? parseInt(kidAge, 10) : undefined,
+      avatarSeed: kidAvatar,
+      // Initialize kid's own economy data
+      coins: 500, // Kids start with 500 coins
+      coinTransactions: [],
+      ownedItems: ['f1', 'anim1'], // Default owned items
+      unlockedVoices: [],
+      // Initialize kid's avatar to their selected head - separate from parent
+      avatar: kidAvatar,
+      frame: 'border-[#8B4513]',
+      hat: null,
+      body: null,
+      leftArm: null,
+      rightArm: null,
+      legs: null,
+      animation: 'anim-breathe',
     });
     // Reset inputs for next kid
     setKidName('');

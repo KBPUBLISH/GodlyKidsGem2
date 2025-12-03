@@ -17,9 +17,11 @@ interface ChallengeGameModalProps {
 type GameState = 'cooldown' | 'intro' | 'ready' | 'playing' | 'game-over' | 'success' | 'claimed';
 
 const GAME_DURATION = 60; // 60 seconds for matching game
+import { profileService } from '../../services/profileService';
+
 const GAME_PAIRS_COUNT = 6;
 const COOLDOWN_HOURS = 12; // 12 hours cooldown
-const STORAGE_KEY = 'memory_game_last_completion';
+const getStorageKey = () => profileService.getProfileKey('memory_game_last_completion');
 
 // Expanded Pool of Biblical Symbols
 const SYMBOL_POOL = [
@@ -114,7 +116,7 @@ const ChallengeGameModal: React.FC<ChallengeGameModalProps> = ({ isOpen, onClose
   // Helper function to check if cooldown is active
   const getLastCompletionTime = (): number | null => {
     try {
-      const stored = localStorage.getItem(STORAGE_KEY);
+      const stored = localStorage.getItem(getStorageKey());
       return stored ? parseInt(stored, 10) : null;
     } catch {
       return null;
@@ -287,8 +289,8 @@ const ChallengeGameModal: React.FC<ChallengeGameModalProps> = ({ isOpen, onClose
     const coinReward = earnedStars === 3 ? 50 : earnedStars === 2 ? 25 : 10;
     addCoins(coinReward, `Memory Challenge - ${earnedStars} ⭐`, 'game');
     
-    // Store completion timestamp
-    localStorage.setItem(STORAGE_KEY, Date.now().toString());
+    // Store completion timestamp (per-profile)
+    localStorage.setItem(getStorageKey(), Date.now().toString());
     
     setTimeout(() => {
         onClose();

@@ -16,6 +16,7 @@ import { isCompleted, isLocked, getWeekDays } from '../services/lessonService';
 import { readingProgressService } from '../services/readingProgressService';
 import { playHistoryService } from '../services/playHistoryService';
 import { bookCompletionService } from '../services/bookCompletionService';
+import { profileService } from '../services/profileService';
 
 // Inline getLessonStatus to avoid circular dependency
 const getLessonStatus = (lesson: any): 'available' | 'locked' | 'completed' => {
@@ -28,10 +29,8 @@ const getLessonStatus = (lesson: any): 'available' | 'locked' | 'completed' => {
   return 'available';
 };
 
-const MEMORY_GAME_ENGAGED_KEY = 'memory_game_engaged';
-const DAILY_KEY_ENGAGED_KEY = 'daily_key_engaged';
-const STRENGTH_GAME_ENGAGED_KEY = 'strength_game_engaged';
-const PRAYER_GAME_ENGAGED_KEY = 'prayer_game_engaged';
+// Profile-specific game engagement keys
+const getEngagementKey = (baseKey: string) => profileService.getProfileKey(baseKey);
 
 
 const HomePage: React.FC = () => {
@@ -76,12 +75,12 @@ const HomePage: React.FC = () => {
   const scrollRef = useRef<HTMLDivElement>(null);
   const lastScrollY = useRef(0);
 
-  // Check if games have been engaged
+  // Check if games have been engaged (per-profile)
   useEffect(() => {
-    const memoryEngaged = localStorage.getItem(MEMORY_GAME_ENGAGED_KEY) === 'true';
-    const dailyKeyEngaged = localStorage.getItem(DAILY_KEY_ENGAGED_KEY) === 'true';
-    const strengthEngaged = localStorage.getItem(STRENGTH_GAME_ENGAGED_KEY) === 'true';
-    const prayerEngaged = localStorage.getItem(PRAYER_GAME_ENGAGED_KEY) === 'true';
+    const memoryEngaged = localStorage.getItem(getEngagementKey('memory_game_engaged')) === 'true';
+    const dailyKeyEngaged = localStorage.getItem(getEngagementKey('daily_key_engaged')) === 'true';
+    const strengthEngaged = localStorage.getItem(getEngagementKey('strength_game_engaged')) === 'true';
+    const prayerEngaged = localStorage.getItem(getEngagementKey('prayer_game_engaged')) === 'true';
     setHasEngagedMemory(memoryEngaged);
     setHasEngagedDailyKey(dailyKeyEngaged);
     setHasEngagedStrength(strengthEngaged);
@@ -98,36 +97,36 @@ const HomePage: React.FC = () => {
   }, [loading, books, refreshBooks]);
 
   const handleDailyKeyClick = () => {
-    // Mark as engaged when user clicks
+    // Mark as engaged when user clicks (per-profile)
     if (!hasEngagedDailyKey) {
-      localStorage.setItem(DAILY_KEY_ENGAGED_KEY, 'true');
+      localStorage.setItem(getEngagementKey('daily_key_engaged'), 'true');
       setHasEngagedDailyKey(true);
     }
     setShowDailyReward(true);
   };
 
   const handleMemoryClick = () => {
-    // Mark as engaged when user clicks
+    // Mark as engaged when user clicks (per-profile)
     if (!hasEngagedMemory) {
-      localStorage.setItem(MEMORY_GAME_ENGAGED_KEY, 'true');
+      localStorage.setItem(getEngagementKey('memory_game_engaged'), 'true');
       setHasEngagedMemory(true);
     }
     setShowChallengeGame(true);
   };
 
   const handleStrengthClick = () => {
-    // Mark as engaged when user clicks
+    // Mark as engaged when user clicks (per-profile)
     if (!hasEngagedStrength) {
-      localStorage.setItem(STRENGTH_GAME_ENGAGED_KEY, 'true');
+      localStorage.setItem(getEngagementKey('strength_game_engaged'), 'true');
       setHasEngagedStrength(true);
     }
     setShowStrengthGame(true);
   };
 
   const handlePrayerClick = async () => {
-    // Mark as engaged when user clicks
+    // Mark as engaged when user clicks (per-profile)
     if (!hasEngagedPrayer) {
-      localStorage.setItem(PRAYER_GAME_ENGAGED_KEY, 'true');
+      localStorage.setItem(getEngagementKey('prayer_game_engaged'), 'true');
       setHasEngagedPrayer(true);
     }
 

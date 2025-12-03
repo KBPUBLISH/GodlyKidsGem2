@@ -1,5 +1,7 @@
-// Reading Progress Service - Tracks reading progress for each book
-const READING_PROGRESS_KEY = 'godlykids_reading_progress';
+// Reading Progress Service - Tracks reading progress for each book PER PROFILE
+import { profileService } from './profileService';
+
+const BASE_KEY = 'godlykids_reading_progress';
 
 export interface ReadingProgress {
   bookId: string;
@@ -8,10 +10,15 @@ export interface ReadingProgress {
 }
 
 class ReadingProgressService {
-  // Get all reading progress
+  // Get the current profile-specific key
+  private getKey(): string {
+    return profileService.getProfileKey(BASE_KEY);
+  }
+
+  // Get all reading progress for current profile
   getAllProgress(): Record<string, ReadingProgress> {
     try {
-      const stored = localStorage.getItem(READING_PROGRESS_KEY);
+      const stored = localStorage.getItem(this.getKey());
       if (!stored) return {};
       return JSON.parse(stored);
     } catch (error) {
@@ -35,7 +42,7 @@ class ReadingProgressService {
         currentPageIndex,
         lastReadAt: Date.now()
       };
-      localStorage.setItem(READING_PROGRESS_KEY, JSON.stringify(allProgress));
+      localStorage.setItem(this.getKey(), JSON.stringify(allProgress));
     } catch (error) {
       console.error('Error saving progress:', error);
     }
@@ -46,16 +53,16 @@ class ReadingProgressService {
     try {
       const allProgress = this.getAllProgress();
       delete allProgress[bookId];
-      localStorage.setItem(READING_PROGRESS_KEY, JSON.stringify(allProgress));
+      localStorage.setItem(this.getKey(), JSON.stringify(allProgress));
     } catch (error) {
       console.error('Error clearing progress:', error);
     }
   }
 
-  // Clear all progress
+  // Clear all progress for current profile
   clearAllProgress(): void {
     try {
-      localStorage.removeItem(READING_PROGRESS_KEY);
+      localStorage.removeItem(this.getKey());
     } catch (error) {
       console.error('Error clearing all progress:', error);
     }
@@ -77,6 +84,3 @@ class ReadingProgressService {
 }
 
 export const readingProgressService = new ReadingProgressService();
-
-
-

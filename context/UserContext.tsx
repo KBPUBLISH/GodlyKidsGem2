@@ -225,6 +225,14 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
     name: string;
     age?: number;
     avatarSeed?: string; // Initial head selection
+    
+    // Per-profile economy data
+    coins?: number;
+    coinTransactions?: CoinTransaction[];
+    ownedItems?: string[];
+    unlockedVoices?: string[];
+    redeemedCodes?: string[];
+    
     // Full avatar configuration
     avatar?: string;
     frame?: string;
@@ -317,6 +325,15 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
     hatScale: number;
   } | null>(saved?.parentAvatarData ?? null);
 
+  // Store parent's economy data persistently
+  const [parentEconomyData, setParentEconomyData] = useState<{
+    coins: number;
+    coinTransactions: CoinTransaction[];
+    ownedItems: string[];
+    unlockedVoices: string[];
+    redeemedCodes: string[];
+  } | null>(saved?.parentEconomyData ?? null);
+
   // --- PERSISTENCE EFFECT ---
   useEffect(() => {
     const stateToSave = {
@@ -354,11 +371,12 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
       hatScale,
       savedCharacters,
       isSubscribed,
-      parentAvatarData
+      parentAvatarData,
+      parentEconomyData
     };
     localStorage.setItem(STORAGE_KEY, JSON.stringify(stateToSave));
   }, [
-    coins, coinTransactions, referralCode, redeemedCodes, ownedItems, unlockedVoices, parentName, kids, currentProfileId,
+    coins, coinTransactions, referralCode, redeemedCodes, ownedItems, unlockedVoices, parentName, kids, currentProfileId, parentEconomyData,
       equippedAvatar, equippedFrame, equippedHat, equippedBody,
     equippedLeftArm, equippedRightArm, equippedLegs, equippedAnimation,
     equippedLeftArmRotation, equippedRightArmRotation, equippedLegsRotation,
@@ -517,6 +535,47 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setHatScale(state.hatScale);
   };
 
+  // Helper to get current economy state
+  const getCurrentEconomyState = () => ({
+    coins,
+    coinTransactions: [...coinTransactions],
+    ownedItems: [...ownedItems],
+    unlockedVoices: [...unlockedVoices],
+    redeemedCodes: [...redeemedCodes],
+  });
+
+  // Helper to apply economy state
+  const applyEconomyState = (state: {
+    coins: number;
+    coinTransactions: CoinTransaction[];
+    ownedItems: string[];
+    unlockedVoices: string[];
+    redeemedCodes: string[];
+  }) => {
+    setCoins(state.coins);
+    setCoinTransactions(state.coinTransactions);
+    setOwnedItems(state.ownedItems);
+    setUnlockedVoices(state.unlockedVoices);
+    setRedeemedCodes(state.redeemedCodes);
+  };
+
+  // Helper to save current profile's economy data
+  const saveCurrentProfileEconomy = useCallback(() => {
+    const currentState = getCurrentEconomyState();
+    
+    if (currentProfileId === null) {
+      // Currently on parent - save parent's economy
+      setParentEconomyData(currentState);
+    } else {
+      // Currently on a kid - save kid's economy to their profile
+      setKids(prev => prev.map(kid => 
+        kid.id === currentProfileId 
+          ? { ...kid, ...currentState }
+          : kid
+      ));
+    }
+  }, [currentProfileId, coins, coinTransactions, ownedItems, unlockedVoices, redeemedCodes]);
+
   // Helper to save current avatar state to active profile
   const saveCurrentProfileAvatar = useCallback(() => {
     // Don't save if we're not on any profile yet (initial load)
@@ -567,20 +626,33 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
   ]);
 
   const switchProfile = (profileId: string | null) => {
-    // Save current profile's avatar data before switching
+    // Save current profile's data before switching
     saveCurrentProfileAvatar();
+    saveCurrentProfileEconomy();
 
     setCurrentProfileId(profileId);
 
     if (profileId === null) {
-      // Switching to parent - restore parent's avatar data
+      // Switching to parent - restore parent's data
       if (parentAvatarData) {
         applyAvatarState(parentAvatarData);
       }
+      if (parentEconomyData) {
+        applyEconomyState(parentEconomyData);
+      }
     } else {
-      // Switching to a kid profile - restore kid's saved avatar or use defaults
+      // Switching to a kid profile - restore kid's saved data or use defaults
       const kid = kids.find(k => k.id === profileId);
       if (kid) {
+        // Restore kid's economy data (or defaults for new profiles)
+        applyEconomyState({
+          coins: kid.coins ?? 100, // New kids start with 100 coins
+          coinTransactions: kid.coinTransactions ?? [],
+          ownedItems: kid.ownedItems ?? ['f1', 'anim1'],
+          unlockedVoices: kid.unlockedVoices ?? [],
+          redeemedCodes: kid.redeemedCodes ?? [],
+        });
+
         // If kid has saved avatar data, use it; otherwise use defaults with their avatarSeed
         if (kid.avatar !== undefined) {
           // Kid has saved avatar configuration
@@ -646,6 +718,9 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
         }
       }
     }
+    
+    // Dispatch event so services can update their storage keys
+    window.dispatchEvent(new CustomEvent('profileSwitched', { detail: { profileId } }));
   };
 
   const isOwned = (id: string) => {

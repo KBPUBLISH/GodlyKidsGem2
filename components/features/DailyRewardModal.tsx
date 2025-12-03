@@ -24,9 +24,11 @@ const DAILY_VERSES = [
 
 type GameState = 'cooldown' | 'intro' | 'ready' | 'playing' | 'game-over' | 'success' | 'claimed';
 
+import { profileService } from '../../services/profileService';
+
 const GAME_DURATION = 30; // 30 seconds
 const COOLDOWN_HOURS = 12; // 12 hours cooldown
-const STORAGE_KEY = 'daily_verse_last_completion';
+const getStorageKey = () => profileService.getProfileKey('daily_verse_last_completion');
 
 const DailyRewardModal: React.FC<DailyRewardModalProps> = ({ isOpen, onClose }) => {
   const { addCoins } = useUser();
@@ -55,7 +57,7 @@ const DailyRewardModal: React.FC<DailyRewardModalProps> = ({ isOpen, onClose }) 
   // Helper function to check if cooldown is active
   const getLastCompletionTime = (): number | null => {
     try {
-      const stored = localStorage.getItem(STORAGE_KEY);
+      const stored = localStorage.getItem(getStorageKey());
       return stored ? parseInt(stored, 10) : null;
     } catch {
       return null;
@@ -259,8 +261,8 @@ const DailyRewardModal: React.FC<DailyRewardModalProps> = ({ isOpen, onClose }) 
     const coinReward = earnedStars === 3 ? 50 : earnedStars === 2 ? 25 : 10;
     addCoins(coinReward, `Daily Verse - ${earnedStars} ⭐`, 'daily');
     
-    // Store completion timestamp
-    localStorage.setItem(STORAGE_KEY, Date.now().toString());
+    // Store completion timestamp (per-profile)
+    localStorage.setItem(getStorageKey(), Date.now().toString());
     
     setTimeout(() => {
         onClose();

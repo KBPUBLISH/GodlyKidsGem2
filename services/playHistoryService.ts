@@ -1,5 +1,7 @@
-// Play History Service - Tracks recently played playlists and songs
-const PLAY_HISTORY_KEY = 'godlykids_play_history';
+// Play History Service - Tracks recently played playlists and songs PER PROFILE
+import { profileService } from './profileService';
+
+const BASE_KEY = 'godlykids_play_history';
 
 export interface PlayHistoryEntry {
   playlistId: string;
@@ -8,10 +10,15 @@ export interface PlayHistoryEntry {
 }
 
 class PlayHistoryService {
-  // Get all play history
+  // Get the current profile-specific key
+  private getKey(): string {
+    return profileService.getProfileKey(BASE_KEY);
+  }
+
+  // Get all play history for current profile
   getAllHistory(): Record<string, PlayHistoryEntry> {
     try {
-      const stored = localStorage.getItem(PLAY_HISTORY_KEY);
+      const stored = localStorage.getItem(this.getKey());
       if (!stored) return {};
       return JSON.parse(stored);
     } catch (error) {
@@ -35,7 +42,7 @@ class PlayHistoryService {
         lastPlayedAt: Date.now(),
         itemId
       };
-      localStorage.setItem(PLAY_HISTORY_KEY, JSON.stringify(allHistory));
+      localStorage.setItem(this.getKey(), JSON.stringify(allHistory));
     } catch (error) {
       console.error('Error saving play history:', error);
     }
@@ -46,16 +53,16 @@ class PlayHistoryService {
     try {
       const allHistory = this.getAllHistory();
       delete allHistory[playlistId];
-      localStorage.setItem(PLAY_HISTORY_KEY, JSON.stringify(allHistory));
+      localStorage.setItem(this.getKey(), JSON.stringify(allHistory));
     } catch (error) {
       console.error('Error clearing play history:', error);
     }
   }
 
-  // Clear all history
+  // Clear all history for current profile
   clearAllHistory(): void {
     try {
-      localStorage.removeItem(PLAY_HISTORY_KEY);
+      localStorage.removeItem(this.getKey());
     } catch (error) {
       console.error('Error clearing all play history:', error);
     }
@@ -85,4 +92,3 @@ class PlayHistoryService {
 }
 
 export const playHistoryService = new PlayHistoryService();
-

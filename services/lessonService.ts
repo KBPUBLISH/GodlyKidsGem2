@@ -1,17 +1,24 @@
 /**
- * Service for managing lesson completions, streaks, and weekly resets
+ * Service for managing lesson completions, streaks, and weekly resets PER PROFILE
  */
+import { profileService } from './profileService';
 
 interface LessonCompletion {
     lessonId: string;
     completedAt: number; // timestamp
-    weekStart: number; // timestamp of Sunday midnight for the week
+    weekStart: number; // timestamp of Monday midnight for the week
     correctAnswers?: number; // number of correct quiz answers
     coinsEarned?: number; // total coins earned from this lesson
 }
 
-const STORAGE_KEY = 'godlykids_lesson_completions';
-const STREAK_STORAGE_KEY = 'godlykids_lesson_streak';
+const BASE_COMPLETIONS_KEY = 'godlykids_lesson_completions';
+const BASE_STREAK_KEY = 'godlykids_lesson_streak';
+const BASE_WEEK_START_KEY = 'godlykids_last_week_start';
+
+// Get profile-specific keys
+const getCompletionsKey = () => profileService.getProfileKey(BASE_COMPLETIONS_KEY);
+const getStreakKey = () => profileService.getProfileKey(BASE_STREAK_KEY);
+const getWeekStartKey = () => profileService.getProfileKey(BASE_WEEK_START_KEY);
 
 /**
  * Get the start of the current week (Monday midnight in user's local time)
@@ -69,13 +76,13 @@ export const getWeekDays = (): Date[] => {
  * Check if we need to reset the streak (new week started)
  */
 export const checkAndResetStreak = (): boolean => {
-    const lastWeekStart = localStorage.getItem('godlykids_last_week_start');
+    const lastWeekStart = localStorage.getItem(getWeekStartKey());
     const currentWeekStart = getWeekStart();
     
     if (!lastWeekStart || parseInt(lastWeekStart) !== currentWeekStart) {
         // New week - reset streak
-        localStorage.setItem('godlykids_last_week_start', currentWeekStart.toString());
-        localStorage.removeItem(STREAK_STORAGE_KEY);
+        localStorage.setItem(getWeekStartKey(), currentWeekStart.toString());
+        localStorage.removeItem(getStreakKey());
         return true;
     }
     
@@ -83,11 +90,11 @@ export const checkAndResetStreak = (): boolean => {
 };
 
 /**
- * Get all lesson completions
+ * Get all lesson completions for current profile
  */
 export const getCompletions = (): LessonCompletion[] => {
     try {
-        const saved = localStorage.getItem(STORAGE_KEY);
+        const saved = localStorage.getItem(getCompletionsKey());
         return saved ? JSON.parse(saved) : [];
     } catch (e) {
         console.error('Failed to load lesson completions', e);
@@ -133,7 +140,7 @@ export const markCompleted = (
         coinsEarned,
     };
     
-    localStorage.setItem(STORAGE_KEY, JSON.stringify([...filtered, newCompletion]));
+    localStorage.setItem(getCompletionsKey(), JSON.stringify([...filtered, newCompletion]));
     
     // Update streak
     updateStreak(weekStart);
@@ -143,7 +150,7 @@ export const markCompleted = (
  * Update streak count for current week
  */
 const updateStreak = (weekStart: number): void => {
-    const streakData = localStorage.getItem(STREAK_STORAGE_KEY);
+    const streakData = localStorage.getItem(getStreakKey());
     let streak = streakData ? JSON.parse(streakData) : { weekStart, count: 0 };
     
     // Reset if new week
@@ -153,7 +160,7 @@ const updateStreak = (weekStart: number): void => {
     
     // Increment streak
     streak.count += 1;
-    localStorage.setItem(STREAK_STORAGE_KEY, JSON.stringify(streak));
+    localStorage.setItem(getStreakKey(), JSON.stringify(streak));
 };
 
 /**
@@ -162,7 +169,7 @@ const updateStreak = (weekStart: number): void => {
 export const getStreak = (): number => {
     checkAndResetStreak(); // Check if new week
     
-    const streakData = localStorage.getItem(STREAK_STORAGE_KEY);
+    const streakData = localStorage.getItem(getStreakKey());
     if (!streakData) return 0;
     
     const streak = JSON.parse(streakData);
@@ -233,4 +240,3 @@ export const getLessonStatus = (lesson: any): 'available' | 'locked' | 'complete
 
 // All functions are exported as named exports above
 // No default export to avoid circular dependency issues
-

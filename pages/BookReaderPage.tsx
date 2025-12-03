@@ -910,12 +910,13 @@ const BookReaderPage: React.FC = () => {
         alignmentWarningShownRef.current = false; // Reset warning flag for new audio
 
         try {
-            // Check preload cache first
-            const cacheKey = `${currentPageIndex}-${index}-${selectedVoiceId}`;
+            // Check preload cache first - use ref for accurate page index (state might be stale)
+            const actualPageIndex = currentPageIndexRef.current;
+            const cacheKey = `${actualPageIndex}-${index}-${selectedVoiceId}`;
             let result = audioPreloadCacheRef.current.get(cacheKey);
             
             if (result) {
-                console.log(`🎵 Using preloaded audio for page ${currentPageIndex + 1}, text box ${index + 1}`);
+                console.log(`🎵 Using preloaded audio for page ${actualPageIndex + 1}, text box ${index + 1}`);
             } else {
                 // Not in cache, generate now
                 const processedText = processTextWithEmotionalCues(text);

@@ -72,29 +72,36 @@ const BookQuizModal: React.FC<BookQuizModalProps> = ({
         setLoading(true);
         setError(null);
         try {
-            console.log(`📝 Loading quiz for age ${kidAge}...`);
+            console.log(`📝 Loading quiz for book ${bookId}, age ${kidAge}...`);
             
             // First try to get existing quiz for this age group
             let quizData = await ApiService.getBookQuiz(bookId, getUserId(), kidAge);
+            console.log('📝 getBookQuiz response:', quizData);
             
             // If no quiz exists for this age group, generate one
             if (!quizData || !quizData.quiz || quizData.needsGeneration) {
                 console.log(`📝 No quiz found for age ${kidAge}, generating...`);
                 const generated = await ApiService.generateBookQuiz(bookId, kidAge);
+                console.log('📝 generateBookQuiz response:', generated);
                 if (generated && generated.quiz) {
                     quizData = { quiz: generated.quiz };
+                } else {
+                    throw new Error('Quiz generation returned empty result');
                 }
             }
 
-            if (quizData && quizData.quiz && quizData.quiz.questions) {
+            if (quizData && quizData.quiz && quizData.quiz.questions && quizData.quiz.questions.length > 0) {
                 setQuestions(quizData.quiz.questions);
                 setAgeGroup(quizData.quiz.ageGroup || getAgeGroupLabel(kidAge));
+                console.log(`✅ Quiz loaded with ${quizData.quiz.questions.length} questions`);
             } else {
-                setError('Could not load quiz questions');
+                console.error('Quiz data structure invalid:', quizData);
+                setError('Could not load quiz questions. The book may not have enough content.');
             }
-        } catch (err) {
+        } catch (err: any) {
             console.error('Failed to load quiz:', err);
-            setError('Failed to load quiz. Please try again.');
+            const errorMessage = err?.message || 'Unknown error';
+            setError(`Failed to load quiz: ${errorMessage}`);
         } finally {
             setLoading(false);
         }

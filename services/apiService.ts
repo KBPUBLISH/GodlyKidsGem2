@@ -1414,6 +1414,54 @@ export const ApiService = {
     }
   },
 
+  // Generate just the first question quickly (for progressive loading)
+  generateFirstQuestion: async (bookId: string, age?: number): Promise<any | null> => {
+    try {
+      const baseUrl = getApiBaseUrl();
+      console.log(`⚡ Generating first question for book ${bookId}...`);
+      const response = await fetchWithTimeout(`${baseUrl}quiz/generate-first`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ bookId, age: age || 6 }),
+        timeout: 15000, // 15 seconds for just one question
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        console.log(`⚡ First question ready:`, data.cached ? 'from cache' : 'newly generated');
+        return data;
+      }
+      return null;
+    } catch (error) {
+      console.error('❌ Failed to generate first question:', error);
+      return null;
+    }
+  },
+
+  // Generate remaining questions in background
+  generateRemainingQuestions: async (bookId: string, age?: number, firstQuestion?: any): Promise<any | null> => {
+    try {
+      const baseUrl = getApiBaseUrl();
+      console.log(`📝 Generating remaining questions for book ${bookId}...`);
+      const response = await fetchWithTimeout(`${baseUrl}quiz/generate-remaining`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ bookId, age: age || 6, firstQuestion }),
+        timeout: 60000, // 60 seconds for remaining questions
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        console.log(`📝 All questions ready:`, data.questions?.length || 0, 'questions');
+        return data;
+      }
+      return null;
+    } catch (error) {
+      console.error('❌ Failed to generate remaining questions:', error);
+      return null;
+    }
+  },
+
   // Get quiz for a book (age-appropriate)
   getBookQuiz: async (bookId: string, userId?: string, age?: number): Promise<any | null> => {
     try {

@@ -43,6 +43,7 @@ const BookQuizModal: React.FC<BookQuizModalProps> = ({
 }) => {
     const { addCoins } = useUser();
     const [loading, setLoading] = useState(true);
+    const [loadingMessage, setLoadingMessage] = useState('Preparing your quiz...');
     const [questions, setQuestions] = useState<QuizQuestion[]>([]);
     const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
     const [selectedAnswers, setSelectedAnswers] = useState<Map<number, number>>(new Map());
@@ -51,6 +52,7 @@ const BookQuizModal: React.FC<BookQuizModalProps> = ({
     const [submitting, setSubmitting] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [ageGroup, setAgeGroup] = useState<string>('');
+    const [loadingRemainingQuestions, setLoadingRemainingQuestions] = useState(false);
 
     // Get user ID (using localStorage for now)
     const getUserId = () => {
@@ -70,6 +72,7 @@ const BookQuizModal: React.FC<BookQuizModalProps> = ({
 
     const loadQuiz = async () => {
         setLoading(true);
+        setLoadingMessage('Preparing your quiz...');
         setError(null);
         try {
             console.log(`📝 Loading quiz for book ${bookId}, age ${kidAge}...`);
@@ -78,25 +81,67 @@ const BookQuizModal: React.FC<BookQuizModalProps> = ({
             let quizData = await ApiService.getBookQuiz(bookId, getUserId(), kidAge);
             console.log('📝 getBookQuiz response:', quizData);
             
-            // If no quiz exists for this age group, generate one
-            if (!quizData || !quizData.quiz || quizData.needsGeneration) {
-                console.log(`📝 No quiz found for age ${kidAge}, generating...`);
-                const generated = await ApiService.generateBookQuiz(bookId, kidAge);
-                console.log('📝 generateBookQuiz response:', generated);
-                if (generated && generated.quiz) {
-                    quizData = { quiz: generated.quiz };
-                } else {
-                    throw new Error('Quiz generation returned empty result');
-                }
-            }
-
-            if (quizData && quizData.quiz && quizData.quiz.questions && quizData.quiz.questions.length > 0) {
+            // If full quiz exists, use it
+            if (quizData && quizData.quiz && quizData.quiz.questions && quizData.quiz.questions.length >= 6) {
                 setQuestions(quizData.quiz.questions);
                 setAgeGroup(quizData.quiz.ageGroup || getAgeGroupLabel(kidAge));
                 console.log(`✅ Quiz loaded with ${quizData.quiz.questions.length} questions`);
+                setLoading(false);
+                return;
+            }
+            
+            // No full quiz exists - use progressive loading
+            console.log(`⚡ Using progressive loading for age ${kidAge}...`);
+            setLoadingMessage('Creating your first question...');
+            
+            // Generate first question quickly
+            const firstResult = await ApiService.generateFirstQuestion(bookId, kidAge);
+            console.log('⚡ First question result:', firstResult);
+            
+            if (firstResult && firstResult.firstQuestion) {
+                // Show first question immediately
+                setQuestions([firstResult.firstQuestion]);
+                setAgeGroup(firstResult.ageGroup || getAgeGroupLabel(kidAge));
+                setLoading(false);
+                
+                // If this was from cache, we already have all questions
+                if (firstResult.cached && firstResult.totalQuestions >= 6) {
+                    // Fetch the full quiz
+                    const fullQuiz = await ApiService.getBookQuiz(bookId, getUserId(), kidAge);
+                    if (fullQuiz?.quiz?.questions) {
+                        setQuestions(fullQuiz.quiz.questions);
+                    }
+                    return;
+                }
+                
+                // Generate remaining questions in background
+                if (firstResult.needsRemainingQuestions) {
+                    setLoadingRemainingQuestions(true);
+                    console.log('📝 Loading remaining questions in background...');
+                    
+                    const remainingResult = await ApiService.generateRemainingQuestions(
+                        bookId, 
+                        kidAge, 
+                        firstResult.firstQuestion
+                    );
+                    
+                    if (remainingResult && remainingResult.questions) {
+                        setQuestions(remainingResult.questions);
+                        console.log(`✅ All ${remainingResult.questions.length} questions loaded`);
+                    }
+                    setLoadingRemainingQuestions(false);
+                }
             } else {
-                console.error('Quiz data structure invalid:', quizData);
-                setError('Could not load quiz questions. The book may not have enough content.');
+                // Fallback to full generation
+                console.log('⚠️ First question failed, falling back to full generation...');
+                setLoadingMessage('Generating all questions...');
+                const generated = await ApiService.generateBookQuiz(bookId, kidAge);
+                if (generated && generated.quiz && generated.quiz.questions) {
+                    setQuestions(generated.quiz.questions);
+                    setAgeGroup(generated.quiz.ageGroup || getAgeGroupLabel(kidAge));
+                } else {
+                    throw new Error('Quiz generation returned empty result');
+                }
             }
         } catch (err: any) {
             console.error('Failed to load quiz:', err);
@@ -115,6 +160,10 @@ const BookQuizModal: React.FC<BookQuizModalProps> = ({
     };
 
     const handleNext = () => {
+        // If remaining questions are still loading and we're at the last available question, wait
+        if (loadingRemainingQuestions && currentQuestionIndex >= questions.length - 1) {
+            return; // Button will be disabled, but this is a safety check
+        }
         if (currentQuestionIndex < questions.length - 1) {
             setCurrentQuestionIndex(prev => prev + 1);
         }
@@ -172,8 +221,9 @@ const BookQuizModal: React.FC<BookQuizModalProps> = ({
     if (!isOpen) return null;
 
     const currentQuestion = questions[currentQuestionIndex];
-    const allAnswered = selectedAnswers.size === questions.length;
-    const isLastQuestion = currentQuestionIndex === questions.length - 1;
+    const totalExpectedQuestions = Math.max(6, questions.length);
+    const allAnswered = selectedAnswers.size >= totalExpectedQuestions && !loadingRemainingQuestions;
+    const isLastQuestion = currentQuestionIndex === questions.length - 1 && questions.length >= 6 && !loadingRemainingQuestions;
 
     return (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/70 backdrop-blur-sm animate-[fadeIn_0.3s_ease-out]">
@@ -214,7 +264,7 @@ const BookQuizModal: React.FC<BookQuizModalProps> = ({
                         <div className="flex flex-col items-center justify-center py-12">
                             <Loader2 className="w-12 h-12 text-[#8B4513] animate-spin mb-4" />
                             <p className="text-[#5D4037] font-bold font-display">
-                                Preparing your quiz...
+                                {loadingMessage}
                             </p>
                             <p className="text-[#8B4513] text-sm mt-2">
                                 Creating age-appropriate questions for {getAgeGroupLabel(kidAge)}!
@@ -276,13 +326,21 @@ const BookQuizModal: React.FC<BookQuizModalProps> = ({
                             {/* Progress */}
                             <div className="mb-6">
                                 <div className="flex justify-between text-[#8B4513] text-sm font-bold mb-2">
-                                    <span>Question {currentQuestionIndex + 1} of {questions.length}</span>
-                                    <span>{selectedAnswers.size}/{questions.length} answered</span>
+                                    <span>Question {currentQuestionIndex + 1} of {questions.length < 6 ? '6' : questions.length}</span>
+                                    <div className="flex items-center gap-2">
+                                        {loadingRemainingQuestions && (
+                                            <span className="flex items-center gap-1 text-xs text-[#A0522D]">
+                                                <Loader2 className="w-3 h-3 animate-spin" />
+                                                Loading more...
+                                            </span>
+                                        )}
+                                        <span>{selectedAnswers.size}/{questions.length < 6 ? 6 : questions.length} answered</span>
+                                    </div>
                                 </div>
                                 <div className="w-full h-3 bg-[#d4c59a] rounded-full overflow-hidden">
                                     <div
                                         className="h-full bg-[#8B4513] transition-all duration-300"
-                                        style={{ width: `${((currentQuestionIndex + 1) / questions.length) * 100}%` }}
+                                        style={{ width: `${((currentQuestionIndex + 1) / (questions.length < 6 ? 6 : questions.length)) * 100}%` }}
                                     />
                                 </div>
                             </div>
@@ -355,11 +413,20 @@ const BookQuizModal: React.FC<BookQuizModalProps> = ({
                                 ) : (
                                     <button
                                         onClick={handleNext}
-                                        disabled={!selectedAnswers.has(currentQuestionIndex)}
+                                        disabled={!selectedAnswers.has(currentQuestionIndex) || (loadingRemainingQuestions && currentQuestionIndex >= questions.length - 1)}
                                         className="flex items-center gap-2 px-6 py-2 rounded-lg font-bold transition-all disabled:opacity-50 disabled:cursor-not-allowed bg-[#8B4513] text-white hover:bg-[#A0522D]"
                                     >
-                                        Next
-                                        <ChevronRight className="w-5 h-5" />
+                                        {loadingRemainingQuestions && currentQuestionIndex >= questions.length - 1 ? (
+                                            <>
+                                                <Loader2 className="w-5 h-5 animate-spin" />
+                                                Loading...
+                                            </>
+                                        ) : (
+                                            <>
+                                                Next
+                                                <ChevronRight className="w-5 h-5" />
+                                            </>
+                                        )}
                                     </button>
                                 )}
                             </div>

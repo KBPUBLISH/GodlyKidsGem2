@@ -225,6 +225,280 @@ Return ONLY the JSON array, no explanations or markdown.`
     }
 });
 
+// POST /api/quiz/generate-first - Generate just the first question quickly
+router.post('/generate-first', async (req, res) => {
+    try {
+        const { bookId, age } = req.body;
+
+        if (!bookId) {
+            return res.status(400).json({ message: 'bookId is required' });
+        }
+
+        const userAge = parseInt(age) || 6;
+        const ageGroup = BookQuiz.getAgeGroup(userAge);
+
+        // Check if quiz already exists
+        let existingQuiz = await BookQuiz.findOne({ bookId });
+        if (existingQuiz && existingQuiz.hasQuestionsForAge(userAge)) {
+            const questions = existingQuiz.getQuestionsForAge(userAge);
+            return res.json({
+                firstQuestion: questions[0],
+                totalQuestions: questions.length,
+                cached: true,
+                ageGroup
+            });
+        }
+
+        // Get book and story content
+        const book = await Book.findById(bookId);
+        if (!book) {
+            return res.status(404).json({ message: 'Book not found' });
+        }
+
+        const pages = await Page.find({ bookId }).sort({ pageNumber: 1 });
+        let storyContent = '';
+        pages.forEach(page => {
+            if (page.content && page.content.textBoxes) {
+                page.content.textBoxes.forEach(tb => {
+                    if (tb.text) {
+                        const cleanText = tb.text.replace(/\[[^\]]+\]/g, '').trim();
+                        if (cleanText) storyContent += cleanText + ' ';
+                    }
+                });
+            }
+            if (page.textBoxes) {
+                page.textBoxes.forEach(tb => {
+                    if (tb.text) {
+                        const cleanText = tb.text.replace(/\[[^\]]+\]/g, '').trim();
+                        if (cleanText) storyContent += cleanText + ' ';
+                    }
+                });
+            }
+        });
+
+        if (!storyContent.trim()) {
+            return res.status(400).json({ message: 'No story content found' });
+        }
+
+        const openaiKey = process.env.OPENAI_API_KEY;
+        if (!openaiKey) {
+            return res.status(500).json({ message: 'OpenAI API key not configured' });
+        }
+
+        // Generate just ONE question quickly
+        console.log(`⚡ Quick-generating first question for book: ${book.title}`);
+        
+        const agePrompt = getAgeAppropriatePrompt(userAge, ageGroup);
+        const response = await axios.post(
+            'https://api.openai.com/v1/chat/completions',
+            {
+                model: 'gpt-4o-mini',
+                messages: [
+                    {
+                        role: 'system',
+                        content: `${agePrompt}
+
+Create exactly 1 multiple-choice question based on the story. This should be an easy warm-up question about the beginning of the story.
+
+Rules:
+1. Create exactly 1 question
+2. 4 options (A, B, C, D), only ONE correct
+3. Make it about something from the start of the story
+4. Keep it fun and encouraging
+
+Return ONLY a JSON object (not array):
+{
+  "question": "What happened at the beginning?",
+  "options": [
+    { "text": "Option A", "isCorrect": false },
+    { "text": "Option B", "isCorrect": true },
+    { "text": "Option C", "isCorrect": false },
+    { "text": "Option D", "isCorrect": false }
+  ]
+}`
+                    },
+                    {
+                        role: 'user',
+                        content: `Create 1 warm-up question for a ${userAge}-year-old about: "${book.title}"\n\nStory: ${storyContent.substring(0, 2000)}`
+                    }
+                ],
+                temperature: 0.7,
+                max_tokens: 500
+            },
+            {
+                headers: {
+                    'Authorization': `Bearer ${openaiKey}`,
+                    'Content-Type': 'application/json'
+                }
+            }
+        );
+
+        let firstQuestion;
+        try {
+            const content = response.data.choices[0].message.content.trim();
+            const jsonContent = content.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+            firstQuestion = JSON.parse(jsonContent);
+        } catch (parseError) {
+            console.error('Failed to parse first question:', parseError);
+            return res.status(500).json({ message: 'Failed to parse question' });
+        }
+
+        console.log(`✅ First question generated for: ${book.title}`);
+
+        res.json({
+            firstQuestion,
+            totalQuestions: 6, // We'll generate 6 total
+            cached: false,
+            ageGroup,
+            // Signal that remaining questions need to be generated
+            needsRemainingQuestions: true
+        });
+
+    } catch (error) {
+        console.error('First Question Generation Error:', error.response?.data || error.message);
+        res.status(500).json({ message: 'Failed to generate first question', error: error.message });
+    }
+});
+
+// POST /api/quiz/generate-remaining - Generate remaining questions (called in background)
+router.post('/generate-remaining', async (req, res) => {
+    try {
+        const { bookId, age, firstQuestion } = req.body;
+
+        if (!bookId) {
+            return res.status(400).json({ message: 'bookId is required' });
+        }
+
+        const userAge = parseInt(age) || 6;
+        const ageGroup = BookQuiz.getAgeGroup(userAge);
+
+        // Check if full quiz already exists
+        let existingQuiz = await BookQuiz.findOne({ bookId });
+        if (existingQuiz && existingQuiz.hasQuestionsForAge(userAge)) {
+            const questions = existingQuiz.getQuestionsForAge(userAge);
+            if (questions.length >= 6) {
+                return res.json({
+                    questions,
+                    cached: true,
+                    ageGroup
+                });
+            }
+        }
+
+        // Get book and story content
+        const book = await Book.findById(bookId);
+        if (!book) {
+            return res.status(404).json({ message: 'Book not found' });
+        }
+
+        const pages = await Page.find({ bookId }).sort({ pageNumber: 1 });
+        let storyContent = '';
+        pages.forEach(page => {
+            if (page.content && page.content.textBoxes) {
+                page.content.textBoxes.forEach(tb => {
+                    if (tb.text) {
+                        const cleanText = tb.text.replace(/\[[^\]]+\]/g, '').trim();
+                        if (cleanText) storyContent += cleanText + ' ';
+                    }
+                });
+            }
+            if (page.textBoxes) {
+                page.textBoxes.forEach(tb => {
+                    if (tb.text) {
+                        const cleanText = tb.text.replace(/\[[^\]]+\]/g, '').trim();
+                        if (cleanText) storyContent += cleanText + ' ';
+                    }
+                });
+            }
+        });
+
+        const openaiKey = process.env.OPENAI_API_KEY;
+        if (!openaiKey) {
+            return res.status(500).json({ message: 'OpenAI API key not configured' });
+        }
+
+        // Generate remaining 5 questions
+        console.log(`📝 Generating remaining questions for: ${book.title}`);
+        
+        const agePrompt = getAgeAppropriatePrompt(userAge, ageGroup);
+        const response = await axios.post(
+            'https://api.openai.com/v1/chat/completions',
+            {
+                model: 'gpt-4o-mini',
+                messages: [
+                    {
+                        role: 'system',
+                        content: `${agePrompt}
+
+Create exactly 5 more multiple-choice questions. The first question was already asked: "${firstQuestion?.question || 'a warm-up question'}"
+
+Rules:
+1. Create exactly 5 NEW questions (different from the first one)
+2. Each has 4 options (A, B, C, D), only ONE correct
+3. Cover different parts of the story (middle and end)
+4. Include variety: characters, events, feelings, lessons
+5. Make it fun!
+
+Return ONLY a JSON array:
+[
+  { "question": "...", "options": [{ "text": "...", "isCorrect": false }, ...] },
+  ...
+]`
+                    },
+                    {
+                        role: 'user',
+                        content: `Create 5 more questions for a ${userAge}-year-old about: "${book.title}"\n\nStory: ${storyContent.substring(0, 4000)}`
+                    }
+                ],
+                temperature: 0.7,
+                max_tokens: 2000
+            },
+            {
+                headers: {
+                    'Authorization': `Bearer ${openaiKey}`,
+                    'Content-Type': 'application/json'
+                }
+            }
+        );
+
+        let remainingQuestions;
+        try {
+            const content = response.data.choices[0].message.content.trim();
+            const jsonContent = content.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+            remainingQuestions = JSON.parse(jsonContent);
+        } catch (parseError) {
+            console.error('Failed to parse remaining questions:', parseError);
+            return res.status(500).json({ message: 'Failed to parse questions' });
+        }
+
+        // Combine first question with remaining
+        const allQuestions = [firstQuestion, ...remainingQuestions].filter(Boolean);
+
+        // Save to database
+        if (!existingQuiz) {
+            existingQuiz = new BookQuiz({
+                bookId,
+                ageGroupedQuestions: [],
+                attempts: []
+            });
+        }
+        existingQuiz.setQuestionsForAge(userAge, allQuestions);
+        await existingQuiz.save();
+
+        console.log(`✅ All ${allQuestions.length} questions saved for: ${book.title}`);
+
+        res.json({
+            questions: allQuestions,
+            cached: false,
+            ageGroup
+        });
+
+    } catch (error) {
+        console.error('Remaining Questions Generation Error:', error.response?.data || error.message);
+        res.status(500).json({ message: 'Failed to generate remaining questions', error: error.message });
+    }
+});
+
 // GET /api/quiz/:bookId - Get quiz for a book
 router.get('/:bookId', async (req, res) => {
     try {

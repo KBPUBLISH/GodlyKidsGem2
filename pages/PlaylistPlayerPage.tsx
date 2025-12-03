@@ -6,6 +6,97 @@ import { libraryService } from '../services/libraryService';
 import { getApiBaseUrl } from '../services/apiService';
 import { useAudio, Playlist } from '../context/AudioContext';
 
+// CSS for the pulse/heartbeat animation synced with music
+const pulseStyles = `
+@keyframes musicPulse {
+    0%, 100% {
+        transform: scale(1);
+        filter: brightness(1);
+    }
+    15% {
+        transform: scale(1.03);
+        filter: brightness(1.05);
+    }
+    30% {
+        transform: scale(1);
+        filter: brightness(1);
+    }
+    45% {
+        transform: scale(1.02);
+        filter: brightness(1.03);
+    }
+    60% {
+        transform: scale(1);
+        filter: brightness(1);
+    }
+}
+
+@keyframes gentleFloat {
+    0%, 100% {
+        transform: translateY(0) scale(1);
+    }
+    25% {
+        transform: translateY(-3px) scale(1.01);
+    }
+    50% {
+        transform: translateY(0) scale(1);
+    }
+    75% {
+        transform: translateY(2px) scale(0.99);
+    }
+}
+
+@keyframes borderGlow {
+    0%, 100% {
+        box-shadow: 0 0 20px rgba(255, 215, 0, 0.3), 0 0 40px rgba(139, 69, 19, 0.2);
+    }
+    50% {
+        box-shadow: 0 0 30px rgba(255, 215, 0, 0.5), 0 0 60px rgba(139, 69, 19, 0.4);
+    }
+}
+
+@keyframes bgPulse {
+    0%, 100% {
+        opacity: 0.6;
+        transform: scale(1);
+    }
+    50% {
+        opacity: 0.7;
+        transform: scale(1.02);
+    }
+}
+
+.music-pulse {
+    animation: musicPulse 0.8s ease-in-out infinite, gentleFloat 3s ease-in-out infinite;
+}
+
+.music-pulse-border {
+    animation: borderGlow 1.5s ease-in-out infinite;
+}
+
+.bg-pulse {
+    animation: bgPulse 2s ease-in-out infinite;
+}
+
+@keyframes spin {
+    from {
+        transform: rotate(0deg);
+    }
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+@keyframes shine {
+    0% {
+        transform: translateX(-100%) rotate(45deg);
+    }
+    50%, 100% {
+        transform: translateX(100%) rotate(45deg);
+    }
+}
+`;
+
 const PlaylistPlayerPage: React.FC = () => {
     const { playlistId, itemIndex } = useParams();
     const navigate = useNavigate();
@@ -29,6 +120,7 @@ const PlaylistPlayerPage: React.FC = () => {
     const [isLiked, setIsLiked] = useState(false);
     const [isSaved, setIsSaved] = useState(false);
     const hasIncrementedPlayCountRef = useRef(false);
+    const [audioLevel, setAudioLevel] = useState(0); // For dynamic pulse intensity
 
     // Fetch playlist data on mount or when params change
     useEffect(() => {
@@ -177,13 +269,36 @@ const PlaylistPlayerPage: React.FC = () => {
     }
 
     const currentTrack = activePlaylist.items[currentTrackIndex];
+    const coverImage = currentTrack.coverImage || activePlaylist.coverImage;
 
     return (
-        <div className="flex flex-col h-full w-full relative overflow-hidden bg-[#fdf6e3]">
-            {/* Background Pattern */}
-            <div className="absolute inset-0 z-0 opacity-10 pointer-events-none"
-                style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg width='100' height='100' viewBox='0 0 100 100' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.5' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100' height='100' filter='url(%23noise)' opacity='0.5'/%3E%3C/svg%3E")` }}>
-            </div>
+        <div className="flex flex-col h-full w-full relative overflow-hidden">
+            {/* Inject animation styles */}
+            <style>{pulseStyles}</style>
+            
+            {/* Blurred Cover Background */}
+            {coverImage && (
+                <div 
+                    className={`absolute inset-0 z-0 ${isPlaying ? 'bg-pulse' : ''}`}
+                    style={{
+                        backgroundImage: `url(${coverImage})`,
+                        backgroundSize: 'cover',
+                        backgroundPosition: 'center',
+                        filter: 'blur(50px) brightness(0.6) saturate(1.2)',
+                        transform: 'scale(1.1)', // Prevent blur edge artifacts
+                    }}
+                />
+            )}
+            
+            {/* Dark overlay for better contrast */}
+            <div className="absolute inset-0 z-0 bg-gradient-to-b from-black/40 via-black/20 to-black/60" />
+            
+            {/* Subtle vignette effect */}
+            <div className="absolute inset-0 z-0 pointer-events-none"
+                style={{
+                    background: 'radial-gradient(ellipse at center, transparent 40%, rgba(0,0,0,0.4) 100%)'
+                }}
+            />
 
             {/* Top Bar */}
             <div className="absolute top-0 left-0 right-0 p-6 z-30 flex justify-between items-center pt-8">
@@ -236,13 +351,25 @@ const PlaylistPlayerPage: React.FC = () => {
 
             {/* Main Content */}
             <div className="flex-1 flex flex-col items-center justify-center px-6 pt-20 pb-48 relative z-10 overflow-y-auto no-scrollbar">
-                {/* Album Art - Increased Size */}
-                <div className="w-[22rem] h-[22rem] mb-8 relative shrink-0 transition-transform duration-500 hover:scale-105">
-                    <div className="absolute inset-0 bg-black/20 rounded-xl transform rotate-3 scale-105 blur-sm"></div>
-                    <div className="relative w-full h-full rounded-2xl overflow-hidden border-[6px] border-[#8B4513] shadow-2xl">
-                        {currentTrack.coverImage || activePlaylist.coverImage ? (
+                {/* Album Art - With Pulse Animation */}
+                <div className={`w-[22rem] h-[22rem] mb-8 relative shrink-0 transition-all duration-300 ${isPlaying ? 'music-pulse' : 'hover:scale-105'}`}>
+                    {/* Glow effect behind the cover */}
+                    <div className={`absolute inset-[-20px] rounded-3xl transition-opacity duration-500 ${isPlaying ? 'opacity-100' : 'opacity-0'}`}
+                        style={{
+                            background: coverImage 
+                                ? `radial-gradient(circle, rgba(255,215,0,0.3) 0%, transparent 70%)`
+                                : 'none',
+                        }}
+                    />
+                    
+                    {/* Shadow/reflection behind */}
+                    <div className="absolute inset-0 bg-black/30 rounded-2xl transform rotate-2 scale-[1.02] blur-md"></div>
+                    
+                    {/* Main cover container */}
+                    <div className={`relative w-full h-full rounded-2xl overflow-hidden border-[6px] border-[#8B4513] shadow-2xl transition-all duration-300 ${isPlaying ? 'music-pulse-border' : ''}`}>
+                        {coverImage ? (
                             <img
-                                src={currentTrack.coverImage || activePlaylist.coverImage}
+                                src={coverImage}
                                 alt={currentTrack.title}
                                 className="w-full h-full object-cover"
                             />
@@ -252,25 +379,53 @@ const PlaylistPlayerPage: React.FC = () => {
                             </div>
                         )}
 
-                        {/* Decorative corners */}
-                        <div className="absolute top-0 left-0 w-10 h-10 border-t-[6px] border-l-[6px] border-[#FFD700] rounded-tl-lg opacity-90"></div>
-                        <div className="absolute top-0 right-0 w-10 h-10 border-t-[6px] border-r-[6px] border-[#FFD700] rounded-tr-lg opacity-90"></div>
-                        <div className="absolute bottom-0 left-0 w-10 h-10 border-b-[6px] border-l-[6px] border-[#FFD700] rounded-bl-lg opacity-90"></div>
-                        <div className="absolute bottom-0 right-0 w-10 h-10 border-b-[6px] border-r-[6px] border-[#FFD700] rounded-br-lg opacity-90"></div>
+                        {/* Animated shine/gloss effect when playing */}
+                        {isPlaying && (
+                            <div className="absolute inset-0 pointer-events-none overflow-hidden">
+                                <div 
+                                    className="absolute inset-0 bg-gradient-to-br from-white/0 via-white/10 to-white/0"
+                                    style={{
+                                        animation: 'shine 3s ease-in-out infinite',
+                                    }}
+                                />
+                            </div>
+                        )}
+
+                        {/* Decorative corners - now with glow when playing */}
+                        <div className={`absolute top-0 left-0 w-10 h-10 border-t-[6px] border-l-[6px] border-[#FFD700] rounded-tl-lg transition-opacity duration-300 ${isPlaying ? 'opacity-100' : 'opacity-70'}`}></div>
+                        <div className={`absolute top-0 right-0 w-10 h-10 border-t-[6px] border-r-[6px] border-[#FFD700] rounded-tr-lg transition-opacity duration-300 ${isPlaying ? 'opacity-100' : 'opacity-70'}`}></div>
+                        <div className={`absolute bottom-0 left-0 w-10 h-10 border-b-[6px] border-l-[6px] border-[#FFD700] rounded-bl-lg transition-opacity duration-300 ${isPlaying ? 'opacity-100' : 'opacity-70'}`}></div>
+                        <div className={`absolute bottom-0 right-0 w-10 h-10 border-b-[6px] border-r-[6px] border-[#FFD700] rounded-br-lg transition-opacity duration-300 ${isPlaying ? 'opacity-100' : 'opacity-70'}`}></div>
+                        
+                        {/* Subtle vinyl record spinning effect when playing */}
+                        {isPlaying && (
+                            <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                                <div 
+                                    className="w-16 h-16 rounded-full border-4 border-white/10 bg-black/20"
+                                    style={{
+                                        animation: 'spin 4s linear infinite',
+                                    }}
+                                >
+                                    <div className="w-full h-full rounded-full flex items-center justify-center">
+                                        <div className="w-4 h-4 rounded-full bg-white/30"></div>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
                     </div>
                 </div>
 
-                {/* Track Info */}
+                {/* Track Info - Updated for blurred background */}
                 <div className="w-full max-w-md text-center">
-                    <h2 className="text-3xl font-display font-black text-[#3E1F07] mb-2 leading-tight drop-shadow-sm">
+                    <h2 className="text-3xl font-display font-black text-white mb-2 leading-tight drop-shadow-[0_2px_4px_rgba(0,0,0,0.5)]">
                         {currentTrack.title}
                     </h2>
-                    <p className="text-[#8B4513] font-sans text-lg font-bold mb-4 uppercase tracking-wider opacity-90">
+                    <p className="text-white/80 font-sans text-lg font-bold mb-4 uppercase tracking-wider drop-shadow-md">
                         {currentTrack.author || activePlaylist.author}
                     </p>
 
-                    <div className="inline-block px-4 py-1 rounded-full bg-[#e6d5b8] border border-[#d4c5a0]">
-                        <p className="text-[#5c2e0b] text-sm font-bold">
+                    <div className="inline-block px-4 py-2 rounded-full bg-black/30 backdrop-blur-md border border-white/20">
+                        <p className="text-white/90 text-sm font-bold">
                             {activePlaylist.title} • Track {currentTrackIndex + 1}/{activePlaylist.items.length}
                         </p>
                     </div>

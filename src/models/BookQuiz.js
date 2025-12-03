@@ -144,7 +144,9 @@ bookQuizSchema.methods.addAttempt = function(userId, score, coinsEarned) {
 // Update updatedAt on save
 bookQuizSchema.pre('save', function(next) {
     this.updatedAt = Date.now();
-    next();
+    if (typeof next === 'function') {
+        next();
+    }
 });
 
 module.exports = mongoose.model('BookQuiz', bookQuizSchema);

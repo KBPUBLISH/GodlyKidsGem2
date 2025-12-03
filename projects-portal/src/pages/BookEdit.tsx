@@ -60,6 +60,14 @@ const BookEdit: React.FC = () => {
                 setStatus(b.status || 'draft');
                 setIsMembersOnly(b.isMembersOnly || false);
                 
+                // Load categories array
+                if (b.categories && Array.isArray(b.categories)) {
+                    setSelectedCategories(b.categories);
+                } else if (b.category) {
+                    // Fallback to single category if categories array doesn't exist
+                    setSelectedCategories([b.category]);
+                }
+                
                 // Load audio files
                 if (b.files && b.files.audio && Array.isArray(b.files.audio)) {
                     setAudioFiles(b.files.audio);

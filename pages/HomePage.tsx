@@ -10,9 +10,12 @@ import DailyRewardModal from '../components/features/DailyRewardModal';
 import ChallengeGameModal from '../components/features/ChallengeGameModal';
 import StrengthGameModal from '../components/features/StrengthGameModal';
 import PrayerGameModal from '../components/features/PrayerGameModal';
-import { BookOpen, Key, Brain, Dumbbell, Heart, Video, ChevronRight, Lock, Check, Play } from 'lucide-react';
+import { BookOpen, Key, Brain, Dumbbell, Heart, Video, ChevronRight, Lock, Check, Play, CheckCircle } from 'lucide-react';
 import { ApiService } from '../services/apiService';
 import { isCompleted, isLocked } from '../services/lessonService';
+import { readingProgressService } from '../services/readingProgressService';
+import { playHistoryService } from '../services/playHistoryService';
+import { bookCompletionService } from '../services/bookCompletionService';
 
 // Inline getLessonStatus to avoid circular dependency
 const getLessonStatus = (lesson: any): 'available' | 'locked' | 'completed' => {
@@ -59,6 +62,10 @@ const HomePage: React.FC = () => {
   // Featured content state
   const [featuredContent, setFeaturedContent] = useState<any[]>([]);
   const [featuredLoading, setFeaturedLoading] = useState(true);
+  
+  // Recently Read/Played state
+  const [recentlyReadBooks, setRecentlyReadBooks] = useState<any[]>([]);
+  const [recentlyPlayedPlaylists, setRecentlyPlayedPlaylists] = useState<any[]>([]);
 
   const scrollRef = useRef<HTMLDivElement>(null);
   const lastScrollY = useRef(0);
@@ -293,6 +300,30 @@ const HomePage: React.FC = () => {
       setFeaturedLoading(false);
     }
   };
+
+  // Compute recently read books when books are loaded
+  useEffect(() => {
+    if (books.length > 0) {
+      const recentBookIds = readingProgressService.getRecentlyReadBookIds(10);
+      const recentBooks = recentBookIds
+        .map(id => books.find(b => (b.id === id || (b as any)._id === id)))
+        .filter(Boolean);
+      setRecentlyReadBooks(recentBooks);
+      console.log('📚 Recently read books:', recentBooks.length);
+    }
+  }, [books]);
+
+  // Compute recently played playlists when playlists are loaded
+  useEffect(() => {
+    if (playlists.length > 0) {
+      const recentPlaylistIds = playHistoryService.getRecentlyPlayedIds(10);
+      const recentPlaylists = recentPlaylistIds
+        .map(id => playlists.find(p => (p._id === id || p.id === id)))
+        .filter(Boolean);
+      setRecentlyPlayedPlaylists(recentPlaylists);
+      console.log('🎵 Recently played playlists:', recentPlaylists.length);
+    }
+  }, [playlists]);
 
   // Group books and playlists by category
   const getBooksByCategory = (categoryName: string) => {
@@ -597,6 +628,68 @@ const HomePage: React.FC = () => {
             </div>
           )}
         </section>
+
+        {/* Recently Read Section */}
+        {recentlyReadBooks.length > 0 && (
+          <section className="mt-6">
+            <SectionTitle 
+              title="Recently Read" 
+              icon="📖"
+              color="#4CAF50"
+            />
+            <div className="grid grid-cols-2 gap-4 mt-4">
+              {recentlyReadBooks.slice(0, 6).map((book) => {
+                const isComplete = bookCompletionService.isBookCompleted(book.id || book._id);
+                return (
+                  <div key={book.id || book._id} className="relative">
+                    <BookCard
+                      book={book}
+                      onClick={() => handleBookClick(book.id || book._id)}
+                    />
+                    {isComplete && (
+                      <div className="absolute top-2 right-2 bg-green-500 rounded-full p-1 shadow-lg">
+                        <CheckCircle className="w-5 h-5 text-white" />
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </section>
+        )}
+
+        {/* Recently Played Section */}
+        {recentlyPlayedPlaylists.length > 0 && (
+          <section className="mt-6">
+            <SectionTitle 
+              title="Recently Played" 
+              icon="🎵"
+              color="#9C27B0"
+            />
+            <div className="grid grid-cols-2 gap-4 mt-4">
+              {recentlyPlayedPlaylists.slice(0, 6).map((playlist) => {
+                const playlistItem = {
+                  id: playlist._id || playlist.id,
+                  title: playlist.title,
+                  author: playlist.author || 'Kingdom Builders',
+                  coverUrl: playlist.coverImage,
+                  isAudio: true,
+                };
+                return (
+                  <div key={playlist._id || playlist.id} className="relative">
+                    <BookCard
+                      book={playlistItem}
+                      onClick={() => navigate(`/audio/playlist/${playlist._id || playlist.id}`)}
+                    />
+                    <div className="absolute top-2 right-2 bg-purple-500 rounded-full p-1 shadow-lg">
+                      <CheckCircle className="w-5 h-5 text-white" />
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </section>
+        )}
 
         {/* Explore Categories Sections */}
         {categoriesLoading ? (

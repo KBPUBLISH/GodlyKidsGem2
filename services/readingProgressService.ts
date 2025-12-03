@@ -60,6 +60,20 @@ class ReadingProgressService {
       console.error('Error clearing all progress:', error);
     }
   }
+
+  // Get recently read book IDs sorted by lastReadAt (most recent first)
+  getRecentlyReadBookIds(limit: number = 10): string[] {
+    try {
+      const allProgress = this.getAllProgress();
+      return Object.values(allProgress)
+        .sort((a, b) => b.lastReadAt - a.lastReadAt)
+        .slice(0, limit)
+        .map(p => p.bookId);
+    } catch (error) {
+      console.error('Error getting recently read books:', error);
+      return [];
+    }
+  }
 }
 
 export const readingProgressService = new ReadingProgressService();

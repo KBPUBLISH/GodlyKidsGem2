@@ -1,6 +1,7 @@
 
 import React, { createContext, useContext, useState, useEffect, useRef, useCallback } from 'react';
 import { ApiService } from '../services/apiService';
+import { playHistoryService } from '../services/playHistoryService';
 
 // --- Interfaces ---
 export interface AudioItem {
@@ -357,15 +358,20 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         // Ensure background music is paused when playlist starts
         setMusicPaused(true);
         
-        // Increment play count
+        // Increment play count and record play history
         const playlistId = (playlist as any)._id || (playlist as any).id;
         const track = playlist.items[startIndex];
         const trackId = (track as any)._id || (track as any).id;
         
-        if (playlistId && trackId) {
-            ApiService.incrementItemPlayCount(playlistId, trackId);
-        } else if (playlistId) {
-            ApiService.incrementPlaylistPlayCount(playlistId);
+        if (playlistId) {
+            // Record in local play history for "Recently Played" section
+            playHistoryService.recordPlay(playlistId, trackId);
+            
+            if (trackId) {
+                ApiService.incrementItemPlayCount(playlistId, trackId);
+            } else {
+                ApiService.incrementPlaylistPlayCount(playlistId);
+            }
         }
     }, []);
 

@@ -1,6 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ChevronLeft, Check, Plus, Trash2, UserCircle, Mic, X } from 'lucide-react';
+import { ChevronLeft, Check, Plus, Trash2, UserCircle, Mic, X, ChevronDown, ChevronUp, BookOpen, Music, Sparkles, Users } from 'lucide-react';
 import WoodButton from '../components/ui/WoodButton';
 import { useUser } from '../context/UserContext';
 import { useAudio } from '../context/AudioContext';
@@ -33,6 +33,225 @@ const FUNNY_HEADS = [
   'head-cat-black',
   'head-lizard'
 ];
+
+// Benefits carousel data
+const BENEFITS = [
+  { icon: '✝️', title: 'Know Jesus', desc: 'Build a relationship with Christ' },
+  { icon: '📖', title: 'Learn Scripture', desc: 'Memorize verses through fun' },
+  { icon: '🌱', title: 'Grow Faith', desc: 'Daily spiritual development' },
+  { icon: '🏠', title: 'Family Time', desc: 'Strengthen bonds together' },
+];
+
+// What's included accordion items
+const INCLUDED_ITEMS = [
+  { icon: BookOpen, label: 'Unlimited Animated Books', desc: 'New stories added weekly' },
+  { icon: Music, label: 'Unlimited Audio & Playlists', desc: 'Worship music & audiobooks' },
+  { icon: Mic, label: 'Unlimited Voice Options', desc: 'Fun narrators for stories' },
+  { icon: Users, label: 'Unlimited Avatar Parts', desc: 'Customize your character' },
+  { icon: Sparkles, label: 'All Games & Activities', desc: 'Daily challenges & quizzes' },
+];
+
+// PaywallStep Component
+const PaywallStep: React.FC<{
+  selectedPlan: 'annual' | 'monthly';
+  setSelectedPlan: (plan: 'annual' | 'monthly') => void;
+  onSubscribe: () => void;
+  onSkip: () => void;
+}> = ({ selectedPlan, setSelectedPlan, onSubscribe, onSkip }) => {
+  const [showIncluded, setShowIncluded] = useState(false);
+  const carouselRef = useRef<HTMLDivElement>(null);
+  const [currentBenefit, setCurrentBenefit] = useState(0);
+
+  // Auto-scroll benefits carousel
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setCurrentBenefit(prev => (prev + 1) % BENEFITS.length);
+    }, 3000);
+    return () => clearInterval(interval);
+  }, []);
+
+  return (
+    <div className="w-full max-w-md px-4 animate-in slide-in-from-right-10 duration-500 pb-10">
+      
+      {/* Hero Badge */}
+      <div className="text-center mb-4">
+        <div className="inline-block bg-gradient-to-r from-[#FFD700] to-[#FFA500] px-5 py-2 rounded-full animate-pulse shadow-lg">
+          <span className="text-[#3E1F07] font-extrabold text-base">🎁 3-DAY FREE TRIAL</span>
+        </div>
+      </div>
+
+      {/* Main Payment Card - UP FRONT */}
+      <div className="bg-white/95 backdrop-blur-md rounded-2xl p-5 shadow-2xl border-2 border-[#FFD700] mb-5">
+        
+        {/* Quick Tagline */}
+        <h2 className="text-[#3E1F07] font-display font-extrabold text-xl text-center mb-1">
+          Unlock Everything
+        </h2>
+        <p className="text-[#8B4513] text-xs text-center mb-4">
+          100% ad-free • Cancel anytime
+        </p>
+
+        {/* Pricing Options */}
+        <div className="space-y-2 mb-4">
+          {/* Annual Option */}
+          <div 
+            onClick={() => setSelectedPlan('annual')}
+            className={`relative w-full rounded-xl border-2 overflow-hidden cursor-pointer transition-all ${
+              selectedPlan === 'annual' 
+                ? 'bg-[#fff8e1] border-[#FFD700] shadow-md scale-[1.02]' 
+                : 'bg-gray-50 border-gray-200'
+            }`}
+          >
+            <div className="absolute top-0 right-0 bg-[#4CAF50] text-white text-[9px] font-extrabold px-2 py-0.5 rounded-bl-lg">
+              BEST VALUE
+            </div>
+            <div className="px-4 py-3 flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${selectedPlan === 'annual' ? 'bg-[#FFD700] border-[#FFD700]' : 'border-gray-300'}`}>
+                  {selectedPlan === 'annual' && <Check size={12} className="text-[#3E1F07]" strokeWidth={4} />}
+                </div>
+                <div className="text-left">
+                  <span className="font-display font-bold text-sm text-[#3E1F07]">Annual</span>
+                  <span className="text-[10px] text-[#4CAF50] font-semibold block">Save 44% • $1.54/week</span>
+                </div>
+              </div>
+              <span className="font-display font-extrabold text-xl text-[#3E1F07]">$79.99<span className="text-xs font-normal">/yr</span></span>
+            </div>
+          </div>
+
+          {/* Monthly Option */}
+          <div 
+            onClick={() => setSelectedPlan('monthly')}
+            className={`relative w-full rounded-xl border-2 overflow-hidden cursor-pointer transition-all ${
+              selectedPlan === 'monthly' 
+                ? 'bg-[#fff8e1] border-[#FFD700] shadow-md scale-[1.02]' 
+                : 'bg-gray-50 border-gray-200'
+            }`}
+          >
+            <div className="px-4 py-3 flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${selectedPlan === 'monthly' ? 'bg-[#FFD700] border-[#FFD700]' : 'border-gray-300'}`}>
+                  {selectedPlan === 'monthly' && <Check size={12} className="text-[#3E1F07]" strokeWidth={4} />}
+                </div>
+                <div className="text-left">
+                  <span className="font-display font-bold text-sm text-[#3E1F07]">Monthly</span>
+                  <span className="text-[10px] text-[#8B4513] block">Flexible billing</span>
+                </div>
+              </div>
+              <span className="font-display font-extrabold text-xl text-[#3E1F07]">$11.99<span className="text-xs font-normal">/mo</span></span>
+            </div>
+          </div>
+        </div>
+
+        {/* CTA Button */}
+        <WoodButton 
+          fullWidth 
+          variant="gold"
+          onClick={onSubscribe}
+          className="py-4 text-lg shadow-xl mb-2 border-b-4 border-[#B8860B]"
+        >
+          🎁 START FREE TRIAL
+        </WoodButton>
+        
+        <p className="text-[#5c2e0b] text-[10px] text-center opacity-70">
+          No charge until trial ends
+        </p>
+      </div>
+
+      {/* What's Included Accordion */}
+      <div className="bg-gradient-to-br from-[#3E1F07] to-[#5c2e0b] rounded-2xl border border-[#8B4513] overflow-hidden mb-5">
+        <button
+          onClick={() => setShowIncluded(!showIncluded)}
+          className="w-full px-4 py-3 flex items-center justify-between text-left"
+        >
+          <div className="flex items-center gap-2">
+            <span className="text-[#FFD700] text-lg">✨</span>
+            <span className="text-white font-bold text-sm">What's Included</span>
+          </div>
+          {showIncluded ? (
+            <ChevronUp className="w-5 h-5 text-[#FFD700]" />
+          ) : (
+            <ChevronDown className="w-5 h-5 text-[#FFD700]" />
+          )}
+        </button>
+        
+        {/* Accordion Content */}
+        <div className={`overflow-hidden transition-all duration-300 ${showIncluded ? 'max-h-[400px]' : 'max-h-0'}`}>
+          <div className="px-4 pb-4 space-y-2">
+            {INCLUDED_ITEMS.map((item, idx) => (
+              <div key={idx} className="flex items-center gap-3 bg-black/20 rounded-lg px-3 py-2">
+                <div className="w-8 h-8 rounded-full bg-[#FFD700]/20 flex items-center justify-center flex-shrink-0">
+                  <item.icon className="w-4 h-4 text-[#FFD700]" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-white text-sm font-semibold">{item.label}</p>
+                  <p className="text-[#eecaa0] text-[10px]">{item.desc}</p>
+                </div>
+                <Check className="w-4 h-4 text-[#4CAF50] flex-shrink-0" />
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* Benefits Carousel */}
+      <div className="mb-5">
+        <div className="overflow-hidden">
+          <div 
+            ref={carouselRef}
+            className="flex transition-transform duration-500 ease-out"
+            style={{ transform: `translateX(-${currentBenefit * 100}%)` }}
+          >
+            {BENEFITS.map((benefit, idx) => (
+              <div key={idx} className="w-full flex-shrink-0 px-2">
+                <div className="bg-gradient-to-br from-[#FFD700]/20 to-[#FFA500]/10 rounded-xl p-4 border border-[#FFD700]/30 text-center">
+                  <div className="text-4xl mb-2">{benefit.icon}</div>
+                  <h3 className="text-white font-bold text-base mb-1">{benefit.title}</h3>
+                  <p className="text-[#eecaa0] text-xs">{benefit.desc}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+        {/* Carousel Dots */}
+        <div className="flex justify-center gap-1.5 mt-3">
+          {BENEFITS.map((_, idx) => (
+            <button
+              key={idx}
+              onClick={() => setCurrentBenefit(idx)}
+              className={`w-2 h-2 rounded-full transition-all ${
+                currentBenefit === idx 
+                  ? 'bg-[#FFD700] w-4' 
+                  : 'bg-white/30'
+              }`}
+            />
+          ))}
+        </div>
+      </div>
+
+      {/* Scripture Quote */}
+      <div className="text-center mb-5 px-4">
+        <p className="text-white/80 text-xs italic">
+          "Train up a child in the way he should go"
+        </p>
+        <p className="text-[#FFD700] text-[10px] font-semibold mt-1">— Proverbs 22:6</p>
+      </div>
+
+      {/* Skip Link */}
+      <div className="text-center">
+        <button 
+          onClick={onSkip}
+          className="text-white/50 text-xs underline decoration-dotted hover:text-white/80"
+        >
+          Continue with limited access
+        </button>
+        <p className="text-white/30 text-[10px] mt-3">
+          Loved by 10,000+ Christian families 🙏
+        </p>
+      </div>
+    </div>
+  );
+};
 
 const OnboardingPage: React.FC = () => {
   const navigate = useNavigate();
@@ -624,162 +843,12 @@ const OnboardingPage: React.FC = () => {
 
         {/* --- STEP 4: PAYWALL / VALUE PROPOSITION --- */}
         {step === 4 && (
-            <div className="w-full max-w-md px-4 animate-in slide-in-from-right-10 duration-500 pb-10">
-                 
-                 {/* Hero Section */}
-                 <div className="text-center mb-6">
-                    <div className="inline-block bg-gradient-to-r from-[#FFD700] to-[#FFA500] px-4 py-1.5 rounded-full mb-3 animate-pulse">
-                      <span className="text-[#3E1F07] font-extrabold text-sm">🎁 3-DAY FREE TRIAL</span>
-                    </div>
-                    <h2 className="text-white font-display font-extrabold text-2xl leading-tight mb-3">
-                      Plant Seeds of Faith<br/>
-                      <span className="text-[#FFD700]">That Last a Lifetime</span>
-                    </h2>
-                    <p className="text-[#eecaa0] text-sm italic px-4">
-                      "A must-have app for any Christian family"
-                    </p>
-                 </div>
-                 
-                 {/* Benefits Cards - Focus on spiritual growth */}
-                 <div className="space-y-3 mb-6">
-                    {/* Know Jesus */}
-                    <div className="bg-gradient-to-r from-[#3E1F07] to-[#5c2e0b] rounded-xl p-4 border border-[#8B4513] flex items-start gap-3">
-                      <div className="text-3xl">✝️</div>
-                      <div>
-                        <h3 className="text-white font-bold text-sm">Help Your Kids Know Jesus</h3>
-                        <p className="text-[#eecaa0] text-xs">Stories and devotionals that bring your children closer to Christ and help them build a personal relationship with God</p>
-                      </div>
-                    </div>
-                    
-                    {/* Learn Scripture */}
-                    <div className="bg-gradient-to-r from-[#3E1F07] to-[#5c2e0b] rounded-xl p-4 border border-[#8B4513] flex items-start gap-3">
-                      <div className="text-3xl">📖</div>
-                      <div>
-                        <h3 className="text-white font-bold text-sm">Make Bible Learning Exciting</h3>
-                        <p className="text-[#eecaa0] text-xs">Turn Scripture into adventures your kids will actually want to explore - they'll memorize verses without even realizing it!</p>
-                      </div>
-                    </div>
-                    
-                    {/* Build Character */}
-                    <div className="bg-gradient-to-r from-[#3E1F07] to-[#5c2e0b] rounded-xl p-4 border border-[#8B4513] flex items-start gap-3">
-                      <div className="text-3xl">🌱</div>
-                      <div>
-                        <h3 className="text-white font-bold text-sm">Shape Their Character</h3>
-                        <p className="text-[#eecaa0] text-xs">Lessons on kindness, honesty, courage, and faith - helping your children grow into the person God created them to be</p>
-                      </div>
-                    </div>
-                    
-                    {/* Foundation */}
-                    <div className="bg-gradient-to-r from-[#3E1F07] to-[#5c2e0b] rounded-xl p-4 border border-[#8B4513] flex items-start gap-3">
-                      <div className="text-3xl">🏠</div>
-                      <div>
-                        <h3 className="text-white font-bold text-sm">Build a Strong Foundation</h3>
-                        <p className="text-[#eecaa0] text-xs">Give your kids the spiritual foundation they need to navigate life with faith, hope, and the love of Jesus in their hearts</p>
-                      </div>
-                    </div>
-                 </div>
-                 
-                 {/* Testimonial Style Quote */}
-                 <div className="bg-[#FFD700]/10 rounded-xl p-4 mb-6 border border-[#FFD700]/30 text-center">
-                    <p className="text-white text-sm italic mb-2">
-                      "Train up a child in the way he should go; even when he is old he will not depart from it."
-                    </p>
-                    <p className="text-[#FFD700] text-xs font-bold">— Proverbs 22:6</p>
-                 </div>
-                 
-                 {/* Main Card */}
-                <div className="bg-white/95 backdrop-blur-md rounded-[2rem] p-5 shadow-2xl border-4 border-[#FFD700] flex flex-col items-center text-center relative">
-                    
-                    {/* Try Free Badge */}
-                    <div className="absolute -top-4 bg-gradient-to-r from-[#4CAF50] to-[#45a049] text-white px-4 py-1 rounded-full font-bold shadow-md text-xs uppercase tracking-wider border-2 border-white">
-                        Try Everything Free
-                    </div>
-
-                    <p className="text-[#5c2e0b] font-sans font-semibold text-xs mb-4 mt-2 opacity-80">
-                        100% ad-free. Cancel anytime during trial.
-                    </p>
-
-                    {/* Pricing Options */}
-                    <div className="w-full space-y-2 mb-4">
-                        {/* Annual Option */}
-                        <div 
-                            onClick={() => setSelectedPlan('annual')}
-                            className={`relative w-full rounded-xl border-2 overflow-hidden cursor-pointer transition-all ${
-                                selectedPlan === 'annual' 
-                                ? 'bg-[#fff8e1] border-[#FFD700] shadow-md scale-[1.02] ring-1 ring-[#FFD700]' 
-                                : 'bg-gray-50 border-gray-200'
-                            }`}
-                        >
-                            <div className="absolute top-0 right-0 bg-[#FFD700] text-[#3E1F07] text-[9px] font-extrabold px-2 py-0.5 rounded-bl-lg">
-                                SAVE 44%
-                            </div>
-                            <div className="px-4 py-3 flex items-center justify-between">
-                                <div className="flex items-center gap-3">
-                                    <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${selectedPlan === 'annual' ? 'bg-[#FFD700] border-[#FFD700]' : 'border-gray-300'}`}>
-                                      {selectedPlan === 'annual' && <Check size={12} className="text-[#3E1F07]" strokeWidth={4} />}
-                                    </div>
-                                    <div className="text-left">
-                                        <span className="font-display font-bold text-sm text-[#3E1F07]">Annual</span>
-                                        <span className="text-[10px] text-[#8B4513] block">$1.54/week after trial</span>
-                                    </div>
-                                </div>
-                                <span className="font-display font-extrabold text-xl text-[#3E1F07]">$79.99<span className="text-xs font-normal">/yr</span></span>
-                            </div>
-                        </div>
-
-                        {/* Monthly Option */}
-                        <div 
-                            onClick={() => setSelectedPlan('monthly')}
-                            className={`relative w-full rounded-xl border-2 overflow-hidden cursor-pointer transition-all ${
-                                selectedPlan === 'monthly' 
-                                ? 'bg-[#fff8e1] border-[#FFD700] shadow-md scale-[1.02]' 
-                                : 'bg-gray-50 border-gray-200'
-                            }`}
-                        >
-                             <div className="px-4 py-3 flex items-center justify-between">
-                                <div className="flex items-center gap-3">
-                                    <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${selectedPlan === 'monthly' ? 'bg-[#FFD700] border-[#FFD700]' : 'border-gray-300'}`}>
-                                      {selectedPlan === 'monthly' && <Check size={12} className="text-[#3E1F07]" strokeWidth={4} />}
-                                    </div>
-                                    <div className="text-left">
-                                        <span className="font-display font-bold text-sm text-[#3E1F07]">Monthly</span>
-                                        <span className="text-[10px] text-[#8B4513] block">Flexible, cancel anytime</span>
-                                    </div>
-                                </div>
-                                <span className="font-display font-extrabold text-xl text-[#3E1F07]">$11.99<span className="text-xs font-normal">/mo</span></span>
-                            </div>
-                        </div>
-                    </div>
-
-                    {/* CTA Button */}
-                    <WoodButton 
-                        fullWidth 
-                        variant="gold"
-                        onClick={handleSubscribeClick}
-                        className="py-4 text-lg shadow-xl mb-3 border-b-4 border-[#B8860B]"
-                    >
-                        🎁 START 3-DAY FREE TRIAL
-                    </WoodButton>
-                    
-                    <p className="text-[#5c2e0b] text-[10px] mb-3 opacity-70">
-                        You won't be charged until after your free trial ends
-                    </p>
-
-                    <button 
-                        onClick={() => navigate('/home')}
-                        className="text-[#8B4513] text-xs font-bold underline decoration-dotted opacity-60 hover:opacity-100"
-                    >
-                        Continue with limited access
-                    </button>
-                </div>
-                
-                {/* Trust Indicators */}
-                <div className="mt-6 text-center">
-                  <p className="text-white/50 text-[10px]">
-                    Loved by 10,000+ Christian families worldwide 🙏
-                  </p>
-                </div>
-            </div>
+            <PaywallStep 
+              selectedPlan={selectedPlan}
+              setSelectedPlan={setSelectedPlan}
+              onSubscribe={handleSubscribeClick}
+              onSkip={() => navigate('/home')}
+            />
         )}
 
         {/* Make sure ParentGateModal is imported at the top of your file:

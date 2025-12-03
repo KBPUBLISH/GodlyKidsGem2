@@ -542,23 +542,25 @@ const HomePage: React.FC = () => {
           </>
         )}
 
-        {/* Games Section - Portrait Thumbnail Carousel Style */}
+        {/* Daily Tasks Section - Portrait Thumbnail Carousel Style */}
         <section className="mt-4">
           <SectionTitle 
-            title="Games" 
-            icon="🎮"
-            color="#FFD700"
+            title="Daily Tasks" 
+            icon="✅"
+            color="#4CAF50"
           />
           <div className="w-screen overflow-x-auto no-scrollbar pb-4 -mx-4">
             <div className="flex space-x-3 px-4">
               
-              {/* Daily Key Game */}
+              {/* Daily Key Task */}
               <div
-                className="relative w-[calc((100vw-48px-40px)/4)] flex-shrink-0 cursor-pointer"
-                onClick={handleDailyKeyClick}
+                className={`relative w-[calc((100vw-48px-40px)/4)] flex-shrink-0 ${
+                  hasEngagedDailyKey ? 'cursor-default' : 'cursor-pointer'
+                }`}
+                onClick={() => !hasEngagedDailyKey && handleDailyKeyClick()}
               >
                 <div className={`relative aspect-[9/16] rounded-xl overflow-hidden transition-all border-2 ${
-                  hasEngagedDailyKey ? 'border-[#FFD700]/50' : 'border-[#FFD700] animate-pulse'
+                  hasEngagedDailyKey ? 'border-[#FFD700]/30' : 'border-[#FFD700]'
                 }`}>
                   {/* Background Gradient */}
                   <div className="absolute inset-0 bg-gradient-to-br from-[#8B4513] to-[#5c2e0b]" />
@@ -570,9 +572,7 @@ const HomePage: React.FC = () => {
                   
                   {/* Icon */}
                   <div className="absolute inset-0 flex flex-col items-center justify-center">
-                    <div className={`w-16 h-16 rounded-full bg-[#FFD700]/20 flex items-center justify-center mb-2 ${
-                      !hasEngagedDailyKey ? 'animate-bounce' : ''
-                    }`}>
+                    <div className="w-16 h-16 rounded-full bg-[#FFD700]/20 flex items-center justify-center mb-2">
                       <Key size={36} className="text-[#FFD700]" fill="#B8860B" />
                     </div>
                     <span className="text-[#FFD700] text-sm font-bold font-display text-center px-2">
@@ -583,22 +583,27 @@ const HomePage: React.FC = () => {
                     </span>
                   </div>
                   
-                  {/* Engaged Indicator */}
+                  {/* Completed Overlay - Faded when done */}
                   {hasEngagedDailyKey && (
-                    <div className="absolute top-2 right-2 bg-green-500 rounded-full p-1">
-                      <Check className="w-3 h-3 text-white" />
-                    </div>
+                    <>
+                      <div className="absolute inset-0 bg-black/50" />
+                      <div className="absolute top-2 right-2 bg-green-500 rounded-full p-1">
+                        <Check className="w-3 h-3 text-white" />
+                      </div>
+                    </>
                   )}
                 </div>
               </div>
 
-              {/* Memory Game */}
+              {/* Memory Task */}
               <div
-                className="relative w-[calc((100vw-48px-40px)/4)] flex-shrink-0 cursor-pointer"
-                onClick={handleMemoryClick}
+                className={`relative w-[calc((100vw-48px-40px)/4)] flex-shrink-0 ${
+                  hasEngagedMemory ? 'cursor-default' : 'cursor-pointer'
+                }`}
+                onClick={() => !hasEngagedMemory && handleMemoryClick()}
               >
                 <div className={`relative aspect-[9/16] rounded-xl overflow-hidden transition-all border-2 ${
-                  hasEngagedMemory ? 'border-[#3949ab]/50' : 'border-[#5c6bc0] animate-pulse'
+                  hasEngagedMemory ? 'border-[#3949ab]/30' : 'border-[#5c6bc0]'
                 }`}>
                   {/* Background Gradient */}
                   <div className="absolute inset-0 bg-gradient-to-br from-[#1a237e] to-[#0d1442]" />
@@ -610,9 +615,7 @@ const HomePage: React.FC = () => {
                   
                   {/* Icon */}
                   <div className="absolute inset-0 flex flex-col items-center justify-center">
-                    <div className={`w-16 h-16 rounded-full bg-[#5c6bc0]/30 flex items-center justify-center mb-2 ${
-                      !hasEngagedMemory ? 'animate-bounce' : ''
-                    }`}>
+                    <div className="w-16 h-16 rounded-full bg-[#5c6bc0]/30 flex items-center justify-center mb-2">
                       <Brain size={36} className="text-[#90caf9]" fill="#64b5f6" />
                     </div>
                     <span className="text-[#90caf9] text-sm font-bold font-display text-center px-2">
@@ -623,22 +626,27 @@ const HomePage: React.FC = () => {
                     </span>
                   </div>
                   
-                  {/* Engaged Indicator */}
+                  {/* Completed Overlay - Faded when done */}
                   {hasEngagedMemory && (
-                    <div className="absolute top-2 right-2 bg-green-500 rounded-full p-1">
-                      <Check className="w-3 h-3 text-white" />
-                    </div>
+                    <>
+                      <div className="absolute inset-0 bg-black/50" />
+                      <div className="absolute top-2 right-2 bg-green-500 rounded-full p-1">
+                        <Check className="w-3 h-3 text-white" />
+                      </div>
+                    </>
                   )}
                 </div>
               </div>
 
-              {/* Strength Game */}
+              {/* Strength Task */}
               <div
-                className="relative w-[calc((100vw-48px-40px)/4)] flex-shrink-0 cursor-pointer"
-                onClick={handleStrengthClick}
+                className={`relative w-[calc((100vw-48px-40px)/4)] flex-shrink-0 ${
+                  hasEngagedStrength ? 'cursor-default' : 'cursor-pointer'
+                }`}
+                onClick={() => !hasEngagedStrength && handleStrengthClick()}
               >
                 <div className={`relative aspect-[9/16] rounded-xl overflow-hidden transition-all border-2 ${
-                  hasEngagedStrength ? 'border-[#FF6B35]/50' : 'border-[#F7931E] animate-pulse'
+                  hasEngagedStrength ? 'border-[#FF6B35]/30' : 'border-[#F7931E]'
                 }`}>
                   {/* Background Gradient */}
                   <div className="absolute inset-0 bg-gradient-to-br from-[#E64A19] to-[#BF360C]" />
@@ -650,9 +658,7 @@ const HomePage: React.FC = () => {
                   
                   {/* Icon */}
                   <div className="absolute inset-0 flex flex-col items-center justify-center">
-                    <div className={`w-16 h-16 rounded-full bg-[#FFD700]/20 flex items-center justify-center mb-2 ${
-                      !hasEngagedStrength ? 'animate-bounce' : ''
-                    }`}>
+                    <div className="w-16 h-16 rounded-full bg-[#FFD700]/20 flex items-center justify-center mb-2">
                       <Dumbbell size={36} className="text-[#FFD700]" fill="#FFB300" />
                     </div>
                     <span className="text-[#FFD700] text-sm font-bold font-display text-center px-2">
@@ -663,22 +669,27 @@ const HomePage: React.FC = () => {
                     </span>
                   </div>
                   
-                  {/* Engaged Indicator */}
+                  {/* Completed Overlay - Faded when done */}
                   {hasEngagedStrength && (
-                    <div className="absolute top-2 right-2 bg-green-500 rounded-full p-1">
-                      <Check className="w-3 h-3 text-white" />
-                    </div>
+                    <>
+                      <div className="absolute inset-0 bg-black/50" />
+                      <div className="absolute top-2 right-2 bg-green-500 rounded-full p-1">
+                        <Check className="w-3 h-3 text-white" />
+                      </div>
+                    </>
                   )}
                 </div>
               </div>
 
-              {/* Prayer Game */}
+              {/* Prayer Task */}
               <div
-                className="relative w-[calc((100vw-48px-40px)/4)] flex-shrink-0 cursor-pointer"
-                onClick={handlePrayerClick}
+                className={`relative w-[calc((100vw-48px-40px)/4)] flex-shrink-0 ${
+                  hasEngagedPrayer ? 'cursor-default' : 'cursor-pointer'
+                }`}
+                onClick={() => !hasEngagedPrayer && handlePrayerClick()}
               >
                 <div className={`relative aspect-[9/16] rounded-xl overflow-hidden transition-all border-2 ${
-                  hasEngagedPrayer ? 'border-[#AB47BC]/50' : 'border-[#BA68C8] animate-pulse'
+                  hasEngagedPrayer ? 'border-[#AB47BC]/30' : 'border-[#BA68C8]'
                 }`}>
                   {/* Background Gradient */}
                   <div className="absolute inset-0 bg-gradient-to-br from-[#7B1FA2] to-[#4A148C]" />
@@ -690,9 +701,7 @@ const HomePage: React.FC = () => {
                   
                   {/* Icon */}
                   <div className="absolute inset-0 flex flex-col items-center justify-center">
-                    <div className={`w-16 h-16 rounded-full bg-[#F06292]/20 flex items-center justify-center mb-2 ${
-                      !hasEngagedPrayer ? 'animate-bounce' : ''
-                    }`}>
+                    <div className="w-16 h-16 rounded-full bg-[#F06292]/20 flex items-center justify-center mb-2">
                       <Heart size={36} className="text-[#F06292]" fill="#EC407A" />
                     </div>
                     <span className="text-[#F06292] text-sm font-bold font-display text-center px-2">
@@ -703,11 +712,14 @@ const HomePage: React.FC = () => {
                     </span>
                   </div>
                   
-                  {/* Engaged Indicator */}
+                  {/* Completed Overlay - Faded when done */}
                   {hasEngagedPrayer && (
-                    <div className="absolute top-2 right-2 bg-green-500 rounded-full p-1">
-                      <Check className="w-3 h-3 text-white" />
-                    </div>
+                    <>
+                      <div className="absolute inset-0 bg-black/50" />
+                      <div className="absolute top-2 right-2 bg-green-500 rounded-full p-1">
+                        <Check className="w-3 h-3 text-white" />
+                      </div>
+                    </>
                   )}
                 </div>
               </div>

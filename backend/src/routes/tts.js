@@ -217,17 +217,29 @@ router.post('/enhance', async (req, res) => {
 Available emotion tags you can insert:
 ${emotionTags.join(', ')}
 
-Rules:
-1. Insert emotion tags naturally where they fit the story's mood
-2. Don't overuse tags - typically 1-3 per paragraph is enough
-3. Place tags BEFORE the text they should affect, or inline for sound effects
-4. Keep the original text intact, only add tags
-5. For dialogue, add emotions that match the character's feelings
+CRITICAL RULES:
+1. NEVER put brackets around words that already exist in the text!
+   - WRONG: "he [gasped]" - this removes "gasped" from being spoken
+   - CORRECT: "[gasps] he gasped" - adds sound effect BEFORE, keeps original word
+   
+2. Emotion tags must be SEPARATE from existing words, not replacing them
+   - WRONG: "Farmer Joe's heart [thumped]" 
+   - CORRECT: "Farmer Joe's heart thumped [nervously]"
+   
+3. Place emotion/mood tags like [excitedly], [sadly], [nervously] AFTER the phrase they describe
+4. Place sound effect tags like [gasps], [laughs], [sighs] BEFORE the action
+5. Don't overuse tags - typically 1-3 per paragraph is enough
 6. Add [pause] or [long pause] for dramatic moments
-7. Use [whispers] for secrets, [excitedly] for exciting parts, [sadly] for sad moments
-8. Sound effects like [laughs], [gasps], [sighs] should be placed where a character would make that sound
+7. For dialogue, add emotions that match the character's feelings
 
-Return ONLY the enhanced text with emotion tags inserted. No explanations.`
+Examples:
+- Input: "Wait! he gasped"
+- Output: "[gasps] 'Wait!' he gasped [breathlessly]"
+
+- Input: "She laughed with joy"
+- Output: "[laughs] She laughed with joy [happily]"
+
+Return ONLY the enhanced text with emotion tags inserted. No explanations. Every original word must remain in the output.`
                             },
                             {
                                 role: 'user',
@@ -253,25 +265,28 @@ Return ONLY the enhanced text with emotion tags inserted. No explanations.`
         }
 
         // Fallback: Simple rule-based enhancement
+        // IMPORTANT: Never replace words, only add tags before/after them
         let enhancedText = text;
 
         // Add pauses after periods for dramatic effect
         enhancedText = enhancedText.replace(/\.\s+/g, '. [pause] ');
         
-        // Add excitement for exclamation marks
-        enhancedText = enhancedText.replace(/!\s*/g, '! ');
-        
-        // Add mystery for questions
-        enhancedText = enhancedText.replace(/\?\s*/g, '? ');
-
-        // Common story phrases
-        enhancedText = enhancedText.replace(/\b(whispered)\b/gi, '[whispers] whispered');
-        enhancedText = enhancedText.replace(/\b(shouted|yelled|screamed)\b/gi, '[shouts] $1');
-        enhancedText = enhancedText.replace(/\b(laughed|giggled|chuckled)\b/gi, '[laughs] $1');
-        enhancedText = enhancedText.replace(/\b(cried|sobbed)\b/gi, '[sadly] $1');
-        enhancedText = enhancedText.replace(/\b(gasped)\b/gi, '[gasps] gasped');
-        enhancedText = enhancedText.replace(/\b(sighed)\b/gi, '[sighs] sighed');
-        enhancedText = enhancedText.replace(/\b(exclaimed)\b/gi, '[excitedly] exclaimed');
+        // Common story phrases - add emotion BEFORE the word, keep the word intact
+        // Pattern: word stays, tag is added before it
+        enhancedText = enhancedText.replace(/\b(whispered)\b/gi, '[whispers] $1');
+        enhancedText = enhancedText.replace(/\b(shouted)\b/gi, '[shouts] $1');
+        enhancedText = enhancedText.replace(/\b(yelled)\b/gi, '[yells] $1');
+        enhancedText = enhancedText.replace(/\b(screamed)\b/gi, '[shouts] $1');
+        enhancedText = enhancedText.replace(/\b(laughed)\b/gi, '[laughs] $1');
+        enhancedText = enhancedText.replace(/\b(giggled)\b/gi, '[giggles] $1');
+        enhancedText = enhancedText.replace(/\b(chuckled)\b/gi, '[chuckles] $1');
+        enhancedText = enhancedText.replace(/\b(cried)\b/gi, '[cries] $1');
+        enhancedText = enhancedText.replace(/\b(sobbed)\b/gi, '[sobs] $1');
+        enhancedText = enhancedText.replace(/\b(gasped)\b/gi, '[gasps] $1');
+        enhancedText = enhancedText.replace(/\b(sighed)\b/gi, '[sighs] $1');
+        enhancedText = enhancedText.replace(/\b(exclaimed)\b/gi, '[excitedly] $1');
+        enhancedText = enhancedText.replace(/\b(groaned)\b/gi, '[groans] $1');
+        enhancedText = enhancedText.replace(/\b(thumped|pounded)\b/gi, '[nervously] $1');
         
         // Dramatic moments
         enhancedText = enhancedText.replace(/\b(suddenly|all of a sudden)\b/gi, '[pause] $1');

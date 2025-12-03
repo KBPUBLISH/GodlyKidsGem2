@@ -1,7 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import { Book } from '../../types';
 import { BookOpen, Headphones } from 'lucide-react';
-import { fetchAuthenticatedImage, revokeImageUrl } from '../../services/imageService';
 
 interface BookCardProps {
   book: Book;
@@ -13,57 +12,23 @@ const DEFAULT_COVER = 'https://via.placeholder.com/400x400/8B4513/FFFFFF?text=Bo
 
 const BookCard: React.FC<BookCardProps> = ({ book, onClick }) => {
   const [imageError, setImageError] = useState(false);
-  const [imageSrc, setImageSrc] = useState<string>(DEFAULT_COVER);
-  const [isLoadingImage, setIsLoadingImage] = useState(false);
 
-  // Load image with authentication if needed
+  // Reset error state when book cover URL changes
   useEffect(() => {
-    const loadImage = async () => {
-      if (!book.coverUrl || book.coverUrl.trim() === '') {
-        console.warn(`⚠️ Book "${book.title}" has no cover URL`);
-        setImageSrc(DEFAULT_COVER);
-        return;
-      }
+    setImageError(false);
+  }, [book.coverUrl]);
 
-      console.log(`🖼️ Loading cover for "${book.title}":`, book.coverUrl);
-      setIsLoadingImage(true);
-      setImageError(false);
-
-      try {
-        // Try to fetch as authenticated image if it's from our API
-        const authenticatedUrl = await fetchAuthenticatedImage(book.coverUrl);
-        
-        if (authenticatedUrl) {
-          setImageSrc(authenticatedUrl);
-          console.log(`✅ Successfully loaded cover for "${book.title}"`);
-        } else {
-          // Fallback to direct URL (might be external or public)
-          setImageSrc(book.coverUrl);
-        }
-      } catch (error) {
-        console.error(`❌ Failed to load cover for "${book.title}":`, error);
-        setImageSrc(DEFAULT_COVER);
-        setImageError(true);
-      } finally {
-        setIsLoadingImage(false);
-      }
-    };
-
-    loadImage();
-
-    // Cleanup: revoke object URL when component unmounts
-    return () => {
-      if (imageSrc && imageSrc.startsWith('blob:')) {
-        revokeImageUrl(imageSrc);
-      }
-    };
-  }, [book.coverUrl, book.title]);
+  // Determine the image source - use direct URL, no blob conversion needed
+  const getImageSrc = useCallback(() => {
+    if (imageError) return DEFAULT_COVER;
+    if (!book.coverUrl || book.coverUrl.trim() === '') return DEFAULT_COVER;
+    return book.coverUrl;
+  }, [book.coverUrl, imageError]);
 
   const handleImageError = () => {
     if (!imageError) {
-      console.error(`❌ Image failed to load for "${book.title}":`, imageSrc);
+      console.error(`❌ Image failed to load for "${book.title}":`, book.coverUrl);
       setImageError(true);
-      setImageSrc(DEFAULT_COVER);
     }
   };
 
@@ -75,7 +40,7 @@ const BookCard: React.FC<BookCardProps> = ({ book, onClick }) => {
       {/* Cover Image - Same structure as AudioPage */}
       <div className="aspect-square bg-gradient-to-br from-indigo-500 to-purple-600 relative overflow-hidden">
         <img 
-          src={imageSrc} 
+          src={getImageSrc()} 
           alt={book.title} 
           className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-300"
           loading="lazy"

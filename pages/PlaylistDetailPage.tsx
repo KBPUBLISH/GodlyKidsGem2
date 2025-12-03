@@ -6,77 +6,122 @@ import { libraryService } from '../services/libraryService';
 import { useAudio } from '../context/AudioContext';
 import MiniPlayer from '../components/audio/MiniPlayer';
 
+// Predefined color palettes for fallback (warm, cool, vibrant variations)
+const FALLBACK_PALETTES = [
+    { primary: '#2d1b4e', secondary: '#4a2c7a', accent: '#9b59b6' }, // Purple
+    { primary: '#1a3a52', secondary: '#2c5a7c', accent: '#3498db' }, // Blue
+    { primary: '#2d4a3e', secondary: '#3d6b56', accent: '#27ae60' }, // Green
+    { primary: '#5d2a2a', secondary: '#8b3d3d', accent: '#e74c3c' }, // Red
+    { primary: '#4a3728', secondary: '#6b4f3a', accent: '#e67e22' }, // Orange
+    { primary: '#3d3d29', secondary: '#5a5a3d', accent: '#f1c40f' }, // Gold
+    { primary: '#2a2a4a', secondary: '#3d3d6b', accent: '#9b59b6' }, // Indigo
+    { primary: '#4a2a3d', secondary: '#6b3d56', accent: '#e91e63' }, // Pink
+];
+
+// Get a consistent fallback palette based on the image URL (so same image = same colors)
+const getFallbackPalette = (imgSrc: string) => {
+    // Simple hash function to get consistent index
+    let hash = 0;
+    for (let i = 0; i < imgSrc.length; i++) {
+        hash = ((hash << 5) - hash) + imgSrc.charCodeAt(i);
+        hash = hash & hash;
+    }
+    const index = Math.abs(hash) % FALLBACK_PALETTES.length;
+    return FALLBACK_PALETTES[index];
+};
+
 // Helper function to extract dominant colors from an image
 const extractColors = (imgSrc: string): Promise<{ primary: string; secondary: string; accent: string }> => {
     return new Promise((resolve) => {
+        // Get fallback palette for this specific image
+        const fallback = getFallbackPalette(imgSrc);
+        
         const img = new Image();
         img.crossOrigin = 'Anonymous';
         
+        // Set a timeout for CORS issues - if image doesn't load in 2 seconds, use fallback
+        const timeout = setTimeout(() => {
+            console.log('Color extraction timeout, using fallback palette');
+            resolve(fallback);
+        }, 2000);
+        
         img.onload = () => {
-            const canvas = document.createElement('canvas');
-            const ctx = canvas.getContext('2d');
-            if (!ctx) {
-                resolve({ primary: '#8B4513', secondary: '#5c2e0b', accent: '#d4a373' });
-                return;
-            }
-            
-            // Sample at a smaller size for performance
-            const size = 50;
-            canvas.width = size;
-            canvas.height = size;
-            ctx.drawImage(img, 0, 0, size, size);
-            
-            const imageData = ctx.getImageData(0, 0, size, size).data;
-            const colorCounts: { [key: string]: number } = {};
-            
-            // Sample pixels and count colors
-            for (let i = 0; i < imageData.length; i += 16) { // Skip some pixels for speed
-                const r = imageData[i];
-                const g = imageData[i + 1];
-                const b = imageData[i + 2];
+            clearTimeout(timeout);
+            try {
+                const canvas = document.createElement('canvas');
+                const ctx = canvas.getContext('2d');
+                if (!ctx) {
+                    resolve(fallback);
+                    return;
+                }
                 
-                // Quantize colors to reduce variations
-                const qr = Math.round(r / 32) * 32;
-                const qg = Math.round(g / 32) * 32;
-                const qb = Math.round(b / 32) * 32;
+                // Sample at a smaller size for performance
+                const size = 50;
+                canvas.width = size;
+                canvas.height = size;
                 
-                // Skip very light colors (near white) and very dark colors (near black)
-                const brightness = (qr + qg + qb) / 3;
-                if (brightness < 30 || brightness > 225) continue;
-                
-                const key = `${qr},${qg},${qb}`;
-                colorCounts[key] = (colorCounts[key] || 0) + 1;
-            }
-            
-            // Sort by frequency
-            const sortedColors = Object.entries(colorCounts)
-                .sort((a, b) => b[1] - a[1])
-                .slice(0, 5);
-            
-            if (sortedColors.length >= 2) {
-                const [r1, g1, b1] = sortedColors[0][0].split(',').map(Number);
-                const [r2, g2, b2] = sortedColors[1][0].split(',').map(Number);
-                
-                // Create a darker version for primary (for better text contrast)
-                const darken = (c: number) => Math.max(0, Math.floor(c * 0.6));
-                const primary = `rgb(${darken(r1)}, ${darken(g1)}, ${darken(b1)})`;
-                
-                // Secondary is slightly lighter
-                const lighten = (c: number) => Math.min(255, Math.floor(c * 0.8));
-                const secondary = `rgb(${lighten(r1)}, ${lighten(g1)}, ${lighten(b1)})`;
-                
-                // Accent from second most common color
-                const accent = `rgb(${r2}, ${g2}, ${b2})`;
-                
-                resolve({ primary, secondary, accent });
-            } else {
-                // Fallback colors
-                resolve({ primary: '#8B4513', secondary: '#5c2e0b', accent: '#d4a373' });
+                try {
+                    ctx.drawImage(img, 0, 0, size, size);
+                    const imageData = ctx.getImageData(0, 0, size, size).data;
+                    const colorCounts: { [key: string]: number } = {};
+                    
+                    // Sample pixels and count colors
+                    for (let i = 0; i < imageData.length; i += 16) {
+                        const r = imageData[i];
+                        const g = imageData[i + 1];
+                        const b = imageData[i + 2];
+                        
+                        // Quantize colors to reduce variations
+                        const qr = Math.round(r / 32) * 32;
+                        const qg = Math.round(g / 32) * 32;
+                        const qb = Math.round(b / 32) * 32;
+                        
+                        // Skip very light colors (near white) and very dark colors (near black)
+                        const brightness = (qr + qg + qb) / 3;
+                        if (brightness < 30 || brightness > 225) continue;
+                        
+                        const key = `${qr},${qg},${qb}`;
+                        colorCounts[key] = (colorCounts[key] || 0) + 1;
+                    }
+                    
+                    // Sort by frequency
+                    const sortedColors = Object.entries(colorCounts)
+                        .sort((a, b) => b[1] - a[1])
+                        .slice(0, 5);
+                    
+                    if (sortedColors.length >= 2) {
+                        const [r1, g1, b1] = sortedColors[0][0].split(',').map(Number);
+                        const [r2, g2, b2] = sortedColors[1][0].split(',').map(Number);
+                        
+                        // Create a darker version for primary (for better text contrast)
+                        const darken = (c: number) => Math.max(0, Math.floor(c * 0.6));
+                        const primary = `rgb(${darken(r1)}, ${darken(g1)}, ${darken(b1)})`;
+                        
+                        // Secondary is slightly lighter
+                        const lighten = (c: number) => Math.min(255, Math.floor(c * 0.8));
+                        const secondary = `rgb(${lighten(r1)}, ${lighten(g1)}, ${lighten(b1)})`;
+                        
+                        // Accent from second most common color
+                        const accent = `rgb(${r2}, ${g2}, ${b2})`;
+                        
+                        resolve({ primary, secondary, accent });
+                    } else {
+                        resolve(fallback);
+                    }
+                } catch (e) {
+                    // CORS error when trying to read canvas data - use fallback
+                    console.log('Canvas CORS error, using fallback palette');
+                    resolve(fallback);
+                }
+            } catch (e) {
+                resolve(fallback);
             }
         };
         
         img.onerror = () => {
-            resolve({ primary: '#8B4513', secondary: '#5c2e0b', accent: '#d4a373' });
+            clearTimeout(timeout);
+            console.log('Image load error, using fallback palette');
+            resolve(fallback);
         };
         
         img.src = imgSrc;

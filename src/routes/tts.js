@@ -149,15 +149,25 @@ router.post('/generate', async (req, res) => {
             character_end_times_seconds: []
         };
 
-        // 5. Save to Cache
-        const newCache = new TTSCache({
-            textHash,
-            voiceId,
-            text,
-            audioUrl,
-            alignmentData
-        });
-        await newCache.save();
+        // 5. Save to Cache (handle duplicate key errors gracefully)
+        try {
+            const newCache = new TTSCache({
+                textHash,
+                voiceId,
+                text,
+                audioUrl,
+                alignmentData
+            });
+            await newCache.save();
+        } catch (cacheError) {
+            // If it's a duplicate key error, that's fine - another request already cached it
+            if (cacheError.code === 11000) {
+                console.log('TTS Cache: Entry already exists (race condition), continuing...');
+            } else {
+                console.warn('TTS Cache save warning:', cacheError.message);
+            }
+            // Don't fail the request - we still have the audio
+        }
 
         res.json({
             audioUrl,

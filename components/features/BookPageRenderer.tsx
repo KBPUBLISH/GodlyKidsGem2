@@ -180,23 +180,24 @@ export const BookPageRenderer: React.FC<BookPageRendererProps> = ({
 
             {/* Text Boxes Layer */}
             <div
-                className="absolute inset-0 pointer-events-none transition-transform duration-500 ease-in-out z-20"
+                className="absolute inset-0 pointer-events-none z-20"
                 style={{
-                    transform: page.scrollUrl && !showScroll
-                        ? 'translateY(100%)'
-                        : 'translateY(0)'
+                    // Don't move the entire text layer - let text boxes stay in place
+                    // Only the scroll image should animate in/out
                 }}
             >
                 {page.textBoxes?.map((box, idx) => {
                     const scrollHeightVal = page.scrollHeight ? `${page.scrollHeight}px` : '30%';
                     const scrollTopVal = `calc(100% - ${scrollHeightVal})`;
                     const isActive = activeTextBoxIndex === idx;
+                    // Text boxes should fade and slide with the scroll
+                    const shouldHideTextBoxes = page.scrollUrl && !showScroll;
 
                     return (
                         <div
                             key={idx}
                             ref={(el) => { textBoxRefs.current[idx] = el; }}
-                            className="absolute pointer-events-auto overflow-y-auto p-2 pt-6 group"
+                            className="absolute pointer-events-auto overflow-y-auto p-2 pt-6 group transition-all duration-500 ease-in-out"
                             style={{
                                 left: `${box.x}%`,
                                 top: page.scrollUrl 
@@ -212,7 +213,11 @@ export const BookPageRenderer: React.FC<BookPageRendererProps> = ({
                                     : `calc(100% - ${box.y}% - 60px)`,
                                 overflowY: 'auto',
                                 textShadow: '1px 1px 2px rgba(255,255,255,0.8)',
-                                scrollBehavior: 'smooth' // Enable smooth scrolling
+                                scrollBehavior: 'smooth',
+                                // Smooth hide/show without jarring layout shift
+                                opacity: shouldHideTextBoxes ? 0 : 1,
+                                transform: shouldHideTextBoxes ? 'translateY(20px)' : 'translateY(0)',
+                                pointerEvents: shouldHideTextBoxes ? 'none' : 'auto',
                             }}
                             onClick={(e) => onPlayText && onPlayText(box.text, idx, e)}
                         >

@@ -464,15 +464,25 @@ Return ONLY a JSON array:
         let remainingQuestions;
         try {
             const content = response.data.choices[0].message.content.trim();
+            console.log('📝 Raw OpenAI response for remaining questions:', content.substring(0, 200));
             const jsonContent = content.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
             remainingQuestions = JSON.parse(jsonContent);
+            console.log(`📝 Parsed ${remainingQuestions.length} remaining questions`);
         } catch (parseError) {
             console.error('Failed to parse remaining questions:', parseError);
-            return res.status(500).json({ message: 'Failed to parse questions' });
+            console.error('Raw content was:', response.data.choices[0]?.message?.content?.substring(0, 500));
+            return res.status(500).json({ message: 'Failed to parse questions', parseError: parseError.message });
+        }
+
+        // Validate remaining questions
+        if (!Array.isArray(remainingQuestions)) {
+            console.error('Remaining questions is not an array:', typeof remainingQuestions);
+            return res.status(500).json({ message: 'Invalid response format - expected array' });
         }
 
         // Combine first question with remaining
         const allQuestions = [firstQuestion, ...remainingQuestions].filter(Boolean);
+        console.log(`📝 Total questions after combining: ${allQuestions.length}`);
 
         // Save to database
         if (!existingQuiz) {
@@ -494,8 +504,13 @@ Return ONLY a JSON array:
         });
 
     } catch (error) {
-        console.error('Remaining Questions Generation Error:', error.response?.data || error.message);
-        res.status(500).json({ message: 'Failed to generate remaining questions', error: error.message });
+        console.error('Remaining Questions Generation Error:', error);
+        console.error('Error details:', error.response?.data || error.message || error.stack);
+        res.status(500).json({ 
+            message: 'Failed to generate remaining questions', 
+            error: error.message,
+            details: error.response?.data || null
+        });
     }
 });
 

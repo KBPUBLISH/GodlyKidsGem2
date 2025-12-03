@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { X, Coins, Gift, BookOpen, Gamepad2, Calendar, Users, ShoppingBag, TrendingUp, TrendingDown, Share2, Copy, Check, Sparkles, Mic, User, ArrowRight } from 'lucide-react';
 import { useUser, CoinTransaction } from '../../context/UserContext';
 
@@ -68,6 +68,19 @@ const CoinHistoryModal: React.FC<CoinHistoryModalProps> = ({ isOpen, onClose, on
   const [codeInput, setCodeInput] = useState('');
   const [redeemMessage, setRedeemMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [activeTab, setActiveTab] = useState<'earn' | 'history'>('earn');
+
+  // Hide BottomNavigation when modal is open
+  useEffect(() => {
+    if (isOpen) {
+      document.body.setAttribute('data-modal-open', 'true');
+    } else {
+      document.body.removeAttribute('data-modal-open');
+    }
+    
+    return () => {
+      document.body.removeAttribute('data-modal-open');
+    };
+  }, [isOpen]);
   
   const handleCopyCode = () => {
     navigator.clipboard.writeText(referralCode);

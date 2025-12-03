@@ -9,6 +9,23 @@ const BottomNavigation: React.FC = () => {
   const [activeTab, setActiveTab] = useState('explore');
   const { playTab, currentPlaylist } = useAudio();
   const isPlayerActive = !!currentPlaylist;
+  const [isHidden, setIsHidden] = useState(false);
+
+  // Listen for modal open/close to hide the ship wheel
+  useEffect(() => {
+    const checkModalState = () => {
+      setIsHidden(document.body.hasAttribute('data-modal-open'));
+    };
+    
+    // Initial check
+    checkModalState();
+    
+    // Use MutationObserver to watch for attribute changes on body
+    const observer = new MutationObserver(checkModalState);
+    observer.observe(document.body, { attributes: true, attributeFilter: ['data-modal-open'] });
+    
+    return () => observer.disconnect();
+  }, []);
 
   // ... (existing code)
 
@@ -112,6 +129,11 @@ const BottomNavigation: React.FC = () => {
   // Positive target rotation
   const targetRotation = (activeItem.index * ITEM_ANGLE);
   const visualRotation = isDragging && dragRotation !== null ? dragRotation : targetRotation;
+
+  // Hide when modal is open
+  if (isHidden) {
+    return null;
+  }
 
   return (
     <div className="fixed bottom-0 left-0 right-0 z-40 h-0 flex justify-center pointer-events-none">

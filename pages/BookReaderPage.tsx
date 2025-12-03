@@ -1,9 +1,10 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
-import { ChevronLeft, ChevronRight, X, Play, Pause, Volume2, Mic, Check, Music, Home, Heart, Star, RotateCcw, Lock } from 'lucide-react';
+import { ChevronLeft, ChevronRight, X, Play, Pause, Volume2, Mic, Check, Music, Home, Heart, Star, RotateCcw, Lock, BookOpen, Loader2 } from 'lucide-react';
 import { ApiService } from '../services/apiService';
 import { voiceCloningService, ClonedVoice } from '../services/voiceCloningService';
 import VoiceCloningModal from '../components/features/VoiceCloningModal';
+import BookQuizModal from '../components/features/BookQuizModal';
 import { useAudio } from '../context/AudioContext';
 import { useUser } from '../context/UserContext';
 import { readingProgressService } from '../services/readingProgressService';
@@ -74,7 +75,7 @@ const BookReaderPage: React.FC = () => {
     const navigate = useNavigate();
     const [searchParams] = useSearchParams();
     const { setGameMode, setMusicPaused, musicEnabled, toggleMusic } = useAudio();
-    const { isVoiceUnlocked, isSubscribed } = useUser();
+    const { isVoiceUnlocked, isSubscribed, addCoins } = useUser();
     const wasMusicEnabledRef = useRef<boolean>(false);
     const [pages, setPages] = useState<Page[]>([]);
     const [currentPageIndex, setCurrentPageIndex] = useState(0);
@@ -128,6 +129,14 @@ const BookReaderPage: React.FC = () => {
     const [hasBookMusic, setHasBookMusic] = useState(false);
     const [isFavorite, setIsFavorite] = useState(false);
     const [isLiked, setIsLiked] = useState(false);
+    
+    // Quiz state
+    const [showQuizModal, setShowQuizModal] = useState(false);
+    const [quizAttemptCount, setQuizAttemptCount] = useState(0);
+    const [quizLoading, setQuizLoading] = useState(false);
+    const [bookTitle, setBookTitle] = useState('');
+    const [congratsAudioPlayed, setCongratsAudioPlayed] = useState(false);
+    const congratsAudioRef = useRef<HTMLAudioElement | null>(null);
     
     // Page turn sound effect using Web Audio API for a synthetic paper sound
     const audioContextRef = useRef<AudioContext | null>(null);
@@ -197,6 +206,47 @@ const BookReaderPage: React.FC = () => {
             console.log('Page turn sound not available');
         }
     };
+
+    // Function to play congratulations message using TTS when user reaches the end
+    const playCongratsAudio = async () => {
+        if (congratsAudioPlayed || !selectedVoiceId) return;
+        
+        try {
+            setCongratsAudioPlayed(true); // Prevent multiple plays
+            
+            const congratsText = "Great job! You made it to the end! What would you like to do now?";
+            console.log('🎉 Generating congrats audio with voice:', selectedVoiceId);
+            
+            const result = await ApiService.generateTTS(congratsText, selectedVoiceId, bookId || undefined);
+            
+            if (result && result.audioUrl) {
+                // Stop any currently playing audio
+                if (congratsAudioRef.current) {
+                    congratsAudioRef.current.pause();
+                }
+                
+                const audio = new Audio(result.audioUrl);
+                audio.volume = 0.8;
+                congratsAudioRef.current = audio;
+                
+                audio.play().catch(err => {
+                    console.warn('Failed to play congrats audio:', err);
+                });
+            }
+        } catch (err) {
+            console.error('Failed to generate congrats audio:', err);
+        }
+    };
+
+    // Play congrats audio when reaching "The End" page
+    useEffect(() => {
+        const currentPage = pages[currentPageIndex];
+        const isTheEnd = currentPage?.id === 'the-end-page' || currentPageIndex === pages.length - 1;
+        
+        if (isTheEnd && pages.length > 1 && !congratsAudioPlayed) {
+            playCongratsAudio();
+        }
+    }, [currentPageIndex, pages, congratsAudioPlayed]);
 
     // Effect 1: Initialization, Book Data Fetching, and Cleanup
     useEffect(() => {
@@ -278,6 +328,17 @@ const BookReaderPage: React.FC = () => {
                 const book = await ApiService.getBookById(bookId);
                 const rawData = (book as any)?.rawData;
                 const files = rawData?.files || (book as any)?.files;
+                
+                // Store book title for quiz modal
+                const title = (book as any)?.title || rawData?.title || 'This Book';
+                setBookTitle(title);
+
+                // Fetch quiz attempt count
+                const userId = localStorage.getItem('godlykids_user_id') || 'anonymous';
+                const attempts = await ApiService.getBookQuizAttempts(bookId, userId);
+                if (attempts) {
+                    setQuizAttemptCount(attempts.attemptCount || 0);
+                }
 
                 if (files?.audio && Array.isArray(files.audio) && files.audio.length > 0) {
                     const musicUrl = files.audio[0].url;
@@ -1756,10 +1817,51 @@ const BookReaderPage: React.FC = () => {
 
                             {/* Action Buttons Grid */}
                             <div className="flex flex-col gap-4 w-full">
+                                {/* Take Quiz Button */}
+                                {quizAttemptCount < 2 && (
+                                    <button
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+                                            // Stop congrats audio if playing
+                                            if (congratsAudioRef.current) {
+                                                congratsAudioRef.current.pause();
+                                            }
+                                            setShowQuizModal(true);
+                                        }}
+                                        disabled={quizLoading}
+                                        className="bg-[#FF9800] hover:bg-[#F57C00] text-white p-4 rounded-xl font-bold shadow-lg border-b-4 border-[#E65100] active:border-b-0 active:translate-y-1 transition-all flex items-center justify-center gap-2 group relative overflow-hidden"
+                                    >
+                                        {quizLoading ? (
+                                            <Loader2 className="w-5 h-5 animate-spin" />
+                                        ) : (
+                                            <BookOpen className="w-5 h-5 group-hover:scale-110 transition-transform" />
+                                        )}
+                                        <span>Take Quiz</span>
+                                        <span className="text-xs bg-white/20 px-2 py-0.5 rounded-full">
+                                            {quizAttemptCount}/2
+                                        </span>
+                                    </button>
+                                )}
+                                
+                                {quizAttemptCount >= 2 && (
+                                    <div className="bg-[#9E9E9E] text-white p-4 rounded-xl font-bold shadow-lg flex items-center justify-center gap-2 opacity-75">
+                                        <BookOpen className="w-5 h-5" />
+                                        <span>Quiz Completed</span>
+                                        <span className="text-xs bg-white/20 px-2 py-0.5 rounded-full">
+                                            2/2
+                                        </span>
+                                    </div>
+                                )}
+
                                 {/* Read Again */}
                                 <button
                                     onClick={(e) => {
                                         e.stopPropagation();
+                                        // Stop congrats audio if playing
+                                        if (congratsAudioRef.current) {
+                                            congratsAudioRef.current.pause();
+                                        }
+                                        setCongratsAudioPlayed(false); // Reset for next read
                                         setCurrentPageIndex(0);
                                     }}
                                     className="bg-[#4CAF50] hover:bg-[#43A047] text-white p-4 rounded-xl font-bold shadow-lg border-b-4 border-[#2E7D32] active:border-b-0 active:translate-y-1 transition-all flex items-center justify-center gap-2 group"
@@ -1772,6 +1874,10 @@ const BookReaderPage: React.FC = () => {
                                 <button
                                     onClick={(e) => {
                                         e.stopPropagation();
+                                        // Stop congrats audio if playing
+                                        if (congratsAudioRef.current) {
+                                            congratsAudioRef.current.pause();
+                                        }
                                         // Restore music before navigating
                                         const wasEnabled = wasMusicEnabledRef.current || localStorage.getItem('godly_kids_music_was_enabled') === 'true';
                                         if (wasEnabled && !musicEnabled) {
@@ -1840,6 +1946,21 @@ const BookReaderPage: React.FC = () => {
                     setClonedVoices(cloned);
                     // Optionally select the newly cloned voice
                     setSelectedVoiceId(voice.voice_id);
+                }}
+            />
+
+            {/* Book Quiz Modal */}
+            <BookQuizModal
+                isOpen={showQuizModal}
+                onClose={() => setShowQuizModal(false)}
+                bookId={bookId || ''}
+                bookTitle={bookTitle}
+                attemptCount={quizAttemptCount}
+                maxAttempts={2}
+                onQuizComplete={(score, coinsEarned) => {
+                    // Update attempt count
+                    setQuizAttemptCount(prev => prev + 1);
+                    console.log(`📊 Quiz completed: ${score}/6, earned ${coinsEarned} coins`);
                 }}
             />
         </div>

@@ -1388,6 +1388,89 @@ export const ApiService = {
       return null;
     }
   },
+
+  // === BOOK QUIZ API ===
+
+  // Generate a quiz for a book using AI
+  generateBookQuiz: async (bookId: string): Promise<any | null> => {
+    try {
+      const baseUrl = getApiBaseUrl();
+      const response = await fetchWithTimeout(`${baseUrl}quiz/generate`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ bookId }),
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        console.log(`📝 Quiz generated for book ${bookId}:`, data.cached ? 'from cache' : 'newly generated');
+        return data;
+      }
+      return null;
+    } catch (error) {
+      console.error('❌ Failed to generate book quiz:', error);
+      return null;
+    }
+  },
+
+  // Get quiz for a book
+  getBookQuiz: async (bookId: string, userId?: string): Promise<any | null> => {
+    try {
+      const baseUrl = getApiBaseUrl();
+      const queryParam = userId ? `?userId=${userId}` : '';
+      const response = await fetchWithTimeout(`${baseUrl}quiz/${bookId}${queryParam}`, {
+        method: 'GET',
+      });
+
+      if (response.ok) {
+        return await response.json();
+      }
+      return null;
+    } catch (error) {
+      console.error('❌ Failed to get book quiz:', error);
+      return null;
+    }
+  },
+
+  // Submit quiz answers
+  submitBookQuiz: async (bookId: string, userId: string, answers: number[]): Promise<any | null> => {
+    try {
+      const baseUrl = getApiBaseUrl();
+      const response = await fetchWithTimeout(`${baseUrl}quiz/${bookId}/submit`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId, answers }),
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        console.log(`📊 Quiz submitted: ${data.score}/${data.totalQuestions} correct, ${data.coinsEarned} coins earned`);
+        return data;
+      }
+      return null;
+    } catch (error) {
+      console.error('❌ Failed to submit book quiz:', error);
+      return null;
+    }
+  },
+
+  // Get user's quiz attempts for a book
+  getBookQuizAttempts: async (bookId: string, userId: string): Promise<any | null> => {
+    try {
+      const baseUrl = getApiBaseUrl();
+      const response = await fetchWithTimeout(`${baseUrl}quiz/${bookId}/attempts/${userId}`, {
+        method: 'GET',
+      });
+
+      if (response.ok) {
+        return await response.json();
+      }
+      return null;
+    } catch (error) {
+      console.error('❌ Failed to get quiz attempts:', error);
+      return null;
+    }
+  },
 };
 
 // Log API configuration on startup

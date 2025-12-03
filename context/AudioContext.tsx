@@ -423,6 +423,10 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         });
     }, []);
 
+    const toggleSfx = useCallback(() => {
+        setSfxEnabled(prev => !prev);
+    }, []);
+
     const setMusicVolume = useCallback((volume: number) => {
         const clampedVolume = Math.max(0, Math.min(1, volume));
         setMusicVolumeState(clampedVolume);

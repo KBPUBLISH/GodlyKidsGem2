@@ -344,32 +344,48 @@ const HomePage: React.FC = () => {
   }, [playlists]);
 
   // Group books and playlists by category
+  // Find the category ID for a given name (for matching books that use category IDs)
+  const getCategoryId = (categoryName: string) => {
+    const cat = exploreCategories.find(c => c.name.toLowerCase() === categoryName.toLowerCase());
+    return cat?._id;
+  };
+
   const getBooksByCategory = (categoryName: string) => {
+    const categoryId = getCategoryId(categoryName);
     const matchedBooks = books.filter(book => {
       const bookCategories = (book as any).categories && Array.isArray((book as any).categories) 
         ? (book as any).categories 
         : (book.category ? [book.category] : []);
+      // Match by name (case-insensitive) OR by category ID
       const matches = bookCategories.some((cat: string) => 
-        cat.toLowerCase() === categoryName.toLowerCase()
+        cat.toLowerCase() === categoryName.toLowerCase() || 
+        (categoryId && cat === categoryId)
       );
       return matches;
     });
-    console.log(`📖 Books in category "${categoryName}":`, matchedBooks.map(b => b.title));
+    if (matchedBooks.length > 0) {
+      console.log(`📖 Books in category "${categoryName}":`, matchedBooks.map(b => b.title));
+    }
     return matchedBooks;
   };
 
   const getPlaylistsByCategory = (categoryName: string) => {
+    const categoryId = getCategoryId(categoryName);
     const matchedPlaylists = playlists
       .filter(playlist => {
         const playlistCategories = (playlist as any).categories && Array.isArray((playlist as any).categories) 
           ? (playlist as any).categories 
           : (playlist.category ? [playlist.category] : []);
+        // Match by name (case-insensitive) OR by category ID
         const matches = playlistCategories.some((cat: string) => 
-          cat.toLowerCase() === categoryName.toLowerCase()
+          cat.toLowerCase() === categoryName.toLowerCase() ||
+          (categoryId && cat === categoryId)
         );
         return matches;
       });
-    console.log(`🎵 Playlists in category "${categoryName}":`, matchedPlaylists.map(p => p.title));
+    if (matchedPlaylists.length > 0) {
+      console.log(`🎵 Playlists in category "${categoryName}":`, matchedPlaylists.map(p => p.title));
+    }
     return matchedPlaylists
       .map(playlist => ({
         // Transform playlist to match Book interface for BookCard

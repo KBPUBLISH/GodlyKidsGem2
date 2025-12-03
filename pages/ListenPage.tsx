@@ -95,12 +95,14 @@ const ListenPage: React.FC = () => {
     fetchPlaylists();
   }, []);
 
-  // Fetch categories on mount (audio type only)
+  // Fetch categories on mount (audio type only, excluding explore-only categories)
   useEffect(() => {
     const fetchCategories = async () => {
       try {
         const cats = await ApiService.getCategories('audio');
-        const categoryNames = ['All', ...cats.map(c => c.name).filter(Boolean)];
+        // Filter out categories that are marked for explore page only
+        const nonExploreCategories = cats.filter(c => !c.showOnExplore);
+        const categoryNames = ['All', ...nonExploreCategories.map(c => c.name).filter(Boolean)];
         setCategories(categoryNames);
       } catch (error) {
         console.error('Error fetching categories:', error);

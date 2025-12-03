@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ChevronLeft, ChevronRight, X, Play, Pause, Check, Lock, Volume2, Loader2, Mic } from 'lucide-react';
+import { ArrowLeft, Play, Pause, RotateCcw, Volume2, VolumeX, Check, ChevronRight, Star, Book, FlaskConical, Calculator, Hourglass, Languages, Palette, Cpu, Video, X, Lock, Loader2, Mic, ChevronLeft } from 'lucide-react';
 import { ApiService } from '../services/apiService';
 import { markCompleted, getCompletion } from '../services/lessonService';
 import { useUser } from '../context/UserContext';
@@ -18,6 +18,11 @@ interface Lesson {
         thumbnail?: string;
         duration?: number;
     };
+    type?: string;
+    captions?: Array<{
+        text: string;
+        timestamp: number;
+    }>;
     devotional: {
         title?: string;
         content?: string;
@@ -38,6 +43,19 @@ interface Lesson {
 }
 
 type Screen = 'video' | 'devotional' | 'activity';
+
+const getLessonIcon = (type: string) => {
+    switch (type) {
+        case 'Bible': return <Book className="w-5 h-5 text-[#FFD700]" />;
+        case 'Science': return <FlaskConical className="w-5 h-5 text-[#FFD700]" />;
+        case 'Math': return <Calculator className="w-5 h-5 text-[#FFD700]" />;
+        case 'History': return <Hourglass className="w-5 h-5 text-[#FFD700]" />;
+        case 'English': return <Languages className="w-5 h-5 text-[#FFD700]" />;
+        case 'Art': return <Palette className="w-5 h-5 text-[#FFD700]" />;
+        case 'Technology': return <Cpu className="w-5 h-5 text-[#FFD700]" />;
+        default: return <Video className="w-5 h-5 text-[#FFD700]" />;
+    }
+};
 
 const LessonPlayerPage: React.FC = () => {
     const { lessonId } = useParams<{ lessonId: string }>();
@@ -556,16 +574,25 @@ const LessonPlayerPage: React.FC = () => {
                     </div>
                     {/* Header */}
                     <div className="flex items-center justify-between p-4">
-                        <button
-                            onClick={handleBack}
-                            className="text-white p-2 hover:bg-white/10 rounded-lg transition-colors"
-                        >
-                            <ChevronLeft className="w-6 h-6" />
-                        </button>
-                        <div className="text-white text-sm font-semibold">
-                            {currentScreen === 'devotional' ? 'Devotional' : 'Activity'}
+                        <div className="flex items-center gap-4">
+                            <button
+                                onClick={handleBack}
+                                className="p-2 hover:bg-white/10 rounded-full transition-colors"
+                            >
+                                <ArrowLeft className="w-6 h-6 text-white" />
+                            </button>
+                            <div className="flex items-center gap-3">
+                                <div className="bg-white/10 p-2 rounded-full">
+                                    {getLessonIcon(lesson.type || 'Bible')}
+                                </div>
+                                <h1 className="text-xl md:text-2xl font-bold text-white">{lesson.title}</h1>
+                            </div>
                         </div>
-                        <div className="w-10" /> {/* Spacer */}
+                        <div className="flex items-center gap-2 bg-black/30 px-4 py-2 rounded-full">
+                            <span className="text-white text-sm font-semibold">
+                                {currentScreen === 'devotional' ? 'Devotional' : 'Activity'}
+                            </span>
+                        </div>
                     </div>
 
                     {/* Content */}
@@ -582,7 +609,7 @@ const LessonPlayerPage: React.FC = () => {
                                 <div className="absolute top-4 right-4 w-3 h-3 rounded-full bg-[#4a2810] shadow-inner opacity-60"></div>
                                 <div className="absolute bottom-4 left-4 w-3 h-3 rounded-full bg-[#4a2810] shadow-inner opacity-60"></div>
                                 <div className="absolute bottom-4 right-4 w-3 h-3 rounded-full bg-[#4a2810] shadow-inner opacity-60"></div>
-                                
+
                                 {/* Audio Controls - Wood style */}
                                 <div className="mb-6 flex justify-center items-center gap-3 relative z-10">
                                     {/* Voice Selector */}
@@ -707,10 +734,10 @@ const LessonPlayerPage: React.FC = () => {
                                         onClick={toggleAudio}
                                         disabled={isGeneratingAudio}
                                         className={`flex items-center gap-3 px-6 py-3 rounded-lg font-bold text-lg transition-all transform hover:scale-105 shadow-lg border-2 ${isGeneratingAudio
-                                                ? 'bg-[#5D4037] text-white/50 border-[#3E2723] cursor-not-allowed'
-                                                : isAudioPlaying
-                                                    ? 'bg-[#3E2723] text-[#FFD700] border-[#FFD700]'
-                                                    : 'bg-[#5D4037] text-[#FFD700] border-[#3E2723] hover:bg-[#4E342E]'
+                                            ? 'bg-[#5D4037] text-white/50 border-[#3E2723] cursor-not-allowed'
+                                            : isAudioPlaying
+                                                ? 'bg-[#3E2723] text-[#FFD700] border-[#FFD700]'
+                                                : 'bg-[#5D4037] text-[#FFD700] border-[#3E2723] hover:bg-[#4E342E]'
                                             }`}
                                     >
                                         {isGeneratingAudio ? (
@@ -740,7 +767,7 @@ const LessonPlayerPage: React.FC = () => {
                                         <div className="absolute inset-0 opacity-10 pointer-events-none mix-blend-multiply"
                                             style={{ backgroundImage: `url("https://www.transparenttextures.com/patterns/aged-paper.png")` }}
                                         ></div>
-                                        
+
                                         {/* Title */}
                                         {lesson.devotional.title && (
                                             <div className="text-center mb-6 relative z-10">
@@ -750,7 +777,7 @@ const LessonPlayerPage: React.FC = () => {
                                                 <div className="w-32 h-1 bg-[#8B4513] mx-auto mt-2 rounded-full opacity-50"></div>
                                             </div>
                                         )}
-                                        
+
                                         {/* Content */}
                                         {lesson.devotional.content && (
                                             <div className="mb-6 relative z-10">
@@ -759,7 +786,7 @@ const LessonPlayerPage: React.FC = () => {
                                                 </div>
                                             </div>
                                         )}
-                                        
+
                                         {/* Bible Verse - Wax Seal Style */}
                                         {lesson.devotional.verse && (
                                             <div className="relative z-10 mt-8 border-t-2 border-[#d4c59a] pt-6">
@@ -774,7 +801,7 @@ const LessonPlayerPage: React.FC = () => {
                                         )}
                                     </div>
                                 </div>
-                                
+
                                 {/* Navigation buttons - Wood Signs */}
                                 <div className="flex items-center justify-between pt-6 gap-4 relative z-10">
                                     <button
@@ -864,21 +891,20 @@ const LessonPlayerPage: React.FC = () => {
                                                                         onClick={() => handleQuizAnswer(currentQuestionIndex, optIndex)}
                                                                         disabled={quizSubmitted}
                                                                         className={`w-full p-4 rounded-lg text-left transition-all border-2 transform active:scale-[0.98] ${showResult && isCorrect
-                                                                                ? 'bg-green-100 border-green-500 text-green-900 shadow-md'
-                                                                                : showResult && isSelected && !isCorrect
-                                                                                    ? 'bg-red-100 border-red-500 text-red-900 shadow-md'
-                                                                                    : isSelected
-                                                                                        ? 'bg-[#FFD700] border-[#B8860B] text-[#3E2723] shadow-md font-bold'
-                                                                                        : 'bg-white/60 border-[#d4c59a] text-[#5D4037] hover:bg-white hover:border-[#8B4513] hover:shadow-md'
+                                                                            ? 'bg-green-100 border-green-500 text-green-900 shadow-md'
+                                                                            : showResult && isSelected && !isCorrect
+                                                                                ? 'bg-red-100 border-red-500 text-red-900 shadow-md'
+                                                                                : isSelected
+                                                                                    ? 'bg-[#FFD700] border-[#B8860B] text-[#3E2723] shadow-md font-bold'
+                                                                                    : 'bg-white/60 border-[#d4c59a] text-[#5D4037] hover:bg-white hover:border-[#8B4513] hover:shadow-md'
                                                                             } ${quizSubmitted ? 'cursor-not-allowed' : 'cursor-pointer'}`}
                                                                     >
                                                                         <div className="flex items-center gap-3">
-                                                                            <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold border ${
-                                                                                showResult && isCorrect ? 'bg-green-500 border-green-600 text-white' :
+                                                                            <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold border ${showResult && isCorrect ? 'bg-green-500 border-green-600 text-white' :
                                                                                 showResult && isSelected && !isCorrect ? 'bg-red-500 border-red-600 text-white' :
-                                                                                isSelected ? 'bg-[#B8860B] border-[#8B4513] text-white' :
-                                                                                'bg-[#d4c59a] border-[#8B4513] text-[#5D4037]'
-                                                                            }`}>
+                                                                                    isSelected ? 'bg-[#B8860B] border-[#8B4513] text-white' :
+                                                                                        'bg-[#d4c59a] border-[#8B4513] text-[#5D4037]'
+                                                                                }`}>
                                                                                 {String.fromCharCode(65 + optIndex)}
                                                                             </div>
                                                                             <span className="text-lg font-medium">{option.text}</span>
@@ -941,24 +967,24 @@ const LessonPlayerPage: React.FC = () => {
                                                     <div className="bg-[#f3e5ab] rounded-lg shadow-2xl p-8 max-w-md w-full border-4 border-[#8B4513] text-center animate-in zoom-in duration-300 relative">
                                                         {/* Confetti/Stars */}
                                                         <div className="absolute -top-6 -left-6 text-4xl animate-bounce">⭐</div>
-                                                        <div className="absolute -top-6 -right-6 text-4xl animate-bounce" style={{animationDelay: '0.5s'}}>⭐</div>
-                                                        
+                                                        <div className="absolute -top-6 -right-6 text-4xl animate-bounce" style={{ animationDelay: '0.5s' }}>⭐</div>
+
                                                         <h3 className="text-[#5D4037] text-3xl font-black font-display mb-4">Quiz Complete!</h3>
-                                                        
+
                                                         <div className="text-6xl mb-4">
                                                             {correctAnswers === questions.length ? '🏆' : correctAnswers > questions.length / 2 ? '🌟' : '👍'}
                                                         </div>
-                                                        
+
                                                         <p className="text-[#3E2723] text-xl mb-6 font-serif">
                                                             You got <span className="font-bold text-[#8B4513]">{correctAnswers}</span> out of <span className="font-bold text-[#8B4513]">{questions.length}</span> correct!
                                                         </p>
-                                                        
+
                                                         <div className="bg-[#FFF8E1] p-4 rounded-lg border-2 border-[#d4c59a] mb-6 inline-block">
                                                             <p className="text-[#FF8F00] font-black text-2xl flex items-center gap-2 justify-center">
                                                                 <span>🪙</span> +{correctAnswers * 10} Coins!
                                                             </p>
                                                         </div>
-                                                        
+
                                                         <button
                                                             onClick={() => navigate(-1)}
                                                             className="w-full bg-[#8B4513] hover:bg-[#A0522D] text-white px-6 py-4 rounded-lg font-bold font-display text-xl shadow-lg border-2 border-[#5D4037] transition-transform active:scale-95"

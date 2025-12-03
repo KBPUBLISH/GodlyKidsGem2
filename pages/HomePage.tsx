@@ -10,7 +10,7 @@ import DailyRewardModal from '../components/features/DailyRewardModal';
 import ChallengeGameModal from '../components/features/ChallengeGameModal';
 import StrengthGameModal from '../components/features/StrengthGameModal';
 import PrayerGameModal from '../components/features/PrayerGameModal';
-import { BookOpen, Key, Brain, Dumbbell, Heart, Video, ChevronRight, Lock, Check, Play } from 'lucide-react';
+import { BookOpen, Key, Brain, Dumbbell, Heart, Video, ChevronRight, Lock, Check, Play, Book, FlaskConical, Calculator, Hourglass, Languages, Palette, Cpu } from 'lucide-react';
 import { ApiService } from '../services/apiService';
 import { isCompleted, isLocked } from '../services/lessonService';
 
@@ -23,6 +23,19 @@ const getLessonStatus = (lesson: any): 'available' | 'locked' | 'completed' => {
     return 'locked';
   }
   return 'available';
+};
+
+const getLessonIcon = (type: string) => {
+  switch (type) {
+    case 'Bible': return <Book className="w-4 h-4 text-white" />;
+    case 'Science': return <FlaskConical className="w-4 h-4 text-white" />;
+    case 'Math': return <Calculator className="w-4 h-4 text-white" />;
+    case 'History': return <Hourglass className="w-4 h-4 text-white" />;
+    case 'English': return <Languages className="w-4 h-4 text-white" />;
+    case 'Art': return <Palette className="w-4 h-4 text-white" />;
+    case 'Technology': return <Cpu className="w-4 h-4 text-white" />;
+    default: return <Video className="w-4 h-4 text-white" />;
+  }
 };
 
 const MEMORY_GAME_ENGAGED_KEY = 'memory_game_engaged';
@@ -49,7 +62,7 @@ const HomePage: React.FC = () => {
   const [lessons, setLessons] = useState<any[]>([]);
   const [lessonsLoading, setLessonsLoading] = useState(true);
   const [weekLessons, setWeekLessons] = useState<Map<string, any>>(new Map());
-  
+
   // Explore categories state
   const [exploreCategories, setExploreCategories] = useState<any[]>([]);
   const [categoriesLoading, setCategoriesLoading] = useState(true);
@@ -247,13 +260,13 @@ const HomePage: React.FC = () => {
       const exploreOnly = categories.filter(cat => cat.showOnExplore === true);
       setExploreCategories(exploreOnly);
       console.log(`✅ Loaded ${exploreOnly.length} explore categories:`, exploreOnly.map(c => c.name));
-      
+
       // Debug: Log all books and their categories
-      console.log('📚 All books:', books.map(b => ({ 
-        title: b.title, 
-        category: (b as any).category, 
+      console.log('📚 All books:', books.map(b => ({
+        title: b.title,
+        category: (b as any).category,
         categories: (b as any).categories,
-        status: (b as any).status 
+        status: (b as any).status
       })));
     } catch (error) {
       console.error('❌ Error fetching explore categories:', error);
@@ -278,10 +291,10 @@ const HomePage: React.FC = () => {
   // Group books and playlists by category
   const getBooksByCategory = (categoryName: string) => {
     const matchedBooks = books.filter(book => {
-      const bookCategories = (book as any).categories && Array.isArray((book as any).categories) 
-        ? (book as any).categories 
+      const bookCategories = (book as any).categories && Array.isArray((book as any).categories)
+        ? (book as any).categories
         : (book.category ? [book.category] : []);
-      const matches = bookCategories.some((cat: string) => 
+      const matches = bookCategories.some((cat: string) =>
         cat.toLowerCase() === categoryName.toLowerCase()
       );
       return matches;
@@ -293,10 +306,10 @@ const HomePage: React.FC = () => {
   const getPlaylistsByCategory = (categoryName: string) => {
     const matchedPlaylists = playlists
       .filter(playlist => {
-        const playlistCategories = (playlist as any).categories && Array.isArray((playlist as any).categories) 
-          ? (playlist as any).categories 
+        const playlistCategories = (playlist as any).categories && Array.isArray((playlist as any).categories)
+          ? (playlist as any).categories
           : (playlist.category ? [playlist.category] : []);
-        const matches = playlistCategories.some((cat: string) => 
+        const matches = playlistCategories.some((cat: string) =>
           cat.toLowerCase() === categoryName.toLowerCase()
         );
         return matches;
@@ -534,6 +547,11 @@ const HomePage: React.FC = () => {
                                   : 'bg-black/20'
                                 }`} />
 
+                              {/* Type Icon */}
+                              <div className="absolute top-2 left-2 bg-black/40 backdrop-blur-sm rounded-full p-1.5">
+                                {getLessonIcon(lesson.type || 'Bible')}
+                              </div>
+
                               {/* Status Icons */}
                               <div className="absolute top-2 right-2">
                                 {status === 'locked' ? (
@@ -575,13 +593,13 @@ const HomePage: React.FC = () => {
               const categoryBooks = getBooksByCategory(category.name);
               const categoryPlaylists = getPlaylistsByCategory(category.name);
               const allItems = [...categoryBooks, ...categoryPlaylists];
-              
+
               if (allItems.length === 0) return null;
-              
+
               return (
                 <section key={category._id} className="mt-6">
-                  <SectionTitle 
-                    title={category.name} 
+                  <SectionTitle
+                    title={category.name}
                     icon={category.icon}
                     color={category.color}
                   />

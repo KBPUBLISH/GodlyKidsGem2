@@ -1,9 +1,10 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
-import { ChevronLeft, ChevronRight, X, Play, Pause, Volume2, Mic, Check, Music, Home, Heart, Star, RotateCcw, Lock } from 'lucide-react';
+import { ChevronLeft, ChevronRight, X, Play, Pause, Volume2, Mic, Check, Music, Home, Heart, Star, RotateCcw, Lock, Sparkles } from 'lucide-react';
 import { ApiService } from '../services/apiService';
 import { voiceCloningService, ClonedVoice } from '../services/voiceCloningService';
 import VoiceCloningModal from '../components/features/VoiceCloningModal';
+import ColoringModal from '../components/features/ColoringModal';
 import { useAudio } from '../context/AudioContext';
 import { useUser } from '../context/UserContext';
 import { readingProgressService } from '../services/readingProgressService';
@@ -28,6 +29,7 @@ interface Page {
     pageNumber: number;
     backgroundUrl?: string;
     backgroundType?: 'image' | 'video';
+    isColoringPage?: boolean;
     scrollUrl?: string;
     scrollHeight?: number;
     textBoxes?: TextBox[];
@@ -123,10 +125,15 @@ const BookReaderPage: React.FC = () => {
     const [hasBookMusic, setHasBookMusic] = useState(false);
     const [isFavorite, setIsFavorite] = useState(false);
     const [isLiked, setIsLiked] = useState(false);
-    
+
+    // Coloring Page State
+    const [coloringPages, setColoringPages] = useState<Page[]>([]);
+    const [showColoringModal, setShowColoringModal] = useState(false);
+    const [selectedColoringPage, setSelectedColoringPage] = useState<Page | null>(null);
+
     // Page turn sound effect using Web Audio API for a synthetic paper sound
     const audioContextRef = useRef<AudioContext | null>(null);
-    
+
     // Function to play page turn sound using Web Audio API (synthetic paper rustle)
     const playPageTurnSound = () => {
         try {
@@ -135,19 +142,19 @@ const BookReaderPage: React.FC = () => {
                 audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
             }
             const ctx = audioContextRef.current;
-            
+
             // Resume context if suspended (required for autoplay policy)
             if (ctx.state === 'suspended') {
                 ctx.resume();
             }
-            
+
             const now = ctx.currentTime;
-            
+
             // Create noise buffer for paper rustle sound
             const bufferSize = ctx.sampleRate * 0.15; // 150ms of sound
             const noiseBuffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
             const output = noiseBuffer.getChannelData(0);
-            
+
             // Generate filtered noise that sounds like paper
             for (let i = 0; i < bufferSize; i++) {
                 // Pink-ish noise with envelope
@@ -155,38 +162,38 @@ const BookReaderPage: React.FC = () => {
                 const envelope = Math.sin(t * Math.PI) * Math.pow(1 - t, 0.5); // Quick attack, natural decay
                 output[i] = (Math.random() * 2 - 1) * envelope * 0.3;
             }
-            
+
             // Create noise source
             const noiseSource = ctx.createBufferSource();
             noiseSource.buffer = noiseBuffer;
-            
+
             // High-pass filter to make it sound more like paper
             const highPass = ctx.createBiquadFilter();
             highPass.type = 'highpass';
             highPass.frequency.value = 800;
             highPass.Q.value = 0.5;
-            
+
             // Low-pass filter to remove harsh highs
             const lowPass = ctx.createBiquadFilter();
             lowPass.type = 'lowpass';
             lowPass.frequency.value = 4000;
             lowPass.Q.value = 0.7;
-            
+
             // Gain for volume control
             const gainNode = ctx.createGain();
             gainNode.gain.setValueAtTime(0.25, now);
             gainNode.gain.exponentialRampToValueAtTime(0.01, now + 0.15);
-            
+
             // Connect the audio graph
             noiseSource.connect(highPass);
             highPass.connect(lowPass);
             lowPass.connect(gainNode);
             gainNode.connect(ctx.destination);
-            
+
             // Play the sound
             noiseSource.start(now);
             noiseSource.stop(now + 0.15);
-            
+
         } catch (err) {
             // Silently fail if Web Audio API is not available
             console.log('Page turn sound not available');
@@ -397,6 +404,13 @@ const BookReaderPage: React.FC = () => {
 
                 setPages([...data, theEndPage]);
 
+                // Filter coloring pages
+                const coloring = data.filter((p: any) => p.isColoringPage);
+                setColoringPages(coloring);
+                if (coloring.length > 0) {
+                    setSelectedColoringPage(coloring[0]);
+                }
+
                 // Check if page is specified in URL (from Continue button)
                 const pageParam = searchParams.get('page');
                 if (pageParam) {
@@ -430,13 +444,13 @@ const BookReaderPage: React.FC = () => {
             if (voiceList.length > 0) {
                 // Store all voices for display (locked/unlocked)
                 setVoices(voiceList);
-                
+
                 // Get default voice from localStorage (set during onboarding)
                 const defaultVoiceId = localStorage.getItem('godlykids_default_voice');
-                
+
                 // Find an unlocked voice to use as default
                 const unlockedVoices = voiceList.filter((v: any) => isVoiceUnlocked(v.voice_id));
-                
+
                 if (defaultVoiceId && isVoiceUnlocked(defaultVoiceId)) {
                     // Use the default voice if it's unlocked
                     setSelectedVoiceId(defaultVoiceId);
@@ -1493,7 +1507,7 @@ const BookReaderPage: React.FC = () => {
                     {flipState && (
                         <>
                             {/* Dynamic shadow cast by the curling page */}
-                            <div 
+                            <div
                                 className="absolute top-0 bottom-0 z-40 pointer-events-none curl-shadow"
                                 style={{
                                     left: flipState.direction === 'next' ? 0 : 'auto',
@@ -1503,15 +1517,14 @@ const BookReaderPage: React.FC = () => {
                                         : 'linear-gradient(to left, rgba(0,0,0,0.4) 0%, rgba(0,0,0,0.2) 30%, rgba(0,0,0,0.05) 70%, transparent 100%)',
                                 }}
                             />
-                            
+
                             {/* The curling glossy white page */}
-                            <div 
-                                className={`absolute inset-0 z-50 pointer-events-none ${
-                                    flipState.direction === 'next' ? 'page-curl-next' : 'page-curl-prev'
-                                }`}
+                            <div
+                                className={`absolute inset-0 z-50 pointer-events-none ${flipState.direction === 'next' ? 'page-curl-next' : 'page-curl-prev'
+                                    }`}
                             >
                                 {/* Front of page - HIGH SHEEN glossy white */}
-                                <div 
+                                <div
                                     className="absolute inset-0"
                                     style={{
                                         background: 'linear-gradient(155deg, #ffffff 0%, #fefefe 15%, #fcfcfa 30%, #fafaf8 45%, #f8f8f5 60%, #f5f5f2 75%, #f2f2ef 90%, #efefec 100%)',
@@ -1526,25 +1539,25 @@ const BookReaderPage: React.FC = () => {
                                     }}
                                 >
                                     {/* Fine paper texture */}
-                                    <div 
+                                    <div
                                         className="absolute inset-0 opacity-[0.015]"
                                         style={{
                                             backgroundImage: `url("data:image/svg+xml,%3Csvg viewBox='0 0 512 512' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='1.2' numOctaves='6' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E")`,
                                         }}
                                     />
-                                    
+
                                     {/* Base glossy sheen layer */}
-                                    <div 
+                                    <div
                                         className="absolute inset-0 sheen-pulse"
                                         style={{
                                             background: 'linear-gradient(120deg, rgba(255,255,255,0) 0%, rgba(255,255,255,0.4) 25%, rgba(255,255,255,0.6) 50%, rgba(255,255,255,0.4) 75%, rgba(255,255,255,0) 100%)',
                                         }}
                                     />
-                                    
+
                                     {/* Multiple shimmer waves for high sheen effect */}
                                     <div className="absolute inset-0 overflow-hidden">
                                         {/* Primary shimmer wave - bright and wide */}
-                                        <div 
+                                        <div
                                             className="absolute top-0 bottom-0 shimmer-wave-1"
                                             style={{
                                                 width: '35%',
@@ -1553,7 +1566,7 @@ const BookReaderPage: React.FC = () => {
                                             }}
                                         />
                                         {/* Secondary shimmer wave - softer */}
-                                        <div 
+                                        <div
                                             className="absolute top-0 bottom-0 shimmer-wave-2"
                                             style={{
                                                 width: '25%',
@@ -1562,7 +1575,7 @@ const BookReaderPage: React.FC = () => {
                                             }}
                                         />
                                         {/* Tertiary shimmer wave - subtle accent */}
-                                        <div 
+                                        <div
                                             className="absolute top-0 bottom-0 shimmer-wave-3"
                                             style={{
                                                 width: '15%',
@@ -1571,9 +1584,9 @@ const BookReaderPage: React.FC = () => {
                                             }}
                                         />
                                     </div>
-                                    
+
                                     {/* Bright curl edge highlight */}
-                                    <div 
+                                    <div
                                         className="absolute top-0 bottom-0"
                                         style={{
                                             width: '6px',
@@ -1583,9 +1596,9 @@ const BookReaderPage: React.FC = () => {
                                             boxShadow: '0 0 20px rgba(255,255,255,0.8), 0 0 40px rgba(255,255,255,0.4)',
                                         }}
                                     />
-                                    
+
                                     {/* Gradient shadow near curl edge for depth */}
-                                    <div 
+                                    <div
                                         className="absolute top-0 bottom-0"
                                         style={{
                                             width: '100px',
@@ -1596,9 +1609,9 @@ const BookReaderPage: React.FC = () => {
                                                 : 'linear-gradient(to right, rgba(0,0,0,0.12) 0%, rgba(0,0,0,0.05) 40%, transparent 100%)',
                                         }}
                                     />
-                                    
+
                                     {/* Opposite edge subtle highlight */}
-                                    <div 
+                                    <div
                                         className="absolute top-0 bottom-0"
                                         style={{
                                             width: '2px',
@@ -1608,9 +1621,9 @@ const BookReaderPage: React.FC = () => {
                                         }}
                                     />
                                 </div>
-                                
+
                                 {/* Back of page - slightly darker with subtle sheen */}
-                                <div 
+                                <div
                                     className="absolute inset-0"
                                     style={{
                                         background: 'linear-gradient(155deg, #f8f8f5 0%, #f5f5f2 20%, #f0f0ed 40%, #ebebea 60%, #e8e8e5 80%, #e5e5e2 100%)',
@@ -1620,23 +1633,23 @@ const BookReaderPage: React.FC = () => {
                                     }}
                                 >
                                     {/* Paper texture on back */}
-                                    <div 
+                                    <div
                                         className="absolute inset-0 opacity-[0.02]"
                                         style={{
                                             backgroundImage: `url("data:image/svg+xml,%3Csvg viewBox='0 0 512 512' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='1.2' numOctaves='6' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E")`,
                                         }}
                                     />
-                                    
+
                                     {/* Subtle matte sheen on back */}
-                                    <div 
+                                    <div
                                         className="absolute inset-0"
                                         style={{
                                             background: 'linear-gradient(135deg, rgba(255,255,255,0) 0%, rgba(255,255,255,0.2) 40%, rgba(255,255,255,0.25) 50%, rgba(255,255,255,0.2) 60%, rgba(255,255,255,0) 100%)',
                                         }}
                                     />
-                                    
+
                                     {/* Edge shadow on back */}
-                                    <div 
+                                    <div
                                         className="absolute top-0 bottom-0"
                                         style={{
                                             width: '60px',
@@ -1724,6 +1737,22 @@ const BookReaderPage: React.FC = () => {
 
                             {/* Action Buttons Grid */}
                             <div className="flex flex-col gap-4 w-full">
+                                {/* Color Button - Only show if book has coloring pages */}
+                                {coloringPages.length > 0 && (
+                                    <button
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+                                            setShowColoringModal(true);
+                                        }}
+                                        className="bg-[#9C27B0] hover:bg-[#7B1FA2] text-white p-4 rounded-xl font-bold shadow-lg border-b-4 border-[#6A1B9A] active:border-b-0 active:translate-y-1 transition-all flex items-center justify-center gap-2 group"
+                                    >
+                                        <div className="relative">
+                                            <Sparkles className="w-6 h-6 group-hover:animate-spin" />
+                                        </div>
+                                        <span>Color!</span>
+                                    </button>
+                                )}
+
                                 {/* Read Again */}
                                 <button
                                     onClick={(e) => {
@@ -1809,6 +1838,13 @@ const BookReaderPage: React.FC = () => {
                     // Optionally select the newly cloned voice
                     setSelectedVoiceId(voice.voice_id);
                 }}
+            />
+
+            {/* Coloring Modal */}
+            <ColoringModal
+                isOpen={showColoringModal}
+                onClose={() => setShowColoringModal(false)}
+                backgroundImageUrl={selectedColoringPage?.backgroundUrl || selectedColoringPage?.files?.background?.url}
             />
         </div>
     );

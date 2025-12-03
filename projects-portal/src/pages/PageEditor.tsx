@@ -39,6 +39,7 @@ const PageEditor: React.FC = () => {
     const [scrollFile, setScrollFile] = useState<File | null>(null);
     const [soundEffectFile, setSoundEffectFile] = useState<File | null>(null);
     const [textBoxes, setTextBoxes] = useState<TextBox[]>([]);
+    const [isColoringPage, setIsColoringPage] = useState(false);
     const [loading, setLoading] = useState(false);
 
     // Previews
@@ -208,6 +209,7 @@ const PageEditor: React.FC = () => {
     const loadPage = (page: any) => {
         setEditingPageId(page._id);
         setPageNumber(page.pageNumber);
+        setIsColoringPage(page.isColoringPage || false);
 
         // Get background type from legacy field or new structure
         const bgType = page.backgroundType || page.files?.background?.type || 'image';
@@ -289,6 +291,7 @@ const PageEditor: React.FC = () => {
             ? Math.max(...existingPages.map((p: any) => p.pageNumber)) + 1
             : 1;
         setPageNumber(nextPageNum);
+        setIsColoringPage(false);
         setBackgroundType('image');
         setBackgroundFile(null);
         setBackgroundPreview(null);
@@ -567,6 +570,7 @@ const PageEditor: React.FC = () => {
                 scrollUrl: scrollUrl || null,
                 scrollHeight: 200, // Fixed for now, could make dynamic
                 textBoxes: textBoxes.map(({ id, ...rest }) => rest), // Remove ID before sending
+                isColoringPage
             };
 
             console.log('Final payload before sending:', {
@@ -634,7 +638,7 @@ const PageEditor: React.FC = () => {
             if (err.response) {
                 console.error('Response data:', err.response.data);
                 console.error('Response status:', err.response.status);
-                
+
                 // Handle duplicate page number error - offer to edit existing page
                 if (err.response.data.error === 'DUPLICATE_PAGE_NUMBER' && err.response.data.existingPageId) {
                     const shouldEdit = window.confirm(
@@ -708,6 +712,24 @@ const PageEditor: React.FC = () => {
                                 className="w-20 border rounded px-2 py-1 text-sm"
                             />
                         </div>
+                    </div>
+
+                    {/* Coloring Page Toggle */}
+                    <div className="flex items-center justify-between">
+                        <label className="text-sm font-medium text-gray-700 flex items-center gap-2">
+                            <Sparkles className="w-4 h-4 text-purple-500" />
+                            Coloring Page
+                        </label>
+                        <button
+                            onClick={() => setIsColoringPage(!isColoringPage)}
+                            className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${isColoringPage ? 'bg-purple-600' : 'bg-gray-200'
+                                }`}
+                        >
+                            <span
+                                className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${isColoringPage ? 'translate-x-6' : 'translate-x-1'
+                                    }`}
+                            />
+                        </button>
                     </div>
 
                     <hr className="border-gray-100" />

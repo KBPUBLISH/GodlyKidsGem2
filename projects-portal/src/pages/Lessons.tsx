@@ -7,11 +7,13 @@ interface Lesson {
     _id: string;
     title: string;
     description?: string;
-    status: string;
+    status: 'draft' | 'scheduled' | 'published' | 'archived';
     video?: {
         url?: string;
         thumbnail?: string;
+        duration?: number;
     };
+    type?: string;
     scheduledDate?: string;
     coinReward?: number;
     order?: number;
@@ -29,7 +31,7 @@ const Lessons: React.FC = () => {
 
     const fetchLessons = async () => {
         try {
-            const url = statusFilter === 'all' 
+            const url = statusFilter === 'all'
                 ? '/api/lessons'
                 : `/api/lessons?status=${statusFilter}`;
             const response = await apiClient.get(url);
@@ -99,41 +101,37 @@ const Lessons: React.FC = () => {
             <div className="mb-6 flex gap-2">
                 <button
                     onClick={() => setStatusFilter('all')}
-                    className={`px-4 py-2 rounded-lg transition-colors ${
-                        statusFilter === 'all' 
-                            ? 'bg-indigo-600 text-white' 
-                            : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                    }`}
+                    className={`px-4 py-2 rounded-lg transition-colors ${statusFilter === 'all'
+                        ? 'bg-indigo-600 text-white'
+                        : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                        }`}
                 >
                     All
                 </button>
                 <button
                     onClick={() => setStatusFilter('draft')}
-                    className={`px-4 py-2 rounded-lg transition-colors ${
-                        statusFilter === 'draft' 
-                            ? 'bg-indigo-600 text-white' 
-                            : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                    }`}
+                    className={`px-4 py-2 rounded-lg transition-colors ${statusFilter === 'draft'
+                        ? 'bg-indigo-600 text-white'
+                        : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                        }`}
                 >
                     Draft
                 </button>
                 <button
                     onClick={() => setStatusFilter('scheduled')}
-                    className={`px-4 py-2 rounded-lg transition-colors ${
-                        statusFilter === 'scheduled' 
-                            ? 'bg-indigo-600 text-white' 
-                            : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                    }`}
+                    className={`px-4 py-2 rounded-lg transition-colors ${statusFilter === 'scheduled'
+                        ? 'bg-indigo-600 text-white'
+                        : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                        }`}
                 >
                     Scheduled
                 </button>
                 <button
                     onClick={() => setStatusFilter('published')}
-                    className={`px-4 py-2 rounded-lg transition-colors ${
-                        statusFilter === 'published' 
-                            ? 'bg-indigo-600 text-white' 
-                            : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                    }`}
+                    className={`px-4 py-2 rounded-lg transition-colors ${statusFilter === 'published'
+                        ? 'bg-indigo-600 text-white'
+                        : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                        }`}
                 >
                     Published
                 </button>
@@ -152,8 +150,8 @@ const Lessons: React.FC = () => {
                             <div>
                                 {lesson.video?.thumbnail ? (
                                     <div className="mb-4 rounded-lg overflow-hidden">
-                                        <img 
-                                            src={lesson.video.thumbnail} 
+                                        <img
+                                            src={lesson.video.thumbnail}
                                             alt={lesson.title}
                                             className="w-full h-48 object-cover"
                                         />
@@ -163,16 +161,19 @@ const Lessons: React.FC = () => {
                                         <Video className="w-12 h-12 text-gray-400" />
                                     </div>
                                 )}
-                                
+
                                 <h3 className="text-xl font-bold text-gray-800 mb-2">{lesson.title}</h3>
-                                
+
                                 {lesson.description && (
                                     <p className="text-gray-600 text-sm mb-4 line-clamp-2">{lesson.description}</p>
                                 )}
-                                
-                                <div className="flex items-center gap-2 mb-2">
+
+                                <div className="flex flex-wrap items-center gap-2 mb-2">
                                     <span className={`px-2 py-1 rounded text-xs font-semibold ${getStatusColor(lesson.status)}`}>
                                         {lesson.status}
+                                    </span>
+                                    <span className="px-2 py-1 rounded text-xs font-semibold bg-indigo-100 text-indigo-800">
+                                        {lesson.type || 'Bible'}
                                     </span>
                                     {lesson.coinReward && (
                                         <span className="text-xs text-gray-500">
@@ -180,15 +181,16 @@ const Lessons: React.FC = () => {
                                         </span>
                                     )}
                                 </div>
-                                
-                                {lesson.scheduledDate && (
-                                    <div className="flex items-center gap-1 text-xs text-gray-500 mb-4">
-                                        <Calendar className="w-4 h-4" />
-                                        {formatDate(lesson.scheduledDate)}
-                                    </div>
-                                )}
-                            </div>
-                            
+                                {
+                                    lesson.scheduledDate && (
+                                        <div className="flex items-center gap-1 text-xs text-gray-500 mb-4">
+                                            <Calendar className="w-4 h-4" />
+                                            {formatDate(lesson.scheduledDate)}
+                                        </div>
+                                    )
+                                }
+                            </div >
+
                             <div className="flex gap-2 mt-4">
                                 <Link
                                     to={`/lessons/edit/${lesson._id}`}
@@ -209,11 +211,11 @@ const Lessons: React.FC = () => {
                                     )}
                                 </button>
                             </div>
-                        </div>
+                        </div >
                     ))}
-                </div>
+                </div >
             )}
-        </div>
+        </div >
     );
 };
 

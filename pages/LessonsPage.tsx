@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Lock, Check, Play, Calendar, Video } from 'lucide-react';
+import { ArrowLeft, Play, Lock, Check, Calendar, Book, FlaskConical, Calculator, Hourglass, Languages, Palette, Cpu, Video } from 'lucide-react';
 import { ApiService } from '../services/apiService';
-import { getLessonStatus } from '../services/lessonService';
+import { isCompleted, isLocked } from '../services/lessonService';
 
 interface Lesson {
     _id: string;
@@ -12,10 +12,23 @@ interface Lesson {
         url: string;
         thumbnail?: string;
         duration?: number;
+        type?: 'Bible' | 'Science' | 'Math' | 'History' | 'English' | 'Art' | 'Technology';
     };
     scheduledDate?: string;
-    status: string;
 }
+
+const getLessonIcon = (type: string) => {
+    switch (type) {
+        case 'Bible': return <Book className="w-4 h-4 text-white" />;
+        case 'Science': return <FlaskConical className="w-4 h-4 text-white" />;
+        case 'Math': return <Calculator className="w-4 h-4 text-white" />;
+        case 'History': return <Hourglass className="w-4 h-4 text-white" />;
+        case 'English': return <Languages className="w-4 h-4 text-white" />;
+        case 'Art': return <Palette className="w-4 h-4 text-white" />;
+        case 'Technology': return <Cpu className="w-4 h-4 text-white" />;
+        default: return <Video className="w-4 h-4 text-white" />;
+    }
+};
 
 const LessonsPage: React.FC = () => {
     const navigate = useNavigate();
@@ -31,18 +44,18 @@ const LessonsPage: React.FC = () => {
         try {
             const data = await ApiService.getLessons();
             setLessons(data);
-            
+
             // Organize lessons by day for the next 7 days
             const weekMap = new Map<string, Lesson>();
             const today = new Date();
-            
+
             for (let i = 0; i < 7; i++) {
                 const date = new Date(today);
                 date.setDate(date.getDate() + i);
                 date.setHours(0, 0, 0, 0);
-                
+
                 const dateKey = date.toISOString().split('T')[0];
-                
+
                 // Find lesson scheduled for this date
                 const lesson = data.find((l: Lesson) => {
                     if (!l.scheduledDate) return false;
@@ -50,12 +63,12 @@ const LessonsPage: React.FC = () => {
                     scheduled.setHours(0, 0, 0, 0);
                     return scheduled.getTime() === date.getTime();
                 });
-                
+
                 if (lesson) {
                     weekMap.set(dateKey, lesson);
                 }
             }
-            
+
             setWeekLessons(weekMap);
         } catch (error) {
             console.error('Error fetching lessons:', error);
@@ -74,8 +87,7 @@ const LessonsPage: React.FC = () => {
     };
 
     const handleLessonClick = (lesson: Lesson) => {
-        const status = getLessonStatus(lesson);
-        if (status === 'locked') {
+        if (isLocked(lesson)) {
             return; // Don't navigate if locked
         }
         navigate(`/lesson/${lesson._id}`);
@@ -113,15 +125,17 @@ const LessonsPage: React.FC = () => {
                     {weekDays.map((date) => {
                         const dateKey = date.toISOString().split('T')[0];
                         const lesson = weekLessons.get(dateKey);
-                        const status = lesson ? getLessonStatus(lesson) : 'empty';
+                        const locked = lesson ? isLocked(lesson) : false;
+                        const completed = lesson ? isCompleted(lesson._id) : false;
+                        const status = locked ? 'locked' : (completed ? 'completed' : (lesson ? 'available' : 'empty'));
                         const isToday = date.toDateString() === today.toDateString();
                         const isPast = date < today && !isToday;
 
                         return (
                             <div
                                 key={dateKey}
-                                className={`relative ${status === 'locked' ? 'cursor-not-allowed' : status !== 'empty' ? 'cursor-pointer' : ''}`}
-                                onClick={() => lesson && status !== 'locked' && handleLessonClick(lesson)}
+                                className={`relative ${locked ? 'cursor-not-allowed' : status !== 'empty' ? 'cursor-pointer' : ''}`}
+                                onClick={() => lesson && !locked && handleLessonClick(lesson)}
                             >
                                 {/* Day Label */}
                                 <div className="text-center mb-2">
@@ -157,13 +171,17 @@ const LessonsPage: React.FC = () => {
                                             )}
 
                                             {/* Overlay */}
-                                            <div className={`absolute inset-0 ${
-                                                status === 'locked' 
-                                                    ? 'bg-black/70' 
-                                                    : status === 'completed' 
-                                                        ? 'bg-green-500/30' 
-                                                        : 'bg-black/20'
-                                            }`} />
+                                            <div className={`absolute inset-0 ${status === 'locked'
+                                                ? 'bg-black/70'
+                                                : status === 'completed'
+                                                    ? 'bg-green-500/30'
+                                                    : 'bg-black/20'
+                                                }`} />
+
+                                            {/* Type Icon */}
+                                            <div className="absolute top-2 left-2 bg-black/40 backdrop-blur-sm rounded-full p-1.5">
+                                                {getLessonIcon(lesson.type || 'Bible')}
+                                            </div>
 
                                             {/* Status Icons */}
                                             <div className="absolute top-2 right-2">
@@ -203,64 +221,71 @@ const LessonsPage: React.FC = () => {
 
                 {/* Available Lessons (Past and Today) */}
                 {lessons.filter(l => {
-                    const status = getLessonStatus(l);
-                    return status === 'available' || status === 'completed';
+                    const locked = isLocked(l);
+                    const completed = isCompleted(l._id);
+                    return !locked || completed; // Show if not locked, or if completed
                 }).length > 0 && (
-                    <div className="mb-6">
-                        <h2 className="text-xl font-bold text-white mb-4">Available Lessons</h2>
-                        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
-                            {lessons
-                                .filter(l => {
-                                    const status = getLessonStatus(l);
-                                    return status === 'available' || status === 'completed';
-                                })
-                                .map((lesson) => {
-                                    const status = getLessonStatus(lesson);
-                                    return (
-                                        <div
-                                            key={lesson._id}
-                                            className="relative aspect-[9/16] rounded-lg overflow-hidden bg-gray-800/50 border-2 cursor-pointer hover:scale-105 transition-transform"
-                                            onClick={() => handleLessonClick(lesson)}
-                                        >
-                                            {lesson.video?.thumbnail ? (
-                                                <img
-                                                    src={lesson.video.thumbnail}
-                                                    alt={lesson.title}
-                                                    className="w-full h-full object-cover"
-                                                />
-                                            ) : (
-                                                <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-indigo-600 to-purple-600">
-                                                    <Video className="w-12 h-12 text-white/50" />
-                                                </div>
-                                            )}
-
-                                            <div className={`absolute inset-0 ${
-                                                status === 'completed' ? 'bg-green-500/30' : 'bg-black/20'
-                                            }`} />
-
-                                            <div className="absolute top-2 right-2">
-                                                {status === 'completed' ? (
-                                                    <div className="bg-green-500 rounded-full p-1.5">
-                                                        <Check className="w-4 h-4 text-white" />
-                                                    </div>
+                        <div className="mb-6">
+                            <h2 className="text-xl font-bold text-white mb-4">Available Lessons</h2>
+                            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
+                                {lessons
+                                    .filter(l => {
+                                        const locked = isLocked(l);
+                                        const completed = isCompleted(l._id); // Fix: Pass lesson._id
+                                        return !locked || completed;
+                                    })
+                                    .map((lesson) => {
+                                        const completed = isCompleted(lesson._id); // Fix: Pass lesson._id
+                                        const status = completed ? 'completed' : 'available';
+                                        return (
+                                            <div
+                                                key={lesson._id}
+                                                className="relative aspect-[9/16] rounded-lg overflow-hidden bg-gray-800/50 border-2 cursor-pointer hover:scale-105 transition-transform"
+                                                onClick={() => handleLessonClick(lesson)}
+                                            >
+                                                {lesson.video?.thumbnail ? (
+                                                    <img
+                                                        src={lesson.video.thumbnail}
+                                                        alt={lesson.title}
+                                                        className="w-full h-full object-cover"
+                                                    />
                                                 ) : (
-                                                    <div className="bg-white/20 backdrop-blur-sm rounded-full p-1.5">
-                                                        <Play className="w-4 h-4 text-white" />
+                                                    <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-indigo-600 to-purple-600">
+                                                        <Video className="w-12 h-12 text-white/50" />
                                                     </div>
                                                 )}
-                                            </div>
 
-                                            <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent p-2">
-                                                <p className="text-white text-xs font-semibold line-clamp-2">
-                                                    {lesson.title}
-                                                </p>
+                                                <div className={`absolute inset-0 ${status === 'completed' ? 'bg-green-500/30' : 'bg-black/20'
+                                                    }`} />
+
+                                                {/* Type Icon */}
+                                                <div className="absolute top-2 left-2 bg-black/40 backdrop-blur-sm rounded-full p-1.5">
+                                                    {getLessonIcon(lesson.video?.type || 'Bible')}
+                                                </div>
+
+                                                <div className="absolute top-2 right-2">
+                                                    {status === 'completed' ? (
+                                                        <div className="bg-green-500 rounded-full p-1.5">
+                                                            <Check className="w-4 h-4 text-white" />
+                                                        </div>
+                                                    ) : (
+                                                        <div className="bg-white/20 backdrop-blur-sm rounded-full p-1.5">
+                                                            <Play className="w-4 h-4 text-white" />
+                                                        </div>
+                                                    )}
+                                                </div>
+
+                                                <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent p-2">
+                                                    <p className="text-white text-xs font-semibold line-clamp-2">
+                                                        {lesson.title}
+                                                    </p>
+                                                </div>
                                             </div>
-                                        </div>
-                                    );
-                                })}
+                                        );
+                                    })}
+                            </div>
                         </div>
-                    </div>
-                )}
+                    )}
             </div>
         </div>
     );

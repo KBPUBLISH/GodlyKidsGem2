@@ -3,6 +3,7 @@ import { Eraser, RotateCcw, Download } from 'lucide-react';
 
 interface DrawingCanvasProps {
     prompt: string;
+    backgroundImageUrl?: string;
     onComplete?: () => void;
 }
 
@@ -23,7 +24,7 @@ const CRAYON_COLORS = [
     '#FFFFFF', // White
 ];
 
-const DrawingCanvas: React.FC<DrawingCanvasProps> = ({ prompt, onComplete }) => {
+const DrawingCanvas: React.FC<DrawingCanvasProps> = ({ prompt, backgroundImageUrl, onComplete }) => {
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const [isDrawing, setIsDrawing] = useState(false);
     const [selectedColor, setSelectedColor] = useState(CRAYON_COLORS[0]);
@@ -60,6 +61,23 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = ({ prompt, onComplete }) => 
         const dpr = window.devicePixelRatio || 1;
         ctx.fillStyle = '#FFFFFF';
         ctx.fillRect(0, 0, canvas.width / dpr, canvas.height / dpr);
+
+        // Draw background image if provided
+        if (backgroundImageUrl) {
+            const img = new Image();
+            img.crossOrigin = "anonymous";
+            img.src = backgroundImageUrl;
+            img.onload = () => {
+                // Calculate aspect ratio to fit image within canvas
+                const canvasWidth = canvas.width / dpr;
+                const canvasHeight = canvas.height / dpr;
+                const scale = Math.min(canvasWidth / img.width, canvasHeight / img.height);
+                const x = (canvasWidth / 2) - (img.width / 2) * scale;
+                const y = (canvasHeight / 2) - (img.height / 2) * scale;
+
+                ctx.drawImage(img, x, y, img.width * scale, img.height * scale);
+            };
+        }
 
         // Set line properties
         ctx.lineCap = 'round';
@@ -169,6 +187,23 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = ({ prompt, onComplete }) => 
 
         ctx.fillStyle = '#FFFFFF';
         ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+        // Redraw background image if provided
+        if (backgroundImageUrl) {
+            const img = new Image();
+            img.crossOrigin = "anonymous";
+            img.src = backgroundImageUrl;
+            img.onload = () => {
+                const dpr = window.devicePixelRatio || 1;
+                const canvasWidth = canvas.width / dpr;
+                const canvasHeight = canvas.height / dpr;
+                const scale = Math.min(canvasWidth / img.width, canvasHeight / img.height);
+                const x = (canvasWidth / 2) - (img.width / 2) * scale;
+                const y = (canvasHeight / 2) - (img.height / 2) * scale;
+
+                ctx.drawImage(img, x, y, img.width * scale, img.height * scale);
+            };
+        }
     };
 
     const downloadDrawing = () => {

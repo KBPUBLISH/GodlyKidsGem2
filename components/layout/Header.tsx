@@ -72,6 +72,15 @@ const Header: React.FC<HeaderProps> = ({ isVisible, title = "GODLY KIDS" }) => {
     return () => clearTimeout(restoreMusic);
   }, [location.pathname, musicEnabled, toggleMusic]); // React to pathname changes
 
+  // Check for openShop in navigation state
+  useEffect(() => {
+    if (location.state && (location.state as any).openShop) {
+      setIsShopOpen(true);
+      // Clear the state to prevent reopening on refresh/back
+      window.history.replaceState({}, document.title);
+    }
+  }, [location.state]);
+
   return (
     <>
       <header

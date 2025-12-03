@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Lock, Check, Play, Calendar, Video } from 'lucide-react';
 import { ApiService } from '../services/apiService';
-import { getLessonStatus } from '../services/lessonService';
+import { getLessonStatus, getWeekDays } from '../services/lessonService';
 
 interface Lesson {
     _id: string;
@@ -32,29 +32,35 @@ const LessonsPage: React.FC = () => {
             const data = await ApiService.getLessons();
             setLessons(data);
             
-            // Organize lessons by day for the next 7 days
+            // Organize lessons by day for the fixed week (Monday to Sunday)
             const weekMap = new Map<string, Lesson>();
-            const today = new Date();
+            const weekDays = getWeekDays(); // Get Monday through Sunday of current week
             
-            for (let i = 0; i < 7; i++) {
-                const date = new Date(today);
-                date.setDate(date.getDate() + i);
-                date.setHours(0, 0, 0, 0);
-                
+            // Also include published lessons without scheduled dates
+            const publishedLessons = data.filter((l: Lesson) =>
+                l.status === 'published' && !l.scheduledDate
+            );
+            
+            weekDays.forEach((date, index) => {
                 const dateKey = date.toISOString().split('T')[0];
                 
                 // Find lesson scheduled for this date
-                const lesson = data.find((l: Lesson) => {
+                let lesson = data.find((l: Lesson) => {
                     if (!l.scheduledDate) return false;
                     const scheduled = new Date(l.scheduledDate);
                     scheduled.setHours(0, 0, 0, 0);
                     return scheduled.getTime() === date.getTime();
                 });
                 
+                // If no scheduled lesson, assign published lessons in order
+                if (!lesson && publishedLessons[index]) {
+                    lesson = publishedLessons[index];
+                }
+                
                 if (lesson) {
                     weekMap.set(dateKey, lesson);
                 }
-            }
+            });
             
             setWeekLessons(weekMap);
         } catch (error) {
@@ -89,15 +95,10 @@ const LessonsPage: React.FC = () => {
         );
     }
 
-    // Generate next 7 days
+    // Generate week days (Monday to Sunday of current week)
     const today = new Date();
-    const weekDays: Date[] = [];
-    for (let i = 0; i < 7; i++) {
-        const date = new Date(today);
-        date.setDate(date.getDate() + i);
-        date.setHours(0, 0, 0, 0);
-        weekDays.push(date);
-    }
+    today.setHours(0, 0, 0, 0);
+    const weekDays = getWeekDays(); // Monday through Sunday
 
     return (
         <div className="h-full overflow-y-auto pb-32">

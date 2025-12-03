@@ -12,7 +12,7 @@ import StrengthGameModal from '../components/features/StrengthGameModal';
 import PrayerGameModal from '../components/features/PrayerGameModal';
 import { BookOpen, Key, Brain, Dumbbell, Heart, Video, ChevronRight, Lock, Check, Play, CheckCircle } from 'lucide-react';
 import { ApiService } from '../services/apiService';
-import { isCompleted, isLocked } from '../services/lessonService';
+import { isCompleted, isLocked, getWeekDays } from '../services/lessonService';
 import { readingProgressService } from '../services/readingProgressService';
 import { playHistoryService } from '../services/playHistoryService';
 import { bookCompletionService } from '../services/bookCompletionService';
@@ -189,21 +189,19 @@ const HomePage: React.FC = () => {
       console.log('📚 Lessons received:', data.length, data);
       setLessons(data);
 
-      // Organize lessons by day for the next 7 days
+      // Organize lessons by day for the fixed week (Monday to Sunday)
       const weekMap = new Map<string, any>();
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
+      const weekDays = getWeekDays(); // Get Monday through Sunday of current week
 
-      // Also include published lessons without scheduled dates (show them as available)
+      // Also include published lessons without scheduled dates
       const publishedLessons = data.filter((l: any) =>
         l.status === 'published' && !l.scheduledDate
       );
 
-      for (let i = 0; i < 7; i++) {
-        const date = new Date(today);
-        date.setDate(date.getDate() + i);
-        date.setHours(0, 0, 0, 0);
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
 
+      weekDays.forEach((date, index) => {
         const dateKey = date.toISOString().split('T')[0];
 
         // Find lesson scheduled for this date
@@ -214,17 +212,18 @@ const HomePage: React.FC = () => {
           return scheduled.getTime() === date.getTime();
         });
 
-        // If no scheduled lesson for this day and it's today, use first available published lesson
-        if (!lesson && i === 0 && publishedLessons.length > 0) {
-          lesson = publishedLessons[0];
+        // If no scheduled lesson and we have published lessons without dates,
+        // assign them in order to days without lessons (for the current week)
+        if (!lesson && publishedLessons[index]) {
+          lesson = publishedLessons[index];
         }
 
         if (lesson) {
           weekMap.set(dateKey, lesson);
         }
-      }
+      });
 
-      console.log('📚 Week lessons map:', Array.from(weekMap.entries()));
+      console.log('📚 Week lessons map (Mon-Sun):', Array.from(weekMap.entries()));
       setWeekLessons(weekMap);
     } catch (error) {
       console.error('❌ Error fetching lessons:', error);
@@ -538,19 +537,15 @@ const HomePage: React.FC = () => {
               <div className="flex space-x-3 px-4">
                 {(() => {
                   const today = new Date();
-                  const weekDays: Date[] = [];
-                  for (let i = 0; i < 7; i++) {
-                    const date = new Date(today);
-                    date.setDate(date.getDate() + i);
-                    date.setHours(0, 0, 0, 0);
-                    weekDays.push(date);
-                  }
+                  today.setHours(0, 0, 0, 0);
+                  const weekDays = getWeekDays(); // Monday through Sunday
 
                   return weekDays.map((date) => {
                     const dateKey = date.toISOString().split('T')[0];
                     const lesson = weekLessons.get(dateKey);
                     const status = lesson ? getLessonStatus(lesson) : 'empty';
                     const isToday = date.toDateString() === today.toDateString();
+                    const isPast = date < today;
 
                     return (
                       <div

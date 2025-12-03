@@ -14,18 +14,55 @@ const STORAGE_KEY = 'godlykids_lesson_completions';
 const STREAK_STORAGE_KEY = 'godlykids_lesson_streak';
 
 /**
- * Get the start of the current week (Sunday midnight in user's local time)
+ * Get the start of the current week (Monday midnight in user's local time)
+ * Week runs Monday to Sunday, resets at midnight Sunday -> Monday
  */
 export const getWeekStart = (date: Date = new Date()): number => {
     const d = new Date(date);
     const day = d.getDay(); // 0 = Sunday, 1 = Monday, etc.
-    const diff = d.getDate() - day; // Days to subtract to get to Sunday
     
-    const sunday = new Date(d);
-    sunday.setDate(diff);
-    sunday.setHours(0, 0, 0, 0); // Midnight
+    // Calculate days to subtract to get to Monday
+    // If Sunday (0), go back 6 days. Otherwise go back (day - 1) days.
+    const daysToMonday = day === 0 ? 6 : day - 1;
     
-    return sunday.getTime();
+    const monday = new Date(d);
+    monday.setDate(d.getDate() - daysToMonday);
+    monday.setHours(0, 0, 0, 0); // Midnight
+    
+    return monday.getTime();
+};
+
+/**
+ * Get Monday of the current week as a Date object
+ */
+export const getMondayOfWeek = (date: Date = new Date()): Date => {
+    const d = new Date(date);
+    const day = d.getDay(); // 0 = Sunday, 1 = Monday, etc.
+    
+    // Calculate days to subtract to get to Monday
+    const daysToMonday = day === 0 ? 6 : day - 1;
+    
+    const monday = new Date(d);
+    monday.setDate(d.getDate() - daysToMonday);
+    monday.setHours(0, 0, 0, 0);
+    
+    return monday;
+};
+
+/**
+ * Get all 7 days of the current week (Monday through Sunday)
+ */
+export const getWeekDays = (): Date[] => {
+    const monday = getMondayOfWeek();
+    const weekDays: Date[] = [];
+    
+    for (let i = 0; i < 7; i++) {
+        const day = new Date(monday);
+        day.setDate(monday.getDate() + i);
+        weekDays.push(day);
+    }
+    
+    return weekDays;
 };
 
 /**

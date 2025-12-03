@@ -27,6 +27,7 @@ interface Activity {
 interface LessonFormData {
     title: string;
     description: string;
+    type: 'Bible' | 'Science' | 'Math' | 'History' | 'English' | 'Art' | 'Technology';
     video: {
         url: string;
         thumbnail?: string;
@@ -55,10 +56,11 @@ const LessonForm: React.FC = () => {
     const [enhancingDevotional, setEnhancingDevotional] = useState(false);
     const videoInputRef = useRef<HTMLInputElement>(null);
     const thumbnailInputRef = useRef<HTMLInputElement>(null);
-    
+
     const [formData, setFormData] = useState<LessonFormData>({
         title: '',
         description: '',
+        type: 'Bible',
         video: {
             url: '',
             thumbnail: '',
@@ -94,6 +96,7 @@ const LessonForm: React.FC = () => {
             setFormData({
                 title: lesson.title || '',
                 description: lesson.description || '',
+                type: lesson.type || 'Bible',
                 video: lesson.video || { url: '', thumbnail: '', duration: 0 },
                 devotional: lesson.devotional || { title: '', content: '', verse: '', verseText: '' },
                 activity: lesson.activity || { type: 'quiz', questions: [] },
@@ -109,7 +112,7 @@ const LessonForm: React.FC = () => {
                 coinReward: lesson.coinReward || 50,
                 order: lesson.order || 0,
             });
-            
+
             if (lesson.video?.url) {
                 setVideoPreview(lesson.video.url);
             }
@@ -144,13 +147,13 @@ const LessonForm: React.FC = () => {
                     headers: { 'Content-Type': 'multipart/form-data' },
                 }
             );
-            
+
             setFormData(prev => ({
                 ...prev,
                 video: { ...prev.video, url: response.data.url },
             }));
             setVideoPreview(response.data.url);
-            
+
             // Try to get video duration
             const video = document.createElement('video');
             video.src = response.data.url;
@@ -188,7 +191,7 @@ const LessonForm: React.FC = () => {
                     headers: { 'Content-Type': 'multipart/form-data' },
                 }
             );
-            
+
             setFormData(prev => ({
                 ...prev,
                 video: { ...prev.video, thumbnail: response.data.url },
@@ -208,7 +211,7 @@ const LessonForm: React.FC = () => {
         console.log('Generate Activity clicked');
         console.log('Devotional content:', formData.devotional.content);
         console.log('Activity type:', formData.activity.type);
-        
+
         if (!formData.devotional.content || !formData.devotional.content.trim()) {
             alert('Please add devotional content first before generating an activity.');
             return;
@@ -220,14 +223,14 @@ const LessonForm: React.FC = () => {
                 devotionalContent: formData.devotional.content,
                 activityType: formData.activity.type,
             };
-            
+
             console.log('Sending request to generate activity:', payload);
-            
+
             const response = await apiClient.post('/api/lessons/generate-activity', payload);
 
             console.log('Activity generation response:', response.data);
             const generated = response.data;
-            
+
             if (formData.activity.type === 'quiz') {
                 setFormData(prev => ({
                     ...prev,
@@ -249,7 +252,7 @@ const LessonForm: React.FC = () => {
                 }));
                 console.log('Updated activity with reflection:', generated);
             }
-            
+
             alert('Activity generated successfully!');
         } catch (error: any) {
             console.error('Error generating activity:', error);
@@ -291,17 +294,17 @@ const LessonForm: React.FC = () => {
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-        
+
         if (!formData.title) {
             alert('Title is required');
             return;
         }
-        
+
         if (!formData.video.url) {
             alert('Video is required');
             return;
         }
-        
+
         if (formData.activity.type === 'quiz') {
             if (!formData.activity.questions || formData.activity.questions.length === 0) {
                 alert('Quiz must have at least one question');
@@ -341,20 +344,20 @@ const LessonForm: React.FC = () => {
                     return `${dateStr}T00:00:00.000Z`;
                 })() : undefined,
             };
-            
+
             let lessonId = id;
-            
+
             if (id) {
                 await apiClient.put(`/api/lessons/${id}`, payload);
             } else {
                 const response = await apiClient.post('/api/lessons', payload);
                 lessonId = response.data._id;
-                
+
                 // Ensure lessonId is defined before using it
                 if (!lessonId) {
                     throw new Error('Failed to create lesson: no ID returned');
                 }
-                
+
                 // If we uploaded files with temp ID, re-upload with real lesson ID
                 if (videoFile && formData.video.url && !formData.video.url.includes(lessonId)) {
                     const formDataUpload = new FormData();
@@ -368,7 +371,7 @@ const LessonForm: React.FC = () => {
                         video: { ...formData.video, url: uploadResponse.data.url },
                     });
                 }
-                
+
                 if (thumbnailFile && formData.video.thumbnail && typeof formData.video.thumbnail === 'string' && !formData.video.thumbnail.includes(lessonId)) {
                     const formDataUpload = new FormData();
                     formDataUpload.append('file', thumbnailFile);
@@ -414,7 +417,7 @@ const LessonForm: React.FC = () => {
                 {/* Basic Information */}
                 <div className="space-y-4">
                     <h2 className="text-xl font-bold text-gray-800 border-b pb-2">Basic Information</h2>
-                    
+
                     <div>
                         <label className="block text-sm font-medium text-gray-700 mb-2">Title *</label>
                         <input
@@ -425,7 +428,7 @@ const LessonForm: React.FC = () => {
                             required
                         />
                     </div>
-                    
+
                     <div>
                         <label className="block text-sm font-medium text-gray-700 mb-2">Description</label>
                         <textarea
@@ -435,6 +438,23 @@ const LessonForm: React.FC = () => {
                             className="w-full rounded-md border border-gray-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500"
                         />
                     </div>
+
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">Lesson Type</label>
+                        <select
+                            value={formData.type}
+                            onChange={(e) => setFormData(prev => ({ ...prev, type: e.target.value as any }))}
+                            className="w-full rounded-md border border-gray-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                        >
+                            <option value="Bible">Bible</option>
+                            <option value="Science">Science</option>
+                            <option value="Math">Math</option>
+                            <option value="History">History</option>
+                            <option value="English">English</option>
+                            <option value="Art">Art</option>
+                            <option value="Technology">Technology</option>
+                        </select>
+                    </div>
                 </div>
 
                 {/* Video Upload */}
@@ -443,7 +463,7 @@ const LessonForm: React.FC = () => {
                         <Video className="w-5 h-5" />
                         Video Content
                     </h2>
-                    
+
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                         {/* Video Upload */}
                         <div>
@@ -497,7 +517,7 @@ const LessonForm: React.FC = () => {
                                 )}
                             </div>
                         </div>
-                        
+
                         {/* Thumbnail Upload */}
                         <div>
                             <label className="block text-sm font-medium text-gray-700 mb-2">Thumbnail</label>
@@ -559,7 +579,7 @@ const LessonForm: React.FC = () => {
                         <BookOpen className="w-5 h-5" />
                         Devotional (Screen 2)
                     </h2>
-                    
+
                     <div>
                         <label className="block text-sm font-medium text-gray-700 mb-2">Devotional Title</label>
                         <input
@@ -572,7 +592,7 @@ const LessonForm: React.FC = () => {
                             className="w-full rounded-md border border-gray-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500"
                         />
                     </div>
-                    
+
                     <div>
                         <label className="block text-sm font-medium text-gray-700 mb-2">Devotional Content</label>
                         <textarea
@@ -610,7 +630,7 @@ const LessonForm: React.FC = () => {
                             </span>
                         </div>
                     </div>
-                    
+
                     <div className="grid grid-cols-2 gap-4">
                         <div>
                             <label className="block text-sm font-medium text-gray-700 mb-2">Bible Verse Reference</label>
@@ -655,11 +675,10 @@ const LessonForm: React.FC = () => {
                                     ...prev,
                                     activity: { ...prev.activity, type: 'quiz', questions: prev.activity.questions || [] },
                                 }))}
-                                className={`px-4 py-2 rounded-lg transition-colors ${
-                                    formData.activity.type === 'quiz'
+                                className={`px-4 py-2 rounded-lg transition-colors ${formData.activity.type === 'quiz'
                                         ? 'bg-indigo-600 text-white'
                                         : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                                }`}
+                                    }`}
                             >
                                 Quiz
                             </button>
@@ -669,17 +688,16 @@ const LessonForm: React.FC = () => {
                                     ...prev,
                                     activity: { ...prev.activity, type: 'reflection' },
                                 }))}
-                                className={`px-4 py-2 rounded-lg transition-colors ${
-                                    formData.activity.type === 'reflection'
+                                className={`px-4 py-2 rounded-lg transition-colors ${formData.activity.type === 'reflection'
                                         ? 'bg-indigo-600 text-white'
                                         : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                                }`}
+                                    }`}
                             >
                                 Reflection
                             </button>
                         </div>
                     </div>
-                    
+
                     {/* AI Generate Button */}
                     <div className="bg-indigo-50 border border-indigo-200 rounded-lg p-4">
                         <div className="flex items-center justify-between">
@@ -713,7 +731,7 @@ const LessonForm: React.FC = () => {
                             </button>
                         </div>
                     </div>
-                    
+
                     <div>
                         <label className="block text-sm font-medium text-gray-700 mb-2">Activity Title</label>
                         <input
@@ -726,7 +744,7 @@ const LessonForm: React.FC = () => {
                             className="w-full rounded-md border border-gray-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500"
                         />
                     </div>
-                    
+
                     {formData.activity.type === 'quiz' ? (
                         <div className="space-y-6">
                             {formData.activity.questions && formData.activity.questions.length > 0 ? (
@@ -750,7 +768,7 @@ const LessonForm: React.FC = () => {
                                                 <Trash2 className="w-4 h-4" />
                                             </button>
                                         </div>
-                                        
+
                                         <div className="mb-4">
                                             <label className="block text-sm font-medium text-gray-700 mb-2">Question Text *</label>
                                             <textarea
@@ -772,7 +790,7 @@ const LessonForm: React.FC = () => {
                                                 required
                                             />
                                         </div>
-                                        
+
                                         <div>
                                             <div className="flex items-center justify-between mb-2">
                                                 <label className="block text-sm font-medium text-gray-700">Answer Options *</label>
@@ -884,7 +902,7 @@ const LessonForm: React.FC = () => {
                         <Calendar className="w-5 h-5" />
                         Settings
                     </h2>
-                    
+
                     <div className="grid grid-cols-2 gap-4">
                         <div>
                             <label className="block text-sm font-medium text-gray-700 mb-2">Scheduled Date</label>
@@ -895,7 +913,7 @@ const LessonForm: React.FC = () => {
                                 className="w-full rounded-md border border-gray-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500"
                             />
                         </div>
-                        
+
                         <div>
                             <label className="block text-sm font-medium text-gray-700 mb-2">Status</label>
                             <select
@@ -910,7 +928,7 @@ const LessonForm: React.FC = () => {
                             </select>
                         </div>
                     </div>
-                    
+
                     <div className="grid grid-cols-2 gap-4">
                         <div>
                             <label className="block text-sm font-medium text-gray-700 mb-2">Coin Reward</label>
@@ -922,7 +940,7 @@ const LessonForm: React.FC = () => {
                                 className="w-full rounded-md border border-gray-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500"
                             />
                         </div>
-                        
+
                         <div>
                             <label className="block text-sm font-medium text-gray-700 mb-2">Order</label>
                             <input

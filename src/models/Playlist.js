@@ -73,6 +73,18 @@ const playlistSchema = new mongoose.Schema({
         type: Boolean,
         default: false,
     },
+    
+    // Featured on explore page carousel
+    isFeatured: {
+        type: Boolean,
+        default: false,
+    },
+    
+    // Order in the featured carousel (lower = first)
+    featuredOrder: {
+        type: Number,
+        default: 0,
+    },
     minAge: {
         type: Number,
         min: 0,

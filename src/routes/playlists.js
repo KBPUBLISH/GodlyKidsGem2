@@ -15,6 +15,19 @@ router.get('/', async (req, res) => {
     }
 });
 
+// GET featured playlists for carousel
+router.get('/featured', async (req, res) => {
+    try {
+        const playlists = await Playlist.find({ 
+            isFeatured: true, 
+            status: 'published' 
+        }).sort({ featuredOrder: 1, createdAt: -1 });
+        res.json(playlists);
+    } catch (error) {
+        res.status(500).json({ message: error.message });
+    }
+});
+
 // GET single playlist
 router.get('/:id', async (req, res) => {
     try {

@@ -38,6 +38,18 @@ const bookSchema = new mongoose.Schema({
         default: false,
     },
     
+    // Featured on explore page carousel
+    isFeatured: {
+        type: Boolean,
+        default: false,
+    },
+    
+    // Order in the featured carousel (lower = first)
+    featuredOrder: {
+        type: Number,
+        default: 0,
+    },
+    
     // Global read count (incremented when any user completes the book)
     readCount: {
         type: Number,

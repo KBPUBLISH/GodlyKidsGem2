@@ -54,6 +54,31 @@ router.get('/', async (req, res) => {
     }
 });
 
+// GET featured books for carousel
+router.get('/featured', async (req, res) => {
+    try {
+        const books = await Book.find({ 
+            isFeatured: true, 
+            status: 'published' 
+        }).sort({ featuredOrder: 1, createdAt: -1 });
+        
+        // Map books to include coverImage for backward compatibility
+        const booksWithCoverImage = books.map(book => {
+            const bookObj = book.toObject();
+            if (bookObj.files && bookObj.files.coverImage) {
+                bookObj.coverImage = bookObj.files.coverImage;
+            } else if (!bookObj.files) {
+                bookObj.files = { coverImage: bookObj.coverImage || null, images: [], videos: [], audio: [] };
+            }
+            return bookObj;
+        });
+        
+        res.json(booksWithCoverImage);
+    } catch (error) {
+        res.status(500).json({ message: error.message });
+    }
+});
+
 // GET single book
 router.get('/:id', async (req, res) => {
     try {

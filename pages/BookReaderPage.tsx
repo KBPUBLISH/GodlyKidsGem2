@@ -304,6 +304,14 @@ const BookReaderPage: React.FC = () => {
                     setBookTitle(book.title);
                     // Track book view analytics
                     analyticsService.bookView(bookId, book.title);
+                    
+                    // Increment view count in database (when book is OPENED)
+                    try {
+                        await ApiService.incrementBookView(bookId);
+                        console.log('👁️ Book view tracked in database');
+                    } catch (viewErr) {
+                        console.warn('Failed to track book view:', viewErr);
+                    }
                 }
                 
                 // Load quiz attempts from localStorage
@@ -1015,28 +1023,79 @@ const BookReaderPage: React.FC = () => {
                 });
 
                 // Track audio time for word highlighting
-                // Use ontimeupdate as primary method (reliable) with frequent polling
+                // Helper to find word index, handling gaps between words
+                const findWordIndex = (currentTime: number, words: Array<{ start: number; end: number }>) => {
+                    let wordIndex = -1;
+                    let lastWordBeforeTime = -1;
+                    
+                    for (let i = 0; i < words.length; i++) {
+                        const w = words[i];
+                        
+                        // Exact match - current time is within word boundaries
+                        if (currentTime >= w.start && currentTime < w.end) {
+                            return i;
+                        }
+                        
+                        // Track the last word that ended before current time
+                        // (handles gaps - e.g., sound effects playing between words)
+                        if (currentTime >= w.end) {
+                            lastWordBeforeTime = i;
+                        }
+                        
+                        // If current time is before this word starts, and we have a previous word,
+                        // stay on the previous word (we're in a gap)
+                        if (currentTime < w.start && lastWordBeforeTime >= 0) {
+                            return lastWordBeforeTime;
+                        }
+                    }
+                    
+                    // If we're past all words, stay on the last word
+                    if (lastWordBeforeTime >= 0) {
+                        return lastWordBeforeTime;
+                    }
+                    
+                    // Before first word - return 0 to start highlighting
+                    if (words.length > 0 && currentTime < words[0].start) {
+                        return 0;
+                    }
+                    
+                    return wordIndex;
+                };
+                
+                // Auto-scroll to keep highlighted word in view
+                const scrollToHighlightedWord = (wordIdx: number) => {
+                    if (wordIdx < 0) return;
+                    
+                    // Find the highlighted word element
+                    const wordElements = document.querySelectorAll('[data-word-index]');
+                    const targetWord = wordElements[wordIdx] as HTMLElement;
+                    
+                    if (targetWord) {
+                        // Scroll the word into view smoothly
+                        targetWord.scrollIntoView({
+                            behavior: 'smooth',
+                            block: 'center',
+                            inline: 'nearest'
+                        });
+                    }
+                };
+                
+                let lastHighlightedIndex = -1;
+                
+                // Use ontimeupdate as primary method
                 audio.ontimeupdate = () => {
                     const currentAlignment = wordAlignmentRef.current;
                     if (currentAlignment && currentAlignment.words && currentAlignment.words.length > 0) {
-                        const currentTime = audio.currentTime;
-                        
-                        // Find current word
-                        let wordIndex = -1;
-                        for (let i = 0; i < currentAlignment.words.length; i++) {
-                            const w = currentAlignment.words[i];
-                            if (currentTime >= w.start && currentTime < w.end) {
-                                wordIndex = i;
-                                break;
-                            }
-                            // Stay on last word if past its end
-                            if (currentTime >= w.end && i === currentAlignment.words.length - 1) {
-                                wordIndex = i;
-                            }
-                        }
+                        const wordIndex = findWordIndex(audio.currentTime, currentAlignment.words);
 
-                        if (wordIndex !== -1) {
+                        if (wordIndex !== -1 && wordIndex !== lastHighlightedIndex) {
+                            lastHighlightedIndex = wordIndex;
                             setCurrentWordIndex(wordIndex);
+                            
+                            // Auto-scroll every few words to avoid too much scrolling
+                            if (wordIndex % 3 === 0 || wordIndex === 0) {
+                                scrollToHighlightedWord(wordIndex);
+                            }
                         }
                     }
                 };
@@ -1047,22 +1106,16 @@ const BookReaderPage: React.FC = () => {
                     
                     const currentAlignment = wordAlignmentRef.current;
                     if (currentAlignment && currentAlignment.words && currentAlignment.words.length > 0) {
-                        const currentTime = audio.currentTime;
-                        
-                        let wordIndex = -1;
-                        for (let i = 0; i < currentAlignment.words.length; i++) {
-                            const w = currentAlignment.words[i];
-                            if (currentTime >= w.start && currentTime < w.end) {
-                                wordIndex = i;
-                                break;
-                            }
-                            if (currentTime >= w.end && i === currentAlignment.words.length - 1) {
-                                wordIndex = i;
-                            }
-                        }
+                        const wordIndex = findWordIndex(audio.currentTime, currentAlignment.words);
 
-                        if (wordIndex !== -1) {
+                        if (wordIndex !== -1 && wordIndex !== lastHighlightedIndex) {
+                            lastHighlightedIndex = wordIndex;
                             setCurrentWordIndex(wordIndex);
+                            
+                            // Auto-scroll
+                            if (wordIndex % 3 === 0) {
+                                scrollToHighlightedWord(wordIndex);
+                            }
                         }
                     }
                 }, 50); // 20 times per second

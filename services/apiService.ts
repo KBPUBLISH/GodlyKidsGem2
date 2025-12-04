@@ -83,7 +83,12 @@ const transformBook = (apiBook: any): Book => {
     isRead: apiBook.isRead || apiBook.is_read || apiBook.read || false,
     description: apiBook.description || apiBook.summary || apiBook.synopsis || '',
     author: apiBook.author || apiBook.author_name || apiBook.authorName || 'Unknown',
-  };
+    // Analytics counts
+    viewCount: apiBook.viewCount || 0,
+    readCount: apiBook.readCount || 0,
+    likeCount: apiBook.likeCount || 0,
+    favoriteCount: apiBook.favoriteCount || 0,
+  } as Book & { viewCount: number; readCount: number; likeCount: number; favoriteCount: number };
 };
 
 // Transform array of books
@@ -890,6 +895,45 @@ export const ApiService = {
 
       console.warn(`❌ Failed to fetch book ${id}, using mock data:`, error);
       return MOCK_BOOKS.find(book => book.id === id) || null;
+    }
+  },
+
+  // Increment book view count (called when book is OPENED)
+  incrementBookView: async (bookId: string): Promise<{ viewCount: number } | null> => {
+    try {
+      const baseUrl = getApiBaseUrl();
+      const response = await fetchWithTimeout(`${baseUrl}books/${bookId}/view`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+      });
+
+      if (response.ok) {
+        return await response.json();
+      }
+      return null;
+    } catch (error) {
+      console.warn(`Failed to increment view count for book ${bookId}:`, error);
+      return null;
+    }
+  },
+
+  // Increment book like count
+  incrementBookLike: async (bookId: string, action: 'add' | 'remove' = 'add'): Promise<{ likeCount: number } | null> => {
+    try {
+      const baseUrl = getApiBaseUrl();
+      const response = await fetchWithTimeout(`${baseUrl}books/${bookId}/like`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action }),
+      });
+
+      if (response.ok) {
+        return await response.json();
+      }
+      return null;
+    } catch (error) {
+      console.warn(`Failed to update like for book ${bookId}:`, error);
+      return null;
     }
   },
 

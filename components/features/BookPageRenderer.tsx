@@ -241,6 +241,7 @@ export const BookPageRenderer: React.FC<BookPageRendererProps> = ({
                                                 return (
                                                     <span
                                                         key={wIdx}
+                                                        data-word-index={wIdx}
                                                         className={`
                                                             transition-all duration-150 rounded px-0.5
                                                             ${isHighlighted

@@ -5,7 +5,8 @@ const User = require('../models/User');
 
 // Configuration for old backend
 const OLD_BACKEND_URL = process.env.OLD_BACKEND_URL || 'https://api.devgodlykids.kbpublish.org/api';
-const MIGRATION_API_KEY = process.env.MIGRATION_API_KEY;
+// Production API Key for migration
+const MIGRATION_API_KEY = process.env.MIGRATION_API_KEY || 'pk_2cd2bc061e2cd0c68d2a00496ff7e6d0778708b6bff04710dc2593e4c7e268d07ca4f4ad671c4f0a8ce74183de28afc9692addb8bab266a1d28aefd45c566828';
 
 /**
  * POST /api/migration/restore-subscription
@@ -33,11 +34,12 @@ router.post('/restore-subscription', async (req, res) => {
 
         console.log(`🔄 Migration: Checking subscription for ${email}`);
 
-        // Call old backend to check subscription status
+        // Call old backend to restore/check subscription status
+        // Endpoint: POST /payments/restore/subscription
         let oldBackendResponse;
         try {
             oldBackendResponse = await axios.post(
-                `${OLD_BACKEND_URL}/migration/check-subscription`,
+                `${OLD_BACKEND_URL}/payments/restore/subscription`,
                 { email: email.toLowerCase().trim() },
                 { 
                     headers: { 
@@ -52,6 +54,14 @@ router.post('/restore-subscription', async (req, res) => {
             if (axiosError.response) {
                 console.error('Response status:', axiosError.response.status);
                 console.error('Response data:', axiosError.response.data);
+                
+                // 401 means unauthorized - invalid API key
+                if (axiosError.response.status === 401) {
+                    return res.status(401).json({ 
+                        success: false, 
+                        message: 'Migration API key is invalid or expired'
+                    });
+                }
             }
             return res.status(502).json({ 
                 success: false, 
@@ -63,7 +73,9 @@ router.post('/restore-subscription', async (req, res) => {
         const subscriptionData = oldBackendResponse.data;
         console.log('📦 Old backend response:', subscriptionData);
 
-        if (!subscriptionData.found) {
+        // Check if we got valid subscription data
+        // Response format: { subscriptionExpiryDate, subscriptionStartDate, membership, email, isTrialUsed, _id }
+        if (!subscriptionData || !subscriptionData.email) {
             return res.json({ 
                 success: true, 
                 found: false,
@@ -73,13 +85,22 @@ router.post('/restore-subscription', async (req, res) => {
 
         // Check if user has an active subscription
         const isPaid = subscriptionData.membership === 'paid';
+        const expiryDate = subscriptionData.subscriptionExpiryDate;
         const isActive = isPaid && (
-            !subscriptionData.subscriptionExpiryDate || 
-            subscriptionData.subscriptionExpiryDate > Date.now()
+            !expiryDate || 
+            new Date(expiryDate).getTime() > Date.now()
         );
 
         // Find or inform about the user in the new backend
         const userInNewBackend = await User.findOne({ email: email.toLowerCase().trim() });
+
+        // Convert dates to proper format
+        const expiryDateParsed = subscriptionData.subscriptionExpiryDate 
+            ? new Date(subscriptionData.subscriptionExpiryDate) 
+            : null;
+        const startDateParsed = subscriptionData.subscriptionStartDate 
+            ? new Date(subscriptionData.subscriptionStartDate) 
+            : null;
 
         if (!userInNewBackend) {
             return res.json({
@@ -90,10 +111,9 @@ router.post('/restore-subscription', async (req, res) => {
                 message: 'Subscription found but please create an account in the new app first with the same email',
                 subscriptionData: {
                     membership: subscriptionData.membership,
-                    subscriptionExpiryDate: subscriptionData.subscriptionExpiryDate,
-                    subscriptionStartDate: subscriptionData.subscriptionStartDate,
-                    isTrialUsed: subscriptionData.isTrialUsed,
-                    isTrialActive: subscriptionData.isTrialActive,
+                    subscriptionExpiryDate: expiryDateParsed,
+                    subscriptionStartDate: startDateParsed,
+                    isTrialUsed: subscriptionData.isTrialUsed || false,
                 }
             });
         }
@@ -102,13 +122,12 @@ router.post('/restore-subscription', async (req, res) => {
         if (isActive) {
             const updateData = {
                 isPremium: true,
-                subscriptionStatus: subscriptionData.isTrialActive ? 'trial' : 'active',
-                subscriptionExpiryDate: subscriptionData.subscriptionExpiryDate,
-                subscriptionStartDate: subscriptionData.subscriptionStartDate,
+                subscriptionStatus: 'active',
+                subscriptionExpiryDate: expiryDateParsed,
+                subscriptionStartDate: startDateParsed,
                 migratedFromOldApp: true,
                 oldAppUserId: subscriptionData._id,
-                isTrialUsed: subscriptionData.isTrialUsed,
-                isTrialActive: subscriptionData.isTrialActive,
+                isTrialUsed: subscriptionData.isTrialUsed || false,
             };
 
             await User.findByIdAndUpdate(userInNewBackend._id, updateData);
@@ -119,20 +138,20 @@ router.post('/restore-subscription', async (req, res) => {
                 success: true,
                 found: true,
                 subscriptionRestored: true,
+                isPremium: true,
                 message: 'Your subscription has been restored successfully!',
                 subscriptionData: {
                     membership: subscriptionData.membership,
-                    subscriptionExpiryDate: subscriptionData.subscriptionExpiryDate,
-                    subscriptionStartDate: subscriptionData.subscriptionStartDate,
-                    isTrialActive: subscriptionData.isTrialActive,
+                    subscriptionExpiryDate: expiryDateParsed,
+                    subscriptionStartDate: startDateParsed,
                 }
             });
         } else {
-            // User had a subscription but it's expired
+            // User had a subscription but it's expired or free
             const updateData = {
                 migratedFromOldApp: true,
                 oldAppUserId: subscriptionData._id,
-                isTrialUsed: subscriptionData.isTrialUsed,
+                isTrialUsed: subscriptionData.isTrialUsed || false,
             };
 
             await User.findByIdAndUpdate(userInNewBackend._id, updateData);
@@ -141,13 +160,14 @@ router.post('/restore-subscription', async (req, res) => {
                 success: true,
                 found: true,
                 subscriptionRestored: false,
+                isPremium: false,
                 message: isPaid 
                     ? 'Your subscription was found but has expired. Please renew to continue.' 
                     : 'Account found but no active subscription.',
                 subscriptionData: {
                     membership: subscriptionData.membership,
-                    subscriptionExpiryDate: subscriptionData.subscriptionExpiryDate,
-                    subscriptionStartDate: subscriptionData.subscriptionStartDate,
+                    subscriptionExpiryDate: expiryDateParsed,
+                    subscriptionStartDate: startDateParsed,
                 }
             });
         }
@@ -188,7 +208,7 @@ router.post('/check-renewal', async (req, res) => {
 
         // Call old backend to check current subscription status
         const oldBackendResponse = await axios.post(
-            `${OLD_BACKEND_URL}/migration/check-subscription`,
+            `${OLD_BACKEND_URL}/payments/restore/subscription`,
             { email: user.email },
             { 
                 headers: { 
@@ -201,7 +221,7 @@ router.post('/check-renewal', async (req, res) => {
 
         const subscriptionData = oldBackendResponse.data;
 
-        if (!subscriptionData.found) {
+        if (!subscriptionData || !subscriptionData.email) {
             return res.json({ 
                 success: true, 
                 renewed: false,
@@ -210,9 +230,10 @@ router.post('/check-renewal', async (req, res) => {
         }
 
         const isPaid = subscriptionData.membership === 'paid';
+        const expiryDate = subscriptionData.subscriptionExpiryDate;
         const isActive = isPaid && (
-            !subscriptionData.subscriptionExpiryDate || 
-            subscriptionData.subscriptionExpiryDate > Date.now()
+            !expiryDate || 
+            new Date(expiryDate).getTime() > Date.now()
         );
 
         if (isActive) {

@@ -4,9 +4,9 @@ const axios = require('axios');
 const User = require('../models/User');
 
 // Configuration for old backend
+// IMPORTANT: API key must be set via environment variable - never hardcode secrets
 const OLD_BACKEND_URL = process.env.OLD_BACKEND_URL || 'https://api.devgodlykids.kbpublish.org/api';
-// Production API Key for migration
-const MIGRATION_API_KEY = process.env.MIGRATION_API_KEY || 'pk_2cd2bc061e2cd0c68d2a00496ff7e6d0778708b6bff04710dc2593e4c7e268d07ca4f4ad671c4f0a8ce74183de28afc9692addb8bab266a1d28aefd45c566828';
+const MIGRATION_API_KEY = process.env.MIGRATION_API_KEY; // Required env variable
 
 /**
  * POST /api/migration/restore-subscription

@@ -1,10 +1,11 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
-import { ChevronLeft, ChevronRight, X, Play, Pause, Volume2, Mic, Check, Music, Home, Heart, Star, RotateCcw, Lock, Sparkles } from 'lucide-react';
+import { ChevronLeft, ChevronRight, X, Play, Pause, Volume2, Mic, Check, Music, Home, Heart, Star, RotateCcw, Lock, Sparkles, HelpCircle } from 'lucide-react';
 import { ApiService } from '../services/apiService';
 import { voiceCloningService, ClonedVoice } from '../services/voiceCloningService';
 import VoiceCloningModal from '../components/features/VoiceCloningModal';
 import ColoringModal from '../components/features/ColoringModal';
+import BookQuizModal from '../components/features/BookQuizModal';
 import { useAudio } from '../context/AudioContext';
 import { useUser } from '../context/UserContext';
 import { readingProgressService } from '../services/readingProgressService';
@@ -82,6 +83,7 @@ const BookReaderPage: React.FC = () => {
     const [currentPageIndex, setCurrentPageIndex] = useState(0);
     const [loading, setLoading] = useState(true);
     const [showScroll, setShowScroll] = useState(true);
+    const [bookTitle, setBookTitle] = useState<string>('Book');
 
     // Keep ref in sync with state
     useEffect(() => {
@@ -131,6 +133,11 @@ const BookReaderPage: React.FC = () => {
     const [coloringPages, setColoringPages] = useState<Page[]>([]);
     const [showColoringModal, setShowColoringModal] = useState(false);
     const [selectedColoringPage, setSelectedColoringPage] = useState<Page | null>(null);
+
+    // Quiz State
+    const [showQuizModal, setShowQuizModal] = useState(false);
+    const [quizAttemptCount, setQuizAttemptCount] = useState(0);
+    const maxQuizAttempts = 2;
 
     // Page turn sound effect using Web Audio API for a synthetic paper sound
     const audioContextRef = useRef<AudioContext | null>(null);
@@ -275,6 +282,18 @@ const BookReaderPage: React.FC = () => {
             if (!bookId) return;
             try {
                 const book = await ApiService.getBookById(bookId);
+                
+                // Set book title
+                if (book?.title) {
+                    setBookTitle(book.title);
+                }
+                
+                // Load quiz attempts from localStorage
+                const savedAttempts = localStorage.getItem(`quiz_attempts_${bookId}`);
+                if (savedAttempts) {
+                    setQuizAttemptCount(parseInt(savedAttempts, 10));
+                }
+                
                 const rawData = (book as any)?.rawData;
                 const files = rawData?.files || (book as any)?.files;
 
@@ -399,6 +418,11 @@ const BookReaderPage: React.FC = () => {
                 setColoringPages(coloring);
                 if (coloring.length > 0) {
                     setSelectedColoringPage(coloring[0]);
+                    console.log('🎨 Coloring page found:', {
+                        page: coloring[0],
+                        backgroundUrl: coloring[0].backgroundUrl,
+                        filesUrl: coloring[0].files?.background?.url
+                    });
                 }
 
                 // Filter pages for the book flow:
@@ -1747,6 +1771,30 @@ const BookReaderPage: React.FC = () => {
 
                             {/* Action Buttons Grid */}
                             <div className="flex flex-col gap-4 w-full">
+                                {/* Quiz Button - Always show but disabled if max attempts reached */}
+                                <button
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        if (quizAttemptCount < maxQuizAttempts) {
+                                            setShowQuizModal(true);
+                                        }
+                                    }}
+                                    disabled={quizAttemptCount >= maxQuizAttempts}
+                                    className={`p-4 rounded-xl font-bold shadow-lg border-b-4 active:border-b-0 active:translate-y-1 transition-all flex items-center justify-center gap-2 group ${
+                                        quizAttemptCount >= maxQuizAttempts
+                                            ? 'bg-gray-400 border-gray-500 text-gray-200 cursor-not-allowed'
+                                            : 'bg-[#FF9800] hover:bg-[#F57C00] text-white border-[#E65100]'
+                                    }`}
+                                >
+                                    <HelpCircle className="w-6 h-6" />
+                                    <span>
+                                        {quizAttemptCount >= maxQuizAttempts 
+                                            ? 'Quiz Completed!' 
+                                            : `Take Quiz (${quizAttemptCount}/${maxQuizAttempts})`
+                                        }
+                                    </span>
+                                </button>
+
                                 {/* Color Button - Only show if book has coloring pages */}
                                 {coloringPages.length > 0 && (
                                     <button
@@ -1855,6 +1903,23 @@ const BookReaderPage: React.FC = () => {
                 isOpen={showColoringModal}
                 onClose={() => setShowColoringModal(false)}
                 backgroundImageUrl={selectedColoringPage?.backgroundUrl || selectedColoringPage?.files?.background?.url}
+            />
+
+            {/* Quiz Modal */}
+            <BookQuizModal
+                isOpen={showQuizModal}
+                onClose={() => setShowQuizModal(false)}
+                bookId={bookId || ''}
+                bookTitle={bookTitle}
+                attemptCount={quizAttemptCount}
+                maxAttempts={maxQuizAttempts}
+                onQuizComplete={(score, coinsEarned) => {
+                    setQuizAttemptCount(prev => prev + 1);
+                    // Save attempt count to localStorage
+                    if (bookId) {
+                        localStorage.setItem(`quiz_attempts_${bookId}`, String(quizAttemptCount + 1));
+                    }
+                }}
             />
         </div>
     );

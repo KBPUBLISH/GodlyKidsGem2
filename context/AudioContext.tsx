@@ -137,11 +137,15 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
     // --- Initialization of Background Audio ---
     useEffect(() => {
+        // Get saved volume for scaling
+        const savedVolume = parseFloat(localStorage.getItem('godly_kids_music_volume') || '0.5');
+        
         // Helper to create audio with error handling
-        const createAudio = (url: string, volume: number, name: string): HTMLAudioElement => {
+        const createAudio = (url: string, baseVolume: number, name: string): HTMLAudioElement => {
             const audio = new Audio();
             audio.loop = true;
-            audio.volume = volume;
+            // Apply saved volume scaled by base volume
+            audio.volume = savedVolume * baseVolume;
             audio.preload = 'auto';
             // Don't set crossOrigin - it can cause CORS issues with some hosts
             
@@ -164,7 +168,7 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
             };
             
             audio.onplay = () => {
-                console.log(`▶️ ${name} Audio playing`);
+                console.log(`▶️ ${name} Audio playing at volume:`, audio.volume);
             };
             
             audio.onpause = () => {
@@ -177,16 +181,16 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
             return audio;
         };
 
-        // BG Audio
-        bgAudioRef.current = createAudio(BG_MUSIC_URL, 0.15, 'BG');
+        // BG Audio - quieter (base 30%)
+        bgAudioRef.current = createAudio(BG_MUSIC_URL, 0.3, 'BG');
 
-        // Game Audio
-        gameAudioRef.current = createAudio(GAME_MUSIC_URL, 0.25, 'Game');
+        // Game Audio - medium (base 50%)
+        gameAudioRef.current = createAudio(GAME_MUSIC_URL, 0.5, 'Game');
 
-        // Workout Audio
-        workoutAudioRef.current = createAudio(WORKOUT_MUSIC_URL, 0.3, 'Workout');
+        // Workout Audio - louder (base 60%)
+        workoutAudioRef.current = createAudio(WORKOUT_MUSIC_URL, 0.6, 'Workout');
 
-        console.log('🎵 Audio System Initialized with hardcoded URLs:', {
+        console.log('🎵 Audio System Initialized with volume:', savedVolume, {
             bg: BG_MUSIC_URL,
             game: GAME_MUSIC_URL,
             workout: WORKOUT_MUSIC_URL
@@ -555,6 +559,19 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         const clampedVolume = Math.max(0, Math.min(1, volume));
         setMusicVolumeState(clampedVolume);
         localStorage.setItem('godly_kids_music_volume', clampedVolume.toString());
+        
+        // Apply volume to all background audio elements
+        // Scale the volume based on their default levels
+        if (bgAudioRef.current) {
+            bgAudioRef.current.volume = clampedVolume * 0.3; // BG is quieter (max 30%)
+        }
+        if (gameAudioRef.current) {
+            gameAudioRef.current.volume = clampedVolume * 0.5; // Game at 50%
+        }
+        if (workoutAudioRef.current) {
+            workoutAudioRef.current.volume = clampedVolume * 0.6; // Workout at 60%
+        }
+        console.log('🎵 Volume set to:', clampedVolume);
     }, []);
 
     const setMusicPaused = useCallback((paused: boolean) => {

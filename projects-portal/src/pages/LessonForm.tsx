@@ -354,9 +354,10 @@ const LessonForm: React.FC = () => {
             const payload = {
                 ...formData,
                 scheduledDate: formData.scheduledDate ? (() => {
-                    // Create date at midnight UTC to avoid timezone shifts
+                    // Create date at noon UTC to avoid timezone boundary issues
+                    // This ensures the date displays correctly in all US timezones
                     const dateStr = formData.scheduledDate; // Format: YYYY-MM-DD
-                    return `${dateStr}T00:00:00.000Z`;
+                    return `${dateStr}T12:00:00.000Z`;
                 })() : undefined,
             };
 

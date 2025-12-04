@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
-import { ChevronLeft, ChevronRight, X, Play, Pause, Volume2, Mic, Check, Music, Home, Heart, Star, RotateCcw, Lock, Sparkles, HelpCircle } from 'lucide-react';
+import { ChevronLeft, ChevronRight, X, Play, Pause, Volume2, Mic, Check, Music, Home, Heart, Star, RotateCcw, Lock, Sparkles, HelpCircle, Share2, Copy, Smartphone, Grid3X3 } from 'lucide-react';
 import { ApiService } from '../services/apiService';
 import { voiceCloningService, ClonedVoice } from '../services/voiceCloningService';
 import VoiceCloningModal from '../components/features/VoiceCloningModal';
@@ -135,11 +135,19 @@ const BookReaderPage: React.FC = () => {
     const [hasBookMusic, setHasBookMusic] = useState(false);
     const [isFavorite, setIsFavorite] = useState(false);
     const [isLiked, setIsLiked] = useState(false);
+    const [copiedLink, setCopiedLink] = useState<'ios' | 'android' | null>(null);
+
+    // App Store Links
+    const IOS_APP_LINK = 'https://apps.apple.com/us/app/godly-kids-kid-bible-stories/id6737245412';
+    const ANDROID_APP_LINK = 'https://play.google.com/store/apps/details?id=com.kbpublish.godlykidscb';
 
     // Coloring Page State
     const [coloringPages, setColoringPages] = useState<Page[]>([]);
     const [showColoringModal, setShowColoringModal] = useState(false);
     const [selectedColoringPage, setSelectedColoringPage] = useState<Page | null>(null);
+
+    // Page Selector State
+    const [showPageSelector, setShowPageSelector] = useState(false);
 
     // Quiz State
     const [showQuizModal, setShowQuizModal] = useState(false);
@@ -591,7 +599,7 @@ const BookReaderPage: React.FC = () => {
                 // Use the determined scroll state
                 setShowScroll(scrollStateToUse);
                 showScrollRef.current = scrollStateToUse; // Update ref
-            }, 700); // Halfway through 1.4s animation
+            }, 300); // Halfway through 0.6s animation
 
             // End the flip animation
             setTimeout(() => {
@@ -608,7 +616,7 @@ const BookReaderPage: React.FC = () => {
                         readCountService.incrementReadCount(bookId);
                     }
                 }
-            }, 1500); // Slightly after 1.4s animation completes
+            }, 650); // Slightly after 0.6s animation completes
         }
     };
 
@@ -632,7 +640,7 @@ const BookReaderPage: React.FC = () => {
                 // Preserve the scroll state from previous page
                 setShowScroll(currentScrollState);
                 showScrollRef.current = currentScrollState; // Update ref
-            }, 700); // Halfway through 1.4s animation
+            }, 300); // Halfway through 0.6s animation
 
             // End the flip animation
             setTimeout(() => {
@@ -643,7 +651,7 @@ const BookReaderPage: React.FC = () => {
                 if (bookId) {
                     readingProgressService.saveProgress(bookId, prevIndex);
                 }
-            }, 1500); // Slightly after 1.4s animation completes
+            }, 650); // Slightly after 0.6s animation completes
         }
     };
 
@@ -663,10 +671,10 @@ const BookReaderPage: React.FC = () => {
     };
 
     const handleTouchEnd = () => {
-        const swipeThresholdX = 100; // Increased from 50 - require more deliberate horizontal swipe
-        const swipeThresholdY = 80; // Max vertical movement allowed (prevents diagonal swipes)
-        const minSwipeTime = 100; // Minimum time in ms for a valid swipe (prevents accidental taps)
-        const maxSwipeTime = 800; // Maximum time for swipe (too slow = not a swipe)
+        const swipeThresholdX = 50; // Reduced for more responsive swiping
+        const swipeThresholdY = 100; // Allow more vertical tolerance for natural swipes
+        const minSwipeTime = 50; // Reduced min time for quick flicks
+        const maxSwipeTime = 600; // Faster swipes feel more responsive
         
         const diffX = touchStartX.current - touchEndX.current;
         const diffY = Math.abs(touchStartY.current - touchEndY.current);
@@ -1576,35 +1584,35 @@ const BookReaderPage: React.FC = () => {
                     }
                     
                     .page-curl-next {
-                        animation: pageCurlNext 1.4s cubic-bezier(0.4, 0.0, 0.2, 1) forwards;
+                        animation: pageCurlNext 0.6s cubic-bezier(0.4, 0.0, 0.2, 1) forwards;
                         transform-origin: left center;
                         transform-style: preserve-3d;
                     }
                     
                     .page-curl-prev {
-                        animation: pageCurlPrev 1.4s cubic-bezier(0.4, 0.0, 0.2, 1) forwards;
+                        animation: pageCurlPrev 0.6s cubic-bezier(0.4, 0.0, 0.2, 1) forwards;
                         transform-origin: right center;
                         transform-style: preserve-3d;
                     }
                     
                     .shimmer-wave-1 {
-                        animation: shimmerWave1 1.4s ease-out forwards;
+                        animation: shimmerWave1 0.6s ease-out forwards;
                     }
                     
                     .shimmer-wave-2 {
-                        animation: shimmerWave2 1.4s ease-out 0.1s forwards;
+                        animation: shimmerWave2 0.6s ease-out 0.05s forwards;
                     }
                     
                     .shimmer-wave-3 {
-                        animation: shimmerWave3 1.4s ease-out 0.05s forwards;
+                        animation: shimmerWave3 0.6s ease-out 0.02s forwards;
                     }
                     
                     .sheen-pulse {
-                        animation: sheenPulse 0.7s ease-in-out infinite;
+                        animation: sheenPulse 0.3s ease-in-out infinite;
                     }
                     
                     .curl-shadow {
-                        animation: curlShadowGrow 1.4s ease-in-out forwards;
+                        animation: curlShadowGrow 0.6s ease-in-out forwards;
                     }
                     
                     @keyframes fadeIn {
@@ -1826,12 +1834,109 @@ const BookReaderPage: React.FC = () => {
                 />
             </div>
 
-            {/* Page Counter - Bottom Right */}
-            <div className="absolute bottom-4 right-4 z-50 pointer-events-none">
-                <div className="bg-black/40 backdrop-blur-md text-white px-3 py-1.5 rounded-full text-xs font-medium pointer-events-auto">
+            {/* Page Counter - Bottom Right (Clickable for page navigation) */}
+            <div className="absolute bottom-4 right-4 z-50">
+                <button
+                    onClick={(e) => {
+                        e.stopPropagation();
+                        setShowPageSelector(true);
+                    }}
+                    className="bg-black/40 backdrop-blur-md text-white px-3 py-1.5 rounded-full text-xs font-medium flex items-center gap-2 hover:bg-black/60 active:scale-95 transition-all"
+                >
+                    <Grid3X3 className="w-3 h-3" />
                     {currentPageIndex + 1} / {pages.length}
-                </div>
+                </button>
             </div>
+
+            {/* Page Selector Modal */}
+            {showPageSelector && (
+                <div 
+                    className="absolute inset-0 z-[60] flex items-center justify-center bg-black/70 backdrop-blur-sm animate-[fadeIn_0.2s_ease-out]"
+                    onClick={() => setShowPageSelector(false)}
+                >
+                    <div 
+                        className="bg-[#DEB887] rounded-2xl shadow-2xl border-4 border-[#5D4037] max-w-md w-full mx-4 max-h-[80vh] overflow-hidden animate-[scaleUp_0.3s_cubic-bezier(0.175,0.885,0.32,1.275)]"
+                        onClick={(e) => e.stopPropagation()}
+                    >
+                        {/* Header */}
+                        <div className="bg-[#5D4037] px-4 py-3 flex items-center justify-between">
+                            <h3 className="text-white font-bold text-lg">Go to Page</h3>
+                            <button
+                                onClick={() => setShowPageSelector(false)}
+                                className="text-white/80 hover:text-white p-1 rounded-full hover:bg-white/10 transition-colors"
+                            >
+                                <X className="w-5 h-5" />
+                            </button>
+                        </div>
+
+                        {/* Page Grid */}
+                        <div className="p-4 overflow-y-auto max-h-[60vh]">
+                            <div className="grid grid-cols-4 gap-2">
+                                {pages.map((page, index) => {
+                                    const isCurrentPage = index === currentPageIndex;
+                                    const isTheEnd = page.id === 'the-end';
+                                    
+                                    return (
+                                        <button
+                                            key={page.id || index}
+                                            onClick={() => {
+                                                setCurrentPageIndex(index);
+                                                setShowPageSelector(false);
+                                                stopAudio();
+                                            }}
+                                            className={`relative aspect-[3/4] rounded-lg overflow-hidden border-2 transition-all active:scale-95 ${
+                                                isCurrentPage 
+                                                    ? 'border-[#FFD700] ring-2 ring-[#FFD700] shadow-lg scale-105' 
+                                                    : 'border-[#8B4513]/30 hover:border-[#8B4513]'
+                                            }`}
+                                        >
+                                            {/* Page Thumbnail or Placeholder */}
+                                            {isTheEnd ? (
+                                                <div className="w-full h-full bg-gradient-to-br from-[#FFD700] to-[#FFA000] flex items-center justify-center">
+                                                    <span className="text-[#3E2723] font-bold text-xs">END</span>
+                                                </div>
+                                            ) : page.backgroundUrl ? (
+                                                <img 
+                                                    src={page.backgroundUrl} 
+                                                    alt={`Page ${index + 1}`}
+                                                    className="w-full h-full object-cover"
+                                                />
+                                            ) : (
+                                                <div className="w-full h-full bg-gradient-to-br from-[#fdf6e3] to-[#e8d5b7] flex items-center justify-center">
+                                                    <span className="text-[#8B4513] font-bold text-lg">{index + 1}</span>
+                                                </div>
+                                            )}
+
+                                            {/* Page Number Badge */}
+                                            <div className={`absolute bottom-1 right-1 px-1.5 py-0.5 rounded text-[10px] font-bold ${
+                                                isCurrentPage 
+                                                    ? 'bg-[#FFD700] text-[#3E2723]' 
+                                                    : 'bg-black/50 text-white'
+                                            }`}>
+                                                {index + 1}
+                                            </div>
+
+                                            {/* Current Page Indicator */}
+                                            {isCurrentPage && (
+                                                <div className="absolute top-1 left-1 bg-[#FFD700] rounded-full p-0.5">
+                                                    <Check className="w-3 h-3 text-[#3E2723]" />
+                                                </div>
+                                            )}
+                                        </button>
+                                    );
+                                })}
+                            </div>
+                        </div>
+
+                        {/* Footer */}
+                        <div className="bg-[#C4A574] px-4 py-2 text-center border-t border-[#8B4513]/20">
+                            <p className="text-[#5D4037] text-xs font-medium">
+                                Tap a page to jump to it
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            )}
 
             {/* The End Page Overlay */}
             {isTheEndPage && (
@@ -1977,6 +2082,80 @@ const BookReaderPage: React.FC = () => {
                                 >
                                     <Heart className={`w-6 h-6 ${isLiked ? 'fill-current' : ''}`} />
                                 </button>
+                            </div>
+
+                            {/* Share with Friends Section */}
+                            <div className="w-full pt-4 border-t border-[#8B4513]/20">
+                                <div className="flex items-center justify-center gap-2 mb-3">
+                                    <Share2 className="w-5 h-5 text-[#5D4037]" />
+                                    <span className="text-[#3E2723] font-bold text-sm">Love the app? Share it!</span>
+                                </div>
+                                <div className="flex gap-3 justify-center">
+                                    {/* iOS Copy Link */}
+                                    <button
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+                                            navigator.clipboard.writeText(IOS_APP_LINK).then(() => {
+                                                setCopiedLink('ios');
+                                                setTimeout(() => setCopiedLink(null), 2000);
+                                            });
+                                        }}
+                                        className={`flex items-center gap-2 px-4 py-2 rounded-xl font-bold text-sm shadow-md border-b-2 active:border-b-0 active:translate-y-0.5 transition-all ${
+                                            copiedLink === 'ios'
+                                                ? 'bg-green-500 border-green-600 text-white'
+                                                : 'bg-gray-100 hover:bg-gray-200 border-gray-300 text-gray-700'
+                                        }`}
+                                    >
+                                        {copiedLink === 'ios' ? (
+                                            <>
+                                                <Check className="w-4 h-4" />
+                                                <span>Copied!</span>
+                                            </>
+                                        ) : (
+                                            <>
+                                                <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
+                                                    <path d="M18.71 19.5C17.88 20.74 17 21.95 15.66 21.97C14.32 22 13.89 21.18 12.37 21.18C10.84 21.18 10.37 21.95 9.09997 22C7.78997 22.05 6.79997 20.68 5.95997 19.47C4.24997 17 2.93997 12.45 4.69997 9.39C5.56997 7.87 7.12997 6.91 8.81997 6.88C10.1 6.86 11.32 7.75 12.11 7.75C12.89 7.75 14.37 6.68 15.92 6.84C16.57 6.87 18.39 7.1 19.56 8.82C19.47 8.88 17.39 10.1 17.41 12.63C17.44 15.65 20.06 16.66 20.09 16.67C20.06 16.74 19.67 18.11 18.71 19.5ZM13 3.5C13.73 2.67 14.94 2.04 15.94 2C16.07 3.17 15.6 4.35 14.9 5.19C14.21 6.04 13.07 6.7 11.95 6.61C11.8 5.46 12.36 4.26 13 3.5Z"/>
+                                                </svg>
+                                                <span>iOS</span>
+                                                <Copy className="w-3 h-3 opacity-60" />
+                                            </>
+                                        )}
+                                    </button>
+
+                                    {/* Android Copy Link */}
+                                    <button
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+                                            navigator.clipboard.writeText(ANDROID_APP_LINK).then(() => {
+                                                setCopiedLink('android');
+                                                setTimeout(() => setCopiedLink(null), 2000);
+                                            });
+                                        }}
+                                        className={`flex items-center gap-2 px-4 py-2 rounded-xl font-bold text-sm shadow-md border-b-2 active:border-b-0 active:translate-y-0.5 transition-all ${
+                                            copiedLink === 'android'
+                                                ? 'bg-green-500 border-green-600 text-white'
+                                                : 'bg-gray-100 hover:bg-gray-200 border-gray-300 text-gray-700'
+                                        }`}
+                                    >
+                                        {copiedLink === 'android' ? (
+                                            <>
+                                                <Check className="w-4 h-4" />
+                                                <span>Copied!</span>
+                                            </>
+                                        ) : (
+                                            <>
+                                                <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
+                                                    <path d="M17.6 11.48L19.44 8.3C19.54 8.12 19.48 7.9 19.3 7.8C19.12 7.7 18.9 7.76 18.8 7.94L16.94 11.16C15.68 10.56 14.22 10.22 12.64 10.22C11.06 10.22 9.6 10.56 8.34 11.16L6.48 7.94C6.38 7.76 6.16 7.7 5.98 7.8C5.8 7.9 5.74 8.12 5.84 8.3L7.68 11.48C4.82 13.02 2.88 15.92 2.64 19.38H22.64C22.4 15.92 20.46 13.02 17.6 11.48ZM7.64 16.38C7.09 16.38 6.64 15.93 6.64 15.38C6.64 14.83 7.09 14.38 7.64 14.38C8.19 14.38 8.64 14.83 8.64 15.38C8.64 15.93 8.19 16.38 7.64 16.38ZM17.64 16.38C17.09 16.38 16.64 15.93 16.64 15.38C16.64 14.83 17.09 14.38 17.64 14.38C18.19 14.38 18.64 14.83 18.64 15.38C18.64 15.93 18.19 16.38 17.64 16.38Z"/>
+                                                </svg>
+                                                <span>Android</span>
+                                                <Copy className="w-3 h-3 opacity-60" />
+                                            </>
+                                        )}
+                                    </button>
+                                </div>
+                                <p className="text-[#5D4037] text-xs text-center mt-2 opacity-70">
+                                    Tap to copy link, then share with friends!
+                                </p>
                             </div>
                         </div>
                     </div>

@@ -181,14 +181,14 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
             return audio;
         };
 
-        // BG Audio - quieter (base 30%)
-        bgAudioRef.current = createAudio(BG_MUSIC_URL, 0.3, 'BG');
+        // BG Audio - moderate (base 50%)
+        bgAudioRef.current = createAudio(BG_MUSIC_URL, 0.5, 'BG');
 
-        // Game Audio - medium (base 50%)
-        gameAudioRef.current = createAudio(GAME_MUSIC_URL, 0.5, 'Game');
+        // Game Audio - louder (base 70%)
+        gameAudioRef.current = createAudio(GAME_MUSIC_URL, 0.7, 'Game');
 
-        // Workout Audio - louder (base 60%)
-        workoutAudioRef.current = createAudio(WORKOUT_MUSIC_URL, 0.6, 'Workout');
+        // Workout Audio - loudest (base 80%)
+        workoutAudioRef.current = createAudio(WORKOUT_MUSIC_URL, 0.8, 'Workout');
 
         console.log('🎵 Audio System Initialized with volume:', savedVolume, {
             bg: BG_MUSIC_URL,
@@ -560,13 +560,19 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         setMusicVolumeState(clampedVolume);
         localStorage.setItem('godly_kids_music_volume', clampedVolume.toString());
         
-        // Apply volume to all background audio elements
-        // Scale the volume based on their default levels
+        // Apply volume directly to all background audio elements
+        // Use reasonable base levels so volume slider has meaningful range
         if (bgAudioRef.current) {
-            bgAudioRef.current.volume = clampedVolume * 0.3; // BG is quieter (max 30%)
+            bgAudioRef.current.volume = clampedVolume * 0.5; // BG at 50% max
+            console.log('🎵 BG volume set to:', bgAudioRef.current.volume);
         }
         if (gameAudioRef.current) {
-            gameAudioRef.current.volume = clampedVolume * 0.5; // Game at 50%
+            gameAudioRef.current.volume = clampedVolume * 0.7; // Game at 70% max
+            console.log('🎵 Game volume set to:', gameAudioRef.current.volume);
+        }
+        if (workoutAudioRef.current) {
+            workoutAudioRef.current.volume = clampedVolume * 0.8; // Workout at 80% max
+            console.log('🎵 Workout volume set to:', workoutAudioRef.current.volume);
         }
         if (workoutAudioRef.current) {
             workoutAudioRef.current.volume = clampedVolume * 0.6; // Workout at 60%

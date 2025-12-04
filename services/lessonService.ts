@@ -81,9 +81,11 @@ export const getLessonsForDay = (lessons: any[], dayIndex: number): any[] => {
     
     return lessons.filter(lesson => {
         if (!lesson.scheduledDate) return false;
-        const scheduled = new Date(lesson.scheduledDate);
-        scheduled.setHours(0, 0, 0, 0);
-        const scheduledStr = scheduled.toISOString().split('T')[0];
+        // Extract date portion directly from the stored date string (UTC)
+        // This avoids timezone conversion issues
+        const scheduledStr = typeof lesson.scheduledDate === 'string' 
+            ? lesson.scheduledDate.split('T')[0]
+            : new Date(lesson.scheduledDate).toISOString().split('T')[0];
         return scheduledStr === targetDateStr;
     });
 };

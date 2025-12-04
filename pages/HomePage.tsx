@@ -221,11 +221,14 @@ const HomePage: React.FC = () => {
         const dateKey = date.toISOString().split('T')[0];
 
         // Find lesson scheduled for this date
+        // Compare date strings directly to avoid timezone conversion issues
         let lesson = data.find((l: any) => {
           if (!l.scheduledDate) return false;
-          const scheduled = new Date(l.scheduledDate);
-          scheduled.setHours(0, 0, 0, 0);
-          return scheduled.getTime() === date.getTime();
+          // Extract date portion directly from the stored date string (UTC)
+          const scheduledStr = typeof l.scheduledDate === 'string'
+            ? l.scheduledDate.split('T')[0]
+            : new Date(l.scheduledDate).toISOString().split('T')[0];
+          return scheduledStr === dateKey;
         });
 
         // If no scheduled lesson and we have published lessons without dates,

@@ -30,6 +30,7 @@ interface Page {
     backgroundUrl?: string;
     backgroundType?: 'image' | 'video';
     isColoringPage?: boolean;
+    coloringEndModalOnly?: boolean; // If true, coloring page only shows in end modal
     scrollUrl?: string;
     scrollHeight?: number;
     textBoxes?: TextBox[];
@@ -392,9 +393,24 @@ const BookReaderPage: React.FC = () => {
                     </svg>
                 `);
 
+                // Separate coloring pages for the end modal
+                // All coloring pages are available in end modal
+                const coloring = data.filter((p: any) => p.isColoringPage);
+                setColoringPages(coloring);
+                if (coloring.length > 0) {
+                    setSelectedColoringPage(coloring[0]);
+                }
+
+                // Filter pages for the book flow:
+                // - Include all non-coloring pages
+                // - Include coloring pages that are NOT marked as "end modal only"
+                const regularPages = data.filter((p: any) => 
+                    !p.isColoringPage || (p.isColoringPage && p.coloringEndModalOnly === false)
+                );
+
                 const theEndPage: Page = {
                     _id: 'the-end-page',
-                    pageNumber: data.length + 1,
+                    pageNumber: regularPages.length + 1,
                     backgroundUrl: theEndBackground,
                     backgroundType: 'image',
                     scrollUrl: '',
@@ -402,14 +418,8 @@ const BookReaderPage: React.FC = () => {
                     textBoxes: [], // Empty - no text on the page itself, modal will show on top
                 };
 
-                setPages([...data, theEndPage]);
-
-                // Filter coloring pages
-                const coloring = data.filter((p: any) => p.isColoringPage);
-                setColoringPages(coloring);
-                if (coloring.length > 0) {
-                    setSelectedColoringPage(coloring[0]);
-                }
+                // Regular pages + inline coloring pages + The End page
+                setPages([...regularPages, theEndPage]);
 
                 // Check if page is specified in URL (from Continue button)
                 const pageParam = searchParams.get('page');

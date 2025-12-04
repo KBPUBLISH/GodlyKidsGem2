@@ -40,6 +40,7 @@ const PageEditor: React.FC = () => {
     const [soundEffectFile, setSoundEffectFile] = useState<File | null>(null);
     const [textBoxes, setTextBoxes] = useState<TextBox[]>([]);
     const [isColoringPage, setIsColoringPage] = useState(false);
+    const [coloringEndModalOnly, setColoringEndModalOnly] = useState(true); // Default: show in end modal only
     const [loading, setLoading] = useState(false);
 
     // Previews
@@ -210,6 +211,7 @@ const PageEditor: React.FC = () => {
         setEditingPageId(page._id);
         setPageNumber(page.pageNumber);
         setIsColoringPage(page.isColoringPage || false);
+        setColoringEndModalOnly(page.coloringEndModalOnly !== false); // Default true if not set
 
         // Get background type from legacy field or new structure
         const bgType = page.backgroundType || page.files?.background?.type || 'image';
@@ -570,7 +572,8 @@ const PageEditor: React.FC = () => {
                 scrollUrl: scrollUrl || null,
                 scrollHeight: 200, // Fixed for now, could make dynamic
                 textBoxes: textBoxes.map(({ id, ...rest }) => rest), // Remove ID before sending
-                isColoringPage
+                isColoringPage,
+                coloringEndModalOnly
             };
 
             console.log('Final payload before sending:', {
@@ -731,6 +734,33 @@ const PageEditor: React.FC = () => {
                             />
                         </button>
                     </div>
+
+                    {/* Coloring Display Mode - Only visible when isColoringPage is ON */}
+                    {isColoringPage && (
+                        <div className="ml-4 p-3 bg-purple-50 rounded-lg border border-purple-200 space-y-2">
+                            <div className="flex items-center justify-between">
+                                <label className="text-sm font-medium text-purple-700">
+                                    End Modal Only
+                                </label>
+                                <button
+                                    onClick={() => setColoringEndModalOnly(!coloringEndModalOnly)}
+                                    className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${coloringEndModalOnly ? 'bg-purple-600' : 'bg-gray-300'
+                                        }`}
+                                >
+                                    <span
+                                        className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${coloringEndModalOnly ? 'translate-x-6' : 'translate-x-1'
+                                            }`}
+                                    />
+                                </button>
+                            </div>
+                            <p className="text-xs text-purple-600">
+                                {coloringEndModalOnly 
+                                    ? '✨ Page only accessible via "Color" button in end modal'
+                                    : '📖 Page shows inline within the book during reading'
+                                }
+                            </p>
+                        </div>
+                    )}
 
                     <hr className="border-gray-100" />
 

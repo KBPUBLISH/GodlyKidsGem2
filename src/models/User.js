@@ -16,6 +16,17 @@ const UserSchema = new mongoose.Schema({
     type: String,
     required: true,
   },
+  isPremium: {
+    type: Boolean,
+    default: false,
+  },
+  subscriptionStatus: {
+    type: String,
+    enum: ['free', 'trial', 'active', 'cancelled', 'expired'],
+    default: 'free',
+  },
+}, {
+  timestamps: true, // Adds createdAt and updatedAt automatically
 });
 
 UserSchema.pre('save', async function () {

@@ -154,7 +154,7 @@ const FunnelChart: React.FC<{
 
 const AnalyticsDashboard: React.FC = () => {
     const [loading, setLoading] = useState(true);
-    const [dateRange, setDateRange] = useState<'7d' | '30d' | '90d' | 'all'>('30d');
+    const [dateRange, setDateRange] = useState<'24h' | '7d' | '30d' | '90d' | 'all'>('30d');
     const [overview, setOverview] = useState<OverviewData | null>(null);
     const [featureUsage, setFeatureUsage] = useState<FeatureUsageData | null>(null);
     const [topUsers, setTopUsers] = useState<TopUser[]>([]);
@@ -230,6 +230,7 @@ const AnalyticsDashboard: React.FC = () => {
                         onChange={(e) => setDateRange(e.target.value as any)}
                         className="px-4 py-2 border border-gray-300 rounded-lg bg-white focus:ring-2 focus:ring-indigo-500"
                     >
+                        <option value="24h">Last 24 hours</option>
                         <option value="7d">Last 7 days</option>
                         <option value="30d">Last 30 days</option>
                         <option value="90d">Last 90 days</option>

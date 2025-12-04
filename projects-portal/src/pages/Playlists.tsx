@@ -1,7 +1,8 @@
 import React, { useEffect, useState } from 'react';
-import { Plus, Edit, Trash2, Music, BookOpen, Eye, EyeOff } from 'lucide-react';
+import { Plus, Edit, Trash2, Music, BookOpen, Eye, EyeOff, List, BarChart3 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import apiClient from '../services/apiClient';
+import PlaylistsAnalytics from '../components/PlaylistsAnalytics';
 
 interface AudioItem {
     _id?: string;
@@ -28,10 +29,13 @@ interface Playlist {
     updatedAt: string;
 }
 
+type TabView = 'list' | 'analytics';
+
 const Playlists: React.FC = () => {
     const [playlists, setPlaylists] = useState<Playlist[]>([]);
     const [loading, setLoading] = useState(true);
     const [filter, setFilter] = useState<'all' | 'draft' | 'published'>('all');
+    const [activeTab, setActiveTab] = useState<TabView>('list');
     const navigate = useNavigate();
 
     useEffect(() => {
@@ -84,127 +88,161 @@ const Playlists: React.FC = () => {
         <div>
             <div className="flex justify-between items-center mb-6">
                 <h1 className="text-3xl font-bold text-gray-800">Audio Playlists</h1>
-                <button
-                    onClick={() => navigate('/playlists/new')}
-                    className="bg-indigo-600 text-white px-4 py-2 rounded-lg flex items-center gap-2 hover:bg-indigo-700 transition-colors"
-                >
-                    <Plus className="w-5 h-5" />
-                    Create Playlist
-                </button>
-            </div>
-
-            {/* Filter Tabs */}
-            <div className="flex gap-2 mb-6">
-                {(['all', 'draft', 'published'] as const).map((status) => (
-                    <button
-                        key={status}
-                        onClick={() => setFilter(status)}
-                        className={`px-4 py-2 rounded-lg font-medium transition-colors ${filter === status
-                                ? 'bg-indigo-600 text-white'
-                                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                <div className="flex items-center gap-3">
+                    {/* Tab Buttons */}
+                    <div className="flex bg-gray-100 rounded-lg p-1">
+                        <button
+                            onClick={() => setActiveTab('list')}
+                            className={`flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-colors ${
+                                activeTab === 'list'
+                                    ? 'bg-white text-purple-600 shadow-sm'
+                                    : 'text-gray-600 hover:text-gray-800'
                             }`}
-                    >
-                        {status.charAt(0).toUpperCase() + status.slice(1)}
-                        <span className="ml-2 text-sm opacity-75">
-                            ({status === 'all' ? playlists.length : playlists.filter(p => p.status === status).length})
-                        </span>
-                    </button>
-                ))}
-            </div>
+                        >
+                            <List className="w-4 h-4" />
+                            List
+                        </button>
+                        <button
+                            onClick={() => setActiveTab('analytics')}
+                            className={`flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-colors ${
+                                activeTab === 'analytics'
+                                    ? 'bg-white text-purple-600 shadow-sm'
+                                    : 'text-gray-600 hover:text-gray-800'
+                            }`}
+                        >
+                            <BarChart3 className="w-4 h-4" />
+                            Analytics
+                        </button>
+                    </div>
 
-            {loading ? (
-                <div className="flex justify-center items-center h-64">
-                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600"></div>
-                </div>
-            ) : filteredPlaylists.length === 0 ? (
-                <div className="bg-white p-12 rounded-lg shadow-sm border border-gray-200 text-center">
-                    <Music className="w-16 h-16 text-gray-400 mx-auto mb-4" />
-                    <p className="text-gray-500 text-lg mb-2">No playlists found</p>
-                    <p className="text-gray-400 mb-4">Create your first audio playlist to get started!</p>
                     <button
                         onClick={() => navigate('/playlists/new')}
-                        className="bg-indigo-600 text-white px-6 py-2 rounded-lg hover:bg-indigo-700 transition-colors inline-flex items-center gap-2"
+                        className="bg-indigo-600 text-white px-4 py-2 rounded-lg flex items-center gap-2 hover:bg-indigo-700 transition-colors"
                     >
                         <Plus className="w-5 h-5" />
                         Create Playlist
                     </button>
                 </div>
+            </div>
+
+            {activeTab === 'analytics' ? (
+                <PlaylistsAnalytics />
             ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                    {filteredPlaylists.map((playlist) => (
-                        <div key={playlist._id} className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden hover:shadow-md transition-shadow">
-                            {/* Cover Image */}
-                            <div className="aspect-square bg-gradient-to-br from-indigo-500 to-purple-600 relative">
-                                {playlist.coverImage ? (
-                                    <img src={playlist.coverImage} alt={playlist.title} className="w-full h-full object-cover" />
-                                ) : (
-                                    <div className="w-full h-full flex items-center justify-center">
-                                        {playlist.type === 'Song' ? (
-                                            <Music className="w-20 h-20 text-white opacity-50" />
-                                        ) : (
-                                            <BookOpen className="w-20 h-20 text-white opacity-50" />
-                                        )}
-                                    </div>
-                                )}
-                                <div className="absolute top-2 right-2 flex gap-2">
-                                    <span className={`px-2 py-1 rounded-full text-xs font-medium ${playlist.status === 'published'
-                                            ? 'bg-green-500 text-white'
-                                            : 'bg-yellow-500 text-white'
-                                        }`}>
-                                        {playlist.status}
-                                    </span>
-                                    <span className="px-2 py-1 rounded-full text-xs font-medium bg-black/50 text-white backdrop-blur-sm">
-                                        {playlist.type}
-                                    </span>
-                                </div>
-                            </div>
+                <>
+                    {/* Filter Tabs */}
+                    <div className="flex gap-2 mb-6">
+                        {(['all', 'draft', 'published'] as const).map((status) => (
+                            <button
+                                key={status}
+                                onClick={() => setFilter(status)}
+                                className={`px-4 py-2 rounded-lg font-medium transition-colors ${filter === status
+                                        ? 'bg-indigo-600 text-white'
+                                        : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                                    }`}
+                            >
+                                {status.charAt(0).toUpperCase() + status.slice(1)}
+                                <span className="ml-2 text-sm opacity-75">
+                                    ({status === 'all' ? playlists.length : playlists.filter(p => p.status === status).length})
+                                </span>
+                            </button>
+                        ))}
+                    </div>
 
-                            {/* Content */}
-                            <div className="p-4">
-                                <h2 className="text-lg font-semibold text-gray-800 mb-1 truncate">{playlist.title}</h2>
-                                <p className="text-sm text-gray-600 mb-2">{playlist.author}</p>
-                                <p className="text-sm text-gray-500 mb-3">
-                                    {playlist.items.length} {playlist.type === 'Song' ? 'songs' : 'episodes'} • {playlist.category}
-                                </p>
-                                {playlist.description && (
-                                    <p className="text-sm text-gray-600 mb-3 line-clamp-2">{playlist.description}</p>
-                                )}
-
-                                {/* Actions */}
-                                <div className="flex gap-2 mt-4">
-                                    <button
-                                        onClick={() => navigate(`/playlists/edit/${playlist._id}`)}
-                                        className="flex-1 bg-indigo-600 text-white px-3 py-2 rounded-lg hover:bg-indigo-700 transition-colors flex items-center justify-center gap-2"
-                                    >
-                                        <Edit className="w-4 h-4" />
-                                        Edit
-                                    </button>
-                                    <button
-                                        onClick={() => handleToggleStatus(playlist)}
-                                        className={`px-3 py-2 rounded-lg transition-colors flex items-center justify-center ${playlist.status === 'published'
-                                                ? 'bg-yellow-100 text-yellow-700 hover:bg-yellow-200'
-                                                : 'bg-green-100 text-green-700 hover:bg-green-200'
-                                            }`}
-                                        title={playlist.status === 'published' ? 'Unpublish' : 'Publish'}
-                                    >
-                                        {playlist.status === 'published' ? (
-                                            <EyeOff className="w-4 h-4" />
-                                        ) : (
-                                            <Eye className="w-4 h-4" />
-                                        )}
-                                    </button>
-                                    <button
-                                        onClick={() => handleDelete(playlist._id)}
-                                        className="px-3 py-2 bg-red-100 text-red-700 rounded-lg hover:bg-red-200 transition-colors flex items-center justify-center"
-                                        title="Delete"
-                                    >
-                                        <Trash2 className="w-4 h-4" />
-                                    </button>
-                                </div>
-                            </div>
+                    {loading ? (
+                        <div className="flex justify-center items-center h-64">
+                            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600"></div>
                         </div>
-                    ))}
-                </div>
+                    ) : filteredPlaylists.length === 0 ? (
+                        <div className="bg-white p-12 rounded-lg shadow-sm border border-gray-200 text-center">
+                            <Music className="w-16 h-16 text-gray-400 mx-auto mb-4" />
+                            <p className="text-gray-500 text-lg mb-2">No playlists found</p>
+                            <p className="text-gray-400 mb-4">Create your first audio playlist to get started!</p>
+                            <button
+                                onClick={() => navigate('/playlists/new')}
+                                className="bg-indigo-600 text-white px-6 py-2 rounded-lg hover:bg-indigo-700 transition-colors inline-flex items-center gap-2"
+                            >
+                                <Plus className="w-5 h-5" />
+                                Create Playlist
+                            </button>
+                        </div>
+                    ) : (
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                            {filteredPlaylists.map((playlist) => (
+                                <div key={playlist._id} className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden hover:shadow-md transition-shadow">
+                                    {/* Cover Image */}
+                                    <div className="aspect-square bg-gradient-to-br from-indigo-500 to-purple-600 relative">
+                                        {playlist.coverImage ? (
+                                            <img src={playlist.coverImage} alt={playlist.title} className="w-full h-full object-cover" />
+                                        ) : (
+                                            <div className="w-full h-full flex items-center justify-center">
+                                                {playlist.type === 'Song' ? (
+                                                    <Music className="w-20 h-20 text-white opacity-50" />
+                                                ) : (
+                                                    <BookOpen className="w-20 h-20 text-white opacity-50" />
+                                                )}
+                                            </div>
+                                        )}
+                                        <div className="absolute top-2 right-2 flex gap-2">
+                                            <span className={`px-2 py-1 rounded-full text-xs font-medium ${playlist.status === 'published'
+                                                    ? 'bg-green-500 text-white'
+                                                    : 'bg-yellow-500 text-white'
+                                                }`}>
+                                                {playlist.status}
+                                            </span>
+                                            <span className="px-2 py-1 rounded-full text-xs font-medium bg-black/50 text-white backdrop-blur-sm">
+                                                {playlist.type}
+                                            </span>
+                                        </div>
+                                    </div>
+
+                                    {/* Content */}
+                                    <div className="p-4">
+                                        <h2 className="text-lg font-semibold text-gray-800 mb-1 truncate">{playlist.title}</h2>
+                                        <p className="text-sm text-gray-600 mb-2">{playlist.author}</p>
+                                        <p className="text-sm text-gray-500 mb-3">
+                                            {playlist.items.length} {playlist.type === 'Song' ? 'songs' : 'episodes'} • {playlist.category}
+                                        </p>
+                                        {playlist.description && (
+                                            <p className="text-sm text-gray-600 mb-3 line-clamp-2">{playlist.description}</p>
+                                        )}
+
+                                        {/* Actions */}
+                                        <div className="flex gap-2 mt-4">
+                                            <button
+                                                onClick={() => navigate(`/playlists/edit/${playlist._id}`)}
+                                                className="flex-1 bg-indigo-600 text-white px-3 py-2 rounded-lg hover:bg-indigo-700 transition-colors flex items-center justify-center gap-2"
+                                            >
+                                                <Edit className="w-4 h-4" />
+                                                Edit
+                                            </button>
+                                            <button
+                                                onClick={() => handleToggleStatus(playlist)}
+                                                className={`px-3 py-2 rounded-lg transition-colors flex items-center justify-center ${playlist.status === 'published'
+                                                        ? 'bg-yellow-100 text-yellow-700 hover:bg-yellow-200'
+                                                        : 'bg-green-100 text-green-700 hover:bg-green-200'
+                                                    }`}
+                                                title={playlist.status === 'published' ? 'Unpublish' : 'Publish'}
+                                            >
+                                                {playlist.status === 'published' ? (
+                                                    <EyeOff className="w-4 h-4" />
+                                                ) : (
+                                                    <Eye className="w-4 h-4" />
+                                                )}
+                                            </button>
+                                            <button
+                                                onClick={() => handleDelete(playlist._id)}
+                                                className="px-3 py-2 bg-red-100 text-red-700 rounded-lg hover:bg-red-200 transition-colors flex items-center justify-center"
+                                                title="Delete"
+                                            >
+                                                <Trash2 className="w-4 h-4" />
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+                </>
             )}
         </div>
     );

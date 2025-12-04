@@ -788,7 +788,7 @@ const HomePage: React.FC = () => {
                   return (
                     <div 
                       key={book.id || book._id} 
-                      className="relative flex-shrink-0 w-[140px] md:w-[160px]"
+                      className="relative flex-shrink-0 w-[42vw] md:w-[30vw] lg:w-[23vw] max-w-[200px]"
                     >
                       <BookCard
                         book={book}
@@ -828,7 +828,7 @@ const HomePage: React.FC = () => {
                   return (
                     <div 
                       key={playlist._id || playlist.id} 
-                      className="relative flex-shrink-0 w-[140px] md:w-[160px]"
+                      className="relative flex-shrink-0 w-[42vw] md:w-[30vw] lg:w-[23vw] max-w-[200px]"
                     >
                       <BookCard
                         book={playlistItem}
@@ -858,7 +858,7 @@ const HomePage: React.FC = () => {
                 {topRatedBooks.map((book) => (
                   <div 
                     key={book.id || book._id} 
-                    className="relative flex-shrink-0 w-[140px] md:w-[160px]"
+                    className="relative flex-shrink-0 w-[42vw] md:w-[30vw] lg:w-[23vw] max-w-[200px]"
                   >
                     <BookCard
                       book={book}
@@ -896,7 +896,7 @@ const HomePage: React.FC = () => {
                   return (
                     <div 
                       key={playlist._id || playlist.id} 
-                      className="relative flex-shrink-0 w-[140px] md:w-[160px]"
+                      className="relative flex-shrink-0 w-[42vw] md:w-[30vw] lg:w-[23vw] max-w-[200px]"
                     >
                       <BookCard
                         book={playlistItem}
@@ -941,7 +941,7 @@ const HomePage: React.FC = () => {
                       {allItems.map((item) => (
                         <div 
                           key={item.id || item._id}
-                          className="flex-shrink-0 w-[140px] md:w-[160px]"
+                          className="flex-shrink-0 w-[42vw] md:w-[30vw] lg:w-[23vw] max-w-[200px]"
                         >
                           <BookCard
                             book={item}

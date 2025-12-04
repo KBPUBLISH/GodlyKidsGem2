@@ -945,21 +945,20 @@ const BookReaderPage: React.FC = () => {
                     const audioDuration = audio.duration;
                     const alignment = result.alignment;
                     
-                    // Get the clean text (same as what's displayed) for reference
+                    // Get the clean text (same as what's displayed)
                     const cleanText = text.replace(/\[([^\]]+)\]/g, '').replace(/\s+/g, ' ').trim();
                     const displayWords = cleanText.split(/\s+/).filter(w => w.length > 0);
                     
-                    // Use real alignment from ElevenLabs if available
+                    // Use ElevenLabs alignment if available
                     if (alignment && alignment.words && alignment.words.length > 0 && !alignment.isEstimated) {
-                        // Filter out bracketed words (sound effects, emotions) from alignment
-                        // These exist in TTS but not in display
-                        const filteredWords: Array<{ word: string; start: number; end: number }> = [];
+                        // Filter out bracketed words (sound effects, emotions)
+                        const filteredWords: Array<{ word: string; start: number; end: number; duration: number }> = [];
                         let insideBracket = false;
                         
                         for (const wordData of alignment.words) {
                             const word = wordData.word || '';
                             
-                            // Track bracket sequences
+                            // Track bracket sequences (multi-word sound effects)
                             if (word.startsWith('[')) {
                                 insideBracket = true;
                             }
@@ -975,32 +974,65 @@ const BookReaderPage: React.FC = () => {
                             // Clean any partial brackets
                             const cleanedWord = word.replace(/\[([^\]]*)\]?/g, '').replace(/\]$/g, '').trim();
                             if (cleanedWord.length > 0) {
+                                const duration = wordData.end - wordData.start;
                                 filteredWords.push({
                                     word: cleanedWord,
                                     start: wordData.start,
-                                    end: wordData.end
+                                    end: wordData.end,
+                                    duration: duration > 0 ? duration : 0.1 // Minimum duration
                                 });
                             }
                         }
                         
-                        console.log('📝 Using REAL ElevenLabs timestamps:', {
-                            audioDuration: audioDuration.toFixed(2),
-                            originalWords: alignment.words.length,
-                            filteredWords: filteredWords.length,
-                            displayWords: displayWords.length,
-                            firstWord: filteredWords[0],
-                            lastWord: filteredWords[filteredWords.length - 1]
-                        });
-                        
-                        // Use filtered alignment (real timestamps from ElevenLabs)
-                        const realAlignment = { words: filteredWords };
-                        setWordAlignment(realAlignment);
-                        wordAlignmentRef.current = realAlignment;
+                        // REDISTRIBUTE TIMING to fill gaps
+                        // This keeps relative word speeds but eliminates gaps that cause freezing
+                        if (filteredWords.length > 0) {
+                            const totalOriginalDuration = filteredWords.reduce((sum, w) => sum + w.duration, 0);
+                            const scaleFactor = audioDuration / totalOriginalDuration;
+                            
+                            let currentTime = 0;
+                            const redistributedAlignment = {
+                                words: filteredWords.map((w) => {
+                                    const scaledDuration = w.duration * scaleFactor;
+                                    const wordTiming = {
+                                        word: w.word,
+                                        start: currentTime,
+                                        end: currentTime + scaledDuration
+                                    };
+                                    currentTime += scaledDuration;
+                                    return wordTiming;
+                                })
+                            };
+                            
+                            console.log('📝 Word alignment (redistributed ElevenLabs):', {
+                                audioDuration: audioDuration.toFixed(2),
+                                originalWords: alignment.words.length,
+                                filteredWords: filteredWords.length,
+                                displayWords: displayWords.length,
+                                scaleFactor: scaleFactor.toFixed(2),
+                                coverage: currentTime.toFixed(2)
+                            });
+                            
+                            setWordAlignment(redistributedAlignment);
+                            wordAlignmentRef.current = redistributedAlignment;
+                        } else {
+                            // Fallback to even distribution
+                            const wordDuration = audioDuration / displayWords.length;
+                            const evenAlignment = {
+                                words: displayWords.map((word, idx) => ({
+                                    word,
+                                    start: idx * wordDuration,
+                                    end: (idx + 1) * wordDuration
+                                }))
+                            };
+                            setWordAlignment(evenAlignment);
+                            wordAlignmentRef.current = evenAlignment;
+                        }
                     } else {
                         // Fallback: spread words evenly across audio duration
                         if (displayWords.length > 0) {
                             const wordDuration = audioDuration / displayWords.length;
-                            const estimatedAlignment = {
+                            const evenAlignment = {
                                 words: displayWords.map((word, idx) => ({
                                     word,
                                     start: idx * wordDuration,
@@ -1008,14 +1040,13 @@ const BookReaderPage: React.FC = () => {
                                 }))
                             };
                             
-                            console.log('📝 Using ESTIMATED timing (fallback):', {
+                            console.log('📝 Word alignment (even fallback):', {
                                 audioDuration: audioDuration.toFixed(2),
-                                wordCount: displayWords.length,
-                                wordDuration: wordDuration.toFixed(2)
+                                wordCount: displayWords.length
                             });
                             
-                            setWordAlignment(estimatedAlignment);
-                            wordAlignmentRef.current = estimatedAlignment;
+                            setWordAlignment(evenAlignment);
+                            wordAlignmentRef.current = evenAlignment;
                         } else {
                             console.warn('⚠️ No words found in text');
                         }

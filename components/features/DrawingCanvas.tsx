@@ -1,5 +1,5 @@
 import React, { useRef, useEffect, useState, useCallback } from 'react';
-import { Eraser, RotateCcw, Download, Paintbrush, Highlighter, PenTool, Pencil, Hand } from 'lucide-react';
+import { Eraser, RotateCcw, Download, Paintbrush, Highlighter, PenTool, Pencil } from 'lucide-react';
 
 interface DrawingCanvasProps {
     prompt: string;
@@ -18,25 +18,17 @@ interface BrushConfig {
     defaultSize: number;
     opacity: number;
     texture: 'smooth' | 'soft' | 'rough' | 'fine';
-    cursorImage: string;
-    // Offset from cursor to tip of the tool (in pixels)
-    // Positive Y means tip is below the cursor anchor point
-    tipOffsetX: number;
-    tipOffsetY: number;
 }
 
 const BRUSH_CONFIGS: Record<BrushType, BrushConfig> = {
     paintbrush: {
-        name: 'Paintbrush',
+        name: 'Brush',
         icon: <Paintbrush className="w-5 h-5" />,
         minSize: 8,
         maxSize: 35,
         defaultSize: 15,
         opacity: 0.9,
         texture: 'smooth',
-        cursorImage: '🖌️',
-        tipOffsetX: -20,  // Tip is to the bottom-left
-        tipOffsetY: 35,
     },
     marker: {
         name: 'Marker',
@@ -46,9 +38,6 @@ const BRUSH_CONFIGS: Record<BrushType, BrushConfig> = {
         defaultSize: 28,
         opacity: 0.5,
         texture: 'soft',
-        cursorImage: '🖍️',
-        tipOffsetX: -18,
-        tipOffsetY: 38,
     },
     crayon: {
         name: 'Crayon',
@@ -58,9 +47,6 @@ const BRUSH_CONFIGS: Record<BrushType, BrushConfig> = {
         defaultSize: 18,
         opacity: 0.85,
         texture: 'rough',
-        cursorImage: '🖍️',
-        tipOffsetX: -18,
-        tipOffsetY: 38,
     },
     pencil: {
         name: 'Pencil',
@@ -70,9 +56,6 @@ const BRUSH_CONFIGS: Record<BrushType, BrushConfig> = {
         defaultSize: 8,
         opacity: 1,
         texture: 'fine',
-        cursorImage: '✏️',
-        tipOffsetX: -22,
-        tipOffsetY: 40,
     },
 };
 
@@ -95,18 +78,12 @@ const CRAYON_COLORS = [
 
 const DrawingCanvas: React.FC<DrawingCanvasProps> = ({ prompt, backgroundImageUrl, onComplete }) => {
     const canvasRef = useRef<HTMLCanvasElement>(null);
-    const containerRef = useRef<HTMLDivElement>(null);
     const [isDrawing, setIsDrawing] = useState(false);
     const [selectedColor, setSelectedColor] = useState(CRAYON_COLORS[0]);
     const [brushType, setBrushType] = useState<BrushType>('paintbrush');
     const [brushSize, setBrushSize] = useState(BRUSH_CONFIGS.paintbrush.defaultSize);
     const [isEraser, setIsEraser] = useState(false);
     const [isCompleted, setIsCompleted] = useState(false);
-    const [isLeftHanded, setIsLeftHanded] = useState(false);
-
-    // Visual cursor position
-    const [cursorPos, setCursorPos] = useState<{ x: number; y: number } | null>(null);
-    const [showCursor, setShowCursor] = useState(false);
 
     // Track if canvas has been initialized
     const [canvasReady, setCanvasReady] = useState(false);
@@ -316,7 +293,6 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = ({ prompt, backgroundImageUr
         lastPosRef.current = { x, y };
 
         setIsDrawing(true);
-        setShowCursor(true);
 
         if (isEraser) {
             ctx.globalCompositeOperation = 'destination-out';
@@ -343,12 +319,9 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = ({ prompt, backgroundImageUr
         if (e.cancelable) e.preventDefault();
         e.stopPropagation();
 
-        const { x, y } = getCoordinates(e);
-
-        // Update cursor position for visual feedback
-        setCursorPos({ x, y });
-
         if (!isDrawing) return;
+
+        const { x, y } = getCoordinates(e);
 
         const canvas = canvasRef.current;
         if (!canvas) return;
@@ -385,13 +358,7 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = ({ prompt, backgroundImageUr
         }
     }, [isDrawing]);
 
-    const handleMouseEnter = useCallback(() => {
-        setShowCursor(true);
-    }, []);
-
     const handleMouseLeave = useCallback(() => {
-        setShowCursor(false);
-        setCursorPos(null);
         stopDrawing();
     }, [stopDrawing]);
 
@@ -466,174 +433,16 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = ({ prompt, backgroundImageUr
             </div>
 
             {/* Canvas Container */}
-            <div
-                ref={containerRef}
-                className="flex-1 bg-white rounded-lg overflow-hidden shadow-lg mb-2 relative min-h-0"
-            >
+            <div className="flex-1 bg-white rounded-lg overflow-hidden shadow-lg mb-2 relative min-h-0">
                 <canvas
                     ref={canvasRef}
-                    className="w-full h-full touch-none"
-                    style={{ minHeight: '250px', cursor: 'none' }}
+                    className="w-full h-full touch-none cursor-crosshair"
+                    style={{ minHeight: '250px' }}
                     onMouseDown={startDrawing}
                     onMouseMove={draw}
                     onMouseUp={stopDrawing}
-                    onMouseEnter={handleMouseEnter}
                     onMouseLeave={handleMouseLeave}
                 />
-
-                {/* Visual Brush Cursor - Positioned so TIP is at drawing point */}
-                {showCursor && cursorPos && (
-                    <div
-                        className="pointer-events-none absolute z-50"
-                        style={{
-                            // Position the cursor container so the TOOL TIP is at cursorPos
-                            // For left-handed: mirror the X offset
-                            left: cursorPos.x - (isLeftHanded ? -currentBrush.tipOffsetX : currentBrush.tipOffsetX),
-                            top: cursorPos.y - currentBrush.tipOffsetY,
-                            transition: 'left 0.02s linear, top 0.02s linear',
-                        }}
-                    >
-                        <div className="relative">
-                            {/* Tool image with high visibility */}
-                            <div
-                                className="relative"
-                                style={{
-                                    // Mirror horizontally for left-handed users
-                                    transform: `${isLeftHanded ? 'scaleX(-1)' : ''} ${isDrawing ? 'scale(1.05) rotate(-3deg)' : 'scale(1)'}`,
-                                    transition: 'transform 0.1s ease-out',
-                                }}
-                            >
-                                {/* Large visible brush/tool - SVG version for color control */}
-                                {isEraser ? (
-                                    <span
-                                        className="text-5xl md:text-6xl select-none"
-                                        style={{
-                                            filter: 'drop-shadow(2px 2px 4px rgba(0,0,0,0.5))',
-                                            display: 'block',
-                                        }}
-                                    >
-                                        🧽
-                                    </span>
-                                ) : (
-                                    <div className="relative">
-                                        {/* Colored tool body */}
-                                        <svg
-                                            viewBox="0 0 64 64"
-                                            className="w-14 h-14 md:w-16 md:h-16"
-                                            style={{
-                                                filter: 'drop-shadow(3px 3px 6px rgba(0,0,0,0.5))',
-                                            }}
-                                        >
-                                            {brushType === 'paintbrush' && (
-                                                <>
-                                                    {/* Brush handle */}
-                                                    <rect x="28" y="4" width="8" height="30" rx="2" fill="#8B4513" />
-                                                    <rect x="30" y="4" width="2" height="30" fill="#A0522D" />
-                                                    {/* Ferrule (metal part) */}
-                                                    <rect x="26" y="32" width="12" height="6" rx="1" fill="#C0C0C0" />
-                                                    <rect x="26" y="33" width="12" height="2" fill="#E8E8E8" />
-                                                    {/* Bristles - colored */}
-                                                    <path
-                                                        d="M26 38 Q24 48 28 58 L32 60 L36 58 Q40 48 38 38 Z"
-                                                        fill={selectedColor}
-                                                    />
-                                                    <path
-                                                        d="M28 38 Q27 46 29 54 L32 56 L35 54 Q37 46 36 38 Z"
-                                                        fill={selectedColor}
-                                                        opacity="0.7"
-                                                    />
-                                                </>
-                                            )}
-                                            {brushType === 'marker' && (
-                                                <>
-                                                    {/* Marker body */}
-                                                    <rect x="24" y="4" width="16" height="36" rx="3" fill={selectedColor} />
-                                                    <rect x="26" y="4" width="4" height="36" fill="white" opacity="0.3" />
-                                                    {/* Cap ring */}
-                                                    <rect x="23" y="38" width="18" height="4" rx="1" fill="#333" />
-                                                    {/* Tip */}
-                                                    <path
-                                                        d="M26 42 L32 60 L38 42 Z"
-                                                        fill={selectedColor}
-                                                    />
-                                                    <path
-                                                        d="M29 42 L32 55 L35 42 Z"
-                                                        fill="white"
-                                                        opacity="0.2"
-                                                    />
-                                                </>
-                                            )}
-                                            {brushType === 'crayon' && (
-                                                <>
-                                                    {/* Crayon body */}
-                                                    <rect x="25" y="8" width="14" height="32" rx="2" fill={selectedColor} />
-                                                    {/* Paper wrapper */}
-                                                    <rect x="25" y="12" width="14" height="20" fill="#222" opacity="0.15" />
-                                                    <text x="32" y="25" textAnchor="middle" fill="white" fontSize="6" fontWeight="bold" opacity="0.8">
-                                                        ★
-                                                    </text>
-                                                    {/* Highlight */}
-                                                    <rect x="27" y="8" width="3" height="32" fill="white" opacity="0.25" />
-                                                    {/* Tip */}
-                                                    <path
-                                                        d="M25 40 L32 58 L39 40 Z"
-                                                        fill={selectedColor}
-                                                    />
-                                                    <path
-                                                        d="M28 40 L32 52 L36 40 Z"
-                                                        fill="white"
-                                                        opacity="0.2"
-                                                    />
-                                                </>
-                                            )}
-                                            {brushType === 'pencil' && (
-                                                <>
-                                                    {/* Pencil body */}
-                                                    <rect x="27" y="4" width="10" height="34" fill={selectedColor} />
-                                                    {/* Highlight stripe */}
-                                                    <rect x="29" y="4" width="3" height="34" fill="white" opacity="0.3" />
-                                                    {/* Wood tip */}
-                                                    <path
-                                                        d="M27 38 L32 54 L37 38 Z"
-                                                        fill="#DEB887"
-                                                    />
-                                                    {/* Graphite tip */}
-                                                    <path
-                                                        d="M30 48 L32 58 L34 48 Z"
-                                                        fill="#333"
-                                                    />
-                                                    {/* Eraser */}
-                                                    <rect x="27" y="2" width="10" height="5" rx="1" fill="#FFB6C1" />
-                                                    {/* Metal band */}
-                                                    <rect x="26" y="5" width="12" height="3" fill="#C0C0C0" />
-                                                </>
-                                            )}
-                                        </svg>
-                                    </div>
-                                )}
-                                
-                                {/* Colored glow at the tip to show where drawing happens */}
-                                {!isEraser && (
-                                    <div
-                                        className="absolute rounded-full animate-pulse"
-                                        style={{
-                                            // Position at the tip - adjusted for SVG size
-                                            left: isLeftHanded ? 'auto' : currentBrush.tipOffsetX + 28,
-                                            right: isLeftHanded ? currentBrush.tipOffsetX + 28 : 'auto',
-                                            top: currentBrush.tipOffsetY,
-                                            width: Math.max(10, brushSize * 0.7),
-                                            height: Math.max(10, brushSize * 0.7),
-                                            backgroundColor: selectedColor,
-                                            boxShadow: `0 0 ${brushSize}px ${selectedColor}, 0 0 ${brushSize * 2}px ${selectedColor}50`,
-                                            transform: 'translate(-50%, -50%)',
-                                            opacity: isDrawing ? 1 : 0.7,
-                                        }}
-                                    />
-                                )}
-                            </div>
-                        </div>
-                    </div>
-                )}
             </div>
 
             {/* Brush Type Selector */}
@@ -685,25 +494,8 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = ({ prompt, backgroundImageUr
 
             {/* Tools Row */}
             <div className="flex items-center justify-between gap-2 flex-wrap">
-                {/* Left/Right Hand Toggle */}
-                <button
-                    onClick={() => setIsLeftHanded(!isLeftHanded)}
-                    className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg transition-all text-xs font-medium ${
-                        isLeftHanded
-                            ? 'bg-gradient-to-r from-blue-500 to-blue-600 text-white shadow-lg'
-                            : 'bg-white/15 text-white hover:bg-white/25'
-                    }`}
-                    title={isLeftHanded ? 'Left-handed mode' : 'Right-handed mode'}
-                >
-                    <Hand 
-                        className="w-4 h-4" 
-                        style={{ transform: isLeftHanded ? 'scaleX(-1)' : 'none' }}
-                    />
-                    <span>{isLeftHanded ? 'L' : 'R'}</span>
-                </button>
-
                 {/* Brush Size */}
-                <div className="flex items-center gap-2 flex-1 min-w-[80px]">
+                <div className="flex items-center gap-2 flex-1 min-w-[100px]">
                     <span className="text-white/70 text-xs">Size:</span>
                     <input
                         type="range"
@@ -716,10 +508,10 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = ({ prompt, backgroundImageUr
                     <div
                         className="rounded-full"
                         style={{
-                            width: Math.max(8, brushSize / 2),
-                            height: Math.max(8, brushSize / 2),
+                            width: Math.max(10, brushSize / 2),
+                            height: Math.max(10, brushSize / 2),
                             backgroundColor: selectedColor,
-                            border: selectedColor === '#FFFFFF' ? '1px solid #ccc' : 'none',
+                            border: selectedColor === '#FFFFFF' ? '2px solid #ccc' : 'none',
                         }}
                     />
                 </div>
@@ -735,7 +527,7 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = ({ prompt, backgroundImageUr
                             }`}
                         title="Eraser"
                     >
-                        <Eraser className="w-4 h-4 md:w-5 md:h-5" />
+                        <Eraser className="w-5 h-5" />
                     </button>
 
                     {/* Clear */}
@@ -744,7 +536,7 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = ({ prompt, backgroundImageUr
                         className="p-2 rounded-lg bg-white/15 text-white hover:bg-white/25 transition-all"
                         title="Start Over"
                     >
-                        <RotateCcw className="w-4 h-4 md:w-5 md:h-5" />
+                        <RotateCcw className="w-5 h-5" />
                     </button>
 
                     {/* Download */}
@@ -753,7 +545,7 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = ({ prompt, backgroundImageUr
                         className="p-2 rounded-lg bg-white/15 text-white hover:bg-white/25 transition-all"
                         title="Save Drawing"
                     >
-                        <Download className="w-4 h-4 md:w-5 md:h-5" />
+                        <Download className="w-5 h-5" />
                     </button>
                 </div>
             </div>

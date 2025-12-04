@@ -26,6 +26,11 @@ const gameSchema = new mongoose.Schema({
     coverImage: {
         type: String,
     },
+    // Show in "Daily Tasks & IQ Games" category
+    showInDailyTasks: {
+        type: Boolean,
+        default: true,
+    },
     // Game type: 'modal' (built-in) or 'webview' (external URL)
     gameType: {
         type: String,

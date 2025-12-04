@@ -134,6 +134,7 @@ router.post('/', async (req, res) => {
         const lessonData = {
             title: req.body.title,
             description: req.body.description,
+            type: req.body.type || 'Bible Study',
             video: req.body.video,
             captions: req.body.captions || [],
             devotional: req.body.devotional || {},
@@ -198,6 +199,7 @@ router.put('/:id', async (req, res) => {
         // Update fields
         if (req.body.title !== undefined) lesson.title = req.body.title;
         if (req.body.description !== undefined) lesson.description = req.body.description;
+        if (req.body.type !== undefined) lesson.type = req.body.type;
         if (req.body.video !== undefined) lesson.video = req.body.video;
         if (req.body.captions !== undefined) lesson.captions = req.body.captions;
         if (req.body.devotional !== undefined) lesson.devotional = req.body.devotional;

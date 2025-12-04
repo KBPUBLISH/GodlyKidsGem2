@@ -10,11 +10,25 @@ const lessonSchema = new mongoose.Schema({
         type: String,
     },
 
-    // Lesson Type
+    // Lesson Type / Subject
     type: {
         type: String,
-        enum: ['Bible', 'Science', 'Math', 'History', 'English', 'Art', 'Technology'],
-        default: 'Bible',
+        enum: [
+            'Bible Study',
+            'Science', 
+            'Math', 
+            'History', 
+            'English', 
+            'Reading',
+            'Arts & Crafts', 
+            'Music',
+            'Physical Education',
+            'Life Skills',
+            'Technology',
+            'Social Studies',
+            'Nature'
+        ],
+        default: 'Bible Study',
     },
 
     // Video content

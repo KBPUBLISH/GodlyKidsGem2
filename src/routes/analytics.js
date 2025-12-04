@@ -519,7 +519,7 @@ router.get('/book/:bookId', async (req, res) => {
         const { startDate, endDate } = getDateRange(range);
 
         const book = await Book.findById(bookId)
-            .select('title viewCount readCount likeCount favoriteCount quizStartCount quizCompletionCount coloringSessionsCount gameUnlockCount gameOpenCount hasQuiz')
+            .select('title viewCount readCount likeCount favoriteCount quizStartCount quizCompletionCount coloringSessionsCount gameUnlockCount gameOpenCount hasQuiz averageCompletionRate totalReadSessions')
             .lean();
 
         if (!book) {
@@ -593,6 +593,9 @@ router.get('/book/:bookId', async (req, res) => {
             quizCompletionRate: book.quizStartCount > 0 
                 ? ((book.quizCompletionCount / book.quizStartCount) * 100).toFixed(2) 
                 : 0,
+            // Average completion rate - what % of the book users read on average
+            averageCompletionRate: book.averageCompletionRate || 0,
+            totalReadSessions: book.totalReadSessions || 0,
         });
     } catch (error) {
         console.error('Error fetching book analytics:', error);

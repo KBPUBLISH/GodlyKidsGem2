@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const AnalyticsEvent = require('../models/AnalyticsEvent');
 const AppUser = require('../models/AppUser');
+const User = require('../models/User'); // The actual user accounts
 const Book = require('../models/Book');
 const Playlist = require('../models/Playlist');
 const Lesson = require('../models/Lesson');
@@ -279,6 +280,7 @@ router.get('/overview', async (req, res) => {
         // Parallel aggregation queries
         const [
             totalUsers,
+            totalAppUsers,
             newUsersInRange,
             activeUsersInRange,
             sessionsInRange,
@@ -288,14 +290,17 @@ router.get('/overview', async (req, res) => {
             dailyActiveUsers,
             topContent,
         ] = await Promise.all([
-            // Total registered users
+            // Total registered users (from actual User collection)
+            User.countDocuments(),
+            
+            // Total tracked app users (for analytics)
             AppUser.countDocuments(),
             
-            // New users in date range
-            AppUser.countDocuments({ createdAt: { $gte: startDate, $lte: endDate } }),
+            // New users in date range (from User collection with timestamps)
+            User.countDocuments({ createdAt: { $gte: startDate, $lte: endDate } }),
             
             // Active users in date range (unique userIds with events)
-            AnalyticsEvent.distinct('userId', { createdAt: { $gte: startDate, $lte: endDate } }).then(ids => ids.length),
+            AnalyticsEvent.distinct('userId', { createdAt: { $gte: startDate, $lte: endDate } }).then(ids => ids.filter(id => id).length),
             
             // Total sessions in range
             AnalyticsEvent.countDocuments({ 
@@ -320,11 +325,11 @@ router.get('/overview', async (req, res) => {
                 }
             ]),
             
-            // Subscription breakdown
-            AppUser.aggregate([
+            // Subscription breakdown (from actual User accounts)
+            User.aggregate([
                 {
                     $group: {
-                        _id: '$subscriptionStatus',
+                        _id: { $ifNull: ['$subscriptionStatus', 'free'] },
                         count: { $sum: 1 }
                     }
                 }
@@ -382,7 +387,8 @@ router.get('/overview', async (req, res) => {
         res.json({
             dateRange: { startDate, endDate, range },
             users: {
-                total: totalUsers,
+                total: totalUsers, // From actual User accounts
+                totalTracked: totalAppUsers, // App users being tracked for analytics
                 newInRange: newUsersInRange,
                 activeInRange: activeUsersInRange,
             },

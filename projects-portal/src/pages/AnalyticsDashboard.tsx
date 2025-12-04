@@ -14,6 +14,7 @@ interface OverviewData {
     };
     users: {
         total: number;
+        totalTracked: number;
         newInRange: number;
         activeInRange: number;
     };

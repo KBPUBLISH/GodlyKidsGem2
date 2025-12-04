@@ -186,7 +186,7 @@ const Header: React.FC<HeaderProps> = ({ isVisible, title = "GODLY KIDS" }) => {
 
               {/* Shop Button with Gold Coins Integrated */}
               <button
-                onClick={() => setIsCoinHistoryOpen(true)}
+                onClick={() => setIsShopOpen(true)}
                 className="bg-[#8B4513] hover:bg-[#A0522D] pl-3 pr-2 py-1 rounded-lg border-2 border-[#5c2e0b] shadow-[0_4px_0_#3e1f07] active:translate-y-[2px] active:shadow-none transition-all relative group flex items-center gap-2"
                 title="Shop - Click to view coins & shop"
               >

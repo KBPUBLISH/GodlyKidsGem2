@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ChevronLeft, Check, Plus, Trash2, UserCircle, Mic, X, ChevronDown, ChevronUp, BookOpen, Music, Sparkles, Users, Loader2, Lock, Crown } from 'lucide-react';
+import { ChevronLeft, Check, Plus, Trash2, UserCircle, Mic, X, ChevronDown, ChevronUp, BookOpen, Music, Sparkles, Users, Loader2, Lock, Crown, ClipboardList } from 'lucide-react';
 import WoodButton from '../components/ui/WoodButton';
 import { useUser } from '../context/UserContext';
 import { useAudio } from '../context/AudioContext';
@@ -49,7 +49,8 @@ const INCLUDED_ITEMS = [
   { icon: Music, label: 'Audio Learning Center', desc: 'Scripture songs & audiobooks' },
   { icon: Sparkles, label: 'Interactive Quizzes', desc: 'Test comprehension & earn rewards' },
   { icon: Mic, label: 'Read-Along Narration', desc: 'Multiple voices to choose from' },
-  { icon: Users, label: 'Kid Profile System', desc: 'Track each child\'s progress' },
+  { icon: Users, label: 'Family Profiles (Up to 5)', desc: 'Each child gets their own progress' },
+  { icon: ClipboardList, label: 'Report Cards', desc: 'Track learning & earning for each kid' },
 ];
 
 // PaywallStep Component
@@ -60,7 +61,8 @@ const PaywallStep: React.FC<{
   onSkip: () => void;
   isPurchasing?: boolean;
   error?: string | null;
-}> = ({ selectedPlan, setSelectedPlan, onSubscribe, onSkip, isPurchasing = false, error = null }) => {
+  kidsCount?: number; // Number of kids added during onboarding
+}> = ({ selectedPlan, setSelectedPlan, onSubscribe, onSkip, isPurchasing = false, error = null, kidsCount = 0 }) => {
   const [showIncluded, setShowIncluded] = useState(false);
   const carouselRef = useRef<HTMLDivElement>(null);
   const [currentBenefit, setCurrentBenefit] = useState(0);
@@ -82,6 +84,28 @@ const PaywallStep: React.FC<{
           <span className="text-[#3E1F07] font-extrabold text-base">🎁 3-DAY FREE TRIAL</span>
         </div>
       </div>
+
+      {/* Personalized Kids Message - Show if they added multiple kids */}
+      {kidsCount > 1 && (
+        <div className="bg-gradient-to-br from-[#3E1F07] to-[#5c2e0b] rounded-2xl p-4 mb-4 border-2 border-[#FFD700]/40 relative overflow-hidden">
+          <div className="absolute top-0 right-0 bg-[#FF6B6B] text-white text-[10px] font-bold px-2 py-1 rounded-bl-lg">
+            ACTION REQUIRED
+          </div>
+          <div className="flex items-center gap-3 mt-1">
+            <div className="w-12 h-12 bg-[#FFD700]/20 rounded-full flex items-center justify-center flex-shrink-0">
+              <Users className="w-6 h-6 text-[#FFD700]" />
+            </div>
+            <div>
+              <p className="text-white font-bold text-sm mb-1">
+                You added <span className="text-[#FFD700]">{kidsCount} kids</span>! 🎉
+              </p>
+              <p className="text-[#eecaa0] text-xs">
+                Free accounts get <span className="font-bold">1 profile</span>. Subscribe to unlock all {kidsCount} profiles with individual progress tracking & rewards.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Main Payment Card - UP FRONT */}
       <div className="bg-white/95 backdrop-blur-md rounded-2xl p-5 shadow-2xl border-2 border-[#FFD700] mb-5">
@@ -362,12 +386,21 @@ const OnboardingPage: React.FC = () => {
 
   const handleStep2Continue = () => {
     playClick();
-    setStep(3); // Go to voice selection step
+    // Voice selection (step 3) is disabled, go directly to paywall
+    // Skip paywall if already subscribed
+    if (subscribedDuringOnboarding || isPremium) {
+      playSuccess();
+      navigate('/home');
+    } else {
+      setStep(4); // Go to unlock/paywall step
+    }
   };
   
-  // Free tier allows only 1 kid account
+  // Free tier allows only 1 kid account, but let users add all kids during onboarding
+  // They'll see the paywall at the end showing how many kids they added
   const FREE_KID_LIMIT = 1;
-  const canAddMoreKids = isPremium || subscribedDuringOnboarding || kids.length < FREE_KID_LIMIT;
+  const MAX_KIDS = 5;
+  const canAddMoreKids = kids.length < MAX_KIDS; // Always allow up to 5 kids
   
   // Handle inline subscribe from family step
   const handleFamilyUnlockClick = () => {
@@ -706,7 +739,7 @@ const OnboardingPage: React.FC = () => {
 
               {/* Added Kids List */}
               <div className="space-y-3 mb-6">
-                  {kids.map((kid) => (
+                  {kids.map((kid, index) => (
                       <div key={kid.id} className="bg-white/10 backdrop-blur-md rounded-xl p-3 flex items-center justify-between border border-white/10 animate-in zoom-in">
                           <div className="flex items-center gap-3">
                               <div className="w-12 h-12 rounded-full bg-[#f3e5ab] overflow-hidden border-2 border-white/50 flex items-center justify-center p-1">
@@ -714,7 +747,15 @@ const OnboardingPage: React.FC = () => {
                               </div>
                               <div>
                                   <h3 className="text-white font-bold font-display text-lg">{kid.name}</h3>
-                                  <span className="text-[#eecaa0] text-xs font-bold">{kid.age} years old</span>
+                                  <div className="flex items-center gap-2">
+                                    <span className="text-[#eecaa0] text-xs font-bold">{kid.age} years old</span>
+                                    {/* Show FREE or PREMIUM badge */}
+                                    {index === 0 ? (
+                                      <span className="text-[8px] font-bold px-1.5 py-0.5 rounded bg-[#4CAF50] text-white">FREE</span>
+                                    ) : (
+                                      <span className="text-[8px] font-bold px-1.5 py-0.5 rounded bg-gradient-to-r from-[#FFD700] to-[#FFA500] text-[#5c2e0b]">PREMIUM</span>
+                                    )}
+                                  </div>
                               </div>
                           </div>
                           <button onClick={() => removeKid(kid.id)} className="w-8 h-8 bg-red-500/20 text-red-300 rounded-full flex items-center justify-center hover:bg-red-500 hover:text-white transition-colors">
@@ -724,11 +765,16 @@ const OnboardingPage: React.FC = () => {
                   ))}
               </div>
 
-              {/* Add Kid Form - Only show if can add more kids */}
+              {/* Add Kid Form - Always show if under max kids */}
               {canAddMoreKids ? (
                 <div className="bg-[#3E1F07] p-5 rounded-2xl border-2 border-[#5c2e0b] shadow-xl mb-6 relative overflow-hidden">
-                   <div className="absolute top-0 right-0 bg-[#FFD700] text-[#5c2e0b] text-[10px] font-bold px-2 py-1 rounded-bl-lg">
-                     {kids.length === 0 ? 'FREE PROFILE' : 'NEW PROFILE'}
+                   {/* Badge shows FREE for first kid, PREMIUM REQUIRED for additional */}
+                   <div className={`absolute top-0 right-0 text-[10px] font-bold px-2 py-1 rounded-bl-lg ${
+                     kids.length === 0 
+                       ? 'bg-[#4CAF50] text-white' 
+                       : 'bg-gradient-to-r from-[#FFD700] to-[#FFA500] text-[#5c2e0b]'
+                   }`}>
+                     {kids.length === 0 ? '✓ FREE PROFILE' : '👑 PREMIUM'}
                    </div>
                    
                    <div className="flex gap-4 mb-4">
@@ -769,74 +815,11 @@ const OnboardingPage: React.FC = () => {
                    </button>
                 </div>
               ) : (
-                /* Premium Upsell - Locked Additional Kids */
-                <div className="bg-gradient-to-br from-[#3E1F07] to-[#5c2e0b] p-5 rounded-2xl border-2 border-[#FFD700]/30 shadow-xl mb-6 relative overflow-hidden">
-                   {/* Premium Badge */}
-                   <div className="absolute top-0 right-0 bg-gradient-to-r from-[#FFD700] to-[#FFA500] text-[#5c2e0b] text-[10px] font-bold px-3 py-1 rounded-bl-lg flex items-center gap-1">
-                     <Crown size={10} /> PREMIUM
-                   </div>
-                   
-                   {/* Locked Avatar Slots */}
-                   <div className="flex justify-center gap-3 mb-4 mt-2">
-                     {[1, 2, 3].map((i) => (
-                       <div key={i} className="w-16 h-16 rounded-xl bg-black/30 border-2 border-dashed border-[#FFD700]/30 flex items-center justify-center">
-                         <Lock size={20} className="text-[#FFD700]/50" />
-                       </div>
-                     ))}
-                   </div>
-                   
-                   <h3 className="text-white font-display font-bold text-lg text-center mb-2">
-                     🏠 Unlock Family Accounts
-                   </h3>
-                   <p className="text-[#eecaa0] text-sm text-center mb-4">
-                     Add your whole family! Each child gets their own progress, rewards & personalized experience.
-                   </p>
-                   
-                   {/* Benefits */}
-                   <div className="space-y-2 mb-4">
-                     <div className="flex items-center gap-2 text-white/90 text-sm">
-                       <Check size={16} className="text-[#FFD700] flex-shrink-0" />
-                       <span>Up to <strong className="text-[#FFD700]">5 kid profiles</strong></span>
-                     </div>
-                     <div className="flex items-center gap-2 text-white/90 text-sm">
-                       <Check size={16} className="text-[#FFD700] flex-shrink-0" />
-                       <span>Individual progress tracking</span>
-                     </div>
-                     <div className="flex items-center gap-2 text-white/90 text-sm">
-                       <Check size={16} className="text-[#FFD700] flex-shrink-0" />
-                       <span>All premium content unlocked</span>
-                     </div>
-                   </div>
-                   
-                   {/* Error Display */}
-                   {familyPurchaseError && (
-                     <div className="bg-red-100 border border-red-300 text-red-700 px-3 py-2 rounded-lg mb-3 text-sm">
-                       {familyPurchaseError}
-                     </div>
-                   )}
-                   
-                   {/* Unlock Button */}
-                   <button 
-                      onClick={handleFamilyUnlockClick}
-                      disabled={isFamilyPurchasing}
-                      className="w-full bg-gradient-to-r from-[#FFD700] to-[#FFA500] hover:from-[#ffed4e] hover:to-[#FFD700] text-[#5c2e0b] font-display font-bold py-3 rounded-xl border-2 border-[#B8860B] flex items-center justify-center gap-2 transition-all shadow-lg disabled:opacity-50"
-                   >
-                      {isFamilyPurchasing ? (
-                        <>
-                          <Loader2 size={18} className="animate-spin" />
-                          Processing...
-                        </>
-                      ) : (
-                        <>
-                          <Crown size={18} />
-                          UNLOCK FAMILY PLAN
-                        </>
-                      )}
-                   </button>
-                   
-                   <p className="text-[#eecaa0]/70 text-[10px] text-center mt-2">
-                     Start with 3-day free trial • Cancel anytime
-                   </p>
+                /* Max Kids Reached */
+                <div className="bg-[#3E1F07]/50 p-4 rounded-xl border border-[#8B4513] text-center">
+                  <p className="text-[#eecaa0] text-sm">
+                    Maximum of {MAX_KIDS} profiles allowed
+                  </p>
                 </div>
               )}
 
@@ -1017,6 +1000,7 @@ const OnboardingPage: React.FC = () => {
               onSkip={() => navigate('/home')}
               isPurchasing={isPurchasing}
               error={purchaseError}
+              kidsCount={kids.length}
             />
         )}
 

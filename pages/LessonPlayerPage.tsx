@@ -91,12 +91,6 @@ const LessonPlayerPage: React.FC = () => {
     const [clonedVoices, setClonedVoices] = useState<ClonedVoice[]>([]);
     const [showVoiceDropdown, setShowVoiceDropdown] = useState(false);
     const voiceDropdownRef = useRef<HTMLDivElement>(null);
-    
-    // Text highlighting state for devotional
-    const [wordAlignment, setWordAlignment] = useState<{ words: Array<{ word: string; start: number; end: number }> } | null>(null);
-    const [currentWordIndex, setCurrentWordIndex] = useState<number>(-1);
-    const wordAlignmentRef = useRef<{ words: Array<{ word: string; start: number; end: number }> } | null>(null);
-
     const videoRef = useRef<HTMLVideoElement>(null);
     const audioRef = useRef<HTMLAudioElement | null>(null);
 
@@ -281,38 +275,9 @@ const LessonPlayerPage: React.FC = () => {
         }
     };
 
-    // Helper to find word index with gap handling
-    const findWordIndex = (currentTime: number, words: Array<{ start: number; end: number }>) => {
-        if (!words || words.length === 0) return -1;
-        
-        // First pass: look for exact match
-        for (let i = 0; i < words.length; i++) {
-            const w = words[i];
-            if (currentTime >= w.start && currentTime < w.end) {
-                return i;
-            }
-        }
-        
-        // Before first word
-        if (words.length > 0 && currentTime < words[0].start) {
-            return 0;
-        }
-        
-        // After last word
-        if (words.length > 0 && currentTime >= words[words.length - 1].end) {
-            return words.length - 1;
-        }
-        
-        // In a gap - find closest word
-        for (let i = 0; i < words.length - 1; i++) {
-            if (currentTime >= words[i].end && currentTime < words[i + 1].start) {
-                const gapMidpoint = (words[i].end + words[i + 1].start) / 2;
-                return currentTime >= gapMidpoint ? i + 1 : i;
-            }
-        }
-        
-        return words.length - 1;
-    };
+    // Audio queue for progressive loading
+    const audioQueueRef = useRef<string[]>([]);
+    const isLoadingRemainingRef = useRef(false);
 
     const generateDevotionalAudio = async () => {
         if (!lesson || !selectedVoiceId) return;
@@ -335,40 +300,51 @@ const LessonPlayerPage: React.FC = () => {
         const fullText = textParts.join('. ');
         if (!fullText.trim()) return;
 
+        // Split text into chunks for progressive loading
+        // First chunk: title + first 2 sentences (faster initial load)
+        // Second chunk: rest of content
+        const sentences = fullText.match(/[^.!?]+[.!?]+/g) || [fullText];
+        const firstChunkSize = Math.min(3, sentences.length); // First 3 sentences
+        const firstChunk = sentences.slice(0, firstChunkSize).join(' ').trim();
+        const remainingChunk = sentences.slice(firstChunkSize).join(' ').trim();
+
         setIsGeneratingAudio(true);
         setShowGeneratingPopup(true);
-        setCurrentWordIndex(-1);
-        setWordAlignment(null);
-        wordAlignmentRef.current = null;
+        audioQueueRef.current = [];
+        isLoadingRemainingRef.current = false;
         
         try {
-            const result = await ApiService.generateTTS(fullText, selectedVoiceId, lessonId);
-            if (result && result.audioUrl) {
-                setAudioUrl(result.audioUrl);
-                
-                // Process word alignment if available
-                if (result.alignment && result.alignment.words && !result.alignment.isEstimated) {
-                    // Filter out bracketed content like [emotion] tags
-                    const filteredWords = result.alignment.words.filter((w: any) => {
-                        const word = w.word || '';
-                        return !word.includes('[') && !word.includes(']') && !/^[.,!?;:'"-]+$/.test(word);
-                    }).map((w: any) => ({
-                        word: w.word.replace(/[.,!?;:'"-]+$/g, '').trim(),
-                        start: w.start,
-                        end: w.end
-                    }));
-                    
-                    const alignment = { words: filteredWords };
-                    setWordAlignment(alignment);
-                    wordAlignmentRef.current = alignment;
-                    console.log('📝 Devotional word alignment loaded:', filteredWords.length, 'words');
-                }
-                
+            // Generate first chunk quickly
+            console.log('🎤 Generating first chunk:', firstChunk.substring(0, 50) + '...');
+            const firstResult = await ApiService.generateTTS(firstChunk, selectedVoiceId, lessonId);
+            
+            if (firstResult && firstResult.audioUrl) {
+                setAudioUrl(firstResult.audioUrl);
                 setShowGeneratingPopup(false);
-                // Auto-play after generation
-                setTimeout(() => {
-                    playAudio(result.audioUrl, result.alignment);
-                }, 100);
+                
+                // Start playing first chunk immediately
+                playAudio(firstResult.audioUrl);
+                
+                // Load remaining content in background (if any)
+                if (remainingChunk.length > 0 && !isLoadingRemainingRef.current) {
+                    isLoadingRemainingRef.current = true;
+                    console.log('🎤 Loading remaining audio in background...');
+                    
+                    // Generate remaining audio in background
+                    ApiService.generateTTS(remainingChunk, selectedVoiceId, lessonId)
+                        .then((remainingResult) => {
+                            if (remainingResult && remainingResult.audioUrl) {
+                                audioQueueRef.current.push(remainingResult.audioUrl);
+                                console.log('✅ Remaining audio loaded and queued');
+                            }
+                        })
+                        .catch((err) => {
+                            console.warn('Failed to load remaining audio:', err);
+                        })
+                        .finally(() => {
+                            isLoadingRemainingRef.current = false;
+                        });
+                }
             } else {
                 console.error('Failed to generate audio');
                 setShowGeneratingPopup(false);
@@ -387,7 +363,7 @@ const LessonPlayerPage: React.FC = () => {
         }
     };
 
-    const playAudio = (url?: string, alignment?: any) => {
+    const playAudio = (url?: string) => {
         const audioUrlToPlay = url || audioUrl;
         if (!audioUrlToPlay) {
             // Generate audio if not available
@@ -411,26 +387,31 @@ const LessonPlayerPage: React.FC = () => {
         };
         audio.onpause = () => setIsAudioPlaying(false);
         audio.onended = () => {
+            // Check if there's more audio in the queue
+            if (audioQueueRef.current.length > 0) {
+                const nextAudioUrl = audioQueueRef.current.shift();
+                console.log('🔄 Playing next queued audio segment');
+                if (nextAudioUrl) {
+                    // Small delay for natural transition
+                    setTimeout(() => {
+                        playAudio(nextAudioUrl);
+                    }, 300);
+                    return;
+                }
+            }
+            // No more audio in queue
             setIsAudioPlaying(false);
-            setCurrentWordIndex(-1);
             audioRef.current = null;
         };
         audio.onerror = () => {
             console.error('Audio playback error');
             setIsAudioPlaying(false);
-            setCurrentWordIndex(-1);
             audioRef.current = null;
-        };
-        
-        // Set up word highlighting
-        let lastHighlightedIndex = -1;
-        audio.ontimeupdate = () => {
-            const currentAlignment = wordAlignmentRef.current;
-            if (currentAlignment && currentAlignment.words && currentAlignment.words.length > 0) {
-                const wordIndex = findWordIndex(audio.currentTime, currentAlignment.words);
-                if (wordIndex !== -1 && wordIndex !== lastHighlightedIndex) {
-                    lastHighlightedIndex = wordIndex;
-                    setCurrentWordIndex(wordIndex);
+            // Try next in queue if available
+            if (audioQueueRef.current.length > 0) {
+                const nextAudioUrl = audioQueueRef.current.shift();
+                if (nextAudioUrl) {
+                    playAudio(nextAudioUrl);
                 }
             }
         };
@@ -898,40 +879,23 @@ const LessonPlayerPage: React.FC = () => {
                                             </div>
                                         )}
 
-                                        {/* Content with Word Highlighting */}
+                                        {/* Content - Clean formatted text (no highlighting) */}
                                         {lesson.devotional.content && (
-                                            <div className="mb-6 relative z-10">
-                                                <div className="text-[#3E2723] text-xl md:text-2xl leading-relaxed font-medium font-serif">
-                                                    {(() => {
-                                                        // Clean content to remove emotional prompts like [happy] for display
-                                                        const cleanedContent = lesson.devotional.content
-                                                            .replace(/\[[^\]]+\][.,!?;:'"-]*/g, '') // Remove [brackets] AND trailing punctuation
-                                                            .replace(/\s+/g, ' ')
-                                                            .trim();
-                                                        const words = cleanedContent.split(/\s+/).filter(w => w.length > 0);
-                                                        
-                                                        // If audio is playing and we have word alignment, show highlighting
-                                                        if (isAudioPlaying && wordAlignment && wordAlignment.words.length > 0) {
-                                                            return words.map((word, idx) => (
-                                                                <span
-                                                                    key={idx}
-                                                                    className={`transition-all duration-150 ${
-                                                                        idx === currentWordIndex
-                                                                            ? 'bg-[#FFD700] text-[#3E2723] px-1 rounded font-bold'
-                                                                            : idx < currentWordIndex
-                                                                                ? 'text-[#5D4037]'
-                                                                                : 'text-[#3E2723]'
-                                                                    }`}
-                                                                >
-                                                                    {word}{' '}
-                                                                </span>
-                                                            ));
-                                                        }
-                                                        
-                                                        // Not playing - show plain text
-                                                        return cleanedContent;
-                                                    })()}
-                                                </div>
+                                            <div className="mb-8 relative z-10">
+                                                {/* Split content by paragraphs and render each with proper spacing */}
+                                                {lesson.devotional.content
+                                                    .replace(/\[[^\]]+\][.,!?;:'"-]*/g, '') // Remove [brackets] AND trailing punctuation
+                                                    .split(/\n\n+|\.\s+(?=[A-Z])/) // Split by double newlines or sentence boundaries
+                                                    .filter(p => p.trim().length > 0)
+                                                    .map((paragraph, idx) => (
+                                                        <p 
+                                                            key={idx} 
+                                                            className="text-[#3E2723] text-lg md:text-xl leading-loose font-medium font-serif mb-4 text-justify first-letter:text-2xl first-letter:font-bold first-letter:text-[#5D4037]"
+                                                        >
+                                                            {paragraph.trim().replace(/\s+/g, ' ')}
+                                                        </p>
+                                                    ))
+                                                }
                                             </div>
                                         )}
 

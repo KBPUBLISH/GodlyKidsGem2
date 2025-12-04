@@ -18,6 +18,12 @@ const pageSchema = new mongoose.Schema({
         type: Boolean,
         default: false
     },
+    // If true, coloring page only shows in end modal (not during reading)
+    // If false, coloring page shows inline within the book
+    coloringEndModalOnly: {
+        type: Boolean,
+        default: true // Default to end modal only
+    },
 
     // Page content - organized structure
     content: {

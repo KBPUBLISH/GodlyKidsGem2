@@ -428,9 +428,18 @@ const BookReaderPage: React.FC = () => {
                 // Filter pages for the book flow:
                 // - Include all non-coloring pages
                 // - Include coloring pages that are NOT marked as "end modal only"
-                const regularPages = data.filter((p: any) => 
-                    !p.isColoringPage || (p.isColoringPage && p.coloringEndModalOnly === false)
-                );
+                const regularPages = data.filter((p: any) => {
+                    // Debug logging for coloring pages
+                    if (p.isColoringPage) {
+                        console.log(`🎨 Processing coloring page ${p.pageNumber}:`, {
+                            isColoringPage: p.isColoringPage,
+                            coloringEndModalOnly: p.coloringEndModalOnly,
+                            showInline: p.coloringEndModalOnly === false
+                        });
+                    }
+                    
+                    return !p.isColoringPage || (p.isColoringPage && p.coloringEndModalOnly === false);
+                });
 
                 const theEndPage: Page = {
                     _id: 'the-end-page',

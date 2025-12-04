@@ -209,10 +209,25 @@ const PageEditor: React.FC = () => {
     };
     // Load existing page for editing
     const loadPage = (page: any) => {
+        console.log('📄 Loading page data:', page);
         setEditingPageId(page._id);
         setPageNumber(page.pageNumber);
-        setIsColoringPage(page.isColoringPage || false);
-        setColoringEndModalOnly(page.coloringEndModalOnly !== false); // Default true if not set
+        
+        // Load coloring page flags
+        const isColoring = page.isColoringPage === true || page.isColoringPage === 'true';
+        console.log('📄 Loading coloring state:', { 
+            fromPage: page.isColoringPage, 
+            parsed: isColoring 
+        });
+        setIsColoringPage(isColoring);
+        
+        // Only set modal-only flag if it exists, otherwise default to true
+        const endModalOnly = page.coloringEndModalOnly !== false;
+        console.log('📄 Loading end modal state:', { 
+            fromPage: page.coloringEndModalOnly, 
+            parsed: endModalOnly 
+        });
+        setColoringEndModalOnly(endModalOnly);
 
         // Get background type from legacy field or new structure
         const bgType = page.backgroundType || page.files?.background?.type || 'image';

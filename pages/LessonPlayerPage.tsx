@@ -91,6 +91,11 @@ const LessonPlayerPage: React.FC = () => {
     const [clonedVoices, setClonedVoices] = useState<ClonedVoice[]>([]);
     const [showVoiceDropdown, setShowVoiceDropdown] = useState(false);
     const voiceDropdownRef = useRef<HTMLDivElement>(null);
+    
+    // Text highlighting state for devotional
+    const [wordAlignment, setWordAlignment] = useState<{ words: Array<{ word: string; start: number; end: number }> } | null>(null);
+    const [currentWordIndex, setCurrentWordIndex] = useState<number>(-1);
+    const wordAlignmentRef = useRef<{ words: Array<{ word: string; start: number; end: number }> } | null>(null);
 
     const videoRef = useRef<HTMLVideoElement>(null);
     const audioRef = useRef<HTMLAudioElement | null>(null);
@@ -276,6 +281,39 @@ const LessonPlayerPage: React.FC = () => {
         }
     };
 
+    // Helper to find word index with gap handling
+    const findWordIndex = (currentTime: number, words: Array<{ start: number; end: number }>) => {
+        if (!words || words.length === 0) return -1;
+        
+        // First pass: look for exact match
+        for (let i = 0; i < words.length; i++) {
+            const w = words[i];
+            if (currentTime >= w.start && currentTime < w.end) {
+                return i;
+            }
+        }
+        
+        // Before first word
+        if (words.length > 0 && currentTime < words[0].start) {
+            return 0;
+        }
+        
+        // After last word
+        if (words.length > 0 && currentTime >= words[words.length - 1].end) {
+            return words.length - 1;
+        }
+        
+        // In a gap - find closest word
+        for (let i = 0; i < words.length - 1; i++) {
+            if (currentTime >= words[i].end && currentTime < words[i + 1].start) {
+                const gapMidpoint = (words[i].end + words[i + 1].start) / 2;
+                return currentTime >= gapMidpoint ? i + 1 : i;
+            }
+        }
+        
+        return words.length - 1;
+    };
+
     const generateDevotionalAudio = async () => {
         if (!lesson || !selectedVoiceId) return;
 
@@ -299,14 +337,37 @@ const LessonPlayerPage: React.FC = () => {
 
         setIsGeneratingAudio(true);
         setShowGeneratingPopup(true);
+        setCurrentWordIndex(-1);
+        setWordAlignment(null);
+        wordAlignmentRef.current = null;
+        
         try {
             const result = await ApiService.generateTTS(fullText, selectedVoiceId, lessonId);
             if (result && result.audioUrl) {
                 setAudioUrl(result.audioUrl);
+                
+                // Process word alignment if available
+                if (result.alignment && result.alignment.words && !result.alignment.isEstimated) {
+                    // Filter out bracketed content like [emotion] tags
+                    const filteredWords = result.alignment.words.filter((w: any) => {
+                        const word = w.word || '';
+                        return !word.includes('[') && !word.includes(']') && !/^[.,!?;:'"-]+$/.test(word);
+                    }).map((w: any) => ({
+                        word: w.word.replace(/[.,!?;:'"-]+$/g, '').trim(),
+                        start: w.start,
+                        end: w.end
+                    }));
+                    
+                    const alignment = { words: filteredWords };
+                    setWordAlignment(alignment);
+                    wordAlignmentRef.current = alignment;
+                    console.log('📝 Devotional word alignment loaded:', filteredWords.length, 'words');
+                }
+                
                 setShowGeneratingPopup(false);
                 // Auto-play after generation
                 setTimeout(() => {
-                    playAudio(result.audioUrl);
+                    playAudio(result.audioUrl, result.alignment);
                 }, 100);
             } else {
                 console.error('Failed to generate audio');
@@ -326,7 +387,7 @@ const LessonPlayerPage: React.FC = () => {
         }
     };
 
-    const playAudio = (url?: string) => {
+    const playAudio = (url?: string, alignment?: any) => {
         const audioUrlToPlay = url || audioUrl;
         if (!audioUrlToPlay) {
             // Generate audio if not available
@@ -344,16 +405,34 @@ const LessonPlayerPage: React.FC = () => {
         const audio = new Audio(audioUrlToPlay);
         audioRef.current = audio;
 
-        audio.onplay = () => setIsAudioPlaying(true);
+        audio.onplay = () => {
+            setIsAudioPlaying(true);
+            setShowGeneratingPopup(false);
+        };
         audio.onpause = () => setIsAudioPlaying(false);
         audio.onended = () => {
             setIsAudioPlaying(false);
+            setCurrentWordIndex(-1);
             audioRef.current = null;
         };
         audio.onerror = () => {
             console.error('Audio playback error');
             setIsAudioPlaying(false);
+            setCurrentWordIndex(-1);
             audioRef.current = null;
+        };
+        
+        // Set up word highlighting
+        let lastHighlightedIndex = -1;
+        audio.ontimeupdate = () => {
+            const currentAlignment = wordAlignmentRef.current;
+            if (currentAlignment && currentAlignment.words && currentAlignment.words.length > 0) {
+                const wordIndex = findWordIndex(audio.currentTime, currentAlignment.words);
+                if (wordIndex !== -1 && wordIndex !== lastHighlightedIndex) {
+                    lastHighlightedIndex = wordIndex;
+                    setCurrentWordIndex(wordIndex);
+                }
+            }
         };
 
         audio.play().catch(error => {
@@ -476,10 +555,18 @@ const LessonPlayerPage: React.FC = () => {
 
     return (
         <>
-            {/* Voice Generation Loading Popup */}
+            {/* Voice Generation Loading Popup - Dismissible */}
             {showGeneratingPopup && (
                 <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/70 backdrop-blur-sm">
-                    <div className="bg-[#5D4037] rounded-2xl p-8 mx-4 max-w-sm w-full shadow-2xl border-4 border-[#3E2723] text-center">
+                    <div className="bg-[#5D4037] rounded-2xl p-8 mx-4 max-w-sm w-full shadow-2xl border-4 border-[#3E2723] text-center relative">
+                        {/* Close Button */}
+                        <button
+                            onClick={() => setShowGeneratingPopup(false)}
+                            className="absolute top-3 right-3 text-white/60 hover:text-white p-1 rounded-full hover:bg-white/10 transition-colors"
+                        >
+                            <X className="w-5 h-5" />
+                        </button>
+                        
                         {/* Animated Icon */}
                         <div className="mb-6 relative">
                             <div className="w-20 h-20 mx-auto bg-[#3E2723] rounded-full flex items-center justify-center">
@@ -495,13 +582,13 @@ const LessonPlayerPage: React.FC = () => {
                         
                         {/* Message */}
                         <p className="text-white/90 text-sm leading-relaxed mb-4">
-                            The voice is being generated in the background. This may take a minute or two.
+                            This will just take a minute, and then after that, it's clear sailing! ⛵
                         </p>
                         
                         {/* Sub-message */}
                         <div className="bg-[#3E2723] rounded-lg p-3 border border-[#FFD700]/20">
                             <p className="text-[#FFD700]/80 text-xs">
-                                ✨ It will start playing automatically when ready!
+                                ✨ Feel free to keep reading - it will start automatically when ready!
                             </p>
                         </div>
                         
@@ -811,12 +898,39 @@ const LessonPlayerPage: React.FC = () => {
                                             </div>
                                         )}
 
-                                        {/* Content */}
+                                        {/* Content with Word Highlighting */}
                                         {lesson.devotional.content && (
                                             <div className="mb-6 relative z-10">
-                                                <div className="text-[#3E2723] text-xl md:text-2xl leading-relaxed whitespace-pre-line font-medium font-serif">
-                                                    {/* Clean content to remove emotional prompts like [happy] for display */}
-                                                    {lesson.devotional.content.replace(/\[.*?\]/g, '')}
+                                                <div className="text-[#3E2723] text-xl md:text-2xl leading-relaxed font-medium font-serif">
+                                                    {(() => {
+                                                        // Clean content to remove emotional prompts like [happy] for display
+                                                        const cleanedContent = lesson.devotional.content
+                                                            .replace(/\[[^\]]+\][.,!?;:'"-]*/g, '') // Remove [brackets] AND trailing punctuation
+                                                            .replace(/\s+/g, ' ')
+                                                            .trim();
+                                                        const words = cleanedContent.split(/\s+/).filter(w => w.length > 0);
+                                                        
+                                                        // If audio is playing and we have word alignment, show highlighting
+                                                        if (isAudioPlaying && wordAlignment && wordAlignment.words.length > 0) {
+                                                            return words.map((word, idx) => (
+                                                                <span
+                                                                    key={idx}
+                                                                    className={`transition-all duration-150 ${
+                                                                        idx === currentWordIndex
+                                                                            ? 'bg-[#FFD700] text-[#3E2723] px-1 rounded font-bold'
+                                                                            : idx < currentWordIndex
+                                                                                ? 'text-[#5D4037]'
+                                                                                : 'text-[#3E2723]'
+                                                                    }`}
+                                                                >
+                                                                    {word}{' '}
+                                                                </span>
+                                                            ));
+                                                        }
+                                                        
+                                                        // Not playing - show plain text
+                                                        return cleanedContent;
+                                                    })()}
                                                 </div>
                                             </div>
                                         )}

@@ -126,6 +126,15 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     const workoutAudioRef = useRef<HTMLAudioElement | null>(null);
     const playlistAudioRef = useRef<HTMLAudioElement | null>(null);
     const audioContextRef = useRef<AudioContext | null>(null);
+    
+    // GainNodes for volume control (works in iOS WKWebView where volume property doesn't)
+    const bgGainRef = useRef<GainNode | null>(null);
+    const gameGainRef = useRef<GainNode | null>(null);
+    const workoutGainRef = useRef<GainNode | null>(null);
+    const playlistGainRef = useRef<GainNode | null>(null);
+    
+    // Track if audio elements are connected to Web Audio API
+    const audioConnectedRef = useRef<Set<HTMLAudioElement>>(new Set());
 
     // Initialize Audio Context lazily
     const getAudioContext = useCallback(() => {
@@ -134,6 +143,44 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         }
         return audioContextRef.current;
     }, []);
+    
+    // Connect an audio element to Web Audio API with gain control
+    // This allows volume control in iOS WKWebView where volume property is read-only
+    const connectAudioToGain = useCallback((audio: HTMLAudioElement, gainRef: React.MutableRefObject<GainNode | null>, volume: number) => {
+        // Only connect once per audio element
+        if (audioConnectedRef.current.has(audio)) {
+            // Just update the gain value
+            if (gainRef.current) {
+                gainRef.current.gain.value = volume;
+            }
+            return;
+        }
+        
+        try {
+            const ctx = getAudioContext();
+            
+            // Create media element source
+            const source = ctx.createMediaElementSource(audio);
+            
+            // Create gain node
+            const gainNode = ctx.createGain();
+            gainNode.gain.value = volume;
+            gainRef.current = gainNode;
+            
+            // Connect: source -> gain -> destination
+            source.connect(gainNode);
+            gainNode.connect(ctx.destination);
+            
+            // Mark as connected
+            audioConnectedRef.current.add(audio);
+            
+            console.log('🎵 Audio connected to GainNode with volume:', volume);
+        } catch (e) {
+            console.warn('⚠️ Could not connect audio to Web Audio API:', e);
+            // Fallback to regular volume property
+            audio.volume = volume;
+        }
+    }, [getAudioContext]);
 
     // --- Initialization of Background Audio ---
     useEffect(() => {
@@ -228,12 +275,21 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         }
 
         // Helper to play one and pause others, applying current volume
-        const playSelected = async (toPlay: HTMLAudioElement, others: HTMLAudioElement[], name: string, volumeMultiplier: number) => {
+        const playSelected = async (
+            toPlay: HTMLAudioElement, 
+            others: HTMLAudioElement[], 
+            name: string, 
+            volumeMultiplier: number,
+            gainRef: React.MutableRefObject<GainNode | null>
+        ) => {
             others.forEach(a => a.pause());
             
-            // Apply current volume before playing
+            // Connect to GainNode for volume control (works in iOS WKWebView)
+            connectAudioToGain(toPlay, gainRef, musicVolume * volumeMultiplier);
+            
+            // Also set volume property as fallback
             toPlay.volume = musicVolume * volumeMultiplier;
-            console.log(`🎵 ${name} volume applied:`, toPlay.volume);
+            console.log(`🎵 ${name} volume applied:`, musicVolume * volumeMultiplier);
             
             if (toPlay.paused) {
                 console.log(`🎵 Attempting to play ${name}...`, {
@@ -245,6 +301,10 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
                 });
                 
                 try {
+                    // Resume AudioContext if suspended (required for iOS)
+                    if (audioContextRef.current?.state === 'suspended') {
+                        await audioContextRef.current.resume();
+                    }
                     await toPlay.play();
                     console.log(`🎵 ${name} music started successfully`);
                 } catch (e: any) {
@@ -260,11 +320,11 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         };
 
         if (musicMode === 'bg') {
-            playSelected(bg, [game, workout], 'BG', 0.5);
+            playSelected(bg, [game, workout], 'BG', 0.5, bgGainRef);
         } else if (musicMode === 'game') {
-            playSelected(game, [bg, workout], 'Game', 0.7);
+            playSelected(game, [bg, workout], 'Game', 0.7, gameGainRef);
         } else if (musicMode === 'workout') {
-            playSelected(workout, [bg, game], 'Workout', 0.8);
+            playSelected(workout, [bg, game], 'Workout', 0.8, workoutGainRef);
         }
 
     }, [musicEnabled, musicForcePaused, musicMode, musicVolume]);
@@ -432,6 +492,14 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     useEffect(() => {
         if (playlistAudioRef.current) {
             if (isPlaying) {
+                // Connect to GainNode for volume control in iOS
+                connectAudioToGain(playlistAudioRef.current, playlistGainRef, musicVolume);
+                
+                // Resume AudioContext if suspended
+                if (audioContextRef.current?.state === 'suspended') {
+                    audioContextRef.current.resume();
+                }
+                
                 playlistAudioRef.current.play().catch(e => {
                     // Silently ignore expected autoplay/abort errors
                     if (e.name !== 'NotAllowedError' && e.name !== 'AbortError' && e.name !== 'NotSupportedError') {
@@ -442,7 +510,7 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
                 playlistAudioRef.current.pause();
             }
         }
-    }, [isPlaying]);
+    }, [isPlaying, connectAudioToGain, musicVolume]);
 
     const playPlaylist = useCallback((playlist: Playlist, startIndex: number = 0) => {
         setCurrentPlaylist(playlist);
@@ -565,24 +633,27 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         setMusicVolumeState(clampedVolume);
         localStorage.setItem('godly_kids_music_volume', clampedVolume.toString());
         
-        // Apply volume directly to all background audio elements
-        // Use reasonable base levels so volume slider has meaningful range
-        if (bgAudioRef.current) {
-            bgAudioRef.current.volume = clampedVolume * 0.5; // BG at 50% max
-            console.log('🎵 BG volume set to:', bgAudioRef.current.volume);
-        }
-        if (gameAudioRef.current) {
-            gameAudioRef.current.volume = clampedVolume * 0.7; // Game at 70% max
-            console.log('🎵 Game volume set to:', gameAudioRef.current.volume);
-        }
-        if (workoutAudioRef.current) {
-            workoutAudioRef.current.volume = clampedVolume * 0.8; // Workout at 80% max
-            console.log('🎵 Workout volume set to:', workoutAudioRef.current.volume);
-        }
-        if (playlistAudioRef.current) {
-            playlistAudioRef.current.volume = clampedVolume; // Playlist at full user volume
-            console.log('🎵 Playlist volume set to:', playlistAudioRef.current.volume);
-        }
+        // Apply volume through GainNodes (works in iOS WKWebView)
+        // If GainNode exists, use it; otherwise fall back to volume property
+        const applyVolume = (gainRef: React.MutableRefObject<GainNode | null>, audioRef: React.MutableRefObject<HTMLAudioElement | null>, multiplier: number, name: string) => {
+            const targetVolume = clampedVolume * multiplier;
+            
+            if (gainRef.current) {
+                // Use GainNode (works in iOS)
+                gainRef.current.gain.value = targetVolume;
+                console.log(`🎵 ${name} GainNode volume set to:`, targetVolume);
+            } else if (audioRef.current) {
+                // Fallback to volume property (works in browsers, not iOS WKWebView)
+                audioRef.current.volume = targetVolume;
+                console.log(`🎵 ${name} volume property set to:`, targetVolume);
+            }
+        };
+        
+        applyVolume(bgGainRef, bgAudioRef, 0.5, 'BG');
+        applyVolume(gameGainRef, gameAudioRef, 0.7, 'Game');
+        applyVolume(workoutGainRef, workoutAudioRef, 0.8, 'Workout');
+        applyVolume(playlistGainRef, playlistAudioRef, 1.0, 'Playlist');
+        
         console.log('🎵 Volume set to:', clampedVolume);
     }, []);
 

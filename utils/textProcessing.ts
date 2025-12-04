@@ -98,11 +98,15 @@ export function adjustWordIndicesForRemovedCues(
 
 /**
  * Remove emotional cues from text for display
+ * Removes [bracketed content] AND any punctuation immediately following (e.g., [emotion], or [emotion].)
  * @param text - Text with emotional cues
  * @returns Text without emotional cues
  */
 export function removeEmotionalCues(text: string): string {
-    return text.replace(/\[([^\]]+)\]/g, '').replace(/\s+/g, ' ').trim();
+    return text
+        .replace(/\[([^\]]+)\][.,!?;:'"-]*/g, '')  // Remove [brackets] AND trailing punctuation
+        .replace(/\s+/g, ' ')  // Normalize whitespace
+        .trim();
 }
 
 

@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
-import { ChevronLeft, ChevronRight, X, Play, Pause, Volume2, Mic, Check, Music, Home, Heart, Star, RotateCcw, Lock, Sparkles, HelpCircle, Share2, Copy, Smartphone, Grid3X3 } from 'lucide-react';
+import { ChevronLeft, ChevronRight, X, Play, Pause, Volume2, Mic, Check, Music, Home, Heart, Star, RotateCcw, Lock, Sparkles, HelpCircle, Share2, Copy, Smartphone, Grid3X3, Loader2 } from 'lucide-react';
 import { ApiService } from '../services/apiService';
 import { voiceCloningService, ClonedVoice } from '../services/voiceCloningService';
 import VoiceCloningModal from '../components/features/VoiceCloningModal';
@@ -96,6 +96,7 @@ const BookReaderPage: React.FC = () => {
     const [currentAudio, setCurrentAudio] = useState<HTMLAudioElement | null>(null);
     const [activeTextBoxIndex, setActiveTextBoxIndex] = useState<number | null>(null);
     const [loadingAudio, setLoadingAudio] = useState(false);
+    const [showLoadingPopup, setShowLoadingPopup] = useState(false); // Dismissible loading popup
     const [voices, setVoices] = useState<any[]>([]);
     const [clonedVoices, setClonedVoices] = useState<ClonedVoice[]>([]);
     const [selectedVoiceId, setSelectedVoiceId] = useState<string>('21m00Tcm4TlvDq8ikWAM'); // Default Rachel
@@ -913,6 +914,7 @@ const BookReaderPage: React.FC = () => {
         // Otherwise, generate/fetch new audio
         setActiveTextBoxIndex(index);
         setLoadingAudio(true);
+        setShowLoadingPopup(true); // Show dismissible loading popup
         setCurrentWordIndex(-1);
         setWordAlignment(null);
         wordAlignmentRef.current = null;
@@ -926,6 +928,7 @@ const BookReaderPage: React.FC = () => {
             
             if (result) {
                 console.log(`🎵 Using preloaded audio for page ${actualPageIndex + 1}, text box ${index + 1}`);
+                setShowLoadingPopup(false); // Hide popup immediately if cached
             } else {
                 // Not in cache, generate now
                 const processedText = processTextWithEmotionalCues(text);
@@ -952,29 +955,52 @@ const BookReaderPage: React.FC = () => {
                     // Use EXACT ElevenLabs timestamps if available
                     if (alignment && alignment.words && alignment.words.length > 0 && !alignment.isEstimated) {
                         // Filter out bracketed words but keep EXACT timestamps
+                        // Also normalize words to match displayed text (remove punctuation that gets stripped)
                         const filteredWords: Array<{ word: string; start: number; end: number }> = [];
                         let insideBracket = false;
+                        let skipNextPunctuation = false; // Skip punctuation that follows a bracket
                         
                         for (const wordData of alignment.words) {
                             const word = wordData.word || '';
                             
-                            // Track bracket sequences (multi-word sound effects)
-                            if (word.startsWith('[')) {
+                            // Skip standalone punctuation that follows bracketed content
+                            // ElevenLabs might return "," or "." as separate words after [emotion]
+                            if (skipNextPunctuation && /^[.,!?;:'"-]+$/.test(word)) {
+                                skipNextPunctuation = false;
+                                continue;
+                            }
+                            skipNextPunctuation = false;
+                            
+                            // Track bracket sequences (multi-word sound effects like "[gentle wind breeze]")
+                            if (word.includes('[')) {
                                 insideBracket = true;
                             }
                             
-                            // Skip bracketed content
-                            if (insideBracket || word.match(/^\[.*\]$/)) {
-                                if (word.endsWith(']')) {
+                            // Check if this word contains bracketed content
+                            const isBracketedWord = /\[.*\]/.test(word);
+                            
+                            // Skip if we're inside a bracket sequence OR this word contains brackets
+                            if (insideBracket || isBracketedWord) {
+                                if (word.includes(']')) {
                                     insideBracket = false;
+                                    // Flag to skip following punctuation (e.g., comma after [dramatically],)
+                                    skipNextPunctuation = true;
                                 }
                                 continue;
                             }
                             
-                            // Clean any partial brackets
-                            const cleanedWord = word.replace(/\[([^\]]*)\]?/g, '').replace(/\]$/g, '').trim();
-                            if (cleanedWord.length > 0) {
-                                // Use EXACT timestamps from ElevenLabs - no modification
+                            // Clean the word:
+                            // 1. Remove any bracket expressions
+                            // 2. Remove orphan brackets
+                            // 3. Strip trailing punctuation to match displayed text
+                            let cleanedWord = word
+                                .replace(/\[[^\]]*\]/g, '')  // Remove [bracketed content]
+                                .replace(/[\[\]]/g, '')       // Remove orphan brackets
+                                .replace(/[.,!?;:'"-]+$/g, '') // Strip TRAILING punctuation
+                                .trim();
+                            
+                            // Skip words that are empty or only punctuation after cleaning
+                            if (cleanedWord.length > 0 && !/^[.,!?;:'"-]+$/.test(cleanedWord)) {
                                 filteredWords.push({
                                     word: cleanedWord,
                                     start: wordData.start,
@@ -1040,7 +1066,7 @@ const BookReaderPage: React.FC = () => {
                 const findWordIndex = (currentTime: number, words: Array<{ start: number; end: number; word?: string }>) => {
                     if (!words || words.length === 0) return -1;
                     
-                    // First pass: look for exact match
+                    // First pass: look for exact match (current time is within word boundaries)
                     for (let i = 0; i < words.length; i++) {
                         const w = words[i];
                         if (currentTime >= w.start && currentTime < w.end) {
@@ -1048,28 +1074,34 @@ const BookReaderPage: React.FC = () => {
                         }
                     }
                     
-                    // Second pass: we're in a gap, find the right word
-                    // Either we're before the first word, in a gap between words, or after the last word
+                    // Second pass: we're in a gap or edge case
+                    // Either before first word, in a gap between words, or after last word
                     
-                    // Before first word
-                    if (currentTime < words[0].start) {
-                        return 0; // Show first word
+                    // Before first word - show first word
+                    if (words.length > 0 && currentTime < words[0].start) {
+                        return 0;
                     }
                     
-                    // After last word
-                    if (currentTime >= words[words.length - 1].end) {
-                        return words.length - 1; // Stay on last word
+                    // After last word - stay on last word
+                    if (words.length > 0 && currentTime >= words[words.length - 1].end) {
+                        return words.length - 1;
                     }
                     
-                    // In a gap between words - find which gap
+                    // In a gap between words - find the NEXT word to move forward
+                    // This handles cases where bracketed content creates timing gaps
                     for (let i = 0; i < words.length - 1; i++) {
                         const currentWord = words[i];
                         const nextWord = words[i + 1];
                         
                         // If we're between this word's end and next word's start
                         if (currentTime >= currentWord.end && currentTime < nextWord.start) {
-                            // We're in a gap - stay on current word (the one that just finished)
-                            return i;
+                            // Gap handling: if we're closer to the next word's start, show next word
+                            // This prevents getting stuck on a word when there's a long gap (e.g., sound effect)
+                            const gapMidpoint = (currentWord.end + nextWord.start) / 2;
+                            if (currentTime >= gapMidpoint) {
+                                return i + 1; // Move to next word
+                            }
+                            return i; // Stay on current word
                         }
                     }
                     
@@ -1280,7 +1312,10 @@ const BookReaderPage: React.FC = () => {
                     }
                 };
 
-                audio.onplay = () => setPlaying(true);
+                audio.onplay = () => {
+                    setPlaying(true);
+                    setShowLoadingPopup(false); // Hide loading popup when audio starts
+                };
                 audio.onpause = () => setPlaying(false);
 
                 setCurrentAudio(audio);
@@ -1294,6 +1329,7 @@ const BookReaderPage: React.FC = () => {
             console.error('Failed to play audio:', error);
             alert('Failed to play audio. The TTS service might be unavailable.');
             setActiveTextBoxIndex(null);
+            setShowLoadingPopup(false);
         } finally {
             setLoadingAudio(false);
         }
@@ -1365,6 +1401,53 @@ const BookReaderPage: React.FC = () => {
                 e.stopPropagation();
             }}
         >
+            {/* Dismissible Loading Popup for TTS Generation */}
+            {showLoadingPopup && loadingAudio && (
+                <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/60 backdrop-blur-sm">
+                    <div className="bg-[#5D4037] rounded-2xl p-6 mx-4 max-w-sm w-full shadow-2xl border-4 border-[#3E2723] text-center relative">
+                        {/* Close Button */}
+                        <button
+                            onClick={() => setShowLoadingPopup(false)}
+                            className="absolute top-3 right-3 text-white/60 hover:text-white p-1 rounded-full hover:bg-white/10 transition-colors"
+                        >
+                            <X className="w-5 h-5" />
+                        </button>
+                        
+                        {/* Animated Icon */}
+                        <div className="mb-4 relative">
+                            <div className="w-16 h-16 mx-auto bg-[#3E2723] rounded-full flex items-center justify-center">
+                                <Loader2 className="w-8 h-8 text-[#FFD700] animate-spin" />
+                            </div>
+                            <div className="absolute inset-0 w-16 h-16 mx-auto rounded-full border-4 border-[#FFD700]/30 animate-ping" />
+                        </div>
+                        
+                        {/* Title */}
+                        <h3 className="text-[#FFD700] text-lg font-bold font-display mb-2">
+                            Preparing Your Story
+                        </h3>
+                        
+                        {/* Message */}
+                        <p className="text-white/90 text-sm leading-relaxed mb-3">
+                            This will just take a minute, and then after that, it's clear sailing! ⛵
+                        </p>
+                        
+                        {/* Sub-message */}
+                        <div className="bg-[#3E2723] rounded-lg p-2 border border-[#FFD700]/20">
+                            <p className="text-[#FFD700]/80 text-xs">
+                                ✨ Feel free to keep reading - it will start automatically!
+                            </p>
+                        </div>
+                        
+                        {/* Progress dots animation */}
+                        <div className="flex justify-center gap-2 mt-4">
+                            <div className="w-2 h-2 bg-[#FFD700] rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
+                            <div className="w-2 h-2 bg-[#FFD700] rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
+                            <div className="w-2 h-2 bg-[#FFD700] rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
+                        </div>
+                    </div>
+                </div>
+            )}
+
             {/* Top Toolbar - Clean and Compact */}
             <div className="absolute top-0 left-0 right-0 h-14 flex items-center justify-between px-3 z-50 pointer-events-none">
                 {/* Back Button */}

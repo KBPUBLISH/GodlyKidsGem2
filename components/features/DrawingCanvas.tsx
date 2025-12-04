@@ -76,7 +76,7 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = ({ prompt, backgroundImageUr
         return () => window.removeEventListener('resize', resizeCanvas);
     }, []);
 
-    // Load background image when URL changes or canvas is ready
+        // Load background image when URL changes or canvas is ready
     useEffect(() => {
         if (!canvasReady || !backgroundImageUrl) {
             console.log('🎨 DrawingCanvas: Waiting for canvas or no image URL', { canvasReady, backgroundImageUrl });
@@ -92,7 +92,8 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = ({ prompt, backgroundImageUr
         console.log('🎨 DrawingCanvas: Loading background image:', backgroundImageUrl);
 
         const img = new Image();
-        img.crossOrigin = "anonymous";
+        // Don't use crossOrigin for GCS images - it triggers CORS requirements
+        // The canvas will be "tainted" but that's fine for coloring (no export needed)
         
         img.onload = () => {
             console.log('🎨 DrawingCanvas: Image loaded successfully!', { width: img.width, height: img.height });
@@ -109,8 +110,12 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = ({ prompt, backgroundImageUr
             const x = (canvasWidth / 2) - (img.width / 2) * scale;
             const y = (canvasHeight / 2) - (img.height / 2) * scale;
 
-            ctx.drawImage(img, x, y, img.width * scale, img.height * scale);
-            setImageLoaded(true);
+            try {
+                ctx.drawImage(img, x, y, img.width * scale, img.height * scale);
+                setImageLoaded(true);
+            } catch (e) {
+                console.error('🎨 DrawingCanvas: Error drawing image to canvas (likely CORS):', e);
+            }
         };
 
         img.onerror = (err) => {

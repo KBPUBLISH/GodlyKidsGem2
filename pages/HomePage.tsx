@@ -12,7 +12,17 @@ import StrengthGameModal from '../components/features/StrengthGameModal';
 import PrayerGameModal from '../components/features/PrayerGameModal';
 import { Key, Brain, Dumbbell, Heart, Video, Lock, Check, Play, CheckCircle } from 'lucide-react';
 import { ApiService } from '../services/apiService';
-import { isCompleted, isLocked, getWeekDays } from '../services/lessonService';
+import { 
+  isCompleted, 
+  isLocked, 
+  getWeekDays, 
+  getTodayIndex, 
+  getSelectedDay, 
+  setSelectedDay, 
+  getLessonsForDay,
+  isDayComplete 
+} from '../services/lessonService';
+import WeeklyLessonTracker from '../components/features/WeeklyLessonTracker';
 import { readingProgressService } from '../services/readingProgressService';
 import { playHistoryService } from '../services/playHistoryService';
 import { bookCompletionService } from '../services/bookCompletionService';
@@ -51,6 +61,8 @@ const HomePage: React.FC = () => {
   const [lessons, setLessons] = useState<any[]>([]);
   const [lessonsLoading, setLessonsLoading] = useState(true);
   const [weekLessons, setWeekLessons] = useState<Map<string, any>>(new Map());
+  const [selectedDayIndex, setSelectedDayIndex] = useState<number>(getSelectedDay());
+  const todayIndex = getTodayIndex();
   
   // Explore categories state
   const [exploreCategories, setExploreCategories] = useState<any[]>([]);
@@ -470,100 +482,137 @@ const HomePage: React.FC = () => {
 
       <div className="px-4 pt-28 space-y-2 pb-52">
 
-        {/* Daily Lessons Section - MOVED TO TOP */}
+        {/* Weekly Progress Tracker + Daily Lessons Section */}
         <section className="pb-2">
-          <SectionTitle title="Daily Lessons" />
+          {/* Weekly Tracker - Compact Mon-Sat progress */}
+          <WeeklyLessonTracker
+            selectedDay={selectedDayIndex}
+            onDaySelect={(dayIndex) => {
+              setSelectedDayIndex(dayIndex);
+              setSelectedDay(dayIndex);
+            }}
+            dayCompletions={[0, 1, 2, 3, 4].map(i => isDayComplete(lessons, i))}
+            todayIndex={todayIndex}
+          />
+
+          {/* Daily Lessons Header */}
+          <div className="flex items-center justify-between mb-2">
+            <SectionTitle 
+              title="Daily Lessons" 
+              icon="📚"
+              color="#7c4dff"
+            />
+            {(() => {
+              const dayLessons = getLessonsForDay(lessons, selectedDayIndex);
+              const completedCount = dayLessons.filter((l: any) => isCompleted(l._id || l.id)).length;
+              return dayLessons.length > 0 ? (
+                <span className="text-white/60 text-xs font-semibold">
+                  {completedCount}/{dayLessons.length} Complete
+                </span>
+              ) : null;
+            })()}
+          </div>
+
+          {/* Lessons Grid - 3.5 per row */}
           {lessonsLoading ? (
-            <div className="text-white/70 text-center py-4 px-4">Loading lessons...</div>
-          ) : (
-            <div className="w-screen overflow-x-auto no-scrollbar pb-4 -mx-4">
-              <div className="flex space-x-3 px-4">
-                {(() => {
-                  const today = new Date();
-                  today.setHours(0, 0, 0, 0);
-                  const weekDays = getWeekDays(); // Monday through Sunday
+            <div className="text-white/70 text-center py-8 px-4">Loading lessons...</div>
+          ) : (() => {
+            const dayLessons = getLessonsForDay(lessons, selectedDayIndex);
+            const isFutureDay = selectedDayIndex > todayIndex && todayIndex !== -1;
 
-                  return weekDays.map((date) => {
-                    const dateKey = date.toISOString().split('T')[0];
-                    const lesson = weekLessons.get(dateKey);
-                    const status = lesson ? getLessonStatus(lesson) : 'empty';
-                    const isToday = date.toDateString() === today.toDateString();
+            if (dayLessons.length === 0) {
+              return (
+                <div className="bg-gradient-to-br from-[#1a237e]/50 to-[#283593]/50 rounded-xl p-6 text-center border border-white/10">
+                  <div className="text-4xl mb-2">🌟</div>
+                  <h3 className="text-white font-bold text-lg mb-1">Rest & Play Day!</h3>
+                  <p className="text-white/60 text-sm">No lessons today. Enjoy reading stories or playing games with family!</p>
+                  <p className="text-white/40 text-xs mt-2">Tap another day above to view those lessons.</p>
+                </div>
+              );
+            }
 
-                    return (
-                      <div
-                        key={dateKey}
-                        className={`relative w-[calc((100vw-48px-40px)/4)] flex-shrink-0 ${status === 'locked' ? 'cursor-not-allowed' : status !== 'empty' ? 'cursor-pointer' : ''}`}
-                        onClick={() => lesson && status !== 'locked' && handleLessonClick(lesson)}
-                      >
-                        {/* Day Label */}
-                        <div className="text-center mb-1.5">
-                          <div className={`text-xs font-semibold ${isToday ? 'text-[#FFD700]' : 'text-white/70'}`}>
-                            {getDayLabel(date)}
+            return (
+              <div className="grid grid-cols-3 gap-2">
+                {dayLessons.map((lesson: any) => {
+                  const status = getLessonStatus(lesson);
+                  const isLessonLocked = isFutureDay || status === 'locked';
+
+                  return (
+                    <div
+                      key={lesson._id || lesson.id}
+                      className={`relative cursor-pointer transition-transform active:scale-95 ${isLessonLocked ? 'opacity-50 cursor-not-allowed' : ''}`}
+                      onClick={() => !isLessonLocked && handleLessonClick(lesson)}
+                    >
+                      {/* Thumbnail */}
+                      <div className="relative aspect-[9/16] rounded-lg overflow-hidden bg-gray-800/50 border border-white/10">
+                        {lesson.video?.thumbnail ? (
+                          <img
+                            src={lesson.video.thumbnail}
+                            alt={lesson.title}
+                            className="w-full h-full object-cover"
+                          />
+                        ) : (
+                          <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-indigo-600 to-purple-600">
+                            <Video className="w-6 h-6 text-white/50" />
                           </div>
-                          <div className={`text-base font-bold ${isToday ? 'text-[#FFD700]' : 'text-white'}`}>
-                            {getDayNumber(date)}
-                          </div>
-                        </div>
+                        )}
 
-                        {/* Portrait Thumbnail Container */}
-                        <div className={`relative aspect-[9/16] rounded-lg overflow-hidden bg-gray-800/50 border transition-all ${isToday ? 'border-2 border-[#FFD700]' : 'border border-white/20'
-                          }`}>
-                          {status === 'empty' ? (
-                            <div className="w-full h-full flex items-center justify-center">
-                              <div className="text-white/20 text-[10px] text-center px-1">
-                                No lesson
-                              </div>
+                        {/* Completed Overlay */}
+                        {status === 'completed' && (
+                          <div className="absolute inset-0 bg-green-500/30 flex items-center justify-center">
+                            <div className="bg-green-500 rounded-full p-1.5">
+                              <Check className="w-4 h-4 text-white" strokeWidth={3} />
                             </div>
-                          ) : lesson ? (
-                            <>
-                              {/* Thumbnail */}
-                              {lesson.video?.thumbnail ? (
-                                <img
-                                  src={lesson.video.thumbnail}
-                                  alt={lesson.title}
-                                  className="w-full h-full object-cover"
-                                />
-                              ) : (
-                                <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-indigo-600 to-purple-600">
-                                  <Video className="w-8 h-8 text-white/50" />
-                                </div>
-                              )}
+                          </div>
+                        )}
 
-                              {/* Overlay */}
-                              <div className={`absolute inset-0 ${status === 'locked'
-                                ? 'bg-black/70'
-                                : status === 'completed'
-                                  ? 'bg-green-500/30'
-                                  : 'bg-black/20'
-                                }`} />
+                        {/* Locked Overlay */}
+                        {isLessonLocked && status !== 'completed' && (
+                          <div className="absolute inset-0 bg-black/60 flex items-center justify-center">
+                            <Lock className="w-5 h-5 text-white/70" />
+                          </div>
+                        )}
 
-                              {/* Status Icons */}
-                              <div className="absolute top-2 right-2">
-                                {status === 'locked' ? (
-                                  <div className="bg-black/60 rounded-full p-1.5">
-                                    <Lock className="w-4 h-4 text-white" />
-                                  </div>
-                                ) : status === 'completed' ? (
-                                  <div className="bg-green-500 rounded-full p-1.5">
-                                    <Check className="w-4 h-4 text-white" />
-                                  </div>
-                                ) : (
-                                  <div className="bg-white/20 backdrop-blur-sm rounded-full p-1.5">
-                                    <Play className="w-4 h-4 text-white" />
-                                  </div>
-                                )}
-                              </div>
+                        {/* Play Button (for available lessons) */}
+                        {!isLessonLocked && status !== 'completed' && (
+                          <div className="absolute inset-0 flex items-center justify-center">
+                            <div className="bg-white/20 backdrop-blur-sm rounded-full p-2">
+                              <Play className="w-5 h-5 text-white" fill="white" />
+                            </div>
+                          </div>
+                        )}
 
-                            </>
-                          ) : null}
-                        </div>
+                        {/* Type Badge */}
+                        {lesson.type && (
+                          <div className="absolute top-1 left-1">
+                            <span className={`text-[8px] font-bold px-1.5 py-0.5 rounded-full ${
+                              lesson.type === 'Bible' ? 'bg-purple-500 text-white' :
+                              lesson.type === 'Science' ? 'bg-green-500 text-white' :
+                              lesson.type === 'History' ? 'bg-amber-500 text-white' :
+                              lesson.type === 'Math' ? 'bg-blue-500 text-white' :
+                              'bg-gray-500 text-white'
+                            }`}>
+                              {lesson.type}
+                            </span>
+                          </div>
+                        )}
                       </div>
-                    );
-                  });
-                })()}
+
+                      {/* Title (truncated) */}
+                      <p className="text-white/80 text-[10px] font-medium mt-1 truncate px-0.5">
+                        {lesson.title}
+                      </p>
+                    </div>
+                  );
+                })}
+
+                {/* Fill remaining space if less than 3 lessons */}
+                {dayLessons.length < 3 && Array.from({ length: 3 - dayLessons.length }).map((_, i) => (
+                  <div key={`placeholder-${i}`} className="aspect-[9/16] rounded-lg bg-white/5 border border-dashed border-white/10" />
+                ))}
               </div>
-            </div>
-          )}
+            );
+          })()}
         </section>
 
         {/* Featured Carousel */}

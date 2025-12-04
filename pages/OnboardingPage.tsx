@@ -34,21 +34,21 @@ const FUNNY_HEADS = [
   'head-lizard'
 ];
 
-// Benefits carousel data
+// Benefits carousel data - Education focused for Academy
 const BENEFITS = [
-  { icon: '✝️', title: 'Know Jesus', desc: 'Build a relationship with Christ' },
-  { icon: '📖', title: 'Learn Scripture', desc: 'Memorize verses through fun' },
-  { icon: '🌱', title: 'Grow Faith', desc: 'Daily spiritual development' },
-  { icon: '🏠', title: 'Family Time', desc: 'Strengthen bonds together' },
+  { icon: '📚', title: 'Bible Curriculum', desc: 'Complete Christian education' },
+  { icon: '✝️', title: 'Scripture Memory', desc: 'Learn verses through play' },
+  { icon: '🎓', title: 'Homeschool Ready', desc: 'Perfect supplement for ages 4-10+' },
+  { icon: '🏠', title: 'Family Learning', desc: 'Grow in faith together' },
 ];
 
-// What's included accordion items
+// What's included accordion items - Academy focused
 const INCLUDED_ITEMS = [
-  { icon: BookOpen, label: 'Unlimited Animated Books', desc: 'New stories added weekly' },
-  { icon: Music, label: 'Unlimited Audio & Playlists', desc: 'Worship music & audiobooks' },
-  { icon: Mic, label: 'Unlimited Voice Options', desc: 'Fun narrators for stories' },
-  { icon: Users, label: 'Unlimited Avatar Parts', desc: 'Customize your character' },
-  { icon: Sparkles, label: 'All Games & Activities', desc: 'Daily challenges & quizzes' },
+  { icon: BookOpen, label: 'Bible Story Library', desc: 'Animated lessons & devotionals' },
+  { icon: Music, label: 'Audio Learning Center', desc: 'Scripture songs & audiobooks' },
+  { icon: Sparkles, label: 'Interactive Quizzes', desc: 'Test comprehension & earn rewards' },
+  { icon: Mic, label: 'Read-Along Narration', desc: 'Multiple voices to choose from' },
+  { icon: Users, label: 'Kid Profile System', desc: 'Track each child\'s progress' },
 ];
 
 // PaywallStep Component

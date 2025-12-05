@@ -68,12 +68,13 @@ const PaywallStep: React.FC<{
   const carouselRef = useRef<HTMLDivElement>(null);
   const [currentBenefit, setCurrentBenefit] = useState(0);
   
-  // Check if user already has an account (email stored)
-  const existingEmail = localStorage.getItem('godlykids_user_email');
-  const hasExistingAccount = !!existingEmail;
+  // Account creation state
+  // Note: Don't auto-populate from localStorage - user should enter email fresh each onboarding
+  const [email, setEmail] = useState('');
+  const [hasEnteredEmail, setHasEnteredEmail] = useState(false);
   
-  // Account creation state (only needed if no existing account)
-  const [email, setEmail] = useState(existingEmail || '');
+  // Only consider existing account if user has entered email in THIS session
+  const hasExistingAccount = hasEnteredEmail && email.length > 0;
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [formError, setFormError] = useState<string | null>(null);
@@ -214,7 +215,7 @@ const PaywallStep: React.FC<{
                 <Check className="w-5 h-5 text-[#4CAF50]" />
                 <div>
                   <p className="text-[#2E7D32] text-sm font-semibold">Account Ready!</p>
-                  <p className="text-[#388E3C] text-xs">{existingEmail}</p>
+                  <p className="text-[#388E3C] text-xs">{email}</p>
                 </div>
               </div>
             </div>
@@ -229,7 +230,7 @@ const PaywallStep: React.FC<{
                 <input
                   type="email"
                   value={email}
-                  onChange={(e) => { setEmail(e.target.value); setFormError(null); }}
+                  onChange={(e) => { setEmail(e.target.value); setFormError(null); setHasEnteredEmail(true); }}
                   placeholder="your@email.com"
                   className="w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm text-[#3E1F07] bg-white placeholder:text-gray-400 focus:outline-none focus:border-[#FFD700] focus:ring-2 focus:ring-[#FFD700]/30"
                 />
@@ -291,7 +292,7 @@ const PaywallStep: React.FC<{
           {isPurchasing ? (
             <span className="flex items-center justify-center gap-2">
               <Loader2 className="w-5 h-5 animate-spin" />
-              Opening Apple...
+              Complete payment in Apple...
             </span>
           ) : (
             '🎁 START FREE TRIAL'

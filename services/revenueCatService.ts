@@ -164,12 +164,70 @@ export const RevenueCatService = {
     
     window.despia = purchaseUrl;
 
-    // Quick mode: Instantly return success after triggering Apple sheet.
-    // User gets into the app immediately - purchase verification happens via webhooks.
+    // Poll backend for purchase confirmation (via RevenueCat webhook)
+    // User stays on unlock screen until payment is confirmed
     if (quickMode) {
-      console.log('⚡ Quick mode: Instant success - letting user into app immediately');
-      localStorage.setItem('godlykids_premium', 'true');
-      return { success: true };
+      console.log('⏳ Waiting for Apple payment confirmation via webhook...');
+      
+      // Get API base URL
+      const apiBaseUrl = localStorage.getItem('godlykids_api_url') || 
+        (window.location.hostname === 'localhost' ? 'http://localhost:5001' : 'https://backendgk2-0.onrender.com');
+      
+      return new Promise((resolve) => {
+        let resolved = false;
+        let pollCount = 0;
+        const maxPolls = 90; // 90 seconds max wait
+        
+        const pollInterval = setInterval(async () => {
+          pollCount++;
+          
+          // Check localStorage first (in case it's set by something else)
+          const localPremium = localStorage.getItem('godlykids_premium') === 'true';
+          if (localPremium && !resolved) {
+            resolved = true;
+            console.log('✅ Premium detected in localStorage after', pollCount, 'seconds');
+            clearInterval(pollInterval);
+            resolve({ success: true });
+            return;
+          }
+          
+          // Poll backend for webhook confirmation
+          try {
+            const response = await fetch(`${apiBaseUrl}/api/webhooks/purchase-status/${encodeURIComponent(userId)}`);
+            const data = await response.json();
+            
+            if (data.isPremium && !resolved) {
+              resolved = true;
+              console.log('✅ Premium confirmed by backend webhook after', pollCount, 'seconds');
+              localStorage.setItem('godlykids_premium', 'true');
+              clearInterval(pollInterval);
+              resolve({ success: true });
+              return;
+            }
+            
+            // Log progress every 10 seconds
+            if (pollCount % 10 === 0) {
+              console.log(`⏳ Still waiting for payment confirmation... (${pollCount}s)`);
+            }
+          } catch (error) {
+            // Network error - just continue polling
+            if (pollCount % 10 === 0) {
+              console.log(`⚠️ Backend check failed, continuing to poll...`);
+            }
+          }
+          
+          // Timeout
+          if (pollCount >= maxPolls && !resolved) {
+            resolved = true;
+            clearInterval(pollInterval);
+            console.log('⏱️ Payment confirmation timeout after', maxPolls, 'seconds');
+            resolve({ 
+              success: false, 
+              error: 'Payment confirmation timeout. If you completed the payment, please restart the app or tap "Restore Purchases".' 
+            });
+          }
+        }, 1000);
+      });
     }
 
     // Legacy mode: Wait for DeSpia to process and user to complete purchase

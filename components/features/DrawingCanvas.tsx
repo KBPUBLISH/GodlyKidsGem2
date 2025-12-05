@@ -76,7 +76,7 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = ({ prompt, backgroundImageUr
     // Crayon brush settings
     const CRAYON_MIN_SIZE = 10;
     const CRAYON_MAX_SIZE = 35;
-    const CRAYON_OPACITY = 0.85;
+    const CRAYON_OPACITY = 0.5; // 50% transparency so users can see lines underneath
 
     // Initialize canvas
     useEffect(() => {

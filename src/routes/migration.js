@@ -48,7 +48,7 @@ router.post('/restore-subscription', async (req, res) => {
                 { email: email.toLowerCase().trim() },
                 { 
                     headers: { 
-                        'Authorization': `Bearer ${MIGRATION_API_KEY}`,
+                        'X-Migration-API-Key': MIGRATION_API_KEY,
                         'Content-Type': 'application/json'
                     },
                     timeout: 15000 // 15 second timeout
@@ -370,7 +370,7 @@ router.post('/test', async (req, res) => {
                 { email: email.toLowerCase().trim() },
                 { 
                     headers: { 
-                        'Authorization': `Bearer ${MIGRATION_API_KEY}`,
+                        'X-Migration-API-Key': MIGRATION_API_KEY,
                         'Content-Type': 'application/json'
                     },
                     timeout: 15000

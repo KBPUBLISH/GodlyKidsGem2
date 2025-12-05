@@ -148,6 +148,7 @@ export const RevenueCatService = {
     console.log('🛒 Initiating purchase via DeSpia URL scheme');
     console.log('   Product:', rcProductId);
     console.log('   User ID:', userId);
+    console.log('   isNativeApp:', isNativeApp());
 
     if (!isNativeApp()) {
       console.warn('⚠️ Not in native app - simulating purchase for web testing');
@@ -155,25 +156,33 @@ export const RevenueCatService = {
       return { success: true };
     }
 
+    // IMPORTANT: Clear premium status before starting purchase
+    // This prevents false positives from previous test purchases
+    const previousPremiumStatus = localStorage.getItem('godlykids_premium');
+    console.log('   Previous premium status:', previousPremiumStatus);
+    localStorage.removeItem('godlykids_premium');
+    
     // Trigger DeSpia purchase via URL scheme
     const purchaseUrl = `revenuecat://purchase?external_id=${encodeURIComponent(userId)}&product=${encodeURIComponent(rcProductId)}`;
     console.log('🔗 Setting window.despia to:', purchaseUrl);
     
     window.despia = purchaseUrl;
 
-    // Poll for status changes every 1 second (much faster than 60s timeout)
-    // This catches the purchase completion quickly
+    // Wait for DeSpia to process and user to complete purchase
+    // DeSpia should fire 'despia-purchase-success' event or set localStorage
     return new Promise((resolve) => {
       purchaseResolve = resolve;
       let pollCount = 0;
-      const maxPolls = 30; // 30 seconds max wait
+      const maxPolls = 120; // 2 minutes max wait (user might take time to confirm)
+      
+      console.log('⏳ Waiting for purchase confirmation...');
       
       const pollInterval = setInterval(() => {
         pollCount++;
         const isPremium = localStorage.getItem('godlykids_premium') === 'true';
         
         if (isPremium) {
-          console.log('✅ Purchase detected via polling after', pollCount, 'seconds');
+          console.log('✅ Purchase SUCCESS detected after', pollCount, 'seconds');
           clearInterval(pollInterval);
           if (purchaseTimeout) clearTimeout(purchaseTimeout);
           resolve({ success: true });
@@ -181,25 +190,30 @@ export const RevenueCatService = {
           return;
         }
         
+        // Check every 10 seconds if still waiting
+        if (pollCount % 10 === 0) {
+          console.log(`⏳ Still waiting for purchase... (${pollCount}s)`);
+        }
+        
         if (pollCount >= maxPolls) {
-          console.log('⏱️ Purchase timeout after 30 seconds');
+          console.log('⏱️ Purchase timeout after 2 minutes');
           clearInterval(pollInterval);
-          resolve({ success: false, error: 'Purchase timed out or cancelled' });
+          resolve({ success: false, error: 'Purchase timed out - please try again' });
           purchaseResolve = null;
         }
       }, 1000);
       
-      // Also set a backup timeout
+      // Backup timeout at 2.5 minutes
       purchaseTimeout = setTimeout(() => {
         clearInterval(pollInterval);
         const isPremium = localStorage.getItem('godlykids_premium') === 'true';
         if (isPremium) {
           resolve({ success: true });
         } else {
-          resolve({ success: false, error: 'Purchase pending or cancelled' });
+          resolve({ success: false, error: 'Purchase was not completed' });
         }
         purchaseResolve = null;
-      }, 35000);
+      }, 150000);
     });
   },
 

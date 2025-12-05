@@ -741,27 +741,30 @@ const OnboardingPage: React.FC = () => {
     
     try {
       // Trigger actual RevenueCat/Apple in-app purchase
+      // This will wait for the user to complete the purchase in the Apple sheet
       console.log('🛒 Starting purchase for plan:', selectedPlan);
+      console.log('🛒 This will open the Apple subscription sheet...');
+      
       const result = await purchase(selectedPlan);
+      
       console.log('🛒 Purchase result:', result);
       
       if (result.success) {
-        // Navigate IMMEDIATELY - don't wait for any processing
+        // Purchase was confirmed by Apple!
+        console.log('✅ Purchase confirmed! Navigating to home...');
         playSuccess();
         
-        // Update state synchronously  
+        // Update state  
         subscribe();
         setSubscribedDuringOnboarding(true);
         localStorage.setItem('godlykids_premium', 'true');
         
-        // Navigate right away!
+        // NOW navigate to home (after successful purchase)
         navigate('/home');
-        
-        // Any additional setup can happen in background after navigation
-        // The home page will pick up the premium status from localStorage
       } else {
         // Purchase was cancelled or failed
-        setPurchaseError(result.error || 'Purchase was cancelled');
+        console.log('❌ Purchase failed or cancelled:', result.error);
+        setPurchaseError(result.error || 'Purchase was cancelled. Please try again.');
         setIsPurchasing(false);
       }
     } catch (error: any) {

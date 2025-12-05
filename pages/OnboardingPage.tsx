@@ -220,10 +220,10 @@ const PaywallStep: React.FC<{
                 </div>
                 <div className="text-left">
                   <span className="font-display font-bold text-sm text-[#3E1F07]">Annual</span>
-                  <span className="text-[10px] text-[#4CAF50] font-semibold block">Save 44% • $1.54/week</span>
+                  <span className="text-[10px] text-[#4CAF50] font-semibold block">Save 42% • $1.33/week</span>
                 </div>
               </div>
-              <span className="font-display font-extrabold text-xl text-[#3E1F07]">$79.99<span className="text-xs font-normal">/yr</span></span>
+              <span className="font-display font-extrabold text-xl text-[#3E1F07]">$69<span className="text-xs font-normal">/yr</span></span>
             </div>
           </div>
 
@@ -246,7 +246,7 @@ const PaywallStep: React.FC<{
                   <span className="text-[10px] text-[#8B4513] block">Flexible billing</span>
                 </div>
               </div>
-              <span className="font-display font-extrabold text-xl text-[#3E1F07]">$11.99<span className="text-xs font-normal">/mo</span></span>
+              <span className="font-display font-extrabold text-xl text-[#3E1F07]">$9.99<span className="text-xs font-normal">/mo</span></span>
             </div>
           </div>
         </div>
@@ -750,23 +750,32 @@ const OnboardingPage: React.FC = () => {
     setIsPurchasing(true);
     setPurchaseError(null);
     
+    // Store user email immediately (non-blocking)
+    if (userEmail) {
+      localStorage.setItem('godlykids_user_email', userEmail);
+      console.log('📧 Stored user email:', userEmail);
+    }
+    
     try {
-      // Store user email for their account
-      if (userEmail) {
-        localStorage.setItem('godlykids_user_email', userEmail);
-        console.log('📧 Stored user email:', userEmail);
-      }
-      
       // Trigger actual RevenueCat/Apple in-app purchase
       console.log('🛒 Starting purchase for plan:', selectedPlan);
       const result = await purchase(selectedPlan);
       console.log('🛒 Purchase result:', result);
       
       if (result.success) {
+        // Navigate IMMEDIATELY - don't wait for any processing
         playSuccess();
-        subscribe(); // Also update local state
+        
+        // Update state synchronously  
+        subscribe();
         setSubscribedDuringOnboarding(true);
+        localStorage.setItem('godlykids_premium', 'true');
+        
+        // Navigate right away!
         navigate('/home');
+        
+        // Any additional setup can happen in background after navigation
+        // The home page will pick up the premium status from localStorage
       } else {
         // Purchase was cancelled or failed
         setPurchaseError(result.error || 'Purchase was cancelled');

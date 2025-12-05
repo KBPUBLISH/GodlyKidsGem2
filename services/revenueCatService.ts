@@ -161,27 +161,45 @@ export const RevenueCatService = {
     
     window.despia = purchaseUrl;
 
-    // Return a promise that resolves when purchase completes
-    // DeSpia may fire events, or we poll for status changes
+    // Poll for status changes every 1 second (much faster than 60s timeout)
+    // This catches the purchase completion quickly
     return new Promise((resolve) => {
       purchaseResolve = resolve;
+      let pollCount = 0;
+      const maxPolls = 30; // 30 seconds max wait
       
-      // Set a timeout - if no response in 60 seconds, assume user is interacting with payment sheet
-      // The actual result will come from the event listener or manual status check
+      const pollInterval = setInterval(() => {
+        pollCount++;
+        const isPremium = localStorage.getItem('godlykids_premium') === 'true';
+        
+        if (isPremium) {
+          console.log('✅ Purchase detected via polling after', pollCount, 'seconds');
+          clearInterval(pollInterval);
+          if (purchaseTimeout) clearTimeout(purchaseTimeout);
+          resolve({ success: true });
+          purchaseResolve = null;
+          return;
+        }
+        
+        if (pollCount >= maxPolls) {
+          console.log('⏱️ Purchase timeout after 30 seconds');
+          clearInterval(pollInterval);
+          resolve({ success: false, error: 'Purchase timed out or cancelled' });
+          purchaseResolve = null;
+        }
+      }, 1000);
+      
+      // Also set a backup timeout
       purchaseTimeout = setTimeout(() => {
-        console.log('⏱️ Purchase timeout - checking status...');
-        // Check if premium was granted
+        clearInterval(pollInterval);
         const isPremium = localStorage.getItem('godlykids_premium') === 'true';
         if (isPremium) {
           resolve({ success: true });
         } else {
-          // Don't resolve as failure - user might still be completing purchase
-          // Just log and let the app continue
-          console.log('ℹ️ Purchase still pending or cancelled');
           resolve({ success: false, error: 'Purchase pending or cancelled' });
         }
         purchaseResolve = null;
-      }, 60000);
+      }, 35000);
     });
   },
 

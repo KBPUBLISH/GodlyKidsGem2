@@ -76,7 +76,7 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = ({ prompt, backgroundImageUr
     // Crayon brush settings
     const CRAYON_MIN_SIZE = 10;
     const CRAYON_MAX_SIZE = 35;
-    const CRAYON_OPACITY = 0.5; // 50% transparency so users can see lines underneath
+    const CRAYON_OPACITY = 0.3; // 30% transparency - very light so lines clearly show through
 
     // Initialize canvas
     useEffect(() => {
@@ -170,7 +170,7 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = ({ prompt, backgroundImageUr
         ctx.lineJoin = 'round';
     }, [CRAYON_OPACITY]);
 
-    // Draw with crayon texture effect - 50% transparent so lines show through
+    // Draw with crayon texture effect - 30% transparent so lines clearly show through
     const drawWithCrayonTexture = useCallback((
         ctx: CanvasRenderingContext2D,
         fromX: number,

@@ -399,7 +399,39 @@ const LessonPlayerPage: React.FC = () => {
                     return;
                 }
             }
-            // No more audio in queue
+            
+            // If still loading remaining audio, wait for it
+            if (isLoadingRemainingRef.current) {
+                console.log('⏳ Waiting for remaining audio to load...');
+                const checkInterval = setInterval(() => {
+                    if (audioQueueRef.current.length > 0) {
+                        clearInterval(checkInterval);
+                        const nextAudioUrl = audioQueueRef.current.shift();
+                        if (nextAudioUrl) {
+                            console.log('🔄 Remaining audio loaded, continuing playback');
+                            playAudio(nextAudioUrl);
+                        }
+                    } else if (!isLoadingRemainingRef.current) {
+                        // Loading finished but queue is empty (error case)
+                        clearInterval(checkInterval);
+                        setIsAudioPlaying(false);
+                        audioRef.current = null;
+                    }
+                }, 200); // Check every 200ms
+                
+                // Timeout after 30 seconds
+                setTimeout(() => {
+                    clearInterval(checkInterval);
+                    if (isLoadingRemainingRef.current) {
+                        console.warn('⚠️ Timeout waiting for remaining audio');
+                        setIsAudioPlaying(false);
+                        audioRef.current = null;
+                    }
+                }, 30000);
+                return;
+            }
+            
+            // No more audio in queue and not loading
             setIsAudioPlaying(false);
             audioRef.current = null;
         };

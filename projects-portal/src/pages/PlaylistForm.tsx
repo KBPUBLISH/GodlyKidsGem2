@@ -8,6 +8,7 @@ interface AudioItem {
     _id?: string;
     title: string;
     author: string;
+    description?: string;
     coverImage?: string;
     audioUrl: string;
     duration?: number;
@@ -480,6 +481,18 @@ const PlaylistForm: React.FC = () => {
                                                     value={item.author}
                                                     onChange={(e) => updateItem(index, 'author', e.target.value)}
                                                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                                                />
+                                            </div>
+                                            <div className="md:col-span-2">
+                                                <label className="block text-sm font-medium text-gray-700 mb-1">
+                                                    Description <span className="text-gray-400 font-normal">(optional)</span>
+                                                </label>
+                                                <textarea
+                                                    value={item.description || ''}
+                                                    onChange={(e) => updateItem(index, 'description', e.target.value)}
+                                                    rows={2}
+                                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                                                    placeholder={formData.type === 'Song' ? 'Brief description of the song...' : 'Brief description of the episode...'}
                                                 />
                                             </div>
                                             <div className="md:col-span-2">

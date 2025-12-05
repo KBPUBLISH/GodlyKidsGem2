@@ -1,11 +1,16 @@
 /**
- * RevenueCat Service for DeSpia Native Integration
+ * RevenueCat Service for DeSpia Native + Web Billing Integration
  * 
- * DeSpia uses URL schemes to trigger RevenueCat actions:
+ * Native (DeSpia) uses URL schemes:
  * - Purchase: window.despia = "revenuecat://purchase?external_id=USER_ID&product=PRODUCT_ID"
  * - Restore: window.despia = "restoreinapppurchases://"
  * - Cancel: window.despia = "cancelinapppurchase://"
+ * 
+ * Web uses RevenueCat Web Billing SDK
  */
+
+// RevenueCat Web Billing API Key
+const REVENUECAT_WEB_API_KEY = 'app600608d495';
 
 // Entitlement identifier for premium access
 export const PREMIUM_ENTITLEMENT_ID = 'premium';
@@ -158,9 +163,9 @@ export const RevenueCatService = {
     localStorage.removeItem('godlykids_premium');
     
     if (!isNativeApp()) {
-      // NOT in native app - purchases only work in the native DeSpia wrapper
-      console.warn('⚠️ Not in native app - in-app purchases require the native app');
-      return { success: false, error: 'Please use the mobile app to subscribe.' };
+      // Web-based billing via RevenueCat Web SDK
+      console.log('🌐 Web mode - using RevenueCat web billing');
+      return RevenueCatService.purchaseWeb(productId);
     }
     
     // Trigger DeSpia purchase via URL scheme
@@ -336,6 +341,108 @@ export const RevenueCatService = {
     if (purchaseTimeout) {
       clearTimeout(purchaseTimeout);
       purchaseTimeout = null;
+    }
+  },
+
+  /**
+   * Web-based purchase via RevenueCat Billing
+   * Opens RevenueCat's hosted checkout page
+   */
+  purchaseWeb: async (productId: 'annual' | 'monthly'): Promise<{ success: boolean; error?: string }> => {
+    const rcProductId = productId === 'annual' ? PRODUCT_IDS.ANNUAL : PRODUCT_IDS.MONTHLY;
+    const userId = getUserId();
+    
+    console.log('🌐 Starting web purchase via RevenueCat Billing');
+    console.log('   Product:', rcProductId);
+    console.log('   User ID:', userId);
+    
+    try {
+      // RevenueCat Web Billing uses a redirect-based checkout
+      // Build the checkout URL
+      const checkoutUrl = `https://pay.rev.cat/${REVENUECAT_WEB_API_KEY}/purchase/${rcProductId}?customer_id=${encodeURIComponent(userId)}`;
+      
+      console.log('🔗 Opening RevenueCat checkout:', checkoutUrl);
+      
+      // Open checkout in new window/tab
+      const checkoutWindow = window.open(checkoutUrl, '_blank', 'width=500,height=700');
+      
+      if (!checkoutWindow) {
+        return { success: false, error: 'Please allow popups to complete purchase' };
+      }
+      
+      // Poll for completion (webhook will update backend)
+      const apiBaseUrl = localStorage.getItem('godlykids_api_url') || 
+        (window.location.hostname === 'localhost' ? 'http://localhost:5001' : 'https://backendgk2-0.onrender.com');
+      
+      return new Promise((resolve) => {
+        let pollCount = 0;
+        const maxPolls = 300; // 5 minutes for web checkout (user might need time)
+        
+        const pollInterval = setInterval(async () => {
+          pollCount++;
+          
+          // Check if checkout window was closed
+          if (checkoutWindow.closed && pollCount > 10) {
+            // Window closed - check if purchase completed
+            try {
+              const response = await fetch(`${apiBaseUrl}/api/webhooks/purchase-status/${encodeURIComponent(userId)}`);
+              const data = await response.json();
+              
+              if (data.isPremium) {
+                clearInterval(pollInterval);
+                localStorage.setItem('godlykids_premium', 'true');
+                resolve({ success: true });
+                return;
+              }
+            } catch (e) {
+              // Ignore error, will timeout
+            }
+            
+            // Give a bit more time after window closes
+            if (pollCount > 30) {
+              clearInterval(pollInterval);
+              resolve({ success: false, error: 'Checkout window closed. If you completed payment, please tap Restore Purchases.' });
+              return;
+            }
+          }
+          
+          // Poll backend for webhook confirmation
+          try {
+            const response = await fetch(`${apiBaseUrl}/api/webhooks/purchase-status/${encodeURIComponent(userId)}`);
+            const data = await response.json();
+            
+            if (data.isPremium) {
+              clearInterval(pollInterval);
+              if (checkoutWindow && !checkoutWindow.closed) {
+                checkoutWindow.close();
+              }
+              localStorage.setItem('godlykids_premium', 'true');
+              resolve({ success: true });
+              return;
+            }
+          } catch (error) {
+            // Continue polling
+          }
+          
+          // Log progress every 30 seconds
+          if (pollCount % 30 === 0) {
+            console.log(`⏳ Waiting for web checkout completion... (${pollCount}s)`);
+          }
+          
+          // Timeout
+          if (pollCount >= maxPolls) {
+            clearInterval(pollInterval);
+            if (checkoutWindow && !checkoutWindow.closed) {
+              checkoutWindow.close();
+            }
+            resolve({ success: false, error: 'Checkout timeout. If you completed payment, please tap Restore Purchases.' });
+          }
+        }, 1000);
+      });
+      
+    } catch (error: any) {
+      console.error('Web purchase error:', error);
+      return { success: false, error: error.message || 'Failed to start checkout' };
     }
   },
 

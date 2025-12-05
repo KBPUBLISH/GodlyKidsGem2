@@ -387,7 +387,7 @@ const BookDetailPage: React.FC = () => {
                   className="flex items-center gap-2 hover:opacity-80 transition-opacity cursor-default"
                 >
                   <Headphones size={20} />
-                  <span className="text-lg">{readCount} Listen</span>
+                  <span className="text-lg">My Listens: {readCount}</span>
                 </button>
                 <div className="h-6 w-px bg-white/20"></div>
                 <button
@@ -549,7 +549,7 @@ const BookDetailPage: React.FC = () => {
                   className="flex items-center gap-2 hover:opacity-80 transition-opacity cursor-default pointer-events-auto"
                 >
                   <BookOpen size={20} />
-                  <span className="text-lg">{readCount} Read</span>
+                  <span className="text-lg">My Reads: {readCount}</span>
                 </button>
                 <div className="h-6 w-px bg-white/20"></div>
                 <button

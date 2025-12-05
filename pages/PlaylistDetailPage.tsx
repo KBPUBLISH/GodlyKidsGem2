@@ -189,15 +189,17 @@ const PlaylistDetailPage: React.FC = () => {
         }
     }, [playlistId]);
     
-    // Get play count from playlist data (server-side count)
+    // Get personal play count from local service
     useEffect(() => {
-        if (playlist) {
-            // Use the server-side playCount if available, otherwise sum from items
-            const serverPlayCount = playlist.playCount || 0;
-            const itemPlays = playlist.items?.reduce((sum, item) => sum + (item.playCount || 0), 0) || 0;
-            setPlayCount(serverPlayCount + itemPlays);
+        if (playlist && id) {
+            // Import and use personal play count service
+            import('../services/playCountService').then(({ playCountService }) => {
+                // Get personal play count for this playlist
+                const personalCount = playCountService.getPlayCount(id);
+                setPlayCount(personalCount);
+            });
         }
-    }, [playlist]);
+    }, [playlist, id]);
     
     // Extract colors from cover image when playlist loads
     useEffect(() => {
@@ -455,7 +457,7 @@ const PlaylistDetailPage: React.FC = () => {
                                 className="flex items-center gap-2 px-4 py-2 rounded-full border-2 border-[#d4c5a0] bg-[#fdf6e3] text-[#8B4513] cursor-default"
                             >
                                 <Headphones size={18} />
-                                <span className="text-sm font-bold">{playCount}</span>
+                                <span className="text-sm font-bold">My Plays: {playCount}</span>
                             </button>
                         </div>
                     </div>

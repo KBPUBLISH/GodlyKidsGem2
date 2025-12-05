@@ -554,12 +554,21 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
             // Record in local play history for "Recently Played" section
             playHistoryService.recordPlay(playlistId, trackId);
             
-            // Track analytics
+            // Increment PERSONAL play count (for "My Plays" display)
+            import('../services/playCountService').then(({ playCountService }) => {
+                playCountService.incrementPlayCount(playlistId, 'playlist');
+                if (trackId) {
+                    playCountService.incrementPlayCount(trackId, playlist.type === 'Audiobook' ? 'episode' : 'song');
+                }
+            });
+            
+            // Track analytics (for portal/global stats)
             analyticsService.playlistPlay(playlistId, playlist.title);
             if (track) {
                 analyticsService.audioPlay(trackId || `${playlistId}_${startIndex}`, track.title, playlistId);
             }
             
+            // Increment server-side counts (for portal analytics)
             if (trackId) {
                 ApiService.incrementItemPlayCount(playlistId, trackId);
             } else {

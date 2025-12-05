@@ -152,10 +152,15 @@ export const RevenueCatService = {
     console.log('   isNativeApp:', isNativeApp());
     console.log('   quickMode:', quickMode);
 
+    // CRITICAL: Clear any existing premium status FIRST before anything else
+    // This prevents stale localStorage from granting instant premium
+    console.log('🧹 Clearing any existing premium status before purchase...');
+    localStorage.removeItem('godlykids_premium');
+    
     if (!isNativeApp()) {
-      console.warn('⚠️ Not in native app - simulating purchase for web testing');
-      localStorage.setItem('godlykids_premium', 'true');
-      return { success: true };
+      // NOT in native app - purchases only work in the native DeSpia wrapper
+      console.warn('⚠️ Not in native app - in-app purchases require the native app');
+      return { success: false, error: 'Please use the mobile app to subscribe.' };
     }
     
     // Trigger DeSpia purchase via URL scheme
@@ -163,11 +168,12 @@ export const RevenueCatService = {
     console.log('🔗 Setting window.despia to:', purchaseUrl);
     
     window.despia = purchaseUrl;
-
+    
     // Poll backend for purchase confirmation (via RevenueCat webhook)
     // User stays on unlock screen until payment is confirmed
     if (quickMode) {
       console.log('⏳ Waiting for Apple payment confirmation via webhook...');
+      console.log('📱 Apple payment sheet should appear now - user must complete payment');
       
       // Get API base URL
       const apiBaseUrl = localStorage.getItem('godlykids_api_url') || 
@@ -176,12 +182,22 @@ export const RevenueCatService = {
       return new Promise((resolve) => {
         let resolved = false;
         let pollCount = 0;
-        const maxPolls = 90; // 90 seconds max wait
+        const maxPolls = 120; // 2 minutes max wait for user to complete Apple payment
+        const minWaitBeforeCheck = 5; // Wait at least 5 seconds before checking (let Apple sheet appear)
         
         const pollInterval = setInterval(async () => {
           pollCount++;
           
-          // Check localStorage first (in case it's set by something else)
+          // Don't check anything for the first 5 seconds - let Apple sheet appear
+          if (pollCount < minWaitBeforeCheck) {
+            if (pollCount === 1) {
+              console.log('⏳ Waiting for Apple payment sheet to appear...');
+            }
+            return;
+          }
+          
+          // After initial wait, start checking for confirmation
+          // Check localStorage (in case webhook or other mechanism sets it)
           const localPremium = localStorage.getItem('godlykids_premium') === 'true';
           if (localPremium && !resolved) {
             resolved = true;
@@ -205,13 +221,13 @@ export const RevenueCatService = {
               return;
             }
             
-            // Log progress every 10 seconds
-            if (pollCount % 10 === 0) {
+            // Log progress every 15 seconds
+            if (pollCount % 15 === 0) {
               console.log(`⏳ Still waiting for payment confirmation... (${pollCount}s)`);
             }
           } catch (error) {
             // Network error - just continue polling
-            if (pollCount % 10 === 0) {
+            if (pollCount % 15 === 0) {
               console.log(`⚠️ Backend check failed, continuing to poll...`);
             }
           }
@@ -223,7 +239,7 @@ export const RevenueCatService = {
             console.log('⏱️ Payment confirmation timeout after', maxPolls, 'seconds');
             resolve({ 
               success: false, 
-              error: 'Payment confirmation timeout. If you completed the payment, please restart the app or tap "Restore Purchases".' 
+              error: 'Payment confirmation timeout. If you completed the payment, please tap "Restore Purchases" or restart the app.' 
             });
           }
         }, 1000);

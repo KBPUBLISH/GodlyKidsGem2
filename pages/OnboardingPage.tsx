@@ -71,12 +71,12 @@ const PaywallStep: React.FC<{
   // Account creation state
   // Note: Don't auto-populate from localStorage - user should enter email fresh each onboarding
   const [email, setEmail] = useState('');
-  const [hasEnteredEmail, setHasEnteredEmail] = useState(false);
-  
-  // Only consider existing account if user has entered email in THIS session
-  const hasExistingAccount = hasEnteredEmail && email.length > 0;
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  const [accountCreated, setAccountCreated] = useState(false);
+  
+  // Only show "Account Ready" after user has actually created their account (email + password validated)
+  const hasExistingAccount = accountCreated;
   const [formError, setFormError] = useState<string | null>(null);
   const [showRestoreInput, setShowRestoreInput] = useState(false);
   const [restoreEmail, setRestoreEmail] = useState('');
@@ -230,7 +230,7 @@ const PaywallStep: React.FC<{
                 <input
                   type="email"
                   value={email}
-                  onChange={(e) => { setEmail(e.target.value); setFormError(null); setHasEnteredEmail(true); }}
+                  onChange={(e) => { setEmail(e.target.value); setFormError(null); }}
                   placeholder="your@email.com"
                   className="w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm text-[#3E1F07] bg-white placeholder:text-gray-400 focus:outline-none focus:border-[#FFD700] focus:ring-2 focus:ring-[#FFD700]/30"
                 />
@@ -776,16 +776,16 @@ const OnboardingPage: React.FC = () => {
       console.log('🛒 Purchase result:', result);
       
       if (result.success) {
-        // Purchase sheet was triggered successfully!
-        console.log('✅ Apple sheet triggered! Letting user into app...');
+        // Payment was CONFIRMED by webhook/backend - user is now premium!
+        console.log('✅ Payment confirmed! User is now premium.');
         playSuccess();
         
-        // Update state  
+        // Update state - premium was already set by the purchase() function
+        // when it received webhook confirmation
         subscribe();
         setSubscribedDuringOnboarding(true);
-        localStorage.setItem('godlykids_premium', 'true');
         
-        // Navigate to home immediately - purchase completes in background
+        // NOW navigate to home - payment is confirmed
         navigate('/home');
       } else {
         // Purchase was cancelled or failed

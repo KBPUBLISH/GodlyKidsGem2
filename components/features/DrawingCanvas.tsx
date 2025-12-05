@@ -1,5 +1,5 @@
 import React, { useRef, useEffect, useState, useCallback } from 'react';
-import { Eraser, RotateCcw, Download, Paintbrush, Highlighter, PenTool, Pencil } from 'lucide-react';
+import { Eraser, RotateCcw, Download } from 'lucide-react';
 
 interface DrawingCanvasProps {
     prompt: string;
@@ -7,81 +7,62 @@ interface DrawingCanvasProps {
     onComplete?: () => void;
 }
 
-// Brush types with their properties
-type BrushType = 'paintbrush' | 'marker' | 'crayon' | 'pencil';
-
-interface BrushConfig {
-    name: string;
-    icon: React.ReactNode;
-    minSize: number;
-    maxSize: number;
-    defaultSize: number;
-    opacity: number;
-    texture: 'smooth' | 'soft' | 'rough' | 'fine';
-}
-
-const BRUSH_CONFIGS: Record<BrushType, BrushConfig> = {
-    paintbrush: {
-        name: 'Brush',
-        icon: <Paintbrush className="w-5 h-5" />,
-        minSize: 8,
-        maxSize: 35,
-        defaultSize: 15,
-        opacity: 0.9,
-        texture: 'smooth',
-    },
-    marker: {
-        name: 'Marker',
-        icon: <Highlighter className="w-5 h-5" />,
-        minSize: 15,
-        maxSize: 45,
-        defaultSize: 28,
-        opacity: 0.5,
-        texture: 'soft',
-    },
-    crayon: {
-        name: 'Crayon',
-        icon: <PenTool className="w-5 h-5" />,
-        minSize: 10,
-        maxSize: 30,
-        defaultSize: 18,
-        opacity: 0.85,
-        texture: 'rough',
-    },
-    pencil: {
-        name: 'Pencil',
-        icon: <Pencil className="w-5 h-5" />,
-        minSize: 4,
-        maxSize: 15,
-        defaultSize: 8,
-        opacity: 1,
-        texture: 'fine',
-    },
-};
-
+// Crayon colors - arranged like a real crayon box
 const CRAYON_COLORS = [
-    '#FF6B6B', // Red
-    '#4ECDC4', // Teal
-    '#45B7D1', // Blue
-    '#FFA07A', // Light Salmon
-    '#98D8C8', // Mint
-    '#F7DC6F', // Yellow
-    '#BB8FCE', // Purple
-    '#85C1E2', // Sky Blue
-    '#F8B739', // Orange
-    '#52BE80', // Green
-    '#E74C3C', // Dark Red
-    '#8E44AD', // Dark Purple
-    '#000000', // Black
-    '#FFFFFF', // White
+    { name: 'Red', color: '#E74C3C' },
+    { name: 'Orange', color: '#F39C12' },
+    { name: 'Yellow', color: '#F1C40F' },
+    { name: 'Green', color: '#27AE60' },
+    { name: 'Blue', color: '#3498DB' },
+    { name: 'Purple', color: '#9B59B6' },
+    { name: 'Pink', color: '#E91E63' },
+    { name: 'Brown', color: '#795548' },
+    { name: 'Teal', color: '#00BCD4' },
+    { name: 'Lime', color: '#8BC34A' },
+    { name: 'Sky Blue', color: '#87CEEB' },
+    { name: 'Peach', color: '#FFAB91' },
+    { name: 'Black', color: '#2C3E50' },
+    { name: 'Gray', color: '#95A5A6' },
+    { name: 'White', color: '#ECF0F1' },
 ];
+
+// Crayon SVG component
+const CrayonIcon: React.FC<{ color: string; isSelected: boolean; onClick: () => void }> = ({ color, isSelected, onClick }) => (
+    <button
+        onClick={onClick}
+        className={`relative transition-all duration-200 ${isSelected ? 'scale-125 -translate-y-2 z-10' : 'hover:scale-110 hover:-translate-y-1'}`}
+        style={{ filter: isSelected ? 'drop-shadow(0 4px 6px rgba(0,0,0,0.3))' : 'none' }}
+    >
+        <svg width="28" height="60" viewBox="0 0 28 60" className="drop-shadow-md">
+            {/* Crayon tip */}
+            <polygon 
+                points="14,0 6,12 22,12" 
+                fill={color}
+                style={{ filter: 'brightness(0.85)' }}
+            />
+            {/* Crayon body */}
+            <rect x="6" y="12" width="16" height="40" fill={color} rx="1" />
+            {/* Wrapper/Label */}
+            <rect x="6" y="30" width="16" height="18" fill="#1a1a1a" opacity="0.9" rx="1" />
+            {/* Paper texture lines */}
+            <line x1="6" y1="35" x2="22" y2="35" stroke="#333" strokeWidth="0.5" />
+            <line x1="6" y1="40" x2="22" y2="40" stroke="#333" strokeWidth="0.5" />
+            {/* Highlight on crayon */}
+            <rect x="8" y="14" width="3" height="14" fill="white" opacity="0.3" rx="1" />
+            {/* Bottom */}
+            <rect x="6" y="52" width="16" height="8" fill={color} rx="2" />
+        </svg>
+        {isSelected && (
+            <div className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-2 h-2 bg-yellow-400 rounded-full animate-pulse" />
+        )}
+    </button>
+);
 
 const DrawingCanvas: React.FC<DrawingCanvasProps> = ({ prompt, backgroundImageUrl, onComplete }) => {
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const [isDrawing, setIsDrawing] = useState(false);
-    const [selectedColor, setSelectedColor] = useState(CRAYON_COLORS[0]);
-    const [brushType, setBrushType] = useState<BrushType>('paintbrush');
-    const [brushSize, setBrushSize] = useState(BRUSH_CONFIGS.paintbrush.defaultSize);
+    const [selectedColor, setSelectedColor] = useState(CRAYON_COLORS[0].color);
+    const [brushSize, setBrushSize] = useState(18); // Crayon default size
     const [isEraser, setIsEraser] = useState(false);
     const [isCompleted, setIsCompleted] = useState(false);
 
@@ -92,8 +73,10 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = ({ prompt, backgroundImageUr
     // Store last position for smooth drawing
     const lastPosRef = useRef<{ x: number; y: number } | null>(null);
 
-    // Get current brush config
-    const currentBrush = BRUSH_CONFIGS[brushType];
+    // Crayon brush settings
+    const CRAYON_MIN_SIZE = 10;
+    const CRAYON_MAX_SIZE = 35;
+    const CRAYON_OPACITY = 0.85;
 
     // Initialize canvas
     useEffect(() => {
@@ -180,86 +163,41 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = ({ prompt, backgroundImageUr
         img.src = backgroundImageUrl;
     }, [canvasReady, backgroundImageUrl]);
 
-    // Apply brush-specific stroke style
-    const applyBrushStyle = useCallback((ctx: CanvasRenderingContext2D, brush: BrushConfig) => {
-        ctx.globalAlpha = brush.opacity;
+    // Apply crayon stroke style
+    const applyCrayonStyle = useCallback((ctx: CanvasRenderingContext2D) => {
+        ctx.globalAlpha = CRAYON_OPACITY;
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+    }, [CRAYON_OPACITY]);
 
-        switch (brush.texture) {
-            case 'smooth':
-                // Paintbrush - smooth, flowing strokes
-                ctx.lineCap = 'round';
-                ctx.lineJoin = 'round';
-                break;
-            case 'soft':
-                // Marker - chisel tip effect
-                ctx.lineCap = 'square';
-                ctx.lineJoin = 'round';
-                break;
-            case 'rough':
-                // Crayon - slightly rough edges
-                ctx.lineCap = 'round';
-                ctx.lineJoin = 'round';
-                break;
-            case 'fine':
-                // Pencil - precise thin lines
-                ctx.lineCap = 'round';
-                ctx.lineJoin = 'round';
-                break;
-        }
-    }, []);
-
-    // Draw with texture effect for crayon
-    const drawWithTexture = useCallback((
+    // Draw with crayon texture effect
+    const drawWithCrayonTexture = useCallback((
         ctx: CanvasRenderingContext2D,
         fromX: number,
         fromY: number,
         toX: number,
         toY: number,
-        brush: BrushConfig,
         size: number,
         color: string
     ) => {
-        if (brush.texture === 'rough') {
-            // Crayon effect - draw multiple offset lines for texture
-            const distance = Math.sqrt((toX - fromX) ** 2 + (toY - fromY) ** 2);
-            const steps = Math.max(Math.floor(distance / 2), 1);
+        // Crayon effect - draw multiple offset dots for waxy texture
+        const distance = Math.sqrt((toX - fromX) ** 2 + (toY - fromY) ** 2);
+        const steps = Math.max(Math.floor(distance / 2), 1);
 
-            for (let i = 0; i < steps; i++) {
-                const t = i / steps;
-                const x = fromX + (toX - fromX) * t;
-                const y = fromY + (toY - fromY) * t;
+        for (let i = 0; i < steps; i++) {
+            const t = i / steps;
+            const x = fromX + (toX - fromX) * t;
+            const y = fromY + (toY - fromY) * t;
 
-                // Add slight random offset for texture
-                const jitter = size * 0.15;
-                const offsetX = (Math.random() - 0.5) * jitter;
-                const offsetY = (Math.random() - 0.5) * jitter;
+            // Add slight random offset for waxy texture
+            const jitter = size * 0.15;
+            const offsetX = (Math.random() - 0.5) * jitter;
+            const offsetY = (Math.random() - 0.5) * jitter;
 
-                ctx.beginPath();
-                ctx.arc(x + offsetX, y + offsetY, size / 2 * (0.8 + Math.random() * 0.4), 0, Math.PI * 2);
-                ctx.fillStyle = color;
-                ctx.fill();
-            }
-        } else if (brush.texture === 'soft') {
-            // Marker effect - multiple transparent overlapping circles
-            const distance = Math.sqrt((toX - fromX) ** 2 + (toY - fromY) ** 2);
-            const steps = Math.max(Math.floor(distance / 3), 1);
-
-            for (let i = 0; i <= steps; i++) {
-                const t = i / steps;
-                const x = fromX + (toX - fromX) * t;
-                const y = fromY + (toY - fromY) * t;
-
-                ctx.beginPath();
-                ctx.arc(x, y, size / 2, 0, Math.PI * 2);
-                ctx.fillStyle = color;
-                ctx.fill();
-            }
-        } else {
-            // Standard line drawing for smooth brushes
             ctx.beginPath();
-            ctx.moveTo(fromX, fromY);
-            ctx.lineTo(toX, toY);
-            ctx.stroke();
+            ctx.arc(x + offsetX, y + offsetY, size / 2 * (0.8 + Math.random() * 0.4), 0, Math.PI * 2);
+            ctx.fillStyle = color;
+            ctx.fill();
         }
     }, []);
 
@@ -301,19 +239,19 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = ({ prompt, backgroundImageUr
             ctx.lineJoin = 'round';
         } else {
             ctx.globalCompositeOperation = 'source-over';
-            applyBrushStyle(ctx, currentBrush);
+            applyCrayonStyle(ctx);
             ctx.strokeStyle = selectedColor;
         }
         ctx.lineWidth = brushSize;
 
-        // Draw a dot at start position
-        if (!isEraser && currentBrush.texture !== 'smooth' && currentBrush.texture !== 'fine') {
+        // Draw a dot at start position for crayon texture
+        if (!isEraser) {
             ctx.beginPath();
             ctx.arc(x, y, brushSize / 2, 0, Math.PI * 2);
             ctx.fillStyle = selectedColor;
             ctx.fill();
         }
-    }, [getCoordinates, isEraser, currentBrush, selectedColor, brushSize, applyBrushStyle]);
+    }, [getCoordinates, isEraser, selectedColor, brushSize, applyCrayonStyle]);
 
     const draw = useCallback((e: any) => {
         if (e.cancelable) e.preventDefault();
@@ -337,11 +275,11 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = ({ prompt, backgroundImageUr
             ctx.lineTo(x, y);
             ctx.stroke();
         } else {
-            drawWithTexture(ctx, lastPos.x, lastPos.y, x, y, currentBrush, brushSize, selectedColor);
+            drawWithCrayonTexture(ctx, lastPos.x, lastPos.y, x, y, brushSize, selectedColor);
         }
 
         lastPosRef.current = { x, y };
-    }, [getCoordinates, isDrawing, isEraser, currentBrush, brushSize, selectedColor, drawWithTexture]);
+    }, [getCoordinates, isDrawing, isEraser, brushSize, selectedColor, drawWithCrayonTexture]);
 
     const stopDrawing = useCallback(() => {
         if (isDrawing) {
@@ -382,10 +320,6 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = ({ prompt, backgroundImageUr
         };
     }, [startDrawing, draw, stopDrawing]);
 
-    // Update brush size when brush type changes
-    useEffect(() => {
-        setBrushSize(currentBrush.defaultSize);
-    }, [brushType, currentBrush.defaultSize]);
 
     const clearCanvas = () => {
         const canvas = canvasRef.current;
@@ -445,48 +379,22 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = ({ prompt, backgroundImageUr
                 />
             </div>
 
-            {/* Brush Type Selector */}
-            <div className="mb-2">
-                <div className="flex justify-center gap-2">
-                    {(Object.entries(BRUSH_CONFIGS) as [BrushType, BrushConfig][]).map(([type, config]) => (
-                        <button
-                            key={type}
+            {/* Crayon Box - Looks like a real crayon set */}
+            <div className="mb-3 bg-gradient-to-b from-[#5D4037] to-[#3E2723] rounded-xl p-3 shadow-lg border-2 border-[#8D6E63]">
+                {/* Crayon box lid effect */}
+                <div className="absolute -top-1 left-4 right-4 h-2 bg-gradient-to-b from-[#8D6E63] to-[#5D4037] rounded-t-lg" />
+                
+                {/* Crayons arranged in rows like a real box */}
+                <div className="flex flex-wrap justify-center gap-1 pb-2" style={{ perspective: '500px' }}>
+                    {CRAYON_COLORS.map((crayon) => (
+                        <CrayonIcon
+                            key={crayon.color}
+                            color={crayon.color}
+                            isSelected={selectedColor === crayon.color && !isEraser}
                             onClick={() => {
-                                setBrushType(type);
+                                setSelectedColor(crayon.color);
                                 setIsEraser(false);
                             }}
-                            className={`flex flex-col items-center gap-1 px-3 py-2 rounded-xl transition-all ${brushType === type && !isEraser
-                                ? 'bg-gradient-to-br from-[#FFD700] to-[#FFA500] text-black shadow-lg scale-105'
-                                : 'bg-white/15 text-white hover:bg-white/25'
-                                }`}
-                            title={config.name}
-                        >
-                            {config.icon}
-                            <span className="text-[10px] font-medium">{config.name}</span>
-                        </button>
-                    ))}
-                </div>
-            </div>
-
-            {/* Crayon Palette */}
-            <div className="mb-2">
-                <div className="flex flex-wrap gap-1.5 justify-center">
-                    {CRAYON_COLORS.map((color) => (
-                        <button
-                            key={color}
-                            onClick={() => {
-                                setSelectedColor(color);
-                                setIsEraser(false);
-                            }}
-                            className={`w-7 h-7 md:w-8 md:h-8 rounded-full transition-all ${selectedColor === color && !isEraser
-                                ? 'ring-2 ring-[#FFD700] ring-offset-2 ring-offset-purple-900 scale-110 shadow-lg'
-                                : 'hover:scale-105 shadow-md'
-                                }`}
-                            style={{
-                                backgroundColor: color,
-                                border: color === '#FFFFFF' ? '2px solid #ccc' : 'none',
-                            }}
-                            title={color}
                         />
                     ))}
                 </div>
@@ -499,8 +407,8 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = ({ prompt, backgroundImageUr
                     <span className="text-white/70 text-xs">Size:</span>
                     <input
                         type="range"
-                        min={currentBrush.minSize}
-                        max={currentBrush.maxSize}
+                        min={CRAYON_MIN_SIZE}
+                        max={CRAYON_MAX_SIZE}
                         value={brushSize}
                         onChange={(e) => setBrushSize(Number(e.target.value))}
                         className="flex-1 accent-[#FFD700]"
@@ -511,7 +419,7 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = ({ prompt, backgroundImageUr
                             width: Math.max(10, brushSize / 2),
                             height: Math.max(10, brushSize / 2),
                             backgroundColor: selectedColor,
-                            border: selectedColor === '#FFFFFF' ? '2px solid #ccc' : 'none',
+                            border: selectedColor === '#ECF0F1' ? '2px solid #ccc' : 'none',
                         }}
                     />
                 </div>
@@ -559,7 +467,7 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = ({ prompt, backgroundImageUr
                     }}
                     className="mt-3 bg-gradient-to-r from-[#FFD700] to-[#FFA500] text-black px-6 py-3 rounded-xl font-bold w-full hover:shadow-lg hover:scale-[1.02] transition-all active:scale-95"
                 >
-                    🎨 I'm Done Coloring!
+                    🖍️ I'm Done Coloring!
                 </button>
             )}
 

@@ -7,8 +7,7 @@ import { useAudio } from '../context/AudioContext';
 import { useSubscription } from '../context/SubscriptionContext';
 import { AVATAR_ASSETS } from '../components/avatar/AvatarAssets';
 import ParentGateModal from '../components/features/ParentGateModal';
-import VoiceCloningModal from '../components/features/VoiceCloningModal';
-import { voiceCloningService, ClonedVoice } from '../services/voiceCloningService';
+// Voice cloning removed - not offering this feature anymore
 import { ApiService } from '../services/apiService';
 import { filterVisibleVoices } from '../services/voiceManagementService';
 import { cleanVoiceDescription, cleanVoiceCategory } from '../utils/voiceUtils';
@@ -59,7 +58,7 @@ const PaywallStep: React.FC<{
   setSelectedPlan: (plan: 'annual' | 'monthly') => void;
   onSubscribe: (email: string) => void;
   onSkip: () => void;
-  onRestore: () => void;
+  onRestore: (email?: string) => void;
   isPurchasing?: boolean;
   isRestoring?: boolean;
   error?: string | null;
@@ -69,83 +68,31 @@ const PaywallStep: React.FC<{
   const carouselRef = useRef<HTMLDivElement>(null);
   const [currentBenefit, setCurrentBenefit] = useState(0);
   
-  // Email verification state
+  // Account creation state
   const [email, setEmail] = useState('');
-  const [verificationCode, setVerificationCode] = useState('');
-  const [sentCode, setSentCode] = useState('');
-  const [isEmailVerified, setIsEmailVerified] = useState(false);
-  const [isSendingCode, setIsSendingCode] = useState(false);
-  const [emailError, setEmailError] = useState<string | null>(null);
-  const [showVerification, setShowVerification] = useState(false);
+  const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [formError, setFormError] = useState<string | null>(null);
+  const [showRestoreInput, setShowRestoreInput] = useState(false);
+  const [restoreEmail, setRestoreEmail] = useState('');
 
   const isValidEmail = (email: string) => {
     return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
   };
 
-  const handleSendVerificationCode = async () => {
-    if (!isValidEmail(email)) {
-      setEmailError('Please enter a valid email address');
-      return;
-    }
-    
-    setIsSendingCode(true);
-    setEmailError(null);
-    
-    try {
-      // Generate a 6-digit code
-      const code = Math.floor(100000 + Math.random() * 900000).toString();
-      setSentCode(code);
-      
-      // Send via OneSignal email
-      const response = await fetch('https://onesignal.com/api/v1/notifications', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Basic ${import.meta.env.VITE_ONESIGNAL_REST_API_KEY || 'NzRhMjJkYmYtNjIxNy00NDA0LWI0MTQtNzA1ODMwMDg2ZTEz'}`,
-        },
-        body: JSON.stringify({
-          app_id: import.meta.env.VITE_ONESIGNAL_APP_ID || 'b03af3a2-6096-4a56-a4b4-9ec9db7ff6fa',
-          include_email_tokens: [email],
-          email_subject: 'Godly Kids Academy - Verify Your Email',
-          email_body: `
-            <div style="font-family: Arial, sans-serif; max-width: 500px; margin: 0 auto; padding: 20px;">
-              <h2 style="color: #8B4513; text-align: center;">🌟 Godly Kids Academy</h2>
-              <p style="text-align: center; font-size: 18px;">Your verification code is:</p>
-              <div style="background: #FFD700; color: #3E1F07; font-size: 32px; font-weight: bold; text-align: center; padding: 20px; border-radius: 10px; letter-spacing: 5px;">
-                ${code}
-              </div>
-              <p style="text-align: center; color: #666; margin-top: 20px;">Enter this code in the app to continue.</p>
-            </div>
-          `,
-        }),
-      });
-      
-      if (response.ok) {
-        setShowVerification(true);
-        console.log('✅ Verification code sent to:', email);
-      } else {
-        // For testing, still show verification (OneSignal may fail without proper setup)
-        setShowVerification(true);
-        console.log('⚠️ OneSignal may have failed, but showing verification for testing. Code:', code);
-      }
-    } catch (err) {
-      console.error('Error sending verification:', err);
-      // Still show verification for testing
-      setShowVerification(true);
-      console.log('⚠️ Using test code:', sentCode);
-    } finally {
-      setIsSendingCode(false);
-    }
+  const isFormValid = () => {
+    if (!email.trim() || !isValidEmail(email)) return false;
+    if (!password || password.length < 6) return false;
+    if (password !== confirmPassword) return false;
+    return true;
   };
 
-  const handleVerifyCode = () => {
-    if (verificationCode === sentCode) {
-      setIsEmailVerified(true);
-      setEmailError(null);
-      console.log('✅ Email verified:', email);
-    } else {
-      setEmailError('Invalid code. Please try again.');
-    }
+  const getFormError = () => {
+    if (!email.trim()) return null; // Don't show error if empty
+    if (!isValidEmail(email)) return 'Please enter a valid email address';
+    if (password && password.length < 6) return 'Password must be at least 6 characters';
+    if (confirmPassword && password !== confirmPassword) return 'Passwords do not match';
+    return null;
   };
 
   // Auto-scroll benefits carousel
@@ -251,71 +198,49 @@ const PaywallStep: React.FC<{
           </div>
         </div>
 
-        {/* Email Verification Section */}
-        <div className="mb-4">
-          {!isEmailVerified ? (
-            <div className="space-y-2">
-              <label className="text-[#3E1F07] text-xs font-semibold">Email Address</label>
-              {!showVerification ? (
-                <div className="flex gap-2">
-                  <input
-                    type="email"
-                    value={email}
-                    onChange={(e) => { setEmail(e.target.value); setEmailError(null); }}
-                    placeholder="your@email.com"
-                    className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:border-[#FFD700] focus:ring-1 focus:ring-[#FFD700]"
-                  />
-                  <button
-                    onClick={handleSendVerificationCode}
-                    disabled={isSendingCode || !email.trim()}
-                    className="px-4 py-2 bg-[#8B4513] text-white text-sm font-semibold rounded-lg hover:bg-[#A0522D] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                  >
-                    {isSendingCode ? '...' : 'Verify'}
-                  </button>
-                </div>
-              ) : (
-                <div className="space-y-2">
-                  <p className="text-[#4CAF50] text-xs">✓ Code sent to {email}</p>
-                  <div className="flex gap-2">
-                    <input
-                      type="text"
-                      value={verificationCode}
-                      onChange={(e) => { setVerificationCode(e.target.value); setEmailError(null); }}
-                      placeholder="Enter 6-digit code"
-                      maxLength={6}
-                      className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm text-center tracking-widest font-mono focus:outline-none focus:border-[#FFD700] focus:ring-1 focus:ring-[#FFD700]"
-                    />
-                    <button
-                      onClick={handleVerifyCode}
-                      disabled={verificationCode.length !== 6}
-                      className="px-4 py-2 bg-[#4CAF50] text-white text-sm font-semibold rounded-lg hover:bg-[#43A047] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                    >
-                      Confirm
-                    </button>
-                  </div>
-                  <button
-                    onClick={() => { setShowVerification(false); setSentCode(''); setVerificationCode(''); }}
-                    className="text-[#8B4513] text-xs underline"
-                  >
-                    Change email
-                  </button>
-                </div>
-              )}
-            </div>
-          ) : (
-            <div className="flex items-center gap-2 bg-[#E8F5E9] px-3 py-2 rounded-lg">
-              <Check className="w-4 h-4 text-[#4CAF50]" />
-              <span className="text-[#2E7D32] text-sm font-medium">{email}</span>
-              <button
-                onClick={() => { setIsEmailVerified(false); setShowVerification(false); setSentCode(''); setVerificationCode(''); }}
-                className="ml-auto text-[#8B4513] text-xs underline"
-              >
-                Change
-              </button>
-            </div>
-          )}
-          {emailError && (
-            <p className="text-red-500 text-xs mt-1">{emailError}</p>
+        {/* Account Creation Section */}
+        <div className="mb-4 space-y-3">
+          <h3 className="text-[#3E1F07] text-sm font-bold">Create Your Account</h3>
+          
+          {/* Email */}
+          <div>
+            <label className="text-[#5D4037] text-xs font-semibold mb-1 block">Email Address</label>
+            <input
+              type="email"
+              value={email}
+              onChange={(e) => { setEmail(e.target.value); setFormError(null); }}
+              placeholder="your@email.com"
+              className="w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm text-[#3E1F07] bg-white placeholder:text-gray-400 focus:outline-none focus:border-[#FFD700] focus:ring-2 focus:ring-[#FFD700]/30"
+            />
+          </div>
+          
+          {/* Password */}
+          <div>
+            <label className="text-[#5D4037] text-xs font-semibold mb-1 block">Password</label>
+            <input
+              type="password"
+              value={password}
+              onChange={(e) => { setPassword(e.target.value); setFormError(null); }}
+              placeholder="At least 6 characters"
+              className="w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm text-[#3E1F07] bg-white placeholder:text-gray-400 focus:outline-none focus:border-[#FFD700] focus:ring-2 focus:ring-[#FFD700]/30"
+            />
+          </div>
+          
+          {/* Confirm Password */}
+          <div>
+            <label className="text-[#5D4037] text-xs font-semibold mb-1 block">Confirm Password</label>
+            <input
+              type="password"
+              value={confirmPassword}
+              onChange={(e) => { setConfirmPassword(e.target.value); setFormError(null); }}
+              placeholder="Re-enter password"
+              className="w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm text-[#3E1F07] bg-white placeholder:text-gray-400 focus:outline-none focus:border-[#FFD700] focus:ring-2 focus:ring-[#FFD700]/30"
+            />
+          </div>
+          
+          {/* Form Error */}
+          {getFormError() && (
+            <p className="text-red-500 text-xs">{getFormError()}</p>
           )}
         </div>
 
@@ -330,8 +255,14 @@ const PaywallStep: React.FC<{
         <WoodButton 
           fullWidth 
           variant="gold"
-          onClick={() => onSubscribe(email)}
-          disabled={isPurchasing || !isEmailVerified}
+          onClick={() => {
+            if (!isFormValid()) {
+              setFormError(getFormError() || 'Please fill in all fields correctly');
+              return;
+            }
+            onSubscribe(email);
+          }}
+          disabled={isPurchasing || !isFormValid()}
           className="py-4 text-lg shadow-xl mb-2 border-b-4 border-[#B8860B] disabled:opacity-50"
         >
           {isPurchasing ? (
@@ -339,8 +270,6 @@ const PaywallStep: React.FC<{
               <Loader2 className="w-5 h-5 animate-spin" />
               Processing...
             </span>
-          ) : !isEmailVerified ? (
-            '🔒 Verify Email First'
           ) : (
             '🎁 START FREE TRIAL'
           )}
@@ -351,20 +280,59 @@ const PaywallStep: React.FC<{
         </p>
 
         {/* Restore Purchases */}
-        <button
-          onClick={onRestore}
-          disabled={isRestoring}
-          className="w-full mt-3 text-[#8B4513] text-sm font-medium py-2 hover:underline disabled:opacity-50 flex items-center justify-center gap-2"
-        >
-          {isRestoring ? (
-            <>
-              <Loader2 className="w-4 h-4 animate-spin" />
-              Checking...
-            </>
+        <div className="mt-4 pt-4 border-t border-gray-200">
+          {!showRestoreInput ? (
+            <button
+              onClick={() => setShowRestoreInput(true)}
+              className="w-full text-[#8B4513] text-sm font-medium py-2 hover:underline"
+            >
+              Already subscribed? Restore Purchases
+            </button>
           ) : (
-            'Already subscribed? Restore Purchases'
+            <div className="space-y-2">
+              <p className="text-[#5D4037] text-xs font-medium text-center">Enter your subscription email:</p>
+              <input
+                type="email"
+                value={restoreEmail}
+                onChange={(e) => setRestoreEmail(e.target.value)}
+                placeholder="your@email.com"
+                className="w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm text-[#3E1F07] bg-white placeholder:text-gray-400 focus:outline-none focus:border-[#FFD700] focus:ring-2 focus:ring-[#FFD700]/30"
+              />
+              <div className="flex gap-2">
+                <button
+                  onClick={() => { setShowRestoreInput(false); setRestoreEmail(''); }}
+                  className="flex-1 px-3 py-2 text-[#8B4513] text-sm font-medium border border-[#8B4513] rounded-lg hover:bg-[#8B4513]/10 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={() => {
+                    if (isValidEmail(restoreEmail)) {
+                      onRestore(restoreEmail);
+                    } else {
+                      setFormError('Please enter a valid email');
+                    }
+                  }}
+                  disabled={isRestoring || !restoreEmail.trim()}
+                  className="flex-1 px-3 py-2 bg-[#8B4513] text-white text-sm font-semibold rounded-lg hover:bg-[#A0522D] disabled:opacity-50 transition-colors flex items-center justify-center gap-2"
+                >
+                  {isRestoring ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      Checking...
+                    </>
+                  ) : (
+                    'Restore'
+                  )}
+                </button>
+              </div>
+            </div>
           )}
-        </button>
+        </div>
+        
+        {formError && (
+          <p className="text-red-500 text-xs text-center mt-2">{formError}</p>
+        )}
       </div>
 
       {/* What's Included Accordion */}
@@ -501,9 +469,6 @@ const OnboardingPage: React.FC = () => {
   const [selectedPlan, setSelectedPlan] = useState<'annual' | 'monthly'>('annual');
   const [showParentGate, setShowParentGate] = useState(false);
   
-  // Voice Cloning (Optional - hidden)
-  const [showVoiceCloningModal, setShowVoiceCloningModal] = useState(false);
-  const [voiceCloned, setVoiceCloned] = useState(false);
 
   // Reset user data when entering onboarding to ensure a fresh start
   useEffect(() => {
@@ -712,20 +677,47 @@ const OnboardingPage: React.FC = () => {
     setShowParentGate(true);
   };
 
-  const handleRestorePurchases = async () => {
+  const handleRestorePurchases = async (restoreEmail?: string) => {
     setIsRestoring(true);
     setPurchaseError(null);
     
     try {
+      // First, check old backend for subscription by email
+      if (restoreEmail) {
+        console.log('🔍 Checking old backend for subscription:', restoreEmail);
+        
+        const migrationResponse = await fetch(`${import.meta.env.VITE_API_URL || 'https://backendgk2-0.onrender.com'}/api/migration/restore-subscription`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email: restoreEmail }),
+        });
+        
+        const migrationResult = await migrationResponse.json();
+        console.log('📦 Migration result:', migrationResult);
+        
+        if (migrationResult.success && migrationResult.subscriptionRestored) {
+          playSuccess();
+          localStorage.setItem('godlykids_premium', 'true');
+          localStorage.setItem('godlykids_user_email', restoreEmail);
+          setSubscribedDuringOnboarding(true);
+          navigate('/home');
+          return;
+        }
+      }
+      
+      // Then try RevenueCat restore
       const { restorePurchases } = await import('../services/revenueCatService').then(m => ({ restorePurchases: m.default.restorePurchases }));
       const result = await restorePurchases();
       
       if (result.success && result.isPremium) {
         playSuccess();
+        if (restoreEmail) {
+          localStorage.setItem('godlykids_user_email', restoreEmail);
+        }
         setSubscribedDuringOnboarding(true);
         navigate('/home');
       } else {
-        setPurchaseError('No active subscription found. Start a new subscription below.');
+        setPurchaseError('No active subscription found with that email. Start a new subscription below.');
       }
     } catch (error: any) {
       console.error('Restore error:', error);
@@ -735,15 +727,6 @@ const OnboardingPage: React.FC = () => {
     }
   };
 
-  const handleSkipVoiceCloning = () => {
-    playClick();
-    setStep(4); // Move to unlock/paywall step
-  };
-
-  const handleVoiceCloningContinue = () => {
-    playClick();
-    setStep(4); // Move to unlock/paywall step
-  };
 
   const handleGateSuccess = async () => {
     setShowParentGate(false);
@@ -788,10 +771,6 @@ const OnboardingPage: React.FC = () => {
     }
   };
 
-  const handleVoiceCloned = (voice: ClonedVoice) => {
-    setVoiceCloned(true);
-    playSuccess();
-  };
 
   // --- RENDERERS ---
 
@@ -1043,83 +1022,6 @@ const OnboardingPage: React.FC = () => {
         {/* --- STEP 3: VOICE SELECTION --- */}
         {step === 3 && (
           <div className="w-full max-w-md px-6 animate-in slide-in-from-right-10 duration-500">
-            {/* Header */}
-            <div className="text-center mb-8">
-              <div className="w-24 h-24 mx-auto mb-6 rounded-full bg-gradient-to-br from-[#FFD700] to-[#FFA500] flex items-center justify-center shadow-2xl border-4 border-[#8B4513]">
-                <Mic className="text-[#8B4513]" size={48} />
-              </div>
-              <h2 className="text-3xl font-bold text-white mb-3">
-                Create Your Own Voice!
-              </h2>
-              <p className="text-[#eecaa0] text-lg leading-relaxed">
-                Record your voice (or a loved one's like Grandpa) to read books in a familiar voice
-              </p>
-            </div>
-
-            {/* Feature Benefits */}
-            <div className="bg-[#3E1F07]/50 rounded-xl p-6 mb-8 border-2 border-[#5D2E0E]">
-              <h3 className="text-white font-bold mb-4 text-lg">Why create a voice?</h3>
-              <ul className="space-y-3 text-white/90">
-                <li className="flex items-start gap-3">
-                  <Check className="text-[#FFD700] flex-shrink-0 mt-1" size={20} />
-                  <span>Listen to books in <span className="font-bold text-white">Grandpa's voice</span> or any family member</span>
-                </li>
-                <li className="flex items-start gap-3">
-                  <Check className="text-[#FFD700] flex-shrink-0 mt-1" size={20} />
-                  <span>Create up to <span className="font-bold text-white">5 custom voices</span> stored on your device</span>
-                </li>
-                <li className="flex items-start gap-3">
-                  <Check className="text-[#FFD700] flex-shrink-0 mt-1" size={20} />
-                  <span>Make storytime more <span className="font-bold text-white">personal and engaging</span></span>
-                </li>
-              </ul>
-            </div>
-
-            {/* Action Buttons */}
-            <div className="flex flex-col gap-3">
-              <WoodButton
-                onClick={() => {
-                  playClick();
-                  setShowVoiceCloningModal(true);
-                }}
-                className="w-full"
-              >
-                <div className="flex items-center justify-center gap-2">
-                  <Mic size={20} />
-                  <span className="text-lg font-bold">Create Voice Now</span>
-                </div>
-              </WoodButton>
-
-              {voiceCloned && (
-                <div className="bg-green-600/20 border-2 border-green-500 rounded-xl p-4 text-center">
-                  <Check className="text-green-400 mx-auto mb-2" size={24} />
-                  <p className="text-green-200 font-bold">Voice created successfully!</p>
-                </div>
-              )}
-
-              <div className="flex gap-3">
-                <button
-                  onClick={handleSkipVoiceCloning}
-                  className="flex-1 text-[#eecaa0] text-sm font-bold underline decoration-dotted opacity-70 hover:opacity-100 transition-opacity"
-                >
-                  Skip for now
-                </button>
-                {voiceCloned && (
-                  <button
-                    onClick={handleVoiceCloningContinue}
-                    className="flex-1 px-6 py-3 bg-[#FFD700] hover:bg-[#ffed4e] border-2 border-[#B8860B] rounded-xl text-[#8B4513] font-bold transition-colors"
-                  >
-                    Continue
-                  </button>
-                )}
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* --- STEP 3: VOICE SELECTION --- */}
-        {step === 3 && (
-          <div className="w-full max-w-md px-6 animate-in slide-in-from-right-10 duration-500">
             <div className="text-center mb-6">
               <div className="w-20 h-20 mx-auto mb-4 rounded-full bg-gradient-to-br from-[#FFD700] to-[#FFA500] flex items-center justify-center shadow-2xl border-4 border-[#8B4513]">
                 <Mic className="text-[#8B4513]" size={40} />
@@ -1201,7 +1103,33 @@ const OnboardingPage: React.FC = () => {
               selectedPlan={selectedPlan}
               setSelectedPlan={setSelectedPlan}
               onSubscribe={handleSubscribeClick}
-              onSkip={() => navigate('/home')}
+              onSkip={() => {
+                // User skipped without subscribing - limit to 1 kid account
+                if (kids.length > 1) {
+                  // Keep only the first kid, remove premium-only ones
+                  const firstKid = kids[0];
+                  setKids([firstKid]);
+                  
+                  // Also update localStorage to only have one kid
+                  const savedProfiles = localStorage.getItem('godlykids_kid_profiles');
+                  if (savedProfiles) {
+                    try {
+                      const profiles = JSON.parse(savedProfiles);
+                      if (Array.isArray(profiles) && profiles.length > 0) {
+                        localStorage.setItem('godlykids_kid_profiles', JSON.stringify([profiles[0]]));
+                      }
+                    } catch (e) {
+                      console.error('Error trimming kid profiles:', e);
+                    }
+                  }
+                  
+                  console.log('🆓 Free account: Limited to 1 kid profile');
+                }
+                
+                // Mark as free user (not premium)
+                localStorage.setItem('godlykids_premium', 'false');
+                navigate('/home');
+              }}
               onRestore={handleRestorePurchases}
               isPurchasing={isPurchasing}
               isRestoring={isRestoring}
@@ -1224,14 +1152,6 @@ const OnboardingPage: React.FC = () => {
             onSuccess={handleFamilyGateSuccess} 
         />
 
-        {/* Voice Cloning Modal - Hidden */}
-        {false && (
-          <VoiceCloningModal
-            isOpen={showVoiceCloningModal}
-            onClose={() => setShowVoiceCloningModal(false)}
-            onVoiceCloned={handleVoiceCloned}
-          />
-        )}
 
       </div>
     </div>

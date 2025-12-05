@@ -1204,6 +1204,10 @@ export const ApiService = {
 
       if (response.ok) {
         const data = await response.json();
+        // Handle both paginated response { data: [], pagination: {} } and direct array
+        if (data.data && Array.isArray(data.data)) {
+          return data.data;
+        }
         return Array.isArray(data) ? data : [];
       }
       return [];
@@ -1395,6 +1399,10 @@ export const ApiService = {
       if (response.ok) {
         const data = await response.json();
         console.log('📚 Lessons API response data:', data);
+        // Handle both paginated response { data: [], pagination: {} } and direct array
+        if (data.data && Array.isArray(data.data)) {
+          return data.data;
+        }
         return Array.isArray(data) ? data : [];
       }
 

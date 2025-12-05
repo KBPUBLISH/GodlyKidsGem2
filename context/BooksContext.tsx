@@ -1,8 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
 import { Book } from '../types';
 import { ApiService } from '../services/apiService';
-import { MOCK_BOOKS, API_BASE_URL } from '../constants';
-import { authService } from '../services/authService';
+import { MOCK_BOOKS } from '../constants';
 
 interface BooksContextType {
   books: Book[];
@@ -35,26 +34,9 @@ export const BooksProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     if (books.length === 0) setLoading(true);
 
     try {
-      console.log('📚 BooksContext: Loading books...');
+      console.log('📚 BooksContext: Loading books from API...');
 
-
-      // Check if user is authenticated
-      const isAuthenticated = authService.isAuthenticated();
-      const isLocalBackend = API_BASE_URL.includes('localhost');
-      console.log('🔑 BooksContext: User authenticated:', isAuthenticated);
-      console.log('🏠 BooksContext: Using local backend:', isLocalBackend);
-
-      // Skip auth check for local development
-      if (!isAuthenticated && !isLocalBackend) {
-        console.warn('⚠️ BooksContext: User not authenticated. Using mock data until login.');
-        console.warn('💡 Please log in to see real data from the dev database.');
-        setBooks(MOCK_BOOKS);
-        setLoading(false);
-        isLoadingRef.current = false;
-        return;
-      }
-
-
+      // Always try to load from API - books are public content
       const data = await ApiService.getBooks();
       console.log('📚 BooksContext: Received', data.length, 'books');
 
@@ -112,42 +94,18 @@ export const BooksProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       return;
     }
 
-    // Check authentication before loading
-    const isAuthenticated = authService.isAuthenticated();
-    const isLocalBackend = API_BASE_URL.includes('localhost');
-    console.log('📚 BooksContext: Initial load, authenticated:', isAuthenticated);
-    console.log('📚 BooksContext: Using local backend:', isLocalBackend);
-
-    if (isAuthenticated || isLocalBackend) {
-      loadData();
-    } else {
-      console.log('📚 BooksContext: Not authenticated, using mock data');
-      setBooks(MOCK_BOOKS);
-      setLoading(false);
-    }
+    // Always load books - they are public content
+    console.log('📚 BooksContext: Initial load - fetching books from API');
+    loadData();
   }, []);
 
-  // Also reload when route changes (e.g., after login navigation or guest navigation) - but only once
+  // Also reload when route changes (e.g., after navigation) - but only once
   useEffect(() => {
     const handleHashChange = () => {
       const isLandingPage = window.location.hash === '#/' || window.location.hash === '';
-      if (!isLandingPage && !hasLoadedRef.current) {
-        const isAuthenticated = authService.isAuthenticated();
-        const isLocalBackend = API_BASE_URL.includes('localhost');
-        console.log('📚 BooksContext: Route changed, authenticated:', isAuthenticated);
-        console.log('📚 BooksContext: Using local backend:', isLocalBackend);
-        if (!isLoadingRef.current) {
-          if (isAuthenticated || isLocalBackend) {
-            console.log('📚 BooksContext: Reloading books after route change');
-            loadData();
-          } else {
-            // Guest user - load mock books
-            console.log('📚 BooksContext: Loading mock books for guest user after route change');
-            setBooks(MOCK_BOOKS);
-            setLoading(false);
-            hasLoadedRef.current = true;
-          }
-        }
+      if (!isLandingPage && !hasLoadedRef.current && !isLoadingRef.current) {
+        console.log('📚 BooksContext: Route changed, loading books from API');
+        loadData();
       }
     };
 

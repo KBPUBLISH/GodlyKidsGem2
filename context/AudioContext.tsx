@@ -428,6 +428,8 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         if (!playlistAudioRef.current) {
             playlistAudioRef.current = new Audio();
             playlistAudioRef.current.preload = 'auto';
+            // Important for cross-origin audio
+            playlistAudioRef.current.crossOrigin = 'anonymous';
 
             // Event listeners
             playlistAudioRef.current.addEventListener('timeupdate', () => {
@@ -443,12 +445,29 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
             playlistAudioRef.current.addEventListener('loadedmetadata', () => {
                 if (playlistAudioRef.current) {
+                    console.log('🎵 Playlist audio metadata loaded, duration:', playlistAudioRef.current.duration);
                     setDuration(playlistAudioRef.current.duration);
                 }
             });
 
             playlistAudioRef.current.addEventListener('ended', () => {
                 handleTrackEnd();
+            });
+            
+            // Error listener to debug audio loading issues
+            playlistAudioRef.current.addEventListener('error', (e) => {
+                const audio = e.target as HTMLAudioElement;
+                const error = audio.error;
+                console.error('🔇 Playlist audio error:', {
+                    code: error?.code,
+                    message: error?.message,
+                    src: audio.src
+                });
+            });
+            
+            // Playing event to confirm audio is actually playing
+            playlistAudioRef.current.addEventListener('playing', () => {
+                console.log('🎵 Playlist audio is now playing!');
             });
         }
     }, []);
@@ -472,35 +491,50 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     useEffect(() => {
         if (currentPlaylist && playlistAudioRef.current) {
             const track = currentPlaylist.items[currentTrackIndex];
-            if (track && playlistAudioRef.current.src !== track.audioUrl) {
+            if (track && track.audioUrl) {
+                console.log('🎵 Loading track:', track.title, 'URL:', track.audioUrl);
+                
+                // Always set the source (the URL comparison was buggy due to absolute vs relative paths)
                 playlistAudioRef.current.src = track.audioUrl;
+                playlistAudioRef.current.load(); // Force reload
+                
                 if (isPlaying) {
-                    const playPromise = playlistAudioRef.current.play();
-                    if (playPromise !== undefined) {
-                        playPromise.catch((e) => {
-                            if (e.name !== 'AbortError' && e.name !== 'NotAllowedError') {
-                                console.error("Play error:", e);
-                            }
+                    // Wait for canplay event before playing
+                    const handleCanPlay = () => {
+                        console.log('🎵 Track ready to play:', track.title);
+                        playlistAudioRef.current?.play().catch((e) => {
+                            console.error('🔇 Play error after load:', e.name, e.message);
                         });
-                    }
+                        playlistAudioRef.current?.removeEventListener('canplay', handleCanPlay);
+                    };
+                    playlistAudioRef.current.addEventListener('canplay', handleCanPlay);
                 }
+            } else {
+                console.warn('🔇 No audio URL for track:', track?.title);
             }
         }
-    }, [currentPlaylist, currentTrackIndex]);
+    }, [currentPlaylist, currentTrackIndex, isPlaying]);
 
     // Sync play/pause state
     useEffect(() => {
         if (playlistAudioRef.current) {
             if (isPlaying) {
                 // Connect to GainNode for volume control in iOS
-                connectAudioToGain(playlistAudioRef.current, playlistGainRef, musicVolume);
+                // Use FULL VOLUME (1.0) for playlist audio, not background music volume
+                connectAudioToGain(playlistAudioRef.current, playlistGainRef, 1.0);
+                
+                // Also set the volume property directly (for browsers that support it)
+                playlistAudioRef.current.volume = 1.0;
                 
                 // Resume AudioContext if suspended
                 if (audioContextRef.current?.state === 'suspended') {
                     audioContextRef.current.resume();
                 }
                 
+                console.log('🎵 Playing playlist audio:', playlistAudioRef.current.src);
+                
                 playlistAudioRef.current.play().catch(e => {
+                    console.error('🔇 Playlist play error:', e.name, e.message);
                     // Silently ignore expected autoplay/abort errors
                     if (e.name !== 'NotAllowedError' && e.name !== 'AbortError' && e.name !== 'NotSupportedError') {
                         console.error("Play error:", e);
@@ -510,7 +544,7 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
                 playlistAudioRef.current.pause();
             }
         }
-    }, [isPlaying, connectAudioToGain, musicVolume]);
+    }, [isPlaying, connectAudioToGain]);
 
     const playPlaylist = useCallback((playlist: Playlist, startIndex: number = 0) => {
         setCurrentPlaylist(playlist);

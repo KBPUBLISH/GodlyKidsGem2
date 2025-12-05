@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { X, Coins, Gift, BookOpen, Gamepad2, Calendar, Users, ShoppingBag, TrendingUp, TrendingDown, Share2, Copy, Check, Sparkles, Mic, User, ArrowRight } from 'lucide-react';
 import { useUser, CoinTransaction } from '../../context/UserContext';
 
@@ -126,7 +127,7 @@ const CoinHistoryModal: React.FC<CoinHistoryModalProps> = ({ isOpen, onClose, on
 
   if (!isOpen) return null;
 
-  return (
+  return createPortal(
     <div className="fixed inset-0 z-[200] flex items-center justify-center p-4">
       {/* Blurred Backdrop */}
       <div 
@@ -401,7 +402,8 @@ const CoinHistoryModal: React.FC<CoinHistoryModalProps> = ({ isOpen, onClose, on
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 };
 

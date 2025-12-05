@@ -9,6 +9,9 @@ const audioItemSchema = new mongoose.Schema({
         type: String,
         default: 'Kingdom Builders Publishing',
     },
+    description: {
+        type: String, // Optional description for the song/episode
+    },
     coverImage: {
         type: String, // URL to GCS
         required: false, // Made optional for backward compatibility with existing playlists

@@ -428,8 +428,9 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         if (!playlistAudioRef.current) {
             playlistAudioRef.current = new Audio();
             playlistAudioRef.current.preload = 'auto';
-            // Important for cross-origin audio
-            playlistAudioRef.current.crossOrigin = 'anonymous';
+            // DO NOT set crossOrigin - GCS doesn't have CORS configured for our domain
+            // This means we can't use Web Audio API, but basic playback will work
+            playlistAudioRef.current.volume = 1.0; // Full volume for playlist audio
 
             // Event listeners
             playlistAudioRef.current.addEventListener('timeupdate', () => {
@@ -519,17 +520,8 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     useEffect(() => {
         if (playlistAudioRef.current) {
             if (isPlaying) {
-                // Connect to GainNode for volume control in iOS
-                // Use FULL VOLUME (1.0) for playlist audio, not background music volume
-                connectAudioToGain(playlistAudioRef.current, playlistGainRef, 1.0);
-                
-                // Also set the volume property directly (for browsers that support it)
+                // Set full volume directly (don't use GainNode - causes CORS issues with GCS)
                 playlistAudioRef.current.volume = 1.0;
-                
-                // Resume AudioContext if suspended
-                if (audioContextRef.current?.state === 'suspended') {
-                    audioContextRef.current.resume();
-                }
                 
                 console.log('🎵 Playing playlist audio:', playlistAudioRef.current.src);
                 
@@ -544,7 +536,7 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
                 playlistAudioRef.current.pause();
             }
         }
-    }, [isPlaying, connectAudioToGain]);
+    }, [isPlaying]);
 
     const playPlaylist = useCallback((playlist: Playlist, startIndex: number = 0) => {
         setCurrentPlaylist(playlist);
@@ -686,7 +678,7 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         applyVolume(bgGainRef, bgAudioRef, 0.5, 'BG');
         applyVolume(gameGainRef, gameAudioRef, 0.7, 'Game');
         applyVolume(workoutGainRef, workoutAudioRef, 0.8, 'Workout');
-        applyVolume(playlistGainRef, playlistAudioRef, 1.0, 'Playlist');
+        // Playlist audio uses native volume (no GainNode) to avoid CORS issues with GCS
         
         console.log('🎵 Volume set to:', clampedVolume);
     }, []);

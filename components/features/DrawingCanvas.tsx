@@ -170,7 +170,7 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = ({ prompt, backgroundImageUr
         ctx.lineJoin = 'round';
     }, [CRAYON_OPACITY]);
 
-    // Draw with crayon texture effect
+    // Draw with crayon texture effect - 50% transparent so lines show through
     const drawWithCrayonTexture = useCallback((
         ctx: CanvasRenderingContext2D,
         fromX: number,
@@ -180,26 +180,36 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = ({ prompt, backgroundImageUr
         size: number,
         color: string
     ) => {
-        // Crayon effect - draw multiple offset dots for waxy texture
-        const distance = Math.sqrt((toX - fromX) ** 2 + (toY - fromY) ** 2);
-        const steps = Math.max(Math.floor(distance / 2), 1);
-
-        for (let i = 0; i < steps; i++) {
-            const t = i / steps;
-            const x = fromX + (toX - fromX) * t;
-            const y = fromY + (toY - fromY) * t;
-
-            // Add slight random offset for waxy texture
-            const jitter = size * 0.15;
-            const offsetX = (Math.random() - 0.5) * jitter;
-            const offsetY = (Math.random() - 0.5) * jitter;
-
-            ctx.beginPath();
-            ctx.arc(x + offsetX, y + offsetY, size / 2 * (0.8 + Math.random() * 0.4), 0, Math.PI * 2);
-            ctx.fillStyle = color;
-            ctx.fill();
-        }
-    }, []);
+        // Convert color to rgba with 50% opacity
+        const getRGBA = (hexOrName: string) => {
+            // Create temp element to resolve color
+            const temp = document.createElement('div');
+            temp.style.color = hexOrName;
+            document.body.appendChild(temp);
+            const computed = getComputedStyle(temp).color;
+            document.body.removeChild(temp);
+            // Extract rgb values
+            const match = computed.match(/rgb\((\d+),\s*(\d+),\s*(\d+)\)/);
+            if (match) {
+                return `rgba(${match[1]}, ${match[2]}, ${match[3]}, ${CRAYON_OPACITY})`;
+            }
+            return `rgba(0, 0, 0, ${CRAYON_OPACITY})`;
+        };
+        
+        const transparentColor = getRGBA(color);
+        
+        // Simpler crayon effect - single stroke with transparency
+        ctx.globalAlpha = 1; // We bake alpha into the color instead
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+        ctx.lineWidth = size;
+        ctx.strokeStyle = transparentColor;
+        
+        ctx.beginPath();
+        ctx.moveTo(fromX, fromY);
+        ctx.lineTo(toX, toY);
+        ctx.stroke();
+    }, [CRAYON_OPACITY]);
 
     const getCoordinates = useCallback((e: any) => {
         const canvas = canvasRef.current;

@@ -31,6 +31,13 @@ const lessonSchema = new mongoose.Schema({
         default: 'Bible Study',
     },
 
+    // Target Age Group
+    ageGroup: {
+        type: String,
+        enum: ['4-6', '6-8', '8-10', '10-12', 'all'],
+        default: 'all',
+    },
+
     // Video content
     video: {
         url: {

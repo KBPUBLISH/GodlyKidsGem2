@@ -36,19 +36,25 @@ router.post('/restore-subscription', async (req, res) => {
 
         // Call old backend to restore/check subscription status
         // Endpoint: POST /payments/restore/subscription
+        // Old backend uses Bearer token authentication
         let oldBackendResponse;
         try {
+            console.log(`📡 Calling old backend: ${OLD_BACKEND_URL}/payments/restore/subscription`);
+            console.log(`📧 Email: ${email.toLowerCase().trim()}`);
+            
             oldBackendResponse = await axios.post(
                 `${OLD_BACKEND_URL}/payments/restore/subscription`,
                 { email: email.toLowerCase().trim() },
                 { 
                     headers: { 
-                        'X-Migration-API-Key': MIGRATION_API_KEY,
+                        'Authorization': `Bearer ${MIGRATION_API_KEY}`,
                         'Content-Type': 'application/json'
                     },
-                    timeout: 10000 // 10 second timeout
+                    timeout: 15000 // 15 second timeout
                 }
             );
+            
+            console.log(`✅ Old backend response status: ${oldBackendResponse.status}`);
         } catch (axiosError) {
             console.error('Error calling old backend:', axiosError.message);
             if (axiosError.response) {
@@ -316,6 +322,99 @@ router.get('/status/:email', async (req, res) => {
         res.status(500).json({ 
             success: false, 
             message: 'Failed to get migration status',
+            error: error.message 
+        });
+    }
+});
+
+/**
+ * POST /api/migration/test
+ * Test endpoint to debug old backend connection
+ */
+router.post('/test', async (req, res) => {
+    try {
+        const { email } = req.body;
+
+        if (!email) {
+            return res.status(400).json({ 
+                success: false, 
+                message: 'Email is required for testing' 
+            });
+        }
+
+        console.log('🧪 Migration Test:');
+        console.log('   OLD_BACKEND_URL:', OLD_BACKEND_URL);
+        console.log('   MIGRATION_API_KEY set:', !!MIGRATION_API_KEY);
+        console.log('   MIGRATION_API_KEY (first 20 chars):', MIGRATION_API_KEY ? MIGRATION_API_KEY.substring(0, 20) + '...' : 'NOT SET');
+        console.log('   Test email:', email);
+
+        if (!MIGRATION_API_KEY) {
+            return res.json({ 
+                success: false, 
+                message: 'MIGRATION_API_KEY not set in environment',
+                config: {
+                    OLD_BACKEND_URL,
+                    MIGRATION_API_KEY_SET: false
+                }
+            });
+        }
+
+        // Try calling old backend
+        try {
+            const testUrl = `${OLD_BACKEND_URL}/payments/restore/subscription`;
+            console.log('   Calling:', testUrl);
+            
+            const response = await axios.post(
+                testUrl,
+                { email: email.toLowerCase().trim() },
+                { 
+                    headers: { 
+                        'Authorization': `Bearer ${MIGRATION_API_KEY}`,
+                        'Content-Type': 'application/json'
+                    },
+                    timeout: 15000
+                }
+            );
+
+            console.log('   Response status:', response.status);
+            console.log('   Response data:', JSON.stringify(response.data, null, 2));
+
+            return res.json({
+                success: true,
+                message: 'Old backend responded successfully',
+                config: {
+                    OLD_BACKEND_URL,
+                    MIGRATION_API_KEY_SET: true,
+                    ENDPOINT: testUrl
+                },
+                oldBackendResponse: response.data
+            });
+
+        } catch (axiosError) {
+            console.error('   Axios error:', axiosError.message);
+            
+            return res.json({
+                success: false,
+                message: 'Failed to connect to old backend',
+                config: {
+                    OLD_BACKEND_URL,
+                    MIGRATION_API_KEY_SET: true,
+                    ENDPOINT: `${OLD_BACKEND_URL}/payments/restore/subscription`
+                },
+                error: {
+                    message: axiosError.message,
+                    status: axiosError.response?.status,
+                    statusText: axiosError.response?.statusText,
+                    data: axiosError.response?.data
+                }
+            });
+        }
+
+    } catch (error) {
+        console.error('Migration test error:', error);
+        res.status(500).json({ 
+            success: false, 
+            message: 'Test failed',
             error: error.message 
         });
     }

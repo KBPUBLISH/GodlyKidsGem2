@@ -164,19 +164,12 @@ export const RevenueCatService = {
     
     window.despia = purchaseUrl;
 
-    // Quick mode: Give Apple a few seconds to show the purchase sheet,
-    // then return success. The actual purchase will be verified by webhooks.
-    // This provides a better UX - users can get into the app immediately.
+    // Quick mode: Instantly return success after triggering Apple sheet.
+    // User gets into the app immediately - purchase verification happens via webhooks.
     if (quickMode) {
-      console.log('⚡ Quick mode: Returning success after triggering Apple sheet');
-      return new Promise((resolve) => {
-        // Wait 3 seconds to let Apple's sheet appear and user to interact
-        setTimeout(() => {
-          console.log('✅ Quick mode: Assuming purchase success, user will be let into app');
-          localStorage.setItem('godlykids_premium', 'true');
-          resolve({ success: true });
-        }, 3000);
-      });
+      console.log('⚡ Quick mode: Instant success - letting user into app immediately');
+      localStorage.setItem('godlykids_premium', 'true');
+      return { success: true };
     }
 
     // Legacy mode: Wait for DeSpia to process and user to complete purchase

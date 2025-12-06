@@ -6,11 +6,12 @@ import BookCard from '../components/ui/BookCard';
 import Header from '../components/layout/Header';
 import FeaturedCarousel from '../components/ui/FeaturedCarousel';
 import { useBooks } from '../context/BooksContext';
+import { useUser } from '../context/UserContext';
 import DailyRewardModal from '../components/features/DailyRewardModal';
 import ChallengeGameModal from '../components/features/ChallengeGameModal';
 import StrengthGameModal from '../components/features/StrengthGameModal';
 import PrayerGameModal from '../components/features/PrayerGameModal';
-import { Key, Brain, Dumbbell, Heart, Video, Lock, Check, Play, CheckCircle, Clock } from 'lucide-react';
+import { Key, Brain, Dumbbell, Heart, Video, Lock, Check, Play, CheckCircle, Clock, Coins } from 'lucide-react';
 import { ApiService } from '../services/apiService';
 import { 
   isCompleted, 
@@ -42,10 +43,26 @@ const getLessonStatus = (lesson: any): 'available' | 'locked' | 'completed' => {
 // Profile-specific game engagement keys
 const getEngagementKey = (baseKey: string) => profileService.getProfileKey(baseKey);
 
+// Check if a purchasable game has been unlocked
+const isGamePurchased = (gameId: string): boolean => {
+  const purchasedGames = JSON.parse(localStorage.getItem(profileService.getProfileKey('purchased_games')) || '[]');
+  return purchasedGames.includes(gameId);
+};
+
+// Mark a game as purchased
+const markGamePurchased = (gameId: string): void => {
+  const purchasedGames = JSON.parse(localStorage.getItem(profileService.getProfileKey('purchased_games')) || '[]');
+  if (!purchasedGames.includes(gameId)) {
+    purchasedGames.push(gameId);
+    localStorage.setItem(profileService.getProfileKey('purchased_games'), JSON.stringify(purchasedGames));
+  }
+};
+
 
 const HomePage: React.FC = () => {
   const navigate = useNavigate();
   const { books, loading, refreshBooks } = useBooks();
+  const { coins, spendCoins } = useUser();
 
   const [isHeaderVisible, setIsHeaderVisible] = useState(true);
   const [showDailyReward, setShowDailyReward] = useState(false);
@@ -867,43 +884,79 @@ const HomePage: React.FC = () => {
               </div>
 
               {/* Dynamic Games from Backend */}
-              {dynamicGames.map((game) => (
-                <div
-                  key={game._id || game.gameId}
-                  className="relative w-[calc((100vw-48px-40px)/4)] flex-shrink-0 cursor-pointer"
-                  onClick={() => {
-                    // Handle game click - open webview if URL exists
-                    if (game.gameType === 'webview' && game.url) {
-                      window.open(game.url, '_blank');
-                    }
-                  }}
-                >
-                  <div className="relative aspect-[9/16] rounded-xl overflow-hidden transition-all border-2 border-[#4CAF50]">
-                    {/* Cover Image or Gradient Background */}
-                    {game.coverImage ? (
-                      <img 
-                        src={game.coverImage} 
-                        alt={game.name}
-                        className="absolute inset-0 w-full h-full object-cover"
-                      />
-                    ) : (
-                      <div className="absolute inset-0 bg-gradient-to-br from-[#4CAF50] to-[#2E7D32]" />
-                    )}
-                    
-                    {/* Overlay with game info */}
-                    <div className="absolute inset-0 bg-black/30 flex flex-col items-center justify-end pb-3">
-                      <span className="text-white text-sm font-bold font-display text-center px-2 drop-shadow-lg">
-                        {game.name}
-                      </span>
-                      {game.description && (
-                        <span className="text-white/80 text-[10px] text-center px-2 mt-1 drop-shadow">
-                          {game.description.substring(0, 30)}...
-                        </span>
+              {dynamicGames.map((game) => {
+                const isPurchasable = game.isPurchasable === true;
+                const hasUnlocked = isGamePurchased(game._id || game.gameId);
+                const isLocked = isPurchasable && !hasUnlocked;
+                const canAfford = coins >= (game.goldCoinPrice || 0);
+                
+                return (
+                  <div
+                    key={game._id || game.gameId}
+                    className="relative w-[calc((100vw-48px-40px)/4)] flex-shrink-0 cursor-pointer"
+                    onClick={() => {
+                      if (isLocked) {
+                        // Show purchase confirmation
+                        if (canAfford) {
+                          if (window.confirm(`Unlock "${game.name}" for ${game.goldCoinPrice} gold coins?`)) {
+                            // Spend coins and unlock game
+                            spendCoins(game.goldCoinPrice || 0, `Unlocked game: ${game.name}`);
+                            markGamePurchased(game._id || game.gameId);
+                            // Force re-render
+                            window.location.reload();
+                          }
+                        } else {
+                          alert(`You need ${game.goldCoinPrice} gold coins to unlock this game. You have ${coins} coins.`);
+                        }
+                        return;
+                      }
+                      
+                      // Handle game click - open webview if URL exists
+                      if (game.gameType === 'webview' && game.url) {
+                        window.open(game.url, '_blank');
+                      }
+                    }}
+                  >
+                    <div className={`relative aspect-[9/16] rounded-xl overflow-hidden transition-all border-2 ${isLocked ? 'border-[#FFD700]' : 'border-[#4CAF50]'}`}>
+                      {/* Cover Image or Gradient Background */}
+                      {game.coverImage ? (
+                        <img 
+                          src={game.coverImage} 
+                          alt={game.name}
+                          className={`absolute inset-0 w-full h-full object-cover ${isLocked ? 'brightness-50' : ''}`}
+                        />
+                      ) : (
+                        <div className={`absolute inset-0 bg-gradient-to-br ${isLocked ? 'from-[#8B4513] to-[#5c2e0b]' : 'from-[#4CAF50] to-[#2E7D32]'}`} />
                       )}
+                      
+                      {/* Lock Overlay for Purchasable Games */}
+                      {isLocked && (
+                        <div className="absolute inset-0 bg-black/40 flex flex-col items-center justify-center z-10">
+                          <div className="bg-black/70 rounded-full p-2 border-2 border-[#FFD700] mb-2">
+                            <Lock size={20} className="text-[#FFD700]" />
+                          </div>
+                          <div className="bg-[#FFD700] rounded-full px-2 py-1 flex items-center gap-1">
+                            <Coins size={12} className="text-[#5c2e0b]" />
+                            <span className="text-[10px] font-bold text-[#5c2e0b]">{game.goldCoinPrice}</span>
+                          </div>
+                        </div>
+                      )}
+                      
+                      {/* Overlay with game info */}
+                      <div className="absolute inset-0 bg-black/30 flex flex-col items-center justify-end pb-3">
+                        <span className="text-white text-sm font-bold font-display text-center px-2 drop-shadow-lg">
+                          {game.name}
+                        </span>
+                        {game.description && !isLocked && (
+                          <span className="text-white/80 text-[10px] text-center px-2 mt-1 drop-shadow">
+                            {game.description.substring(0, 30)}...
+                          </span>
+                        )}
+                      </div>
                     </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
 
             </div>
           </div>

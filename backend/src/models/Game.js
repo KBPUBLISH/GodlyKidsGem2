@@ -75,6 +75,16 @@ const gameSchema = new mongoose.Schema({
         oneStar: { type: Number, default: 10 },
     },
     
+    // Purchase with gold coins
+    isPurchasable: {
+        type: Boolean,
+        default: false,
+    },
+    goldCoinPrice: {
+        type: Number,
+        default: 0,
+    },
+    
     createdAt: {
         type: Date,
         default: Date.now,

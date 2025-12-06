@@ -40,6 +40,29 @@ router.get('/enabled', async (req, res) => {
     }
 });
 
+// GET games for Daily Tasks & IQ Games section
+router.get('/daily-tasks', async (req, res) => {
+    try {
+        if (mongoose.connection.readyState !== 1) {
+            return res.status(500).json({ 
+                message: 'Database not connected. Please check MONGO_URI in .env file.',
+                error: 'Database connection not established'
+            });
+        }
+
+        // Get games that are enabled AND marked for daily tasks display
+        const games = await Game.find({ 
+            enabled: true, 
+            showInDailyTasks: true 
+        }).sort({ createdAt: -1 });
+        
+        res.json(games);
+    } catch (error) {
+        console.error('Error fetching daily task games:', error);
+        res.status(500).json({ message: error.message });
+    }
+});
+
 // GET single game by ID
 router.get('/:gameId', async (req, res) => {
     try {

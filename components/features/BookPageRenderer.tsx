@@ -197,6 +197,7 @@ export const BookPageRenderer: React.FC<BookPageRendererProps> = ({
                         <div
                             key={idx}
                             ref={(el) => { textBoxRefs.current[idx] = el; }}
+                            data-scroll-container="true"
                             className="absolute pointer-events-auto overflow-y-auto p-2 pt-6 group"
                             style={{
                                 left: `${box.x}%`,

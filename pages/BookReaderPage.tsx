@@ -1120,17 +1120,31 @@ const BookReaderPage: React.FC = () => {
                 const scrollToHighlightedWord = (wordIdx: number) => {
                     if (wordIdx < 0) return;
                     
+                    // Only scroll if the scroll UI is visible - respect user's preference
+                    if (!showScrollRef.current) return;
+                    
                     // Find the highlighted word element
                     const wordElements = document.querySelectorAll('[data-word-index]');
                     const targetWord = wordElements[wordIdx] as HTMLElement;
                     
                     if (targetWord) {
-                        // Scroll the word into view smoothly
-                        targetWord.scrollIntoView({
-                            behavior: 'smooth',
-                            block: 'center',
-                            inline: 'nearest'
-                        });
+                        // Find the scrollable container (the text scroll area)
+                        const scrollContainer = targetWord.closest('[data-scroll-container]') || targetWord.closest('.overflow-y-auto');
+                        
+                        if (scrollContainer) {
+                            // Scroll within the container only, not the whole page
+                            const containerRect = scrollContainer.getBoundingClientRect();
+                            const wordRect = targetWord.getBoundingClientRect();
+                            const scrollTop = scrollContainer.scrollTop;
+                            
+                            // Calculate position to center the word in the container
+                            const targetScrollTop = scrollTop + (wordRect.top - containerRect.top) - (containerRect.height / 2) + (wordRect.height / 2);
+                            
+                            scrollContainer.scrollTo({
+                                top: Math.max(0, targetScrollTop),
+                                behavior: 'smooth'
+                            });
+                        }
                     }
                 };
                 
@@ -1419,15 +1433,20 @@ const BookReaderPage: React.FC = () => {
     }
 
     // Landscape mode styles for books created in landscape orientation
+    // Make it truly fullscreen covering status bar
     const isLandscape = bookOrientation === 'landscape';
     const landscapeContainerStyle: React.CSSProperties = isLandscape ? {
         position: 'fixed',
         top: 0,
         left: 0,
+        right: 0,
+        bottom: 0,
         width: '100vh',
         height: '100vw',
         transform: 'rotate(90deg) translateY(-100%)',
         transformOrigin: 'top left',
+        zIndex: 9999, // Ensure it's above everything including status bar
+        backgroundColor: '#000', // Black background to cover any gaps
     } : {};
 
     return (

@@ -85,6 +85,7 @@ const BookReaderPage: React.FC = () => {
     const [loading, setLoading] = useState(true);
     const [showScroll, setShowScroll] = useState(true);
     const [bookTitle, setBookTitle] = useState<string>('Book');
+    const [bookOrientation, setBookOrientation] = useState<'portrait' | 'landscape'>('portrait');
 
     // Keep ref in sync with state
     useEffect(() => {
@@ -300,11 +301,17 @@ const BookReaderPage: React.FC = () => {
             try {
                 const book = await ApiService.getBookById(bookId);
                 
-                // Set book title
+                // Set book title and orientation
                 if (book?.title) {
                     setBookTitle(book.title);
                     // Track book view analytics
                     analyticsService.bookView(bookId, book.title);
+                    
+                // Set book orientation
+                const rawData = (book as any)?.rawData;
+                const orientation = rawData?.orientation || (book as any)?.orientation || 'portrait';
+                setBookOrientation(orientation);
+                console.log('📖 Book orientation:', orientation);
                     
                     // Increment view count in database (when book is OPENED)
                     try {
@@ -1411,9 +1418,22 @@ const BookReaderPage: React.FC = () => {
         );
     }
 
+    // Landscape mode styles for books created in landscape orientation
+    const isLandscape = bookOrientation === 'landscape';
+    const landscapeContainerStyle: React.CSSProperties = isLandscape ? {
+        position: 'fixed',
+        top: 0,
+        left: 0,
+        width: '100vh',
+        height: '100vw',
+        transform: 'rotate(90deg) translateY(-100%)',
+        transformOrigin: 'top left',
+    } : {};
+
     return (
         <div
-            className="relative w-full h-screen bg-gray-900 overflow-hidden flex flex-col"
+            className={`relative bg-gray-900 overflow-hidden flex flex-col ${isLandscape ? '' : 'w-full h-screen'}`}
+            style={landscapeContainerStyle}
             onTouchStart={(e) => {
                 // Block any music from playing on touch
                 e.stopPropagation();

@@ -162,6 +162,7 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const isBookReader = location.pathname.startsWith('/read/');
   const isAudioPage = location.pathname.startsWith('/audio/');
   const isLessonPage = location.pathname.startsWith('/lesson/');
+  const isGamePage = location.pathname === '/game';
 
   return (
     <div className="relative h-screen w-full overflow-hidden text-white flex flex-col">
@@ -177,7 +178,7 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
       <MiniPlayer />
 
       {/* Only show BottomNavigation on main tab pages */}
-      {!isLanding && !isSignIn && !isOnboarding && !isBookDetail && !isPlayer && !isProfile && !isCreateProfile && !isPaywall && !isSettings && !isBookReader && !isAudioPage && !isLessonPage && <BottomNavigation />}
+      {!isLanding && !isSignIn && !isOnboarding && !isBookDetail && !isPlayer && !isProfile && !isCreateProfile && !isPaywall && !isSettings && !isBookReader && !isAudioPage && !isLessonPage && !isGamePage && <BottomNavigation />}
     </div>
   );
 };

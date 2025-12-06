@@ -44,16 +44,17 @@ const WeeklyLessonTracker: React.FC<WeeklyLessonTrackerProps> = ({
           const isSelected = !isWeekend && index === selectedDay;
           const isFuture = !isWeekend && index > todayIndex && todayIndex !== -1;
 
-          // Weekend days - display only, not interactive
+          // Weekend days - clickable but show as rest days
           if (isWeekend) {
             return (
-              <div
+              <button
                 key={day}
-                className="flex flex-col items-center gap-0.5 opacity-50"
+                onClick={() => onDaySelect(index)}
+                className="flex flex-col items-center gap-0.5 opacity-70 hover:opacity-100 transition-all duration-200 cursor-pointer hover:scale-105"
               >
                 {/* Day Label */}
                 <span className={`text-[9px] font-bold uppercase tracking-wide ${
-                  isToday ? 'text-[#9C27B0]' : 'text-white/40'
+                  isToday ? 'text-white' : 'text-white/50'
                 }`}>
                   {day}
                 </span>
@@ -62,13 +63,18 @@ const WeeklyLessonTracker: React.FC<WeeklyLessonTrackerProps> = ({
                 <div className={`
                   w-7 h-7 rounded-full flex items-center justify-center
                   ${isToday 
-                    ? 'bg-[#9C27B0]/30 border border-[#9C27B0]/50' 
-                    : 'bg-white/5 border border-white/10'
+                    ? 'bg-white/20 border border-white/50' 
+                    : 'bg-white/5 border border-white/20'
                   }
                 `}>
-                  <Moon className={`w-3 h-3 ${isToday ? 'text-[#9C27B0]' : 'text-white/30'}`} />
+                  <Moon className={`w-3 h-3 ${isToday ? 'text-white' : 'text-white/40'}`} />
                 </div>
-              </div>
+
+                {/* Today indicator dot for weekend */}
+                {isToday && (
+                  <div className="w-1 h-1 rounded-full bg-white animate-pulse mt-0.5" />
+                )}
+              </button>
             );
           }
 
@@ -132,7 +138,7 @@ const WeeklyLessonTracker: React.FC<WeeklyLessonTrackerProps> = ({
 
       {/* Weekend Rest Message (shown if today is Saturday or Sunday) */}
       {(isTodaySaturday || isTodaySunday) && (
-        <div className="text-center mt-2 text-[#9C27B0]/80 text-[10px]">
+        <div className="text-center mt-2 text-white/70 text-[10px]">
           🌙 Rest day! Enjoy reading stories with family!
         </div>
       )}

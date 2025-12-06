@@ -38,7 +38,11 @@ const Categories: React.FC = () => {
                     ? '/api/categories?explore=true'
                     : `/api/categories?type=${filterType}`;
             const response = await apiClient.get(url);
-            setCategories(response.data);
+            // Handle paginated response or direct array
+            const categoriesData = Array.isArray(response.data) 
+                ? response.data 
+                : (response.data.data || response.data.categories || []);
+            setCategories(categoriesData);
         } catch (error) {
             console.error('Error fetching categories:', error);
         } finally {

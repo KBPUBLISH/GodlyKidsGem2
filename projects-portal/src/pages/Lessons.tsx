@@ -35,7 +35,11 @@ const Lessons: React.FC = () => {
                 ? '/api/lessons'
                 : `/api/lessons?status=${statusFilter}`;
             const response = await apiClient.get(url);
-            setLessons(response.data);
+            // Handle paginated response or direct array
+            const lessonsData = Array.isArray(response.data) 
+                ? response.data 
+                : (response.data.data || response.data.lessons || []);
+            setLessons(lessonsData);
         } catch (error) {
             console.error('Error fetching lessons:', error);
         } finally {

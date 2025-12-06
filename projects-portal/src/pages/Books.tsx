@@ -24,7 +24,11 @@ const Books: React.FC = () => {
         const fetchBooks = async () => {
             try {
                 const response = await apiClient.get('/api/books');
-                setBooks(response.data);
+                // Handle paginated response { data: [...], pagination: {...} } or direct array
+                const booksData = Array.isArray(response.data) 
+                    ? response.data 
+                    : (response.data.data || response.data.books || []);
+                setBooks(booksData);
             } catch (error) {
                 console.error('Error fetching books:', error);
             } finally {

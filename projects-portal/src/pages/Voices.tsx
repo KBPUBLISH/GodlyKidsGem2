@@ -41,7 +41,11 @@ const Voices: React.FC = () => {
     const fetchVoices = async () => {
         try {
             const response = await apiClient.get('/api/voices');
-            setVoices(response.data);
+            // Handle paginated response or direct array
+            const voicesData = Array.isArray(response.data) 
+                ? response.data 
+                : (response.data.data || response.data.voices || []);
+            setVoices(voicesData);
         } catch (error) {
             console.error('Error fetching voices:', error);
         } finally {

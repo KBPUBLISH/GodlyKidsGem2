@@ -112,7 +112,11 @@ const BookEdit: React.FC = () => {
             try {
                 // Only fetch book categories
                 const response = await apiClient.get('/api/categories?type=book');
-                setCategories(response.data);
+                // Handle paginated response or direct array
+                const categoriesData = Array.isArray(response.data) 
+                    ? response.data 
+                    : (response.data.data || response.data.categories || []);
+                setCategories(categoriesData);
             } catch (error) {
                 console.error('Error fetching categories:', error);
             }
@@ -124,7 +128,11 @@ const BookEdit: React.FC = () => {
         const fetchGames = async () => {
             try {
                 const response = await apiClient.get('/api/games');
-                setAvailableGames(response.data);
+                // Handle paginated response or direct array
+                const gamesData = Array.isArray(response.data) 
+                    ? response.data 
+                    : (response.data.data || response.data.games || []);
+                setAvailableGames(gamesData);
             } catch (error) {
                 console.error('Error fetching games:', error);
             }

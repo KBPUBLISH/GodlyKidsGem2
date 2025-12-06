@@ -20,6 +20,8 @@ interface Game {
     };
     isPurchasable?: boolean;
     goldCoinPrice?: number;
+    ageMin?: number;
+    ageMax?: number;
 }
 
 const Games: React.FC = () => {
@@ -44,6 +46,8 @@ const Games: React.FC = () => {
         },
         isPurchasable: false,
         goldCoinPrice: 0,
+        ageMin: 4,
+        ageMax: 10,
     });
     const [uploadingCover, setUploadingCover] = useState(false);
     const [uploadingEditCover, setUploadingEditCover] = useState(false);
@@ -132,6 +136,8 @@ const Games: React.FC = () => {
             settings: game.settings || {},
             isPurchasable: game.isPurchasable || false,
             goldCoinPrice: game.goldCoinPrice || 0,
+            ageMin: game.ageMin ?? 4,
+            ageMax: game.ageMax ?? 10,
         });
     };
 
@@ -185,6 +191,8 @@ const Games: React.FC = () => {
                 },
                 isPurchasable: false,
                 goldCoinPrice: 0,
+                ageMin: 4,
+                ageMax: 10,
             });
         } catch (error: any) {
             console.error('Error creating game:', error);
@@ -498,6 +506,42 @@ const Games: React.FC = () => {
                                 </label>
                             </div>
 
+                            {/* Target Age Range Section */}
+                            <div className="border-t border-gray-200 pt-4">
+                                <h3 className="text-lg font-bold text-gray-800 mb-4">Target Age Range</h3>
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div>
+                                        <label className="block text-sm font-semibold text-gray-700 mb-2">
+                                            Minimum Age
+                                        </label>
+                                        <input
+                                            type="number"
+                                            min="1"
+                                            max="18"
+                                            value={formData.ageMin}
+                                            onChange={(e) => setFormData({ ...formData, ageMin: parseInt(e.target.value) || 4 })}
+                                            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="block text-sm font-semibold text-gray-700 mb-2">
+                                            Maximum Age
+                                        </label>
+                                        <input
+                                            type="number"
+                                            min="1"
+                                            max="18"
+                                            value={formData.ageMax}
+                                            onChange={(e) => setFormData({ ...formData, ageMax: parseInt(e.target.value) || 10 })}
+                                            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                                        />
+                                    </div>
+                                </div>
+                                <p className="text-xs text-gray-500 mt-2">
+                                    Set the recommended age range for this game (e.g., 4-10 years old)
+                                </p>
+                            </div>
+
                             {/* Purchase with Gold Coins Section */}
                             <div className="border-t border-gray-200 pt-4">
                                 <h3 className="text-lg font-bold text-gray-800 mb-4 flex items-center gap-2">
@@ -636,6 +680,8 @@ const Games: React.FC = () => {
                                         },
                                         isPurchasable: false,
                                         goldCoinPrice: 0,
+                                        ageMin: 4,
+                                        ageMax: 10,
                                     });
                                 }}
                                 className="text-gray-500 hover:text-gray-700"
@@ -815,6 +861,42 @@ const Games: React.FC = () => {
                                 </label>
                             </div>
 
+                            {/* Target Age Range Section */}
+                            <div className="border-t border-gray-200 pt-4">
+                                <h3 className="text-lg font-bold text-gray-800 mb-4">Target Age Range</h3>
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div>
+                                        <label className="block text-sm font-semibold text-gray-700 mb-2">
+                                            Minimum Age
+                                        </label>
+                                        <input
+                                            type="number"
+                                            min="1"
+                                            max="18"
+                                            value={newGame.ageMin}
+                                            onChange={(e) => setNewGame({ ...newGame, ageMin: parseInt(e.target.value) || 4 })}
+                                            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="block text-sm font-semibold text-gray-700 mb-2">
+                                            Maximum Age
+                                        </label>
+                                        <input
+                                            type="number"
+                                            min="1"
+                                            max="18"
+                                            value={newGame.ageMax}
+                                            onChange={(e) => setNewGame({ ...newGame, ageMax: parseInt(e.target.value) || 10 })}
+                                            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                                        />
+                                    </div>
+                                </div>
+                                <p className="text-xs text-gray-500 mt-2">
+                                    Set the recommended age range for this game (e.g., 4-10 years old)
+                                </p>
+                            </div>
+
                             {/* Purchase with Gold Coins Section */}
                             <div className="border-t border-gray-200 pt-4">
                                 <h3 className="text-lg font-bold text-gray-800 mb-4 flex items-center gap-2">
@@ -929,6 +1011,8 @@ const Games: React.FC = () => {
                                         },
                                         isPurchasable: false,
                                         goldCoinPrice: 0,
+                                        ageMin: 4,
+                                        ageMax: 10,
                                     });
                                 }}
                                 className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition"

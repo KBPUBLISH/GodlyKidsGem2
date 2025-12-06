@@ -85,6 +85,16 @@ const gameSchema = new mongoose.Schema({
         default: 0,
     },
     
+    // Target age range
+    ageMin: {
+        type: Number,
+        default: 4,
+    },
+    ageMax: {
+        type: Number,
+        default: 10,
+    },
+    
     createdAt: {
         type: Date,
         default: Date.now,

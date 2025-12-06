@@ -96,7 +96,8 @@ router.post('/', async (req, res) => {
 
         const { 
             gameId, name, enabled, description, settings, rewards,
-            url, coverImage, gameType, showInDailyTasks, isPurchasable, goldCoinPrice 
+            url, coverImage, gameType, showInDailyTasks, isPurchasable, goldCoinPrice,
+            ageMin, ageMax 
         } = req.body;
 
         if (!gameId || !name) {
@@ -120,6 +121,8 @@ router.post('/', async (req, res) => {
             if (showInDailyTasks !== undefined) existingGame.showInDailyTasks = showInDailyTasks;
             if (isPurchasable !== undefined) existingGame.isPurchasable = isPurchasable;
             if (goldCoinPrice !== undefined) existingGame.goldCoinPrice = goldCoinPrice;
+            if (ageMin !== undefined) existingGame.ageMin = ageMin;
+            if (ageMax !== undefined) existingGame.ageMax = ageMax;
             
             const updatedGame = await existingGame.save();
             res.json(updatedGame);
@@ -142,6 +145,8 @@ router.post('/', async (req, res) => {
                 showInDailyTasks: showInDailyTasks !== undefined ? showInDailyTasks : true,
                 isPurchasable: isPurchasable || false,
                 goldCoinPrice: goldCoinPrice || 0,
+                ageMin: ageMin !== undefined ? ageMin : 4,
+                ageMax: ageMax !== undefined ? ageMax : 10,
             });
             
             const newGame = await game.save();
@@ -191,6 +196,8 @@ router.put('/:gameId', async (req, res) => {
         if (req.body.showInDailyTasks !== undefined) game.showInDailyTasks = req.body.showInDailyTasks;
         if (req.body.isPurchasable !== undefined) game.isPurchasable = req.body.isPurchasable;
         if (req.body.goldCoinPrice !== undefined) game.goldCoinPrice = req.body.goldCoinPrice;
+        if (req.body.ageMin !== undefined) game.ageMin = req.body.ageMin;
+        if (req.body.ageMax !== undefined) game.ageMax = req.body.ageMax;
 
         const updatedGame = await game.save();
         res.json(updatedGame);

@@ -79,11 +79,15 @@ const ListenPage: React.FC = () => {
         });
 
         if (response.ok) {
-          const data = await response.json();
-          const validPlaylists = Array.isArray(data) ? data.filter((p: any) => {
+          const responseData = await response.json();
+          // Handle both paginated response { data: [...] } and direct array response
+          const playlistsArray = Array.isArray(responseData) ? responseData : (responseData.data || []);
+          
+          const validPlaylists = playlistsArray.filter((p: any) => {
             return p._id && p.title && p.status === 'published' && p.items && Array.isArray(p.items) && p.items.length > 0;
-          }) : [];
+          });
 
+          console.log('📻 Fetched playlists:', validPlaylists.length);
           setPlaylists(validPlaylists);
         } else {
           console.error('Error fetching playlists:', response.status);

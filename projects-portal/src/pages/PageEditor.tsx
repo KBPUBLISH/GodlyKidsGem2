@@ -15,7 +15,9 @@ import {
     Sparkles,
     Loader2,
     X,
-    Volume2
+    Volume2,
+    Smartphone,
+    Monitor
 } from 'lucide-react';
 import apiClient, { getMediaUrl } from '../services/apiClient';
 
@@ -80,6 +82,35 @@ const PageEditor: React.FC = () => {
     const [isResizingLeft, setIsResizingLeft] = useState(false);
     const [isResizingRight, setIsResizingRight] = useState(false);
     const [isResizingCanvas, setIsResizingCanvas] = useState(false);
+    
+    // Book orientation
+    const [bookOrientation, setBookOrientation] = useState<'portrait' | 'landscape'>('portrait');
+
+    // Fetch book orientation first
+    useEffect(() => {
+        const fetchBookOrientation = async () => {
+            if (!bookId) return;
+            try {
+                const res = await apiClient.get(`/api/books/${bookId}`);
+                const orientation = res.data.orientation || 'portrait';
+                setBookOrientation(orientation);
+                
+                // Set canvas dimensions based on orientation
+                if (orientation === 'landscape') {
+                    // 16:9 landscape aspect ratio
+                    setCanvasWidth(960);
+                    setCanvasHeight(540);
+                } else {
+                    // 9:16 portrait aspect ratio  
+                    setCanvasWidth(540);
+                    setCanvasHeight(960);
+                }
+            } catch (err) {
+                console.error('Failed to fetch book orientation:', err);
+            }
+        };
+        fetchBookOrientation();
+    }, [bookId]);
 
     // Fetch existing pages for this book
     useEffect(() => {
@@ -1184,7 +1215,24 @@ const PageEditor: React.FC = () => {
             </div>
 
             {/* Main Canvas Area */}
-            <div className="flex-1 bg-gray-200 flex items-center justify-center p-8 overflow-auto relative">
+            <div className="flex-1 bg-gray-200 flex flex-col items-center justify-center p-8 overflow-auto relative">
+                {/* Orientation Indicator */}
+                <div className="mb-4 flex items-center gap-2">
+                    <span className={`px-3 py-1 rounded-full text-xs font-semibold flex items-center gap-1.5 ${
+                        bookOrientation === 'landscape' 
+                            ? 'bg-blue-100 text-blue-700 border border-blue-300' 
+                            : 'bg-purple-100 text-purple-700 border border-purple-300'
+                    }`}>
+                        {bookOrientation === 'landscape' 
+                            ? <><Monitor className="w-3.5 h-3.5" /> Landscape Mode</>
+                            : <><Smartphone className="w-3.5 h-3.5" /> Portrait Mode</>
+                        }
+                    </span>
+                    <span className="text-xs text-gray-500">
+                        {canvasWidth} × {canvasHeight}px
+                    </span>
+                </div>
+                
                 {/* Canvas Container */}
                 <div
                     ref={canvasRef}

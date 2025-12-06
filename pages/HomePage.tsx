@@ -28,6 +28,7 @@ import { readingProgressService } from '../services/readingProgressService';
 import { playHistoryService } from '../services/playHistoryService';
 import { bookCompletionService } from '../services/bookCompletionService';
 import { profileService } from '../services/profileService';
+import { activityTrackingService } from '../services/activityTrackingService';
 
 // Inline getLessonStatus to avoid circular dependency
 const getLessonStatus = (lesson: any): 'available' | 'locked' | 'completed' => {
@@ -150,6 +151,8 @@ const HomePage: React.FC = () => {
       localStorage.setItem(getEngagementKey('daily_key_engaged'), 'true');
       setHasEngagedDailyKey(true);
     }
+    // Track game play for Report Card
+    activityTrackingService.trackGamePlayed('daily_key', 'Daily Key');
     setShowDailyReward(true);
   };
 
@@ -159,6 +162,8 @@ const HomePage: React.FC = () => {
       localStorage.setItem(getEngagementKey('memory_game_engaged'), 'true');
       setHasEngagedMemory(true);
     }
+    // Track game play for Report Card
+    activityTrackingService.trackGamePlayed('memory_challenge', 'Memory Challenge');
     setShowChallengeGame(true);
   };
 
@@ -168,6 +173,8 @@ const HomePage: React.FC = () => {
       localStorage.setItem(getEngagementKey('strength_game_engaged'), 'true');
       setHasEngagedStrength(true);
     }
+    // Track game play for Report Card
+    activityTrackingService.trackGamePlayed('strength_game', 'Strength Game');
     setShowStrengthGame(true);
   };
 
@@ -177,6 +184,8 @@ const HomePage: React.FC = () => {
       localStorage.setItem(getEngagementKey('prayer_game_engaged'), 'true');
       setHasEngagedPrayer(true);
     }
+    // Track game play for Report Card
+    activityTrackingService.trackGamePlayed('prayer_game', 'Prayer Game');
 
     // Request microphone permission early (on user interaction)
     try {

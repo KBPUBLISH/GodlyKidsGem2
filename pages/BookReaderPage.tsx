@@ -14,6 +14,7 @@ import { readCountService } from '../services/readCountService';
 import { analyticsService } from '../services/analyticsService';
 import { BookPageRenderer } from '../components/features/BookPageRenderer';
 import { processTextWithEmotionalCues, removeEmotionalCues } from '../utils/textProcessing';
+import { activityTrackingService } from '../services/activityTrackingService';
 
 interface TextBox {
     text: string;
@@ -306,6 +307,9 @@ const BookReaderPage: React.FC = () => {
                     setBookTitle(book.title);
                     // Track book view analytics
                     analyticsService.bookView(bookId, book.title);
+                    
+                    // Track book read for Report Card
+                    activityTrackingService.trackBookRead(bookId, book.title);
                     
                 // Set book orientation
                 const rawData = (book as any)?.rawData;
@@ -628,6 +632,10 @@ const BookReaderPage: React.FC = () => {
                 const nextIndex = currentPageIndex + 1;
                 setCurrentPageIndex(nextIndex);
                 currentPageIndexRef.current = nextIndex;
+                // Track page read for Report Card
+                if (bookId) {
+                    activityTrackingService.trackPageRead(bookId, nextIndex);
+                }
                 // Use the determined scroll state
                 setShowScroll(scrollStateToUse);
                 showScrollRef.current = scrollStateToUse; // Update ref

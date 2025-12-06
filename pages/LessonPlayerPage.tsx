@@ -9,6 +9,7 @@ import { analyticsService } from '../services/analyticsService';
 import { voiceCloningService, ClonedVoice } from '../services/voiceCloningService';
 import DrawingCanvas from '../components/features/DrawingCanvas';
 import { filterVisibleVoices } from '../services/voiceManagementService';
+import { activityTrackingService } from '../services/activityTrackingService';
 
 interface Lesson {
     _id: string;
@@ -515,6 +516,9 @@ const LessonPlayerPage: React.FC = () => {
         
         // Track lesson complete analytics
         analyticsService.lessonComplete(lessonId!, lesson?.title);
+        
+        // Track for Report Card
+        activityTrackingService.trackLessonCompleted(lessonId!, lesson?.title || 'Video Lesson');
 
         // Save to backend
         const userId = 'local-user'; // TODO: Get from auth context
@@ -1150,6 +1154,9 @@ const LessonPlayerPage: React.FC = () => {
                                                 
                                                 // Track lesson complete analytics
                                                 analyticsService.lessonComplete(lessonId!, lesson?.title);
+                                                
+                                                // Track for Report Card
+                                                activityTrackingService.trackLessonCompleted(lessonId!, lesson?.title || 'Video Lesson');
 
                                                 // Save to backend
                                                 const userId = 'local-user'; // TODO: Get from auth context

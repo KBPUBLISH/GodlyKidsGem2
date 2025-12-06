@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { X, BookOpen, Music, Gamepad2, Clock, Coins, TrendingUp, Calendar, Award, Star, Headphones, Check } from 'lucide-react';
+import { X, BookOpen, Music, Gamepad2, Clock, Coins, TrendingUp, Calendar, Award, Star, Headphones, Check, FileText } from 'lucide-react';
 import { useUser, CoinTransaction } from '../../context/UserContext';
 import { profileService } from '../../services/profileService';
 import { playHistoryService } from '../../services/playHistoryService';
+import { activityTrackingService } from '../../services/activityTrackingService';
 
 interface ReportCardModalProps {
   isOpen: boolean;
@@ -11,6 +12,7 @@ interface ReportCardModalProps {
 
 interface WeeklyStats {
   booksRead: number;
+  pagesRead: number;
   songsListened: number;
   gamesPlayed: number;
   lessonsCompleted: number;
@@ -89,6 +91,7 @@ const ReportCardModal: React.FC<ReportCardModalProps> = ({ isOpen, onClose }) =>
   const [selectedPeriod, setSelectedPeriod] = useState<'week' | 'month'>('week');
   const [weeklyStats, setWeeklyStats] = useState<WeeklyStats>({
     booksRead: 0,
+    pagesRead: 0,
     songsListened: 0,
     gamesPlayed: 0,
     lessonsCompleted: 0,
@@ -106,76 +109,25 @@ const ReportCardModal: React.FC<ReportCardModalProps> = ({ isOpen, onClose }) =>
     if (!isOpen) return;
     
     const loadStats = () => {
-      const now = Date.now();
-      const weekAgo = now - 7 * 24 * 60 * 60 * 1000;
-      const monthAgo = now - 30 * 24 * 60 * 60 * 1000;
-      const cutoff = selectedPeriod === 'week' ? weekAgo : monthAgo;
+      const periodDays = selectedPeriod === 'week' ? 7 : 30;
+      const cutoff = Date.now() - periodDays * 24 * 60 * 60 * 1000;
       
-      // Get profile-specific storage key helper
-      const getKey = (key: string) => profileService.getProfileKey(key);
-      
-      // Books read
-      const booksRead = Object.keys(localStorage)
-        .filter(key => key.includes('book_completion_') || key.includes('reading_progress_'))
-        .filter(key => {
-          const value = localStorage.getItem(key);
-          if (!value) return false;
-          try {
-            const data = JSON.parse(value);
-            const timestamp = data.lastReadAt || data.timestamp || data.completedAt || 0;
-            return timestamp > cutoff;
-          } catch {
-            return false;
-          }
-        }).length;
-      
-      // Songs listened (from play history)
-      const playHistoryEntries = playHistoryService.getAllHistory();
-      const songsListened = Object.values(playHistoryEntries).filter(entry => {
-        const timestamp = entry.lastPlayedAt || 0;
-        return timestamp > cutoff;
-      }).length;
-      
-      // Games played
-      const gameKeys = ['memory_game_engaged', 'daily_key_engaged', 'strength_game_engaged', 'prayer_game_engaged'];
-      const gamesPlayed = gameKeys.filter(key => {
-        const timestamp = localStorage.getItem(getKey(key + '_timestamp'));
-        return timestamp && parseInt(timestamp) > cutoff;
-      }).length;
-      
-      // Lessons completed
-      const lessonCompletions = localStorage.getItem(getKey('lesson_completions'));
-      let lessonsCompleted = 0;
-      if (lessonCompletions) {
-        try {
-          const completions = JSON.parse(lessonCompletions);
-          lessonsCompleted = Object.values(completions).filter((entry: any) => {
-            const timestamp = entry.completedAt || entry.timestamp || 0;
-            return timestamp > cutoff;
-          }).length;
-        } catch {}
-      }
+      // Get stats from activity tracking service
+      const stats = activityTrackingService.getStats(periodDays);
       
       // Coins earned from transactions
       const coinsEarned = coinTransactions
         .filter(t => t.timestamp > cutoff && t.amount > 0)
         .reduce((sum, t) => sum + t.amount, 0);
       
-      // Time spent (estimate based on activity)
-      // Each book ~10 min, each song ~3 min, each game ~5 min, each lesson ~8 min
-      const estimatedTime = booksRead * 10 + songsListened * 3 + gamesPlayed * 5 + lessonsCompleted * 8;
-      
-      // Also check session tracking if available
-      const sessionTime = localStorage.getItem(getKey('total_session_time_minutes'));
-      const timeSpent = sessionTime ? parseInt(sessionTime) : estimatedTime;
-      
       setWeeklyStats({
-        booksRead,
-        songsListened,
-        gamesPlayed,
-        lessonsCompleted,
+        booksRead: stats.booksRead,
+        pagesRead: stats.pagesRead,
+        songsListened: stats.songsListened,
+        gamesPlayed: stats.gamesPlayed,
+        lessonsCompleted: stats.lessonsCompleted,
         coinsEarned,
-        timeSpentMinutes: timeSpent,
+        timeSpentMinutes: stats.timeSpentMinutes,
       });
       
       // Build recent activity list
@@ -193,12 +145,13 @@ const ReportCardModal: React.FC<ReportCardModalProps> = ({ isOpen, onClose }) =>
         }
       });
       
-      // Add play history
-      Object.values(playHistoryEntries).slice(0, 10).forEach(entry => {
+      // Add activities from tracking service
+      const recentTrackedActivities = activityTrackingService.getRecentActivities(15);
+      recentTrackedActivities.forEach(activity => {
         activities.push({
-          type: 'song',
-          title: `Playlist played`,
-          timestamp: entry.lastPlayedAt || Date.now(),
+          type: activity.type as any,
+          title: activity.title || `${activity.type} activity`,
+          timestamp: activity.timestamp,
         });
       });
       
@@ -210,30 +163,6 @@ const ReportCardModal: React.FC<ReportCardModalProps> = ({ isOpen, onClose }) =>
     loadStats();
   }, [isOpen, selectedPeriod, coinTransactions]);
   
-  // Track session time while app is open
-  useEffect(() => {
-    if (!isOpen) return;
-    
-    const getKey = (key: string) => profileService.getProfileKey(key);
-    const sessionStartKey = getKey('session_start');
-    const totalTimeKey = getKey('total_session_time_minutes');
-    
-    // Mark session start if not already set
-    if (!localStorage.getItem(sessionStartKey)) {
-      localStorage.setItem(sessionStartKey, Date.now().toString());
-    }
-    
-    // Update total time on interval
-    const interval = setInterval(() => {
-      const sessionStart = localStorage.getItem(sessionStartKey);
-      if (sessionStart) {
-        const previousTotal = parseInt(localStorage.getItem(totalTimeKey) || '0');
-        localStorage.setItem(totalTimeKey, (previousTotal + 1).toString());
-      }
-    }, 60000); // Update every minute
-    
-    return () => clearInterval(interval);
-  }, [isOpen]);
   
   // Hide BottomNavigation when modal is open
   useEffect(() => {
@@ -387,6 +316,16 @@ const ReportCardModal: React.FC<ReportCardModalProps> = ({ isOpen, onClose }) =>
                   <p className="text-blue-400 text-xs mt-1">📚 Stories explored</p>
                 </div>
 
+                {/* Pages Read */}
+                <div className="bg-cyan-500/10 rounded-xl p-4 border border-cyan-500/30">
+                  <div className="flex items-center gap-2 mb-2">
+                    <FileText className="w-5 h-5 text-cyan-400" />
+                    <span className="text-white/60 text-xs font-medium">Pages Read</span>
+                  </div>
+                  <p className="text-white font-bold text-2xl">{weeklyStats.pagesRead}</p>
+                  <p className="text-cyan-400 text-xs mt-1">📄 Pages turned</p>
+                </div>
+
                 {/* Songs Listened */}
                 <div className="bg-purple-500/10 rounded-xl p-4 border border-purple-500/30">
                   <div className="flex items-center gap-2 mb-2">
@@ -408,13 +347,13 @@ const ReportCardModal: React.FC<ReportCardModalProps> = ({ isOpen, onClose }) =>
                 </div>
 
                 {/* Lessons Completed */}
-                <div className="bg-orange-500/10 rounded-xl p-4 border border-orange-500/30">
+                <div className="bg-orange-500/10 rounded-xl p-4 border border-orange-500/30 col-span-2">
                   <div className="flex items-center gap-2 mb-2">
                     <Calendar className="w-5 h-5 text-orange-400" />
-                    <span className="text-white/60 text-xs font-medium">Lessons Done</span>
+                    <span className="text-white/60 text-xs font-medium">Lessons Completed</span>
                   </div>
                   <p className="text-white font-bold text-2xl">{weeklyStats.lessonsCompleted}</p>
-                  <p className="text-orange-400 text-xs mt-1">📖 Daily devotionals</p>
+                  <p className="text-orange-400 text-xs mt-1">📖 Daily video lessons</p>
                 </div>
               </div>
 

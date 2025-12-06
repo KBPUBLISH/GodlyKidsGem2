@@ -3,6 +3,7 @@ import React, { createContext, useContext, useState, useEffect, useRef, useCallb
 import { ApiService } from '../services/apiService';
 import { playHistoryService } from '../services/playHistoryService';
 import { analyticsService } from '../services/analyticsService';
+import { activityTrackingService } from '../services/activityTrackingService';
 
 // --- Interfaces ---
 export interface AudioItem {
@@ -566,6 +567,8 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
             analyticsService.playlistPlay(playlistId, playlist.title);
             if (track) {
                 analyticsService.audioPlay(trackId || `${playlistId}_${startIndex}`, track.title, playlistId);
+                // Track for Report Card
+                activityTrackingService.trackSongPlayed(trackId || `${playlistId}_${startIndex}`, track.title);
             }
             
             // Increment server-side counts (for portal analytics)
@@ -594,6 +597,8 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
             
             if (playlistId && track) {
                 analyticsService.audioPlay(trackId || `${playlistId}_${nextIndex}`, track.title, playlistId);
+                // Track for Report Card
+                activityTrackingService.trackSongPlayed(trackId || `${playlistId}_${nextIndex}`, track.title);
                 if (trackId) {
                     ApiService.incrementItemPlayCount(playlistId, trackId);
                 }
@@ -615,6 +620,8 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
                 
                 if (playlistId && track) {
                     analyticsService.audioPlay(trackId || `${playlistId}_${prevIndex}`, track.title, playlistId);
+                    // Track for Report Card
+                    activityTrackingService.trackSongPlayed(trackId || `${playlistId}_${prevIndex}`, track.title);
                     if (trackId) {
                         ApiService.incrementItemPlayCount(playlistId, trackId);
                     }

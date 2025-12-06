@@ -29,6 +29,7 @@ import { UserProvider } from './context/UserContext';
 import { AudioProvider } from './context/AudioContext';
 import { SubscriptionProvider } from './context/SubscriptionContext';
 import NotificationService from './services/notificationService';
+import { activityTrackingService } from './services/activityTrackingService';
 
 // --- ASSETS & HELPERS ---
 
@@ -187,6 +188,15 @@ const App: React.FC = () => {
   // Initialize OneSignal notifications
   useEffect(() => {
     NotificationService.init();
+  }, []);
+
+  // Initialize activity tracking for Report Card
+  useEffect(() => {
+    activityTrackingService.startTimeTracking();
+    
+    return () => {
+      activityTrackingService.stopTimeTracking();
+    };
   }, []);
 
   return (

@@ -369,23 +369,38 @@ const Games: React.FC = () => {
                                 />
                             </div>
 
-                            {formData.gameType === 'webview' && (
-                                <>
-                                    <div>
-                                        <label className="block text-sm font-semibold text-gray-700 mb-2">
-                                            Game URL
-                                        </label>
-                                        <input
-                                            type="url"
-                                            value={formData.url}
-                                            onChange={(e) => setFormData({ ...formData, url: e.target.value })}
-                                            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
-                                        />
-                                    </div>
-                                    <div>
-                                        <label className="block text-sm font-semibold text-gray-700 mb-2">
-                                            Cover Image
-                                        </label>
+                            <div>
+                                <label className="block text-sm font-semibold text-gray-700 mb-2">
+                                    Game Type
+                                </label>
+                                <select
+                                    value={formData.gameType || 'webview'}
+                                    onChange={(e) => setFormData({ ...formData, gameType: e.target.value as 'modal' | 'webview' })}
+                                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                                >
+                                    <option value="webview">Webview (External URL)</option>
+                                    <option value="modal">Modal (Built-in)</option>
+                                </select>
+                            </div>
+
+                            <div>
+                                <label className="block text-sm font-semibold text-gray-700 mb-2">
+                                    Game URL {formData.gameType === 'webview' && <span className="text-red-500">*</span>}
+                                </label>
+                                <input
+                                    type="url"
+                                    value={formData.url || ''}
+                                    onChange={(e) => setFormData({ ...formData, url: e.target.value })}
+                                    placeholder="https://example.com/game"
+                                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                                />
+                                <p className="text-xs text-gray-500 mt-1">The URL that opens when users click on the game</p>
+                            </div>
+
+                            <div>
+                                <label className="block text-sm font-semibold text-gray-700 mb-2">
+                                    Cover Image
+                                </label>
                                         {formData.coverImage && (
                                             <div className="mb-2 relative inline-block">
                                                 <img
@@ -456,8 +471,6 @@ const Games: React.FC = () => {
                                             />
                                         </p>
                                     </div>
-                                </>
-                            )}
 
                             <div className="flex items-center gap-2">
                                 <input

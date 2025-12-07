@@ -606,7 +606,7 @@ const HomePage: React.FC = () => {
 
         {/* Welcome Video - Plays once per session above Week's Progress */}
         {showWelcomeVideo && (
-          <div className="flex justify-center mb-4">
+          <div className="flex flex-col items-center mb-4">
             <div className="relative aspect-[9/16] w-[calc((100%-16px)/3)] rounded-lg overflow-hidden">
               <video
                 ref={welcomeVideoRef}
@@ -619,6 +619,9 @@ const HomePage: React.FC = () => {
                 onError={handleWelcomeVideoEnd}
               />
             </div>
+            <p className="mt-3 text-white font-display font-bold text-lg text-center">
+              Hi Explorer! Let's Dive in. 🌊
+            </p>
           </div>
         )}
 

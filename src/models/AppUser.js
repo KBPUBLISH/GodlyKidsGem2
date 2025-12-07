@@ -186,3 +186,4 @@ appUserSchema.index({ lastActiveAt: -1 });
 
 module.exports = mongoose.model('AppUser', appUserSchema);
 
+

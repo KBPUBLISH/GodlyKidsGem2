@@ -36,6 +36,8 @@ interface Page {
     coloringEndModalOnly?: boolean; // If true, coloring page only shows in end modal
     scrollUrl?: string;
     scrollHeight?: number;
+    scrollMidHeight?: number; // Mid scroll height % (default 30)
+    scrollMaxHeight?: number; // Max scroll height % (default 60)
     textBoxes?: TextBox[];
     files?: {
         soundEffect?: {
@@ -2131,10 +2133,8 @@ const BookReaderPage: React.FC = () => {
                     bottom: scrollState === 'hidden' 
                         ? '1rem' 
                         : scrollState === 'max'
-                            ? 'calc(60% + 1rem)' // Above max scroll (60%)
-                            : currentPage.scrollHeight 
-                                ? `calc(${currentPage.scrollHeight}px + 1rem)` 
-                                : 'calc(30% + 1rem)' // Above mid scroll (30%)
+                            ? `calc(${currentPage.scrollMaxHeight || 60}% + 1.5rem)` // Above max scroll
+                            : `calc(${currentPage.scrollMidHeight || 30}% + 1.5rem)` // Above mid scroll
                 }}
             >
                 <WoodButton

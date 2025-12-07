@@ -174,6 +174,8 @@ export const BookPageRenderer: React.FC<BookPageRendererProps> = ({
         <div
             className="w-full h-full relative bg-white overflow-hidden shadow-2xl"
             onClick={handleScrollClick}
+            onTouchStart={handleScrollTouchStart}
+            onTouchEnd={handleScrollTouchEnd}
         >
             {/* Background Layer */}
             <div className="absolute inset-0 bg-black overflow-hidden">
@@ -227,35 +229,19 @@ export const BookPageRenderer: React.FC<BookPageRendererProps> = ({
                 </div>
             )}
             
-            {/* Swipe Zone - Covers entire scroll area for swipe detection */}
-            {page.scrollUrl && scrollState !== 'hidden' && (
-                <div
-                    className="absolute bottom-0 left-0 right-0 z-25 cursor-pointer"
-                    style={{ 
-                        height: scrollState === 'max' 
-                            ? `${page.scrollMaxHeight || 60}%` 
-                            : `${page.scrollMidHeight || 30}%`
-                    }}
-                    onTouchStart={handleScrollTouchStart}
-                    onTouchEnd={handleScrollTouchEnd}
-                    onClick={handleScrollClick}
-                >
-                </div>
-            )}
-            
-            {/* Swipe Indicator - Positioned ABOVE the scroll */}
+            {/* Swipe Indicator - Inside the scroll, at the top */}
             {page.scrollUrl && scrollState !== 'hidden' && (
                 <div 
-                    className="absolute left-1/2 transform -translate-x-1/2 z-30 pointer-events-none transition-all duration-500 ease-in-out"
+                    className="absolute left-1/2 transform -translate-x-1/2 z-20 pointer-events-none transition-all duration-500 ease-in-out"
                     style={{
                         bottom: scrollState === 'max' 
-                            ? `calc(${page.scrollMaxHeight || 60}% - 8px)` 
-                            : `calc(${page.scrollMidHeight || 30}% - 8px)`
+                            ? `calc(${page.scrollMaxHeight || 60}% - 24px)` 
+                            : `calc(${page.scrollMidHeight || 30}% - 24px)`
                     }}
                 >
-                    <div className="flex flex-col items-center gap-1 bg-black/40 backdrop-blur-sm px-4 py-2 rounded-full">
-                        <div className="w-10 h-1 bg-white/80 rounded-full"></div>
-                        <span className="text-white text-[10px] font-medium">
+                    <div className="flex flex-col items-center gap-0.5 opacity-50">
+                        <div className="w-10 h-1 bg-white rounded-full shadow"></div>
+                        <span className="text-white/90 text-[9px] font-medium drop-shadow">
                             {scrollState === 'mid' ? '↑ Swipe for more' : '↓ Swipe to shrink'}
                         </span>
                     </div>

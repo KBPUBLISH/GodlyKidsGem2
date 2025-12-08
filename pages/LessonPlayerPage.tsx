@@ -11,6 +11,14 @@ import DrawingCanvas from '../components/features/DrawingCanvas';
 import { filterVisibleVoices } from '../services/voiceManagementService';
 import { activityTrackingService } from '../services/activityTrackingService';
 
+interface Episode {
+    episodeNumber: number;
+    title?: string;
+    url: string;
+    thumbnail?: string;
+    duration?: number;
+}
+
 interface Lesson {
     _id: string;
     title: string;
@@ -20,6 +28,7 @@ interface Lesson {
         thumbnail?: string;
         duration?: number;
     };
+    episodes?: Episode[];
     type?: string;
     captions?: Array<{
         text: string;
@@ -75,6 +84,11 @@ const LessonPlayerPage: React.FC = () => {
     const [touchStart, setTouchStart] = useState<{ x: number; y: number } | null>(null);
     const [devotionalRead, setDevotionalRead] = useState(false);
     const [activityCompleted, setActivityCompleted] = useState(false);
+    
+    // Episode state
+    const [currentEpisodeIndex, setCurrentEpisodeIndex] = useState(0);
+    const [showEpisodeSelector, setShowEpisodeSelector] = useState(false);
+    const preloadedVideosRef = useRef<Map<string, HTMLVideoElement>>(new Map());
 
     // Quiz state
     const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
@@ -168,6 +182,77 @@ const LessonPlayerPage: React.FC = () => {
             setSelectedVoiceId('21m00Tcm4TlvDq8ikWAM');
         }
     };
+
+    // Episode helpers
+    const hasEpisodes = lesson?.episodes && lesson.episodes.length > 0;
+    const totalEpisodes = hasEpisodes ? lesson!.episodes!.length : 1;
+    const currentEpisode = hasEpisodes ? lesson!.episodes![currentEpisodeIndex] : null;
+    
+    const getCurrentVideoUrl = (): string => {
+        if (hasEpisodes && currentEpisode) {
+            return currentEpisode.url;
+        }
+        return lesson?.video?.url || '';
+    };
+
+    const goToNextEpisode = () => {
+        if (hasEpisodes && currentEpisodeIndex < totalEpisodes - 1) {
+            setCurrentEpisodeIndex(prev => prev + 1);
+            setVideoProgress(0);
+            setIsVideoPlaying(true);
+            // Auto-play next episode
+            setTimeout(() => {
+                if (videoRef.current) {
+                    videoRef.current.play().catch(err => console.log('Autoplay prevented:', err));
+                }
+            }, 100);
+        } else {
+            // Last episode finished - mark as watched
+            setVideoWatched(true);
+        }
+    };
+
+    const goToPreviousEpisode = () => {
+        if (hasEpisodes && currentEpisodeIndex > 0) {
+            setCurrentEpisodeIndex(prev => prev - 1);
+            setVideoProgress(0);
+            setTimeout(() => {
+                if (videoRef.current) {
+                    videoRef.current.play().catch(err => console.log('Autoplay prevented:', err));
+                }
+            }, 100);
+        }
+    };
+
+    const goToEpisode = (index: number) => {
+        if (hasEpisodes && index >= 0 && index < totalEpisodes) {
+            setCurrentEpisodeIndex(index);
+            setVideoProgress(0);
+            setShowEpisodeSelector(false);
+            setTimeout(() => {
+                if (videoRef.current) {
+                    videoRef.current.play().catch(err => console.log('Autoplay prevented:', err));
+                }
+            }, 100);
+        }
+    };
+
+    // Preload next episodes for smooth transitions
+    useEffect(() => {
+        if (hasEpisodes && lesson?.episodes) {
+            // Preload next 2 episodes
+            const episodesToPreload = lesson.episodes.slice(currentEpisodeIndex + 1, currentEpisodeIndex + 3);
+            episodesToPreload.forEach(episode => {
+                if (!preloadedVideosRef.current.has(episode.url)) {
+                    const video = document.createElement('video');
+                    video.preload = 'auto';
+                    video.src = episode.url;
+                    preloadedVideosRef.current.set(episode.url, video);
+                    console.log(`🎬 Preloading episode ${episode.episodeNumber}...`);
+                }
+            });
+        }
+    }, [hasEpisodes, currentEpisodeIndex, lesson?.episodes]);
 
     // Close dropdown when clicking outside
     useEffect(() => {
@@ -653,15 +738,21 @@ const LessonPlayerPage: React.FC = () => {
                     >
                         <video
                             ref={videoRef}
-                            src={lesson.video.url}
+                            key={getCurrentVideoUrl()} // Force re-render when URL changes
+                            src={getCurrentVideoUrl()}
                             className="w-full h-full object-contain pointer-events-none"
                             onTimeUpdate={handleVideoProgress}
                             onPlay={() => setIsVideoPlaying(true)}
                             onPause={() => setIsVideoPlaying(false)}
                             onEnded={() => {
                                 setIsVideoPlaying(false);
-                                setVideoWatched(true);
-                                // Show continue button - don't auto-advance, let user click
+                                // If multi-episode, go to next episode
+                                if (hasEpisodes && currentEpisodeIndex < totalEpisodes - 1) {
+                                    goToNextEpisode();
+                                } else {
+                                    // Last episode or single video - show continue button
+                                    setVideoWatched(true);
+                                }
                             }}
                             onLoadedData={() => {
                                 // Autoplay video when loaded
@@ -688,6 +779,70 @@ const LessonPlayerPage: React.FC = () => {
                             </div>
                         )}
 
+                        {/* Episode Indicator - Shows current episode number */}
+                        {hasEpisodes && (
+                            <div className="absolute top-20 left-4 z-30">
+                                <button
+                                    onClick={() => setShowEpisodeSelector(!showEpisodeSelector)}
+                                    className="bg-black/60 backdrop-blur-sm text-white px-4 py-2 rounded-full flex items-center gap-2 hover:bg-black/70 transition-colors border border-white/20"
+                                >
+                                    <Video className="w-4 h-4 text-[#FFD700]" />
+                                    <span className="font-display font-bold text-sm">
+                                        {currentEpisode?.title || `Episode ${currentEpisodeIndex + 1}`}
+                                    </span>
+                                    <span className="text-white/60 text-xs">
+                                        / {totalEpisodes}
+                                    </span>
+                                </button>
+                            </div>
+                        )}
+
+                        {/* Episode Selector Modal */}
+                        {showEpisodeSelector && hasEpisodes && (
+                            <div className="absolute inset-0 bg-black/80 backdrop-blur-sm z-40 flex items-center justify-center">
+                                <div className="bg-[#2a1810] border-4 border-[#8B4513] rounded-2xl p-6 max-w-sm w-full mx-4 shadow-2xl">
+                                    <div className="flex items-center justify-between mb-4">
+                                        <h3 className="text-[#FFD700] font-display font-bold text-lg">Select Episode</h3>
+                                        <button
+                                            onClick={() => setShowEpisodeSelector(false)}
+                                            className="text-white/60 hover:text-white p-1"
+                                        >
+                                            <X className="w-6 h-6" />
+                                        </button>
+                                    </div>
+                                    
+                                    {/* Episode List - Horizontal Scroll with Snap */}
+                                    <div 
+                                        className="flex gap-3 overflow-x-auto pb-4 snap-x snap-mandatory scrollbar-hide"
+                                        style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
+                                    >
+                                        {lesson?.episodes?.map((episode, index) => (
+                                            <button
+                                                key={index}
+                                                onClick={() => goToEpisode(index)}
+                                                className={`flex-shrink-0 snap-center w-16 h-16 rounded-xl flex flex-col items-center justify-center transition-all ${
+                                                    index === currentEpisodeIndex
+                                                        ? 'bg-[#FFD700] text-[#2a1810] scale-110 shadow-lg'
+                                                        : index < currentEpisodeIndex
+                                                        ? 'bg-[#4a3020] text-[#FFD700]/80 border-2 border-[#FFD700]/30'
+                                                        : 'bg-[#3a2515] text-white/60 hover:bg-[#4a3020] hover:text-white'
+                                                }`}
+                                            >
+                                                <span className="font-display font-bold text-2xl">{index + 1}</span>
+                                                {index < currentEpisodeIndex && (
+                                                    <Check className="w-4 h-4 mt-0.5" />
+                                                )}
+                                            </button>
+                                        ))}
+                                    </div>
+                                    
+                                    <p className="text-white/60 text-xs text-center mt-2">
+                                        {currentEpisode?.title || `Episode ${currentEpisodeIndex + 1}`}
+                                    </p>
+                                </div>
+                            </div>
+                        )}
+
                         {/* Continue Button - Shows after watching video or when video ends */}
                         {videoWatched && (
                             <div className="absolute bottom-16 left-0 right-0 flex justify-center z-30 animate-in fade-in slide-in-from-bottom-4 duration-500">
@@ -702,6 +857,30 @@ const LessonPlayerPage: React.FC = () => {
                                     Continue to Devotional
                                     <ChevronRight className="w-6 h-6" />
                                 </button>
+                            </div>
+                        )}
+
+                        {/* Episode Progress Bar (for multi-episode) */}
+                        {hasEpisodes && !videoWatched && (
+                            <div className="absolute bottom-16 left-4 right-4 z-30">
+                                <div className="bg-black/60 backdrop-blur-sm rounded-full px-4 py-2 flex items-center gap-3">
+                                    {lesson?.episodes?.map((_, index) => (
+                                        <button
+                                            key={index}
+                                            onClick={() => goToEpisode(index)}
+                                            className={`flex-1 h-1.5 rounded-full transition-all ${
+                                                index < currentEpisodeIndex
+                                                    ? 'bg-[#FFD700]' // Completed
+                                                    : index === currentEpisodeIndex
+                                                    ? 'bg-gradient-to-r from-[#FFD700] to-white/30' // Current
+                                                    : 'bg-white/30' // Upcoming
+                                            }`}
+                                            style={index === currentEpisodeIndex ? { 
+                                                background: `linear-gradient(to right, #FFD700 ${videoProgress}%, rgba(255,255,255,0.3) ${videoProgress}%)` 
+                                            } : {}}
+                                        />
+                                    ))}
+                                </div>
                             </div>
                         )}
 

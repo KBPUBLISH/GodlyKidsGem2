@@ -1,7 +1,15 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Upload, Plus, Trash2, Save, Video, Image as ImageIcon, BookOpen, Activity, Calendar, Sparkles } from 'lucide-react';
+import { ArrowLeft, Upload, Plus, Trash2, Save, Video, Image as ImageIcon, BookOpen, Activity, Calendar, Sparkles, GripVertical, ChevronUp, ChevronDown, Film } from 'lucide-react';
 import apiClient from '../services/apiClient';
+
+interface Episode {
+    episodeNumber: number;
+    title?: string;
+    url: string;
+    thumbnail?: string;
+    duration?: number;
+}
 
 interface Devotional {
     title?: string;
@@ -51,6 +59,7 @@ interface LessonFormData {
         thumbnail?: string;
         duration?: number;
     };
+    episodes: Episode[];
     devotional: Devotional;
     activity: Activity;
     scheduledDate?: string;
@@ -85,6 +94,7 @@ const LessonForm: React.FC = () => {
             thumbnail: '',
             duration: 0,
         },
+        episodes: [],
         devotional: {
             title: '',
             content: '',
@@ -101,6 +111,9 @@ const LessonForm: React.FC = () => {
         coinReward: 50,
         order: 0,
     });
+    
+    const [uploadingEpisode, setUploadingEpisode] = useState<number | null>(null);
+    const episodeInputRefs = useRef<Map<number, HTMLInputElement>>(new Map());
 
     useEffect(() => {
         if (id) {
@@ -118,6 +131,7 @@ const LessonForm: React.FC = () => {
                 type: lesson.type || 'Bible Study',
                 ageGroup: lesson.ageGroup || 'all',
                 video: lesson.video || { url: '', thumbnail: '', duration: 0 },
+                episodes: lesson.episodes || [],
                 devotional: lesson.devotional || { title: '', content: '', verse: '', verseText: '' },
                 activity: lesson.activity || { type: 'quiz', questions: [] },
                 scheduledDate: lesson.scheduledDate ? (() => {
@@ -225,6 +239,102 @@ const LessonForm: React.FC = () => {
         }
     };
 
+    // Episode management functions
+    const handleEpisodeUpload = async (file: File, episodeIndex: number) => {
+        if (!file.type.startsWith('video/')) {
+            alert('Please select a video file');
+            return;
+        }
+
+        setUploadingEpisode(episodeIndex);
+        const formDataUpload = new FormData();
+        formDataUpload.append('file', file);
+
+        try {
+            const lessonId = id || 'temp';
+            const response = await apiClient.post(
+                `/api/upload/video?bookId=lessons&type=episodes&lessonId=${lessonId}&episodeNumber=${episodeIndex + 1}`,
+                formDataUpload,
+                {
+                    headers: { 'Content-Type': 'multipart/form-data' },
+                }
+            );
+
+            // Get video duration
+            let duration = 0;
+            const video = document.createElement('video');
+            video.src = response.data.url;
+            await new Promise<void>((resolve) => {
+                video.onloadedmetadata = () => {
+                    duration = Math.floor(video.duration);
+                    resolve();
+                };
+                video.onerror = () => resolve();
+            });
+
+            setFormData(prev => {
+                const newEpisodes = [...prev.episodes];
+                newEpisodes[episodeIndex] = {
+                    ...newEpisodes[episodeIndex],
+                    url: response.data.url,
+                    duration,
+                };
+                return { ...prev, episodes: newEpisodes };
+            });
+        } catch (error) {
+            console.error('Error uploading episode video:', error);
+            alert('Failed to upload episode video');
+        } finally {
+            setUploadingEpisode(null);
+        }
+    };
+
+    const addEpisode = () => {
+        setFormData(prev => ({
+            ...prev,
+            episodes: [
+                ...prev.episodes,
+                {
+                    episodeNumber: prev.episodes.length + 1,
+                    title: `Episode ${prev.episodes.length + 1}`,
+                    url: '',
+                    duration: 0,
+                },
+            ],
+        }));
+    };
+
+    const removeEpisode = (index: number) => {
+        setFormData(prev => {
+            const newEpisodes = prev.episodes
+                .filter((_, i) => i !== index)
+                .map((ep, i) => ({
+                    ...ep,
+                    episodeNumber: i + 1,
+                    title: ep.title?.startsWith('Episode ') ? `Episode ${i + 1}` : ep.title,
+                }));
+            return { ...prev, episodes: newEpisodes };
+        });
+    };
+
+    const moveEpisode = (index: number, direction: 'up' | 'down') => {
+        const newIndex = direction === 'up' ? index - 1 : index + 1;
+        if (newIndex < 0 || newIndex >= formData.episodes.length) return;
+
+        setFormData(prev => {
+            const newEpisodes = [...prev.episodes];
+            [newEpisodes[index], newEpisodes[newIndex]] = [newEpisodes[newIndex], newEpisodes[index]];
+            // Re-number episodes
+            return {
+                ...prev,
+                episodes: newEpisodes.map((ep, i) => ({
+                    ...ep,
+                    episodeNumber: i + 1,
+                })),
+            };
+        });
+    };
+
 
 
     const handleGenerateActivity = async () => {
@@ -320,9 +430,22 @@ const LessonForm: React.FC = () => {
             return;
         }
 
-        if (!formData.video.url) {
-            alert('Video is required');
+        // Check if either legacy video or episodes exist
+        const hasLegacyVideo = !!formData.video.url;
+        const hasEpisodes = formData.episodes.length > 0 && formData.episodes.every(ep => ep.url);
+        
+        if (!hasLegacyVideo && !hasEpisodes) {
+            alert('Video is required. Either upload a single video or add episodes.');
             return;
+        }
+        
+        // Validate episodes have videos
+        if (formData.episodes.length > 0) {
+            const missingVideos = formData.episodes.filter(ep => !ep.url);
+            if (missingVideos.length > 0) {
+                alert(`Please upload videos for all episodes. Missing: ${missingVideos.map(ep => `Episode ${ep.episodeNumber}`).join(', ')}`);
+                return;
+            }
         }
 
         if (formData.activity.type === 'quiz') {
@@ -615,6 +738,161 @@ const LessonForm: React.FC = () => {
                             </div>
                         </div>
                     </div>
+                </div>
+
+                {/* Episodes Section */}
+                <div className="space-y-4">
+                    <div className="flex items-center justify-between border-b pb-2">
+                        <h2 className="text-xl font-bold text-gray-800 flex items-center gap-2">
+                            <Film className="w-5 h-5" />
+                            Video Episodes
+                            <span className="text-sm font-normal text-gray-500">(optional - for multi-part lessons)</span>
+                        </h2>
+                        <button
+                            type="button"
+                            onClick={addEpisode}
+                            className="bg-indigo-600 text-white px-4 py-2 rounded-lg flex items-center gap-2 hover:bg-indigo-700 transition-colors text-sm"
+                        >
+                            <Plus className="w-4 h-4" />
+                            Add Episode
+                        </button>
+                    </div>
+
+                    {formData.episodes.length === 0 ? (
+                        <div className="text-center py-8 text-gray-500 border-2 border-dashed border-gray-300 rounded-lg bg-gray-50">
+                            <Film className="w-12 h-12 mx-auto mb-3 text-gray-300" />
+                            <p className="font-medium">No episodes yet</p>
+                            <p className="text-sm mt-1">Click "Add Episode" to create a multi-part lesson.</p>
+                            <p className="text-xs text-gray-400 mt-2">If you only need one video, use the single video upload above.</p>
+                        </div>
+                    ) : (
+                        <div className="space-y-4">
+                            <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 text-sm text-blue-800">
+                                <strong>Multi-Episode Mode:</strong> When episodes are added, they will play in sequence. The single video above will be ignored.
+                            </div>
+                            
+                            {formData.episodes.map((episode, index) => (
+                                <div key={index} className="border border-gray-200 rounded-lg p-4 bg-white shadow-sm">
+                                    <div className="flex items-center gap-3 mb-4">
+                                        {/* Reorder controls */}
+                                        <div className="flex flex-col gap-1">
+                                            <button
+                                                type="button"
+                                                onClick={() => moveEpisode(index, 'up')}
+                                                disabled={index === 0}
+                                                className="p-1 hover:bg-gray-100 rounded disabled:opacity-30 disabled:cursor-not-allowed"
+                                                title="Move up"
+                                            >
+                                                <ChevronUp className="w-4 h-4" />
+                                            </button>
+                                            <button
+                                                type="button"
+                                                onClick={() => moveEpisode(index, 'down')}
+                                                disabled={index === formData.episodes.length - 1}
+                                                className="p-1 hover:bg-gray-100 rounded disabled:opacity-30 disabled:cursor-not-allowed"
+                                                title="Move down"
+                                            >
+                                                <ChevronDown className="w-4 h-4" />
+                                            </button>
+                                        </div>
+
+                                        {/* Episode number badge */}
+                                        <div className="w-10 h-10 bg-indigo-600 text-white rounded-full flex items-center justify-center font-bold text-lg">
+                                            {episode.episodeNumber}
+                                        </div>
+
+                                        {/* Episode title input */}
+                                        <div className="flex-1">
+                                            <input
+                                                type="text"
+                                                value={episode.title || ''}
+                                                onChange={(e) => {
+                                                    setFormData(prev => {
+                                                        const newEpisodes = [...prev.episodes];
+                                                        newEpisodes[index] = { ...newEpisodes[index], title: e.target.value };
+                                                        return { ...prev, episodes: newEpisodes };
+                                                    });
+                                                }}
+                                                placeholder={`Episode ${episode.episodeNumber}`}
+                                                className="w-full rounded-md border border-gray-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                                            />
+                                        </div>
+
+                                        {/* Delete button */}
+                                        <button
+                                            type="button"
+                                            onClick={() => removeEpisode(index)}
+                                            className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                                            title="Remove episode"
+                                        >
+                                            <Trash2 className="w-5 h-5" />
+                                        </button>
+                                    </div>
+
+                                    {/* Video upload area */}
+                                    <div className="border-2 border-dashed border-gray-300 rounded-lg p-4">
+                                        {episode.url ? (
+                                            <div className="relative">
+                                                <video src={episode.url} controls className="w-full rounded-lg max-h-48" />
+                                                <div className="mt-2 flex items-center justify-between">
+                                                    <span className="text-sm text-gray-500">
+                                                        {episode.duration ? `Duration: ${Math.floor(episode.duration / 60)}:${String(episode.duration % 60).padStart(2, '0')}` : 'Duration: Unknown'}
+                                                    </span>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => {
+                                                            setFormData(prev => {
+                                                                const newEpisodes = [...prev.episodes];
+                                                                newEpisodes[index] = { ...newEpisodes[index], url: '', duration: 0 };
+                                                                return { ...prev, episodes: newEpisodes };
+                                                            });
+                                                        }}
+                                                        className="text-red-600 hover:text-red-800 text-sm flex items-center gap-1"
+                                                    >
+                                                        <Trash2 className="w-4 h-4" />
+                                                        Remove Video
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        ) : (
+                                            <>
+                                                <input
+                                                    ref={(el) => {
+                                                        if (el) episodeInputRefs.current.set(index, el);
+                                                    }}
+                                                    type="file"
+                                                    accept="video/*"
+                                                    onChange={(e) => {
+                                                        const file = e.target.files?.[0];
+                                                        if (file) handleEpisodeUpload(file, index);
+                                                    }}
+                                                    className="hidden"
+                                                />
+                                                <button
+                                                    type="button"
+                                                    onClick={() => episodeInputRefs.current.get(index)?.click()}
+                                                    disabled={uploadingEpisode === index}
+                                                    className="w-full py-6 hover:bg-gray-50 transition-colors disabled:opacity-50"
+                                                >
+                                                    {uploadingEpisode === index ? (
+                                                        <div className="flex items-center justify-center gap-2">
+                                                            <div className="w-5 h-5 border-2 border-indigo-600 border-t-transparent rounded-full animate-spin"></div>
+                                                            <span className="text-gray-600">Uploading Episode {episode.episodeNumber}...</span>
+                                                        </div>
+                                                    ) : (
+                                                        <div className="flex flex-col items-center gap-2">
+                                                            <Upload className="w-8 h-8 text-gray-400" />
+                                                            <span className="text-sm text-gray-600">Click to upload video for Episode {episode.episodeNumber}</span>
+                                                        </div>
+                                                    )}
+                                                </button>
+                                            </>
+                                        )}
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    )}
                 </div>
 
                 {/* Devotional Editor */}

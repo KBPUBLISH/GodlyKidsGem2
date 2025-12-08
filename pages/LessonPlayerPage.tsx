@@ -791,7 +791,11 @@ const LessonPlayerPage: React.FC = () => {
                                         <video
                                             ref={videoRef}
                                             src={episode.url}
-                                            className="w-full h-full object-contain"
+                                            className="w-full h-full object-contain cursor-pointer"
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                handleVideoTap();
+                                            }}
                                             onTimeUpdate={handleVideoProgress}
                                             onPlay={() => setIsVideoPlaying(true)}
                                             onPause={() => setIsVideoPlaying(false)}
@@ -835,7 +839,11 @@ const LessonPlayerPage: React.FC = () => {
                                 <video
                                     ref={videoRef}
                                     src={getCurrentVideoUrl()}
-                                    className="w-full h-full object-contain"
+                                    className="w-full h-full object-contain cursor-pointer"
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleVideoTap();
+                                    }}
                                     onTimeUpdate={handleVideoProgress}
                                     onPlay={() => setIsVideoPlaying(true)}
                                     onPause={() => setIsVideoPlaying(false)}

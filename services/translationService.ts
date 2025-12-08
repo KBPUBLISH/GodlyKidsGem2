@@ -14,6 +14,7 @@ export const SUPPORTED_LANGUAGES: Record<string, { name: string; flag: string; n
     'zh': { name: 'Chinese', flag: '🇨🇳', nativeName: '中文' },
     'ja': { name: 'Japanese', flag: '🇯🇵', nativeName: '日本語' },
     'ko': { name: 'Korean', flag: '🇰🇷', nativeName: '한국어' },
+    'tl': { name: 'Filipino', flag: '🇵🇭', nativeName: 'Filipino' },
 };
 
 // ElevenLabs multilingual voice IDs for different languages
@@ -30,6 +31,7 @@ export const LANGUAGE_VOICES: Record<string, string> = {
     'zh': 'ThT5KcBeYPX3keUQqHPh', // Chinese
     'ja': 'ThT5KcBeYPX3keUQqHPh', // Japanese
     'ko': 'ThT5KcBeYPX3keUQqHPh', // Korean
+    'tl': 'ThT5KcBeYPX3keUQqHPh', // Filipino (use multilingual)
 };
 
 interface TranslatedTextBox {

@@ -272,6 +272,93 @@ router.post('/bulk', async (req, res) => {
     }
 });
 
+// POST /api/translate/ui - Translate UI strings (batch)
+router.post('/ui', async (req, res) => {
+    try {
+        const { texts, lang } = req.body;
+
+        if (!texts || !Array.isArray(texts)) {
+            return res.status(400).json({ message: 'texts array is required' });
+        }
+
+        if (!lang || !SUPPORTED_LANGUAGES[lang]) {
+            return res.status(400).json({ message: 'Valid language code (lang) is required' });
+        }
+
+        if (lang === 'en') {
+            return res.json({ translations: texts });
+        }
+
+        const translations = [];
+        for (const text of texts) {
+            const translated = await translateText(text, lang);
+            translations.push(translated);
+        }
+
+        res.json({ translations, language: lang });
+    } catch (error) {
+        console.error('UI translation error:', error);
+        res.status(500).json({ message: error.message });
+    }
+});
+
+// POST /api/translate/text - Translate a single text string
+router.post('/text', async (req, res) => {
+    try {
+        const { text } = req.body;
+        const { lang } = req.query;
+
+        if (!text) {
+            return res.status(400).json({ message: 'text is required' });
+        }
+
+        if (!lang || !SUPPORTED_LANGUAGES[lang]) {
+            return res.status(400).json({ message: 'Valid language code (lang) is required' });
+        }
+
+        if (lang === 'en') {
+            return res.json({ translatedText: text, language: lang });
+        }
+
+        const translatedText = await translateText(text, lang);
+        res.json({ translatedText, language: lang });
+    } catch (error) {
+        console.error('Text translation error:', error);
+        res.status(500).json({ message: error.message });
+    }
+});
+
+// POST /api/translate/texts - Translate multiple text strings (batch)
+router.post('/texts', async (req, res) => {
+    try {
+        const { texts } = req.body;
+        const { lang } = req.query;
+
+        if (!texts || !Array.isArray(texts)) {
+            return res.status(400).json({ message: 'texts array is required' });
+        }
+
+        if (!lang || !SUPPORTED_LANGUAGES[lang]) {
+            return res.status(400).json({ message: 'Valid language code (lang) is required' });
+        }
+
+        if (lang === 'en') {
+            return res.json({ translations: texts, language: lang });
+        }
+
+        const translations = [];
+        for (const text of texts) {
+            const translated = await translateText(text, lang);
+            translations.push(translated);
+        }
+
+        res.json({ translations, language: lang });
+    } catch (error) {
+        console.error('Texts translation error:', error);
+        res.status(500).json({ message: error.message });
+    }
+});
+
 // DELETE /api/translate/cache - Clear all translation cache (or specific language)
 router.delete('/cache', async (req, res) => {
     try {

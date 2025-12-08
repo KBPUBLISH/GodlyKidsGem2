@@ -2,6 +2,7 @@ import React, { useEffect, useState, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { Compass, Headphones, BookOpen, Library } from 'lucide-react';
 import { useAudio } from '../../context/AudioContext';
+import { useLanguage } from '../../context/LanguageContext';
 
 // Key for storing wheel hint state
 const WHEEL_HINT_KEY = 'godlykids_wheel_hint_shown';
@@ -11,6 +12,7 @@ const BottomNavigation: React.FC = () => {
   const location = useLocation();
   const [activeTab, setActiveTab] = useState('explore');
   const { playTab, currentPlaylist } = useAudio();
+  const { t } = useLanguage();
   const isPlayerActive = !!currentPlaylist;
   const [isHidden, setIsHidden] = useState(false);
   
@@ -57,10 +59,10 @@ const BottomNavigation: React.FC = () => {
   const ITEM_ANGLE = 45; // Degrees between items;
 
   const navItems = [
-    { id: 'explore', label: 'Explore', icon: Compass, path: '/home', index: 0 },
-    { id: 'listen', label: 'Listen', icon: Headphones, path: '/listen', index: 1 },
-    { id: 'read', label: 'Read', icon: BookOpen, path: '/read', index: 2 },
-    { id: 'library', label: 'Library', icon: Library, path: '/library', index: 3 },
+    { id: 'explore', label: t('explore'), icon: Compass, path: '/home', index: 0 },
+    { id: 'listen', label: t('listen'), icon: Headphones, path: '/listen', index: 1 },
+    { id: 'read', label: t('read'), icon: BookOpen, path: '/read', index: 2 },
+    { id: 'library', label: t('library'), icon: Library, path: '/library', index: 3 },
   ];
 
   useEffect(() => {
@@ -179,7 +181,7 @@ const BottomNavigation: React.FC = () => {
           <div className="relative flex flex-col items-center animate-in fade-in duration-500">
             {/* Text Bubble */}
             <div className="bg-[#FFD700] text-[#3E1F07] px-4 py-2 rounded-xl font-bold text-sm shadow-lg mb-2 relative">
-              <span>Spin the wheel to navigate!</span>
+              <span>{t('spinWheelToNavigate') || 'Spin the wheel to navigate!'}</span>
               {/* Bubble Arrow */}
               <div className="absolute -bottom-2 left-1/2 -translate-x-1/2 w-0 h-0 border-l-[8px] border-l-transparent border-r-[8px] border-r-transparent border-t-[8px] border-t-[#FFD700]"></div>
             </div>

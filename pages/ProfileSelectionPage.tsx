@@ -248,8 +248,8 @@ const ProfileSelectionPage: React.FC = () => {
                                 <Crown size={20} className="text-[#B8860B]" fill="#B8860B" />
                            </div>
                            <div className="flex flex-col">
-                               <span className="font-display font-extrabold text-[#B8860B] text-sm leading-tight">GO PREMIUM</span>
-                               <span className="text-[10px] text-[#B8860B] font-bold opacity-80">Unlock all stories & items</span>
+                               <span className="font-display font-extrabold text-[#B8860B] text-sm leading-tight">{t('goPremium').toUpperCase()}</span>
+                               <span className="text-[10px] text-[#B8860B] font-bold opacity-80">{t('unlockAllStoriesItems') || 'Unlock all stories & items'}</span>
                            </div>
                       </div>
                       <div className="bg-[#B8860B] text-[#FFD700] rounded-full p-1">
@@ -262,7 +262,7 @@ const ProfileSelectionPage: React.FC = () => {
           {/* Bottom Buttons */}
           <div className={`w-full max-w-xs flex gap-4 ${!isSubscribed ? 'mt-2' : 'mt-8'}`}>
              <WoodButton variant="light" fullWidth className="text-sm py-3 rounded-xl border-b-4 shadow-lg" onClick={() => navigate('/edit-profile')}>
-                EDIT PROFILE
+                {t('editProfile').toUpperCase()}
              </WoodButton>
              <WoodButton 
                 variant="gold" 
@@ -271,7 +271,7 @@ const ProfileSelectionPage: React.FC = () => {
                 onClick={() => setIsShopOpen(true)}
              >
                 <ShoppingBag size={20} />
-                VISIT SHOP
+                {t('visitShop').toUpperCase()}
              </WoodButton>
           </div>
           

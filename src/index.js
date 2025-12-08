@@ -109,6 +109,7 @@ app.use('/api/music', require('./routes/music'));
 app.use('/api/migration', require('./routes/migration'));
 app.use('/api/jobs', require('./routes/jobs'));
 app.use('/api/webhooks', require('./routes/webhooks'));
+app.use('/api/translate', require('./routes/translate'));
 
 // ===========================================
 // HEALTH & STATUS ENDPOINTS

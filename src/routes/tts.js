@@ -146,14 +146,19 @@ const processAlignmentToWords = (text, alignment) => {
 // POST /generate - Generate TTS audio
 router.post('/generate', async (req, res) => {
     try {
-        const { text, voiceId, bookId } = req.body;
+        const { text, voiceId, bookId, languageCode } = req.body;
 
         if (!text || !voiceId) {
             return res.status(400).json({ message: 'Text and voiceId are required' });
         }
 
+        // Include language in cache key for multilingual support
+        const cacheKey = languageCode && languageCode !== 'en' 
+            ? `${text}${voiceId}${languageCode}` 
+            : `${text}${voiceId}`;
+        
         // 1. Check Cache
-        const textHash = crypto.createHash('md5').update(text + voiceId).digest('hex');
+        const textHash = crypto.createHash('md5').update(cacheKey).digest('hex');
         const cached = await TTSCache.findOne({ textHash, voiceId });
 
         if (cached) {
@@ -174,8 +179,10 @@ router.post('/generate', async (req, res) => {
             return res.status(500).json({ message: 'TTS Generation Failed', error: 'apiKey is not defined' });
         }
 
-        const modelId = "eleven_v3";
-        console.log('🎤 Generating TTS with ElevenLabs model:', modelId, '(with timestamps)');
+        // Use multilingual model for non-English languages
+        const isMultilingual = languageCode && languageCode !== 'en';
+        const modelId = isMultilingual ? "eleven_multilingual_v2" : "eleven_v3";
+        console.log(`🎤 Generating TTS with ElevenLabs model: ${modelId} (language: ${languageCode || 'en'})`);
 
         try {
             // Use the /with-timestamps endpoint to get word-level timing

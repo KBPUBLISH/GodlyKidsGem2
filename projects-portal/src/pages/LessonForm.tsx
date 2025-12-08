@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Upload, Plus, Trash2, Save, Video, Image as ImageIcon, BookOpen, Activity, Calendar, Sparkles, GripVertical, ChevronUp, ChevronDown, Film } from 'lucide-react';
+import { ArrowLeft, Upload, Plus, Trash2, Save, Image as ImageIcon, BookOpen, Activity, Calendar, Sparkles, ChevronUp, ChevronDown, Film } from 'lucide-react';
 import apiClient from '../services/apiClient';
 
 interface Episode {
@@ -73,15 +73,11 @@ const LessonForm: React.FC = () => {
     const navigate = useNavigate();
     const [loading, setLoading] = useState(false);
     const [fetching, setFetching] = useState(!!id);
-    const [uploadingVideo, setUploadingVideo] = useState(false);
     const [uploadingThumbnail, setUploadingThumbnail] = useState(false);
-    const [videoFile, setVideoFile] = useState<File | null>(null);
     const [thumbnailFile, setThumbnailFile] = useState<File | null>(null);
-    const [videoPreview, setVideoPreview] = useState<string>('');
     const [thumbnailPreview, setThumbnailPreview] = useState<string>('');
     const [generatingActivity, setGeneratingActivity] = useState(false);
     const [enhancingDevotional, setEnhancingDevotional] = useState(false);
-    const videoInputRef = useRef<HTMLInputElement>(null);
     const thumbnailInputRef = useRef<HTMLInputElement>(null);
 
     const [formData, setFormData] = useState<LessonFormData>({
@@ -147,9 +143,6 @@ const LessonForm: React.FC = () => {
                 order: lesson.order || 0,
             });
 
-            if (lesson.video?.url) {
-                setVideoPreview(lesson.video.url);
-            }
             if (lesson.video?.thumbnail) {
                 setThumbnailPreview(lesson.video.thumbnail);
             }
@@ -158,50 +151,6 @@ const LessonForm: React.FC = () => {
             alert('Failed to load lesson');
         } finally {
             setFetching(false);
-        }
-    };
-
-    const handleVideoUpload = async (file: File) => {
-        if (!file.type.startsWith('video/')) {
-            alert('Please select a video file');
-            return;
-        }
-
-        setUploadingVideo(true);
-        setVideoFile(file);
-        const formDataUpload = new FormData();
-        formDataUpload.append('file', file);
-
-        try {
-            const lessonId = id || 'temp';
-            const response = await apiClient.post(
-                `/api/upload/video?bookId=lessons&type=video&lessonId=${lessonId}`,
-                formDataUpload,
-                {
-                    headers: { 'Content-Type': 'multipart/form-data' },
-                }
-            );
-
-            setFormData(prev => ({
-                ...prev,
-                video: { ...prev.video, url: response.data.url },
-            }));
-            setVideoPreview(response.data.url);
-
-            // Try to get video duration
-            const video = document.createElement('video');
-            video.src = response.data.url;
-            video.onloadedmetadata = () => {
-                setFormData(prev => ({
-                    ...prev,
-                    video: { ...prev.video, duration: Math.floor(video.duration) },
-                }));
-            };
-        } catch (error) {
-            console.error('Error uploading video:', error);
-            alert('Failed to upload video');
-        } finally {
-            setUploadingVideo(false);
         }
     };
 
@@ -430,22 +379,17 @@ const LessonForm: React.FC = () => {
             return;
         }
 
-        // Check if either legacy video or episodes exist
-        const hasLegacyVideo = !!formData.video.url;
-        const hasEpisodes = formData.episodes.length > 0 && formData.episodes.every(ep => ep.url);
-        
-        if (!hasLegacyVideo && !hasEpisodes) {
-            alert('Video is required. Either upload a single video or add episodes.');
+        // Require at least one episode
+        if (formData.episodes.length === 0) {
+            alert('Please add at least one episode with a video.');
             return;
         }
         
-        // Validate episodes have videos
-        if (formData.episodes.length > 0) {
-            const missingVideos = formData.episodes.filter(ep => !ep.url);
-            if (missingVideos.length > 0) {
-                alert(`Please upload videos for all episodes. Missing: ${missingVideos.map(ep => `Episode ${ep.episodeNumber}`).join(', ')}`);
-                return;
-            }
+        // Validate all episodes have videos
+        const missingVideos = formData.episodes.filter(ep => !ep.url);
+        if (missingVideos.length > 0) {
+            alert(`Please upload videos for all episodes. Missing: ${missingVideos.map(ep => `Episode ${ep.episodeNumber}`).join(', ')}`);
+            return;
         }
 
         if (formData.activity.type === 'quiz') {
@@ -502,20 +446,7 @@ const LessonForm: React.FC = () => {
                     throw new Error('Failed to create lesson: no ID returned');
                 }
 
-                // If we uploaded files with temp ID, re-upload with real lesson ID
-                if (videoFile && formData.video.url && !formData.video.url.includes(lessonId)) {
-                    const formDataUpload = new FormData();
-                    formDataUpload.append('file', videoFile);
-                    const uploadResponse = await apiClient.post(
-                        `/api/upload/video?bookId=lessons&type=video&lessonId=${lessonId}`,
-                        formDataUpload,
-                        { headers: { 'Content-Type': 'multipart/form-data' } }
-                    );
-                    await apiClient.put(`/api/lessons/${lessonId}`, {
-                        video: { ...formData.video, url: uploadResponse.data.url },
-                    });
-                }
-
+                // If we uploaded thumbnail with temp ID, re-upload with real lesson ID
                 if (thumbnailFile && formData.video.thumbnail && typeof formData.video.thumbnail === 'string' && !formData.video.thumbnail.includes(lessonId)) {
                     const formDataUpload = new FormData();
                     formDataUpload.append('file', thumbnailFile);
@@ -624,118 +555,63 @@ const LessonForm: React.FC = () => {
                     </div>
                 </div>
 
-                {/* Video Upload */}
+                {/* Thumbnail Upload */}
                 <div className="space-y-4">
                     <h2 className="text-xl font-bold text-gray-800 border-b pb-2 flex items-center gap-2">
-                        <Video className="w-5 h-5" />
-                        Video Content
+                        <ImageIcon className="w-5 h-5" />
+                        Lesson Thumbnail
                     </h2>
 
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        {/* Video Upload */}
-                        <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-2">Video *</label>
-                            <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center">
-                                {videoPreview ? (
-                                    <div className="relative">
-                                        <video src={videoPreview} controls className="w-full rounded-lg max-h-64" />
-                                        <button
-                                            type="button"
-                                            onClick={() => {
-                                                setVideoPreview('');
-                                                setFormData(prev => ({ ...prev, video: { ...prev.video, url: '' } }));
-                                            }}
-                                            className="absolute top-2 right-2 bg-red-500 text-white rounded-full p-1 hover:bg-red-600"
-                                        >
-                                            <Trash2 className="w-4 h-4" />
-                                        </button>
-                                    </div>
-                                ) : (
-                                    <>
-                                        <input
-                                            ref={videoInputRef}
-                                            type="file"
-                                            accept="video/*"
-                                            onChange={(e) => {
-                                                const file = e.target.files?.[0];
-                                                if (file) handleVideoUpload(file);
-                                            }}
-                                            className="hidden"
-                                        />
-                                        <button
-                                            type="button"
-                                            onClick={() => videoInputRef.current?.click()}
-                                            disabled={uploadingVideo}
-                                            className="w-full py-4 border-2 border-dashed border-gray-300 rounded-lg hover:border-indigo-500 transition-colors disabled:opacity-50"
-                                        >
-                                            {uploadingVideo ? (
-                                                <div className="flex items-center justify-center gap-2">
-                                                    <div className="w-5 h-5 border-2 border-indigo-600 border-t-transparent rounded-full animate-spin"></div>
-                                                    Uploading...
-                                                </div>
-                                            ) : (
-                                                <div className="flex flex-col items-center gap-2">
-                                                    <Upload className="w-8 h-8 text-gray-400" />
-                                                    <span className="text-sm text-gray-600">Click to upload video</span>
-                                                </div>
-                                            )}
-                                        </button>
-                                    </>
-                                )}
-                            </div>
-                        </div>
-
-                        {/* Thumbnail Upload */}
-                        <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-2">Thumbnail</label>
-                            <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center">
-                                {thumbnailPreview ? (
-                                    <div className="relative">
-                                        <img src={thumbnailPreview} alt="Thumbnail" className="w-full rounded-lg max-h-64 object-cover" />
-                                        <button
-                                            type="button"
-                                            onClick={() => {
-                                                setThumbnailPreview('');
-                                                setFormData(prev => ({ ...prev, video: { ...prev.video, thumbnail: '' } }));
-                                            }}
-                                            className="absolute top-2 right-2 bg-red-500 text-white rounded-full p-1 hover:bg-red-600"
-                                        >
-                                            <Trash2 className="w-4 h-4" />
-                                        </button>
-                                    </div>
-                                ) : (
-                                    <>
-                                        <input
-                                            ref={thumbnailInputRef}
-                                            type="file"
-                                            accept="image/*"
-                                            onChange={(e) => {
-                                                const file = e.target.files?.[0];
-                                                if (file) handleThumbnailUpload(file);
-                                            }}
-                                            className="hidden"
-                                        />
-                                        <button
-                                            type="button"
-                                            onClick={() => thumbnailInputRef.current?.click()}
-                                            disabled={uploadingThumbnail}
-                                            className="w-full py-4 border-2 border-dashed border-gray-300 rounded-lg hover:border-indigo-500 transition-colors disabled:opacity-50"
-                                        >
-                                            {uploadingThumbnail ? (
-                                                <div className="flex items-center justify-center gap-2">
-                                                    <div className="w-5 h-5 border-2 border-indigo-600 border-t-transparent rounded-full animate-spin"></div>
-                                                    Uploading...
-                                                </div>
-                                            ) : (
-                                                <div className="flex flex-col items-center gap-2">
-                                                    <ImageIcon className="w-8 h-8 text-gray-400" />
-                                                    <span className="text-sm text-gray-600">Click to upload thumbnail</span>
-                                                </div>
-                                            )}
-                                        </button>
-                                    </>
-                                )}
-                            </div>
+                    <div className="max-w-md">
+                        <label className="block text-sm font-medium text-gray-700 mb-2">Thumbnail Image *</label>
+                        <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center">
+                            {thumbnailPreview ? (
+                                <div className="relative">
+                                    <img src={thumbnailPreview} alt="Thumbnail" className="w-full rounded-lg max-h-64 object-cover" />
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            setThumbnailPreview('');
+                                            setFormData(prev => ({ ...prev, video: { ...prev.video, thumbnail: '' } }));
+                                        }}
+                                        className="absolute top-2 right-2 bg-red-500 text-white rounded-full p-1 hover:bg-red-600"
+                                    >
+                                        <Trash2 className="w-4 h-4" />
+                                    </button>
+                                </div>
+                            ) : (
+                                <>
+                                    <input
+                                        ref={thumbnailInputRef}
+                                        type="file"
+                                        accept="image/*"
+                                        onChange={(e) => {
+                                            const file = e.target.files?.[0];
+                                            if (file) handleThumbnailUpload(file);
+                                        }}
+                                        className="hidden"
+                                    />
+                                    <button
+                                        type="button"
+                                        onClick={() => thumbnailInputRef.current?.click()}
+                                        disabled={uploadingThumbnail}
+                                        className="w-full py-4 border-2 border-dashed border-gray-300 rounded-lg hover:border-indigo-500 transition-colors disabled:opacity-50"
+                                    >
+                                        {uploadingThumbnail ? (
+                                            <div className="flex items-center justify-center gap-2">
+                                                <div className="w-5 h-5 border-2 border-indigo-600 border-t-transparent rounded-full animate-spin"></div>
+                                                Uploading...
+                                            </div>
+                                        ) : (
+                                            <div className="flex flex-col items-center gap-2">
+                                                <ImageIcon className="w-8 h-8 text-gray-400" />
+                                                <span className="text-sm text-gray-600">Click to upload thumbnail</span>
+                                                <span className="text-xs text-gray-400">This will be shown in the lesson list</span>
+                                            </div>
+                                        )}
+                                    </button>
+                                </>
+                            )}
                         </div>
                     </div>
                 </div>
@@ -745,8 +621,7 @@ const LessonForm: React.FC = () => {
                     <div className="flex items-center justify-between border-b pb-2">
                         <h2 className="text-xl font-bold text-gray-800 flex items-center gap-2">
                             <Film className="w-5 h-5" />
-                            Video Episodes
-                            <span className="text-sm font-normal text-gray-500">(optional - for multi-part lessons)</span>
+                            Video Episodes *
                         </h2>
                         <button
                             type="button"
@@ -762,14 +637,11 @@ const LessonForm: React.FC = () => {
                         <div className="text-center py-8 text-gray-500 border-2 border-dashed border-gray-300 rounded-lg bg-gray-50">
                             <Film className="w-12 h-12 mx-auto mb-3 text-gray-300" />
                             <p className="font-medium">No episodes yet</p>
-                            <p className="text-sm mt-1">Click "Add Episode" to create a multi-part lesson.</p>
-                            <p className="text-xs text-gray-400 mt-2">If you only need one video, use the single video upload above.</p>
+                            <p className="text-sm mt-1">Click "Add Episode" to add your first video.</p>
+                            <p className="text-xs text-gray-400 mt-2">Each episode is a separate video that plays in sequence.</p>
                         </div>
                     ) : (
                         <div className="space-y-4">
-                            <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 text-sm text-blue-800">
-                                <strong>Multi-Episode Mode:</strong> When episodes are added, they will play in sequence. The single video above will be ignored.
-                            </div>
                             
                             {formData.episodes.map((episode, index) => (
                                 <div key={index} className="border border-gray-200 rounded-lg p-4 bg-white shadow-sm">

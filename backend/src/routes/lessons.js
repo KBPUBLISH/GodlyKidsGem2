@@ -156,7 +156,9 @@ router.post('/', async (req, res) => {
             title: req.body.title,
             description: req.body.description,
             type: req.body.type || 'Bible Study',
-            video: req.body.video,
+            ageGroup: req.body.ageGroup || 'all',
+            video: req.body.video || {},
+            episodes: req.body.episodes || [],
             captions: req.body.captions || [],
             devotional: req.body.devotional || {},
             activity: req.body.activity,
@@ -171,8 +173,12 @@ router.post('/', async (req, res) => {
             return res.status(400).json({ message: 'Title is required' });
         }
         
-        if (!lessonData.video || !lessonData.video.url) {
-            return res.status(400).json({ message: 'Video URL is required' });
+        // Require either a video URL or at least one episode with a URL
+        const hasVideoUrl = lessonData.video && lessonData.video.url;
+        const hasEpisodes = lessonData.episodes && lessonData.episodes.length > 0 && lessonData.episodes.every(ep => ep.url);
+        
+        if (!hasVideoUrl && !hasEpisodes) {
+            return res.status(400).json({ message: 'Either a video URL or at least one episode is required' });
         }
         
         if (!lessonData.activity || !lessonData.activity.type) {
@@ -221,7 +227,9 @@ router.put('/:id', async (req, res) => {
         if (req.body.title !== undefined) lesson.title = req.body.title;
         if (req.body.description !== undefined) lesson.description = req.body.description;
         if (req.body.type !== undefined) lesson.type = req.body.type;
+        if (req.body.ageGroup !== undefined) lesson.ageGroup = req.body.ageGroup;
         if (req.body.video !== undefined) lesson.video = req.body.video;
+        if (req.body.episodes !== undefined) lesson.episodes = req.body.episodes;
         if (req.body.captions !== undefined) lesson.captions = req.body.captions;
         if (req.body.devotional !== undefined) lesson.devotional = req.body.devotional;
         if (req.body.activity !== undefined) lesson.activity = req.body.activity;

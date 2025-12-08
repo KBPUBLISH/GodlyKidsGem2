@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { createPortal } from 'react-dom';
-import { ChevronRight, Book, Gamepad2, Star, Sparkles } from 'lucide-react';
+import { ChevronRight, Star, Sparkles } from 'lucide-react';
 
 interface WelcomeOnboardingModalProps {
   isOpen: boolean;
@@ -12,22 +12,16 @@ const ONBOARDING_PAGES = [
     icon: '📖',
     title: 'Stories & Adventures',
     subtitle: 'Explore Bible stories with beautiful illustrations and read-along audio!',
-    color: 'from-blue-500 to-indigo-600',
-    accent: '#4F46E5'
   },
   {
     icon: '🎮',
     title: 'Fun Games & Challenges',
     subtitle: 'Play memory games, daily challenges, and earn gold coins!',
-    color: 'from-amber-500 to-orange-600',
-    accent: '#F59E0B'
   },
   {
     icon: '⭐',
     title: 'Learn & Grow',
     subtitle: 'Watch video lessons, complete activities, and grow in faith every day!',
-    color: 'from-purple-500 to-pink-600',
-    accent: '#A855F7'
   }
 ];
 
@@ -50,24 +44,29 @@ const WelcomeOnboardingModal: React.FC<WelcomeOnboardingModalProps> = ({ isOpen,
 
   return createPortal(
     <div className="fixed inset-0 z-[200] flex items-center justify-center p-4">
-      {/* Backdrop with animated gradient */}
-      <div className="absolute inset-0 bg-gradient-to-br from-indigo-900/95 via-purple-900/95 to-pink-900/95 backdrop-blur-md">
-        {/* Animated sparkles background */}
-        <div className="absolute inset-0 overflow-hidden">
-          {[...Array(20)].map((_, i) => (
+      {/* Backdrop - Panorama style background */}
+      <div 
+        className="absolute inset-0"
+        style={{
+          background: 'linear-gradient(135deg, #1a0a2e 0%, #16213e 25%, #0f3460 50%, #1a1a2e 75%, #16213e 100%)',
+        }}
+      >
+        {/* Subtle stars/sparkles */}
+        <div className="absolute inset-0 overflow-hidden opacity-30">
+          {[...Array(30)].map((_, i) => (
             <div
               key={i}
               className="absolute animate-pulse"
               style={{
                 left: `${Math.random() * 100}%`,
                 top: `${Math.random() * 100}%`,
-                animationDelay: `${Math.random() * 2}s`,
-                animationDuration: `${2 + Math.random() * 2}s`
+                animationDelay: `${Math.random() * 3}s`,
+                animationDuration: `${2 + Math.random() * 3}s`
               }}
             >
               <Sparkles 
-                size={12 + Math.random() * 12} 
-                className="text-white/20"
+                size={8 + Math.random() * 10} 
+                className="text-[#FFD700]"
               />
             </div>
           ))}
@@ -77,68 +76,125 @@ const WelcomeOnboardingModal: React.FC<WelcomeOnboardingModalProps> = ({ isOpen,
       {/* Main Card */}
       <div className="relative w-full max-w-sm animate-in zoom-in-95 slide-in-from-bottom-4 duration-500">
         
-        {/* Card Content */}
-        <div className="relative bg-white rounded-3xl shadow-2xl overflow-hidden">
+        {/* Welcome badge at top */}
+        <div className="absolute -top-4 left-1/2 -translate-x-1/2 z-10">
+          <div className="bg-[#CD853F] px-5 py-2 rounded-full shadow-lg border-4 border-[#8B4513]">
+            <span className="text-sm font-display font-bold text-[#fff8e1] flex items-center gap-2 tracking-wide">
+              <span className="text-lg">👋</span> Welcome!
+            </span>
+          </div>
+        </div>
+
+        {/* Card Content - Wood themed */}
+        <div 
+          className="relative rounded-3xl shadow-2xl overflow-hidden border-4 border-[#8B4513]"
+          style={{
+            background: 'linear-gradient(180deg, #CD853F 0%, #A0522D 100%)',
+          }}
+        >
+          {/* Wood grain texture overlay */}
+          <div 
+            className="absolute inset-0 opacity-20 pointer-events-none"
+            style={{
+              backgroundImage: `repeating-linear-gradient(
+                90deg,
+                transparent,
+                transparent 2px,
+                rgba(62, 31, 7, 0.3) 2px,
+                rgba(62, 31, 7, 0.3) 4px
+              )`
+            }}
+          />
           
-          {/* Colored Header Section */}
-          <div className={`bg-gradient-to-br ${page.color} pt-12 pb-16 px-6 text-center relative overflow-hidden`}>
-            {/* Decorative circles */}
-            <div className="absolute -top-10 -left-10 w-32 h-32 bg-white/10 rounded-full" />
-            <div className="absolute -bottom-10 -right-10 w-40 h-40 bg-white/10 rounded-full" />
+          {/* Header Section with Icon */}
+          <div className="pt-14 pb-8 px-6 text-center relative">
+            {/* Decorative corner nails */}
+            <div className="absolute top-4 left-4 w-3 h-3 rounded-full bg-[#3E1F07] shadow-inner" />
+            <div className="absolute top-4 right-4 w-3 h-3 rounded-full bg-[#3E1F07] shadow-inner" />
             
-            {/* Icon */}
-            <div className="relative">
-              <div className="w-24 h-24 mx-auto bg-white/20 backdrop-blur-sm rounded-full flex items-center justify-center mb-4 shadow-lg border-4 border-white/30">
-                <span className="text-5xl">{page.icon}</span>
+            {/* Icon in wood circle */}
+            <div className="relative mb-6">
+              <div 
+                className="w-28 h-28 mx-auto rounded-full flex items-center justify-center shadow-xl border-4 border-[#FFD700]"
+                style={{
+                  background: 'linear-gradient(145deg, #8B4513, #5D3A1A)',
+                  boxShadow: '0 8px 32px rgba(0,0,0,0.4), inset 0 2px 4px rgba(255,255,255,0.1)'
+                }}
+              >
+                <span className="text-6xl drop-shadow-lg">{page.icon}</span>
               </div>
             </div>
             
             {/* Title */}
-            <h2 className="text-2xl font-display font-extrabold text-white drop-shadow-lg mb-2">
+            <h2 className="text-2xl font-display font-extrabold text-[#fff8e1] drop-shadow-lg tracking-wide">
               {page.title}
             </h2>
           </div>
 
-          {/* Body Section */}
-          <div className="px-6 pt-6 pb-8 -mt-8 bg-white rounded-t-3xl relative">
+          {/* Body Section - Scroll/parchment style */}
+          <div 
+            className="mx-3 mb-3 px-6 pt-6 pb-8 rounded-2xl relative"
+            style={{
+              background: 'linear-gradient(180deg, #fff8e1 0%, #f5e6c8 100%)',
+              boxShadow: 'inset 0 2px 8px rgba(139, 69, 19, 0.2)'
+            }}
+          >
+            {/* Parchment texture lines */}
+            <div 
+              className="absolute inset-0 rounded-2xl opacity-30 pointer-events-none"
+              style={{
+                backgroundImage: `repeating-linear-gradient(
+                  0deg,
+                  transparent,
+                  transparent 24px,
+                  rgba(139, 90, 43, 0.1) 24px,
+                  rgba(139, 90, 43, 0.1) 25px
+                )`
+              }}
+            />
+            
             {/* Subtitle */}
-            <p className="text-gray-600 text-center text-lg leading-relaxed mb-8">
+            <p className="text-[#5c2e0b] text-center text-lg leading-relaxed mb-8 relative font-medium">
               {page.subtitle}
             </p>
 
-            {/* Page Indicators */}
-            <div className="flex justify-center gap-2 mb-6">
+            {/* Page Indicators - Gold coins style */}
+            <div className="flex justify-center gap-3 mb-6">
               {ONBOARDING_PAGES.map((_, i) => (
                 <div
                   key={i}
-                  className={`h-2 rounded-full transition-all duration-300 ${
+                  className={`rounded-full transition-all duration-300 ${
                     i === currentPage 
-                      ? 'w-8 bg-gradient-to-r ' + page.color
+                      ? 'w-8 h-3 bg-gradient-to-r from-[#FFD700] to-[#FFA500] shadow-md'
                       : i < currentPage
-                        ? 'w-2 bg-gray-400'
-                        : 'w-2 bg-gray-200'
+                        ? 'w-3 h-3 bg-[#CD853F]'
+                        : 'w-3 h-3 bg-[#d4c4a8]'
                   }`}
+                  style={i === currentPage ? {
+                    boxShadow: '0 2px 8px rgba(255, 215, 0, 0.5)'
+                  } : {}}
                 />
               ))}
             </div>
 
-            {/* Action Button */}
+            {/* Action Button - Gold wood button */}
             <button
               onClick={handleNext}
-              className={`w-full py-4 rounded-2xl font-display font-bold text-lg text-white shadow-lg transition-all duration-300 active:scale-95 flex items-center justify-center gap-2 bg-gradient-to-r ${page.color}`}
+              className="w-full py-4 rounded-xl font-display font-bold text-lg text-[#5c2e0b] shadow-lg transition-all duration-300 active:scale-95 flex items-center justify-center gap-2 border-b-4 border-[#B8860B]"
               style={{
-                boxShadow: `0 8px 20px ${page.accent}40`
+                background: 'linear-gradient(180deg, #FFD700 0%, #FFA500 100%)',
+                boxShadow: '0 4px 16px rgba(255, 165, 0, 0.4)'
               }}
             >
               {isLastPage ? (
                 <>
                   <span>Let's Go!</span>
-                  <Star className="w-5 h-5" />
+                  <Star className="w-5 h-5 fill-current" />
                 </>
               ) : (
                 <>
                   <span>Next</span>
-                  <ChevronRight className="w-5 h-5" />
+                  <ChevronRight className="w-5 h-5" strokeWidth={3} />
                 </>
               )}
             </button>
@@ -147,19 +203,12 @@ const WelcomeOnboardingModal: React.FC<WelcomeOnboardingModalProps> = ({ isOpen,
             {!isLastPage && (
               <button
                 onClick={onComplete}
-                className="w-full mt-3 py-2 text-gray-400 font-medium text-sm hover:text-gray-600 transition-colors"
+                className="w-full mt-4 py-2 text-[#8B4513] font-display font-medium text-sm hover:text-[#5c2e0b] transition-colors"
               >
                 Skip intro
               </button>
             )}
           </div>
-        </div>
-
-        {/* Welcome badge at top */}
-        <div className="absolute -top-3 left-1/2 -translate-x-1/2 bg-white px-4 py-1.5 rounded-full shadow-lg border-2 border-gray-100">
-          <span className="text-sm font-bold text-gray-700 flex items-center gap-1">
-            <span className="text-lg">👋</span> Welcome!
-          </span>
         </div>
       </div>
     </div>,
@@ -168,4 +217,3 @@ const WelcomeOnboardingModal: React.FC<WelcomeOnboardingModalProps> = ({ isOpen,
 };
 
 export default WelcomeOnboardingModal;
-

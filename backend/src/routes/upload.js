@@ -221,13 +221,20 @@ router.post('/video', (req, res, next) => {
                 const extractedLessonId = lessonId || bookId.replace('lessons/', '').replace('lessons', '') || 'temp';
                 console.log('Processing lesson video upload, lessonId:', extractedLessonId);
                 
-                // For lessons, allow 'video' and 'thumbnail' types
-                if (!['video', 'thumbnail'].includes(type)) {
-                    return res.status(400).json({ message: 'For lessons, type must be either "video" or "thumbnail"' });
+                // For lessons, allow 'video', 'thumbnail', and 'episodes' types
+                if (!['video', 'thumbnail', 'episodes'].includes(type)) {
+                    return res.status(400).json({ message: 'For lessons, type must be one of: "video", "thumbnail", or "episodes"' });
                 }
                 
                 try {
-                    filePath = generateFilePath(`lessons/${extractedLessonId}`, type, req.file.originalname);
+                    // For episodes, include episode number in filename
+                    const episodeNumber = req.query.episodeNumber;
+                    let filename = req.file.originalname;
+                    if (type === 'episodes' && episodeNumber) {
+                        const ext = path.extname(req.file.originalname);
+                        filename = `episode-${episodeNumber}${ext}`;
+                    }
+                    filePath = generateFilePath(`lessons/${extractedLessonId}`, type, filename);
                     console.log('Generated file path for lesson:', filePath);
                 } catch (pathError) {
                     console.error('Error generating file path:', pathError);

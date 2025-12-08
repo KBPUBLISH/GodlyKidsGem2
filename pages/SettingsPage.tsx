@@ -10,6 +10,7 @@ import { getHiddenVoices, isVoiceHidden, toggleVoiceVisibility } from '../servic
 import { cleanVoiceDescription } from '../utils/voiceUtils';
 import { authService } from '../services/authService';
 import { getApiBaseUrl } from '../services/apiService';
+import WebViewModal from '../components/features/WebViewModal';
 
 const SettingsPage: React.FC = () => {
   const navigate = useNavigate();
@@ -27,6 +28,11 @@ const SettingsPage: React.FC = () => {
     type: 'success' | 'error' | 'info';
     message: string;
   } | null>(null);
+  
+  // WebView modal state
+  const [showWebView, setShowWebView] = useState(false);
+  const [webViewUrl, setWebViewUrl] = useState('');
+  const [webViewTitle, setWebViewTitle] = useState('');
   
   // Load cloned voices
   useEffect(() => {
@@ -440,13 +446,27 @@ const SettingsPage: React.FC = () => {
             <section className="bg-[#fff8e1] rounded-2xl p-5 border-2 border-[#eecaa0] shadow-sm space-y-2">
                 <h3 className="font-display font-bold text-[#8B4513] text-lg mb-2 uppercase tracking-wide opacity-80">Support</h3>
                 
-                <button className="w-full text-left px-3 py-3 text-[#5c2e0b] font-bold text-sm bg-white/40 hover:bg-white/80 rounded-lg border border-transparent hover:border-[#eecaa0] transition-all flex items-center gap-3 group">
+                <button 
+                    onClick={() => {
+                        setWebViewUrl('https://www.godlykids.com/privacy');
+                        setWebViewTitle('Privacy Policy');
+                        setShowWebView(true);
+                    }}
+                    className="w-full text-left px-3 py-3 text-[#5c2e0b] font-bold text-sm bg-white/40 hover:bg-white/80 rounded-lg border border-transparent hover:border-[#eecaa0] transition-all flex items-center gap-3 group"
+                >
                     <div className="w-6 h-6 rounded-full bg-[#d7ccc8] flex items-center justify-center text-[#5d4037] group-hover:bg-[#8d6e63] group-hover:text-white transition-colors">
                         <Shield size={12} />
                     </div>
                     <span>Privacy Policy</span>
                 </button>
-                <button className="w-full text-left px-3 py-3 text-[#5c2e0b] font-bold text-sm bg-white/40 hover:bg-white/80 rounded-lg border border-transparent hover:border-[#eecaa0] transition-all flex items-center gap-3 group">
+                <button 
+                    onClick={() => {
+                        setWebViewUrl('https://www.godlykids.com/end-user-license-agreement');
+                        setWebViewTitle('Terms of Service');
+                        setShowWebView(true);
+                    }}
+                    className="w-full text-left px-3 py-3 text-[#5c2e0b] font-bold text-sm bg-white/40 hover:bg-white/80 rounded-lg border border-transparent hover:border-[#eecaa0] transition-all flex items-center gap-3 group"
+                >
                     <div className="w-6 h-6 rounded-full bg-[#d7ccc8] flex items-center justify-center text-[#5d4037] group-hover:bg-[#8d6e63] group-hover:text-white transition-colors">
                         <FileText size={12} />
                     </div>
@@ -474,6 +494,14 @@ const SettingsPage: React.FC = () => {
             </div>
         </div>
       </div>
+
+      {/* WebView Modal for Privacy/Terms */}
+      <WebViewModal
+        isOpen={showWebView}
+        onClose={() => setShowWebView(false)}
+        url={webViewUrl}
+        title={webViewTitle}
+      />
     </div>
   );
 };

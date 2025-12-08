@@ -7,6 +7,7 @@ import { useAudio } from '../context/AudioContext';
 import { useSubscription } from '../context/SubscriptionContext';
 import { AVATAR_ASSETS } from '../components/avatar/AvatarAssets';
 import ParentGateModal from '../components/features/ParentGateModal';
+import WebViewModal from '../components/features/WebViewModal';
 // Voice cloning removed - not offering this feature anymore
 import { ApiService } from '../services/apiService';
 import { filterVisibleVoices } from '../services/voiceManagementService';
@@ -80,6 +81,12 @@ const PaywallStep: React.FC<{
   const [formError, setFormError] = useState<string | null>(null);
   const [showRestoreInput, setShowRestoreInput] = useState(false);
   const [restoreEmail, setRestoreEmail] = useState('');
+  
+  // Terms agreement state
+  const [agreedToTerms, setAgreedToTerms] = useState(false);
+  const [showTermsModal, setShowTermsModal] = useState(false);
+  const [termsModalUrl, setTermsModalUrl] = useState('');
+  const [termsModalTitle, setTermsModalTitle] = useState('');
 
   const isValidEmail = (emailStr: string) => {
     return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailStr);
@@ -87,6 +94,7 @@ const PaywallStep: React.FC<{
 
   // If user already has account, form is always valid (no password needed)
   const isFormValid = () => {
+    if (!agreedToTerms) return false; // Must agree to terms
     if (hasExistingAccount) return true;
     if (!email.trim() || !isValidEmail(email)) return false;
     if (!password || password.length < 6) return false;
@@ -275,6 +283,55 @@ const PaywallStep: React.FC<{
           </div>
         )}
 
+        {/* Terms Agreement Checkbox */}
+        <div className="mb-4">
+          <label className="flex items-start gap-3 cursor-pointer group">
+            <div className="relative mt-0.5">
+              <input
+                type="checkbox"
+                checked={agreedToTerms}
+                onChange={(e) => setAgreedToTerms(e.target.checked)}
+                className="sr-only"
+              />
+              <div className={`w-5 h-5 rounded border-2 flex items-center justify-center transition-all ${
+                agreedToTerms 
+                  ? 'bg-[#FFD700] border-[#B8860B]' 
+                  : 'bg-white border-gray-300 group-hover:border-[#FFD700]'
+              }`}>
+                {agreedToTerms && <Check size={14} className="text-[#3E1F07]" strokeWidth={3} />}
+              </div>
+            </div>
+            <span className="text-[#5D4037] text-xs leading-relaxed">
+              I agree to the{' '}
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.preventDefault();
+                  setTermsModalUrl('https://www.godlykids.com/end-user-license-agreement');
+                  setTermsModalTitle('Terms of Agreement');
+                  setShowTermsModal(true);
+                }}
+                className="text-[#1976D2] font-semibold underline hover:text-[#1565C0]"
+              >
+                Terms of Agreement
+              </button>
+              {' '}and{' '}
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.preventDefault();
+                  setTermsModalUrl('https://www.godlykids.com/privacy');
+                  setTermsModalTitle('Privacy Policy');
+                  setShowTermsModal(true);
+                }}
+                className="text-[#1976D2] font-semibold underline hover:text-[#1565C0]"
+              >
+                Privacy Policy
+              </button>
+            </span>
+          </label>
+        </div>
+
         {/* CTA Button */}
         <WoodButton 
           fullWidth 
@@ -450,6 +507,14 @@ const PaywallStep: React.FC<{
           Loved by 10,000+ Christian families 🙏
         </p>
       </div>
+
+      {/* Terms/Privacy WebView Modal */}
+      <WebViewModal
+        isOpen={showTermsModal}
+        onClose={() => setShowTermsModal(false)}
+        url={termsModalUrl}
+        title={termsModalTitle}
+      />
     </div>
   );
 };

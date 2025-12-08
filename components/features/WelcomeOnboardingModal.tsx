@@ -1,37 +1,47 @@
 import React, { useState } from 'react';
 import { createPortal } from 'react-dom';
 import { ChevronRight, Star, Sparkles } from 'lucide-react';
+import { useLanguage } from '../../context/LanguageContext';
 
 interface WelcomeOnboardingModalProps {
   isOpen: boolean;
   onComplete: () => void;
 }
 
-const ONBOARDING_PAGES = [
+// Translation keys for onboarding pages
+const ONBOARDING_PAGE_KEYS = [
   {
     icon: '📖',
-    title: 'Stories & Adventures',
-    subtitle: 'Explore Bible stories with beautiful illustrations and read-along audio!',
+    titleKey: 'storiesAdventures',
+    subtitleKey: 'exploreStories',
+    // Fallback English text
+    titleFallback: 'Stories & Adventures',
+    subtitleFallback: 'Explore Bible stories with beautiful illustrations and read-along audio!',
   },
   {
     icon: '🎮',
-    title: 'Fun Games & Challenges',
-    subtitle: 'Play memory games, daily challenges, and earn gold coins!',
+    titleKey: 'funGamesTitle',
+    subtitleKey: 'playMemoryGames',
+    titleFallback: 'Fun Games & Challenges',
+    subtitleFallback: 'Play memory games, daily challenges, and earn gold coins!',
   },
   {
     icon: '⭐',
-    title: 'Learn & Grow',
-    subtitle: 'Watch video lessons, complete activities, and grow in faith every day!',
+    titleKey: 'learnAndGrow',
+    subtitleKey: 'watchVideoLessons',
+    titleFallback: 'Learn & Grow',
+    subtitleFallback: 'Watch video lessons, complete activities, and grow in faith every day!',
   }
 ];
 
 const WelcomeOnboardingModal: React.FC<WelcomeOnboardingModalProps> = ({ isOpen, onComplete }) => {
   const [currentPage, setCurrentPage] = useState(0);
+  const { t } = useLanguage();
 
   if (!isOpen) return null;
 
   const handleNext = () => {
-    if (currentPage < ONBOARDING_PAGES.length - 1) {
+    if (currentPage < ONBOARDING_PAGE_KEYS.length - 1) {
       setCurrentPage(currentPage + 1);
     } else {
       // Complete onboarding
@@ -39,8 +49,12 @@ const WelcomeOnboardingModal: React.FC<WelcomeOnboardingModalProps> = ({ isOpen,
     }
   };
 
-  const page = ONBOARDING_PAGES[currentPage];
-  const isLastPage = currentPage === ONBOARDING_PAGES.length - 1;
+  const pageData = ONBOARDING_PAGE_KEYS[currentPage];
+  const isLastPage = currentPage === ONBOARDING_PAGE_KEYS.length - 1;
+  
+  // Get translated text or fallback
+  const pageTitle = t(pageData.titleKey) !== pageData.titleKey ? t(pageData.titleKey) : pageData.titleFallback;
+  const pageSubtitle = t(pageData.subtitleKey) !== pageData.subtitleKey ? t(pageData.subtitleKey) : pageData.subtitleFallback;
 
   return createPortal(
     <div className="fixed inset-0 z-[200] flex items-center justify-center p-4">
@@ -80,7 +94,7 @@ const WelcomeOnboardingModal: React.FC<WelcomeOnboardingModalProps> = ({ isOpen,
         <div className="absolute -top-4 left-1/2 -translate-x-1/2 z-10">
           <div className="bg-[#CD853F] px-5 py-2 rounded-full shadow-lg border-4 border-[#8B4513]">
             <span className="text-sm font-display font-bold text-[#fff8e1] flex items-center gap-2 tracking-wide">
-              <span className="text-lg">👋</span> Welcome!
+              <span className="text-lg">👋</span> {t('welcome')}!
             </span>
           </div>
         </div>
@@ -121,13 +135,13 @@ const WelcomeOnboardingModal: React.FC<WelcomeOnboardingModalProps> = ({ isOpen,
                   boxShadow: '0 8px 32px rgba(0,0,0,0.4), inset 0 2px 4px rgba(255,255,255,0.1)'
                 }}
               >
-                <span className="text-6xl drop-shadow-lg">{page.icon}</span>
+                <span className="text-6xl drop-shadow-lg">{pageData.icon}</span>
               </div>
             </div>
             
             {/* Title */}
             <h2 className="text-2xl font-display font-extrabold text-[#fff8e1] drop-shadow-lg tracking-wide">
-              {page.title}
+              {pageTitle}
             </h2>
           </div>
 
@@ -155,12 +169,12 @@ const WelcomeOnboardingModal: React.FC<WelcomeOnboardingModalProps> = ({ isOpen,
             
             {/* Subtitle */}
             <p className="text-[#5c2e0b] text-center text-lg leading-relaxed mb-8 relative font-medium">
-              {page.subtitle}
+              {pageSubtitle}
             </p>
 
             {/* Page Indicators - Gold coins style */}
             <div className="flex justify-center gap-3 mb-6">
-              {ONBOARDING_PAGES.map((_, i) => (
+              {ONBOARDING_PAGE_KEYS.map((_, i) => (
                 <div
                   key={i}
                   className={`rounded-full transition-all duration-300 ${
@@ -188,12 +202,12 @@ const WelcomeOnboardingModal: React.FC<WelcomeOnboardingModalProps> = ({ isOpen,
             >
               {isLastPage ? (
                 <>
-                  <span>Let's Go!</span>
+                  <span>{t('letsGo')}</span>
                   <Star className="w-5 h-5 fill-current" />
                 </>
               ) : (
                 <>
-                  <span>Next</span>
+                  <span>{t('next')}</span>
                   <ChevronRight className="w-5 h-5" strokeWidth={3} />
                 </>
               )}
@@ -205,7 +219,7 @@ const WelcomeOnboardingModal: React.FC<WelcomeOnboardingModalProps> = ({ isOpen,
                 onClick={onComplete}
                 className="w-full mt-4 py-2 text-[#8B4513] font-display font-medium text-sm hover:text-[#5c2e0b] transition-colors"
               >
-                Skip intro
+                {t('skip')}
               </button>
             )}
           </div>

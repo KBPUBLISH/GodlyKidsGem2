@@ -491,8 +491,8 @@ const SettingsPage: React.FC = () => {
                 >
                     <span className="flex items-center gap-2">
                         {isRestoring && <RefreshCw size={16} className="animate-spin" />}
-                        {!isRestoring && "Restore Purchases"}
-                        {isRestoring && "Restoring..."}
+                        {!isRestoring && t('restorePurchases')}
+                        {isRestoring && `${t('loading')}`}
                     </span>
                     <ChevronLeft size={16} className="rotate-180 opacity-0 group-hover:opacity-50 transition-opacity" />
                 </button>
@@ -514,12 +514,12 @@ const SettingsPage: React.FC = () => {
 
             {/* Legal & Support */}
             <section className="bg-[#fff8e1] rounded-2xl p-5 border-2 border-[#eecaa0] shadow-sm space-y-2">
-                <h3 className="font-display font-bold text-[#8B4513] text-lg mb-2 uppercase tracking-wide opacity-80">Support</h3>
+                <h3 className="font-display font-bold text-[#8B4513] text-lg mb-2 uppercase tracking-wide opacity-80">{t('support')}</h3>
                 
                 <button 
                     onClick={() => {
                         setWebViewUrl('https://www.godlykids.com/privacy');
-                        setWebViewTitle('Privacy Policy');
+                        setWebViewTitle(t('privacyPolicy'));
                         setShowWebView(true);
                     }}
                     className="w-full text-left px-3 py-3 text-[#5c2e0b] font-bold text-sm bg-white/40 hover:bg-white/80 rounded-lg border border-transparent hover:border-[#eecaa0] transition-all flex items-center gap-3 group"
@@ -527,12 +527,12 @@ const SettingsPage: React.FC = () => {
                     <div className="w-6 h-6 rounded-full bg-[#d7ccc8] flex items-center justify-center text-[#5d4037] group-hover:bg-[#8d6e63] group-hover:text-white transition-colors">
                         <Shield size={12} />
                     </div>
-                    <span>Privacy Policy</span>
+                    <span>{t('privacyPolicy')}</span>
                 </button>
                 <button 
                     onClick={() => {
                         setWebViewUrl('https://www.godlykids.com/end-user-license-agreement');
-                        setWebViewTitle('Terms of Service');
+                        setWebViewTitle(t('termsAndConditions'));
                         setShowWebView(true);
                     }}
                     className="w-full text-left px-3 py-3 text-[#5c2e0b] font-bold text-sm bg-white/40 hover:bg-white/80 rounded-lg border border-transparent hover:border-[#eecaa0] transition-all flex items-center gap-3 group"
@@ -540,13 +540,13 @@ const SettingsPage: React.FC = () => {
                     <div className="w-6 h-6 rounded-full bg-[#d7ccc8] flex items-center justify-center text-[#5d4037] group-hover:bg-[#8d6e63] group-hover:text-white transition-colors">
                         <FileText size={12} />
                     </div>
-                    <span>Terms of Service</span>
+                    <span>{t('termsAndConditions')}</span>
                 </button>
                 <button className="w-full text-left px-3 py-3 text-[#5c2e0b] font-bold text-sm bg-white/40 hover:bg-white/80 rounded-lg border border-transparent hover:border-[#eecaa0] transition-all flex items-center gap-3 group">
                     <div className="w-6 h-6 rounded-full bg-[#d7ccc8] flex items-center justify-center text-[#5d4037] group-hover:bg-[#8d6e63] group-hover:text-white transition-colors">
                         <HelpCircle size={12} />
                     </div>
-                    <span>Help Center</span>
+                    <span>{t('helpCenter')}</span>
                 </button>
             </section>
 

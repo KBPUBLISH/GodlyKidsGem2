@@ -671,6 +671,13 @@ const BookReaderPage: React.FC = () => {
         
         // Save language preference
         translationService.setPreferredLanguage(selectedLanguage);
+        
+        // Clear audio cache when translations are being fetched for non-English
+        // This ensures we don't use cached English audio
+        if (selectedLanguage !== 'en') {
+            audioPreloadCacheRef.current.clear();
+            preloadingInProgressRef.current.clear();
+        }
     }, [selectedLanguage, currentPageIndex, pages]);
 
     // Cleanup audio on unmount
@@ -1002,32 +1009,55 @@ const BookReaderPage: React.FC = () => {
             const page = pages[pageIndex];
             if (!page || !page.textBoxes) continue;
             
+            // For non-English, check if translation is available before preloading
+            // If not available, skip preloading - it will be generated on-demand
+            if (currentLang !== 'en') {
+                const cacheKey = `${page._id}_${currentLang}`;
+                const hasTranslation = translatedContent.has(cacheKey);
+                if (!hasTranslation) {
+                    console.log(`⏳ Skipping audio preload for page ${pageIndex + 1} - translation not ready yet`);
+                    continue; // Skip this page, will preload when translation is ready
+                }
+            }
+            
             // Preload each text box on the page
             for (let textBoxIndex = 0; textBoxIndex < page.textBoxes.length; textBoxIndex++) {
                 const textBox = page.textBoxes[textBoxIndex];
                 if (!textBox.text) continue;
                 
                 // Include language in cache key for multilingual support
-                const cacheKey = `${pageIndex}-${textBoxIndex}-${selectedVoiceId}${currentLang !== 'en' ? `-${currentLang}` : ''}`;
+                const audioCacheKey = `${pageIndex}-${textBoxIndex}-${selectedVoiceId}${currentLang !== 'en' ? `-${currentLang}` : ''}`;
                 
                 // Skip if already cached or currently preloading
-                if (audioPreloadCacheRef.current.has(cacheKey) || preloadingInProgressRef.current.has(cacheKey)) {
+                if (audioPreloadCacheRef.current.has(audioCacheKey) || preloadingInProgressRef.current.has(audioCacheKey)) {
                     continue;
                 }
                 
                 // Mark as preloading
-                preloadingInProgressRef.current.add(cacheKey);
+                preloadingInProgressRef.current.add(audioCacheKey);
                 
                 // Preload in background (don't await to avoid blocking)
                 (async () => {
                     try {
                         // Use translated text if available
                         const textToSpeak = getTranslatedText(page._id, textBoxIndex, textBox.text);
+                        
+                        // IMPORTANT: For non-English, verify we have the actual translation, not fallback
+                        // If textToSpeak equals original text but language isn't English, skip preload
+                        if (currentLang !== 'en' && textToSpeak === textBox.text) {
+                            console.log(`⚠️ Skipping audio preload - translation not available for page ${pageIndex + 1}`);
+                            preloadingInProgressRef.current.delete(audioCacheKey);
+                            return;
+                        }
+                        
                         const processedText = processTextWithEmotionalCues(textToSpeak);
                         // For non-English, strip emotional cues (multilingual model doesn't support them)
                         const ttsText = currentLang !== 'en' 
                             ? removeEmotionalCues(textToSpeak) 
                             : processedText.ttsText;
+                        
+                        console.log(`🎤 Preloading TTS for page ${pageIndex + 1} in ${currentLang}: "${ttsText.substring(0, 50)}..."`);
+                        
                         const result = await ApiService.generateTTS(
                             ttsText,
                             selectedVoiceId,
@@ -1036,29 +1066,35 @@ const BookReaderPage: React.FC = () => {
                         );
                         
                         if (result && result.audioUrl) {
-                            audioPreloadCacheRef.current.set(cacheKey, {
+                            audioPreloadCacheRef.current.set(audioCacheKey, {
                                 audioUrl: result.audioUrl,
                                 alignment: result.alignment
                             });
-                            console.log(`🎵 Preloaded audio for page ${pageIndex + 1}, text box ${textBoxIndex + 1}`);
+                            console.log(`🎵 Preloaded audio for page ${pageIndex + 1}, text box ${textBoxIndex + 1} (${currentLang})`);
                         }
                     } catch (err) {
                         console.warn(`Failed to preload audio for page ${pageIndex + 1}:`, err);
                     } finally {
-                        preloadingInProgressRef.current.delete(cacheKey);
+                        preloadingInProgressRef.current.delete(audioCacheKey);
                     }
                 })();
             }
         }
     };
 
-    // Trigger audio preloading when page changes, voice changes, or language changes
+    // Trigger audio preloading when page changes, voice changes, language changes, or translations load
     useEffect(() => {
         if (pages.length > 0 && selectedVoiceId) {
+            // For non-English, only preload when translations are ready
+            const currentLang = selectedLanguageRef.current;
+            if (currentLang !== 'en' && translatedContent.size === 0) {
+                console.log(`⏳ Waiting for translations before preloading audio (${currentLang})`);
+                return;
+            }
             // Start preloading from current page
             preloadUpcomingAudio(currentPageIndex);
         }
-    }, [currentPageIndex, selectedVoiceId, pages.length, selectedLanguage]);
+    }, [currentPageIndex, selectedVoiceId, pages.length, selectedLanguage, translatedContent.size]);
 
     // Clear audio cache when language changes (to force re-generation with new language)
     useEffect(() => {
@@ -1187,12 +1223,22 @@ const BookReaderPage: React.FC = () => {
                 setShowLoadingPopup(false); // Hide popup immediately if cached
             } else {
                 // Not in cache, generate now with translated text
+                // IMPORTANT: Check if we actually have a translation for non-English
+                const isUsingTranslation = currentLang !== 'en' && textToSpeak !== text;
+                
+                if (currentLang !== 'en' && !isUsingTranslation) {
+                    console.warn(`⚠️ No translation available for ${currentLang}, using original text with multilingual TTS`);
+                }
+                
                 const processedText = processTextWithEmotionalCues(textToSpeak);
                 // For non-English, strip emotional cues (multilingual model doesn't support them)
                 const ttsText = currentLang !== 'en' 
                     ? removeEmotionalCues(textToSpeak) 
                     : processedText.ttsText;
-                console.log(`🎤 Generating TTS for page ${actualPageIndex + 1}, text box ${index + 1} (lang: ${currentLang})`);
+                    
+                console.log(`🎤 Generating TTS for page ${actualPageIndex + 1}, text box ${index + 1} (lang: ${currentLang})${isUsingTranslation ? ' [TRANSLATED]' : ''}`);
+                console.log(`📝 Text to speak: "${ttsText.substring(0, 80)}..."`);
+                
                 result = await ApiService.generateTTS(
                     ttsText,
                     selectedVoiceId,

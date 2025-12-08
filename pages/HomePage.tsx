@@ -6,6 +6,7 @@ import Header from '../components/layout/Header';
 import FeaturedCarousel from '../components/ui/FeaturedCarousel';
 import { useBooks } from '../context/BooksContext';
 import { useUser } from '../context/UserContext';
+import { useLanguage } from '../context/LanguageContext';
 import StormySeaError from '../components/ui/StormySeaError';
 import DailyRewardModal from '../components/features/DailyRewardModal';
 import ChallengeGameModal from '../components/features/ChallengeGameModal';

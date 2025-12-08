@@ -88,6 +88,38 @@ const UI_TRANSLATIONS: Record<string, Record<string, string>> = {
         termsConditions: 'By continuing you agree to our Terms & Conditions',
         appDisplayLanguage: 'The app will be displayed in your selected language',
         changesLanguageInterface: 'Changes the language of the app interface and automatically translates book text.',
+        // Profile Page
+        profiles: 'Profiles',
+        chooseExplorer: 'Choose Explorer',
+        whosPlayingToday: "Who's playing today?",
+        addProfile: 'Add Profile',
+        parent: 'Parent',
+        // Home Page
+        hiExplorer: 'Hi Explorer!',
+        letsDiveIn: "Let's Dive in.",
+        thisWeeksProgress: "This Week's Progress",
+        days: 'Days',
+        dailyTasksIQGames: 'Daily Tasks & IQ Games',
+        restPlayDay: 'Rest & Play Day!',
+        noLessonsToday: 'No lessons today. Enjoy reading stories or playing games with family!',
+        tapAnotherDay: 'Tap another day above to view those lessons.',
+        // Book details
+        byAuthor: 'by',
+        readNow: 'Read Now',
+        listenNow: 'Listen Now',
+        pages: 'pages',
+        minutes: 'minutes',
+        // Categories
+        allCategories: 'All Categories',
+        bibleStories: 'Bible Stories',
+        faithValues: 'Faith & Values',
+        prayerDevotional: 'Prayer & Devotional',
+        // Common actions
+        seeAll: 'See All',
+        viewAll: 'View All',
+        search: 'Search',
+        filter: 'Filter',
+        sort: 'Sort',
     },
     es: {
         // Navigation
@@ -172,6 +204,38 @@ const UI_TRANSLATIONS: Record<string, Record<string, string>> = {
         termsConditions: 'Al continuar aceptas nuestros Términos y Condiciones',
         appDisplayLanguage: 'La aplicación se mostrará en el idioma seleccionado',
         changesLanguageInterface: 'Cambia el idioma de la interfaz de la aplicación y traduce automáticamente el texto de los libros.',
+        // Profile Page
+        profiles: 'Perfiles',
+        chooseExplorer: 'Elige Explorador',
+        whosPlayingToday: '¿Quién juega hoy?',
+        addProfile: 'Añadir Perfil',
+        parent: 'Padre',
+        // Home Page
+        hiExplorer: '¡Hola Explorador!',
+        letsDiveIn: 'Vamos a sumergirnos.',
+        thisWeeksProgress: 'Progreso de Esta Semana',
+        days: 'Días',
+        dailyTasksIQGames: 'Tareas Diarias y Juegos de IQ',
+        restPlayDay: '¡Día de Descanso y Juego!',
+        noLessonsToday: 'No hay lecciones hoy. ¡Disfruta leyendo historias o jugando con la familia!',
+        tapAnotherDay: 'Toca otro día arriba para ver esas lecciones.',
+        // Book details
+        byAuthor: 'por',
+        readNow: 'Leer Ahora',
+        listenNow: 'Escuchar Ahora',
+        pages: 'páginas',
+        minutes: 'minutos',
+        // Categories
+        allCategories: 'Todas las Categorías',
+        bibleStories: 'Historias Bíblicas',
+        faithValues: 'Fe y Valores',
+        prayerDevotional: 'Oración y Devocional',
+        // Common actions
+        seeAll: 'Ver Todo',
+        viewAll: 'Ver Todo',
+        search: 'Buscar',
+        filter: 'Filtrar',
+        sort: 'Ordenar',
     },
     pt: {
         home: 'Início',

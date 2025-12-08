@@ -6,6 +6,7 @@ import WoodButton from '../components/ui/WoodButton';
 import ShopModal from '../components/features/ShopModal';
 import AvatarCompositor from '../components/avatar/AvatarCompositor';
 import { useUser } from '../context/UserContext';
+import { useLanguage } from '../context/LanguageContext';
 import { AVATAR_ASSETS } from '../components/avatar/AvatarAssets';
 
 // Helper for random color backgrounds if needed, though we mainly use #f3e5ab or consistent logic
@@ -49,6 +50,7 @@ const ProfileSelectionPage: React.FC = () => {
   // Get the correct parent avatar (works even when viewing as kid profile)
   const parentAvatar = getParentAvatar();
   const [isShopOpen, setIsShopOpen] = useState(false);
+  const { t } = useLanguage();
   
   // Open shop if requested via navigation state
   useEffect(() => {
@@ -79,7 +81,7 @@ const ProfileSelectionPage: React.FC = () => {
                         <Crown size={10} className={isSubscribed ? "text-[#B8860B]" : "text-gray-400"} fill={isSubscribed ? "#FFD700" : "#E5E7EB"} />
                     </div>
                 </div>
-                <span className="font-display font-bold text-[#5c2e0b] text-lg">Profiles</span>
+                <span className="font-display font-bold text-[#5c2e0b] text-lg">{t('profiles')}</span>
             </div>
 
             {/* Right Actions */}
@@ -101,9 +103,9 @@ const ProfileSelectionPage: React.FC = () => {
                  <div className="absolute inset-0 opacity-20 rounded-2xl pointer-events-none" style={{backgroundImage: 'repeating-linear-gradient(45deg, transparent, transparent 10px, #3E1F07 10px, #3E1F07 12px)'}}></div>
                 
                 <h1 className="relative font-display font-extrabold text-[#5c2e0b] text-2xl tracking-wide drop-shadow-[0_1px_0_rgba(255,255,255,0.4)] text-center">
-                  Choose Explorer
+                  {t('chooseExplorer')}
                 </h1>
-                <p className="relative text-[#8B4513] text-sm text-center mt-1 font-medium">Who's playing today?</p>
+                <p className="relative text-[#8B4513] text-sm text-center mt-1 font-medium">{t('whosPlayingToday')}</p>
 
                 {/* Nails */}
                 <div className="absolute top-1/2 -translate-y-1/2 left-3 w-3 h-3 bg-[#3e1f07] rounded-full shadow-[inset_0_1px_2px_rgba(0,0,0,0.5)]"></div>

@@ -1,4 +1,5 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
+import { useLanguage } from '../../context/LanguageContext';
 
 interface SectionTitleProps {
   title: string;
@@ -9,6 +10,19 @@ interface SectionTitleProps {
 const SectionTitle: React.FC<SectionTitleProps> = ({ title, icon }) => {
   // Always use wood-plank brown style for consistency
   const backgroundColor = '#8B4513';
+  const { currentLanguage, translateText } = useLanguage();
+  const [displayTitle, setDisplayTitle] = useState(title);
+  
+  useEffect(() => {
+    if (currentLanguage === 'en') {
+      setDisplayTitle(title);
+      return;
+    }
+    
+    translateText(title).then(translated => {
+      setDisplayTitle(translated);
+    });
+  }, [title, currentLanguage, translateText]);
   
   return (
     <div className="relative py-2 my-4 mx-[-10px]">
@@ -27,7 +41,7 @@ const SectionTitle: React.FC<SectionTitleProps> = ({ title, icon }) => {
       {/* Text */}
       <h2 className="relative z-10 text-white font-display text-lg tracking-wide px-6 drop-shadow-md text-shadow flex items-center gap-2">
         {icon && <span className="text-xl">{icon}</span>}
-        {title}
+        {displayTitle}
       </h2>
       
       {/* Nail details */}

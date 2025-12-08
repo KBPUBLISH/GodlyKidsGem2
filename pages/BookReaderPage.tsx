@@ -113,10 +113,16 @@ const BookReaderPage: React.FC = () => {
     
     // Translation state
     const [selectedLanguage, setSelectedLanguage] = useState<string>(() => translationService.getPreferredLanguage());
+    const selectedLanguageRef = useRef<string>(selectedLanguage); // Ref to track language for closures
     const [showLanguageDropdown, setShowLanguageDropdown] = useState(false);
     const [translatedContent, setTranslatedContent] = useState<Map<string, { text: string; textBoxes: Array<{ translatedText: string }> }>>(new Map());
     const [isTranslating, setIsTranslating] = useState(false);
     const languageDropdownRef = useRef<HTMLDivElement>(null);
+    
+    // Keep language ref in sync with state
+    useEffect(() => {
+        selectedLanguageRef.current = selectedLanguage;
+    }, [selectedLanguage]);
     const wordAlignmentRef = useRef<{ words: Array<{ word: string; start: number; end: number }> } | null>(null);
     const bookBackgroundMusicRef = useRef<HTMLAudioElement | null>(null);
     const voiceDropdownRef = useRef<HTMLDivElement>(null);
@@ -986,6 +992,8 @@ const BookReaderPage: React.FC = () => {
     // Preload audio for upcoming pages (runs in background)
     const preloadUpcomingAudio = async (startPageIndex: number) => {
         const pagesToPreload = 3; // Preload next 3 pages
+        // Use ref to get current language value (stable across async operations)
+        const currentLang = selectedLanguageRef.current;
         
         for (let i = 0; i < pagesToPreload; i++) {
             const pageIndex = startPageIndex + i;
@@ -1000,7 +1008,7 @@ const BookReaderPage: React.FC = () => {
                 if (!textBox.text) continue;
                 
                 // Include language in cache key for multilingual support
-                const cacheKey = `${pageIndex}-${textBoxIndex}-${selectedVoiceId}${selectedLanguage !== 'en' ? `-${selectedLanguage}` : ''}`;
+                const cacheKey = `${pageIndex}-${textBoxIndex}-${selectedVoiceId}${currentLang !== 'en' ? `-${currentLang}` : ''}`;
                 
                 // Skip if already cached or currently preloading
                 if (audioPreloadCacheRef.current.has(cacheKey) || preloadingInProgressRef.current.has(cacheKey)) {
@@ -1017,14 +1025,14 @@ const BookReaderPage: React.FC = () => {
                         const textToSpeak = getTranslatedText(page._id, textBoxIndex, textBox.text);
                         const processedText = processTextWithEmotionalCues(textToSpeak);
                         // For non-English, strip emotional cues (multilingual model doesn't support them)
-                        const ttsText = selectedLanguage !== 'en' 
+                        const ttsText = currentLang !== 'en' 
                             ? removeEmotionalCues(textToSpeak) 
                             : processedText.ttsText;
                         const result = await ApiService.generateTTS(
                             ttsText,
                             selectedVoiceId,
                             bookId || undefined,
-                            selectedLanguage !== 'en' ? selectedLanguage : undefined
+                            currentLang !== 'en' ? currentLang : undefined
                         );
                         
                         if (result && result.audioUrl) {
@@ -1162,8 +1170,10 @@ const BookReaderPage: React.FC = () => {
         try {
             // Check preload cache first - use ref for accurate page index (state might be stale)
             const actualPageIndex = currentPageIndexRef.current;
+            // Use ref for language to get latest value in async context
+            const currentLang = selectedLanguageRef.current;
             // Include language in cache key for multilingual support
-            const cacheKey = `${actualPageIndex}-${index}-${selectedVoiceId}${selectedLanguage !== 'en' ? `-${selectedLanguage}` : ''}`;
+            const cacheKey = `${actualPageIndex}-${index}-${selectedVoiceId}${currentLang !== 'en' ? `-${currentLang}` : ''}`;
             let result = audioPreloadCacheRef.current.get(cacheKey);
             
             // Get translated text if available
@@ -1173,20 +1183,21 @@ const BookReaderPage: React.FC = () => {
                 : text;
             
             if (result) {
-                console.log(`🎵 Using preloaded audio for page ${actualPageIndex + 1}, text box ${index + 1}`);
+                console.log(`🎵 Using preloaded audio for page ${actualPageIndex + 1}, text box ${index + 1} (lang: ${currentLang})`);
                 setShowLoadingPopup(false); // Hide popup immediately if cached
             } else {
                 // Not in cache, generate now with translated text
                 const processedText = processTextWithEmotionalCues(textToSpeak);
                 // For non-English, strip emotional cues (multilingual model doesn't support them)
-                const ttsText = selectedLanguage !== 'en' 
+                const ttsText = currentLang !== 'en' 
                     ? removeEmotionalCues(textToSpeak) 
                     : processedText.ttsText;
+                console.log(`🎤 Generating TTS for page ${actualPageIndex + 1}, text box ${index + 1} (lang: ${currentLang})`);
                 result = await ApiService.generateTTS(
                     ttsText,
                     selectedVoiceId,
                     bookId || undefined,
-                    selectedLanguage !== 'en' ? selectedLanguage : undefined
+                    currentLang !== 'en' ? currentLang : undefined
                 ) || undefined;
             }
 

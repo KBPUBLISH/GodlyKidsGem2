@@ -2,6 +2,7 @@ import React, { useState, useCallback, useEffect } from 'react';
 import { Book } from '../../types';
 import { BookOpen, Headphones, Eye, Heart, Lock, Crown } from 'lucide-react';
 import { useUser } from '../../context/UserContext';
+import { useLanguage } from '../../context/LanguageContext';
 
 interface BookCardProps {
   book: Book;
@@ -14,6 +15,20 @@ const DEFAULT_COVER = 'https://via.placeholder.com/400x400/8B4513/FFFFFF?text=Bo
 const BookCard: React.FC<BookCardProps> = ({ book, onClick }) => {
   const [imageError, setImageError] = useState(false);
   const { isSubscribed } = useUser();
+  const { currentLanguage, translateText } = useLanguage();
+  const [translatedTitle, setTranslatedTitle] = useState(book.title);
+  
+  // Translate title when language changes
+  useEffect(() => {
+    if (currentLanguage === 'en') {
+      setTranslatedTitle(book.title);
+      return;
+    }
+    
+    translateText(book.title).then(translated => {
+      setTranslatedTitle(translated);
+    });
+  }, [book.title, currentLanguage, translateText]);
   
   // Check if this content is locked (members only and user not subscribed)
   const isMembersOnly = (book as any).isMembersOnly === true;
@@ -112,7 +127,7 @@ const BookCard: React.FC<BookCardProps> = ({ book, onClick }) => {
       {/* Info - Same structure as AudioPage */}
       <div className="p-2">
         <h3 className="text-white text-sm font-bold mb-0.5 truncate font-display">
-          {book.title}
+          {translatedTitle}
         </h3>
         {book.author && (
           <p className="text-white/70 text-xs">{book.author}</p>

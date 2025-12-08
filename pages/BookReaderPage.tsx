@@ -975,10 +975,11 @@ const BookReaderPage: React.FC = () => {
         setAutoPlayMode(true);
         autoPlayModeRef.current = true;
 
-        // Play the first text box on the page
+        // Play the first text box on the page (use translated text if available)
         if (currentPage.textBoxes && currentPage.textBoxes.length > 0) {
-            const firstBox = currentPage.textBoxes[0];
-            handlePlayText(firstBox.text, 0, e, true); // Pass autoPlay flag
+            const translatedTextBoxes = getTranslatedTextBoxes(currentPage);
+            const firstBoxText = translatedTextBoxes[0]?.text || currentPage.textBoxes[0].text;
+            handlePlayText(firstBoxText, 0, e, true); // Pass autoPlay flag
         }
     };
 
@@ -1015,8 +1016,12 @@ const BookReaderPage: React.FC = () => {
                         // Use translated text if available
                         const textToSpeak = getTranslatedText(page._id, textBoxIndex, textBox.text);
                         const processedText = processTextWithEmotionalCues(textToSpeak);
+                        // For non-English, strip emotional cues (multilingual model doesn't support them)
+                        const ttsText = selectedLanguage !== 'en' 
+                            ? removeEmotionalCues(textToSpeak) 
+                            : processedText.ttsText;
                         const result = await ApiService.generateTTS(
-                            processedText.ttsText,
+                            ttsText,
                             selectedVoiceId,
                             bookId || undefined,
                             selectedLanguage !== 'en' ? selectedLanguage : undefined
@@ -1173,8 +1178,12 @@ const BookReaderPage: React.FC = () => {
             } else {
                 // Not in cache, generate now with translated text
                 const processedText = processTextWithEmotionalCues(textToSpeak);
+                // For non-English, strip emotional cues (multilingual model doesn't support them)
+                const ttsText = selectedLanguage !== 'en' 
+                    ? removeEmotionalCues(textToSpeak) 
+                    : processedText.ttsText;
                 result = await ApiService.generateTTS(
-                    processedText.ttsText, // Send text with cues to ElevenLabs
+                    ttsText,
                     selectedVoiceId,
                     bookId || undefined,
                     selectedLanguage !== 'en' ? selectedLanguage : undefined
@@ -1480,11 +1489,13 @@ const BookReaderPage: React.FC = () => {
                                         if (autoPlayModeRef.current && currentPageIndexRef.current === nextPageIndex) {
                                             const nextPage = pages[nextPageIndex];
                                             if (nextPage && nextPage.textBoxes && nextPage.textBoxes.length > 0) {
-                                                const firstBox = nextPage.textBoxes[0];
+                                                // Use translated text if available
+                                                const translatedTextBoxes = getTranslatedTextBoxes(nextPage);
+                                                const firstBoxText = translatedTextBoxes[0]?.text || nextPage.textBoxes[0].text;
                                                 console.log('▶️ Auto-play: Starting next page audio');
                                                 isAutoPlayingRef.current = false; // Reset flag before calling
                                                 const syntheticEvent = { stopPropagation: () => { } } as React.MouseEvent;
-                                                handlePlayText(firstBox.text, 0, syntheticEvent, true);
+                                                handlePlayText(firstBoxText, 0, syntheticEvent, true);
                                             } else {
                                                 console.log('⏹️ Auto-play: No text boxes on next page, stopping');
                                                 setAutoPlayMode(false);
@@ -1555,11 +1566,13 @@ const BookReaderPage: React.FC = () => {
                                     if (autoPlayModeRef.current && currentPageIndexRef.current === nextPageIndex) {
                                         const nextPage = pages[nextPageIndex];
                                         if (nextPage && nextPage.textBoxes && nextPage.textBoxes.length > 0) {
-                                            const firstBox = nextPage.textBoxes[0];
+                                            // Use translated text if available
+                                            const translatedTextBoxes = getTranslatedTextBoxes(nextPage);
+                                            const firstBoxText = translatedTextBoxes[0]?.text || nextPage.textBoxes[0].text;
                                             console.log('▶️ Auto-play: Starting next page audio');
                                             isAutoPlayingRef.current = false; // Reset flag before calling
                                             const syntheticEvent = { stopPropagation: () => { } } as React.MouseEvent;
-                                            handlePlayText(firstBox.text, 0, syntheticEvent, true);
+                                            handlePlayText(firstBoxText, 0, syntheticEvent, true);
                                         } else {
                                             console.log('⏹️ Auto-play: No text boxes on next page, stopping');
                                             setAutoPlayMode(false);

@@ -755,8 +755,72 @@ const LessonPlayerPage: React.FC = () => {
                         />
                     </div>
 
-                    {/* Header - Only show X button on video screen */}
-                    <div className="absolute top-2 right-2 z-20">
+                    {/* Header Bar - Episode selector on left, X button on right */}
+                    <div className="absolute top-2 left-2 right-2 z-30 flex items-center justify-between">
+                        {/* Episode Indicator - Left side */}
+                        {hasEpisodes ? (
+                            <div className="relative">
+                                <button
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        setShowEpisodeSelector(!showEpisodeSelector);
+                                    }}
+                                    className="flex items-center gap-2 bg-black/70 backdrop-blur-sm rounded-full px-3 py-2"
+                                >
+                                    <span className="text-white font-medium text-sm">
+                                        Episode {currentEpisodeIndex + 1}/{totalEpisodes}
+                                    </span>
+                                    <ChevronRight className={`w-4 h-4 text-white/70 transition-transform ${showEpisodeSelector ? 'rotate-90' : ''}`} />
+                                </button>
+
+                                {/* Episode Selector Dropdown */}
+                                {showEpisodeSelector && (
+                                    <div className="absolute top-full left-0 mt-2 bg-black/90 backdrop-blur-md rounded-xl border border-white/10 overflow-hidden min-w-[200px]">
+                                        {lesson?.episodes?.map((ep, idx) => (
+                                            <button
+                                                key={idx}
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    if (idx !== currentEpisodeIndex) {
+                                                        setIsTransitioning(true);
+                                                        setTimeout(() => {
+                                                            setCurrentEpisodeIndex(idx);
+                                                            setVideoProgress(0);
+                                                            setIsTransitioning(false);
+                                                            setTimeout(() => {
+                                                                if (videoRef.current) {
+                                                                    videoRef.current.play().catch(err => console.log('Autoplay prevented:', err));
+                                                                }
+                                                            }, 100);
+                                                        }, 200);
+                                                    }
+                                                    setShowEpisodeSelector(false);
+                                                }}
+                                                className={`w-full px-4 py-3 text-left flex items-center gap-3 transition-colors ${
+                                                    idx === currentEpisodeIndex 
+                                                        ? 'bg-[#FFD700]/20 text-[#FFD700]' 
+                                                        : 'text-white hover:bg-white/10'
+                                                }`}
+                                            >
+                                                <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold ${
+                                                    idx === currentEpisodeIndex ? 'bg-[#FFD700] text-black' : 'bg-white/20'
+                                                }`}>
+                                                    {idx + 1}
+                                                </div>
+                                                <span className="text-sm">{ep.title || `Episode ${idx + 1}`}</span>
+                                                {idx === currentEpisodeIndex && (
+                                                    <Check className="w-4 h-4 ml-auto" />
+                                                )}
+                                            </button>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
+                        ) : (
+                            <div /> 
+                        )}
+
+                        {/* Close Button - Right side */}
                         <button
                             onClick={() => navigate(-1)}
                             className="text-white p-2 bg-black/50 rounded-full hover:bg-black/70 transition-colors backdrop-blur-sm"
@@ -804,7 +868,11 @@ const LessonPlayerPage: React.FC = () => {
                                                 if (currentEpisodeIndex < totalEpisodes - 1) {
                                                     goToNextEpisode();
                                                 } else {
+                                                    // Last episode finished - transition to devotional
                                                     setVideoWatched(true);
+                                                    setTimeout(() => {
+                                                        setCurrentScreen('devotional');
+                                                    }, 500);
                                                 }
                                             }}
                                             onLoadedData={() => {
@@ -896,79 +964,6 @@ const LessonPlayerPage: React.FC = () => {
                                     <ChevronRight className="w-6 h-6 text-white/70" />
                                 </div>
                             )}
-                        </div>
-                    )}
-
-                    {/* Episode Indicator - Shows current episode number */}
-                    {hasEpisodes && (
-                        <div className="absolute top-20 left-4 z-30">
-                            <button
-                                onClick={(e) => {
-                                    e.stopPropagation();
-                                    setShowEpisodeSelector(!showEpisodeSelector);
-                                }}
-                                className="bg-black/60 backdrop-blur-sm text-white px-4 py-2 rounded-full flex items-center gap-2 hover:bg-black/70 transition-colors border border-white/20"
-                            >
-                                <Video className="w-4 h-4 text-[#FFD700]" />
-                                <span className="font-display font-bold text-sm">
-                                    {currentEpisode?.title || `Episode ${currentEpisodeIndex + 1}`}
-                                </span>
-                                <span className="text-white/60 text-xs">
-                                    / {totalEpisodes}
-                                </span>
-                            </button>
-                        </div>
-                    )}
-
-                    {/* Episode Selector Modal */}
-                    {showEpisodeSelector && hasEpisodes && (
-                        <div 
-                            className="absolute inset-0 bg-black/80 backdrop-blur-sm z-40 flex items-center justify-center"
-                            onClick={() => setShowEpisodeSelector(false)}
-                        >
-                            <div 
-                                className="bg-[#2a1810] border-4 border-[#8B4513] rounded-2xl p-6 max-w-sm w-full mx-4 shadow-2xl"
-                                onClick={(e) => e.stopPropagation()}
-                            >
-                                <div className="flex items-center justify-between mb-4">
-                                    <h3 className="text-[#FFD700] font-display font-bold text-lg">Select Episode</h3>
-                                    <button
-                                        onClick={() => setShowEpisodeSelector(false)}
-                                        className="text-white/60 hover:text-white p-1"
-                                    >
-                                        <X className="w-6 h-6" />
-                                    </button>
-                                </div>
-                                
-                                {/* Episode List - Horizontal Scroll with Snap */}
-                                <div 
-                                    className="flex gap-3 overflow-x-auto pb-4 snap-x snap-mandatory scrollbar-hide"
-                                    style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
-                                >
-                                    {lesson?.episodes?.map((episode, index) => (
-                                        <button
-                                            key={index}
-                                            onClick={() => goToEpisode(index)}
-                                            className={`flex-shrink-0 snap-center w-16 h-16 rounded-xl flex flex-col items-center justify-center transition-all ${
-                                                index === currentEpisodeIndex
-                                                    ? 'bg-[#FFD700] text-[#2a1810] scale-110 shadow-lg'
-                                                    : index < currentEpisodeIndex
-                                                    ? 'bg-[#4a3020] text-[#FFD700]/80 border-2 border-[#FFD700]/30'
-                                                    : 'bg-[#3a2515] text-white/60 hover:bg-[#4a3020] hover:text-white'
-                                            }`}
-                                        >
-                                            <span className="font-display font-bold text-2xl">{index + 1}</span>
-                                            {index < currentEpisodeIndex && (
-                                                <Check className="w-4 h-4 mt-0.5" />
-                                            )}
-                                        </button>
-                                    ))}
-                                </div>
-                                
-                                <p className="text-white/60 text-xs text-center mt-2">
-                                    {currentEpisode?.title || `Episode ${currentEpisodeIndex + 1}`}
-                                </p>
-                            </div>
                         </div>
                     )}
 

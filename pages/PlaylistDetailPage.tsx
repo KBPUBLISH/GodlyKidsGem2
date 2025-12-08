@@ -4,6 +4,7 @@ import { ChevronLeft, Crown, Play, Pause, Music, Headphones, Heart, Bookmark, Ha
 import { getApiBaseUrl } from '../services/apiService';
 import { favoritesService } from '../services/favoritesService';
 import { useAudio } from '../context/AudioContext';
+import { useLanguage } from '../context/LanguageContext';
 import MiniPlayer from '../components/audio/MiniPlayer';
 
 // Predefined color palettes for fallback (warm, cool, vibrant variations)
@@ -156,6 +157,7 @@ const PlaylistDetailPage: React.FC = () => {
     const { playlistId } = useParams();
     const navigate = useNavigate();
     const { currentPlaylist, currentTrackIndex, isPlaying, togglePlayPause, playPlaylist } = useAudio();
+    const { t, translateText, currentLanguage } = useLanguage();
     const [playlist, setPlaylist] = useState<Playlist | null>(null);
     const [loading, setLoading] = useState(true);
     const [isFavorited, setIsFavorited] = useState(false);
@@ -163,6 +165,8 @@ const PlaylistDetailPage: React.FC = () => {
     const [localLikeCount, setLocalLikeCount] = useState(0);
     const [isInLibrary, setIsInLibrary] = useState(false);
     const [playCount, setPlayCount] = useState(0);
+    const [translatedTitle, setTranslatedTitle] = useState<string>('');
+    const [translatedDescription, setTranslatedDescription] = useState<string>('');
     
     // Dynamic gradient colors extracted from cover image
     const [gradientColors, setGradientColors] = useState({
@@ -222,6 +226,16 @@ const PlaylistDetailPage: React.FC = () => {
                 data.items.sort((a: AudioItem, b: AudioItem) => (a.order || 0) - (b.order || 0));
             }
             setPlaylist(data);
+            
+            // Translate title and description for non-English
+            if (currentLanguage !== 'en') {
+                if (data.title) translateText(data.title).then(setTranslatedTitle);
+                if (data.description) translateText(data.description).then(setTranslatedDescription);
+            } else {
+                setTranslatedTitle(data.title || '');
+                setTranslatedDescription(data.description || '');
+            }
+            
             // Initialize like count from backend, but ensure it's at least 1 if locally liked
             const likes = JSON.parse(localStorage.getItem('liked_playlists') || '[]');
             const isLocallyLiked = likes.includes(playlistId);

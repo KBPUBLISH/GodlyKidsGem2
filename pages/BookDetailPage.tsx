@@ -6,6 +6,7 @@ import { useBooks } from '../context/BooksContext';
 import { Book } from '../types';
 import { readingProgressService } from '../services/readingProgressService';
 import { useAudio } from '../context/AudioContext';
+import { useLanguage } from '../context/LanguageContext';
 import { ApiService } from '../services/apiService';
 import { readCountService } from '../services/readCountService';
 import { bookCompletionService } from '../services/bookCompletionService';
@@ -48,6 +49,9 @@ const BookDetailPage: React.FC = () => {
   const location = useLocation();
   const { books, loading } = useBooks();
   const { musicEnabled, toggleMusic } = useAudio();
+  const { t, translateText, currentLanguage } = useLanguage();
+  const [translatedTitle, setTranslatedTitle] = useState<string>('');
+  const [translatedDescription, setTranslatedDescription] = useState<string>('');
   const [book, setBook] = useState<Book | null>(null);
   const [imageError, setImageError] = useState(false);
   const [savedPageIndex, setSavedPageIndex] = useState<number | null>(null);
@@ -114,6 +118,17 @@ const BookDetailPage: React.FC = () => {
       // Track book view analytics when book is loaded
       if (found && id) {
         analyticsService.bookView(id, found.title);
+      }
+      
+      // Translate title and description
+      if (found && currentLanguage !== 'en') {
+        translateText(found.title).then(setTranslatedTitle);
+        if (found.description) {
+          translateText(found.description).then(setTranslatedDescription);
+        }
+      } else if (found) {
+        setTranslatedTitle(found.title);
+        setTranslatedDescription(found.description || '');
       }
 
       // Load reading progress for this book
@@ -369,12 +384,12 @@ const BookDetailPage: React.FC = () => {
                   {isInLibrary ? (
                     <>
                       <Bookmark size={20} fill="currentColor" />
-                      <span>Saved to Library</span>
+                      <span>{t('savedToLibrary') || 'Saved to Library'}</span>
                     </>
                   ) : (
                     <>
                       <Plus size={20} />
-                      <span>Save to Library</span>
+                      <span>{t('saveToLibrary') || 'Save to Library'}</span>
                     </>
                   )}
                 </button>
@@ -387,7 +402,7 @@ const BookDetailPage: React.FC = () => {
                   className="flex items-center gap-2 hover:opacity-80 transition-opacity cursor-default"
                 >
                   <Headphones size={20} />
-                  <span className="text-lg">My Listens: {readCount}</span>
+                  <span className="text-lg">{t('myListens') || 'My Listens'}: {readCount}</span>
                 </button>
                 <div className="h-6 w-px bg-white/20"></div>
                 <button
@@ -399,7 +414,7 @@ const BookDetailPage: React.FC = () => {
                     className={`${isFavorited ? 'text-[#FF5252] fill-[#FF5252]' : 'text-[#FF5252]'}`}
                     fill={isFavorited ? '#FF5252' : 'none'}
                   />
-                  <span className="text-lg">{favoriteCount} Favs</span>
+                  <span className="text-lg">{favoriteCount} {t('favorites') || 'Favs'}</span>
                 </button>
               </div>
             </>
@@ -412,15 +427,15 @@ const BookDetailPage: React.FC = () => {
                   onClick={() => navigate(`/read/${id}`)}
                   className="flex-1 bg-[#FCEBB6] hover:bg-[#fff5cc] text-[#5c2e0b] font-display font-bold text-xl py-3 rounded-2xl shadow-[0_4px_0_#D4B483] border-2 border-[#D4B483] active:translate-y-[4px] active:shadow-none transition-all text-center leading-none"
                 >
-                  Read
+                  {t('read')}
                 </button>
                 {savedPageIndex !== null && savedPageIndex >= 0 ? (
                   <button
                     onClick={handleContinue}
                     className="flex-1 bg-[#FCEBB6] hover:bg-[#fff5cc] text-[#5c2e0b] font-display font-bold text-xl py-3 rounded-2xl shadow-[0_4px_0_#D4B483] border-2 border-[#D4B483] active:translate-y-[4px] active:shadow-none transition-all text-center leading-none flex flex-col items-center justify-center gap-0.5"
                   >
-                    <span>Continue</span>
-                    <span className="text-[10px] font-sans font-normal opacity-80">(Page {savedPageIndex + 1})</span>
+                    <span>{t('continue')}</span>
+                    <span className="text-[10px] font-sans font-normal opacity-80">({t('pages') || 'Page'} {savedPageIndex + 1})</span>
                   </button>
                 ) : null}
               </div>
@@ -514,7 +529,7 @@ const BookDetailPage: React.FC = () => {
                               {game.title}
                             </h3>
                             {!isUnlocked && (
-                              <p className="text-xs text-white/70 mt-0.5">Complete book to unlock</p>
+                              <p className="text-xs text-white/70 mt-0.5">{t('completeBookToUnlock') || 'Complete book to unlock'}</p>
                             )}
                           </div>
                           <button
@@ -533,7 +548,7 @@ const BookDetailPage: React.FC = () => {
                               : 'bg-gray-600 cursor-not-allowed opacity-50'
                               } text-white text-sm font-bold py-1.5 px-5 rounded-full shadow-[0_3px_0_#3d5c2b] active:translate-y-[3px] active:shadow-none transition-all border border-[#ffffff20] shrink-0`}
                           >
-                            {isUnlocked ? 'Play' : 'Locked'}
+                            {isUnlocked ? t('play') : t('locked')}
                           </button>
                         </div>
                       </div>
@@ -549,7 +564,7 @@ const BookDetailPage: React.FC = () => {
                   className="flex items-center gap-2 hover:opacity-80 transition-opacity cursor-default pointer-events-auto"
                 >
                   <BookOpen size={20} />
-                  <span className="text-lg">My Reads: {readCount}</span>
+                  <span className="text-lg">{t('myReads') || 'My Reads'}: {readCount}</span>
                 </button>
                 <div className="h-6 w-px bg-white/20"></div>
                 <button
@@ -562,7 +577,7 @@ const BookDetailPage: React.FC = () => {
                     className={`${isFavorited ? 'text-[#FF5252] fill-[#FF5252]' : 'text-[#FF5252]'}`}
                     fill={isFavorited ? '#FF5252' : 'none'}
                   />
-                  <span className="text-lg">{favoriteCount} Fav</span>
+                  <span className="text-lg">{favoriteCount} {t('favorites') || 'Fav'}</span>
                 </button>
               </div>
 
@@ -578,12 +593,12 @@ const BookDetailPage: React.FC = () => {
                 {isInLibrary ? (
                   <>
                     <Bookmark size={18} fill="currentColor" />
-                    <span>Saved to Library</span>
+                    <span>{t('savedToLibrary') || 'Saved to Library'}</span>
                   </>
                 ) : (
                   <>
                     <Plus size={18} />
-                    <span>Save to Library</span>
+                    <span>{t('saveToLibrary') || 'Save to Library'}</span>
                   </>
                 )}
               </button>

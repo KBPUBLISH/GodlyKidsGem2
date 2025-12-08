@@ -345,18 +345,27 @@ const LessonPlayerPage: React.FC = () => {
     };
 
     const handleVideoTap = () => {
+        console.log('🎬 Video tap detected, videoRef:', !!videoRef.current, 'isPlaying:', isVideoPlaying);
+        
+        // Show tap indicator briefly regardless of video state
+        setShowVideoControls(true);
+        setTimeout(() => setShowVideoControls(false), 500);
+        
         if (videoRef.current) {
-            // Show tap indicator briefly
-            setShowVideoControls(true);
-            setTimeout(() => setShowVideoControls(false), 500);
-
             if (isVideoPlaying) {
                 videoRef.current.pause();
                 setIsVideoPlaying(false);
+                console.log('⏸️ Video paused');
             } else {
-                videoRef.current.play();
-                setIsVideoPlaying(true);
+                videoRef.current.play().then(() => {
+                    setIsVideoPlaying(true);
+                    console.log('▶️ Video playing');
+                }).catch(err => {
+                    console.log('⚠️ Play prevented:', err);
+                });
             }
+        } else {
+            console.log('⚠️ Video ref not available');
         }
     };
 
@@ -374,16 +383,20 @@ const LessonPlayerPage: React.FC = () => {
 
         // If horizontal swipe is greater than vertical, it's a swipe
         if (Math.abs(deltaX) > Math.abs(deltaY) && Math.abs(deltaX) > 80) {
-            // Swipe detected - handle episode navigation
-            if (hasEpisodes) {
-                if (deltaX > 0) {
-                    // Swipe right - go to previous episode
+            // Swipe detected
+            if (deltaX > 0) {
+                // Swipe right - go to previous episode
+                if (hasEpisodes && currentEpisodeIndex > 0) {
                     goToPreviousEpisode();
+                }
+            } else {
+                // Swipe left - go to next episode or devotional
+                if (hasEpisodes && currentEpisodeIndex < totalEpisodes - 1) {
+                    goToNextEpisode();
                 } else {
-                    // Swipe left - go to next episode
-                    if (currentEpisodeIndex < totalEpisodes - 1) {
-                        goToNextEpisode();
-                    }
+                    // Last episode or no episodes - swipe to devotional
+                    setVideoWatched(true);
+                    setCurrentScreen('devotional');
                 }
             }
         } else if (Math.abs(deltaX) < 15 && Math.abs(deltaY) < 15) {
@@ -841,6 +854,13 @@ const LessonPlayerPage: React.FC = () => {
                         }}
                         onTouchStart={handleTouchStart}
                         onTouchEnd={handleTouchEnd}
+                        onClick={(e) => {
+                            // Handle click on the container itself (not on video element)
+                            // This helps with desktop and some mobile browsers
+                            if (e.target === e.currentTarget) {
+                                handleVideoTap();
+                            }
+                        }}
                     >
                         {/* Render all episodes for snap scroll (or single video if no episodes) */}
                         {hasEpisodes ? (
@@ -1016,7 +1036,34 @@ const LessonPlayerPage: React.FC = () => {
                     </div>
                 </div>
             ) : (
-                <div className="h-full flex flex-col bg-black">
+                <div 
+                    className="h-full flex flex-col bg-black"
+                    onTouchStart={(e) => {
+                        const touch = e.touches[0];
+                        setTouchStart({ x: touch.clientX, y: touch.clientY });
+                    }}
+                    onTouchEnd={(e) => {
+                        if (!touchStart) return;
+                        const touch = e.changedTouches[0];
+                        const deltaX = touch.clientX - touchStart.x;
+                        const deltaY = touch.clientY - touchStart.y;
+                        
+                        // Only process horizontal swipes
+                        if (Math.abs(deltaX) > Math.abs(deltaY) && Math.abs(deltaX) > 80) {
+                            if (deltaX > 0) {
+                                // Swipe right - go back
+                                handleBack();
+                            } else {
+                                // Swipe left - go forward
+                                if (currentScreen === 'devotional') {
+                                    setDevotionalRead(true);
+                                    setCurrentScreen('activity');
+                                }
+                            }
+                        }
+                        setTouchStart(null);
+                    }}
+                >
                     {/* Progress Bar for other screens */}
                     <div className="w-full h-1 bg-gray-800">
                         <div

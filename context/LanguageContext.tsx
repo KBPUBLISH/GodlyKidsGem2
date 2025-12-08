@@ -213,6 +213,14 @@ const UI_TRANSLATIONS: Record<string, Record<string, string>> = {
         incomplete: 'Incomplete',
         start: 'Start',
         resume: 'Resume',
+        
+        // Book/Playlist details
+        saveToLibrary: 'Save to Library',
+        savedToLibrary: 'Saved to Library',
+        myReads: 'My Reads',
+        myListens: 'My Listens',
+        completeBookToUnlock: 'Complete book to unlock',
+        spinWheelToNavigate: 'Spin the wheel to navigate!',
     },
     es: {
         // Navigation
@@ -422,6 +430,14 @@ const UI_TRANSLATIONS: Record<string, Record<string, string>> = {
         incomplete: 'Incompleto',
         start: 'Iniciar',
         resume: 'Continuar',
+        
+        // Book/Playlist details
+        saveToLibrary: 'Guardar en Biblioteca',
+        savedToLibrary: 'Guardado en Biblioteca',
+        myReads: 'Mis Lecturas',
+        myListens: 'Mis Escuchas',
+        completeBookToUnlock: 'Completa el libro para desbloquear',
+        spinWheelToNavigate: '¡Gira la rueda para navegar!',
     },
     pt: {
         home: 'Início',

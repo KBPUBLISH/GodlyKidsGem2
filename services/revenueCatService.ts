@@ -10,7 +10,11 @@
  */
 
 // RevenueCat Web Billing API Key
-const REVENUECAT_WEB_API_KEY = 'app600608d495';
+// Note: Web Billing requires a separate API key from RevenueCat dashboard
+// Format is typically 'rcb_...' for web billing
+// If not set up, users can use the native app or contact support
+const REVENUECAT_WEB_API_KEY = import.meta.env.VITE_REVENUECAT_WEB_KEY || 'app600608d495';
+const WEB_BILLING_ENABLED = import.meta.env.VITE_WEB_BILLING_ENABLED === 'true';
 
 // Entitlement identifier for premium access
 export const PREMIUM_ENTITLEMENT_ID = 'premium';
@@ -31,9 +35,25 @@ declare global {
 // Check if running in DeSpia native environment
 const isNativeApp = (): boolean => {
   // DeSpia apps run inside a native wrapper
-  // We can detect this by checking user agent or if despia property exists
+  // We detect this by checking if the despia URL scheme works
+  // Mobile browsers should NOT be treated as native apps
   const ua = navigator.userAgent.toLowerCase();
-  return ua.includes('despia') || ua.includes('wkwebview') || ua.includes('mobile');
+  
+  // Check for explicit DeSpia markers
+  if (ua.includes('despia')) return true;
+  
+  // WKWebView indicates iOS native app (not Safari)
+  // But we need to distinguish from Safari on iOS
+  if (ua.includes('wkwebview') && !ua.includes('safari')) return true;
+  
+  // Check if running in standalone PWA mode (home screen app)
+  if ((window.navigator as any).standalone === true) return true;
+  
+  // Check for Android WebView
+  if (ua.includes('wv') && ua.includes('android')) return true;
+  
+  // Default: assume web browser (not native)
+  return false;
 };
 
 // Get the current user ID for RevenueCat external_id
@@ -355,6 +375,16 @@ export const RevenueCatService = {
     console.log('🌐 Starting web purchase via RevenueCat Billing');
     console.log('   Product:', rcProductId);
     console.log('   User ID:', userId);
+    console.log('   Web Billing Enabled:', WEB_BILLING_ENABLED);
+    
+    // Check if web billing is enabled
+    if (!WEB_BILLING_ENABLED) {
+      console.log('⚠️ Web billing not enabled - directing user to app stores');
+      return { 
+        success: false, 
+        error: 'Web purchases are not available yet. Please download our app from the App Store or Google Play to subscribe.' 
+      };
+    }
     
     try {
       // RevenueCat Web Billing uses a redirect-based checkout

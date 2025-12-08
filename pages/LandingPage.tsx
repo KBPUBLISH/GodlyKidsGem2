@@ -24,8 +24,16 @@ const LandingPage: React.FC = () => {
           userData.isSubscribed;
         
         if (hasCompletedOnboarding) {
-          console.log('👤 User already signed in, redirecting to home...');
-          navigate('/home', { replace: true });
+          // If user has kids, go to profile selection so they can choose
+          // Otherwise go directly to home
+          const hasKids = userData.kids && userData.kids.length > 0;
+          if (hasKids) {
+            console.log('👤 User has profiles, redirecting to profile selection...');
+            navigate('/profile', { replace: true });
+          } else {
+            console.log('👤 User signed in (no kids), redirecting to home...');
+            navigate('/home', { replace: true });
+          }
           return;
         }
       }

@@ -799,8 +799,9 @@ const OnboardingPage: React.FC = () => {
       }
       
       // Then try RevenueCat restore
-      const { restorePurchases } = await import('../services/revenueCatService').then(m => ({ restorePurchases: m.default.restorePurchases }));
-      const result = await restorePurchases();
+      const revenueCatModule = await import('../services/revenueCatService');
+      const revenueCatService = revenueCatModule.default;
+      const result = await revenueCatService.restorePurchases();
       
       if (result.success && result.isPremium) {
         playSuccess();
@@ -902,18 +903,26 @@ const OnboardingPage: React.FC = () => {
   const renderProgress = () => {
     const totalSteps = 4; // Parent, Family, Voice Selection, Unlock
     return (
-    <div className="w-full max-w-md px-8 mb-8">
-       <div className="flex justify-between mb-2 text-[#eecaa0] font-display font-bold text-xs uppercase tracking-widest">
-          <span className={step >= 1 ? "text-[#FFD700]" : "opacity-50"}>Parent</span>
-          <span className={step >= 2 ? "text-[#FFD700]" : "opacity-50"}>Family</span>
-          <span className={step >= 3 ? "text-[#FFD700]" : "opacity-50"}>Voice</span>
-          <span className={step >= 4 ? "text-[#FFD700]" : "opacity-50"}>Unlock</span>
-       </div>
-       <div className="h-3 bg-[#3E1F07] rounded-full overflow-hidden border border-[#5c2e0b] shadow-inner">
-          <div 
-            className="h-full bg-gradient-to-r from-[#FFD700] to-[#ffb300] transition-all duration-500 ease-out"
-            style={{ width: `${(step / totalSteps) * 100}%` }}
-          ></div>
+    <div className="w-full max-w-md px-6 mb-6">
+       {/* Wood plank container for progress */}
+       <div className="bg-[#CD853F] rounded-2xl p-4 border-2 border-[#8B4513] shadow-lg relative overflow-hidden">
+         {/* Wood grain */}
+         <div className="absolute inset-0 opacity-10" style={{backgroundImage: 'repeating-linear-gradient(90deg, transparent, transparent 25px, #3E1F07 25px, #3E1F07 27px)'}}></div>
+         
+         <div className="relative">
+           <div className="flex justify-between mb-3 text-[#5c2e0b] font-display font-bold text-xs uppercase tracking-wide">
+              <span className={step >= 1 ? "text-[#3E1F07]" : "opacity-40"}>Parent</span>
+              <span className={step >= 2 ? "text-[#3E1F07]" : "opacity-40"}>Family</span>
+              <span className={step >= 3 ? "text-[#3E1F07]" : "opacity-40"}>Voice</span>
+              <span className={step >= 4 ? "text-[#3E1F07]" : "opacity-40"}>Unlock</span>
+           </div>
+           <div className="h-4 bg-[#5c2e0b] rounded-full overflow-hidden border-2 border-[#3E1F07] shadow-inner">
+              <div 
+                className="h-full bg-gradient-to-r from-[#FFD700] to-[#ffb300] transition-all duration-500 ease-out rounded-full"
+                style={{ width: `${(step / totalSteps) * 100}%` }}
+              ></div>
+           </div>
+         </div>
        </div>
     </div>
     );
@@ -937,30 +946,32 @@ const OnboardingPage: React.FC = () => {
   };
 
   return (
-    <div className="flex flex-col h-full w-full relative overflow-y-auto no-scrollbar bg-[#0f172a]">
+    <div className="flex flex-col h-full w-full relative overflow-y-auto no-scrollbar">
       
-      {/* BACKGROUND DECORATION */}
-      <div className="fixed inset-0 pointer-events-none z-0">
-          <div className="absolute inset-0 opacity-20" style={{backgroundImage: 'radial-gradient(#1e293b 1px, transparent 1px)', backgroundSize: '20px 20px'}}></div>
-          <div className="absolute top-0 left-0 right-0 h-[50vh] bg-gradient-to-b from-[#0ea5e9]/20 to-transparent"></div>
-      </div>
-
-      {/* HEADER */}
-      <div className="relative z-20 pt-6 px-6 flex items-center justify-between">
-         {step > 1 && (
-           <button onClick={() => setStep(prev => (prev - 1) as any)} className="text-[#eecaa0] hover:text-white transition-colors">
-              <ChevronLeft size={32} />
-           </button>
-         )}
-         {step === 1 && <div className="w-8"></div>} {/* Spacer */}
-         
-         <div className="flex flex-col items-center">
-             <h1 className="font-display font-extrabold text-2xl text-white tracking-wide drop-shadow-md">
-                 SETUP
-             </h1>
-         </div>
-         
-         <div className="w-8"></div> {/* Spacer */}
+      {/* Wood Header Bar */}
+      <div className="relative z-20 pt-8 pb-4 px-6 bg-[#CD853F] shadow-md border-b-4 border-[#8B4513]">
+        {/* Wood Texture */}
+        <div className="absolute inset-0 opacity-10 pointer-events-none" style={{backgroundImage: 'repeating-linear-gradient(90deg, transparent, transparent 30px, #3E1F07 30px, #3E1F07 32px)'}}></div>
+        
+        <div className="relative flex items-center justify-between z-10">
+           {step > 1 && (
+             <button 
+               onClick={() => setStep(prev => (prev - 1) as any)} 
+               className="w-12 h-12 bg-[#8B4513] hover:bg-[#A0522D] rounded-full flex items-center justify-center text-[#f3e5ab] border-2 border-[#eecaa0] active:scale-95 transition-transform shadow-md"
+             >
+                <ChevronLeft size={28} strokeWidth={3} />
+             </button>
+           )}
+           {step === 1 && <div className="w-12"></div>} {/* Spacer */}
+           
+           <div className="flex flex-col items-center">
+               <h1 className="font-display font-extrabold text-2xl text-[#5c2e0b] tracking-wide drop-shadow-sm uppercase">
+                   Setup
+               </h1>
+           </div>
+           
+           <div className="w-12"></div> {/* Spacer */}
+        </div>
       </div>
 
       <div className="flex-1 flex flex-col items-center pt-6 pb-10 w-full relative z-10">
@@ -971,52 +982,68 @@ const OnboardingPage: React.FC = () => {
         {step === 1 && (
           <div className="w-full max-w-md px-6 animate-in slide-in-from-right-10 duration-500">
              
-             {/* Clarification Banner */}
-             <div className="bg-[#eecaa0]/20 rounded-lg p-3 mb-6 flex items-center gap-3 border border-[#eecaa0]/30">
-                 <div className="bg-[#FFD700] rounded-full p-1.5 text-[#5c2e0b]">
-                     <UserCircle size={20} />
+             {/* Clarification Banner - Wood Themed */}
+             <div className="bg-[#CD853F] rounded-2xl p-4 mb-6 flex items-center gap-3 border-2 border-[#8B4513] shadow-lg relative overflow-hidden">
+                 {/* Wood grain texture */}
+                 <div className="absolute inset-0 opacity-10" style={{backgroundImage: 'repeating-linear-gradient(90deg, transparent, transparent 20px, #3E1F07 20px, #3E1F07 22px)'}}></div>
+                 <div className="relative flex items-center gap-3">
+                   <div className="bg-[#FFD700] rounded-full p-2 text-[#5c2e0b] border-2 border-[#B8860B] shadow-md">
+                       <UserCircle size={24} />
+                   </div>
+                   <p className="text-[#5c2e0b] text-sm font-display font-bold">
+                       Step 1: Create the <span className="text-[#3E1F07]">Parent Profile</span>
+                   </p>
                  </div>
-                 <p className="text-[#eecaa0] text-sm font-bold">
-                     Step 1: Create the <span className="text-white">Parent Profile</span>
-                 </p>
              </div>
 
-             {/* Avatar Picker */}
-             <div className="flex flex-col items-center mb-8">
-                <div className="w-32 h-32 rounded-full border-[6px] border-white shadow-[0_0_30px_rgba(255,255,255,0.2)] bg-[#f3e5ab] mb-6 relative overflow-hidden flex items-center justify-center">
-                     <div className="w-[90%] h-[90%] flex items-center justify-center">
-                         {renderAvatarAsset(pAvatar)}
-                     </div>
-                </div>
+             {/* Avatar Picker - Wood Container */}
+             <div className="bg-[#CD853F] rounded-2xl p-5 mb-6 border-2 border-[#8B4513] shadow-lg relative overflow-hidden">
+                {/* Wood grain */}
+                <div className="absolute inset-0 opacity-10" style={{backgroundImage: 'repeating-linear-gradient(90deg, transparent, transparent 20px, #3E1F07 20px, #3E1F07 22px)'}}></div>
                 
-                <div className="w-full overflow-x-auto no-scrollbar pb-2">
-                  <div className="flex gap-3 justify-center min-w-min px-2">
-                    {FUNNY_HEADS.map((head) => (
-                      <button
-                        key={head}
-                        onClick={() => setPAvatar(head)}
-                        className={`w-12 h-12 rounded-full overflow-hidden border-2 transition-all flex-shrink-0 p-1 bg-[#f3e5ab] flex items-center justify-center ${pAvatar === head ? 'border-[#FFD700] scale-110 ring-2 ring-[#FFD700]/50' : 'border-white/20 opacity-60 hover:opacity-100'}`}
-                      >
-                          {renderAvatarAsset(head)}
-                      </button>
-                    ))}
+                <div className="relative flex flex-col items-center">
+                  <div className="w-28 h-28 rounded-full border-4 border-[#8B4513] shadow-lg bg-[#f3e5ab] mb-4 relative overflow-hidden flex items-center justify-center">
+                       <div className="w-[90%] h-[90%] flex items-center justify-center">
+                           {renderAvatarAsset(pAvatar)}
+                       </div>
+                  </div>
+                  
+                  <p className="text-[#5c2e0b] text-xs font-bold mb-3">Tap to change avatar</p>
+                  
+                  <div className="w-full overflow-x-auto no-scrollbar pb-2">
+                    <div className="flex gap-2 justify-center min-w-min px-2">
+                      {FUNNY_HEADS.map((head) => (
+                        <button
+                          key={head}
+                          onClick={() => setPAvatar(head)}
+                          className={`w-11 h-11 rounded-full overflow-hidden border-2 transition-all flex-shrink-0 p-1 bg-[#f3e5ab] flex items-center justify-center ${pAvatar === head ? 'border-[#FFD700] scale-110 ring-2 ring-[#FFD700]/50' : 'border-[#8B4513]/50 opacity-70 hover:opacity-100'}`}
+                        >
+                            {renderAvatarAsset(head)}
+                        </button>
+                      ))}
+                    </div>
                   </div>
                 </div>
              </div>
 
-             {/* Name Input */}
-             <div className="bg-[#3E1F07] p-6 rounded-2xl border-2 border-[#5c2e0b] shadow-xl">
-                 <label className="block text-[#eecaa0] font-display font-bold text-sm tracking-wide mb-2 uppercase">
-                   Parent Name
-                 </label>
-                 <input 
-                    type="text" 
-                    value={pName}
-                    onChange={(e) => setPName(e.target.value)}
-                    placeholder="e.g. Mom, Dad"
-                    className="w-full bg-black/30 border-2 border-[#8B4513] rounded-xl px-4 py-3 text-white font-display text-lg placeholder:text-white/30 focus:outline-none focus:border-[#FFD700] transition-colors text-center"
-                    autoFocus
-                 />
+             {/* Name Input - Wood Container */}
+             <div className="bg-[#CD853F] p-5 rounded-2xl border-2 border-[#8B4513] shadow-lg relative overflow-hidden">
+                 {/* Wood grain */}
+                 <div className="absolute inset-0 opacity-10" style={{backgroundImage: 'repeating-linear-gradient(90deg, transparent, transparent 20px, #3E1F07 20px, #3E1F07 22px)'}}></div>
+                 
+                 <div className="relative">
+                   <label className="block text-[#5c2e0b] font-display font-bold text-sm tracking-wide mb-2 uppercase">
+                     Parent Name
+                   </label>
+                   <input 
+                      type="text" 
+                      value={pName}
+                      onChange={(e) => setPName(e.target.value)}
+                      placeholder="e.g. Mom, Dad"
+                      className="w-full bg-[#fff8e1] border-2 border-[#8B4513] rounded-xl px-4 py-3 text-[#3E1F07] font-display text-lg placeholder:text-[#8B4513]/40 focus:outline-none focus:border-[#FFD700] focus:ring-2 focus:ring-[#FFD700]/30 transition-colors text-center"
+                      autoFocus
+                   />
+                 </div>
              </div>
 
              <div className="mt-8">
@@ -1036,28 +1063,33 @@ const OnboardingPage: React.FC = () => {
         {step === 2 && (
            <div className="w-full max-w-md px-6 animate-in slide-in-from-right-10 duration-500 flex flex-col h-full">
               
-              <div className="text-center mb-6">
-                 <h2 className="text-white font-display font-bold text-xl">Who is adventuring?</h2>
-                 <p className="text-[#eecaa0] text-sm">Create profiles for your children.</p>
-                 {subscribedDuringOnboarding && (
-                   <div className="inline-flex items-center gap-1 mt-2 px-3 py-1 bg-[#FFD700]/20 rounded-full text-[#FFD700] text-xs font-bold">
-                     <Crown size={12} /> Premium - Unlimited Kids
-                   </div>
-                 )}
+              {/* Header - Wood Container */}
+              <div className="bg-[#CD853F] rounded-2xl p-4 mb-6 border-2 border-[#8B4513] shadow-lg relative overflow-hidden text-center">
+                 <div className="absolute inset-0 opacity-10" style={{backgroundImage: 'repeating-linear-gradient(90deg, transparent, transparent 20px, #3E1F07 20px, #3E1F07 22px)'}}></div>
+                 <div className="relative">
+                   <h2 className="text-[#3E1F07] font-display font-bold text-xl">Who is adventuring?</h2>
+                   <p className="text-[#5c2e0b] text-sm">Create profiles for your children.</p>
+                   {subscribedDuringOnboarding && (
+                     <div className="inline-flex items-center gap-1 mt-2 px-3 py-1 bg-[#FFD700] rounded-full text-[#5c2e0b] text-xs font-bold border border-[#B8860B]">
+                       <Crown size={12} /> Premium - Unlimited Kids
+                     </div>
+                   )}
+                 </div>
               </div>
 
               {/* Added Kids List */}
               <div className="space-y-3 mb-6">
                   {kids.map((kid, index) => (
-                      <div key={kid.id} className="bg-white/10 backdrop-blur-md rounded-xl p-3 flex items-center justify-between border border-white/10 animate-in zoom-in">
-                          <div className="flex items-center gap-3">
-                              <div className="w-12 h-12 rounded-full bg-[#f3e5ab] overflow-hidden border-2 border-white/50 flex items-center justify-center p-1">
+                      <div key={kid.id} className="bg-[#CD853F] rounded-xl p-3 flex items-center justify-between border-2 border-[#8B4513] shadow-md animate-in zoom-in relative overflow-hidden">
+                          <div className="absolute inset-0 opacity-10" style={{backgroundImage: 'repeating-linear-gradient(90deg, transparent, transparent 15px, #3E1F07 15px, #3E1F07 17px)'}}></div>
+                          <div className="relative flex items-center gap-3">
+                              <div className="w-12 h-12 rounded-full bg-[#f3e5ab] overflow-hidden border-2 border-[#8B4513] flex items-center justify-center p-1">
                                    {renderAvatarAsset(kid.avatarSeed)}
                               </div>
                               <div>
-                                  <h3 className="text-white font-bold font-display text-lg">{kid.name}</h3>
+                                  <h3 className="text-[#3E1F07] font-bold font-display text-lg">{kid.name}</h3>
                                   <div className="flex items-center gap-2">
-                                    <span className="text-[#eecaa0] text-xs font-bold">{kid.age} years old</span>
+                                    <span className="text-[#5c2e0b] text-xs font-bold">{kid.age} years old</span>
                                     {/* Show FREE or PREMIUM badge */}
                                     {index === 0 ? (
                                       <span className="text-[8px] font-bold px-1.5 py-0.5 rounded bg-[#4CAF50] text-white">FREE</span>
@@ -1067,18 +1099,21 @@ const OnboardingPage: React.FC = () => {
                                   </div>
                               </div>
                           </div>
-                          <button onClick={() => removeKid(kid.id)} className="w-8 h-8 bg-red-500/20 text-red-300 rounded-full flex items-center justify-center hover:bg-red-500 hover:text-white transition-colors">
+                          <button onClick={() => removeKid(kid.id)} className="relative w-8 h-8 bg-red-500/80 text-white rounded-full flex items-center justify-center hover:bg-red-600 transition-colors border border-red-700">
                               <Trash2 size={16} />
                           </button>
                       </div>
                   ))}
               </div>
 
-              {/* Add Kid Form - Always show if under max kids */}
+              {/* Add Kid Form - Wood Container */}
               {canAddMoreKids ? (
-                <div className="bg-[#3E1F07] p-5 rounded-2xl border-2 border-[#5c2e0b] shadow-xl mb-6 relative overflow-hidden">
+                <div className="bg-[#CD853F] p-5 rounded-2xl border-2 border-[#8B4513] shadow-lg mb-6 relative overflow-hidden">
+                   {/* Wood grain */}
+                   <div className="absolute inset-0 opacity-10" style={{backgroundImage: 'repeating-linear-gradient(90deg, transparent, transparent 20px, #3E1F07 20px, #3E1F07 22px)'}}></div>
+                   
                    {/* Badge shows FREE for first kid, PREMIUM REQUIRED for additional */}
-                   <div className={`absolute top-0 right-0 text-[10px] font-bold px-2 py-1 rounded-bl-lg ${
+                   <div className={`absolute top-0 right-0 text-[10px] font-bold px-2 py-1 rounded-bl-lg z-10 ${
                      kids.length === 0 
                        ? 'bg-[#4CAF50] text-white' 
                        : 'bg-gradient-to-r from-[#FFD700] to-[#FFA500] text-[#5c2e0b]'
@@ -1086,14 +1121,14 @@ const OnboardingPage: React.FC = () => {
                      {kids.length === 0 ? '✓ FREE PROFILE' : '👑 PREMIUM'}
                    </div>
                    
-                   <div className="flex gap-4 mb-4">
+                   <div className="relative flex gap-4 mb-4">
                       <div className="w-20 shrink-0 flex flex-col gap-2">
                           <div 
                              className="w-20 h-20 rounded-xl bg-[#f3e5ab] border-2 border-[#8B4513] overflow-hidden relative cursor-pointer hover:opacity-90 flex items-center justify-center p-2"
                              onClick={() => setKidAvatar(FUNNY_HEADS[Math.floor(Math.random() * FUNNY_HEADS.length)])}
                           >
                                {renderAvatarAsset(kidAvatar)}
-                               <div className="absolute bottom-0 left-0 right-0 bg-black/40 text-white text-[8px] text-center py-0.5">TAP</div>
+                               <div className="absolute bottom-0 left-0 right-0 bg-[#5c2e0b]/80 text-[#f3e5ab] text-[8px] text-center py-0.5 font-bold">TAP</div>
                           </div>
                       </div>
                       <div className="flex-1 space-y-3">
@@ -1102,14 +1137,14 @@ const OnboardingPage: React.FC = () => {
                               placeholder="Child's Name"
                               value={kidName}
                               onChange={(e) => setKidName(e.target.value)}
-                              className="w-full bg-black/30 border border-[#8B4513] rounded-lg px-3 py-2 text-white font-display placeholder:text-white/30 focus:outline-none focus:border-[#FFD700]"
+                              className="w-full bg-[#fff8e1] border-2 border-[#8B4513] rounded-lg px-3 py-2.5 text-[#3E1F07] font-display placeholder:text-[#8B4513]/40 focus:outline-none focus:border-[#FFD700] focus:ring-2 focus:ring-[#FFD700]/30"
                           />
                           <input 
                               type="number" 
                               placeholder="Age"
                               value={kidAge}
                               onChange={(e) => setKidAge(e.target.value)}
-                              className="w-20 bg-black/30 border border-[#8B4513] rounded-lg px-3 py-2 text-white font-display placeholder:text-white/30 focus:outline-none focus:border-[#FFD700]"
+                              className="w-20 bg-[#fff8e1] border-2 border-[#8B4513] rounded-lg px-3 py-2.5 text-[#3E1F07] font-display placeholder:text-[#8B4513]/40 focus:outline-none focus:border-[#FFD700] focus:ring-2 focus:ring-[#FFD700]/30"
                           />
                       </div>
                    </div>
@@ -1117,7 +1152,7 @@ const OnboardingPage: React.FC = () => {
                    <button 
                       onClick={handleAddKid}
                       disabled={!kidName.trim()}
-                      className={`w-full bg-[#5c2e0b] hover:bg-[#70380d] text-[#eecaa0] font-display font-bold py-3 rounded-xl border border-[#8B4513] flex items-center justify-center gap-2 transition-colors ${!kidName.trim() ? 'opacity-50' : ''}`}
+                      className={`relative w-full bg-[#5c2e0b] hover:bg-[#70380d] text-[#f3e5ab] font-display font-bold py-3 rounded-xl border-2 border-[#3E1F07] flex items-center justify-center gap-2 transition-colors shadow-md ${!kidName.trim() ? 'opacity-50' : ''}`}
                    >
                       <Plus size={18} />
                       ADD CHILD

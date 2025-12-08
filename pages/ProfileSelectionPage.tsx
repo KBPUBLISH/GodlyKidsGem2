@@ -65,52 +65,45 @@ const ProfileSelectionPage: React.FC = () => {
   return (
     <div className="flex flex-col h-full w-full relative overflow-y-auto no-scrollbar">
       
-      {/* Top Bar */}
-      <div className="absolute top-0 left-0 right-0 p-6 z-20 flex justify-between items-center pt-8">
-        <div className="flex items-center gap-3">
-            {/* Back Button */}
-            <button 
-              onClick={() => navigate('/home')}
-              className="w-10 h-10 bg-white/20 hover:bg-white/30 backdrop-blur-md rounded-full flex items-center justify-center text-white border border-white/30 active:scale-95 transition-transform shadow-md"
-            >
-              <ChevronLeft size={24} />
-            </button>
-
-            <div className="flex items-center gap-2 opacity-90">
-                <div className="w-10 h-10 bg-[#8B4513] rounded-full flex items-center justify-center border-2 border-[#eecaa0] shadow-md hidden xs:flex relative">
+      {/* Wood Header Bar */}
+      <div className="relative z-20 pt-8 pb-4 px-6 bg-[#CD853F] shadow-md border-b-4 border-[#8B4513]">
+        {/* Wood Texture */}
+        <div className="absolute inset-0 opacity-10 pointer-events-none" style={{backgroundImage: 'repeating-linear-gradient(90deg, transparent, transparent 30px, #3E1F07 30px, #3E1F07 32px)'}}></div>
+        
+        <div className="relative flex items-center justify-between z-10">
+            <div className="flex items-center gap-2">
+                <div className="w-10 h-10 bg-[#8B4513] rounded-full flex items-center justify-center border-2 border-[#eecaa0] shadow-md relative">
                     <UserIcon size={20} className="text-[#eecaa0]" />
                      {/* Sub Badge Small */}
                      <div className={`absolute -top-1 -right-1 bg-white rounded-full p-0.5 border shadow-sm ${isSubscribed ? 'border-[#FFD700]' : 'border-gray-300'}`}>
                         <Crown size={10} className={isSubscribed ? "text-[#B8860B]" : "text-gray-400"} fill={isSubscribed ? "#FFD700" : "#E5E7EB"} />
                     </div>
                 </div>
-                <span className="font-display font-bold text-[#eecaa0] text-lg shadow-sm">Member</span>
+                <span className="font-display font-bold text-[#5c2e0b] text-lg">Profiles</span>
             </div>
-        </div>
 
-        {/* Right Actions */}
-        <div className="flex items-center gap-3">
-            {/* Settings Button */}
+            {/* Right Actions */}
             <button 
               onClick={() => navigate('/settings')} 
-              className="w-10 h-10 bg-[#5c2e0b] hover:bg-[#70380d] border-2 border-[#8B4513] rounded-full flex items-center justify-center text-[#eecaa0] shadow-lg active:scale-95 transition-transform"
+              className="w-10 h-10 bg-[#8B4513] hover:bg-[#A0522D] border-2 border-[#eecaa0] rounded-full flex items-center justify-center text-[#f3e5ab] shadow-md active:scale-95 transition-transform"
             >
                 <Settings size={20} />
             </button>
         </div>
       </div>
 
-      <div className="flex-1 flex flex-col items-center pt-28 pb-10 px-6">
+      <div className="flex-1 flex flex-col items-center pt-8 pb-10 px-6">
           
           {/* Sign */}
-          <div className="relative mb-12 animate-in slide-in-from-top-10 duration-700">
-             <div className="relative bg-[#CD853F] px-10 py-3 rounded-xl border-b-[6px] border-[#8B4513] shadow-xl transform -rotate-1">
+          <div className="relative mb-10 animate-in slide-in-from-top-10 duration-700">
+             <div className="relative bg-[#CD853F] px-8 py-4 rounded-2xl border-b-[6px] border-[#8B4513] shadow-xl transform -rotate-1">
                 {/* Wood Texture */}
-                 <div className="absolute inset-0 opacity-20 rounded-xl pointer-events-none" style={{backgroundImage: 'repeating-linear-gradient(45deg, transparent, transparent 10px, #3E1F07 10px, #3E1F07 12px)'}}></div>
+                 <div className="absolute inset-0 opacity-20 rounded-2xl pointer-events-none" style={{backgroundImage: 'repeating-linear-gradient(45deg, transparent, transparent 10px, #3E1F07 10px, #3E1F07 12px)'}}></div>
                 
-                <h1 className="relative font-display font-extrabold text-[#5c2e0b] text-2xl tracking-widest drop-shadow-[0_1px_0_rgba(255,255,255,0.4)]">
-                  WHO'S PLAYING?
+                <h1 className="relative font-display font-extrabold text-[#5c2e0b] text-2xl tracking-wide drop-shadow-[0_1px_0_rgba(255,255,255,0.4)] text-center">
+                  Choose Explorer
                 </h1>
+                <p className="relative text-[#8B4513] text-sm text-center mt-1 font-medium">Who's playing today?</p>
 
                 {/* Nails */}
                 <div className="absolute top-1/2 -translate-y-1/2 left-3 w-3 h-3 bg-[#3e1f07] rounded-full shadow-[inset_0_1px_2px_rgba(0,0,0,0.5)]"></div>

@@ -1,14 +1,11 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ChevronLeft, Mail, Lock, Eye, EyeOff, X, Loader2, RefreshCw } from 'lucide-react';
+import { ChevronLeft, Mail, Lock, Eye, EyeOff, X, Loader2 } from 'lucide-react';
 import WoodButton from '../components/ui/WoodButton';
 import { ApiService, getApiBaseUrl } from '../services/apiService';
-import { useSubscription } from '../context/SubscriptionContext';
-import { RevenueCatService } from '../services/revenueCatService';
 
 const SignInPage: React.FC = () => {
   const navigate = useNavigate();
-  const { subscribe } = useSubscription();
   const [loading, setLoading] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [email, setEmail] = useState('');
@@ -21,10 +18,6 @@ const SignInPage: React.FC = () => {
   const [forgotLoading, setForgotLoading] = useState(false);
   const [forgotSuccess, setForgotSuccess] = useState(false);
   const [forgotError, setForgotError] = useState<string | null>(null);
-  
-  // Restore purchases state
-  const [isRestoring, setIsRestoring] = useState(false);
-  const [restoreResult, setRestoreResult] = useState<{ type: 'success' | 'error' | 'info', message: string } | null>(null);
 
   const handleForgotPassword = async () => {
     if (!forgotEmail || !forgotEmail.includes('@')) {
@@ -63,77 +56,6 @@ const SignInPage: React.FC = () => {
     setForgotEmail('');
     setForgotSuccess(false);
     setForgotError(null);
-  };
-
-  const handleRestorePurchases = async () => {
-    setIsRestoring(true);
-    setRestoreResult(null);
-    setError(null);
-    
-    try {
-      console.log('🔄 Restore purchases clicked on Sign In page');
-      
-      // First try native RevenueCat/DeSpia restore
-      const result = await RevenueCatService.restorePurchases(true); // true = trigger native Apple restore
-      console.log('🔄 Native restore result:', result);
-      
-      if (result.success && result.isPremium) {
-        subscribe();
-        setRestoreResult({
-          type: 'success',
-          message: 'Your subscription has been restored! 🎉'
-        });
-        setTimeout(() => navigate('/home'), 1500);
-        return;
-      }
-      
-      // Check if user is logged in and try migration API
-      const userEmail = email || localStorage.getItem('godlykids_user_email');
-      if (userEmail) {
-        console.log('🔄 Checking migration API for:', userEmail);
-        const baseUrl = getApiBaseUrl();
-        
-        const migrationResponse = await fetch(`${baseUrl}migration/restore-subscription`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ email: userEmail }),
-        });
-        
-        const migrationData = await migrationResponse.json();
-        console.log('🔄 Migration API result:', migrationData);
-        
-        if (migrationData.subscriptionRestored) {
-          subscribe();
-          setRestoreResult({
-            type: 'success',
-            message: 'Welcome back! Your subscription has been restored! 🎉'
-          });
-          setTimeout(() => navigate('/home'), 2000);
-          return;
-        } else if (migrationData.found) {
-          setRestoreResult({
-            type: 'info',
-            message: migrationData.message || 'Account found but subscription has expired.'
-          });
-          return;
-        }
-      }
-      
-      // No subscription found
-      setRestoreResult({
-        type: 'error',
-        message: 'No active subscription found for this device or email. If you recently subscribed, please wait a moment and try again.'
-      });
-      
-    } catch (err: any) {
-      console.error('❌ Restore error:', err);
-      setRestoreResult({
-        type: 'error',
-        message: err.message || 'Failed to restore purchases. Please try again.'
-      });
-    } finally {
-      setIsRestoring(false);
-    }
   };
 
   const handleLogin = async (provider: 'apple' | 'google' | 'email', emailValue?: string, passwordValue?: string) => {
@@ -327,54 +249,6 @@ const SignInPage: React.FC = () => {
               >
                 Get Started
               </button>
-
-              {/* Restore Purchases Section */}
-              <div className="mt-4 pt-4 border-t border-white/20">
-                <button
-                  onClick={handleRestorePurchases}
-                  disabled={isRestoring}
-                  className="w-full flex items-center justify-center gap-2 text-white/70 hover:text-white text-sm py-2 transition-colors disabled:opacity-50"
-                >
-                  {isRestoring ? (
-                    <>
-                      <Loader2 className="w-4 h-4 animate-spin" />
-                      Restoring...
-                    </>
-                  ) : (
-                    <>
-                      <RefreshCw size={16} />
-                      Restore Previous Subscription
-                    </>
-                  )}
-                </button>
-                
-                {restoreResult && (
-                  <div className={`mt-2 px-3 py-2 rounded-lg text-sm text-center ${
-                    restoreResult.type === 'success' 
-                      ? 'bg-green-500/20 text-green-300 border border-green-500/30' 
-                      : restoreResult.type === 'error'
-                        ? 'bg-red-500/20 text-red-300 border border-red-500/30'
-                        : 'bg-blue-500/20 text-blue-300 border border-blue-500/30'
-                  }`}>
-                    {restoreResult.message.includes('hello@kbpublish.org') 
-                      ? restoreResult.message.split('hello@kbpublish.org').map((part, i, arr) => (
-                          <span key={i}>
-                            {part}
-                            {i < arr.length - 1 && (
-                              <a 
-                                href="mailto:hello@kbpublish.org?subject=Subscription%20Support%20Request" 
-                                className="text-yellow-300 underline font-semibold"
-                              >
-                                hello@kbpublish.org
-                              </a>
-                            )}
-                          </span>
-                        ))
-                      : restoreResult.message
-                    }
-                  </div>
-                )}
-              </div>
 
               <p className="text-center text-white/60 text-xs mt-4">
                 By continuing you agree to our Terms & Conditions

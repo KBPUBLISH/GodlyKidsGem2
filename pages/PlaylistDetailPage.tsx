@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { ChevronLeft, Crown, Play, Pause, Music, Headphones, Heart, Bookmark, Hammer, Wrench, Lock } from 'lucide-react';
+import { ChevronLeft, Crown, Play, Pause, Music, Headphones, Heart, Bookmark, Hammer, Wrench, Lock, Check } from 'lucide-react';
 import { getApiBaseUrl } from '../services/apiService';
 import { favoritesService } from '../services/favoritesService';
 import { useAudio } from '../context/AudioContext';
@@ -479,115 +479,180 @@ const PlaylistDetailPage: React.FC = () => {
                 </div>
             </div>
 
-            {/* CONTENT SECTION - Audio Items List */}
-            <div className="flex-1 w-full px-6 pt-8 pb-32">
-                <div className="max-w-2xl mx-auto space-y-3">
+            {/* CONTENT SECTION - Learning Path Style */}
+            <div 
+                className="flex-1 w-full pb-32 relative overflow-hidden"
+                style={{
+                    background: 'linear-gradient(180deg, #87CEEB 0%, #B0E0E6 30%, #87CEEB 60%, #5DADE2 100%)'
+                }}
+            >
+                {/* Sky/Cloud decorations */}
+                <div className="absolute inset-0 pointer-events-none overflow-hidden">
+                    {/* Sun */}
+                    <div className="absolute top-8 right-8 w-24 h-24 rounded-full bg-gradient-to-br from-[#FFE44D] to-[#FFA500] opacity-80 blur-sm" />
+                    <div className="absolute top-10 right-10 w-20 h-20 rounded-full bg-gradient-to-br from-[#FFFACD] to-[#FFD700] opacity-90" />
+                    
+                    {/* Clouds */}
+                    <div className="absolute top-20 left-4 w-32 h-12 bg-white/60 rounded-full blur-md" />
+                    <div className="absolute top-16 left-12 w-24 h-10 bg-white/70 rounded-full blur-sm" />
+                    <div className="absolute top-40 right-20 w-28 h-10 bg-white/50 rounded-full blur-md" />
+                    <div className="absolute top-[30%] left-8 w-20 h-8 bg-white/40 rounded-full blur-sm" />
+                    
+                    {/* Ocean waves at bottom */}
+                    <div className="absolute bottom-0 left-0 right-0 h-32 bg-gradient-to-t from-[#1E90FF]/40 to-transparent" />
+                    <div className="absolute bottom-8 left-0 right-0 h-16 bg-[#4169E1]/20 rounded-t-[100%]" />
+                    <div className="absolute bottom-4 left-0 right-0 h-12 bg-[#1E90FF]/30 rounded-t-[100%]" />
+                </div>
+
+                {/* Path Items */}
+                <div className="relative z-10 pt-12 pb-8 px-4 flex flex-col items-center">
                     {playlist.items.map((item, index) => {
                         const trackPlaying = isTrackPlaying(index);
                         const isCurrent = isCurrentTrack(index);
                         const itemIsLocked = (item as any).isMembersOnly && !isSubscribed;
+                        const isCompleted = false; // TODO: Track completed episodes
+                        const isEven = index % 2 === 0;
                         
                         return (
-                            <div
-                                key={item._id || index}
-                                onClick={() => handleItemClick(index)}
-                                className={`rounded-xl overflow-hidden shadow-md border-2 hover:shadow-xl hover:scale-[1.02] transition-all cursor-pointer group ${
-                                    itemIsLocked
-                                        ? 'bg-gray-100 border-gray-300 opacity-90'
-                                        : isCurrent 
-                                            ? 'bg-[#FFF8E1] border-[#FFD700] ring-2 ring-[#FFD700]/50' 
-                                            : 'bg-white border-[#d4c5a0]'
-                                }`}
-                            >
-                                <div className="flex items-center gap-4 p-4">
-                                    {/* Cover Image or Icon */}
-                                    <div className={`w-16 h-16 rounded-lg overflow-hidden border-2 shrink-0 relative ${
-                                        itemIsLocked ? 'border-gray-400' : isCurrent ? 'border-[#FFD700]' : 'border-[#d4c5a0]'
-                                    }`}>
-                                        {item.coverImage ? (
-                                            <img
-                                                src={item.coverImage}
-                                                alt={item.title}
-                                                className={`w-full h-full object-cover ${itemIsLocked ? 'filter brightness-75' : ''}`}
-                                            />
-                                        ) : (
-                                            <div className="w-full h-full bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center">
-                                                {playlist.type === 'Song' ? (
-                                                    <Music className="w-8 h-8 text-white opacity-50" />
-                                                ) : (
-                                                    <Headphones className="w-8 h-8 text-white opacity-50" />
-                                                )}
-                                            </div>
+                            <div key={item._id || index} className="relative w-full max-w-xs">
+                                {/* Connecting path line */}
+                                {index < playlist.items.length - 1 && (
+                                    <div 
+                                        className="absolute left-1/2 top-[90px] w-1 h-24 -translate-x-1/2 z-0"
+                                        style={{
+                                            background: 'linear-gradient(180deg, #5DADE2 0%, #85C1E9 50%, #5DADE2 100%)',
+                                            opacity: 0.6
+                                        }}
+                                    />
+                                )}
+                                
+                                {/* Item container - alternates left/right */}
+                                <div 
+                                    className={`flex items-center gap-4 mb-8 ${isEven ? 'flex-row' : 'flex-row-reverse'}`}
+                                    style={{ marginLeft: isEven ? '0' : 'auto', marginRight: isEven ? 'auto' : '0' }}
+                                >
+                                    {/* Circle with cover image */}
+                                    <div 
+                                        onClick={() => handleItemClick(index)}
+                                        className={`relative cursor-pointer transition-all duration-300 hover:scale-110 active:scale-95 ${
+                                            isCurrent ? 'scale-110' : ''
+                                        }`}
+                                    >
+                                        {/* Outer glow ring for current */}
+                                        {isCurrent && (
+                                            <div className="absolute -inset-3 rounded-full bg-[#FFD700]/40 animate-pulse" />
                                         )}
-                                        {/* Locked indicator on cover */}
-                                        {itemIsLocked && (
-                                            <div className="absolute inset-0 bg-black/40 flex items-center justify-center">
-                                                <Lock className="w-6 h-6 text-white" />
-                                            </div>
-                                        )}
-                                        {/* Playing indicator on cover */}
-                                        {!itemIsLocked && trackPlaying && (
-                                            <div className="absolute inset-0 bg-black/40 flex items-center justify-center">
-                                                <div className="flex items-end gap-0.5 h-4">
-                                                    <div className="w-1 bg-[#FFD700] rounded-full animate-[soundBar1_0.5s_ease-in-out_infinite]" style={{ height: '100%' }} />
-                                                    <div className="w-1 bg-[#FFD700] rounded-full animate-[soundBar2_0.5s_ease-in-out_infinite_0.1s]" style={{ height: '60%' }} />
-                                                    <div className="w-1 bg-[#FFD700] rounded-full animate-[soundBar3_0.5s_ease-in-out_infinite_0.2s]" style={{ height: '80%' }} />
+                                        
+                                        {/* Main circle */}
+                                        <div className={`relative w-24 h-24 rounded-full overflow-hidden border-4 shadow-xl ${
+                                            itemIsLocked 
+                                                ? 'border-gray-400' 
+                                                : isCurrent 
+                                                    ? 'border-[#FFD700] ring-4 ring-[#FFD700]/50' 
+                                                    : isCompleted 
+                                                        ? 'border-green-500' 
+                                                        : 'border-white'
+                                        }`}>
+                                            {/* Cover image */}
+                                            {item.coverImage ? (
+                                                <img
+                                                    src={item.coverImage}
+                                                    alt={item.title}
+                                                    className={`w-full h-full object-cover ${itemIsLocked ? 'filter brightness-50 grayscale-[30%]' : ''}`}
+                                                />
+                                            ) : (
+                                                <div className="w-full h-full bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center">
+                                                    {playlist.type === 'Song' ? (
+                                                        <Music className="w-10 h-10 text-white opacity-70" />
+                                                    ) : (
+                                                        <Headphones className="w-10 h-10 text-white opacity-70" />
+                                                    )}
                                                 </div>
-                                            </div>
-                                        )}
-                                    </div>
-
-                                    {/* Item Info */}
-                                    <div className="flex-1 min-w-0">
-                                        <div className="flex items-center gap-2">
-                                            <h3 className={`text-lg font-bold truncate font-display ${
-                                                itemIsLocked ? 'text-gray-600' : isCurrent ? 'text-[#8B4513]' : 'text-[#3E1F07]'
-                                            }`}>
-                                                {item.title}
-                                            </h3>
-                                            {/* Premium badge for locked items */}
+                                            )}
+                                            
+                                            {/* Overlay for locked items */}
                                             {itemIsLocked && (
-                                                <span className="shrink-0 text-[10px] font-bold text-[#B8860B] bg-gradient-to-r from-[#FFD700] to-[#FFA500] px-2 py-0.5 rounded-full flex items-center gap-1">
-                                                    <Crown className="w-3 h-3" />
-                                                    PREMIUM
-                                                </span>
+                                                <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
+                                                    <div className="w-10 h-10 rounded-full bg-gradient-to-br from-[#FFD700] to-[#FFA500] flex items-center justify-center shadow-lg">
+                                                        <Lock className="w-5 h-5 text-[#5c2e0b]" />
+                                                    </div>
+                                                </div>
+                                            )}
+                                            
+                                            {/* Play button overlay for unlocked items */}
+                                            {!itemIsLocked && !trackPlaying && (
+                                                <div className="absolute inset-0 bg-black/20 flex items-center justify-center opacity-0 hover:opacity-100 transition-opacity">
+                                                    <div className="w-10 h-10 rounded-full bg-white/90 flex items-center justify-center shadow-lg">
+                                                        <Play className="w-5 h-5 text-[#3E1F07] ml-0.5" fill="#3E1F07" />
+                                                    </div>
+                                                </div>
+                                            )}
+                                            
+                                            {/* Playing indicator */}
+                                            {trackPlaying && (
+                                                <div className="absolute inset-0 bg-black/40 flex items-center justify-center">
+                                                    <div className="flex items-end gap-1 h-6">
+                                                        <div className="w-1.5 bg-[#FFD700] rounded-full animate-[soundBar1_0.5s_ease-in-out_infinite]" style={{ height: '100%' }} />
+                                                        <div className="w-1.5 bg-[#FFD700] rounded-full animate-[soundBar2_0.5s_ease-in-out_infinite_0.1s]" style={{ height: '60%' }} />
+                                                        <div className="w-1.5 bg-[#FFD700] rounded-full animate-[soundBar3_0.5s_ease-in-out_infinite_0.2s]" style={{ height: '80%' }} />
+                                                    </div>
+                                                </div>
                                             )}
                                         </div>
-                                        {item.author && (
-                                            <p className={`text-sm truncate ${itemIsLocked ? 'text-gray-500' : 'text-[#8B4513]'}`}>{item.author}</p>
+                                        
+                                        {/* Completion checkmark badge */}
+                                        {isCompleted && !itemIsLocked && (
+                                            <div className="absolute -bottom-1 -right-1 w-8 h-8 rounded-full bg-green-500 border-3 border-white flex items-center justify-center shadow-lg">
+                                                <Check className="w-5 h-5 text-white" strokeWidth={3} />
+                                            </div>
                                         )}
-                                        <div className="flex items-center gap-2 mt-1">
+                                        
+                                        {/* Premium crown badge for locked */}
+                                        {itemIsLocked && (
+                                            <div className="absolute -top-1 -right-1 w-8 h-8 rounded-full bg-gradient-to-br from-[#FFD700] to-[#FFA500] border-2 border-white flex items-center justify-center shadow-lg">
+                                                <Crown className="w-4 h-4 text-[#5c2e0b]" />
+                                            </div>
+                                        )}
+                                        
+                                        {/* Episode number badge */}
+                                        <div className={`absolute -top-2 -left-2 w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold shadow-md ${
+                                            itemIsLocked 
+                                                ? 'bg-gray-500 text-white' 
+                                                : isCurrent 
+                                                    ? 'bg-[#FFD700] text-[#3E1F07]' 
+                                                    : 'bg-[#5DADE2] text-white'
+                                        }`}>
+                                            {index + 1}
+                                        </div>
+                                    </div>
+                                    
+                                    {/* Title card */}
+                                    <div 
+                                        className={`flex-1 max-w-[160px] ${isEven ? 'text-left' : 'text-right'}`}
+                                        onClick={() => handleItemClick(index)}
+                                    >
+                                        <div className={`inline-block px-3 py-2 rounded-xl shadow-lg cursor-pointer transition-all hover:scale-105 ${
+                                            itemIsLocked 
+                                                ? 'bg-gray-200/90 border border-gray-300' 
+                                                : isCurrent 
+                                                    ? 'bg-[#FFF8E1] border-2 border-[#FFD700]' 
+                                                    : 'bg-white/90 border border-white/50'
+                                        }`}>
+                                            <h4 className={`text-sm font-bold font-display leading-tight ${
+                                                itemIsLocked ? 'text-gray-600' : 'text-[#3E1F07]'
+                                            }`}>
+                                                {item.title}
+                                            </h4>
                                             {item.duration && (
-                                                <p className={`text-xs opacity-75 ${itemIsLocked ? 'text-gray-500' : 'text-[#5c2e0b]'}`}>
+                                                <p className={`text-xs mt-0.5 ${itemIsLocked ? 'text-gray-500' : 'text-[#8B4513]'}`}>
                                                     {formatDuration(item.duration)}
                                                 </p>
                                             )}
-                                            {!itemIsLocked && isCurrent && (
-                                                <span className="text-xs font-bold text-[#8B4513] bg-[#FFD700]/30 px-2 py-0.5 rounded-full">
-                                                    {trackPlaying ? 'Now Playing' : 'Paused'}
-                                                </span>
+                                            {isCurrent && trackPlaying && (
+                                                <p className="text-xs text-[#FFD700] font-bold mt-1">♪ Playing</p>
                                             )}
                                         </div>
                                     </div>
-
-                                    {/* Play/Pause or Lock Button */}
-                                    {itemIsLocked ? (
-                                        <div className="w-12 h-12 rounded-full flex items-center justify-center shadow-lg transition-colors shrink-0 bg-gradient-to-br from-[#FFD700] to-[#FFA500] group-hover:from-[#FFE44D] group-hover:to-[#FFB733]">
-                                            <Lock className="w-5 h-5 text-[#5c2e0b]" />
-                                        </div>
-                                    ) : (
-                                        <div className={`w-12 h-12 rounded-full flex items-center justify-center shadow-lg transition-colors shrink-0 ${
-                                            trackPlaying 
-                                                ? 'bg-[#FFD700] group-hover:bg-[#FFC107]' 
-                                                : 'bg-[#8B4513] group-hover:bg-[#6B3410]'
-                                        }`}>
-                                            {trackPlaying ? (
-                                                <Pause className="w-6 h-6 text-[#3E1F07]" fill="#3E1F07" />
-                                            ) : (
-                                                <Play className="w-6 h-6 text-white ml-1" fill="white" />
-                                            )}
-                                        </div>
-                                    )}
                                 </div>
                             </div>
                         );

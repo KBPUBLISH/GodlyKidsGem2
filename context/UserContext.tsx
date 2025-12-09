@@ -423,19 +423,29 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
 
     // Listen for custom events from RevenueCat service
-    const handlePremiumChange = () => {
-      syncSubscription();
+    const handlePremiumChange = (event?: CustomEvent) => {
+      console.log('🔔 Premium change event received:', event?.detail);
+      // Immediately update from event if provided
+      if (event?.detail?.isPremium !== undefined) {
+        setIsSubscribed(event.detail.isPremium);
+      } else {
+        syncSubscription();
+      }
     };
 
     window.addEventListener('storage', handleStorageChange);
     window.addEventListener('authTokenUpdated', handlePremiumChange);
+    window.addEventListener('revenuecat:premiumChanged', handlePremiumChange as EventListener);
+    window.addEventListener('despia:subscriptionChanged', handlePremiumChange as EventListener);
     
     // Check periodically in case localStorage changes without events
-    const interval = setInterval(syncSubscription, 5000);
+    const interval = setInterval(syncSubscription, 3000); // Check every 3 seconds
 
     return () => {
       window.removeEventListener('storage', handleStorageChange);
       window.removeEventListener('authTokenUpdated', handlePremiumChange);
+      window.removeEventListener('revenuecat:premiumChanged', handlePremiumChange as EventListener);
+      window.removeEventListener('despia:subscriptionChanged', handlePremiumChange as EventListener);
       clearInterval(interval);
     };
   }, [isSubscribed]);

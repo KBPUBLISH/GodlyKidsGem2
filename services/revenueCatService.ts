@@ -82,6 +82,19 @@ const getUserId = (): string => {
 // Listen for purchase completion events (DeSpia may fire custom events)
 let purchaseResolve: ((value: { success: boolean; error?: string }) => void) | null = null;
 let purchaseTimeout: ReturnType<typeof setTimeout> | null = null;
+let purchasePollInterval: ReturnType<typeof setInterval> | null = null;
+
+// Clean up any pending purchase state
+const cleanupPurchaseState = () => {
+  if (purchaseTimeout) {
+    clearTimeout(purchaseTimeout);
+    purchaseTimeout = null;
+  }
+  if (purchasePollInterval) {
+    clearInterval(purchasePollInterval);
+    purchasePollInterval = null;
+  }
+};
 
 // Set up listener for purchase completion
 const setupPurchaseListener = () => {
@@ -89,14 +102,13 @@ const setupPurchaseListener = () => {
   window.addEventListener('despia-purchase-success', () => {
     console.log('✅ DeSpia purchase success event received');
     localStorage.setItem('godlykids_premium', 'true');
+    // Dispatch event for UI update
+    window.dispatchEvent(new CustomEvent('revenuecat:premiumChanged', { detail: { isPremium: true } }));
     if (purchaseResolve) {
       purchaseResolve({ success: true });
       purchaseResolve = null;
     }
-    if (purchaseTimeout) {
-      clearTimeout(purchaseTimeout);
-      purchaseTimeout = null;
-    }
+    cleanupPurchaseState();
   });
 
   window.addEventListener('despia-purchase-failed', (event: any) => {
@@ -105,10 +117,7 @@ const setupPurchaseListener = () => {
       purchaseResolve({ success: false, error: event?.detail?.message || 'Purchase failed' });
       purchaseResolve = null;
     }
-    if (purchaseTimeout) {
-      clearTimeout(purchaseTimeout);
-      purchaseTimeout = null;
-    }
+    cleanupPurchaseState();
   });
 
   window.addEventListener('despia-purchase-cancelled', () => {
@@ -117,9 +126,47 @@ const setupPurchaseListener = () => {
       purchaseResolve({ success: false, error: 'Purchase cancelled' });
       purchaseResolve = null;
     }
-    if (purchaseTimeout) {
-      clearTimeout(purchaseTimeout);
-      purchaseTimeout = null;
+    cleanupPurchaseState();
+  });
+  
+  // Listen for DeSpia callback when payment sheet completes (success or failure)
+  // DeSpia uses postMessage or URL callback to notify of purchase result
+  window.addEventListener('message', (event: MessageEvent) => {
+    try {
+      const data = typeof event.data === 'string' ? JSON.parse(event.data) : event.data;
+      
+      if (data?.type === 'revenuecat_purchase_success' || data?.type === 'despia_purchase_complete') {
+        console.log('✅ Purchase complete message received:', data);
+        localStorage.setItem('godlykids_premium', 'true');
+        window.dispatchEvent(new CustomEvent('revenuecat:premiumChanged', { detail: { isPremium: true } }));
+        if (purchaseResolve) {
+          purchaseResolve({ success: true });
+          purchaseResolve = null;
+        }
+        cleanupPurchaseState();
+      } else if (data?.type === 'revenuecat_purchase_failed' || data?.type === 'despia_purchase_failed') {
+        console.log('❌ Purchase failed message received:', data);
+        if (purchaseResolve) {
+          purchaseResolve({ success: false, error: data?.error || 'Purchase failed' });
+          purchaseResolve = null;
+        }
+        cleanupPurchaseState();
+      }
+    } catch {
+      // Not a JSON message, ignore
+    }
+  });
+  
+  // Also listen for localStorage changes (in case another tab/process sets it)
+  window.addEventListener('storage', (event: StorageEvent) => {
+    if (event.key === 'godlykids_premium' && event.newValue === 'true') {
+      console.log('✅ Premium status detected via storage event');
+      window.dispatchEvent(new CustomEvent('revenuecat:premiumChanged', { detail: { isPremium: true } }));
+      if (purchaseResolve) {
+        purchaseResolve({ success: true });
+        purchaseResolve = null;
+      }
+      cleanupPurchaseState();
     }
   });
 };
@@ -205,19 +252,29 @@ export const RevenueCatService = {
         (window.location.hostname === 'localhost' ? 'http://localhost:5001' : 'https://backendgk2-0.onrender.com');
       
       return new Promise((resolve) => {
+        // Store resolve for event listeners
+        purchaseResolve = resolve;
+        
         let resolved = false;
         let pollCount = 0;
-        const maxPolls = 120; // 2 minutes max wait for user to complete Apple payment
-        const minWaitBeforeCheck = 5; // Wait at least 5 seconds before checking (let Apple sheet appear)
+        const maxPolls = 60; // 1 minute max wait, then try restore as fallback
+        const minWaitBeforeCheck = 3; // Wait at least 3 seconds before checking
         
-        const pollInterval = setInterval(async () => {
+        purchasePollInterval = setInterval(async () => {
           pollCount++;
           
-          // Don't check anything for the first 5 seconds - let Apple sheet appear
+          // Don't check anything for the first few seconds - let Apple sheet appear
           if (pollCount < minWaitBeforeCheck) {
             if (pollCount === 1) {
               console.log('⏳ Waiting for Apple payment sheet to appear...');
             }
+            return;
+          }
+          
+          // Check if already resolved by event listener
+          if (purchaseResolve !== resolve) {
+            // Another resolution happened, stop polling
+            cleanupPurchaseState();
             return;
           }
           
@@ -227,8 +284,10 @@ export const RevenueCatService = {
           if (localPremium && !resolved) {
             resolved = true;
             console.log('✅ Premium detected in localStorage after', pollCount, 'seconds');
-            clearInterval(pollInterval);
+            cleanupPurchaseState();
+            window.dispatchEvent(new CustomEvent('revenuecat:premiumChanged', { detail: { isPremium: true } }));
             resolve({ success: true });
+            purchaseResolve = null;
             return;
           }
           
@@ -241,31 +300,58 @@ export const RevenueCatService = {
               resolved = true;
               console.log('✅ Premium confirmed by backend webhook after', pollCount, 'seconds');
               localStorage.setItem('godlykids_premium', 'true');
-              clearInterval(pollInterval);
+              cleanupPurchaseState();
+              window.dispatchEvent(new CustomEvent('revenuecat:premiumChanged', { detail: { isPremium: true } }));
               resolve({ success: true });
+              purchaseResolve = null;
               return;
             }
             
-            // Log progress every 15 seconds
-            if (pollCount % 15 === 0) {
+            // Log progress every 10 seconds
+            if (pollCount % 10 === 0) {
               console.log(`⏳ Still waiting for payment confirmation... (${pollCount}s)`);
             }
           } catch (error) {
             // Network error - just continue polling
-            if (pollCount % 15 === 0) {
+            if (pollCount % 10 === 0) {
               console.log(`⚠️ Backend check failed, continuing to poll...`);
             }
           }
           
-          // Timeout
+          // After timeout, try restore as fallback (Apple may have completed but webhook missed)
           if (pollCount >= maxPolls && !resolved) {
             resolved = true;
-            clearInterval(pollInterval);
-            console.log('⏱️ Payment confirmation timeout after', maxPolls, 'seconds');
+            cleanupPurchaseState();
+            console.log('⏱️ Polling timeout after', maxPolls, 'seconds - trying restore as fallback...');
+            
+            // Try restore purchases as fallback
+            try {
+              window.despia = 'restoreinapppurchases://';
+              console.log('🔄 Triggered restore purchases fallback');
+              
+              // Wait for restore result
+              await new Promise(r => setTimeout(r, 3000));
+              
+              // Check if premium now
+              const nowPremium = localStorage.getItem('godlykids_premium') === 'true';
+              if (nowPremium) {
+                console.log('✅ Premium confirmed via restore fallback');
+                window.dispatchEvent(new CustomEvent('revenuecat:premiumChanged', { detail: { isPremium: true } }));
+                resolve({ success: true });
+                purchaseResolve = null;
+                return;
+              }
+            } catch (e) {
+              console.error('Restore fallback error:', e);
+            }
+            
+            // Still no premium - show message
+            console.log('⚠️ Payment confirmation failed - user should try restore');
             resolve({ 
               success: false, 
-              error: 'Payment confirmation timeout. If you completed the payment, please tap "Restore Purchases" or restart the app.' 
+              error: 'Payment is processing. If you completed the payment, please tap "Restore Purchases".' 
             });
+            purchaseResolve = null;
           }
         }, 1000);
       });
@@ -336,14 +422,31 @@ export const RevenueCatService = {
     window.despia = 'restoreinapppurchases://';
     console.log('🔗 Set window.despia to: restoreinapppurchases://');
 
-    // Wait a moment for the native app to process
+    // Poll for restore completion with multiple checks
     return new Promise((resolve) => {
-      setTimeout(() => {
+      let pollCount = 0;
+      const maxPolls = 10; // 10 seconds max
+      
+      const pollInterval = setInterval(() => {
+        pollCount++;
+        
         // Check if premium was restored
         const isPremium = localStorage.getItem('godlykids_premium') === 'true';
-        console.log('✅ Restore complete. Premium:', isPremium);
-        resolve({ success: true, isPremium });
-      }, 3000);
+        
+        if (isPremium) {
+          clearInterval(pollInterval);
+          console.log('✅ Restore complete. Premium: true');
+          window.dispatchEvent(new CustomEvent('revenuecat:premiumChanged', { detail: { isPremium: true } }));
+          resolve({ success: true, isPremium: true });
+          return;
+        }
+        
+        if (pollCount >= maxPolls) {
+          clearInterval(pollInterval);
+          console.log('⏱️ Restore timeout - no premium found');
+          resolve({ success: true, isPremium: false, error: 'No active subscription found to restore.' });
+        }
+      }, 1000);
     });
   },
 

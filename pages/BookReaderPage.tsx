@@ -415,7 +415,7 @@ const BookReaderPage: React.FC = () => {
             console.log('📖 BookReaderPage UNMOUNTING - Cleanup');
             if (killInterval) clearInterval(killInterval);
 
-            // Stop and destroy book music
+            // Stop and destroy book background music
             if (bookBackgroundMusicRef.current) {
                 bookBackgroundMusicRef.current.pause();
                 bookBackgroundMusicRef.current.src = '';
@@ -426,6 +426,47 @@ const BookReaderPage: React.FC = () => {
             setMusicPaused(false);
         };
     }, [bookId, setGameMode, setMusicPaused]); // Removed bookMusicEnabled from dependencies
+
+    // Effect: Stop TTS audio when component unmounts or user navigates away
+    useEffect(() => {
+        return () => {
+            console.log('📖 BookReaderPage - Stopping TTS audio on unmount');
+            // Stop any playing TTS narration
+            if (currentAudio) {
+                currentAudio.pause();
+                currentAudio.src = '';
+            }
+            // Reset playing state
+            setPlaying(false);
+            setActiveTextBoxIndex(null);
+            setCurrentWordIndex(-1);
+        };
+    }, [currentAudio]);
+
+    // Effect: Stop audio when page becomes hidden (user switches tabs/apps)
+    useEffect(() => {
+        const handleVisibilityChange = () => {
+            if (document.hidden) {
+                console.log('📖 Page hidden - stopping book audio');
+                // Stop TTS narration
+                if (currentAudio) {
+                    currentAudio.pause();
+                }
+                setPlaying(false);
+                
+                // Stop book background music
+                if (bookBackgroundMusicRef.current) {
+                    bookBackgroundMusicRef.current.pause();
+                }
+            }
+        };
+
+        document.addEventListener('visibilitychange', handleVisibilityChange);
+        
+        return () => {
+            document.removeEventListener('visibilitychange', handleVisibilityChange);
+        };
+    }, [currentAudio]);
 
     // Effect 2: Handle Music Toggle (Play/Pause)
     useEffect(() => {

@@ -311,13 +311,18 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = ({ prompt, backgroundImageUr
                 ctx.fillStyle = '#FFFFFF';
                 ctx.fillRect(0, 0, canvasWidth, canvasHeight);
 
-                // Calculate aspect ratio to fit image within canvas
-                const scale = Math.min(canvasWidth / img.width, canvasHeight / img.height);
-                const x = (canvasWidth / 2) - (img.width / 2) * scale;
-                const y = (canvasHeight / 2) - (img.height / 2) * scale;
+                // Calculate scale to FILL width (cover mode, not contain)
+                // This ensures the image fills the width while cropping from bottom if needed
+                const scale = Math.max(canvasWidth / img.width, canvasHeight / img.height);
+                const scaledWidth = img.width * scale;
+                const scaledHeight = img.height * scale;
+                
+                // Center horizontally, align to top vertically
+                const x = (canvasWidth - scaledWidth) / 2;
+                const y = 0; // Top-aligned instead of centered
 
                 try {
-                    ctx.drawImage(img, x, y, img.width * scale, img.height * scale);
+                    ctx.drawImage(img, x, y, scaledWidth, scaledHeight);
                     setImageLoaded(true);
                 } catch (e) {
                     console.error('🎨 DrawingCanvas: Error drawing image to canvas (likely CORS):', e);
@@ -548,11 +553,14 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = ({ prompt, backgroundImageUr
             const img = new Image();
             img.src = backgroundImageUrl;
             img.onload = () => {
-                const scale = Math.min(canvasWidth / img.width, canvasHeight / img.height);
-                const x = (canvasWidth / 2) - (img.width / 2) * scale;
-                const y = (canvasHeight / 2) - (img.height / 2) * scale;
+                // Use cover mode scaling (fill width, crop from bottom if needed)
+                const scale = Math.max(canvasWidth / img.width, canvasHeight / img.height);
+                const scaledWidth = img.width * scale;
+                const scaledHeight = img.height * scale;
+                const x = (canvasWidth - scaledWidth) / 2;
+                const y = 0; // Top-aligned
 
-                ctx.drawImage(img, x, y, img.width * scale, img.height * scale);
+                ctx.drawImage(img, x, y, scaledWidth, scaledHeight);
             };
         }
     };
@@ -596,10 +604,12 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = ({ prompt, backgroundImageUr
                         ref={overlayRef}
                         src={processedLineArt}
                         alt="Coloring lines"
-                        className="absolute inset-0 w-full h-full object-contain pointer-events-none"
+                        className="absolute inset-0 w-full h-full pointer-events-none"
                         style={{ 
                             zIndex: 10,
-                            mixBlendMode: 'multiply' // Makes white transparent, keeps black lines
+                            mixBlendMode: 'multiply', // Makes white transparent, keeps black lines
+                            objectFit: 'cover', // Fill the container width
+                            objectPosition: 'center top' // Keep top of image visible
                         }}
                     />
                 )}

@@ -838,7 +838,9 @@ const LessonPlayerPage: React.FC = () => {
             )}
 
             {currentScreen === 'video' ? (
-                <div className="fixed inset-0 z-50 bg-black overflow-hidden">
+                <div className="fixed inset-0 z-50 bg-black overflow-hidden flex items-center justify-center">
+                {/* Video container - constrained on larger screens */}
+                <div className="relative w-full h-full md:max-w-4xl md:max-h-[80vh] md:rounded-2xl md:overflow-hidden md:shadow-2xl">
                     {/* Progress Bar - Only show on video screen at top */}
                     <div className="absolute top-0 left-0 right-0 z-20 h-1 bg-gray-800/50">
                         <div
@@ -1038,6 +1040,7 @@ const LessonPlayerPage: React.FC = () => {
                         <div className={`h-1 rounded-full transition-all ${currentScreen === 'devotional' ? 'w-8 bg-[#FFD700]' : 'w-1 bg-white/50'}`} />
                         <div className={`h-1 rounded-full transition-all ${currentScreen === 'activity' ? 'w-8 bg-[#FFD700]' : 'w-1 bg-white/50'}`} />
                     </div>
+                </div>
                 </div>
             ) : (
                 <div 

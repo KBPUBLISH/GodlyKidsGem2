@@ -699,8 +699,8 @@ const HomePage: React.FC = () => {
                   <div className="absolute bottom-16 left-[20%] w-1.5 h-1.5 bg-white/40 rounded-full animate-pulse" style={{ animationDelay: '1s' }} />
                 </div>
 
-                {/* Path container */}
-                <div className="relative flex flex-col items-center">
+                {/* Path container - max width for iPad/larger screens */}
+                <div className="relative flex flex-col items-center max-w-lg mx-auto">
                   {dayLessons.map((lesson: any, index: number) => {
                     const status = getLessonStatus(lesson);
                     const isLessonLocked = status === 'locked';
@@ -720,13 +720,13 @@ const HomePage: React.FC = () => {
                         {/* Connecting path line */}
                         {index < dayLessons.length - 1 && (
                           <div 
-                            className="absolute left-1/2 top-[70px] -translate-x-1/2 z-0 animate-[pathDraw_0.3s_ease-out_forwards]"
+                            className="absolute left-1/2 top-[70px] md:top-[85px] -translate-x-1/2 z-0 animate-[pathDraw_0.3s_ease-out_forwards]"
                             style={{ 
                               opacity: 0,
                               animationDelay: `${(index * 0.15) + 0.3}s`
                             }}
                           >
-                            <svg width="60" height="50" viewBox="0 0 60 50" className="overflow-visible">
+                            <svg width="60" height="50" viewBox="0 0 60 50" className="overflow-visible md:scale-125">
                               <path 
                                 d={isEven ? "M30 0 Q30 25, 45 50" : "M30 0 Q30 25, 15 50"}
                                 stroke={isCompleted ? "#4CAF50" : "rgba(255,255,255,0.4)"}
@@ -741,12 +741,11 @@ const HomePage: React.FC = () => {
 
                         {/* Lesson node */}
                         <div 
-                          className={`flex items-center gap-4 mb-4 ${isEven ? 'flex-row' : 'flex-row-reverse'}`}
-                          style={{ marginLeft: isEven ? '10%' : '0', marginRight: isEven ? '0' : '10%' }}
+                          className={`flex items-center gap-4 md:gap-6 mb-4 md:mb-6 px-2 md:px-4 ${isEven ? 'flex-row' : 'flex-row-reverse'}`}
                         >
                           {/* Circle thumbnail */}
                           <div 
-                            className={`relative cursor-pointer transition-all duration-300 ${canWatch ? 'hover:scale-110 active:scale-95' : ''}`}
+                            className={`relative cursor-pointer transition-all duration-300 flex-shrink-0 ${canWatch ? 'hover:scale-110 active:scale-95' : ''}`}
                             onClick={() => {
                               if (isFutureDay) {
                                 alert(`📅 Coming soon!\n\nThis lesson "${lesson.title}" will be available on ${
@@ -764,8 +763,8 @@ const HomePage: React.FC = () => {
                               <div className="absolute -inset-2 rounded-full bg-[#FFD700]/30 animate-pulse" />
                             )}
 
-                            {/* Main circle */}
-                            <div className={`relative w-20 h-20 rounded-full overflow-hidden border-4 shadow-xl ${
+                            {/* Main circle - responsive sizing */}
+                            <div className={`relative w-20 h-20 md:w-24 md:h-24 rounded-full overflow-hidden border-4 shadow-xl ${
                               isCompleted 
                                 ? 'border-green-500 ring-4 ring-green-500/30' 
                                 : isLessonLocked || isFutureDay
@@ -814,8 +813,8 @@ const HomePage: React.FC = () => {
                               )}
                             </div>
 
-                            {/* Lesson number badge */}
-                            <div className={`absolute -top-1 -left-1 w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold shadow-md border-2 border-white ${
+                            {/* Lesson number badge - responsive */}
+                            <div className={`absolute -top-1 -left-1 w-7 h-7 md:w-8 md:h-8 rounded-full flex items-center justify-center text-xs md:text-sm font-bold shadow-md border-2 border-white ${
                               isCompleted 
                                 ? 'bg-green-500 text-white' 
                                 : isLessonLocked || isFutureDay
@@ -826,9 +825,9 @@ const HomePage: React.FC = () => {
                             </div>
                           </div>
 
-                          {/* Lesson info card */}
+                          {/* Lesson info card - responsive width */}
                           <div 
-                            className={`flex-1 max-w-[180px] ${isEven ? 'text-left' : 'text-right'}`}
+                            className={`flex-1 max-w-[180px] md:max-w-[240px] ${isEven ? 'text-left' : 'text-right'}`}
                             onClick={() => {
                               if (!isFutureDay && canWatch) {
                                 handleLessonClick(lesson);
@@ -857,7 +856,7 @@ const HomePage: React.FC = () => {
                                   {lesson.type}
                                 </span>
                               )}
-                              <h4 className={`text-sm font-bold font-display leading-tight ${
+                              <h4 className={`text-sm md:text-base font-bold font-display leading-tight ${
                                 isCompleted ? 'text-green-400' : isLessonLocked || isFutureDay ? 'text-white/50' : 'text-white'
                               }`}>
                                 {lesson.title}

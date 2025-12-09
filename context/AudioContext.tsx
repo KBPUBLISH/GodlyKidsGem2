@@ -607,18 +607,16 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     }, [isPlaying]);
 
     // --- MEDIA SESSION API ---
-    // Updates lock screen / notification widget with current track info
-    useEffect(() => {
-        if (!('mediaSession' in navigator)) {
-            console.log('📱 Media Session API not supported');
-            return;
-        }
-
-        if (currentPlaylist && currentPlaylist.items[currentTrackIndex]) {
-            const track = currentPlaylist.items[currentTrackIndex];
-            const coverImage = track.coverImage || currentPlaylist.coverImage;
-            
-            // Set metadata for lock screen / notification widget
+    // Helper function to set media session metadata - keeps lock screen widget alive
+    const setMediaSessionMetadata = useCallback(() => {
+        if (!('mediaSession' in navigator) || !currentPlaylist) return;
+        
+        const track = currentPlaylist.items[currentTrackIndex];
+        if (!track) return;
+        
+        const coverImage = track.coverImage || currentPlaylist.coverImage;
+        
+        try {
             navigator.mediaSession.metadata = new MediaMetadata({
                 title: track.title,
                 artist: track.author || currentPlaylist.author || 'GodlyKids',
@@ -632,17 +630,47 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
                     { src: coverImage, sizes: '512x512', type: 'image/jpeg' },
                 ] : []
             });
-
-            console.log('📱 Media Session updated:', track.title);
-        } else {
-            // Clear metadata when no playlist
-            navigator.mediaSession.metadata = null;
+            console.log('📱 Media Session metadata set:', track.title);
+        } catch (e) {
+            console.warn('📱 Failed to set media session metadata:', e);
         }
+    }, [currentPlaylist, currentTrackIndex]);
+
+    // Updates lock screen / notification widget with current track info
+    useEffect(() => {
+        if (!('mediaSession' in navigator)) {
+            console.log('📱 Media Session API not supported');
+            return;
+        }
+
+        if (currentPlaylist && currentPlaylist.items[currentTrackIndex]) {
+            setMediaSessionMetadata();
+        }
+        // Note: Don't clear metadata when paused - iOS loses the lock screen widget
+        // Only clear when playlist is explicitly closed via closePlayer()
 
         // Update playback state
         navigator.mediaSession.playbackState = isPlaying ? 'playing' : 'paused';
 
-    }, [currentPlaylist, currentTrackIndex, isPlaying]);
+    }, [currentPlaylist, currentTrackIndex, isPlaying, setMediaSessionMetadata]);
+    
+    // Periodically refresh metadata while paused to prevent iOS from dropping it
+    useEffect(() => {
+        if (!currentPlaylist || isPlaying) return;
+        
+        // Refresh metadata every 20 seconds while paused to keep lock screen alive
+        const refreshInterval = setInterval(() => {
+            if (currentPlaylist && !isPlaying) {
+                console.log('📱 Refreshing media session metadata (paused)');
+                setMediaSessionMetadata();
+                if ('mediaSession' in navigator) {
+                    navigator.mediaSession.playbackState = 'paused';
+                }
+            }
+        }, 20000);
+        
+        return () => clearInterval(refreshInterval);
+    }, [currentPlaylist, isPlaying, setMediaSessionMetadata]);
 
     // Set up Media Session action handlers (once on mount)
     useEffect(() => {
@@ -945,6 +973,11 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         if (playlistAudioRef.current) {
             playlistAudioRef.current.pause();
             playlistAudioRef.current.currentTime = 0;
+        }
+        // Clear media session metadata when player is explicitly closed
+        if ('mediaSession' in navigator) {
+            navigator.mediaSession.metadata = null;
+            navigator.mediaSession.playbackState = 'none';
         }
         // Resume background music if it was enabled
         setMusicPaused(false);

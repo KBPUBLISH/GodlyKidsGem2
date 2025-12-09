@@ -356,7 +356,22 @@ const SignInPage: React.FC = () => {
                         ? 'bg-red-500/20 text-red-300 border border-red-500/30'
                         : 'bg-blue-500/20 text-blue-300 border border-blue-500/30'
                   }`}>
-                    {restoreResult.message}
+                    {restoreResult.message.includes('hello@kbpublish.org') 
+                      ? restoreResult.message.split('hello@kbpublish.org').map((part, i, arr) => (
+                          <span key={i}>
+                            {part}
+                            {i < arr.length - 1 && (
+                              <a 
+                                href="mailto:hello@kbpublish.org?subject=Subscription%20Support%20Request" 
+                                className="text-yellow-300 underline font-semibold"
+                              >
+                                hello@kbpublish.org
+                              </a>
+                            )}
+                          </span>
+                        ))
+                      : restoreResult.message
+                    }
                   </div>
                 )}
               </div>

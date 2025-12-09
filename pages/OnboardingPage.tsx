@@ -453,7 +453,22 @@ const PaywallStep: React.FC<{
           {/* Error Display */}
           {error && (
             <div className="bg-red-100 border border-red-300 text-red-700 px-3 py-2 rounded-lg mb-3 text-sm">
-              {error}
+              {error.includes('hello@kbpublish.org') 
+                ? error.split('hello@kbpublish.org').map((part, i, arr) => (
+                    <span key={i}>
+                      {part}
+                      {i < arr.length - 1 && (
+                        <a 
+                          href="mailto:hello@kbpublish.org?subject=Subscription%20Support%20Request" 
+                          className="text-blue-600 underline font-semibold"
+                        >
+                          hello@kbpublish.org
+                        </a>
+                      )}
+                    </span>
+                  ))
+                : error
+              }
             </div>
           )}
 

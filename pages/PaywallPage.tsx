@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Check, X, Loader2, RefreshCw, AlertCircle, CheckCircle } from 'lucide-react';
+import { Check, X, Loader2, RefreshCw, AlertCircle, CheckCircle, Mail } from 'lucide-react';
 import { useUser } from '../context/UserContext';
 import { useSubscription } from '../context/SubscriptionContext';
 import ParentGateModal from '../components/features/ParentGateModal';
@@ -28,6 +28,10 @@ const PaywallPage: React.FC = () => {
     type: 'success' | 'info';
     message: string;
   } | null>(null);
+  
+  // Restore modal state
+  const [showRestoreModal, setShowRestoreModal] = useState(false);
+  const [restoreEmail, setRestoreEmail] = useState('');
 
   // If user already has premium, redirect to home
   useEffect(() => {
@@ -67,10 +71,11 @@ const PaywallPage: React.FC = () => {
     }
   };
 
-  const handleRestorePurchases = async () => {
+  const handleRestorePurchases = async (emailToSearch?: string) => {
     setIsRestoring(true);
     setError(null);
     setMigrationResult(null);
+    setShowRestoreModal(false);
 
     try {
       console.log('🔄 Starting restore purchases...');
@@ -100,18 +105,19 @@ const PaywallPage: React.FC = () => {
         return;
       }
 
-      // If native restore didn't find purchases, also try migration API for old app users
+      // Try migration API with the provided email or current user's email
       const user = authService.getUser();
-      console.log('🔄 Checking if user is signed in:', user ? `Yes (${user.email})` : 'No');
+      const emailForMigration = emailToSearch || user?.email;
+      console.log('🔄 Email for migration check:', emailForMigration || 'None');
       
-      if (user?.email) {
-        console.log('🔄 Checking migration API for:', user.email);
+      if (emailForMigration) {
+        console.log('🔄 Checking migration API for:', emailForMigration);
         const baseUrl = getApiBaseUrl();
         console.log('🔄 Migration API URL:', `${baseUrl}migration/restore-subscription`);
         const migrationResponse = await fetch(`${baseUrl}migration/restore-subscription`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ email: user.email }),
+          body: JSON.stringify({ email: emailForMigration }),
         });
 
         const migrationData = await migrationResponse.json();
@@ -122,27 +128,24 @@ const PaywallPage: React.FC = () => {
           subscribe();
           setMigrationResult({
             type: 'success',
-            message: 'Welcome back! Your subscription from the old app has been restored! 🎉',
+            message: `Welcome back! Your subscription for ${emailForMigration} has been restored! 🎉`,
           });
           setTimeout(() => navigate('/home'), 2000);
           return;
         } else if (migrationData.found) {
           setMigrationResult({
             type: 'info',
-            message: migrationData.message || 'Account found but subscription has expired.',
+            message: migrationData.message || `Account found for ${emailForMigration} but subscription has expired.`,
           });
+          return;
+        } else {
+          setError(`No subscription found for ${emailForMigration}. Please contact hello@kbpublish.org if you believe this is an error.`);
           return;
         }
       }
 
-      // No purchases found - but Apple might still know about it
-      // This could happen if the subscription is valid in Apple but not linked to our user
-      if (!user?.email) {
-        console.log('⚠️ User not signed in - cannot check migration API');
-        setError('Please sign in first to restore your subscription. If you subscribed in the old app, use the same email address.');
-      } else {
-        setError('No subscription found. If you just subscribed, please try again in a few seconds or contact support.');
-      }
+      // No email provided and not signed in
+      setError('No subscription found. Please contact hello@kbpublish.org for assistance.');
     } catch (err: any) {
       console.error('Restore error:', err);
       setError(err.message || 'Failed to restore purchases. Please try again.');
@@ -216,7 +219,24 @@ const PaywallPage: React.FC = () => {
                 {error && (
                   <div className="w-full bg-red-50 border border-red-200 text-red-700 px-4 py-2 rounded-xl mb-4 text-sm flex items-start gap-2">
                     <AlertCircle size={16} className="shrink-0 mt-0.5" />
-                    {error}
+                    <span>
+                      {error.includes('hello@kbpublish.org') 
+                        ? error.split('hello@kbpublish.org').map((part, i, arr) => (
+                            <span key={i}>
+                              {part}
+                              {i < arr.length - 1 && (
+                                <a 
+                                  href="mailto:hello@kbpublish.org?subject=Subscription%20Support%20Request" 
+                                  className="text-blue-600 underline font-semibold"
+                                >
+                                  hello@kbpublish.org
+                                </a>
+                              )}
+                            </span>
+                          ))
+                        : error
+                      }
+                    </span>
                   </div>
                 )}
 
@@ -344,9 +364,13 @@ const PaywallPage: React.FC = () => {
                     <div className="absolute top-0 -left-full w-full h-full bg-gradient-to-r from-transparent via-white/20 to-transparent skew-x-[-20deg] group-hover:animate-[shimmer_1s_infinite]"></div>
                 </button>
 
-                {/* Restore Purchases Button - Always clickable unless actively restoring */}
+                {/* Restore Purchases Button - Opens modal to enter email */}
                 <button
-                  onClick={handleRestorePurchases}
+                  onClick={() => {
+                    const user = authService.getUser();
+                    setRestoreEmail(user?.email || '');
+                    setShowRestoreModal(true);
+                  }}
                   disabled={isRestoring}
                   className="text-[#7c4dff] text-sm font-semibold flex items-center gap-2 mb-4 hover:text-[#651fff] transition-colors disabled:opacity-50"
                 >
@@ -409,6 +433,65 @@ const PaywallPage: React.FC = () => {
             onClose={() => setShowParentGate(false)} 
             onSuccess={handleGateSuccess} 
         />
+
+        {/* Restore Purchases Modal */}
+        {showRestoreModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            <div 
+              className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+              onClick={() => setShowRestoreModal(false)}
+            />
+            <div className="relative bg-white rounded-2xl p-6 w-full max-w-sm shadow-2xl animate-in zoom-in-95 duration-200">
+              <button
+                onClick={() => setShowRestoreModal(false)}
+                className="absolute top-3 right-3 text-gray-400 hover:text-gray-600"
+              >
+                <X size={24} />
+              </button>
+              
+              <h2 className="text-[#1a237e] font-display font-bold text-xl mb-2">
+                Restore Subscription
+              </h2>
+              <p className="text-gray-600 text-sm mb-4">
+                Enter the email address you used when you originally subscribed:
+              </p>
+              
+              <div className="relative mb-4">
+                <Mail className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
+                <input
+                  type="email"
+                  value={restoreEmail}
+                  onChange={(e) => setRestoreEmail(e.target.value)}
+                  placeholder="your@email.com"
+                  className="w-full bg-gray-50 border border-gray-200 rounded-xl py-3 pl-10 pr-4 text-gray-800 placeholder:text-gray-400 focus:outline-none focus:border-[#7c4dff] focus:ring-2 focus:ring-[#7c4dff]/20"
+                  autoFocus
+                />
+              </div>
+              
+              <button
+                onClick={() => handleRestorePurchases(restoreEmail)}
+                disabled={!restoreEmail || isRestoring}
+                className="w-full bg-gradient-to-r from-[#7c4dff] to-[#536dfe] text-white font-bold py-3 px-4 rounded-xl shadow-lg disabled:opacity-50 flex items-center justify-center gap-2"
+              >
+                {isRestoring ? (
+                  <>
+                    <Loader2 className="w-5 h-5 animate-spin" />
+                    Searching...
+                  </>
+                ) : (
+                  <>
+                    <RefreshCw size={18} />
+                    Search & Restore
+                  </>
+                )}
+              </button>
+              
+              <p className="text-gray-400 text-xs text-center mt-3">
+                This will check both the new app and old GodlyKids app databases.
+              </p>
+            </div>
+          </div>
+        )}
     </div>
   );
 };

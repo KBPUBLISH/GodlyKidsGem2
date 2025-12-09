@@ -83,6 +83,7 @@ app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
 // Auth routes - stricter rate limiting
 app.use('/api/authentication', authLimiter, require('./routes/authentication'));
 app.use('/api/auth', authLimiter, require('./routes/auth'));
+app.use('/api/password-reset', authLimiter, require('./routes/passwordReset'));
 
 // TTS routes - expensive operation
 app.use('/api/tts', ttsLimiter, require('./routes/tts'));

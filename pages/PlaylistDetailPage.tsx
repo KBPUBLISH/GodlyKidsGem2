@@ -345,9 +345,9 @@ const PlaylistDetailPage: React.FC = () => {
     }
 
     return (
-        <div className="flex flex-col h-full overflow-y-auto no-scrollbar bg-[#fdf6e3]">
+        <div className="flex flex-col min-h-full overflow-y-auto no-scrollbar" style={{ background: 'linear-gradient(180deg, #87CEEB 0%, #B0E0E6 30%, #87CEEB 60%, #5DADE2 100%)' }}>
             {/* TOP SECTION - DYNAMIC GRADIENT BACKGROUND */}
-            <div className="relative pb-8 shadow-2xl z-10 overflow-hidden shrink-0 w-full rounded-b-[40px]">
+            <div className="relative pb-16 shadow-2xl z-10 overflow-hidden shrink-0 w-full rounded-b-[40px]">
                 {/* Dynamic gradient based on cover image colors */}
                 <div 
                     className="absolute inset-0 transition-all duration-700"
@@ -481,10 +481,7 @@ const PlaylistDetailPage: React.FC = () => {
 
             {/* CONTENT SECTION - Learning Path Style */}
             <div 
-                className="w-full pb-32 relative min-h-screen"
-                style={{
-                    background: 'linear-gradient(180deg, #87CEEB 0%, #B0E0E6 30%, #87CEEB 60%, #5DADE2 100%)'
-                }}
+                className="w-full pb-32 relative flex-1"
             >
                 {/* Sky/Cloud decorations */}
                 <div className="absolute inset-0 pointer-events-none overflow-hidden">

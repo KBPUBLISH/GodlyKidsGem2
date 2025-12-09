@@ -14,6 +14,7 @@
     "branch": "./scripts/create-work-branch.sh"
   },
   "dependencies": {
+    "capacitor-rate-app": "^4.0.3",
     "lucide-react": "^0.554.0",
     "page-flip": "^2.0.7",
     "react": "^19.2.0",

@@ -23,17 +23,35 @@ const WeeklyLessonTracker: React.FC<WeeklyLessonTrackerProps> = ({
   const isTodaySunday = today === 0;
 
   return (
-    <div className="bg-gradient-to-r from-[#1a237e]/80 to-[#283593]/80 backdrop-blur-sm rounded-xl px-3 py-2.5 mb-3 border border-white/10">
+    <div className="relative overflow-hidden rounded-2xl px-4 py-3 mb-3 border-2 border-[#48CAE4]/50 shadow-lg" style={{ background: 'linear-gradient(135deg, #0096C7 0%, #00B4D8 50%, #48CAE4 100%)' }}>
+      {/* Decorative elements */}
+      <div className="absolute inset-0 pointer-events-none">
+        {/* Floating bubbles/stars */}
+        <div className="absolute top-2 left-4 w-2 h-2 bg-white/30 rounded-full animate-pulse" />
+        <div className="absolute top-4 right-8 w-1.5 h-1.5 bg-white/40 rounded-full animate-pulse" style={{ animationDelay: '0.3s' }} />
+        <div className="absolute bottom-3 left-[30%] w-1 h-1 bg-white/20 rounded-full animate-pulse" style={{ animationDelay: '0.7s' }} />
+        <div className="absolute bottom-2 right-[20%] w-1.5 h-1.5 bg-white/25 rounded-full animate-pulse" style={{ animationDelay: '0.5s' }} />
+        {/* Subtle wave decoration */}
+        <svg className="absolute bottom-0 left-0 w-full h-6 opacity-20" viewBox="0 0 400 30" preserveAspectRatio="none">
+          <path d="M0,15 Q50,0 100,15 T200,15 T300,15 T400,15 L400,30 L0,30 Z" fill="white" />
+        </svg>
+      </div>
+      
       {/* Week Header */}
-      <div className="flex items-center justify-between mb-2">
-        <span className="text-white/60 text-[10px] font-semibold uppercase tracking-wider">This Week's Progress</span>
-        <span className="text-[#FFD700] text-[10px] font-bold">
-          {dayCompletions.filter(Boolean).length}/5 Days
-        </span>
+      <div className="relative flex items-center justify-between mb-2">
+        <div className="flex items-center gap-2">
+          <span className="text-2xl">🗓️</span>
+          <span className="text-white font-bold text-xs uppercase tracking-wider drop-shadow-sm">This Week's Progress</span>
+        </div>
+        <div className="bg-white/20 backdrop-blur-sm px-3 py-1 rounded-full border border-white/30">
+          <span className="text-[#FFD700] text-xs font-extrabold drop-shadow-sm">
+            {dayCompletions.filter(Boolean).length}/5 Days
+          </span>
+        </div>
       </div>
 
       {/* Day Circles */}
-      <div className="flex justify-between items-center gap-0.5">
+      <div className="relative flex justify-between items-center gap-0.5 bg-white/10 rounded-xl p-2 backdrop-blur-sm">
         {DAYS.map((day, index) => {
           const isWeekend = index >= 5; // Sat (5) or Sun (6)
           const weekdayIndex = isWeekend ? -1 : index; // Only 0-4 are valid weekday indices

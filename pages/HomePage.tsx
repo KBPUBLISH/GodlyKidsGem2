@@ -666,29 +666,37 @@ const HomePage: React.FC = () => {
 
             if (dayLessons.length === 0) {
               return (
-                <div className="bg-gradient-to-br from-[#1a237e]/50 to-[#283593]/50 rounded-xl p-6 text-center border border-white/10">
+                <div className="rounded-2xl p-6 text-center border-2 border-[#48CAE4]/50 shadow-lg" style={{ background: 'linear-gradient(135deg, #0096C7 0%, #00B4D8 50%, #48CAE4 100%)' }}>
                   <div className="text-4xl mb-2">🌟</div>
-                  <h3 className="text-white font-bold text-lg mb-1">Rest & Play Day!</h3>
-                  <p className="text-white/60 text-sm">No lessons today. Enjoy reading stories or playing games with family!</p>
-                  <p className="text-white/40 text-xs mt-2">Tap another day above to view those lessons.</p>
+                  <h3 className="text-white font-bold text-lg mb-1 drop-shadow-sm">Rest & Play Day!</h3>
+                  <p className="text-white/90 text-sm">No lessons today. Enjoy reading stories or playing games with family!</p>
+                  <p className="text-white/70 text-xs mt-2">Tap another day above to view those lessons.</p>
                 </div>
               );
             }
 
             return (
               <div 
-                className="relative rounded-2xl overflow-hidden py-6 px-4"
+                className="relative rounded-2xl overflow-hidden py-6 px-4 border-2 border-[#48CAE4]/50 shadow-lg"
                 style={{
-                  background: 'linear-gradient(180deg, #1a237e 0%, #283593 50%, #3949ab 100%)'
+                  background: 'linear-gradient(180deg, #0096C7 0%, #00B4D8 40%, #48CAE4 70%, #90E0EF 100%)'
                 }}
               >
-                {/* Decorative stars */}
+                {/* Sun decoration */}
+                <div className="absolute top-4 right-4 w-16 h-16 rounded-full bg-gradient-to-br from-[#FFE44D] to-[#FFA500] opacity-80 blur-sm" />
+                <div className="absolute top-5 right-5 w-14 h-14 rounded-full bg-gradient-to-br from-[#FFFACD] to-[#FFD700] opacity-90" />
+                
+                {/* Decorative clouds/bubbles */}
                 <div className="absolute inset-0 pointer-events-none overflow-hidden">
-                  <div className="absolute top-4 left-6 w-2 h-2 bg-white/40 rounded-full animate-pulse" />
-                  <div className="absolute top-8 right-10 w-1.5 h-1.5 bg-white/30 rounded-full animate-pulse" style={{ animationDelay: '0.5s' }} />
-                  <div className="absolute top-20 left-12 w-1 h-1 bg-white/20 rounded-full animate-pulse" style={{ animationDelay: '1s' }} />
-                  <div className="absolute bottom-12 right-8 w-2 h-2 bg-white/30 rounded-full animate-pulse" style={{ animationDelay: '0.3s' }} />
-                  <div className="absolute bottom-20 left-8 w-1.5 h-1.5 bg-white/25 rounded-full animate-pulse" style={{ animationDelay: '0.7s' }} />
+                  <div className="absolute top-8 left-6 w-12 h-5 bg-white/40 rounded-full blur-sm" />
+                  <div className="absolute top-6 left-10 w-8 h-4 bg-white/50 rounded-full blur-[2px]" />
+                  <div className="absolute top-20 left-4 w-6 h-3 bg-white/30 rounded-full blur-sm" />
+                  <div className="absolute top-16 right-24 w-10 h-4 bg-white/35 rounded-full blur-sm" />
+                  
+                  {/* Sparkle effects */}
+                  <div className="absolute top-12 left-[40%] w-2 h-2 bg-white/60 rounded-full animate-pulse" />
+                  <div className="absolute top-24 right-[30%] w-1.5 h-1.5 bg-white/50 rounded-full animate-pulse" style={{ animationDelay: '0.5s' }} />
+                  <div className="absolute bottom-16 left-[20%] w-1.5 h-1.5 bg-white/40 rounded-full animate-pulse" style={{ animationDelay: '1s' }} />
                 </div>
 
                 {/* Path container */}

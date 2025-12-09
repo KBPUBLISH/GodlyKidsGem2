@@ -470,6 +470,41 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
             // Playing event to confirm audio is actually playing
             playlistAudioRef.current.addEventListener('playing', () => {
                 console.log('🎵 Playlist audio is now playing!');
+                // Sync state - audio is actually playing
+                setIsPlaying(true);
+            });
+            
+            // Pause event - sync state when audio is paused (e.g., by iOS interruption)
+            playlistAudioRef.current.addEventListener('pause', () => {
+                console.log('🎵 Playlist audio paused (event)');
+                // Only sync if we think we should be playing
+                // This handles iOS audio interruptions
+            });
+            
+            // Handle stalled/waiting states (buffering issues)
+            playlistAudioRef.current.addEventListener('waiting', () => {
+                console.log('🎵 Playlist audio waiting/buffering...');
+            });
+            
+            playlistAudioRef.current.addEventListener('stalled', () => {
+                console.log('🎵 Playlist audio stalled, attempting recovery...');
+                // Try to recover by reloading
+                if (playlistAudioRef.current && playlistAudioRef.current.src) {
+                    const currentSrc = playlistAudioRef.current.src;
+                    const currentPosition = playlistAudioRef.current.currentTime;
+                    playlistAudioRef.current.load();
+                    playlistAudioRef.current.currentTime = currentPosition;
+                }
+            });
+            
+            // Handle iOS audio session interruptions (e.g., phone calls)
+            playlistAudioRef.current.addEventListener('suspend', () => {
+                console.log('🎵 Audio suspended (iOS interruption or background)');
+            });
+            
+            // canplay event - audio can be played again after stall/suspend
+            playlistAudioRef.current.addEventListener('canplay', () => {
+                console.log('🎵 Audio can play now');
             });
         }
     }, []);
@@ -525,14 +560,46 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
                 playlistAudioRef.current.volume = 1.0;
                 
                 console.log('🎵 Playing playlist audio:', playlistAudioRef.current.src);
+                console.log('🎵 Audio readyState:', playlistAudioRef.current.readyState);
                 
-                playlistAudioRef.current.play().catch(e => {
-                    console.error('🔇 Playlist play error:', e.name, e.message);
-                    // Silently ignore expected autoplay/abort errors
-                    if (e.name !== 'NotAllowedError' && e.name !== 'AbortError' && e.name !== 'NotSupportedError') {
-                        console.error("Play error:", e);
+                const attemptPlay = async (retryCount = 0) => {
+                    if (!playlistAudioRef.current) return;
+                    
+                    try {
+                        // If audio element needs reloading (e.g., after iOS suspension)
+                        if (playlistAudioRef.current.readyState < 2 && playlistAudioRef.current.src) {
+                            console.log('🎵 Audio needs reload before playing');
+                            playlistAudioRef.current.load();
+                            // Wait for it to be ready
+                            await new Promise<void>((resolve) => {
+                                const handleCanPlay = () => {
+                                    playlistAudioRef.current?.removeEventListener('canplay', handleCanPlay);
+                                    resolve();
+                                };
+                                playlistAudioRef.current?.addEventListener('canplay', handleCanPlay);
+                                // Timeout fallback
+                                setTimeout(resolve, 2000);
+                            });
+                        }
+                        
+                        await playlistAudioRef.current.play();
+                        console.log('🎵 Play successful');
+                    } catch (e: any) {
+                        console.error('🔇 Playlist play error:', e.name, e.message);
+                        
+                        // Retry logic for recoverable errors
+                        if (retryCount < 2 && e.name !== 'NotAllowedError') {
+                            console.log('🔇 Retrying play in 200ms...');
+                            setTimeout(() => attemptPlay(retryCount + 1), 200);
+                        } else if (e.name === 'NotAllowedError') {
+                            // User interaction required - sync state back
+                            console.log('🔇 User interaction required, pausing state');
+                            setIsPlaying(false);
+                        }
                     }
-                });
+                };
+                
+                attemptPlay();
             } else {
                 playlistAudioRef.current.pause();
             }
@@ -582,13 +649,43 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         if (!('mediaSession' in navigator)) return;
 
         // Play/Pause from lock screen or headphones
-        navigator.mediaSession.setActionHandler('play', () => {
+        navigator.mediaSession.setActionHandler('play', async () => {
             console.log('📱 Media Session: play');
-            setIsPlaying(true);
+            
+            // Directly try to play the audio element first
+            if (playlistAudioRef.current) {
+                try {
+                    // If audio was suspended, we may need to reload
+                    if (playlistAudioRef.current.readyState < 2) {
+                        console.log('📱 Audio needs reload, readyState:', playlistAudioRef.current.readyState);
+                        playlistAudioRef.current.load();
+                    }
+                    
+                    await playlistAudioRef.current.play();
+                    setIsPlaying(true);
+                    console.log('📱 Media Session: play successful');
+                } catch (e: any) {
+                    console.error('📱 Media Session: play failed:', e.name, e.message);
+                    // Try again after a short delay
+                    setTimeout(async () => {
+                        try {
+                            await playlistAudioRef.current?.play();
+                            setIsPlaying(true);
+                        } catch (e2) {
+                            console.error('📱 Media Session: retry play failed');
+                        }
+                    }, 100);
+                }
+            } else {
+                setIsPlaying(true);
+            }
         });
 
         navigator.mediaSession.setActionHandler('pause', () => {
             console.log('📱 Media Session: pause');
+            if (playlistAudioRef.current) {
+                playlistAudioRef.current.pause();
+            }
             setIsPlaying(false);
         });
 
@@ -693,6 +790,55 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
             if (interval) clearInterval(interval);
         };
     }, [isPlaying, duration]);
+
+    // Handle app visibility changes (foreground/background)
+    // This helps recover audio when user returns to the app
+    useEffect(() => {
+        const handleVisibilityChange = async () => {
+            if (document.visibilityState === 'visible' && isPlaying && playlistAudioRef.current) {
+                console.log('📱 App returned to foreground, checking audio state...');
+                
+                // Check if audio is actually paused when it should be playing
+                if (playlistAudioRef.current.paused) {
+                    console.log('📱 Audio was paused while in background, attempting resume...');
+                    
+                    try {
+                        // Re-ensure metadata is set (iOS sometimes loses it)
+                        if ('mediaSession' in navigator && currentPlaylist) {
+                            const track = currentPlaylist.items[currentTrackIndex];
+                            const coverImage = track?.coverImage || currentPlaylist.coverImage;
+                            
+                            navigator.mediaSession.metadata = new MediaMetadata({
+                                title: track?.title || 'Unknown',
+                                artist: track?.author || currentPlaylist.author || 'GodlyKids',
+                                album: currentPlaylist.title,
+                                artwork: coverImage ? [
+                                    { src: coverImage, sizes: '512x512', type: 'image/jpeg' }
+                                ] : []
+                            });
+                        }
+                        
+                        // Try to resume playback
+                        await playlistAudioRef.current.play();
+                        console.log('📱 Audio resumed successfully');
+                    } catch (e: any) {
+                        console.error('📱 Could not auto-resume audio:', e.name);
+                        // If we can't auto-resume, sync state to paused
+                        // so user knows they need to tap play again
+                        if (e.name === 'NotAllowedError') {
+                            setIsPlaying(false);
+                        }
+                    }
+                }
+            }
+        };
+        
+        document.addEventListener('visibilitychange', handleVisibilityChange);
+        
+        return () => {
+            document.removeEventListener('visibilitychange', handleVisibilityChange);
+        };
+    }, [isPlaying, currentPlaylist, currentTrackIndex]);
 
     const playPlaylist = useCallback((playlist: Playlist, startIndex: number = 0) => {
         setCurrentPlaylist(playlist);

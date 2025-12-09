@@ -40,14 +40,17 @@ const WeeklyLessonTracker: React.FC<WeeklyLessonTrackerProps> = ({
       {/* Week Header */}
       <div className="relative flex items-center justify-between mb-2">
         <div className="flex items-center gap-2">
-          <span className="text-2xl animate-bounce" style={{ animationDuration: '2s' }}>⭐</span>
+          <span className="text-2xl animate-bounce" style={{ animationDuration: '2s' }}>🚀</span>
           <span className="text-white font-display font-bold text-sm drop-shadow-lg" style={{ textShadow: '0 2px 4px rgba(0,0,0,0.3)' }}>
-            Weekly Adventure!
+            Your Weekly Quest!
           </span>
         </div>
         <div className="bg-gradient-to-r from-[#FFD700] to-[#FFA500] px-3 py-1 rounded-full shadow-lg border-2 border-white/50">
           <span className="text-[#5c2e0b] text-xs font-extrabold font-display">
-            🏆 {dayCompletions.filter(Boolean).length}/5
+            {dayCompletions.filter(Boolean).length === 5 ? '🌟 Champion!' : 
+             dayCompletions.filter(Boolean).length >= 3 ? '🔥 On Fire!' : 
+             dayCompletions.filter(Boolean).length >= 1 ? '💪 Go Go Go!' : 
+             '🎯 Let\'s Start!'}
           </span>
         </div>
       </div>
@@ -158,8 +161,8 @@ const WeeklyLessonTracker: React.FC<WeeklyLessonTrackerProps> = ({
 
       {/* Weekend Rest Message (shown if today is Saturday or Sunday) */}
       {(isTodaySaturday || isTodaySunday) && (
-        <div className="text-center mt-2 text-white/70 text-[10px]">
-          🌙 Rest day! Enjoy reading stories with family!
+        <div className="text-center mt-2 text-white/90 text-[10px] font-medium">
+          🎉 It's the weekend! Time for fun & family stories! 📚
         </div>
       )}
     </div>

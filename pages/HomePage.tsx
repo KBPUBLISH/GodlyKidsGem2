@@ -709,14 +709,27 @@ const HomePage: React.FC = () => {
                     const isCompleted = status === 'completed';
 
                     return (
-                      <div key={lesson._id || lesson.id} className="relative w-full">
+                      <div 
+                        key={lesson._id || lesson.id} 
+                        className="relative w-full animate-[lessonPop_0.5s_ease-out_forwards]"
+                        style={{ 
+                          opacity: 0,
+                          animationDelay: `${index * 0.15}s`
+                        }}
+                      >
                         {/* Connecting path line */}
                         {index < dayLessons.length - 1 && (
-                          <div className="absolute left-1/2 top-[70px] -translate-x-1/2 z-0">
+                          <div 
+                            className="absolute left-1/2 top-[70px] -translate-x-1/2 z-0 animate-[pathDraw_0.3s_ease-out_forwards]"
+                            style={{ 
+                              opacity: 0,
+                              animationDelay: `${(index * 0.15) + 0.3}s`
+                            }}
+                          >
                             <svg width="60" height="50" viewBox="0 0 60 50" className="overflow-visible">
                               <path 
                                 d={isEven ? "M30 0 Q30 25, 45 50" : "M30 0 Q30 25, 15 50"}
-                                stroke={isCompleted ? "#4CAF50" : "rgba(255,255,255,0.2)"}
+                                stroke={isCompleted ? "#4CAF50" : "rgba(255,255,255,0.4)"}
                                 strokeWidth="4"
                                 strokeDasharray={isCompleted ? "0" : "8 4"}
                                 fill="none"
@@ -1397,5 +1410,40 @@ const HomePage: React.FC = () => {
     </div>
   );
 };
+
+// Add lesson pop animation keyframes
+const lessonAnimationStyles = document.createElement('style');
+lessonAnimationStyles.textContent = `
+@keyframes lessonPop {
+  0% {
+    opacity: 0;
+    transform: scale(0.3) translateY(20px);
+  }
+  50% {
+    transform: scale(1.1) translateY(-5px);
+  }
+  70% {
+    transform: scale(0.95) translateY(2px);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+@keyframes pathDraw {
+  0% {
+    opacity: 0;
+    transform: translateX(-50%) scaleY(0);
+  }
+  100% {
+    opacity: 1;
+    transform: translateX(-50%) scaleY(1);
+  }
+}
+`;
+if (!document.getElementById('homepage-lesson-animations')) {
+  lessonAnimationStyles.id = 'homepage-lesson-animations';
+  document.head.appendChild(lessonAnimationStyles);
+}
 
 export default HomePage;

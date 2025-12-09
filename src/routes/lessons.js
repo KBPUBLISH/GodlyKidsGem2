@@ -6,10 +6,10 @@ const { generateActivityFromDevotional } = require('../services/aiService');
 const { notifyNewLesson } = require('../services/notificationService');
 
 // GET /api/lessons/calendar - Get lessons for calendar view (by date range)
-// Query params: startDate, endDate (ISO date strings)
+// Query params: startDate, endDate (ISO date strings), status (optional, defaults to published/scheduled)
 router.get('/calendar', async (req, res) => {
     try {
-        const { startDate, endDate } = req.query;
+        const { startDate, endDate, status } = req.query;
         
         if (!startDate || !endDate) {
             return res.status(400).json({ message: 'startDate and endDate are required' });
@@ -18,13 +18,24 @@ router.get('/calendar', async (req, res) => {
         const start = new Date(startDate);
         const end = new Date(endDate);
         
-        // Get all lessons with scheduledDate in the range
-        const lessons = await Lesson.find({
+        // Build query - default to published/scheduled lessons only
+        const query = {
             scheduledDate: {
                 $gte: start,
                 $lte: end
             }
-        }).sort({ scheduledDate: 1 });
+        };
+        
+        // Portal can pass status=all to see all statuses
+        if (status !== 'all') {
+            query.$or = [
+                { status: 'published' },
+                { status: 'scheduled' }
+            ];
+        }
+        
+        // Get all lessons with scheduledDate in the range
+        const lessons = await Lesson.find(query).sort({ scheduledDate: 1 });
         
         // Group by date for calendar display
         const calendarData = {};
@@ -93,18 +104,25 @@ router.get('/', async (req, res) => {
         // Build query
         const query = {};
         
-        if (status) {
+        // Handle status filtering
+        // Portal can pass status=all to get everything, or status=draft for drafts only
+        if (status === 'all') {
+            // Don't filter by status - show all (for portal)
+        } else if (status) {
             query.status = status;
-        }
-        
-        // If published=true, get published or scheduled lessons
-        if (published === 'true') {
+        } else if (published === 'true') {
+            // If published=true, get published or scheduled lessons
             // Get all published lessons, or scheduled lessons (regardless of date)
             query.$or = [
                 { status: 'published' },
                 { status: 'scheduled' }
             ];
-            // Don't filter by date - show all published/scheduled lessons
+        } else {
+            // Default: only show published or scheduled lessons in the main app
+            query.$or = [
+                { status: 'published' },
+                { status: 'scheduled' }
+            ];
         }
         
         // Get total count for pagination metadata

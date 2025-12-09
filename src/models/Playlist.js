@@ -32,6 +32,12 @@ const audioItemSchema = new mongoose.Schema({
         type: Number,
         default: 0,
     },
+    // Access control - whether this specific song/episode requires membership
+    // false = free for everyone, true = premium members only
+    isMembersOnly: {
+        type: Boolean,
+        default: false,
+    },
 }, { _id: true });
 
 const playlistSchema = new mongoose.Schema({

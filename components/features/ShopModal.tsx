@@ -184,6 +184,9 @@ const ShopModal: React.FC<ShopModalProps> = ({ isOpen, onClose, initialTab }) =>
     const [showScrollHint, setShowScrollHint] = useState(false);
     const [showCoinHistory, setShowCoinHistory] = useState(false);
     const tabsContainerRef = useRef<HTMLDivElement>(null);
+    const menuContainerRef = useRef<HTMLDivElement>(null);
+    const touchStartY = useRef<number>(0);
+    const touchStartTime = useRef<number>(0);
 
     // Update tab when initialTab changes
     useEffect(() => {
@@ -827,15 +830,41 @@ const ShopModal: React.FC<ShopModalProps> = ({ isOpen, onClose, initialTab }) =>
                     </div>
                 </div>
 
-                {/* Menu Container */}
-                <div className={`flex flex-col bg-[#f3e5ab] border-t-4 border-[#8B4513] rounded-t-3xl -mt-6 relative z-20 shadow-[0_-10px_40px_rgba(0,0,0,0.4)] transition-all duration-500 ease-in-out ${isMenuMinimized ? 'h-auto shrink-0' : 'flex-1 min-h-0'}`}>
+                {/* Menu Container - Swipeable */}
+                <div 
+                    ref={menuContainerRef}
+                    className={`flex flex-col bg-[#f3e5ab] border-t-4 border-[#8B4513] rounded-t-3xl -mt-6 relative z-20 shadow-[0_-10px_40px_rgba(0,0,0,0.4)] transition-all duration-500 ease-in-out ${isMenuMinimized ? 'h-auto shrink-0' : 'flex-1 min-h-0'}`}
+                    onTouchStart={(e) => {
+                        touchStartY.current = e.touches[0].clientY;
+                        touchStartTime.current = Date.now();
+                    }}
+                    onTouchEnd={(e) => {
+                        const touchEndY = e.changedTouches[0].clientY;
+                        const deltaY = touchStartY.current - touchEndY;
+                        const timeDelta = Date.now() - touchStartTime.current;
+                        
+                        // Only trigger if it's a quick swipe (under 300ms) and significant distance (over 50px)
+                        if (timeDelta < 300 && Math.abs(deltaY) > 50) {
+                            if (deltaY > 0) {
+                                // Swiped UP - expand the menu (show items)
+                                setIsMenuMinimized(false);
+                            } else {
+                                // Swiped DOWN - minimize the menu (hide items)
+                                setIsMenuMinimized(true);
+                            }
+                        }
+                    }}
+                >
 
-                    {/* Handle Bar */}
+                    {/* Handle Bar - Visual indicator for swiping */}
                     <div
-                        className="w-full h-9 flex items-center justify-center cursor-pointer touch-none shrink-0 hover:bg-black/5 transition-colors rounded-t-3xl"
+                        className="w-full h-9 flex flex-col items-center justify-center cursor-pointer shrink-0 hover:bg-black/5 transition-colors rounded-t-3xl"
                         onClick={() => setIsMenuMinimized(!isMenuMinimized)}
                     >
-                        <div className={`w-12 h-1.5 rounded-full bg-[#8B4513]/30 transition-all duration-300 ${isMenuMinimized ? 'rotate-0' : ''}`}></div>
+                        <div className={`w-12 h-1.5 rounded-full bg-[#8B4513]/30 transition-all duration-300`}></div>
+                        <span className="text-[8px] text-[#8B4513]/40 font-bold mt-1">
+                            {isMenuMinimized ? '↑ SWIPE UP' : '↓ SWIPE DOWN'}
+                        </span>
                     </div>
 
                     {/* Tabs Scroller - Updated visual cues */}
@@ -894,8 +923,12 @@ const ShopModal: React.FC<ShopModalProps> = ({ isOpen, onClose, initialTab }) =>
                         )}
                     </div>
 
-                    {/* Scrollable Items Content */}
-                    <div className={`overflow-y-auto p-4 bg-[#f3e5ab] relative transition-all duration-500 ${isMenuMinimized ? 'h-0 p-0 opacity-0' : 'flex-1 opacity-100'}`}>
+                    {/* Scrollable Items Content - Touch-friendly scrolling */}
+                    <div 
+                        className={`overflow-y-auto overscroll-contain p-4 bg-[#f3e5ab] relative transition-all duration-500 ${isMenuMinimized ? 'h-0 p-0 opacity-0 pointer-events-none' : 'flex-1 opacity-100'}`}
+                        style={{ WebkitOverflowScrolling: 'touch' }}
+                        onTouchStart={(e) => e.stopPropagation()} // Prevent menu swipe when scrolling items
+                    >
                         {activeTab === 'saves' ? (
                             <div className="flex flex-col gap-4 pb-20">
                                 {/* Save Current Button */}

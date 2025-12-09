@@ -202,11 +202,9 @@ const LessonPlayerPage: React.FC = () => {
         if (hasEpisodes && currentEpisodeIndex < totalEpisodes - 1 && !isTransitioning) {
             setIsTransitioning(true);
             
-            // PAUSE current video before transitioning
-            if (videoRef.current) {
-                videoRef.current.pause();
-                setIsVideoPlaying(false);
-            }
+            // PAUSE ALL videos in the document to prevent background audio
+            document.querySelectorAll('video').forEach(v => v.pause());
+            setIsVideoPlaying(false);
             
             // Scroll to next episode with smooth animation
             if (episodeContainerRef.current) {
@@ -225,9 +223,7 @@ const LessonPlayerPage: React.FC = () => {
             }, 350);
         } else if (!hasEpisodes || currentEpisodeIndex >= totalEpisodes - 1) {
             // Last episode finished - auto-transition to devotional
-            if (videoRef.current) {
-                videoRef.current.pause();
-            }
+            document.querySelectorAll('video').forEach(v => v.pause());
             setVideoWatched(true);
             setTimeout(() => {
                 setCurrentScreen('devotional');
@@ -239,11 +235,9 @@ const LessonPlayerPage: React.FC = () => {
         if (hasEpisodes && currentEpisodeIndex > 0 && !isTransitioning) {
             setIsTransitioning(true);
             
-            // PAUSE current video before transitioning
-            if (videoRef.current) {
-                videoRef.current.pause();
-                setIsVideoPlaying(false);
-            }
+            // PAUSE ALL videos in the document to prevent background audio
+            document.querySelectorAll('video').forEach(v => v.pause());
+            setIsVideoPlaying(false);
             
             // Scroll to previous episode with smooth animation
             if (episodeContainerRef.current) {
@@ -267,11 +261,9 @@ const LessonPlayerPage: React.FC = () => {
         if (hasEpisodes && index >= 0 && index < totalEpisodes && !isTransitioning && index !== currentEpisodeIndex) {
             setIsTransitioning(true);
             
-            // PAUSE current video before transitioning
-            if (videoRef.current) {
-                videoRef.current.pause();
-                setIsVideoPlaying(false);
-            }
+            // PAUSE ALL videos in the document to prevent background audio
+            document.querySelectorAll('video').forEach(v => v.pause());
+            setIsVideoPlaying(false);
             
             // Scroll to selected episode
             if (episodeContainerRef.current) {
@@ -306,6 +298,26 @@ const LessonPlayerPage: React.FC = () => {
             });
         }
     }, [hasEpisodes, currentEpisodeIndex, lesson?.episodes]);
+
+    // Auto-play current episode when episode index changes
+    useEffect(() => {
+        if (hasEpisodes && lesson?.episodes && currentScreen === 'video' && !isTransitioning) {
+            // Small delay to allow React to update the ref
+            const timer = setTimeout(() => {
+                // Pause all other videos first
+                document.querySelectorAll('video').forEach(v => v.pause());
+                
+                // Play the current episode
+                if (videoRef.current) {
+                    videoRef.current.play().catch(err => {
+                        console.log('Autoplay prevented:', err);
+                    });
+                }
+            }, 100);
+            
+            return () => clearTimeout(timer);
+        }
+    }, [currentEpisodeIndex, hasEpisodes, lesson?.episodes, currentScreen, isTransitioning]);
 
     // Close dropdown when clicking outside
     useEffect(() => {
@@ -890,19 +902,26 @@ const LessonPlayerPage: React.FC = () => {
                                     style={{ scrollSnapAlign: 'center' }}
                                     onClick={handleVideoTap}
                                 >
-                                    {index === currentEpisodeIndex ? (
-                                        <video
-                                            ref={videoRef}
-                                            src={episode.url}
-                                            className="w-full h-full object-contain cursor-pointer"
-                                            onClick={(e) => {
-                                                e.stopPropagation();
+                                    {/* Render ALL video elements to prevent unmounting issues */}
+                                    <video
+                                        ref={index === currentEpisodeIndex ? videoRef : undefined}
+                                        src={episode.url}
+                                        className="w-full h-full object-contain cursor-pointer"
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+                                            if (index === currentEpisodeIndex) {
                                                 handleVideoTap();
-                                            }}
-                                            onTimeUpdate={handleVideoProgress}
-                                            onPlay={() => setIsVideoPlaying(true)}
-                                            onPause={() => setIsVideoPlaying(false)}
-                                            onEnded={() => {
+                                            }
+                                        }}
+                                        onTimeUpdate={index === currentEpisodeIndex ? handleVideoProgress : undefined}
+                                        onPlay={() => {
+                                            if (index === currentEpisodeIndex) setIsVideoPlaying(true);
+                                        }}
+                                        onPause={() => {
+                                            if (index === currentEpisodeIndex) setIsVideoPlaying(false);
+                                        }}
+                                        onEnded={() => {
+                                            if (index === currentEpisodeIndex) {
                                                 setIsVideoPlaying(false);
                                                 if (currentEpisodeIndex < totalEpisodes - 1) {
                                                     goToNextEpisode();
@@ -913,28 +932,19 @@ const LessonPlayerPage: React.FC = () => {
                                                         setCurrentScreen('devotional');
                                                     }, 500);
                                                 }
-                                            }}
-                                            onLoadedData={() => {
-                                                if (videoRef.current && index === currentEpisodeIndex) {
-                                                    videoRef.current.play().catch(err => {
-                                                        console.log('Autoplay prevented:', err);
-                                                    });
-                                                }
-                                            }}
-                                            playsInline
-                                            autoPlay={index === currentEpisodeIndex}
-                                        />
-                                    ) : (
-                                        // Placeholder for non-active episodes (shows thumbnail or loading)
-                                        <div className="w-full h-full flex items-center justify-center bg-black">
-                                            <div className="text-center">
-                                                <div className="w-16 h-16 mx-auto bg-white/10 rounded-full flex items-center justify-center mb-3">
-                                                    <span className="text-3xl font-bold text-white">{index + 1}</span>
-                                                </div>
-                                                <p className="text-white/60 text-sm">{episode.title || `Episode ${index + 1}`}</p>
-                                            </div>
-                                        </div>
-                                    )}
+                                            }
+                                        }}
+                                        onLoadedData={(e) => {
+                                            // Auto-play only if this is the current episode
+                                            if (index === currentEpisodeIndex) {
+                                                (e.target as HTMLVideoElement).play().catch(err => {
+                                                    console.log('Autoplay prevented:', err);
+                                                });
+                                            }
+                                        }}
+                                        playsInline
+                                        preload="metadata"
+                                    />
                                 </div>
                             ))
                         ) : (

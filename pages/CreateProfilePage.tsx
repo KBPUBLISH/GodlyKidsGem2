@@ -5,6 +5,7 @@ import { ChevronLeft } from 'lucide-react';
 import WoodButton from '../components/ui/WoodButton';
 import { AVATAR_ASSETS } from '../components/avatar/AvatarAssets';
 import { useUser } from '../context/UserContext';
+import { useLanguage } from '../context/LanguageContext';
 
 const FUNNY_HEADS = [
   'head-toast',
@@ -29,6 +30,7 @@ const FUNNY_HEADS = [
 
 const CreateProfilePage: React.FC = () => {
   const navigate = useNavigate();
+  const { t } = useLanguage();
   const { addKid } = useUser();
   const [name, setName] = useState('');
   const [age, setAge] = useState('');
@@ -80,7 +82,7 @@ const CreateProfilePage: React.FC = () => {
              <div className="relative bg-[#CD853F] px-8 py-3 rounded-xl border-b-[6px] border-[#8B4513] shadow-xl">
                  <div className="absolute inset-0 opacity-20 rounded-xl pointer-events-none" style={{backgroundImage: 'repeating-linear-gradient(45deg, transparent, transparent 10px, #3E1F07 10px, #3E1F07 12px)'}}></div>
                 <h1 className="relative font-display font-extrabold text-[#5c2e0b] text-xl tracking-widest drop-shadow-[0_1px_0_rgba(255,255,255,0.4)] uppercase">
-                  New Adventurer
+                  {t('createProfile')}
                 </h1>
                 {/* Nails */}
                 <div className="absolute top-1/2 -translate-y-1/2 left-2 w-2 h-2 bg-[#3e1f07] rounded-full"></div>
@@ -103,34 +105,34 @@ const CreateProfilePage: React.FC = () => {
 
           {/* Name Input */}
           <div className="w-full mb-4 space-y-2">
-            <label className="text-[#eecaa0] font-display font-bold ml-2 text-sm tracking-wide">NAME</label>
+            <label className="text-[#eecaa0] font-display font-bold ml-2 text-sm tracking-wide">{t('name').toUpperCase()}</label>
             <input 
               type="text" 
               value={name}
               onChange={(e) => setName(e.target.value)}
-              placeholder="Name..."
+              placeholder={`${t('name')}...`}
               className="w-full bg-black/30 backdrop-blur-sm border-2 border-[#eecaa0]/50 rounded-xl px-5 py-4 text-white font-display text-lg placeholder:text-white/40 focus:outline-none focus:border-[#eecaa0] transition-colors shadow-inner text-center"
             />
           </div>
 
            {/* Age Input - Required for age-appropriate content */}
            <div className="w-full mb-8 space-y-2">
-            <label className="text-[#eecaa0] font-display font-bold ml-2 text-sm tracking-wide">AGE *</label>
+            <label className="text-[#eecaa0] font-display font-bold ml-2 text-sm tracking-wide">{t('age').toUpperCase()} *</label>
             <input 
               type="number" 
               min="1"
               max="18"
               value={age}
               onChange={(e) => setAge(e.target.value)}
-              placeholder="How old are you?"
+              placeholder={t('howOldAreYou')}
               className="w-full bg-black/30 backdrop-blur-sm border-2 border-[#eecaa0]/50 rounded-xl px-5 py-4 text-white font-display text-lg placeholder:text-white/40 focus:outline-none focus:border-[#eecaa0] transition-colors shadow-inner text-center"
             />
-            <p className="text-[#eecaa0]/60 text-xs text-center">Used for age-appropriate quizzes and content</p>
+            <p className="text-[#eecaa0]/60 text-xs text-center">{t('ageAppropriate')}</p>
           </div>
 
           {/* Avatar Selection Grid */}
           <div className="w-full mb-8">
-             <label className="text-[#eecaa0] font-display font-bold ml-2 text-sm tracking-wide mb-3 block">CHOOSE A LOOK</label>
+             <label className="text-[#eecaa0] font-display font-bold ml-2 text-sm tracking-wide mb-3 block">{t('chooseALook').toUpperCase()}</label>
              <div className="grid grid-cols-5 gap-3">
                 {FUNNY_HEADS.map((head) => (
                    <button
@@ -160,7 +162,7 @@ const CreateProfilePage: React.FC = () => {
             disabled={!name.trim() || !age}
             className={`py-4 text-xl transition-opacity ${!name.trim() || !age ? 'opacity-50 grayscale' : 'opacity-100'}`}
           >
-            START ADVENTURE
+            {t('create').toUpperCase()}
           </WoodButton>
 
       </div>

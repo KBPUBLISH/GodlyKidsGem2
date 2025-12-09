@@ -370,12 +370,17 @@ const LessonPlayerPage: React.FC = () => {
     };
 
     const handleTouchStart = (e: React.TouchEvent) => {
+        // Prevent default to stop native video controls from interfering
+        e.preventDefault();
         const touch = e.touches[0];
         setTouchStart({ x: touch.clientX, y: touch.clientY });
     };
 
     const handleTouchEnd = (e: React.TouchEvent) => {
         if (!touchStart) return;
+        
+        // Prevent default to stop click events from also firing
+        e.preventDefault();
 
         const touch = e.changedTouches[0];
         const deltaX = touch.clientX - touchStart.x;
@@ -399,8 +404,8 @@ const LessonPlayerPage: React.FC = () => {
                     setCurrentScreen('devotional');
                 }
             }
-        } else if (Math.abs(deltaX) < 15 && Math.abs(deltaY) < 15) {
-            // Small movement - treat as tap for play/pause
+        } else if (Math.abs(deltaX) < 50 && Math.abs(deltaY) < 50) {
+            // Increased threshold to 50px - allows for natural finger movement during tap
             handleVideoTap();
         }
 

@@ -193,6 +193,8 @@ router.put('/:id', async (req, res) => {
                     order: item.order !== undefined ? item.order : index,
                     duration: item.duration,
                     coverImage: (item.coverImage && item.coverImage.trim() !== '') ? item.coverImage : null, // Convert empty strings to null
+                    description: item.description || '',
+                    isMembersOnly: item.isMembersOnly === true, // Preserve members-only flag per item
                 };
                 console.log(`📝 Item ${index}:`, JSON.stringify(mappedItem, null, 2));
                 return mappedItem;

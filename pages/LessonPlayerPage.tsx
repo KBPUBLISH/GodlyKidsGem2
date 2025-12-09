@@ -874,17 +874,13 @@ const LessonPlayerPage: React.FC = () => {
                                                 onClick={(e) => {
                                                     e.stopPropagation();
                                                     if (idx !== currentEpisodeIndex) {
-                                                        setIsTransitioning(true);
+                                                        setCurrentEpisodeIndex(idx);
+                                                        setVideoProgress(0);
                                                         setTimeout(() => {
-                                                            setCurrentEpisodeIndex(idx);
-                                                            setVideoProgress(0);
-                                                            setIsTransitioning(false);
-                                                            setTimeout(() => {
-                                                                if (videoRef.current) {
-                                                                    videoRef.current.play().catch(err => console.log('Autoplay prevented:', err));
-                                                                }
-                                                            }, 100);
-                                                        }, 200);
+                                                            if (videoRef.current) {
+                                                                videoRef.current.play().catch(err => console.log('Autoplay prevented:', err));
+                                                            }
+                                                        }, 100);
                                                     }
                                                     setShowEpisodeSelector(false);
                                                 }}
@@ -996,7 +992,7 @@ const LessonPlayerPage: React.FC = () => {
 
                     {/* Continue Button - Shows on last episode (always visible so user can skip ahead) */}
                     {(!hasEpisodes || currentEpisodeIndex === totalEpisodes - 1) && (
-                        <div className="absolute bottom-16 left-0 right-0 flex justify-center z-30 animate-in fade-in slide-in-from-bottom-4 duration-500">
+                        <div className="absolute bottom-32 left-0 right-0 flex justify-center z-30 animate-in fade-in slide-in-from-bottom-4 duration-500">
                             <button
                                 onClick={() => setCurrentScreen('devotional')}
                                 className="flex items-center gap-3 bg-[#8B4513] hover:bg-[#A0522D] text-white px-8 py-4 rounded-full font-bold font-display text-lg shadow-2xl border-4 border-[#FFD700] transition-all transform hover:scale-105 active:scale-95"

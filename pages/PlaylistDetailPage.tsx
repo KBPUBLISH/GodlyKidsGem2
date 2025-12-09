@@ -499,10 +499,68 @@ const PlaylistDetailPage: React.FC = () => {
                     <div className="absolute top-40 right-20 w-28 h-10 bg-white/50 rounded-full blur-md" />
                     <div className="absolute top-[30%] left-8 w-20 h-8 bg-white/40 rounded-full blur-sm" />
                     
-                    {/* Ocean waves at bottom */}
-                    <div className="absolute bottom-0 left-0 right-0 h-32 bg-gradient-to-t from-[#1E90FF]/40 to-transparent" />
-                    <div className="absolute bottom-8 left-0 right-0 h-16 bg-[#4169E1]/20 rounded-t-[100%]" />
-                    <div className="absolute bottom-4 left-0 right-0 h-12 bg-[#1E90FF]/30 rounded-t-[100%]" />
+                    {/* Animated Ocean Waves */}
+                    <div className="absolute bottom-0 left-0 right-0 h-40">
+                        {/* Deep ocean base */}
+                        <div className="absolute bottom-0 left-0 right-0 h-24 bg-gradient-to-t from-[#0077B6] via-[#0096C7] to-transparent" />
+                        
+                        {/* Back wave layer - slowest */}
+                        <svg 
+                            className="absolute bottom-16 left-0 w-[200%] h-20 animate-[wave_8s_ease-in-out_infinite]"
+                            viewBox="0 0 1440 120" 
+                            preserveAspectRatio="none"
+                        >
+                            <path 
+                                d="M0,60 C180,120 360,0 540,60 C720,120 900,0 1080,60 C1260,120 1440,0 1440,60 L1440,120 L0,120 Z"
+                                fill="rgba(0, 150, 199, 0.3)"
+                            />
+                        </svg>
+                        
+                        {/* Middle wave layer */}
+                        <svg 
+                            className="absolute bottom-10 left-0 w-[200%] h-16 animate-[wave_6s_ease-in-out_infinite_reverse]"
+                            viewBox="0 0 1440 100" 
+                            preserveAspectRatio="none"
+                        >
+                            <path 
+                                d="M0,50 C120,100 240,0 360,50 C480,100 600,0 720,50 C840,100 960,0 1080,50 C1200,100 1320,0 1440,50 L1440,100 L0,100 Z"
+                                fill="rgba(0, 119, 182, 0.4)"
+                            />
+                        </svg>
+                        
+                        {/* Front wave layer - fastest */}
+                        <svg 
+                            className="absolute bottom-4 left-0 w-[200%] h-14 animate-[wave_4s_ease-in-out_infinite]"
+                            viewBox="0 0 1440 80" 
+                            preserveAspectRatio="none"
+                        >
+                            <path 
+                                d="M0,40 C90,80 180,0 270,40 C360,80 450,0 540,40 C630,80 720,0 810,40 C900,80 990,0 1080,40 C1170,80 1260,0 1350,40 C1440,80 1440,40 1440,40 L1440,80 L0,80 Z"
+                                fill="rgba(72, 202, 228, 0.5)"
+                            />
+                        </svg>
+                        
+                        {/* Foam/spray at top of waves */}
+                        <svg 
+                            className="absolute bottom-12 left-0 w-[200%] h-8 animate-[wave_5s_ease-in-out_infinite]"
+                            viewBox="0 0 1440 40" 
+                            preserveAspectRatio="none"
+                        >
+                            <path 
+                                d="M0,20 Q60,0 120,20 T240,20 T360,20 T480,20 T600,20 T720,20 T840,20 T960,20 T1080,20 T1200,20 T1320,20 T1440,20"
+                                stroke="rgba(255,255,255,0.4)"
+                                strokeWidth="3"
+                                fill="none"
+                                strokeLinecap="round"
+                            />
+                        </svg>
+                        
+                        {/* Sparkle/light reflections on water */}
+                        <div className="absolute bottom-8 left-[20%] w-2 h-2 bg-white/60 rounded-full animate-pulse" />
+                        <div className="absolute bottom-12 left-[40%] w-1.5 h-1.5 bg-white/50 rounded-full animate-pulse" style={{ animationDelay: '0.5s' }} />
+                        <div className="absolute bottom-6 left-[60%] w-2 h-2 bg-white/40 rounded-full animate-pulse" style={{ animationDelay: '1s' }} />
+                        <div className="absolute bottom-10 left-[80%] w-1.5 h-1.5 bg-white/50 rounded-full animate-pulse" style={{ animationDelay: '0.3s' }} />
+                    </div>
                 </div>
 
                 {/* Path Items */}
@@ -667,7 +725,7 @@ const PlaylistDetailPage: React.FC = () => {
     );
 };
 
-// Add sound bar animation keyframes
+// Add sound bar and wave animation keyframes
 const styleSheet = document.createElement('style');
 styleSheet.textContent = `
 @keyframes soundBar1 {
@@ -681,6 +739,11 @@ styleSheet.textContent = `
 @keyframes soundBar3 {
     0%, 100% { height: 60%; }
     50% { height: 100%; }
+}
+@keyframes wave {
+    0% { transform: translateX(0); }
+    50% { transform: translateX(-25%); }
+    100% { transform: translateX(0); }
 }
 `;
 if (!document.getElementById('playlist-detail-animations')) {

@@ -8,6 +8,7 @@ import {
 } from 'lucide-react';
 import { useUser } from '../../context/UserContext';
 import { useAudio } from '../../context/AudioContext';
+import { useLanguage } from '../../context/LanguageContext';
 
 interface ChallengeGameModalProps {
   isOpen: boolean;
@@ -55,6 +56,7 @@ interface Card {
 const ChallengeGameModal: React.FC<ChallengeGameModalProps> = ({ isOpen, onClose }) => {
   const { addCoins } = useUser();
   const { playClick, playSuccess, playTab, playBack } = useAudio();
+  const { t } = useLanguage();
   
   const [gameState, setGameState] = useState<GameState>('intro');
   const [isClaiming, setIsClaiming] = useState(false);
@@ -354,7 +356,7 @@ const ChallengeGameModal: React.FC<ChallengeGameModalProps> = ({ isOpen, onClose
           <div className="relative z-10 flex flex-col items-center pt-8 pb-8 px-6 text-center min-h-[460px]">
               
               <h2 className="font-display font-extrabold text-2xl text-white drop-shadow-md tracking-wide mb-4 uppercase">
-                Divine Pairs
+                {t('divinePairs')}
               </h2>
 
               {/* COOLDOWN SCREEN */}
@@ -368,21 +370,21 @@ const ChallengeGameModal: React.FC<ChallengeGameModalProps> = ({ isOpen, onClose
 
                       <div className="bg-black/20 rounded-xl p-4 mb-6 backdrop-blur-sm border border-white/10">
                           <p className="text-white/90 font-bold text-lg mb-2">
-                            Come Back Soon!
+                            {t('comeBackSoon')}
                           </p>
                           <p className="text-white/60 text-sm leading-relaxed mb-3">
-                             You've already completed today's memory challenge. The next challenge will be available in:
+                             {t('memoryChallengeCompleted')}
                           </p>
                           <div className="text-[#90caf9] font-display font-black text-3xl mb-2">
                             {timeUntilNext || '0s'}
                           </div>
                           <p className="text-white/50 text-xs">
-                            (Resets every 12 hours)
+                            {t('resetsEvery12Hours')}
                           </p>
                       </div>
 
                       <WoodButton onClick={onClose} variant="primary" className="px-10 py-4 text-xl bg-[#303f9f] hover:bg-[#3949ab]">
-                          CLOSE
+                          {t('close').toUpperCase()}
                       </WoodButton>
                   </div>
               )}
@@ -399,15 +401,15 @@ const ChallengeGameModal: React.FC<ChallengeGameModalProps> = ({ isOpen, onClose
                       </div>
 
                       <div className="bg-black/20 rounded-xl p-4 mb-6 backdrop-blur-sm border border-white/10">
-                          <p className="text-white/90 font-bold text-lg mb-1">Memory Challenge</p>
+                          <p className="text-white/90 font-bold text-lg mb-1">{t('memoryChallenge')}</p>
                           <p className="text-white/60 text-sm leading-relaxed">
-                             Flip the cards to match the divine symbols! <br/>
-                             Find them all quickly for 3 stars.
+                             {t('flipCardsToMatch')} <br/>
+                             {t('findThemQuickly')}
                           </p>
                       </div>
 
                       <WoodButton onClick={startCountdown} variant="primary" className="px-10 py-4 text-xl shadow-lg bg-[#303f9f] hover:bg-[#3949ab] border-[#1a237e]">
-                          START (60s)
+                          {t('startGame')} (60s)
                       </WoodButton>
                   </div>
               )}
@@ -426,7 +428,7 @@ const ChallengeGameModal: React.FC<ChallengeGameModalProps> = ({ isOpen, onClose
                   <div className="flex flex-col w-full h-full flex-1">
                        <div className="flex justify-between items-center w-full mb-4 px-2">
                           <div className="text-white/80 text-sm font-bold font-sans">
-                             Pairs: {matchesFound} / {GAME_PAIRS_COUNT}
+                             {t('pairs')}: {matchesFound} / {GAME_PAIRS_COUNT}
                           </div>
                           <div className={`font-display font-black text-2xl drop-shadow-sm ${timeLeft <= 10 ? 'text-red-400 animate-pulse' : 'text-white'}`}>
                              00:{timeLeft.toString().padStart(2, '0')}
@@ -470,9 +472,9 @@ const ChallengeGameModal: React.FC<ChallengeGameModalProps> = ({ isOpen, onClose
               {gameState === 'game-over' && (
                   <div className="flex flex-col items-center justify-center flex-1 w-full animate-in zoom-in">
                       <div className="text-6xl mb-4">⏳</div>
-                      <h3 className="font-display font-bold text-2xl text-white mb-2">Time's Up!</h3>
-                      <p className="text-white/70 mb-6">Keep practicing your memory!</p>
-                      <WoodButton onClick={initializeGame} variant="primary" className="bg-[#303f9f] hover:bg-[#3949ab]">TRY AGAIN</WoodButton>
+                      <h3 className="font-display font-bold text-2xl text-white mb-2">{t('timesUp')}</h3>
+                      <p className="text-white/70 mb-6">{t('keepPracticing')}</p>
+                      <WoodButton onClick={initializeGame} variant="primary" className="bg-[#303f9f] hover:bg-[#3949ab]">{t('tryAgain')}</WoodButton>
                   </div>
               )}
 
@@ -489,8 +491,8 @@ const ChallengeGameModal: React.FC<ChallengeGameModalProps> = ({ isOpen, onClose
                            </div>
                       </div>
 
-                      <h3 className="font-display font-bold text-3xl text-white mb-1">SHARP MIND!</h3>
-                      <p className="text-white/70 font-sans font-bold mb-6">You found all the divine pairs!</p>
+                      <h3 className="font-display font-bold text-3xl text-white mb-1">{t('sharpMind')}</h3>
+                      <p className="text-white/70 font-sans font-bold mb-6">{t('foundAllPairs')}</p>
                       
                       <div className="flex gap-2 mb-8">
                           {[1, 2, 3].map((star) => (
@@ -507,7 +509,7 @@ const ChallengeGameModal: React.FC<ChallengeGameModalProps> = ({ isOpen, onClose
 
                       <div className="w-full px-8">
                           <WoodButton variant="gold" fullWidth onClick={handleClaim} className="py-4 text-xl shadow-[0_0_20px_#FFD700]">
-                              CLAIM {earnedStars === 3 ? 50 : earnedStars === 2 ? 25 : 10} COINS
+                              {t('claimCoins')} {earnedStars === 3 ? 50 : earnedStars === 2 ? 25 : 10} {t('coins').toUpperCase()}
                           </WoodButton>
                       </div>
                   </div>

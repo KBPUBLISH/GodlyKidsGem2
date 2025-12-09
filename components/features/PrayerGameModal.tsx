@@ -8,6 +8,7 @@ import {
 } from 'lucide-react';
 import { useUser } from '../../context/UserContext';
 import { useAudio } from '../../context/AudioContext';
+import { useLanguage } from '../../context/LanguageContext';
 
 interface PrayerGameModalProps {
   isOpen: boolean;
@@ -115,6 +116,7 @@ const PRAYER_TEXTS: Record<string, string[]> = {
 const PrayerGameModal: React.FC<PrayerGameModalProps> = ({ isOpen, onClose }) => {
   const { addCoins } = useUser();
   const { playClick, playSuccess, playTab, setGameMode } = useAudio();
+  const { t } = useLanguage();
   
   const [gameState, setGameState] = useState<GameState>('intro');
   const [isClaiming, setIsClaiming] = useState(false);

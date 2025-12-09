@@ -7,6 +7,7 @@ import {
 } from 'lucide-react';
 import { useUser } from '../../context/UserContext';
 import { useAudio } from '../../context/AudioContext';
+import { useLanguage } from '../../context/LanguageContext';
 
 interface StrengthGameModalProps {
   isOpen: boolean;
@@ -32,6 +33,7 @@ const ACTIVITIES = [
 const StrengthGameModal: React.FC<StrengthGameModalProps> = ({ isOpen, onClose }) => {
   const { addCoins } = useUser();
   const { playClick, playSuccess, setGameMode, musicEnabled, toggleMusic } = useAudio();
+  const { t } = useLanguage();
   
   const [gameState, setGameState] = useState<GameState>('intro');
   const [isClaiming, setIsClaiming] = useState(false);

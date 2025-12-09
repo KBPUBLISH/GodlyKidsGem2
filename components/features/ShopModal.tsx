@@ -10,6 +10,7 @@ import { AVATAR_ASSETS } from '../avatar/AvatarAssets';
 import { ApiService } from '../../services/apiService';
 import { filterVisibleVoices } from '../../services/voiceManagementService';
 import CoinHistoryModal from './CoinHistoryModal';
+import { useLanguage } from '../../context/LanguageContext';
 
 interface ShopModalProps {
     isOpen: boolean;
@@ -171,6 +172,7 @@ type ShopTab = 'head' | 'hat' | 'body' | 'arms' | 'legs' | 'moves' | 'voices' | 
 
 const ShopModal: React.FC<ShopModalProps> = ({ isOpen, onClose, initialTab }) => {
     const navigate = useNavigate();
+    const { t } = useLanguage();
     const [activeTab, setActiveTab] = useState<ShopTab>(initialTab || 'head');
     const [availableVoices, setAvailableVoices] = useState<any[]>([]);
     const [loadingVoices, setLoadingVoices] = useState(false);

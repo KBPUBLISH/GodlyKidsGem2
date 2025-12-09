@@ -4,6 +4,7 @@ import { useUser, CoinTransaction } from '../../context/UserContext';
 import { profileService } from '../../services/profileService';
 import { playHistoryService } from '../../services/playHistoryService';
 import { activityTrackingService } from '../../services/activityTrackingService';
+import { useLanguage } from '../../context/LanguageContext';
 
 interface ReportCardModalProps {
   isOpen: boolean;
@@ -87,6 +88,7 @@ const formatDuration = (minutes: number): string => {
 
 const ReportCardModal: React.FC<ReportCardModalProps> = ({ isOpen, onClose }) => {
   const { coins, coinTransactions, kids, activeKidId, parentName } = useUser();
+  const { t } = useLanguage();
   const [activeTab, setActiveTab] = useState<'overview' | 'activity'>('overview');
   const [selectedPeriod, setSelectedPeriod] = useState<'week' | 'month'>('week');
   const [weeklyStats, setWeeklyStats] = useState<WeeklyStats>({
@@ -208,9 +210,9 @@ const ReportCardModal: React.FC<ReportCardModalProps> = ({ isOpen, onClose }) =>
           <div className="text-center">
             <div className="inline-flex items-center gap-2 mb-2">
               <Award className="w-6 h-6 text-[#4CAF50]" />
-              <h2 className="text-white font-display font-bold text-xl">Report Card</h2>
+              <h2 className="text-white font-display font-bold text-xl">{t('reportCard')}</h2>
             </div>
-            <p className="text-[#81C784] text-sm font-medium">{profileName}'s Learning Progress</p>
+            <p className="text-[#81C784] text-sm font-medium">{profileName} - {t('yourProgress')}</p>
             
             {/* Overall Grade Badge */}
             <div className="mt-4 inline-flex items-center gap-3 bg-black/30 px-5 py-3 rounded-2xl border border-[#4CAF50]/30">
@@ -237,7 +239,7 @@ const ReportCardModal: React.FC<ReportCardModalProps> = ({ isOpen, onClose }) =>
                 : 'bg-white/10 text-white/60 hover:text-white'
             }`}
           >
-            This Week
+            {t('thisWeek')}
           </button>
           <button
             onClick={() => setSelectedPeriod('month')}
@@ -247,7 +249,7 @@ const ReportCardModal: React.FC<ReportCardModalProps> = ({ isOpen, onClose }) =>
                 : 'bg-white/10 text-white/60 hover:text-white'
             }`}
           >
-            This Month
+            {t('thisMonth')}
           </button>
         </div>
 
@@ -263,7 +265,7 @@ const ReportCardModal: React.FC<ReportCardModalProps> = ({ isOpen, onClose }) =>
           >
             <span className="flex items-center justify-center gap-2">
               <TrendingUp className="w-4 h-4" />
-              Overview
+              {t('overview')}
             </span>
           </button>
           <button
@@ -276,7 +278,7 @@ const ReportCardModal: React.FC<ReportCardModalProps> = ({ isOpen, onClose }) =>
           >
             <span className="flex items-center justify-center gap-2">
               <Calendar className="w-4 h-4" />
-              Activity
+              {t('activityHistory')}
             </span>
           </button>
         </div>
@@ -293,13 +295,13 @@ const ReportCardModal: React.FC<ReportCardModalProps> = ({ isOpen, onClose }) =>
                       <Clock className="w-6 h-6 text-[#81C784]" />
                     </div>
                     <div>
-                      <p className="text-white/60 text-xs font-medium">Time Spent</p>
+                      <p className="text-white/60 text-xs font-medium">{t('timeSpent')}</p>
                       <p className="text-white font-bold text-xl">{formatDuration(weeklyStats.timeSpentMinutes)}</p>
                     </div>
                   </div>
                   <div className="text-right">
-                    <p className="text-[#81C784] text-xs">Learning Time</p>
-                    <p className="text-white/60 text-xs">This {selectedPeriod}</p>
+                    <p className="text-[#81C784] text-xs">📖</p>
+                    <p className="text-white/60 text-xs">{selectedPeriod === 'week' ? t('thisWeek') : t('thisMonth')}</p>
                   </div>
                 </div>
               </div>
@@ -310,40 +312,40 @@ const ReportCardModal: React.FC<ReportCardModalProps> = ({ isOpen, onClose }) =>
                 <div className="bg-blue-500/10 rounded-xl p-4 border border-blue-500/30">
                   <div className="flex items-center gap-2 mb-2">
                     <BookOpen className="w-5 h-5 text-blue-400" />
-                    <span className="text-white/60 text-xs font-medium">Books Read</span>
+                    <span className="text-white/60 text-xs font-medium">{t('booksRead')}</span>
                   </div>
                   <p className="text-white font-bold text-2xl">{weeklyStats.booksRead}</p>
-                  <p className="text-blue-400 text-xs mt-1">📚 Stories explored</p>
+                  <p className="text-blue-400 text-xs mt-1">📚</p>
                 </div>
 
                 {/* Pages Read */}
                 <div className="bg-cyan-500/10 rounded-xl p-4 border border-cyan-500/30">
                   <div className="flex items-center gap-2 mb-2">
                     <FileText className="w-5 h-5 text-cyan-400" />
-                    <span className="text-white/60 text-xs font-medium">Pages Read</span>
+                    <span className="text-white/60 text-xs font-medium">{t('pagesReadStat')}</span>
                   </div>
                   <p className="text-white font-bold text-2xl">{weeklyStats.pagesRead}</p>
-                  <p className="text-cyan-400 text-xs mt-1">📄 Pages turned</p>
+                  <p className="text-cyan-400 text-xs mt-1">📄</p>
                 </div>
 
                 {/* Songs Listened */}
                 <div className="bg-purple-500/10 rounded-xl p-4 border border-purple-500/30">
                   <div className="flex items-center gap-2 mb-2">
                     <Music className="w-5 h-5 text-purple-400" />
-                    <span className="text-white/60 text-xs font-medium">Songs Played</span>
+                    <span className="text-white/60 text-xs font-medium">{t('songsListened')}</span>
                   </div>
                   <p className="text-white font-bold text-2xl">{weeklyStats.songsListened}</p>
-                  <p className="text-purple-400 text-xs mt-1">🎵 Worship songs</p>
+                  <p className="text-purple-400 text-xs mt-1">🎵</p>
                 </div>
 
                 {/* Games Played */}
                 <div className="bg-green-500/10 rounded-xl p-4 border border-green-500/30">
                   <div className="flex items-center gap-2 mb-2">
                     <Gamepad2 className="w-5 h-5 text-green-400" />
-                    <span className="text-white/60 text-xs font-medium">Games Played</span>
+                    <span className="text-white/60 text-xs font-medium">{t('gamesPlayed')}</span>
                   </div>
                   <p className="text-white font-bold text-2xl">{weeklyStats.gamesPlayed}</p>
-                  <p className="text-green-400 text-xs mt-1">🎮 Brain challenges</p>
+                  <p className="text-green-400 text-xs mt-1">🎮</p>
                 </div>
 
                 {/* Lessons Completed */}

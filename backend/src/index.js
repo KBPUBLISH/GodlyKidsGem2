@@ -84,6 +84,7 @@ app.use('/api/analytics', analyticsLimiter, require('./routes/analytics'));
 
 // Standard routes (use general limiter already applied)
 app.use('/api/books', require('./routes/books'));
+app.use('/api/book-series', require('./routes/bookSeries'));
 app.use('/api/pages', require('./routes/pages'));
 app.use('/api/playlists', require('./routes/playlists'));
 app.use('/api/categories', require('./routes/categories'));

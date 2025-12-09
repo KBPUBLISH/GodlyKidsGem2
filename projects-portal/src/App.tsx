@@ -9,6 +9,8 @@ import BookForm from './pages/BookForm';
 import BookEdit from './pages/BookEdit';
 import Playlists from './pages/Playlists';
 import PlaylistForm from './pages/PlaylistForm';
+import BookSeries from './pages/BookSeries';
+import BookSeriesForm from './pages/BookSeriesForm';
 import BookReader from './pages/BookReader';
 import PageEditor from './pages/PageEditor';
 import Categories from './pages/Categories';
@@ -45,6 +47,9 @@ function App() {
             <Route path="playlists" element={<Playlists />} />
             <Route path="playlists/new" element={<PlaylistForm />} />
             <Route path="playlists/edit/:id" element={<PlaylistForm />} />
+            <Route path="book-series" element={<BookSeries />} />
+            <Route path="book-series/new" element={<BookSeriesForm />} />
+            <Route path="book-series/:id" element={<BookSeriesForm />} />
             <Route path="categories" element={<Categories />} />
             <Route path="voices" element={<Voices />} />
             <Route path="games" element={<Games />} />

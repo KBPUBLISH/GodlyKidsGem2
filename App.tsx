@@ -160,6 +160,7 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const isPlayer = location.pathname.startsWith('/player/');
   const isProfile = location.pathname === '/profile';
   const isCreateProfile = location.pathname === '/create-profile';
+  const isEditProfile = location.pathname === '/edit-profile';
   const isPaywall = location.pathname === '/paywall';
   const isSettings = location.pathname === '/settings';
   const isBookReader = location.pathname.startsWith('/read/');
@@ -181,7 +182,7 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
       <MiniPlayer />
 
       {/* Only show BottomNavigation on main tab pages */}
-      {!isLanding && !isSignIn && !isOnboarding && !isBookDetail && !isPlayer && !isProfile && !isCreateProfile && !isPaywall && !isSettings && !isBookReader && !isAudioPage && !isLessonPage && !isGamePage && <BottomNavigation />}
+      {!isLanding && !isSignIn && !isOnboarding && !isBookDetail && !isPlayer && !isProfile && !isCreateProfile && !isEditProfile && !isPaywall && !isSettings && !isBookReader && !isAudioPage && !isLessonPage && !isGamePage && <BottomNavigation />}
     </div>
   );
 };

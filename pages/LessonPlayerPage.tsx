@@ -909,8 +909,8 @@ const LessonPlayerPage: React.FC = () => {
                         </div>
                     )}
 
-                    {/* Continue Button - Shows ONLY on last episode after watching AND video is paused/ended */}
-                    {videoWatched && !isVideoPlaying && (!hasEpisodes || currentEpisodeIndex === totalEpisodes - 1) && (
+                    {/* Continue Button - Shows on last episode (always visible so user can skip ahead) */}
+                    {(!hasEpisodes || currentEpisodeIndex === totalEpisodes - 1) && (
                         <div className="absolute bottom-16 left-0 right-0 flex justify-center z-30 animate-in fade-in slide-in-from-bottom-4 duration-500">
                             <button
                                 onClick={() => setCurrentScreen('devotional')}

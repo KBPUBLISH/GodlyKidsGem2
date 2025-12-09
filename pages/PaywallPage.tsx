@@ -74,6 +74,7 @@ const PaywallPage: React.FC = () => {
 
     try {
       console.log('🔄 Starting restore purchases...');
+      console.log('🔄 isNativeApp:', isNativeApp);
       
       // First, try native RevenueCat/DeSpia restore (this asks Apple directly)
       const result = await restorePurchases();
@@ -101,9 +102,12 @@ const PaywallPage: React.FC = () => {
 
       // If native restore didn't find purchases, also try migration API for old app users
       const user = authService.getUser();
+      console.log('🔄 Checking if user is signed in:', user ? `Yes (${user.email})` : 'No');
+      
       if (user?.email) {
         console.log('🔄 Checking migration API for:', user.email);
         const baseUrl = getApiBaseUrl();
+        console.log('🔄 Migration API URL:', `${baseUrl}migration/restore-subscription`);
         const migrationResponse = await fetch(`${baseUrl}migration/restore-subscription`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -133,7 +137,12 @@ const PaywallPage: React.FC = () => {
 
       // No purchases found - but Apple might still know about it
       // This could happen if the subscription is valid in Apple but not linked to our user
-      setError('No subscription found. If you just subscribed, please try again in a few seconds or contact support.');
+      if (!user?.email) {
+        console.log('⚠️ User not signed in - cannot check migration API');
+        setError('Please sign in first to restore your subscription. If you subscribed in the old app, use the same email address.');
+      } else {
+        setError('No subscription found. If you just subscribed, please try again in a few seconds or contact support.');
+      }
     } catch (err: any) {
       console.error('Restore error:', err);
       setError(err.message || 'Failed to restore purchases. Please try again.');

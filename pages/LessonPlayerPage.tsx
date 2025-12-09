@@ -943,8 +943,9 @@ const LessonPlayerPage: React.FC = () => {
                                     // More episodes to go - auto advance
                                     goToNextEpisode();
                                 } else {
-                                    // Last episode or single video - show continue button
+                                    // Last episode or single video - auto transition to devotional
                                     setVideoWatched(true);
+                                    setCurrentScreen('devotional');
                                 }
                             }}
                             onLoadedData={() => {

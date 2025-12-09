@@ -40,18 +40,20 @@ const WeeklyLessonTracker: React.FC<WeeklyLessonTrackerProps> = ({
       {/* Week Header */}
       <div className="relative flex items-center justify-between mb-2">
         <div className="flex items-center gap-2">
-          <span className="text-2xl">🗓️</span>
-          <span className="text-white font-bold text-xs uppercase tracking-wider drop-shadow-md">This Week's Progress</span>
+          <span className="text-2xl animate-bounce" style={{ animationDuration: '2s' }}>⭐</span>
+          <span className="text-white font-display font-bold text-sm drop-shadow-lg" style={{ textShadow: '0 2px 4px rgba(0,0,0,0.3)' }}>
+            Weekly Adventure!
+          </span>
         </div>
-        <div className="bg-white/25 backdrop-blur-sm px-3 py-1 rounded-full border border-white/40">
-          <span className="text-[#FFD700] text-xs font-extrabold drop-shadow-md">
-            {dayCompletions.filter(Boolean).length}/5 Days
+        <div className="bg-gradient-to-r from-[#FFD700] to-[#FFA500] px-3 py-1 rounded-full shadow-lg border-2 border-white/50">
+          <span className="text-[#5c2e0b] text-xs font-extrabold font-display">
+            🏆 {dayCompletions.filter(Boolean).length}/5
           </span>
         </div>
       </div>
 
       {/* Day Circles */}
-      <div className="relative flex justify-between items-center gap-0.5 bg-white/10 rounded-xl p-2 backdrop-blur-sm">
+      <div className="relative flex justify-between items-center gap-0.5 bg-[#0D47A1]/70 rounded-xl p-2 shadow-inner border border-white/10">
         {DAYS.map((day, index) => {
           const isWeekend = index >= 5; // Sat (5) or Sun (6)
           const weekdayIndex = isWeekend ? -1 : index; // Only 0-4 are valid weekday indices

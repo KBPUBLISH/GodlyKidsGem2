@@ -8,6 +8,7 @@ export interface Book {
   isRead?: boolean;
   description?: string;
   author?: string;
+  isMembersOnly?: boolean; // Premium/locked content for subscribers only
 }
 
 export interface User {

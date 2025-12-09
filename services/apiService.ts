@@ -83,12 +83,14 @@ const transformBook = (apiBook: any): Book => {
     isRead: apiBook.isRead || apiBook.is_read || apiBook.read || false,
     description: apiBook.description || apiBook.summary || apiBook.synopsis || '',
     author: apiBook.author || apiBook.author_name || apiBook.authorName || 'Unknown',
+    // Premium/Members only flag
+    isMembersOnly: apiBook.isMembersOnly || apiBook.is_members_only || apiBook.isPremium || apiBook.is_premium || false,
     // Analytics counts
     viewCount: apiBook.viewCount || 0,
     readCount: apiBook.readCount || 0,
     likeCount: apiBook.likeCount || 0,
     favoriteCount: apiBook.favoriteCount || 0,
-  } as Book & { viewCount: number; readCount: number; likeCount: number; favoriteCount: number };
+  } as Book & { viewCount: number; readCount: number; likeCount: number; favoriteCount: number; isMembersOnly: boolean };
 };
 
 // Transform array of books

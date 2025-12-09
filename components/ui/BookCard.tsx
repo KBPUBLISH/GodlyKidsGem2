@@ -31,7 +31,7 @@ const BookCard: React.FC<BookCardProps> = ({ book, onClick }) => {
   }, [book.title, currentLanguage, translateText]);
   
   // Check if this content is locked (members only and user not subscribed)
-  const isMembersOnly = (book as any).isMembersOnly === true;
+  const isMembersOnly = book.isMembersOnly === true;
   const isLocked = isMembersOnly && !isSubscribed;
 
   // Reset error state when book cover URL changes

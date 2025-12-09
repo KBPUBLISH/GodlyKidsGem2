@@ -539,6 +539,161 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         }
     }, [isPlaying]);
 
+    // --- MEDIA SESSION API ---
+    // Updates lock screen / notification widget with current track info
+    useEffect(() => {
+        if (!('mediaSession' in navigator)) {
+            console.log('📱 Media Session API not supported');
+            return;
+        }
+
+        if (currentPlaylist && currentPlaylist.items[currentTrackIndex]) {
+            const track = currentPlaylist.items[currentTrackIndex];
+            const coverImage = track.coverImage || currentPlaylist.coverImage;
+            
+            // Set metadata for lock screen / notification widget
+            navigator.mediaSession.metadata = new MediaMetadata({
+                title: track.title,
+                artist: track.author || currentPlaylist.author || 'GodlyKids',
+                album: currentPlaylist.title,
+                artwork: coverImage ? [
+                    { src: coverImage, sizes: '96x96', type: 'image/jpeg' },
+                    { src: coverImage, sizes: '128x128', type: 'image/jpeg' },
+                    { src: coverImage, sizes: '192x192', type: 'image/jpeg' },
+                    { src: coverImage, sizes: '256x256', type: 'image/jpeg' },
+                    { src: coverImage, sizes: '384x384', type: 'image/jpeg' },
+                    { src: coverImage, sizes: '512x512', type: 'image/jpeg' },
+                ] : []
+            });
+
+            console.log('📱 Media Session updated:', track.title);
+        } else {
+            // Clear metadata when no playlist
+            navigator.mediaSession.metadata = null;
+        }
+
+        // Update playback state
+        navigator.mediaSession.playbackState = isPlaying ? 'playing' : 'paused';
+
+    }, [currentPlaylist, currentTrackIndex, isPlaying]);
+
+    // Set up Media Session action handlers (once on mount)
+    useEffect(() => {
+        if (!('mediaSession' in navigator)) return;
+
+        // Play/Pause from lock screen or headphones
+        navigator.mediaSession.setActionHandler('play', () => {
+            console.log('📱 Media Session: play');
+            setIsPlaying(true);
+        });
+
+        navigator.mediaSession.setActionHandler('pause', () => {
+            console.log('📱 Media Session: pause');
+            setIsPlaying(false);
+        });
+
+        // Next/Previous track from lock screen or headphones
+        navigator.mediaSession.setActionHandler('nexttrack', () => {
+            console.log('📱 Media Session: nexttrack');
+            if (currentPlaylist && currentTrackIndex < currentPlaylist.items.length - 1) {
+                setCurrentTrackIndex(prev => prev + 1);
+                setIsPlaying(true);
+            }
+        });
+
+        navigator.mediaSession.setActionHandler('previoustrack', () => {
+            console.log('📱 Media Session: previoustrack');
+            if (currentTrackIndex > 0) {
+                setCurrentTrackIndex(prev => prev - 1);
+                setIsPlaying(true);
+            }
+        });
+
+        // Seek backward/forward (for headphone buttons)
+        navigator.mediaSession.setActionHandler('seekbackward', (details) => {
+            const skipTime = details.seekOffset || 10;
+            if (playlistAudioRef.current) {
+                playlistAudioRef.current.currentTime = Math.max(0, playlistAudioRef.current.currentTime - skipTime);
+            }
+        });
+
+        navigator.mediaSession.setActionHandler('seekforward', (details) => {
+            const skipTime = details.seekOffset || 10;
+            if (playlistAudioRef.current) {
+                playlistAudioRef.current.currentTime = Math.min(
+                    playlistAudioRef.current.duration || 0,
+                    playlistAudioRef.current.currentTime + skipTime
+                );
+            }
+        });
+
+        // Seek to specific position (scrubbing on lock screen)
+        navigator.mediaSession.setActionHandler('seekto', (details) => {
+            if (playlistAudioRef.current && details.seekTime !== undefined) {
+                playlistAudioRef.current.currentTime = details.seekTime;
+            }
+        });
+
+        // Stop (close player)
+        navigator.mediaSession.setActionHandler('stop', () => {
+            console.log('📱 Media Session: stop');
+            setIsPlaying(false);
+            setCurrentPlaylist(null);
+            if (playlistAudioRef.current) {
+                playlistAudioRef.current.pause();
+                playlistAudioRef.current.currentTime = 0;
+            }
+        });
+
+        console.log('📱 Media Session handlers registered');
+
+        return () => {
+            // Clean up handlers on unmount
+            try {
+                navigator.mediaSession.setActionHandler('play', null);
+                navigator.mediaSession.setActionHandler('pause', null);
+                navigator.mediaSession.setActionHandler('nexttrack', null);
+                navigator.mediaSession.setActionHandler('previoustrack', null);
+                navigator.mediaSession.setActionHandler('seekbackward', null);
+                navigator.mediaSession.setActionHandler('seekforward', null);
+                navigator.mediaSession.setActionHandler('seekto', null);
+                navigator.mediaSession.setActionHandler('stop', null);
+            } catch (e) {
+                // Some handlers might not be supported
+            }
+        };
+    }, [currentPlaylist, currentTrackIndex]);
+
+    // Update position state for lock screen progress bar
+    useEffect(() => {
+        if (!('mediaSession' in navigator) || !playlistAudioRef.current) return;
+        
+        const updatePositionState = () => {
+            if (playlistAudioRef.current && !isNaN(playlistAudioRef.current.duration)) {
+                try {
+                    navigator.mediaSession.setPositionState({
+                        duration: playlistAudioRef.current.duration,
+                        playbackRate: playlistAudioRef.current.playbackRate,
+                        position: playlistAudioRef.current.currentTime
+                    });
+                } catch (e) {
+                    // setPositionState might not be supported in all browsers
+                }
+            }
+        };
+
+        // Update position every second while playing
+        let interval: NodeJS.Timeout | null = null;
+        if (isPlaying) {
+            updatePositionState(); // Update immediately
+            interval = setInterval(updatePositionState, 1000);
+        }
+
+        return () => {
+            if (interval) clearInterval(interval);
+        };
+    }, [isPlaying, duration]);
+
     const playPlaylist = useCallback((playlist: Playlist, startIndex: number = 0) => {
         setCurrentPlaylist(playlist);
         setCurrentTrackIndex(startIndex);

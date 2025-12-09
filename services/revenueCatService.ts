@@ -318,35 +318,24 @@ export const RevenueCatService = {
             }
           }
           
-          // After timeout, try restore as fallback (Apple may have completed but webhook missed)
+          // After timeout, just check localStorage one more time
           if (pollCount >= maxPolls && !resolved) {
             resolved = true;
             cleanupPurchaseState();
-            console.log('⏱️ Polling timeout after', maxPolls, 'seconds - trying restore as fallback...');
+            console.log('⏱️ Polling timeout after', maxPolls, 'seconds');
             
-            // Try restore purchases as fallback
-            try {
-              window.despia = 'restoreinapppurchases://';
-              console.log('🔄 Triggered restore purchases fallback');
-              
-              // Wait for restore result
-              await new Promise(r => setTimeout(r, 3000));
-              
-              // Check if premium now
-              const nowPremium = localStorage.getItem('godlykids_premium') === 'true';
-              if (nowPremium) {
-                console.log('✅ Premium confirmed via restore fallback');
-                window.dispatchEvent(new CustomEvent('revenuecat:premiumChanged', { detail: { isPremium: true } }));
-                resolve({ success: true });
-                purchaseResolve = null;
-                return;
-              }
-            } catch (e) {
-              console.error('Restore fallback error:', e);
+            // Final check of localStorage
+            const finalPremium = localStorage.getItem('godlykids_premium') === 'true';
+            if (finalPremium) {
+              console.log('✅ Premium found in final check');
+              window.dispatchEvent(new CustomEvent('revenuecat:premiumChanged', { detail: { isPremium: true } }));
+              resolve({ success: true });
+              purchaseResolve = null;
+              return;
             }
             
-            // Still no premium - show message
-            console.log('⚠️ Payment confirmation failed - user should try restore');
+            // Not premium - tell user to tap Restore manually
+            console.log('⚠️ Payment confirmation timeout - user should manually restore');
             resolve({ 
               success: false, 
               error: 'Payment is processing. If you completed the payment, please tap "Restore Purchases".' 

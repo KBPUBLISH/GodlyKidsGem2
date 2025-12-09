@@ -49,9 +49,9 @@ export const SubscriptionProvider: React.FC<SubscriptionProviderProps> = ({ chil
   const [isPremium, setIsPremium] = useState(false);
   const [isNativeApp, setIsNativeApp] = useState(false);
 
-  // Check subscription status from multiple sources
+  // Check subscription status from localStorage and backend (NO automatic restore - that shows UI)
   const checkSubscriptionFromAllSources = useCallback(async (): Promise<boolean> => {
-    console.log('🔍 Checking subscription status from all sources...');
+    console.log('🔍 Checking subscription status...');
     
     // 1. Check localStorage first (fastest)
     const localPremium = localStorage.getItem('godlykids_premium') === 'true';
@@ -84,28 +84,10 @@ export const SubscriptionProvider: React.FC<SubscriptionProviderProps> = ({ chil
       }
     }
     
-    // 3. In native app, trigger a silent restore to check with Apple/Google
-    if (RevenueCatService.isNativeApp()) {
-      console.log('📱 Native app - triggering silent restore check...');
-      try {
-        // Trigger DeSpia restore silently
-        window.despia = 'restoreinapppurchases://';
-        
-        // Wait briefly and check localStorage again
-        await new Promise(resolve => setTimeout(resolve, 2000));
-        
-        const afterRestorePremium = localStorage.getItem('godlykids_premium') === 'true';
-        if (afterRestorePremium) {
-          console.log('✅ Premium found after silent restore');
-          window.dispatchEvent(new CustomEvent('revenuecat:premiumChanged', { detail: { isPremium: true } }));
-          return true;
-        }
-      } catch (error) {
-        console.log('⚠️ Silent restore check failed');
-      }
-    }
+    // NOTE: We do NOT auto-trigger restore here because DeSpia shows a native popup
+    // Users must manually tap "Restore Purchases" button if needed
     
-    console.log('ℹ️ No premium subscription found');
+    console.log('ℹ️ No premium subscription found in cache');
     return false;
   }, []);
 

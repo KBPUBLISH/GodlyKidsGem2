@@ -1,10 +1,35 @@
 const express = require('express');
 const router = express.Router();
+const mongoose = require('mongoose');
 const User = require('../models/User');
 
 // Store pending purchases (external_id -> status)
 // In production, this should be in Redis or database
 const pendingPurchases = new Map();
+
+// Helper to check if a string is a valid MongoDB ObjectId
+const isValidObjectId = (id) => {
+    if (!id || typeof id !== 'string') return false;
+    // ObjectIds are exactly 24 hex characters
+    if (!/^[0-9a-fA-F]{24}$/.test(id)) return false;
+    try {
+        return new mongoose.Types.ObjectId(id).toString() === id;
+    } catch {
+        return false;
+    }
+};
+
+// Helper to build safe query for finding users by various IDs
+const buildUserQuery = (externalId) => {
+    const conditions = [
+        { email: externalId },
+        { deviceId: externalId }
+    ];
+    if (isValidObjectId(externalId)) {
+        conditions.unshift({ _id: externalId });
+    }
+    return { $or: conditions };
+};
 
 /**
  * RevenueCat Webhook Handler
@@ -51,13 +76,7 @@ router.post('/revenuecat', async (req, res) => {
                 
                 // Try to update user in database
                 try {
-                    const user = await User.findOne({ 
-                        $or: [
-                            { _id: externalId },
-                            { email: externalId },
-                            { deviceId: externalId }
-                        ]
-                    });
+                    const user = await User.findOne(buildUserQuery(externalId));
                     
                     if (user) {
                         user.isPremium = true;
@@ -85,13 +104,7 @@ router.post('/revenuecat', async (req, res) => {
                 });
                 
                 try {
-                    const user = await User.findOne({ 
-                        $or: [
-                            { _id: externalId },
-                            { email: externalId },
-                            { deviceId: externalId }
-                        ]
-                    });
+                    const user = await User.findOne(buildUserQuery(externalId));
                     
                     if (user) {
                         user.isPremium = false;
@@ -140,23 +153,7 @@ router.get('/purchase-status/:externalId', async (req, res) => {
         
         // Also check database
         try {
-            const mongoose = require('mongoose');
-            
-            // Build query - only use _id if it's a valid ObjectId
-            const isValidObjectId = mongoose.Types.ObjectId.isValid(externalId) && 
-                (new mongoose.Types.ObjectId(externalId)).toString() === externalId;
-            
-            const queryConditions = [
-                { email: externalId },
-                { deviceId: externalId }
-            ];
-            
-            // Only add _id condition if it's a valid ObjectId
-            if (isValidObjectId) {
-                queryConditions.unshift({ _id: externalId });
-            }
-            
-            const user = await User.findOne({ $or: queryConditions });
+            const user = await User.findOne(buildUserQuery(externalId));
             
             if (user && user.isPremium) {
                 console.log(`✅ Found premium user in database`);

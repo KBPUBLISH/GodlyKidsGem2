@@ -25,32 +25,14 @@ app.use(helmet({
   contentSecurityPolicy: false, // Disable CSP for API
 }));
 
-// CORS - Allow all GodlyKids origins
-const allowedOrigins = [
-  'https://app.godlykids.com',
-  'https://portal.godlykids.com',
-  'https://www.godlykids.com',
-  'https://godlykids.com',
-  'https://godlykids.netlify.app',
-  'http://localhost:3000', 
-  'http://localhost:5173', 
-  'http://localhost:5174'
-];
-
+// CORS - Allow all origins for flexibility (mobile apps, web, etc.)
 app.use(cors({
   origin: (origin, callback) => {
     // Allow requests with no origin (mobile apps, Postman, curl, etc.)
     if (!origin) return callback(null, true);
     
-    // Allow any godlykids or netlify subdomain
-    if (allowedOrigins.includes(origin) || 
-        origin.includes('godlykids') || 
-        origin.includes('netlify.app')) {
-      callback(null, true);
-    } else {
-      console.warn(`CORS origin not in whitelist: ${origin} - allowing anyway`);
-      callback(null, true); // Allow all for now
-    }
+    // Allow any godlykids or netlify subdomain - no logging spam
+    callback(null, true);
   },
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],

@@ -10,7 +10,14 @@ const Lesson = require('../models/Lesson');
 
 // Helper to check if a string is a valid MongoDB ObjectId
 const isValidObjectId = (id) => {
-    return mongoose.Types.ObjectId.isValid(id) && (new mongoose.Types.ObjectId(id)).toString() === id;
+    if (!id || typeof id !== 'string') return false;
+    // ObjectIds are exactly 24 hex characters
+    if (!/^[0-9a-fA-F]{24}$/.test(id)) return false;
+    try {
+        return new mongoose.Types.ObjectId(id).toString() === id;
+    } catch {
+        return false;
+    }
 };
 
 // Helper to get date range

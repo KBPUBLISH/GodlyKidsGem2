@@ -106,14 +106,17 @@ const SettingsPage: React.FC = () => {
     try {
       // Get user email from auth service
       const user = authService.getUser();
+      console.log('🔄 Restore: Current user from auth:', user);
+      
       if (!user?.email) {
         setRestoreResult({
           type: 'error',
-          message: 'Please sign in with the same email you used in the old app.',
+          message: 'Please sign in first with the email you used in the old app.',
         });
         return;
       }
 
+      console.log('🔄 Restore: Calling API for email:', user.email);
       const baseUrl = getApiBaseUrl();
       const response = await fetch(`${baseUrl}migration/restore-subscription`, {
         method: 'POST',
@@ -124,6 +127,7 @@ const SettingsPage: React.FC = () => {
       });
 
       const data = await response.json();
+      console.log('🔄 Restore: API response:', data);
 
       if (!response.ok) {
         throw new Error(data.message || 'Failed to restore purchases');
@@ -136,17 +140,23 @@ const SettingsPage: React.FC = () => {
           type: 'success',
           message: 'Your subscription has been restored! Welcome back! 🎉',
         });
+      } else if (data.found && data.subscriptionFound && !data.subscriptionRestored) {
+        // Subscription found in old app but user needs to create account in new app first
+        setRestoreResult({
+          type: 'info',
+          message: data.message || 'Subscription found! Please make sure you\'re signed in with the same email.',
+        });
       } else if (data.found && !data.subscriptionRestored) {
         // Account found but subscription expired or not active
         setRestoreResult({
           type: 'info',
-          message: data.message || 'Account found but no active subscription.',
+          message: data.message || 'Account found but subscription has expired.',
         });
       } else {
         // No account found
         setRestoreResult({
           type: 'info',
-          message: 'No previous subscription found with this email.',
+          message: data.message || 'No previous subscription found with this email.',
         });
       }
     } catch (error: any) {
@@ -488,18 +498,26 @@ const SettingsPage: React.FC = () => {
                 )}
                 
                 {/* Restore Purchases Button with Status */}
-                <button 
-                    onClick={handleRestorePurchases}
-                    disabled={isRestoring}
-                    className="w-full text-left px-3 py-3 text-[#5c2e0b] font-bold text-sm bg-white/40 hover:bg-white/80 rounded-lg border border-transparent hover:border-[#eecaa0] transition-all flex items-center justify-between group disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                    <span className="flex items-center gap-2">
-                        {isRestoring && <RefreshCw size={16} className="animate-spin" />}
-                        {!isRestoring && t('restorePurchases')}
-                        {isRestoring && `${t('loading')}`}
-                    </span>
-                    <ChevronLeft size={16} className="rotate-180 opacity-0 group-hover:opacity-50 transition-opacity" />
-                </button>
+                <div className="space-y-1">
+                    <button 
+                        onClick={handleRestorePurchases}
+                        disabled={isRestoring}
+                        className="w-full text-left px-3 py-3 text-[#5c2e0b] font-bold text-sm bg-white/40 hover:bg-white/80 rounded-lg border border-transparent hover:border-[#eecaa0] transition-all flex items-center justify-between group disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                        <span className="flex items-center gap-2">
+                            {isRestoring && <RefreshCw size={16} className="animate-spin" />}
+                            {!isRestoring && t('restorePurchases')}
+                            {isRestoring && `${t('loading')}`}
+                        </span>
+                        <ChevronLeft size={16} className="rotate-180 opacity-0 group-hover:opacity-50 transition-opacity" />
+                    </button>
+                    {/* Show current email if signed in */}
+                    {authService.getUser()?.email && (
+                        <p className="text-xs text-[#8B4513]/60 px-3">
+                            Using: {authService.getUser()?.email}
+                        </p>
+                    )}
+                </div>
                 
                 {/* Restore Result Message */}
                 {restoreResult && (

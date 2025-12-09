@@ -299,25 +299,32 @@ const LessonPlayerPage: React.FC = () => {
         }
     }, [hasEpisodes, currentEpisodeIndex, lesson?.episodes]);
 
-    // Auto-play current episode when episode index changes
+    // Auto-play current episode when episode index changes OR when returning to video screen
     useEffect(() => {
-        if (hasEpisodes && lesson?.episodes && currentScreen === 'video' && !isTransitioning) {
-            // Small delay to allow React to update the ref
+        if (currentScreen === 'video' && !isTransitioning) {
+            // Small delay to allow React to update the ref and DOM
             const timer = setTimeout(() => {
                 // Pause all other videos first
                 document.querySelectorAll('video').forEach(v => v.pause());
                 
-                // Play the current episode
+                // Play the current video
                 if (videoRef.current) {
+                    // Reset video if going back from devotional and videoWatched is true
+                    if (videoWatched && videoRef.current.ended) {
+                        videoRef.current.currentTime = 0;
+                    }
                     videoRef.current.play().catch(err => {
                         console.log('Autoplay prevented:', err);
                     });
                 }
-            }, 100);
+            }, 150);
             
             return () => clearTimeout(timer);
+        } else {
+            // Pause video when leaving video screen
+            document.querySelectorAll('video').forEach(v => v.pause());
         }
-    }, [currentEpisodeIndex, hasEpisodes, lesson?.episodes, currentScreen, isTransitioning]);
+    }, [currentEpisodeIndex, currentScreen, isTransitioning, videoWatched]);
 
     // Close dropdown when clicking outside
     useEffect(() => {
@@ -935,15 +942,15 @@ const LessonPlayerPage: React.FC = () => {
                                             }
                                         }}
                                         onLoadedData={(e) => {
-                                            // Auto-play only if this is the current episode
-                                            if (index === currentEpisodeIndex) {
+                                            // Auto-play only if this is the current episode AND we're on video screen
+                                            if (index === currentEpisodeIndex && currentScreen === 'video') {
                                                 (e.target as HTMLVideoElement).play().catch(err => {
                                                     console.log('Autoplay prevented:', err);
                                                 });
                                             }
                                         }}
                                         playsInline
-                                        preload="metadata"
+                                        preload="auto"
                                     />
                                 </div>
                             ))
@@ -973,14 +980,14 @@ const LessonPlayerPage: React.FC = () => {
                                         }, 500);
                                     }}
                                     onLoadedData={() => {
-                                        if (videoRef.current) {
+                                        if (videoRef.current && currentScreen === 'video') {
                                             videoRef.current.play().catch(err => {
                                                 console.log('Autoplay prevented:', err);
                                             });
                                         }
                                     }}
                                     playsInline
-                                    autoPlay
+                                    preload="auto"
                                 />
                             </div>
                         )}
@@ -1016,8 +1023,8 @@ const LessonPlayerPage: React.FC = () => {
                         </div>
                     )}
 
-                    {/* Continue Button - Shows after watching video or when video ends */}
-                    {videoWatched && (
+                    {/* Continue Button - Shows after watching video AND video is paused/ended */}
+                    {videoWatched && !isVideoPlaying && (
                         <div className="absolute bottom-16 left-0 right-0 flex justify-center z-30 animate-in fade-in slide-in-from-bottom-4 duration-500">
                             <button
                                 onClick={() => setCurrentScreen('devotional')}

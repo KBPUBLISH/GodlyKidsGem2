@@ -666,9 +666,9 @@ const HomePage: React.FC = () => {
 
             if (dayLessons.length === 0) {
               return (
-                <div className="rounded-2xl p-6 text-center border-2 border-[#48CAE4]/50 shadow-lg" style={{ background: 'linear-gradient(135deg, #0096C7 0%, #00B4D8 50%, #48CAE4 100%)' }}>
+                <div className="rounded-2xl p-6 text-center border-2 border-[#1E88E5]/50 shadow-lg" style={{ background: 'linear-gradient(135deg, #1565C0 0%, #1976D2 50%, #2196F3 100%)' }}>
                   <div className="text-4xl mb-2">🌟</div>
-                  <h3 className="text-white font-bold text-lg mb-1 drop-shadow-sm">Rest & Play Day!</h3>
+                  <h3 className="text-white font-bold text-lg mb-1 drop-shadow-md">Rest & Play Day!</h3>
                   <p className="text-white/90 text-sm">No lessons today. Enjoy reading stories or playing games with family!</p>
                   <p className="text-white/70 text-xs mt-2">Tap another day above to view those lessons.</p>
                 </div>
@@ -677,9 +677,9 @@ const HomePage: React.FC = () => {
 
             return (
               <div 
-                className="relative rounded-2xl overflow-hidden py-6 px-4 border-2 border-[#48CAE4]/50 shadow-lg"
+                className="relative rounded-2xl overflow-hidden py-6 px-4 border-2 border-[#1E88E5]/50 shadow-lg"
                 style={{
-                  background: 'linear-gradient(180deg, #0096C7 0%, #00B4D8 40%, #48CAE4 70%, #90E0EF 100%)'
+                  background: 'linear-gradient(180deg, #1565C0 0%, #1976D2 40%, #42A5F5 70%, #64B5F6 100%)'
                 }}
               >
                 {/* Sun decoration */}

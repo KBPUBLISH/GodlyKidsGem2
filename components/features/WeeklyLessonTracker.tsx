@@ -23,7 +23,7 @@ const WeeklyLessonTracker: React.FC<WeeklyLessonTrackerProps> = ({
   const isTodaySunday = today === 0;
 
   return (
-    <div className="relative overflow-hidden rounded-2xl px-4 py-3 mb-3 border-2 border-[#48CAE4]/50 shadow-lg" style={{ background: 'linear-gradient(135deg, #0096C7 0%, #00B4D8 50%, #48CAE4 100%)' }}>
+    <div className="relative overflow-hidden rounded-2xl px-4 py-3 mb-3 border-2 border-[#1E88E5]/50 shadow-lg" style={{ background: 'linear-gradient(135deg, #1565C0 0%, #1976D2 50%, #2196F3 100%)' }}>
       {/* Decorative elements */}
       <div className="absolute inset-0 pointer-events-none">
         {/* Floating bubbles/stars */}
@@ -41,10 +41,10 @@ const WeeklyLessonTracker: React.FC<WeeklyLessonTrackerProps> = ({
       <div className="relative flex items-center justify-between mb-2">
         <div className="flex items-center gap-2">
           <span className="text-2xl">🗓️</span>
-          <span className="text-white font-bold text-xs uppercase tracking-wider drop-shadow-sm">This Week's Progress</span>
+          <span className="text-white font-bold text-xs uppercase tracking-wider drop-shadow-md">This Week's Progress</span>
         </div>
-        <div className="bg-white/20 backdrop-blur-sm px-3 py-1 rounded-full border border-white/30">
-          <span className="text-[#FFD700] text-xs font-extrabold drop-shadow-sm">
+        <div className="bg-white/25 backdrop-blur-sm px-3 py-1 rounded-full border border-white/40">
+          <span className="text-[#FFD700] text-xs font-extrabold drop-shadow-md">
             {dayCompletions.filter(Boolean).length}/5 Days
           </span>
         </div>

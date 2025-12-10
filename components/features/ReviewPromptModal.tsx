@@ -15,31 +15,44 @@ const ReviewPromptModal: React.FC<ReviewPromptModalProps> = ({ isOpen, onReviewS
     setIsSubmitting(true);
     
     try {
-      // Check if running on native platform
-      if (Capacitor.isNativePlatform()) {
-        // Try to use native review prompt
-        if (Capacitor.getPlatform() === 'ios') {
-          // iOS - Use App Store Review API
-          try {
-            const { RateApp } = await import('capacitor-rate-app');
-            await RateApp.requestReview();
-          } catch (e) {
-            // Fallback: Open App Store directly
-            window.open('https://apps.apple.com/app/id[YOUR_APP_ID]?action=write-review', '_blank');
-          }
-        } else if (Capacitor.getPlatform() === 'android') {
-          // Android - Use Play Store Review API
-          try {
-            const { RateApp } = await import('capacitor-rate-app');
-            await RateApp.requestReview();
-          } catch (e) {
-            // Fallback: Open Play Store directly
-            window.open('https://play.google.com/store/apps/details?id=[YOUR_PACKAGE_ID]', '_blank');
+      console.log('🌟 Review button clicked');
+      console.log('🌟 Is native platform:', Capacitor.isNativePlatform());
+      console.log('🌟 Platform:', Capacitor.getPlatform());
+      
+      // Check if running on native platform (DeSpia wraps as native)
+      const isNative = Capacitor.isNativePlatform() || 
+                       window.hasOwnProperty('webkit') || 
+                       (window as any).despia;
+      
+      if (isNative) {
+        console.log('🌟 Attempting native review request...');
+        
+        // Try Capacitor Rate App plugin
+        try {
+          const { RateApp } = await import('capacitor-rate-app');
+          console.log('🌟 RateApp plugin loaded, requesting review...');
+          await RateApp.requestReview();
+          console.log('🌟 Native review request sent!');
+        } catch (e) {
+          console.log('🌟 RateApp plugin not available, trying DeSpia...', e);
+          
+          // Try DeSpia URL scheme for reviews (if DeSpia supports it)
+          if ((window as any).despia !== undefined) {
+            (window as any).despia = 'requestreview://';
+            console.log('🌟 DeSpia review request sent');
+          } else {
+            // Final fallback - iOS StoreKit review via webkit
+            if ((window as any).webkit?.messageHandlers?.requestReview) {
+              (window as any).webkit.messageHandlers.requestReview.postMessage({});
+              console.log('🌟 Webkit review request sent');
+            } else {
+              console.log('🌟 No native review API available');
+            }
           }
         }
       } else {
         // Web fallback - just show thank you
-        console.log('Review requested (web mode)');
+        console.log('🌟 Review requested (web mode - no native API)');
       }
       
       // Mark review as submitted in localStorage
@@ -56,7 +69,7 @@ const ReviewPromptModal: React.FC<ReviewPromptModalProps> = ({ isOpen, onReviewS
       }, 2000);
       
     } catch (error) {
-      console.error('Error requesting review:', error);
+      console.error('🌟 Error requesting review:', error);
       // Still close the modal on error
       onReviewSubmitted();
     } finally {

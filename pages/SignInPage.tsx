@@ -1,11 +1,13 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ChevronLeft, Mail, Lock, Eye, EyeOff, X, Loader2 } from 'lucide-react';
+import { ChevronLeft, Mail, Lock, Eye, EyeOff, X, Loader2, Sparkles } from 'lucide-react';
 import WoodButton from '../components/ui/WoodButton';
 import { ApiService, getApiBaseUrl } from '../services/apiService';
+import { useUser } from '../context/UserContext';
 
 const SignInPage: React.FC = () => {
   const navigate = useNavigate();
+  const { subscribe } = useUser();
   const [loading, setLoading] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [email, setEmail] = useState('');
@@ -18,6 +20,16 @@ const SignInPage: React.FC = () => {
   const [forgotLoading, setForgotLoading] = useState(false);
   const [forgotSuccess, setForgotSuccess] = useState(false);
   const [forgotError, setForgotError] = useState<string | null>(null);
+  
+  // Legacy user migration modal state
+  const [showLegacyModal, setShowLegacyModal] = useState(false);
+  const [legacyEmail, setLegacyEmail] = useState('');
+  const [legacyHasSubscription, setLegacyHasSubscription] = useState(false);
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmNewPassword, setConfirmNewPassword] = useState('');
+  const [showNewPassword, setShowNewPassword] = useState(false);
+  const [legacyLoading, setLegacyLoading] = useState(false);
+  const [legacyError, setLegacyError] = useState<string | null>(null);
 
   const handleForgotPassword = async () => {
     if (!forgotEmail || !forgotEmail.includes('@')) {
@@ -56,6 +68,68 @@ const SignInPage: React.FC = () => {
     setForgotEmail('');
     setForgotSuccess(false);
     setForgotError(null);
+  };
+
+  // Handle legacy user migration
+  const handleLegacyMigration = async () => {
+    if (!newPassword || newPassword.length < 6) {
+      setLegacyError('Password must be at least 6 characters');
+      return;
+    }
+    if (newPassword !== confirmNewPassword) {
+      setLegacyError('Passwords do not match');
+      return;
+    }
+    
+    setLegacyLoading(true);
+    setLegacyError(null);
+    
+    try {
+      const baseUrl = getApiBaseUrl();
+      const response = await fetch(`${baseUrl}auth/migrate-legacy`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          email: legacyEmail.toLowerCase().trim(), 
+          password: newPassword 
+        }),
+      });
+      
+      const data = await response.json();
+      
+      if (response.ok && data.token) {
+        // Store the token
+        localStorage.setItem('token', data.token);
+        localStorage.setItem('user', JSON.stringify(data.user));
+        
+        // If subscription was restored, update premium status
+        if (data.subscriptionRestored || data.user?.isPremium) {
+          subscribe();
+        }
+        
+        console.log('✅ Legacy user migrated:', data);
+        
+        // Navigate to home
+        window.dispatchEvent(new Event('authTokenUpdated'));
+        setTimeout(() => navigate('/home'), 100);
+      } else {
+        setLegacyError(data.msg || data.message || 'Migration failed. Please try again.');
+      }
+    } catch (err) {
+      console.error('Legacy migration error:', err);
+      setLegacyError('Unable to connect. Please check your internet and try again.');
+    } finally {
+      setLegacyLoading(false);
+    }
+  };
+
+  const closeLegacyModal = () => {
+    setShowLegacyModal(false);
+    setLegacyEmail('');
+    setNewPassword('');
+    setConfirmNewPassword('');
+    setLegacyError(null);
+    setLegacyHasSubscription(false);
   };
 
   const handleLogin = async (provider: 'apple' | 'google' | 'email', emailValue?: string, passwordValue?: string) => {
@@ -115,6 +189,13 @@ const SignInPage: React.FC = () => {
             window.location.hash = '#/home';
           }, 100);
         }
+      } else if ((result as any).code === 'LEGACY_ACCOUNT') {
+        // User has an account in the old app! Show migration modal
+        console.log('🔄 SignInPage: Legacy account found, showing migration modal');
+        setLegacyEmail(email);
+        setLegacyHasSubscription((result as any).hasSubscription || false);
+        setShowLegacyModal(true);
+        setLoading(null);
       } else {
         console.error('❌ SignInPage: Login failed', result.error);
         setError(result.error || 'Login failed. Please try again.');
@@ -344,6 +425,131 @@ const SignInPage: React.FC = () => {
                 </button>
               </>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* Legacy Account Migration Modal */}
+      {showLegacyModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          {/* Backdrop */}
+          <div 
+            className="absolute inset-0 bg-black/70 backdrop-blur-sm"
+            onClick={closeLegacyModal}
+          />
+          
+          {/* Modal */}
+          <div className="relative bg-gradient-to-b from-[#5c3d2e] to-[#3e2a1e] rounded-2xl border-4 border-[#FFD700] shadow-2xl w-full max-w-sm p-6 animate-in zoom-in-95 duration-200">
+            {/* Close Button */}
+            <button
+              onClick={closeLegacyModal}
+              className="absolute top-3 right-3 text-white/60 hover:text-white transition-colors"
+            >
+              <X size={24} />
+            </button>
+            
+            {/* Icon */}
+            <div className="w-16 h-16 bg-gradient-to-br from-[#FFD700] to-[#FFA500] rounded-full flex items-center justify-center mx-auto mb-4 shadow-lg">
+              <Sparkles className="text-[#3E1F07]" size={32} />
+            </div>
+            
+            {/* Title */}
+            <h2 className="text-[#FFD700] font-display font-bold text-xl mb-2 text-center">
+              Welcome Back! 🎉
+            </h2>
+            
+            <p className="text-white/80 text-sm text-center mb-2">
+              We found your account from our previous app!
+            </p>
+            
+            {legacyHasSubscription && (
+              <div className="bg-green-500/20 border border-green-500/50 rounded-lg px-3 py-2 mb-4">
+                <p className="text-green-300 text-sm text-center">
+                  ✨ Your subscription will be restored!
+                </p>
+              </div>
+            )}
+            
+            <p className="text-white/60 text-xs text-center mb-4">
+              Please set a new password to continue.
+            </p>
+            
+            {legacyError && (
+              <div className="bg-red-500/20 border border-red-500/50 text-white text-sm px-3 py-2 rounded-lg mb-3">
+                {legacyError}
+              </div>
+            )}
+            
+            <div className="space-y-3 mb-4">
+              {/* Email (read-only) */}
+              <div className="relative">
+                <Mail className="absolute left-3 top-1/2 -translate-y-1/2 text-white/60" size={18} />
+                <input
+                  type="email"
+                  value={legacyEmail}
+                  disabled
+                  className="w-full bg-white/5 border border-white/10 rounded-xl py-3 pl-10 pr-4 text-white/60 cursor-not-allowed"
+                />
+              </div>
+              
+              {/* New Password */}
+              <div className="relative">
+                <Lock className="absolute left-3 top-1/2 -translate-y-1/2 text-white/60" size={18} />
+                <input
+                  type={showNewPassword ? 'text' : 'password'}
+                  placeholder="New Password (min 6 characters)"
+                  value={newPassword}
+                  onChange={(e) => setNewPassword(e.target.value)}
+                  disabled={legacyLoading}
+                  className="w-full bg-white/10 backdrop-blur-sm border border-white/20 rounded-xl py-3 pl-10 pr-10 text-white placeholder:text-white/60 focus:outline-none focus:bg-white/15 focus:border-[#FFD700] transition-colors"
+                  autoFocus
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowNewPassword(!showNewPassword)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-white/60 hover:text-white/80 transition-colors"
+                  tabIndex={-1}
+                >
+                  {showNewPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                </button>
+              </div>
+              
+              {/* Confirm Password */}
+              <div className="relative">
+                <Lock className="absolute left-3 top-1/2 -translate-y-1/2 text-white/60" size={18} />
+                <input
+                  type={showNewPassword ? 'text' : 'password'}
+                  placeholder="Confirm New Password"
+                  value={confirmNewPassword}
+                  onChange={(e) => setConfirmNewPassword(e.target.value)}
+                  disabled={legacyLoading}
+                  className="w-full bg-white/10 backdrop-blur-sm border border-white/20 rounded-xl py-3 pl-10 pr-4 text-white placeholder:text-white/60 focus:outline-none focus:bg-white/15 focus:border-[#FFD700] transition-colors"
+                />
+              </div>
+            </div>
+            
+            <WoodButton 
+              onClick={handleLegacyMigration}
+              fullWidth
+              variant="gold"
+              disabled={legacyLoading || !newPassword || !confirmNewPassword}
+            >
+              {legacyLoading ? (
+                <span className="flex items-center justify-center gap-2">
+                  <Loader2 className="w-5 h-5 animate-spin" />
+                  Migrating...
+                </span>
+              ) : (
+                '✨ Continue to App'
+              )}
+            </WoodButton>
+            
+            <button
+              onClick={closeLegacyModal}
+              className="w-full text-white/60 text-sm mt-3 hover:text-white transition-colors"
+            >
+              Cancel
+            </button>
           </div>
         </div>
       )}

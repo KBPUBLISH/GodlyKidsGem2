@@ -635,6 +635,17 @@ export const ApiService = {
             errorMessage = errorData.error;
           }
 
+          // Check if this is a legacy account that needs migration
+          if (errorData.code === 'LEGACY_ACCOUNT') {
+            console.log('🔄 Legacy account detected, needs migration');
+            return {
+              success: false,
+              code: 'LEGACY_ACCOUNT',
+              hasSubscription: errorData.hasSubscription || false,
+              error: errorData.message || 'Account found in previous app. Please set a new password.'
+            };
+          }
+          
           // Check if error is about email confirmation
           const errorStr = JSON.stringify(errorData).toLowerCase();
           if (errorStr.includes('confirm') || errorStr.includes('verified') || errorStr.includes('verification')) {

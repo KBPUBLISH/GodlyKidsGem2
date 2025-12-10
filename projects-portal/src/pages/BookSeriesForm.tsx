@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeft, Upload, Plus, Trash2, GripVertical, BookOpen, Save, X, Lock, Unlock, Search, Check } from 'lucide-react';
+import { ArrowLeft, Plus, Trash2, GripVertical, BookOpen, Save, X, Search } from 'lucide-react';
 import apiClient from '../services/apiClient';
 
 interface Book {
@@ -107,11 +107,7 @@ const BookSeriesForm: React.FC = () => {
             const response = await apiClient.get(`/api/book-series/${id}`);
             const series = response.data;
             
-            // Extract book IDs and full book data
-            const bookIds = series.books?.map((b: any) => 
-                typeof b.book === 'object' ? b.book._id : b.book
-            ) || [];
-            
+            // Extract full book data
             const booksWithData = series.books?.map((b: any) => 
                 typeof b.book === 'object' ? b.book : null
             ).filter(Boolean) || [];

@@ -102,8 +102,8 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     });
     const [musicEnabled, setMusicEnabled] = useState<boolean>(() => {
         const saved = localStorage.getItem('godly_kids_music_enabled');
-        // Default to true if not set
-        return saved !== null ? saved === 'true' : true;
+        // Default to false - background music disabled to prevent conflicts with playlist player
+        return saved !== null ? saved === 'true' : false;
     });
     const [sfxEnabled, setSfxEnabled] = useState(true);
     const [musicMode, setMusicMode] = useState<'bg' | 'game' | 'workout'>('bg');

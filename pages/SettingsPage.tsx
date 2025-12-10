@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ChevronLeft, Volume2, Bell, Shield, FileText, LogOut, Crown, HelpCircle, Mic, Trash2, RefreshCw, CheckCircle, AlertCircle, Music, Globe, Check, ChevronRight } from 'lucide-react';
+import { ChevronLeft, Volume2, Bell, Shield, FileText, LogOut, Crown, HelpCircle, Mic, Trash2, RefreshCw, CheckCircle, AlertCircle, Globe, Check, ChevronRight } from 'lucide-react';
 import WoodButton from '../components/ui/WoodButton';
 import { useUser } from '../context/UserContext';
 import { useAudio } from '../context/AudioContext';
@@ -17,7 +17,7 @@ import ParentGateModal from '../components/features/ParentGateModal';
 const SettingsPage: React.FC = () => {
   const navigate = useNavigate();
   const { isSubscribed, isVoiceUnlocked, setIsSubscribed } = useUser();
-  const { sfxEnabled, toggleSfx, playBack, musicEnabled, toggleMusic, musicVolume, setMusicVolume } = useAudio();
+  const { sfxEnabled, toggleSfx, playBack } = useAudio();
   const { currentLanguage, setLanguage, supportedLanguages, isTranslating, t } = useLanguage();
   const [clonedVoices, setClonedVoices] = useState<ClonedVoice[]>([]);
   const [deletingVoiceId, setDeletingVoiceId] = useState<string | null>(null);
@@ -204,42 +204,6 @@ const SettingsPage: React.FC = () => {
                 <h3 className="font-display font-bold text-[#8B4513] text-lg mb-4 uppercase tracking-wide opacity-80">{t('audioNotifications')}</h3>
                 
                 <div className="space-y-5">
-                    {/* Background Music Toggle */}
-                    <div className="space-y-3">
-                        <div className="flex items-center justify-between">
-                            <div className="flex items-center gap-3 text-[#5c2e0b]">
-                                <div className="w-8 h-8 rounded-full bg-[#e1bee7] flex items-center justify-center text-[#8e24aa]">
-                                    <Music size={18} />
-                                </div>
-                                <span className="font-bold">{t('backgroundMusic')}</span>
-                            </div>
-                            <button 
-                                onClick={toggleMusic}
-                                className={`w-12 h-7 rounded-full relative transition-colors duration-200 border-2 ${musicEnabled ? 'bg-[#8bc34a] border-[#689f38]' : 'bg-gray-300 border-gray-400'}`}
-                            >
-                                <div className={`absolute top-0.5 w-5 h-5 bg-white rounded-full shadow-sm transition-all duration-200 ${musicEnabled ? 'left-5' : 'left-0.5'}`}></div>
-                            </button>
-                        </div>
-                        
-                        {/* Volume Slider - Only show when music is enabled */}
-                        {musicEnabled && (
-                            <div className="ml-11 pr-1">
-                                <div className="flex items-center gap-3">
-                                    <Volume2 size={14} className="text-[#8B4513]/50 shrink-0" />
-                                    <input 
-                                        type="range"
-                                        min="0"
-                                        max="100"
-                                        value={musicVolume * 100}
-                                        onChange={(e) => setMusicVolume(parseInt(e.target.value) / 100)}
-                                        className="flex-1 h-2 bg-[#eecaa0] rounded-full appearance-none cursor-pointer accent-[#8e24aa] [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-5 [&::-webkit-slider-thumb]:h-5 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-[#8e24aa] [&::-webkit-slider-thumb]:border-2 [&::-webkit-slider-thumb]:border-white [&::-webkit-slider-thumb]:shadow-md"
-                                    />
-                                    <span className="text-xs font-bold text-[#8B4513]/60 w-8 text-right">{Math.round(musicVolume * 100)}%</span>
-                                </div>
-                            </div>
-                        )}
-                    </div>
-
                     {/* Sound Effects Toggle */}
                     <div className="flex items-center justify-between">
                         <div className="flex items-center gap-3 text-[#5c2e0b]">

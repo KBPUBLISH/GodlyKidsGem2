@@ -1305,6 +1305,15 @@ const BookReaderPage: React.FC = () => {
                     const audioDuration = audio.duration;
                     const alignment = result.alignment;
                     
+                    // DEBUG: Log alignment data
+                    console.log('🔍 ALIGNMENT DEBUG:', {
+                        hasAlignment: !!alignment,
+                        hasWords: alignment?.words?.length || 0,
+                        isEstimated: alignment?.isEstimated,
+                        firstWord: alignment?.words?.[0],
+                        audioUrl: result.audioUrl?.substring(0, 50)
+                    });
+                    
                     // Get the clean text (same as what's displayed)
                     const cleanText = text.replace(/\[([^\]]+)\]/g, '').replace(/\s+/g, ' ').trim();
                     const displayWords = cleanText.split(/\s+/).filter(w => w.length > 0);

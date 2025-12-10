@@ -120,6 +120,9 @@ const HomePage: React.FC = () => {
   const [topRatedBooks, setTopRatedBooks] = useState<any[]>([]);
   const [topRatedPlaylists, setTopRatedPlaylists] = useState<any[]>([]);
   
+  // Book Series state
+  const [bookSeries, setBookSeries] = useState<any[]>([]);
+  
   // Dynamic games from backend
   const [dynamicGames, setDynamicGames] = useState<any[]>([]);
   const [gamesLoading, setGamesLoading] = useState(true);
@@ -277,6 +280,7 @@ const HomePage: React.FC = () => {
     fetchFeaturedContent();
     fetchTopRatedContent();
     fetchDynamicGames();
+    fetchBookSeries();
   }, []);
   
   // Fetch dynamic games from backend
@@ -461,6 +465,17 @@ const HomePage: React.FC = () => {
       setTopRatedPlaylists(topPlaylists);
     } catch (error) {
       console.error('❌ Error fetching top-rated content:', error);
+    }
+  };
+
+  // Fetch book series
+  const fetchBookSeries = async () => {
+    try {
+      const data = await ApiService.getBookSeries();
+      console.log('📚 Book series loaded:', data.length);
+      setBookSeries(data);
+    } catch (error) {
+      console.error('❌ Error fetching book series:', error);
     }
   };
 
@@ -918,6 +933,62 @@ const HomePage: React.FC = () => {
               }} 
             />
           </>
+        )}
+
+        {/* Book Series Section */}
+        {bookSeries.length > 0 && (
+          <section className="mt-6">
+            <SectionTitle 
+              title="Book Series" 
+              icon="📚"
+              color="#9C27B0"
+            />
+            <div className="w-screen overflow-x-auto no-scrollbar pb-4 -mx-4">
+              <div className="flex space-x-3 px-4">
+                {bookSeries.map((series) => (
+                  <div 
+                    key={series._id} 
+                    className="relative flex-shrink-0 w-[42vw] md:w-[30vw] lg:w-[23vw] max-w-[200px] cursor-pointer"
+                    onClick={() => navigate(`/book-series/${series._id}`)}
+                  >
+                    <div className="bg-white/10 backdrop-blur-sm rounded-2xl overflow-hidden shadow-lg border-2 border-white/20 hover:shadow-2xl hover:scale-105 transition-all">
+                      <div className="aspect-square bg-gradient-to-br from-purple-500 to-indigo-600 relative overflow-hidden">
+                        {series.coverImage ? (
+                          <img 
+                            src={series.coverImage} 
+                            alt={series.title} 
+                            className="w-full h-full object-cover"
+                          />
+                        ) : (
+                          <div className="w-full h-full flex items-center justify-center">
+                            <span className="text-6xl">📚</span>
+                          </div>
+                        )}
+                        {/* Books count badge */}
+                        <div className="absolute bottom-2 left-2 bg-black/60 backdrop-blur-sm text-white text-xs font-bold px-2 py-1 rounded-md">
+                          {series.books?.length || 0} books
+                        </div>
+                        {/* Premium badge */}
+                        {series.isMembersOnly && (
+                          <div className="absolute top-2 right-2 bg-gradient-to-r from-[#FFD700] to-[#FFA500] text-[#5c2e0b] text-[10px] font-bold px-2 py-1 rounded-full">
+                            👑 PREMIUM
+                          </div>
+                        )}
+                      </div>
+                      <div className="p-2">
+                        <h3 className="text-white text-sm font-bold mb-0.5 truncate font-display">
+                          {series.title}
+                        </h3>
+                        {series.author && (
+                          <p className="text-white/70 text-xs truncate">{series.author}</p>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </section>
         )}
 
         {/* Daily Tasks & IQ Games Section - Portrait Thumbnail Carousel Style */}

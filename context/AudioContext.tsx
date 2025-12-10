@@ -593,9 +593,12 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
                     if (!playlistAudioRef.current) return;
                     
                     try {
+                        // Save current position before any operations
+                        const savedPosition = playlistAudioRef.current.currentTime;
+                        
                         // If audio element needs reloading (e.g., after iOS suspension)
                         if (playlistAudioRef.current.readyState < 2 && playlistAudioRef.current.src) {
-                            console.log('🎵 Audio needs reload before playing');
+                            console.log('🎵 Audio needs reload before playing, saving position:', savedPosition);
                             playlistAudioRef.current.load();
                             // Wait for it to be ready
                             await new Promise<void>((resolve) => {
@@ -607,10 +610,15 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
                                 // Timeout fallback
                                 setTimeout(resolve, 2000);
                             });
+                            // Restore position after reload
+                            if (savedPosition > 0 && playlistAudioRef.current) {
+                                playlistAudioRef.current.currentTime = savedPosition;
+                                console.log('🎵 Restored position after reload:', savedPosition);
+                            }
                         }
                         
                         await playlistAudioRef.current.play();
-                        console.log('🎵 Play successful');
+                        console.log('🎵 Play successful at position:', playlistAudioRef.current?.currentTime);
                     } catch (e: any) {
                         console.error('🔇 Playlist play error:', e.name, e.message);
                         
@@ -719,15 +727,34 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
             // Directly try to play the audio element first
             if (playlistAudioRef.current) {
                 try {
+                    // Save current position before any operations
+                    const savedPosition = playlistAudioRef.current.currentTime;
+                    console.log('📱 Saved position:', savedPosition);
+                    
                     // If audio was suspended, we may need to reload
                     if (playlistAudioRef.current.readyState < 2) {
                         console.log('📱 Audio needs reload, readyState:', playlistAudioRef.current.readyState);
                         playlistAudioRef.current.load();
+                        // Wait for audio to be ready
+                        await new Promise<void>((resolve) => {
+                            const onCanPlay = () => {
+                                playlistAudioRef.current?.removeEventListener('canplay', onCanPlay);
+                                resolve();
+                            };
+                            playlistAudioRef.current?.addEventListener('canplay', onCanPlay);
+                            // Timeout fallback
+                            setTimeout(resolve, 1000);
+                        });
+                        // Restore position after reload
+                        if (savedPosition > 0 && playlistAudioRef.current) {
+                            playlistAudioRef.current.currentTime = savedPosition;
+                            console.log('📱 Restored position after reload:', savedPosition);
+                        }
                     }
                     
                     await playlistAudioRef.current.play();
                     setIsPlaying(true);
-                    console.log('📱 Media Session: play successful');
+                    console.log('📱 Media Session: play successful at position:', playlistAudioRef.current.currentTime);
                 } catch (e: any) {
                     console.error('📱 Media Session: play failed:', e.name, e.message);
                     // Try again after a short delay

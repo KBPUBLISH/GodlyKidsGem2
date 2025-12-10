@@ -499,6 +499,62 @@ export const ApiService = {
     }
   },
 
+  // Get all published book series
+  getBookSeries: async (): Promise<any[]> => {
+    try {
+      const baseUrl = getApiBaseUrl();
+      const response = await fetchWithTimeout(`${baseUrl}book-series`, {
+        method: 'GET',
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        return Array.isArray(data) ? data : [];
+      }
+      return [];
+    } catch (error) {
+      console.warn("Failed to fetch book series:", error);
+      return [];
+    }
+  },
+
+  // Get featured book series
+  getFeaturedBookSeries: async (): Promise<any[]> => {
+    try {
+      const baseUrl = getApiBaseUrl();
+      const response = await fetchWithTimeout(`${baseUrl}book-series/featured`, {
+        method: 'GET',
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        return Array.isArray(data) ? data : [];
+      }
+      return [];
+    } catch (error) {
+      console.warn("Failed to fetch featured book series:", error);
+      return [];
+    }
+  },
+
+  // Get a single book series by ID
+  getBookSeriesById: async (id: string): Promise<any | null> => {
+    try {
+      const baseUrl = getApiBaseUrl();
+      const response = await fetchWithTimeout(`${baseUrl}book-series/${id}`, {
+        method: 'GET',
+      });
+
+      if (response.ok) {
+        return await response.json();
+      }
+      return null;
+    } catch (error) {
+      console.warn("Failed to fetch book series:", error);
+      return null;
+    }
+  },
+
   login: async (provider: 'apple' | 'google' | 'email', credentials?: { email?: string; password?: string }): Promise<{ success: boolean; token?: string; user?: any; error?: string }> => {
     try {
       const baseUrl = getApiBaseUrl();

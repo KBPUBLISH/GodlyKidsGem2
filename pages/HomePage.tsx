@@ -12,7 +12,6 @@ import DailyRewardModal from '../components/features/DailyRewardModal';
 import ChallengeGameModal from '../components/features/ChallengeGameModal';
 import StrengthGameModal from '../components/features/StrengthGameModal';
 import PrayerGameModal from '../components/features/PrayerGameModal';
-import WelcomeOnboardingModal from '../components/features/WelcomeOnboardingModal';
 import { Key, Brain, Dumbbell, Heart, Video, Lock, Check, Play, CheckCircle, Clock, Coins } from 'lucide-react';
 import { ApiService } from '../services/apiService';
 import { 
@@ -94,19 +93,10 @@ const HomePage: React.FC = () => {
   const [selectedDayIndex, setSelectedDayIndex] = useState<number>(getSelectedDay());
   const todayIndex = getTodayIndex();
   
-  // Welcome onboarding state - shows once ever for new users (persisted in localStorage)
-  const [showOnboarding, setShowOnboarding] = useState(() => {
-    const hasCompletedOnboarding = localStorage.getItem('godlykids_onboarding_complete');
-    return !hasCompletedOnboarding;
-  });
-
   // Welcome video state - plays once per app session when returning to home
-  // Also triggers after onboarding completes for first-time users
   const [showWelcomeVideo, setShowWelcomeVideo] = useState(() => {
-    // Only show video if onboarding is already complete AND video hasn't shown this session
-    const hasCompletedOnboarding = localStorage.getItem('godlykids_onboarding_complete');
     const hasShownThisSession = sessionStorage.getItem('godlykids_welcome_shown');
-    return hasCompletedOnboarding && !hasShownThisSession;
+    return !hasShownThisSession;
   });
   const welcomeVideoRef = useRef<HTMLVideoElement>(null);
   
@@ -358,14 +348,6 @@ const HomePage: React.FC = () => {
     navigate(`/lesson/${lesson._id}`);
   };
 
-  // Handle onboarding complete - mark as done and trigger welcome video
-  const handleOnboardingComplete = () => {
-    localStorage.setItem('godlykids_onboarding_complete', 'true');
-    setShowOnboarding(false);
-    // Trigger the welcome video after onboarding
-    setShowWelcomeVideo(true);
-  };
-
   // Handle welcome video end - mark as shown and hide video
   const handleWelcomeVideoEnd = () => {
     sessionStorage.setItem('godlykids_welcome_shown', 'true');
@@ -595,12 +577,6 @@ const HomePage: React.FC = () => {
       <PrayerGameModal
         isOpen={showPrayerGame}
         onClose={() => setShowPrayerGame(false)}
-      />
-
-      {/* Welcome Onboarding - Shows once for new users */}
-      <WelcomeOnboardingModal
-        isOpen={showOnboarding}
-        onComplete={handleOnboardingComplete}
       />
 
       <div className="px-4 pt-28 space-y-2 pb-52">

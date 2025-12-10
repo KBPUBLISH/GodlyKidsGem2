@@ -274,33 +274,36 @@ export const RevenueCatService = {
         
         let resolved = false;
         let pollCount = 0;
-        const maxPolls = 60; // 1 minute max wait, then try restore as fallback
-        const minWaitBeforeCheck = 3; // Wait at least 3 seconds before checking
+        const maxPolls = 30; // 30 seconds max wait (reduced from 60)
+        const minWaitBeforeCheck = 1; // Just 1 second to let Apple sheet appear
         
-        purchasePollInterval = setInterval(async () => {
+        // Poll faster initially (every 500ms for first 15 seconds), then slower
+        const getPollInterval = () => pollCount < 30 ? 500 : 1000;
+        
+        const doPoll = async () => {
           pollCount++;
+          const elapsedSeconds = pollCount * 0.5; // Approximate seconds (500ms intervals initially)
           
-          // Don't check anything for the first few seconds - let Apple sheet appear
-          if (pollCount < minWaitBeforeCheck) {
+          // Don't check for the first second - let Apple sheet appear
+          if (elapsedSeconds < minWaitBeforeCheck) {
             if (pollCount === 1) {
-              console.log('⏳ Waiting for Apple payment sheet to appear...');
+              console.log('⏳ Apple payment sheet appearing...');
             }
+            schedulePoll();
             return;
           }
           
           // Check if already resolved by event listener
           if (purchaseResolve !== resolve) {
-            // Another resolution happened, stop polling
             cleanupPurchaseState();
             return;
           }
           
-          // After initial wait, start checking for confirmation
-          // Check localStorage (in case webhook or other mechanism sets it)
+          // Check localStorage first (fastest)
           const localPremium = localStorage.getItem('godlykids_premium') === 'true';
           if (localPremium && !resolved) {
             resolved = true;
-            console.log('✅ Premium detected in localStorage after', pollCount, 'seconds');
+            console.log('✅ Premium detected in localStorage after', elapsedSeconds.toFixed(1), 'seconds');
             cleanupPurchaseState();
             window.dispatchEvent(new CustomEvent('revenuecat:premiumChanged', { detail: { isPremium: true } }));
             resolve({ success: true });
@@ -315,7 +318,7 @@ export const RevenueCatService = {
             
             if (data.isPremium && !resolved) {
               resolved = true;
-              console.log('✅ Premium confirmed by backend webhook after', pollCount, 'seconds');
+              console.log('✅ Premium confirmed by backend webhook after', elapsedSeconds.toFixed(1), 'seconds');
               localStorage.setItem('godlykids_premium', 'true');
               cleanupPurchaseState();
               window.dispatchEvent(new CustomEvent('revenuecat:premiumChanged', { detail: { isPremium: true } }));
@@ -324,19 +327,19 @@ export const RevenueCatService = {
               return;
             }
             
-            // Log progress every 10 seconds
-            if (pollCount % 10 === 0) {
-              console.log(`⏳ Still waiting for payment confirmation... (${pollCount}s)`);
+            // Log progress every 5 seconds
+            if (Math.floor(elapsedSeconds) % 5 === 0 && elapsedSeconds > 1) {
+              console.log(`⏳ Waiting for payment confirmation... (${elapsedSeconds.toFixed(0)}s)`);
             }
           } catch (error) {
             // Network error - just continue polling
-            if (pollCount % 10 === 0) {
-              console.log(`⚠️ Backend check failed, continuing to poll...`);
+            if (Math.floor(elapsedSeconds) % 5 === 0) {
+              console.log(`⚠️ Backend check failed, continuing...`);
             }
           }
           
-          // After timeout, just check localStorage one more time
-          if (pollCount >= maxPolls && !resolved) {
+          // Timeout after maxPolls (30 seconds)
+          if (elapsedSeconds >= maxPolls && !resolved) {
             resolved = true;
             cleanupPurchaseState();
             console.log('⏱️ Polling timeout after', maxPolls, 'seconds');
@@ -351,15 +354,28 @@ export const RevenueCatService = {
               return;
             }
             
-            // Not premium - tell user to tap Restore manually
-            console.log('⚠️ Payment confirmation timeout - user should manually restore');
+            // Not premium yet - tell user it's still processing
+            console.log('⚠️ Payment still processing - user may need to wait or restore');
             resolve({ 
               success: false, 
-              error: 'Payment is processing. If you completed the payment, please tap "Restore Purchases".' 
+              error: 'Payment is processing. If you completed the payment, please wait a moment or tap "Restore Purchases".' 
             });
             purchaseResolve = null;
+            return;
           }
-        }, 1000);
+          
+          // Schedule next poll
+          schedulePoll();
+        };
+        
+        // Schedule a poll with variable interval (faster at first)
+        const schedulePoll = () => {
+          const interval = pollCount < 30 ? 500 : 1000; // 500ms for first 15s, then 1s
+          purchasePollInterval = setTimeout(doPoll, interval) as unknown as ReturnType<typeof setInterval>;
+        };
+        
+        // Start polling
+        schedulePoll();
       });
     }
 

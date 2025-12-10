@@ -1014,12 +1014,31 @@ const OnboardingPage: React.FC = () => {
         // when it received webhook confirmation
         subscribe();
         setSubscribedDuringOnboarding(true);
+        setIsPurchasing(false);
         
         // NOW navigate to home - payment is confirmed
         navigate('/home');
       } else {
         // Purchase was cancelled or failed
         console.log('❌ Purchase failed or cancelled:', result.error);
+        
+        // Check if this is a "still processing" message vs actual cancellation
+        const isProcessing = result.error?.includes('processing') || result.error?.includes('Restore');
+        
+        if (isProcessing) {
+          // Payment might still be processing - check one more time
+          const isPremium = localStorage.getItem('godlykids_premium') === 'true';
+          if (isPremium) {
+            console.log('✅ Premium found after timeout - proceeding!');
+            playSuccess();
+            subscribe();
+            setSubscribedDuringOnboarding(true);
+            setIsPurchasing(false);
+            navigate('/home');
+            return;
+          }
+        }
+        
         setPurchaseError(result.error || 'Purchase was cancelled. Please try again.');
         setIsPurchasing(false);
       }
@@ -1455,6 +1474,42 @@ const OnboardingPage: React.FC = () => {
             onSuccess={handleFamilyGateSuccess} 
         />
 
+        {/* Full-screen Purchase Processing Overlay */}
+        {isPurchasing && (
+          <div className="fixed inset-0 z-[100] bg-black/80 backdrop-blur-sm flex flex-col items-center justify-center">
+            <div className="bg-gradient-to-b from-[#2a1810] to-[#1a0f08] rounded-3xl p-8 mx-6 max-w-sm w-full border-2 border-[#8B4513] shadow-2xl">
+              {/* Animated Loader */}
+              <div className="flex justify-center mb-6">
+                <div className="relative">
+                  <div className="w-20 h-20 border-4 border-[#FFD700]/30 rounded-full"></div>
+                  <div className="absolute top-0 left-0 w-20 h-20 border-4 border-transparent border-t-[#FFD700] rounded-full animate-spin"></div>
+                  <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-3xl">
+                    💳
+                  </div>
+                </div>
+              </div>
+              
+              {/* Text */}
+              <h3 className="text-[#FFD700] font-display font-bold text-xl text-center mb-2">
+                Processing Payment
+              </h3>
+              <p className="text-white/70 text-center text-sm mb-4">
+                Please complete your purchase in the Apple payment sheet...
+              </p>
+              
+              {/* Progress indicator */}
+              <div className="flex justify-center gap-1 mb-4">
+                <div className="w-2 h-2 bg-[#FFD700] rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></div>
+                <div className="w-2 h-2 bg-[#FFD700] rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></div>
+                <div className="w-2 h-2 bg-[#FFD700] rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></div>
+              </div>
+              
+              <p className="text-white/50 text-center text-xs">
+                Do not close this screen
+              </p>
+            </div>
+          </div>
+        )}
 
       </div>
     </div>

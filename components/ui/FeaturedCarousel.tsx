@@ -303,8 +303,8 @@ const FeaturedCarousel: React.FC<FeaturedCarouselProps> = ({ books, onBookClick 
             <div className="absolute inset-0 bg-[radial-gradient(circle,transparent_40%,rgba(0,0,0,0.6)_100%)]"></div>
 
             {/* Tap to Read/Listen text above cover */}
-            <div className="relative z-20 mb-3">
-              <p className="text-white font-display font-bold text-lg md:text-xl drop-shadow-lg">
+            <div className="relative z-20 mb-2 px-4">
+              <p className="text-white font-display font-bold text-sm sm:text-base md:text-lg drop-shadow-lg text-center whitespace-nowrap">
                 {itemIsPlaylist ? '🎧 Tap to listen' : '📖 Tap to read'}
               </p>
             </div>

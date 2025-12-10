@@ -27,6 +27,7 @@ import VideoLessonDemo from './pages/VideoLessonDemo';
 import GameWebViewPage from './pages/GameWebViewPage';
 import MiniPlayer from './components/audio/MiniPlayer';
 import BottomNavigation from './components/layout/BottomNavigation';
+import ErrorBoundary from './components/ErrorBoundary';
 import { BooksProvider } from './context/BooksContext';
 import { UserProvider } from './context/UserContext';
 import { AudioProvider } from './context/AudioContext';
@@ -207,47 +208,49 @@ const App: React.FC = () => {
   }, []);
 
   return (
-    <LanguageProvider>
-    <AudioProvider>
-      <UserProvider>
-        <SubscriptionProvider>
-          <BooksProvider>
-            <HashRouter>
-            <Layout>
-              <Routes>
-                <Route path="/" element={<LandingPage />} />
-                <Route path="/signin" element={<SignInPage />} />
-                <Route path="/sign-in" element={<SignInPage />} />
-                <Route path="/reset-password" element={<ResetPasswordPage />} />
-                <Route path="/onboarding" element={<OnboardingPage />} />
-                <Route path="/home" element={<HomePage />} />
-                <Route path="/listen" element={<ListenPage />} />
-                <Route path="/read" element={<ReadPage />} />
-                <Route path="/library" element={<LibraryPage />} />
-                <Route path="/book/:id" element={<BookDetailPage />} />
-                <Route path="/read/:bookId" element={<BookReaderPage />} />
-                <Route path="/player/:bookId/:chapterId" element={<AudioPlayerPage />} />
-                <Route path="/audio" element={<AudioPage />} />
-                <Route path="/audio/playlist/:playlistId" element={<PlaylistDetailPage />} />
-                <Route path="/audio/playlist/:playlistId/play/:itemIndex" element={<PlaylistPlayerPage />} />
-                <Route path="/book-series/:seriesId" element={<BookSeriesDetailPage />} />
-                <Route path="/lessons" element={<LessonsPage />} />
-                <Route path="/lesson/:lessonId" element={<LessonPlayerPage />} />
-                <Route path="/profile" element={<ProfileSelectionPage />} />
-                <Route path="/create-profile" element={<CreateProfilePage />} />
-                <Route path="/edit-profile" element={<EditProfilePage />} />
-                <Route path="/paywall" element={<PaywallPage />} />
-                <Route path="/settings" element={<SettingsPage />} />
-                <Route path="/demo/video-lesson" element={<VideoLessonDemo />} />
-                <Route path="/game" element={<GameWebViewPage />} />
-              </Routes>
-            </Layout>
-          </HashRouter>
-          </BooksProvider>
-        </SubscriptionProvider>
-      </UserProvider>
-    </AudioProvider>
-    </LanguageProvider>
+    <ErrorBoundary>
+      <LanguageProvider>
+      <AudioProvider>
+        <UserProvider>
+          <SubscriptionProvider>
+            <BooksProvider>
+              <HashRouter>
+              <Layout>
+                <Routes>
+                  <Route path="/" element={<LandingPage />} />
+                  <Route path="/signin" element={<SignInPage />} />
+                  <Route path="/sign-in" element={<SignInPage />} />
+                  <Route path="/reset-password" element={<ResetPasswordPage />} />
+                  <Route path="/onboarding" element={<OnboardingPage />} />
+                  <Route path="/home" element={<HomePage />} />
+                  <Route path="/listen" element={<ListenPage />} />
+                  <Route path="/read" element={<ReadPage />} />
+                  <Route path="/library" element={<LibraryPage />} />
+                  <Route path="/book/:id" element={<BookDetailPage />} />
+                  <Route path="/read/:bookId" element={<BookReaderPage />} />
+                  <Route path="/player/:bookId/:chapterId" element={<AudioPlayerPage />} />
+                  <Route path="/audio" element={<AudioPage />} />
+                  <Route path="/audio/playlist/:playlistId" element={<PlaylistDetailPage />} />
+                  <Route path="/audio/playlist/:playlistId/play/:itemIndex" element={<PlaylistPlayerPage />} />
+                  <Route path="/book-series/:seriesId" element={<BookSeriesDetailPage />} />
+                  <Route path="/lessons" element={<LessonsPage />} />
+                  <Route path="/lesson/:lessonId" element={<LessonPlayerPage />} />
+                  <Route path="/profile" element={<ProfileSelectionPage />} />
+                  <Route path="/create-profile" element={<CreateProfilePage />} />
+                  <Route path="/edit-profile" element={<EditProfilePage />} />
+                  <Route path="/paywall" element={<PaywallPage />} />
+                  <Route path="/settings" element={<SettingsPage />} />
+                  <Route path="/demo/video-lesson" element={<VideoLessonDemo />} />
+                  <Route path="/game" element={<GameWebViewPage />} />
+                </Routes>
+              </Layout>
+            </HashRouter>
+            </BooksProvider>
+          </SubscriptionProvider>
+        </UserProvider>
+      </AudioProvider>
+      </LanguageProvider>
+    </ErrorBoundary>
   );
 };
 

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Star, Heart, Sparkles } from 'lucide-react';
+import { Heart } from 'lucide-react';
 import { Capacitor } from '@capacitor/core';
 
 interface ReviewPromptModalProps {
@@ -56,7 +56,7 @@ const ReviewPromptModal: React.FC<ReviewPromptModalProps> = ({ isOpen, onReviewS
       setTimeout(() => {
         setShowThankYou(false);
         onReviewSubmitted();
-      }, 2000);
+      }, 1500);
       
     } catch (error) {
       console.error('🌟 Error requesting review:', error);
@@ -70,96 +70,51 @@ const ReviewPromptModal: React.FC<ReviewPromptModalProps> = ({ isOpen, onReviewS
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-[9999] flex items-center justify-center">
+    <div className="fixed inset-0 z-[10000] flex items-center justify-center p-6">
       {/* Backdrop - No click to close */}
-      <div className="absolute inset-0 bg-black/80 backdrop-blur-sm" />
+      <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" />
       
-      {/* Modal Content */}
-      <div className="relative bg-gradient-to-b from-[#5c2e0b] to-[#3E1F07] rounded-3xl p-6 mx-4 max-w-sm w-full border-4 border-[#FFD700] shadow-2xl animate-in zoom-in-95 duration-300">
+      {/* Simple Modal Content */}
+      <div className="relative bg-gradient-to-b from-[#5c2e0b] to-[#3E1F07] rounded-2xl p-6 mx-4 max-w-xs w-full border-2 border-[#8B4513] shadow-2xl animate-in zoom-in-95 duration-200">
         
-        {/* Decorative top stars */}
-        <div className="absolute -top-6 left-1/2 -translate-x-1/2">
-          <div className="flex gap-1">
-            {[...Array(5)].map((_, i) => (
-              <Star 
-                key={i} 
-                className="w-8 h-8 text-[#FFD700] animate-pulse" 
-                fill="#FFD700"
-                style={{ animationDelay: `${i * 0.1}s` }}
-              />
-            ))}
-          </div>
-        </div>
-
         {showThankYou ? (
           /* Thank You State */
-          <div className="text-center py-8">
-            <div className="w-20 h-20 mx-auto mb-4 rounded-full bg-gradient-to-br from-[#FFD700] to-[#FFA500] flex items-center justify-center animate-bounce">
-              <Heart className="w-10 h-10 text-[#5c2e0b]" fill="#5c2e0b" />
+          <div className="text-center py-4">
+            <div className="w-16 h-16 mx-auto mb-3 rounded-full bg-gradient-to-br from-[#FFD700] to-[#FFA500] flex items-center justify-center">
+              <Heart className="w-8 h-8 text-[#5c2e0b]" fill="#5c2e0b" />
             </div>
-            <h2 className="text-2xl font-display font-bold text-[#FFD700] mb-2">
+            <h2 className="text-xl font-display font-bold text-[#FFD700] mb-1">
               Thank You! 💛
             </h2>
             <p className="text-[#eecaa0] text-sm">
-              Your support means the world to us!
+              Your support means everything!
             </p>
           </div>
         ) : (
-          /* Review Request State */
-          <>
-            {/* Character/Icon */}
-            <div className="w-24 h-24 mx-auto mt-4 mb-4 rounded-full bg-gradient-to-br from-[#FFD700] to-[#FFA500] flex items-center justify-center shadow-lg border-4 border-[#f3e5ab]">
-              <Sparkles className="w-12 h-12 text-[#5c2e0b]" />
-            </div>
+          /* Simple Review Request */
+          <div className="text-center">
+            {/* Simple emoji icon */}
+            <div className="text-5xl mb-3">💛</div>
 
             {/* Title */}
-            <h2 className="text-2xl font-display font-bold text-center text-[#FFD700] mb-2">
+            <h2 className="text-xl font-display font-bold text-white mb-2">
               Enjoying Godly Kids?
             </h2>
 
             {/* Message */}
-            <p className="text-center text-[#eecaa0] text-sm mb-2">
-              We'd love to hear from you! 🙏
-            </p>
-            <p className="text-center text-[#d4b896] text-xs mb-6">
-              Your review helps other Christian families discover faith-building content for their kids.
+            <p className="text-[#d4b896] text-sm mb-5">
+              Your review helps other families discover us!
             </p>
 
-            {/* Stars Display */}
-            <div className="flex justify-center gap-2 mb-6">
-              {[...Array(5)].map((_, i) => (
-                <Star 
-                  key={i} 
-                  className="w-10 h-10 text-[#FFD700] transition-transform hover:scale-110" 
-                  fill="#FFD700"
-                />
-              ))}
-            </div>
-
-            {/* Review Button - The ONLY way to exit */}
+            {/* Simple Review Button */}
             <button
               onClick={handleLeaveReview}
               disabled={isSubmitting}
-              className="w-full py-4 bg-gradient-to-b from-[#FFD700] to-[#FFA500] text-[#3E1F07] font-display font-bold text-lg rounded-2xl shadow-lg border-b-4 border-[#B8860B] transition-all active:scale-95 active:border-b-0 disabled:opacity-70 flex items-center justify-center gap-2"
+              className="w-full py-3.5 bg-gradient-to-b from-[#FFD700] to-[#FFA500] text-[#3E1F07] font-display font-bold text-base rounded-xl shadow-lg border-b-4 border-[#B8860B] transition-all active:scale-95 active:border-b-0 disabled:opacity-70"
             >
-              {isSubmitting ? (
-                <>
-                  <div className="w-5 h-5 border-2 border-[#3E1F07] border-t-transparent rounded-full animate-spin" />
-                  Opening...
-                </>
-              ) : (
-                <>
-                  <Star className="w-5 h-5" fill="#3E1F07" />
-                  Leave a Review
-                </>
-              )}
+              {isSubmitting ? 'Opening...' : 'Leave a Review'}
             </button>
-
-            {/* Subtle encouragement */}
-            <p className="text-center text-[#8B7355] text-[10px] mt-4">
-              It only takes a moment and helps us grow! ✨
-            </p>
-          </>
+          </div>
         )}
       </div>
     </div>

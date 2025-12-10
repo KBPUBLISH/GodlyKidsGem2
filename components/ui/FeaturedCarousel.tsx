@@ -36,24 +36,41 @@ const PageFlipPreview: React.FC<{
   const cycleCompleteRef = useRef(false);
 
   // All images: cover + first 2 pages (3 total for ~3 second cycle)
-  const allImages = [coverUrl, ...pages.slice(0, 2)];
+  const allImages = pagesLoaded && pages.length > 0 
+    ? [coverUrl, ...pages.slice(0, 2)] 
+    : [coverUrl];
+  
+  console.log('📖 allImages constructed:', allImages.length, 'pages:', pages.length);
   
   // Fetch first 2 pages of the book (just background images, no text)
   useEffect(() => {
     const fetchPages = async () => {
       try {
+        console.log('📖 Fetching pages for featured book:', bookId);
         const bookPages = await ApiService.getBookPages(bookId);
+        console.log('📖 Got pages:', bookPages?.length, bookPages);
+        
         if (bookPages && bookPages.length > 0) {
           // Get first 2 pages' background images only
+          // Check multiple possible field names
           const pageImages = bookPages
             .slice(0, 2)
-            .map((p: any) => p.backgroundImage)
+            .map((p: any) => {
+              const img = p.backgroundImage || p.background || p.imageUrl || p.image;
+              console.log('📖 Page image:', img);
+              return img;
+            })
             .filter(Boolean);
+          
+          console.log('📖 Final page images:', pageImages);
           setPages(pageImages);
+          setPagesLoaded(true);
+        } else {
+          console.log('📖 No pages found for book');
           setPagesLoaded(true);
         }
       } catch (error) {
-        console.log('Could not fetch pages for preview:', bookId);
+        console.log('📖 Could not fetch pages for preview:', bookId, error);
         setPagesLoaded(true); // Mark as loaded even on error
       }
     };
@@ -73,28 +90,37 @@ const PageFlipPreview: React.FC<{
 
   // Auto-flip animation - 1 second per image
   useEffect(() => {
+    console.log('📖 Flip effect - isActive:', isActive, 'pagesLoaded:', pagesLoaded, 'allImages:', allImages.length);
+    
     if (!isActive || !pagesLoaded) return;
     
     const totalImages = allImages.length;
+    console.log('📖 Total images for flip:', totalImages);
+    
     if (totalImages <= 1) {
       // No pages to flip, just wait and advance
+      console.log('📖 Only 1 image, waiting 3s then advancing');
       const timeout = setTimeout(() => {
         onCycleComplete();
       }, 3000);
       return () => clearTimeout(timeout);
     }
     
+    console.log('📖 Starting flip interval for', totalImages, 'images');
     const interval = setInterval(() => {
+      console.log('📖 Flipping! Current index:', currentImageIndex);
       setIsFlipping(true);
       
       // After flip animation, change image
       setTimeout(() => {
         setCurrentImageIndex((prev) => {
           const next = prev + 1;
+          console.log('📖 Advancing from', prev, 'to', next);
           if (next >= totalImages) {
             // Cycle complete - trigger carousel advance
             if (!cycleCompleteRef.current) {
               cycleCompleteRef.current = true;
+              console.log('📖 Cycle complete, advancing carousel');
               setTimeout(() => onCycleComplete(), 500);
             }
             return 0; // Reset to cover

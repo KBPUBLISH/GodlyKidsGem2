@@ -258,13 +258,6 @@ const FeaturedCarousel: React.FC<FeaturedCarouselProps> = ({ books, onBookClick 
             {/* Vignette / Shadow Overlay */}
             <div className="absolute inset-0 bg-[radial-gradient(circle,transparent_40%,rgba(0,0,0,0.6)_100%)]"></div>
 
-            {/* NEW! Badge - Above the book on wood background */}
-            <div className="relative z-20 mb-3">
-              <div className="bg-gradient-to-r from-[#FFD700] to-[#FFA500] text-[#3E1F07] font-display font-extrabold text-sm md:text-base px-5 py-1.5 rounded-full shadow-lg border-2 border-white/30 animate-pulse">
-                ✨ NEW! ✨
-              </div>
-            </div>
-
             {/* Content Container */}
             <div className="relative z-10 transform transition-transform active:scale-95 duration-200 px-4">
               {/* Cover - Aspect Square */}

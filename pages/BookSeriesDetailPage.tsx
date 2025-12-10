@@ -6,11 +6,122 @@ import { favoritesService } from '../services/favoritesService';
 import { useLanguage } from '../context/LanguageContext';
 import { useUser } from '../context/UserContext';
 
+// Predefined color palettes for fallback (warm, cool, vibrant variations)
+const FALLBACK_PALETTES = [
+    { primary: '#2d1b4e', secondary: '#4a2c7a', accent: '#9b59b6' }, // Purple
+    { primary: '#1a3a52', secondary: '#2c5a7c', accent: '#3498db' }, // Blue
+    { primary: '#2d4a3e', secondary: '#3d6b56', accent: '#27ae60' }, // Green
+    { primary: '#5d2a2a', secondary: '#8b3d3d', accent: '#e74c3c' }, // Red
+    { primary: '#4a3728', secondary: '#6b4f3a', accent: '#e67e22' }, // Orange
+    { primary: '#3d3d29', secondary: '#5a5a3d', accent: '#f1c40f' }, // Gold
+    { primary: '#2a2a4a', secondary: '#3d3d6b', accent: '#9b59b6' }, // Indigo
+    { primary: '#4a2a3d', secondary: '#6b3d56', accent: '#e91e63' }, // Pink
+];
+
+// Get a consistent fallback palette based on the image URL
+const getFallbackPalette = (imgSrc: string) => {
+    let hash = 0;
+    for (let i = 0; i < imgSrc.length; i++) {
+        hash = ((hash << 5) - hash) + imgSrc.charCodeAt(i);
+        hash = hash & hash;
+    }
+    const index = Math.abs(hash) % FALLBACK_PALETTES.length;
+    return FALLBACK_PALETTES[index];
+};
+
+// Helper function to extract dominant colors from an image
+const extractColors = (imgSrc: string): Promise<{ primary: string; secondary: string; accent: string }> => {
+    return new Promise((resolve) => {
+        const fallback = getFallbackPalette(imgSrc);
+        
+        const img = new Image();
+        img.crossOrigin = 'Anonymous';
+        
+        const timeout = setTimeout(() => {
+            resolve(fallback);
+        }, 2000);
+        
+        img.onload = () => {
+            clearTimeout(timeout);
+            try {
+                const canvas = document.createElement('canvas');
+                const ctx = canvas.getContext('2d');
+                if (!ctx) {
+                    resolve(fallback);
+                    return;
+                }
+                
+                const size = 50;
+                canvas.width = size;
+                canvas.height = size;
+                
+                try {
+                    ctx.drawImage(img, 0, 0, size, size);
+                    const imageData = ctx.getImageData(0, 0, size, size).data;
+                    const colorCounts: { [key: string]: number } = {};
+                    
+                    for (let i = 0; i < imageData.length; i += 16) {
+                        const r = imageData[i];
+                        const g = imageData[i + 1];
+                        const b = imageData[i + 2];
+                        
+                        const qr = Math.round(r / 32) * 32;
+                        const qg = Math.round(g / 32) * 32;
+                        const qb = Math.round(b / 32) * 32;
+                        
+                        const brightness = (qr + qg + qb) / 3;
+                        if (brightness < 30 || brightness > 225) continue;
+                        
+                        const key = `${qr},${qg},${qb}`;
+                        colorCounts[key] = (colorCounts[key] || 0) + 1;
+                    }
+                    
+                    const sortedColors = Object.entries(colorCounts)
+                        .sort((a, b) => b[1] - a[1])
+                        .slice(0, 5);
+                    
+                    if (sortedColors.length >= 2) {
+                        const [r1, g1, b1] = sortedColors[0][0].split(',').map(Number);
+                        const [r2, g2, b2] = sortedColors[1][0].split(',').map(Number);
+                        
+                        const darken = (c: number) => Math.max(0, Math.floor(c * 0.6));
+                        const primary = `rgb(${darken(r1)}, ${darken(g1)}, ${darken(b1)})`;
+                        
+                        const lighten = (c: number) => Math.min(255, Math.floor(c * 0.8));
+                        const secondary = `rgb(${lighten(r1)}, ${lighten(g1)}, ${lighten(b1)})`;
+                        
+                        const accent = `rgb(${r2}, ${g2}, ${b2})`;
+                        
+                        resolve({ primary, secondary, accent });
+                    } else {
+                        resolve(fallback);
+                    }
+                } catch (e) {
+                    resolve(fallback);
+                }
+            } catch (e) {
+                resolve(fallback);
+            }
+        };
+        
+        img.onerror = () => {
+            clearTimeout(timeout);
+            resolve(fallback);
+        };
+        
+        img.src = imgSrc;
+    });
+};
+
 interface BookInSeries {
     book: {
         _id: string;
         title: string;
         coverImage?: string;
+        coverUrl?: string;
+        files?: {
+            coverImage?: string;
+        };
         author?: string;
         description?: string;
         minAge?: number;
@@ -20,6 +131,11 @@ interface BookInSeries {
     };
     order: number;
 }
+
+// Helper to get book cover URL from various possible fields
+const getBookCoverUrl = (book: BookInSeries['book']): string | null => {
+    return book.coverImage || book.coverUrl || book.files?.coverImage || null;
+};
 
 interface BookSeries {
     _id: string;
@@ -50,6 +166,7 @@ const BookSeriesDetailPage: React.FC = () => {
     const [isLiked, setIsLiked] = useState(false);
     const [translatedTitle, setTranslatedTitle] = useState<string>('');
     const [translatedDescription, setTranslatedDescription] = useState<string>('');
+    const [colors, setColors] = useState({ primary: '#2d1b4e', secondary: '#4a2c7a', accent: '#9b59b6' });
 
     useEffect(() => {
         fetchSeries();
@@ -74,6 +191,13 @@ const BookSeriesDetailPage: React.FC = () => {
             setTranslatedDescription(series.description || '');
         }
     }, [series, currentLanguage, translateText]);
+
+    // Extract colors from cover image
+    useEffect(() => {
+        if (series?.coverImage) {
+            extractColors(series.coverImage).then(setColors);
+        }
+    }, [series?.coverImage]);
 
     const fetchSeries = async () => {
         try {
@@ -150,16 +274,30 @@ const BookSeriesDetailPage: React.FC = () => {
     }
 
     return (
-        <div className="h-full overflow-y-auto no-scrollbar pb-32">
-            {/* Header Section with Cover */}
+        <div className="h-full overflow-y-auto no-scrollbar pb-32 bg-gradient-to-b from-[#87CEEB] to-[#5DADE2]">
+            {/* Header Section with Cover - z-20 to overlap sky background */}
             <div 
-                className="relative w-full overflow-hidden"
+                className="relative w-full overflow-hidden z-20"
                 style={{
-                    background: 'linear-gradient(180deg, #2d1b4e 0%, #4a2c7a 50%, #6b4a9e 100%)',
+                    background: `linear-gradient(180deg, ${colors.primary} 0%, ${colors.secondary} 50%, ${colors.accent} 100%)`,
                     borderBottomLeftRadius: '40px',
                     borderBottomRightRadius: '40px',
+                    boxShadow: '0 10px 30px rgba(0,0,0,0.3)',
                 }}
             >
+                {/* Blurred cover background overlay for depth */}
+                {series.coverImage && (
+                    <div 
+                        className="absolute inset-0 z-0 opacity-20"
+                        style={{
+                            backgroundImage: `url(${series.coverImage})`,
+                            backgroundSize: 'cover',
+                            backgroundPosition: 'center',
+                            filter: 'blur(30px)',
+                        }}
+                    />
+                )}
+
                 {/* Back Button */}
                 <button 
                     onClick={() => navigate(-1)}
@@ -244,12 +382,13 @@ const BookSeriesDetailPage: React.FC = () => {
                 </div>
             </div>
 
-            {/* CONTENT SECTION - Learning Path Style */}
+            {/* CONTENT SECTION - Learning Path Style - z-10 so header overlaps */}
             <div 
-                className="w-full pb-32 relative -mt-4"
+                className="w-full pb-32 relative -mt-8 z-10"
                 style={{
                     background: 'linear-gradient(180deg, #87CEEB 0%, #B0E0E6 30%, #87CEEB 60%, #5DADE2 100%)',
-                    minHeight: `${Math.max(400, series.books.length * 180 + 200)}px`
+                    minHeight: `${Math.max(400, series.books.length * 180 + 200)}px`,
+                    paddingTop: '40px',
                 }}
             >
                 {/* Sky/Cloud decorations */}
@@ -364,9 +503,9 @@ const BookSeriesDetailPage: React.FC = () => {
                                                     ? 'border-gray-500/50 grayscale opacity-60' 
                                                     : 'border-[#FFD700] ring-4 ring-[#FFD700]/30'
                                         }`}>
-                                            {book.coverImage ? (
+                                            {getBookCoverUrl(book) ? (
                                                 <img
-                                                    src={book.coverImage}
+                                                    src={getBookCoverUrl(book)!}
                                                     alt={book.title}
                                                     className="w-full h-full object-cover"
                                                 />

@@ -229,11 +229,49 @@ const PlaylistPlayerPage: React.FC = () => {
         setIsSaved(newSavedState);
     };
 
-    const handleSeek = (e: React.MouseEvent<HTMLDivElement>) => {
-        const rect = e.currentTarget.getBoundingClientRect();
-        const x = e.clientX - rect.left;
-        const percentage = x / rect.width;
+    const [isDragging, setIsDragging] = useState(false);
+
+    const seekToPosition = (clientX: number, element: HTMLDivElement) => {
+        const rect = element.getBoundingClientRect();
+        const x = clientX - rect.left;
+        const percentage = Math.max(0, Math.min(1, x / rect.width));
         seek(percentage * duration);
+    };
+
+    const handleSeek = (e: React.MouseEvent<HTMLDivElement>) => {
+        seekToPosition(e.clientX, e.currentTarget);
+    };
+
+    const handleProgressMouseDown = (e: React.MouseEvent<HTMLDivElement>) => {
+        setIsDragging(true);
+        seekToPosition(e.clientX, e.currentTarget);
+    };
+
+    const handleProgressMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
+        if (isDragging) {
+            seekToPosition(e.clientX, e.currentTarget);
+        }
+    };
+
+    const handleProgressMouseUp = () => {
+        setIsDragging(false);
+    };
+
+    const handleProgressTouchStart = (e: React.TouchEvent<HTMLDivElement>) => {
+        setIsDragging(true);
+        const touch = e.touches[0];
+        seekToPosition(touch.clientX, e.currentTarget);
+    };
+
+    const handleProgressTouchMove = (e: React.TouchEvent<HTMLDivElement>) => {
+        if (isDragging && e.touches.length > 0) {
+            const touch = e.touches[0];
+            seekToPosition(touch.clientX, e.currentTarget);
+        }
+    };
+
+    const handleProgressTouchEnd = () => {
+        setIsDragging(false);
     };
 
     const formatTime = (seconds: number) => {
@@ -478,17 +516,24 @@ const PlaylistPlayerPage: React.FC = () => {
                     }}
                 ></div>
 
-                {/* Progress Slider */}
+                {/* Progress Slider - Draggable */}
                 <div
                     onClick={handleSeek}
-                    className="relative w-full h-3 bg-[#3E1F07] rounded-full mb-3 mt-4 z-40 group cursor-pointer shadow-inner"
+                    onMouseDown={handleProgressMouseDown}
+                    onMouseMove={handleProgressMouseMove}
+                    onMouseUp={handleProgressMouseUp}
+                    onMouseLeave={handleProgressMouseUp}
+                    onTouchStart={handleProgressTouchStart}
+                    onTouchMove={handleProgressTouchMove}
+                    onTouchEnd={handleProgressTouchEnd}
+                    className={`relative w-full h-3 bg-[#3E1F07] rounded-full mb-3 mt-4 z-40 group shadow-inner ${isDragging ? 'cursor-grabbing' : 'cursor-pointer'}`}
                 >
                     <div
                         className="absolute top-0 left-0 h-full bg-[#FFD700] rounded-full"
                         style={{ width: `${progress}%` }}
                     ></div>
                     <div
-                        className="absolute top-1/2 -translate-y-1/2 h-6 w-6 bg-[#f3e5ab] border-4 border-[#8B4513] rounded-full shadow-lg transform transition-transform group-hover:scale-110"
+                        className={`absolute top-1/2 -translate-y-1/2 h-6 w-6 bg-[#f3e5ab] border-4 border-[#8B4513] rounded-full shadow-lg transition-transform ${isDragging ? 'scale-125' : 'group-hover:scale-110'}`}
                         style={{ left: `${progress}%`, transform: 'translate(-50%, -50%)' }}
                     ></div>
                 </div>

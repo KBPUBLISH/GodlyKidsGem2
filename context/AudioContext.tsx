@@ -473,13 +473,39 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
                 console.log('🎵 Playlist audio is now playing!');
                 // Sync state - audio is actually playing
                 setIsPlaying(true);
+                
+                // Ensure media session is set when playback starts/resumes
+                if ('mediaSession' in navigator) {
+                    navigator.mediaSession.playbackState = 'playing';
+                }
             });
             
-            // Pause event - sync state when audio is paused (e.g., by iOS interruption)
+            // Pause event - sync state when audio is paused (e.g., by iOS interruption or lock screen)
             playlistAudioRef.current.addEventListener('pause', () => {
-                console.log('🎵 Playlist audio paused (event)');
-                // Only sync if we think we should be playing
-                // This handles iOS audio interruptions
+                console.log('🎵 Playlist audio paused (event) - refreshing media session');
+                setIsPlaying(false);
+                
+                // CRITICAL: Immediately refresh media session metadata when paused from native widget
+                // iOS tends to drop the lock screen widget if we don't do this
+                if ('mediaSession' in navigator) {
+                    // Re-set playback state
+                    navigator.mediaSession.playbackState = 'paused';
+                    
+                    // Schedule a metadata refresh to prevent iOS from dropping the widget
+                    setTimeout(() => {
+                        if ('mediaSession' in navigator && navigator.mediaSession.metadata) {
+                            console.log('📱 Refreshing metadata after pause');
+                            // Re-set the same metadata to keep the widget alive
+                            const currentMetadata = navigator.mediaSession.metadata;
+                            navigator.mediaSession.metadata = new MediaMetadata({
+                                title: currentMetadata.title,
+                                artist: currentMetadata.artist,
+                                album: currentMetadata.album,
+                                artwork: currentMetadata.artwork as MediaImage[]
+                            });
+                        }
+                    }, 100);
+                }
             });
             
             // Handle stalled/waiting states (buffering issues)
@@ -657,20 +683,29 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     
     // Periodically refresh metadata while paused to prevent iOS from dropping it
     useEffect(() => {
-        if (!currentPlaylist || isPlaying) return;
+        if (!currentPlaylist) return;
         
-        // Refresh metadata every 20 seconds while paused to keep lock screen alive
-        const refreshInterval = setInterval(() => {
-            if (currentPlaylist && !isPlaying) {
-                console.log('📱 Refreshing media session metadata (paused)');
-                setMediaSessionMetadata();
-                if ('mediaSession' in navigator) {
-                    navigator.mediaSession.playbackState = 'paused';
-                }
+        if (!isPlaying) {
+            // Immediately refresh when paused
+            console.log('📱 Audio paused - setting up metadata refresh');
+            setMediaSessionMetadata();
+            if ('mediaSession' in navigator) {
+                navigator.mediaSession.playbackState = 'paused';
             }
-        }, 20000);
-        
-        return () => clearInterval(refreshInterval);
+            
+            // Refresh metadata every 10 seconds while paused to keep lock screen alive
+            const refreshInterval = setInterval(() => {
+                if (currentPlaylist && !isPlaying) {
+                    console.log('📱 Refreshing media session metadata (paused)');
+                    setMediaSessionMetadata();
+                    if ('mediaSession' in navigator) {
+                        navigator.mediaSession.playbackState = 'paused';
+                    }
+                }
+            }, 10000);
+            
+            return () => clearInterval(refreshInterval);
+        }
     }, [currentPlaylist, isPlaying, setMediaSessionMetadata]);
 
     // Set up Media Session action handlers (once on mount)

@@ -34,6 +34,9 @@ const PageFlipPreview: React.FC<{
   const [isFlipping, setIsFlipping] = useState(false);
   const [pagesLoaded, setPagesLoaded] = useState(false);
   const cycleCompleteRef = useRef(false);
+  const hasFetchedRef = useRef(false);
+
+  console.log('📖 PageFlipPreview rendered - bookId:', bookId, 'isActive:', isActive);
 
   // All images: cover + first 2 pages (3 total for ~3 second cycle)
   const allImages = pagesLoaded && pages.length > 0 
@@ -41,14 +44,28 @@ const PageFlipPreview: React.FC<{
     : [coverUrl];
   
   console.log('📖 allImages constructed:', allImages.length, 'pages:', pages.length);
-  
+
   // Fetch first 2 pages of the book (just background images, no text)
   useEffect(() => {
+    console.log('📖 Fetch useEffect triggered - bookId:', bookId, 'hasFetched:', hasFetchedRef.current);
+    
+    if (!bookId) {
+      console.log('📖 No bookId, skipping fetch');
+      setPagesLoaded(true);
+      return;
+    }
+    
+    if (hasFetchedRef.current) {
+      console.log('📖 Already fetched, skipping');
+      return;
+    }
+    
     const fetchPages = async () => {
+      hasFetchedRef.current = true;
       try {
-        console.log('📖 Fetching pages for featured book:', bookId);
+        console.log('📖 FETCHING pages for featured book:', bookId);
         const bookPages = await ApiService.getBookPages(bookId);
-        console.log('📖 Got pages:', bookPages?.length, bookPages);
+        console.log('📖 Got pages:', bookPages?.length, bookPages?.[0]);
         
         if (bookPages && bookPages.length > 0) {
           // Get first 2 pages' background images only
@@ -57,27 +74,24 @@ const PageFlipPreview: React.FC<{
             .slice(0, 2)
             .map((p: any) => {
               const img = p.backgroundImage || p.background || p.imageUrl || p.image;
-              console.log('📖 Page image:', img);
+              console.log('📖 Page has backgroundImage:', !!p.backgroundImage, 'image:', !!p.image);
               return img;
             })
             .filter(Boolean);
           
-          console.log('📖 Final page images:', pageImages);
+          console.log('📖 Final page images:', pageImages.length, pageImages);
           setPages(pageImages);
-          setPagesLoaded(true);
         } else {
-          console.log('📖 No pages found for book');
-          setPagesLoaded(true);
+          console.log('📖 No pages array returned');
         }
+        setPagesLoaded(true);
       } catch (error) {
-        console.log('📖 Could not fetch pages for preview:', bookId, error);
-        setPagesLoaded(true); // Mark as loaded even on error
+        console.log('📖 Error fetching pages:', bookId, error);
+        setPagesLoaded(true);
       }
     };
     
-    if (bookId) {
-      fetchPages();
-    }
+    fetchPages();
   }, [bookId]);
 
   // Reset when becoming active

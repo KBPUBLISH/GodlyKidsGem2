@@ -11,6 +11,29 @@ import HomePage from './pages/HomePage';
 if (!(window as any).__GK_APP_BOOTED__) {
   (window as any).__GK_APP_BOOTED__ = true;
   console.log('🚀 APP BOOT (WebView created)', new Date().toISOString());
+  
+  // GLOBAL ERROR HANDLERS - catch ALL JS errors, not just React ones
+  window.onerror = (message, source, lineno, colno, error) => {
+    console.error('💥 GLOBAL ERROR:', { message, source, lineno, colno, error: error?.stack });
+    // Prevent white screen - show alert so user knows what happened
+    try {
+      const errorDiv = document.createElement('div');
+      errorDiv.innerHTML = `
+        <div style="position:fixed;inset:0;background:#1a3a52;display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:99999;padding:20px;text-align:center;">
+          <div style="font-size:48px;margin-bottom:16px;">🌊</div>
+          <h1 style="color:white;font-size:20px;font-weight:bold;margin-bottom:8px;">Oops! Something went wrong</h1>
+          <p style="color:rgba(255,255,255,0.7);margin-bottom:16px;max-width:280px;">The app hit a wave. Tap to refresh.</p>
+          <button onclick="location.reload()" style="background:linear-gradient(to right,#FFD700,#FFA500);color:#3E1F07;font-weight:bold;padding:12px 32px;border-radius:9999px;border:none;">Refresh</button>
+        </div>
+      `;
+      document.body.appendChild(errorDiv);
+    } catch {}
+    return true; // Prevent default error handling
+  };
+  
+  window.onunhandledrejection = (event) => {
+    console.error('💥 UNHANDLED PROMISE REJECTION:', event.reason);
+  };
 } else {
   console.log('♻️ APP module re-evaluated but already booted');
 }
@@ -36,6 +59,7 @@ import GameWebViewPage from './pages/GameWebViewPage';
 import MiniPlayer from './components/audio/MiniPlayer';
 import BottomNavigation from './components/layout/BottomNavigation';
 import ErrorBoundary from './components/ErrorBoundary';
+import DebugConsole from './components/DebugConsole';
 import { BooksProvider } from './context/BooksContext';
 import { UserProvider } from './context/UserContext';
 import { AudioProvider } from './context/AudioContext';
@@ -217,6 +241,7 @@ const App: React.FC = () => {
 
   return (
     <ErrorBoundary>
+      <DebugConsole />
       <LanguageProvider>
       <AudioProvider>
         <UserProvider>

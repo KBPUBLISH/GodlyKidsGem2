@@ -105,6 +105,19 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
     // --- Refs ---
     const audioRef = useRef<HTMLAudioElement | null>(null);
+    const sfxContextRef = useRef<AudioContext | null>(null);
+
+    // Get or create SFX AudioContext (reuse for all sound effects)
+    const getSfxContext = useCallback(() => {
+        if (!sfxContextRef.current || sfxContextRef.current.state === 'closed') {
+            sfxContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
+        }
+        // Resume if suspended (happens after user interaction is required)
+        if (sfxContextRef.current.state === 'suspended') {
+            sfxContextRef.current.resume();
+        }
+        return sfxContextRef.current;
+    }, []);
 
     // Create audio element once on mount
     useEffect(() => {
@@ -184,9 +197,14 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         } else {
             audio.pause();
         }
+        
+        // Update media session playback state
+        if ('mediaSession' in navigator) {
+            navigator.mediaSession.playbackState = isPlaying ? 'playing' : 'paused';
+        }
     }, [isPlaying]);
 
-    // Simple Media Session setup
+    // Media Session setup with cover image
     const updateMediaSession = useCallback(() => {
         if (!('mediaSession' in navigator) || !currentPlaylist) return;
 
@@ -194,20 +212,41 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         if (!track) return;
 
         const coverImage = track.coverImage || currentPlaylist.coverImage;
+        console.log('📱 Setting Media Session:', track.title, 'Cover:', coverImage);
 
         try {
+            // Build artwork array with multiple sizes for iOS
+            const artwork: MediaImage[] = [];
+            if (coverImage) {
+                artwork.push(
+                    { src: coverImage, sizes: '96x96', type: 'image/png' },
+                    { src: coverImage, sizes: '128x128', type: 'image/png' },
+                    { src: coverImage, sizes: '192x192', type: 'image/png' },
+                    { src: coverImage, sizes: '256x256', type: 'image/png' },
+                    { src: coverImage, sizes: '384x384', type: 'image/png' },
+                    { src: coverImage, sizes: '512x512', type: 'image/png' }
+                );
+            }
+
             navigator.mediaSession.metadata = new MediaMetadata({
                 title: track.title,
                 artist: track.author || currentPlaylist.author || 'GodlyKids',
                 album: currentPlaylist.title,
-                artwork: coverImage ? [
-                    { src: coverImage, sizes: '512x512', type: 'image/jpeg' }
-                ] : []
+                artwork
             });
+            
+            navigator.mediaSession.playbackState = isPlaying ? 'playing' : 'paused';
         } catch (e) {
-            // Ignore errors
+            console.log('Media Session error:', e);
         }
-    }, [currentPlaylist, currentTrackIndex]);
+    }, [currentPlaylist, currentTrackIndex, isPlaying]);
+
+    // Update media session when track changes
+    useEffect(() => {
+        if (currentPlaylist) {
+            updateMediaSession();
+        }
+    }, [currentPlaylist, currentTrackIndex, updateMediaSession]);
 
     // Set up Media Session action handlers once
     useEffect(() => {
@@ -268,21 +307,24 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     }, [currentPlaylist, currentTrackIndex]);
 
     // --- Simple SFX using Web Audio API ---
-    const playTone = useCallback((freq: number, duration: number) => {
+    const playTone = useCallback((freq: number, dur: number, vol: number = 0.15) => {
         if (!sfxEnabled) return;
         try {
-            const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
+            const ctx = getSfxContext();
             const osc = ctx.createOscillator();
             const gain = ctx.createGain();
-            osc.frequency.value = freq;
-            gain.gain.setValueAtTime(0.1, ctx.currentTime);
-            gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + duration);
+            osc.type = 'sine';
+            osc.frequency.setValueAtTime(freq, ctx.currentTime);
+            gain.gain.setValueAtTime(vol, ctx.currentTime);
+            gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + dur);
             osc.connect(gain);
             gain.connect(ctx.destination);
-            osc.start();
-            osc.stop(ctx.currentTime + duration);
-        } catch { }
-    }, [sfxEnabled]);
+            osc.start(ctx.currentTime);
+            osc.stop(ctx.currentTime + dur);
+        } catch (e) {
+            console.log('SFX error:', e);
+        }
+    }, [sfxEnabled, getSfxContext]);
 
     const playClick = useCallback(() => playTone(400, 0.1), [playTone]);
     const playBack = useCallback(() => playTone(200, 0.15), [playTone]);

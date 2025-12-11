@@ -747,78 +747,95 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
             console.log('📱 Current position:', audio.currentTime, 'Saved position:', savedPosition, 'ReadyState:', audio.readyState);
             
             try {
-                // First, try a simple play without reloading
-                if (audio.readyState >= 2) {
-                    // Audio is ready, just play
-                    console.log('📱 Audio ready, attempting play...');
+                // STRATEGY: Try play() first - it often works even with low readyState
+                // Only use load() as fallback - NEVER reset audio.src as it clears position
+                
+                // If audio is ready OR already has data, just play
+                if (audio.readyState >= 2 || audio.readyState === 1) {
+                    console.log('📱 Audio has data (readyState:', audio.readyState, '), playing at:', audio.currentTime);
+                    
+                    // Restore position if current position is 0 but we have saved position
+                    if (audio.currentTime < 1 && savedPosition > 1) {
+                        console.log('📱 Position was reset, restoring to:', savedPosition);
+                        audio.currentTime = savedPosition;
+                        await new Promise(r => setTimeout(r, 50));
+                    }
+                    
                     await audio.play();
                     setIsPlaying(true);
-                    console.log('📱 Play successful');
+                    console.log('📱 Play successful at:', audio.currentTime);
                     return;
                 }
                 
-                // Audio needs to be reloaded (iOS suspended it)
-                console.log('📱 Audio suspended, need to reload. ReadyState:', audio.readyState);
+                // Try direct play first - sometimes works even with readyState 0
+                console.log('📱 Low readyState:', audio.readyState, '- trying play() anyway...');
+                try {
+                    // Restore position first if needed
+                    if (audio.currentTime < 1 && savedPosition > 1) {
+                        audio.currentTime = savedPosition;
+                    }
+                    await audio.play();
+                    setIsPlaying(true);
+                    console.log('📱 Direct play worked!');
+                    return;
+                } catch (directPlayError: any) {
+                    console.log('📱 Direct play failed:', directPlayError.name, '- using load() recovery');
+                }
                 
-                // Save the src to reload
-                const currentSrc = audio.src;
-                if (!currentSrc) {
-                    console.log('📱 No audio src');
+                // Use load() to recover - DON'T reset audio.src as it clears position!
+                if (!audio.src) {
+                    console.log('📱 No audio src, cannot recover');
                     return;
                 }
                 
-                // Reload by setting src again (more reliable than load())
-                audio.src = currentSrc;
+                // Call load() to trigger reload from current src
+                audio.load();
                 
                 // Wait for audio to be ready
-                await new Promise<void>((resolve, reject) => {
+                await new Promise<void>((resolve) => {
                     const timeout = setTimeout(() => {
-                        console.log('📱 Canplay timeout, attempting anyway');
+                        console.log('📱 Canplay timeout after load()');
                         resolve();
                     }, 3000);
                     
                     const onCanPlay = () => {
                         clearTimeout(timeout);
                         audio.removeEventListener('canplay', onCanPlay);
-                        audio.removeEventListener('error', onError);
-                        console.log('📱 Audio canplay received');
+                        console.log('📱 Audio ready after load()');
                         resolve();
                     };
                     
-                    const onError = (e: Event) => {
-                        clearTimeout(timeout);
-                        audio.removeEventListener('canplay', onCanPlay);
-                        audio.removeEventListener('error', onError);
-                        console.error('📱 Audio load error');
-                        reject(e);
-                    };
-                    
                     audio.addEventListener('canplay', onCanPlay);
-                    audio.addEventListener('error', onError);
                 });
                 
-                // Restore position BEFORE playing
+                // Restore position AFTER load() - load() resets to 0
                 if (savedPosition > 0) {
-                    console.log('📱 Restoring position to:', savedPosition);
+                    console.log('📱 Restoring position after load():', savedPosition);
                     audio.currentTime = savedPosition;
-                    // Small delay to ensure seek completes
-                    await new Promise(r => setTimeout(r, 50));
+                    // Longer delay for iOS to process the seek
+                    await new Promise(r => setTimeout(r, 150));
                 }
                 
                 // Now play
                 await audio.play();
                 setIsPlaying(true);
-                console.log('📱 Play successful at position:', audio.currentTime);
+                console.log('📱 Play successful after load() at:', audio.currentTime);
                 
             } catch (e: any) {
                 console.error('📱 Media Session play failed:', e.name, e.message);
                 
-                // Last resort: try play without any fancy logic
+                // Last resort: restore position and try play
                 try {
+                    if (savedPosition > 0 && audio.currentTime < 1) {
+                        audio.currentTime = savedPosition;
+                        await new Promise(r => setTimeout(r, 100));
+                    }
                     await audio.play();
                     setIsPlaying(true);
+                    console.log('📱 Last resort play worked at:', audio.currentTime);
                 } catch (e2) {
                     console.error('📱 Final play attempt failed');
+                    setIsPlaying(false);
                 }
             }
         });

@@ -59,7 +59,6 @@ import GameWebViewPage from './pages/GameWebViewPage';
 import MiniPlayer from './components/audio/MiniPlayer';
 import BottomNavigation from './components/layout/BottomNavigation';
 import ErrorBoundary from './components/ErrorBoundary';
-import DebugConsole from './components/DebugConsole';
 import { BooksProvider } from './context/BooksContext';
 import { UserProvider } from './context/UserContext';
 import { AudioProvider } from './context/AudioContext';
@@ -241,7 +240,6 @@ const App: React.FC = () => {
 
   return (
     <ErrorBoundary>
-      <DebugConsole />
       <LanguageProvider>
       <AudioProvider>
         <UserProvider>

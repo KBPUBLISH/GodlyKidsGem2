@@ -44,43 +44,54 @@ const SimplePagePreview: React.FC<{
   isActive: boolean;
 }> = ({ bookId, coverUrl, isActive }) => {
   const [pageUrl, setPageUrl] = useState<string | null>(null);
+  const [pageLoaded, setPageLoaded] = useState(false);
   const [showPage, setShowPage] = useState(false);
-  const fetchedRef = useRef(false);
 
-  // Fetch ONE page only when this item becomes active
+  // Load from cache each time this becomes active; fetch only if missing.
+  // Important: when inactive, release the page image to reduce iOS WebView memory pressure.
   useEffect(() => {
-    if (!isActive || fetchedRef.current) return;
-    fetchedRef.current = true;
+    let cancelled = false;
 
-    // Check cache first (instant, no API call)
+    if (!isActive) {
+      setShowPage(false);
+      setPageLoaded(false);
+      setPageUrl(null);
+      return;
+    }
+
     const cached = getPageFromCache(bookId);
     if (cached) {
+      setPageLoaded(false);
       setPageUrl(cached);
       return;
     }
 
-    // Fetch from API (only happens once per book, cached for 24h)
     ApiService.getBookPages(bookId)
       .then(pages => {
         const url = pages?.[0]?.files?.background?.url || pages?.[0]?.backgroundUrl;
-        if (url) {
+        if (!cancelled && url) {
           setPageToCache(bookId, url);
+          setPageLoaded(false);
           setPageUrl(url);
         }
       })
       .catch(() => {}); // Silent fail - just show cover
+
+    return () => {
+      cancelled = true;
+    };
   }, [bookId, isActive]);
 
-  // Simple animation: show cover, then crossfade to page after 2s
+  // Crossfade only AFTER the page is loaded (avoid flicker / decode stalls)
   useEffect(() => {
-    if (!isActive || !pageUrl) {
+    if (!isActive || !pageUrl || !pageLoaded) {
       setShowPage(false);
       return;
     }
 
-    const timer = setTimeout(() => setShowPage(true), 2000);
+    const timer = setTimeout(() => setShowPage(true), 800);
     return () => clearTimeout(timer);
-  }, [isActive, pageUrl]);
+  }, [isActive, pageUrl, pageLoaded]);
 
   return (
     <div className="w-full h-full relative rounded-lg overflow-hidden">
@@ -89,13 +100,27 @@ const SimplePagePreview: React.FC<{
         src={coverUrl}
         alt="Book cover"
         className="absolute inset-0 w-full h-full object-cover"
+        loading="lazy"
+        decoding="async"
       />
       
       {/* Page image (fades in on top) */}
-      {pageUrl && (
+      {isActive && pageUrl && (
         <img
           src={pageUrl}
           alt="Book page"
+          loading="eager"
+          decoding="async"
+          onLoad={() => setPageLoaded(true)}
+          onError={() => {
+            // Recover: drop bad cache + fall back to cover
+            try {
+              localStorage.removeItem(`gk_page_${bookId}`);
+            } catch {}
+            setShowPage(false);
+            setPageLoaded(false);
+            setPageUrl(null);
+          }}
           className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-500 ${
             showPage ? 'opacity-100' : 'opacity-0'
           }`}
@@ -103,7 +128,7 @@ const SimplePagePreview: React.FC<{
       )}
       
       {/* Page edge effect when showing page */}
-      {showPage && pageUrl && (
+      {isActive && showPage && pageUrl && (
         <div className="absolute left-0 top-2 bottom-2 w-1 bg-gradient-to-r from-black/40 to-transparent" />
       )}
       
@@ -211,11 +236,21 @@ const FeaturedCarousel: React.FC<FeaturedCarouselProps> = ({ books, onBookClick 
                       className="w-full h-full object-cover rounded-lg border-2 border-white/10"
                     />
                   ) : (
-                    <SimplePagePreview
-                      bookId={itemId}
-                      coverUrl={coverUrl || '/assets/images/placeholder-book.png'}
-                      isActive={isActive}
-                    />
+                    isActive ? (
+                      <SimplePagePreview
+                        bookId={itemId}
+                        coverUrl={coverUrl || '/assets/images/placeholder-book.png'}
+                        isActive={isActive}
+                      />
+                    ) : (
+                      <img
+                        src={coverUrl || '/assets/images/placeholder-book.png'}
+                        alt={item.title}
+                        className="w-full h-full object-cover rounded-lg border-2 border-white/10"
+                        loading="lazy"
+                        decoding="async"
+                      />
+                    )
                   )}
 
                   {/* Action Button */}

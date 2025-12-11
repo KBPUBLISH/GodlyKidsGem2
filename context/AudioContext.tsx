@@ -1112,6 +1112,7 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         if (playlistAudioRef.current) {
             playlistAudioRef.current.pause();
             playlistAudioRef.current.currentTime = 0;
+            playlistAudioRef.current.src = ''; // Clear src to fully stop iOS from showing phantom widget
         }
         // Clear media session metadata when player is explicitly closed
         if ('mediaSession' in navigator) {

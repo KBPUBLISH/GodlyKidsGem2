@@ -138,9 +138,18 @@ const HomePage: React.FC = () => {
   const scrollRef = useRef<HTMLDivElement>(null);
   const lastScrollY = useRef(0);
   
+  // Diagnostic: Log every time HomePage mounts
+  useEffect(() => {
+    const mountId = Math.random().toString(36).slice(2, 8);
+    console.log(`🏠 HomePage MOUNT [${mountId}]`, new Date().toISOString());
+    return () => {
+      console.log(`🏠 HomePage UNMOUNT [${mountId}]`, new Date().toISOString());
+    };
+  }, []);
+  
   // Track last fetch time to prevent excessive refetching (debounce)
   // Use sessionStorage so it persists across component remounts
-  const FETCH_DEBOUNCE_MS = 60000; // Don't refetch within 60 seconds (1 minute)
+  const FETCH_DEBOUNCE_MS = 120000; // Don't refetch within 2 minutes
 
   // Check if we should show the review prompt (immediately on home page)
   useEffect(() => {

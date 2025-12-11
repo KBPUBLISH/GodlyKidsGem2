@@ -6,6 +6,14 @@ import SignInPage from './pages/SignInPage';
 import ResetPasswordPage from './pages/ResetPasswordPage';
 import OnboardingPage from './pages/OnboardingPage';
 import HomePage from './pages/HomePage';
+
+// Diagnostic: Log when the entire app JS module is evaluated (WebView recreation)
+if (!(window as any).__GK_APP_BOOTED__) {
+  (window as any).__GK_APP_BOOTED__ = true;
+  console.log('🚀 APP BOOT (WebView created)', new Date().toISOString());
+} else {
+  console.log('♻️ APP module re-evaluated but already booted');
+}
 import ListenPage from './pages/ListenPage';
 import ReadPage from './pages/ReadPage';
 import LibraryPage from './pages/LibraryPage';

@@ -2,6 +2,33 @@ import { API_BASE_URL, MOCK_BOOKS } from '../constants';
 import { Book } from '../types';
 import { authService } from './authService';
 
+// ============================================
+// Module-level caching to prevent repeated API calls
+// even if components remount frequently
+// ============================================
+interface CacheEntry<T> {
+  data: T;
+  timestamp: number;
+}
+
+const API_CACHE: Record<string, CacheEntry<any>> = {};
+const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+
+const getCached = <T>(key: string): T | null => {
+  const entry = API_CACHE[key];
+  if (entry && Date.now() - entry.timestamp < CACHE_TTL) {
+    console.log(`📦 API Cache HIT: ${key}`);
+    return entry.data;
+  }
+  return null;
+};
+
+const setCache = <T>(key: string, data: T): void => {
+  API_CACHE[key] = { data, timestamp: Date.now() };
+};
+
+// ============================================
+
 // Get API base URL from environment or use default
 export const getApiBaseUrl = (): string => {
   // Check for environment variable (Vite uses import.meta.env)
@@ -439,6 +466,10 @@ export const ApiService = {
   },
 
   getFeaturedContent: async (): Promise<Array<Book | Playlist>> => {
+    const cacheKey = 'featured_content';
+    const cached = getCached<Array<Book | Playlist>>(cacheKey);
+    if (cached) return cached;
+
     try {
       const [featuredBooks, featuredPlaylists] = await Promise.all([
         ApiService.getFeaturedBooks(),
@@ -453,6 +484,8 @@ export const ApiService = {
 
       // Sort by featuredOrder (lower = first)
       combined.sort((a, b) => ((a as any).featuredOrder || 0) - ((b as any).featuredOrder || 0));
+      
+      setCache(cacheKey, combined);
 
       return combined;
     } catch (error) {
@@ -463,6 +496,10 @@ export const ApiService = {
 
   // Get top-rated books (15%+ likes/favorites to reads ratio)
   getTopRatedBooks: async (minRatio: number = 0.15): Promise<Book[]> => {
+    const cacheKey = `top_rated_books_${minRatio}`;
+    const cached = getCached<Book[]>(cacheKey);
+    if (cached) return cached;
+
     try {
       const baseUrl = getApiBaseUrl();
       const response = await fetchWithTimeout(`${baseUrl}books/top-rated?minRatio=${minRatio}`, {
@@ -471,7 +508,9 @@ export const ApiService = {
 
       if (response.ok) {
         const data = await response.json();
-        return transformBooks(Array.isArray(data) ? data : []);
+        const result = transformBooks(Array.isArray(data) ? data : []);
+        setCache(cacheKey, result);
+        return result;
       }
       return [];
     } catch (error) {
@@ -482,6 +521,10 @@ export const ApiService = {
 
   // Get top-rated playlists (15%+ likes/favorites to plays ratio)
   getTopRatedPlaylists: async (minRatio: number = 0.15): Promise<Playlist[]> => {
+    const cacheKey = `top_rated_playlists_${minRatio}`;
+    const cached = getCached<Playlist[]>(cacheKey);
+    if (cached) return cached;
+
     try {
       const baseUrl = getApiBaseUrl();
       const response = await fetchWithTimeout(`${baseUrl}playlists/top-rated?minRatio=${minRatio}`, {
@@ -490,7 +533,9 @@ export const ApiService = {
 
       if (response.ok) {
         const data = await response.json();
-        return Array.isArray(data) ? data : [];
+        const result = Array.isArray(data) ? data : [];
+        setCache(cacheKey, result);
+        return result;
       }
       return [];
     } catch (error) {
@@ -501,6 +546,10 @@ export const ApiService = {
 
   // Get all published book series
   getBookSeries: async (): Promise<any[]> => {
+    const cacheKey = 'book_series';
+    const cached = getCached<any[]>(cacheKey);
+    if (cached) return cached;
+
     try {
       const baseUrl = getApiBaseUrl();
       const response = await fetchWithTimeout(`${baseUrl}book-series`, {
@@ -509,7 +558,9 @@ export const ApiService = {
 
       if (response.ok) {
         const data = await response.json();
-        return Array.isArray(data) ? data : [];
+        const result = Array.isArray(data) ? data : [];
+        setCache(cacheKey, result);
+        return result;
       }
       return [];
     } catch (error) {
@@ -997,6 +1048,10 @@ export const ApiService = {
 
   // Get pages for a book
   getBookPages: async (bookId: string): Promise<any[]> => {
+    const cacheKey = `book_pages_${bookId}`;
+    const cached = getCached<any[]>(cacheKey);
+    if (cached) return cached;
+
     try {
       const baseUrl = getApiBaseUrl();
       console.log(`🔍 Fetching pages for book ID: ${bookId}`);
@@ -1008,6 +1063,7 @@ export const ApiService = {
       if (response.ok) {
         const data = await response.json();
         console.log(`✅ Pages received for book ${bookId}:`, data.length);
+        setCache(cacheKey, data);
         return data;
       }
 
@@ -1208,6 +1264,10 @@ export const ApiService = {
 
   // Get all playlists (optionally filtered by status)
   getPlaylists: async (status?: 'draft' | 'published'): Promise<any[]> => {
+    const cacheKey = `playlists_${status || 'all'}`;
+    const cached = getCached<any[]>(cacheKey);
+    if (cached) return cached;
+
     try {
       const baseUrl = getApiBaseUrl();
       const queryParam = status ? `?status=${status}` : '';
@@ -1218,10 +1278,14 @@ export const ApiService = {
       if (response.ok) {
         const data = await response.json();
         // Handle both paginated response { data: [], pagination: {} } and direct array
+        let result: any[];
         if (data.data && Array.isArray(data.data)) {
-          return data.data;
+          result = data.data;
+        } else {
+          result = Array.isArray(data) ? data : [];
         }
-        return Array.isArray(data) ? data : [];
+        setCache(cacheKey, result);
+        return result;
       }
       return [];
     } catch (error) {
@@ -1234,6 +1298,10 @@ export const ApiService = {
   // Optional type parameter: 'book' or 'audio' to filter categories
   // Optional explore parameter: true to get only categories that show on explore page
   getCategories: async (type?: 'book' | 'audio', explore?: boolean): Promise<Array<{ _id: string; name: string; description?: string; color: string; icon?: string; showOnExplore?: boolean }>> => {
+    const cacheKey = `categories_${type || 'all'}_${explore ? 'explore' : 'all'}`;
+    const cached = getCached<Array<{ _id: string; name: string; description?: string; color: string; icon?: string; showOnExplore?: boolean }>>(cacheKey);
+    if (cached) return cached;
+
     try {
       const baseUrl = getApiBaseUrl();
       console.log(`🔍 Fetching categories from API${type ? ` (type: ${type})` : ''}${explore ? ' (explore: true)' : ''}`);
@@ -1265,7 +1333,7 @@ export const ApiService = {
             if (categories.length > 0) {
               console.log(`✅ Found ${categories.length} categories${type ? ` (filtered by type: ${type})` : ''}${explore ? ' (explore page)' : ''}`);
               // Return full category objects
-              return categories.map((cat: any) => ({
+              const result = categories.map((cat: any) => ({
                 _id: cat._id || cat.id || '',
                 name: String(cat.name || cat.title || cat),
                 description: cat.description,
@@ -1273,6 +1341,8 @@ export const ApiService = {
                 icon: cat.icon,
                 showOnExplore: cat.showOnExplore || false,
               }));
+              setCache(cacheKey, result);
+              return result;
             }
           }
         } catch (error) {
@@ -1285,13 +1355,15 @@ export const ApiService = {
       const allBooks = await ApiService.getBooks();
       const uniqueCategories = [...new Set(allBooks.map(book => book.category))];
       // Return as category objects for consistency
-      return uniqueCategories
+      const fallbackResult = uniqueCategories
         .filter(cat => cat && cat !== 'Uncategorized')
         .map((name, index) => ({
           _id: `fallback-${index}`,
           name: String(name),
           color: '#6366f1',
         }));
+      setCache(cacheKey, fallbackResult);
+      return fallbackResult;
     } catch (error) {
       console.error(`❌ Failed to fetch categories:`, error);
       return [];
@@ -1400,6 +1472,10 @@ export const ApiService = {
 
   // Lessons API
   getLessons: async (): Promise<any[]> => {
+    const cacheKey = 'lessons';
+    const cached = getCached<any[]>(cacheKey);
+    if (cached) return cached;
+
     try {
       const baseUrl = getApiBaseUrl();
       console.log('📚 Fetching lessons from:', `${baseUrl}lessons?published=true`);
@@ -1413,10 +1489,14 @@ export const ApiService = {
         const data = await response.json();
         console.log('📚 Lessons API response data:', data);
         // Handle both paginated response { data: [], pagination: {} } and direct array
+        let result: any[];
         if (data.data && Array.isArray(data.data)) {
-          return data.data;
+          result = data.data;
+        } else {
+          result = Array.isArray(data) ? data : [];
         }
-        return Array.isArray(data) ? data : [];
+        setCache(cacheKey, result);
+        return result;
       }
 
       const errorText = await response.text().catch(() => 'Unknown error');
@@ -1430,6 +1510,10 @@ export const ApiService = {
 
   // Games API - Get games for Daily Tasks & IQ Games section
   getDailyTaskGames: async (): Promise<any[]> => {
+    const cacheKey = 'daily_task_games';
+    const cached = getCached<any[]>(cacheKey);
+    if (cached) return cached;
+
     try {
       const baseUrl = getApiBaseUrl();
       console.log('🎮 Fetching daily task games from:', `${baseUrl}games/daily-tasks`);
@@ -1440,7 +1524,9 @@ export const ApiService = {
       if (response.ok) {
         const data = await response.json();
         console.log('🎮 Daily task games:', data);
-        return Array.isArray(data) ? data : [];
+        const result = Array.isArray(data) ? data : [];
+        setCache(cacheKey, result);
+        return result;
       }
 
       console.warn('⚠️ Failed to fetch daily task games:', response.status);

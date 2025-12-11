@@ -47,9 +47,11 @@ const PageFlipPreview: React.FC<{
     };
   }, []);
 
-  // Fetch first 2 pages of the book (just background images)
+  // Fetch first 2 pages of the book ONLY when it becomes active
+  // This prevents loading all book pages at once which can crash older devices
   useEffect(() => {
-    if (!bookId || hasFetchedRef.current) return;
+    // Only fetch when this book is active AND we haven't fetched yet
+    if (!bookId || !isActive || hasFetchedRef.current) return;
     
     const fetchPages = async () => {
       hasFetchedRef.current = true;
@@ -82,7 +84,7 @@ const PageFlipPreview: React.FC<{
     };
     
     fetchPages();
-  }, [bookId, title]);
+  }, [bookId, title, isActive]);
 
   // Reset when becoming active
   useEffect(() => {

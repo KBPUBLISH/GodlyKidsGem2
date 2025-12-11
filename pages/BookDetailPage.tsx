@@ -14,6 +14,7 @@ import { bookCompletionService } from '../services/bookCompletionService';
 import { favoritesService } from '../services/favoritesService';
 import { libraryService } from '../services/libraryService';
 import { analyticsService } from '../services/analyticsService';
+import { pinnedColoringService } from '../services/pinnedColoringService';
 import GameWebView from '../components/features/GameWebView';
 import ChallengeGameModal from '../components/features/ChallengeGameModal';
 import StrengthGameModal from '../components/features/StrengthGameModal';
@@ -69,6 +70,7 @@ const BookDetailPage: React.FC = () => {
   const [isFavorited, setIsFavorited] = useState<boolean>(false);
   const [isInLibrary, setIsInLibrary] = useState<boolean>(false);
   const [isMembersOnly, setIsMembersOnly] = useState<boolean>(false);
+  const [pinnedDrawing, setPinnedDrawing] = useState<{ pageRef: string; pageId: string; dataUrl: string } | null>(null);
   
   // Check if book is locked (members only and user not subscribed)
   const isLocked = isMembersOnly && !isSubscribed;
@@ -148,6 +150,23 @@ const BookDetailPage: React.FC = () => {
       }
     }
   }, [id, books]);
+
+  // Load pinned coloring drawing ("fridge") for this book
+  useEffect(() => {
+    if (!id) return;
+    const pinned = pinnedColoringService.getPinned(id);
+    if (!pinned) {
+      setPinnedDrawing(null);
+      return;
+    }
+    const dataUrl = pinnedColoringService.getDrawingDataUrl(pinned.pageId);
+    if (!dataUrl) {
+      // Drawing missing; keep things clean
+      setPinnedDrawing(null);
+      return;
+    }
+    setPinnedDrawing({ pageRef: pinned.pageRef, pageId: pinned.pageId, dataUrl });
+  }, [id]);
 
   // Fetch book details including bookGames and total pages
   useEffect(() => {
@@ -667,6 +686,50 @@ const BookDetailPage: React.FC = () => {
 
         {/* Description or Playlist */}
         <div className="max-w-lg mx-auto">
+          {/* Pinned drawing ("fridge") */}
+          {pinnedDrawing && !isAudio && (
+            <div className="mb-6 bg-white rounded-2xl p-3 shadow-[0_6px_16px_rgba(0,0,0,0.12)] border-2 border-[#eecaa0]">
+              <div className="flex items-center justify-between gap-3 mb-2">
+                <div className="min-w-0">
+                  <p className="text-xs font-bold text-[#8B4513] opacity-80 uppercase tracking-wide">
+                    Your Drawing
+                  </p>
+                  <p className="text-[#3E1F07] font-display font-bold text-lg leading-tight truncate">
+                    Continue coloring
+                  </p>
+                </div>
+                <button
+                  onClick={() => {
+                    if (!id) return;
+                    navigate(`/read/${id}?coloring=${encodeURIComponent(pinnedDrawing.pageRef)}`);
+                  }}
+                  className="shrink-0 bg-[#6da34d] hover:bg-[#7db85b] text-white text-sm font-bold py-2 px-4 rounded-full shadow-[0_3px_0_#3d5c2b] active:translate-y-[3px] active:shadow-none transition-all border border-[#ffffff20]"
+                >
+                  Continue
+                </button>
+              </div>
+              <div className="w-full aspect-[16/9] rounded-xl overflow-hidden bg-[#fdf6e3] border border-[#eecaa0]">
+                <img
+                  src={pinnedDrawing.dataUrl}
+                  alt="Pinned drawing"
+                  className="w-full h-full object-cover"
+                  loading="lazy"
+                  decoding="async"
+                />
+              </div>
+              <button
+                onClick={() => {
+                  if (!id) return;
+                  pinnedColoringService.unpin(id);
+                  setPinnedDrawing(null);
+                }}
+                className="mt-3 text-xs font-bold text-[#8B4513] hover:text-[#5c2e0b] underline underline-offset-2"
+              >
+                Remove from fridge
+              </button>
+            </div>
+          )}
+
           <p className="text-[#5c2e0b] font-sans text-base leading-relaxed opacity-90 mb-8 text-center">
             {book.description || "In a world where hearts glow with living colors, a young girl discovers her gift may change the fate of kingdoms. Guided by courage, friendship, and the mysterious Pulse, she learns that even in the darkest places, hearts still beats."}
             {isAudio && <span className="block mt-2 font-bold text-[#8B4513]">`Total playback duration: 00:53:10`</span>}

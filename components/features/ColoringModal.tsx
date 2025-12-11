@@ -1,8 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
-import { X, Sparkles, Home, ShoppingBag, Star } from 'lucide-react';
+import { X, Sparkles, Home, ShoppingBag, Star, Pin, PinOff } from 'lucide-react';
 import DrawingCanvas from './DrawingCanvas';
+import { pinnedColoringService, parseColoringPageId } from '../../services/pinnedColoringService';
 interface ColoringModalProps {
     isOpen: boolean;
     onClose: () => void;
@@ -33,6 +34,14 @@ const ColoringModal: React.FC<ColoringModalProps> = ({ isOpen, onClose, backgrou
     const navigate = useNavigate();
     const [showReward, setShowReward] = useState(false);
     const [resolvedImageUrl, setResolvedImageUrl] = useState<string>('');
+    const [pinToast, setPinToast] = useState<string | null>(null);
+
+    const parsedPage = useMemo(() => parseColoringPageId(pageId), [pageId]);
+    const pinnedForBook = useMemo(() => {
+        if (!parsedPage?.bookId) return null;
+        return pinnedColoringService.getPinned(parsedPage.bookId);
+    }, [parsedPage?.bookId, showReward, isOpen]);
+    const isPinnedThisPage = !!(pinnedForBook && pageId && pinnedForBook.pageId === pageId);
 
     // Resolve the background image URL when it changes
     useEffect(() => {
@@ -52,6 +61,18 @@ const ColoringModal: React.FC<ColoringModalProps> = ({ isOpen, onClose, backgrou
     const handleComplete = () => {
         // No coins awarded for coloring - just show completion
         setShowReward(true);
+    };
+
+    const handlePinToggle = () => {
+        if (!pageId || !parsedPage?.bookId) return;
+        if (isPinnedThisPage) {
+            pinnedColoringService.unpin(parsedPage.bookId);
+            setPinToast('Removed from fridge');
+        } else {
+            const pinned = pinnedColoringService.pinFromPageId(pageId);
+            setPinToast(pinned ? 'Pinned to book!' : 'Could not pin (storage full?)');
+        }
+        window.setTimeout(() => setPinToast(null), 1500);
     };
 
     const handleHome = () => {
@@ -116,6 +137,21 @@ const ColoringModal: React.FC<ColoringModalProps> = ({ isOpen, onClose, backgrou
                             </p>
 
                             <div className="flex flex-col gap-4 w-full max-w-xs px-4 animate-in slide-in-from-bottom-8 duration-500 delay-500">
+                                {/* Pin to book ("fridge") */}
+                                {parsedPage?.bookId && pageId && (
+                                    <button
+                                        onClick={handlePinToggle}
+                                        className={`py-4 rounded-xl font-bold shadow-lg border-b-4 active:border-b-0 active:translate-y-1 transition-all flex items-center justify-center gap-2 ${
+                                            isPinnedThisPage
+                                                ? 'bg-green-600 hover:bg-green-700 border-green-800 text-white'
+                                                : 'bg-[#FFD700] hover:bg-[#FFDE4D] border-[#B8860B] text-[#5c2e0b]'
+                                        }`}
+                                    >
+                                        {isPinnedThisPage ? <PinOff size={24} /> : <Pin size={24} />}
+                                        <span>{isPinnedThisPage ? 'Unpin from Book' : 'Hang on Book Fridge'}</span>
+                                    </button>
+                                )}
+
                                 <button
                                     onClick={handleHome}
                                     className="bg-[#2196F3] hover:bg-[#1E88E5] text-white py-4 rounded-xl font-bold shadow-lg border-b-4 border-[#1565C0] active:border-b-0 active:translate-y-1 transition-all flex items-center justify-center gap-2"
@@ -132,6 +168,12 @@ const ColoringModal: React.FC<ColoringModalProps> = ({ isOpen, onClose, backgrou
                                     Go to Shop
                                 </button>
                             </div>
+
+                            {pinToast && (
+                                <div className="mt-6 px-4 py-2 rounded-full bg-white/10 text-white text-sm font-bold border border-white/20">
+                                    {pinToast}
+                                </div>
+                            )}
                         </div>
                     )}
                 </div>

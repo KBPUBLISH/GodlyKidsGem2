@@ -170,6 +170,7 @@ const BookReaderPage: React.FC = () => {
     const [coloringPages, setColoringPages] = useState<Page[]>([]);
     const [showColoringModal, setShowColoringModal] = useState(false);
     const [selectedColoringPage, setSelectedColoringPage] = useState<Page | null>(null);
+    const openedColoringFromLinkRef = useRef(false);
 
     // Page Selector State
     const [showPageSelector, setShowPageSelector] = useState(false);
@@ -637,6 +638,28 @@ const BookReaderPage: React.FC = () => {
         };
         loadClonedVoices();
     }, [bookId]);
+
+    // Deep link: /read/:bookId?coloring=<pageNumber|pageId> opens coloring modal directly
+    useEffect(() => {
+        if (openedColoringFromLinkRef.current) return;
+        if (!bookId) return;
+
+        const coloringParam = searchParams.get('coloring');
+        if (!coloringParam) return;
+        if (!coloringPages || coloringPages.length === 0) return;
+
+        const match = coloringPages.find((p: any) => {
+            const pageNum = p?.pageNumber;
+            const pageId = p?._id;
+            return String(pageNum) === String(coloringParam) || String(pageId) === String(coloringParam);
+        });
+
+        if (match) {
+            setSelectedColoringPage(match);
+            setShowColoringModal(true);
+            openedColoringFromLinkRef.current = true;
+        }
+    }, [bookId, coloringPages, searchParams]);
 
     // Close dropdown when clicking outside
     useEffect(() => {

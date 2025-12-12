@@ -154,6 +154,9 @@ const BookReaderPage: React.FC = () => {
     const preloadedBackgroundsRef = useRef<Set<string>>(new Set());
     
     const [bookMusicEnabled, setBookMusicEnabled] = useState(true); // Default to enabled
+    const [showVolumeSlider, setShowVolumeSlider] = useState(false);
+    const [musicVolume, setMusicVolume] = useState(0.20); // Default 20% volume
+    const volumeSliderTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
     // Use ref to track music enabled state for intervals/callbacks
     const bookMusicEnabledRef = useRef<boolean>(bookMusicEnabled);
@@ -385,16 +388,18 @@ const BookReaderPage: React.FC = () => {
 
                         const audio = new Audio(musicUrl);
                         audio.loop = true;
-                        audio.volume = 0.20; // 20% volume for background music
+                        audio.volume = 0.20; // Default 20% volume for background music
                         audio.preload = 'auto';
                         bookBackgroundMusicRef.current = audio;
 
                         // Start playing book music automatically when loaded
                         audio.addEventListener('canplaythrough', () => {
                             // Ensure volume is set correctly before playing
-                            audio.volume = 0.20;
+                            if (bookBackgroundMusicRef.current) {
+                                audio.volume = bookBackgroundMusicRef.current.volume || 0.20;
+                            }
                             if (bookMusicEnabledRef.current) {
-                                console.log('🎵 Book music ready - starting playback at 20% volume');
+                                console.log('🎵 Book music ready - starting playback');
                                 audio.play().catch(err => {
                                     console.warn('⚠️ Book music auto-play prevented:', err);
                                 });
@@ -2030,34 +2035,144 @@ const BookReaderPage: React.FC = () => {
                         )}
                     </div>
 
-                    {/* Background Music Toggle - Only show if book has music */}
+                    {/* Background Music Toggle with Volume Control - Only show if book has music */}
                     {hasBookMusic ? (
-                        <button
-                            onClick={(e) => {
-                                e.stopPropagation();
-                                const newState = !bookMusicEnabled;
-                                setBookMusicEnabled(newState);
-
-                                if (bookBackgroundMusicRef.current) {
-                                    if (newState) {
-                                        // Update volume when playing - 20% for background music
-                                        bookBackgroundMusicRef.current.volume = 0.20;
-                                        bookBackgroundMusicRef.current.play().catch(err => {
-                                            console.warn('Could not play book music:', err);
-                                        });
+                        <div className="relative" onClick={(e) => e.stopPropagation()}>
+                            <button
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    if (bookMusicEnabled) {
+                                        // If music is on, show/hide volume slider
+                                        setShowVolumeSlider(!showVolumeSlider);
+                                        // Auto-hide after 3 seconds
+                                        if (!showVolumeSlider) {
+                                            if (volumeSliderTimeoutRef.current) {
+                                                clearTimeout(volumeSliderTimeoutRef.current);
+                                            }
+                                            volumeSliderTimeoutRef.current = setTimeout(() => {
+                                                setShowVolumeSlider(false);
+                                            }, 3000);
+                                        }
                                     } else {
-                                        bookBackgroundMusicRef.current.pause();
+                                        // If music is off, turn it on
+                                        setBookMusicEnabled(true);
+                                        if (bookBackgroundMusicRef.current) {
+                                            bookBackgroundMusicRef.current.volume = musicVolume;
+                                            bookBackgroundMusicRef.current.play().catch(err => {
+                                                console.warn('Could not play book music:', err);
+                                            });
+                                        }
+                                    }
+                                }}
+                                onDoubleClick={(e) => {
+                                    e.stopPropagation();
+                                    // Double tap to toggle music on/off
+                                    const newState = !bookMusicEnabled;
+                                    setBookMusicEnabled(newState);
+                                    setShowVolumeSlider(false);
+                                    if (bookBackgroundMusicRef.current) {
+                                        if (newState) {
+                                            bookBackgroundMusicRef.current.volume = musicVolume;
+                                            bookBackgroundMusicRef.current.play().catch(err => {
+                                                console.warn('Could not play book music:', err);
+                                            });
+                                        } else {
+                                            bookBackgroundMusicRef.current.pause();
+                                        }
+                                    }
+                                }}
+                                className={`bg-black/50 backdrop-blur-md rounded-full p-3 hover:bg-black/70 transition-all border ${bookMusicEnabled
+                                    ? 'border-yellow-400/50 shadow-lg shadow-yellow-400/20'
+                                    : 'border-white/20'
+                                    }`}
+                                title={bookMusicEnabled ? "Tap to adjust volume, double-tap to mute" : "Enable background music"}
+                            >
+                                <Music className={`w-6 h-6 ${bookMusicEnabled ? 'text-yellow-300' : 'text-white/50'}`} />
+                            </button>
+
+                            {/* Volume Slider Dropdown */}
+                            {showVolumeSlider && bookMusicEnabled && (
+                                <div 
+                                    className="absolute top-full left-1/2 -translate-x-1/2 mt-2 bg-black/80 backdrop-blur-md rounded-xl border border-white/20 shadow-2xl p-3 z-50 animate-fade-in"
+                                    style={{
+                                        animation: 'slideDown 0.2s ease-out'
+                                    }}
+                                    onClick={(e) => e.stopPropagation()}
+                                >
+                                    {/* Vertical Volume Slider */}
+                                    <div className="flex flex-col items-center gap-2">
+                                        <div className="text-white/70 text-xs font-medium">Volume</div>
+                                        <div className="relative h-32 w-8 flex items-center justify-center">
+                                            <input
+                                                type="range"
+                                                min="0"
+                                                max="100"
+                                                value={Math.round(musicVolume * 100)}
+                                                onChange={(e) => {
+                                                    const newVolume = parseInt(e.target.value) / 100;
+                                                    setMusicVolume(newVolume);
+                                                    if (bookBackgroundMusicRef.current) {
+                                                        bookBackgroundMusicRef.current.volume = newVolume;
+                                                    }
+                                                    // Reset auto-hide timer on interaction
+                                                    if (volumeSliderTimeoutRef.current) {
+                                                        clearTimeout(volumeSliderTimeoutRef.current);
+                                                    }
+                                                    volumeSliderTimeoutRef.current = setTimeout(() => {
+                                                        setShowVolumeSlider(false);
+                                                    }, 3000);
+                                                }}
+                                                className="absolute w-32 h-2 bg-white/20 rounded-full appearance-none cursor-pointer origin-center"
+                                                style={{
+                                                    transform: 'rotate(-90deg)',
+                                                    WebkitAppearance: 'none',
+                                                    background: `linear-gradient(to right, #FFD700 0%, #FFD700 ${musicVolume * 100}%, rgba(255,255,255,0.2) ${musicVolume * 100}%, rgba(255,255,255,0.2) 100%)`,
+                                                }}
+                                            />
+                                        </div>
+                                        <div className="text-yellow-300 text-sm font-bold">{Math.round(musicVolume * 100)}%</div>
+                                        {/* Mute button */}
+                                        <button
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                setBookMusicEnabled(false);
+                                                setShowVolumeSlider(false);
+                                                if (bookBackgroundMusicRef.current) {
+                                                    bookBackgroundMusicRef.current.pause();
+                                                }
+                                            }}
+                                            className="mt-1 px-3 py-1 bg-red-500/20 hover:bg-red-500/40 text-red-300 text-xs font-medium rounded-full transition-colors"
+                                        >
+                                            Mute
+                                        </button>
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* CSS for animations */}
+                            <style>{`
+                                @keyframes slideDown {
+                                    from {
+                                        opacity: 0;
+                                        transform: translateX(-50%) translateY(-10px);
+                                    }
+                                    to {
+                                        opacity: 1;
+                                        transform: translateX(-50%) translateY(0);
                                     }
                                 }
-                            }}
-                            className={`bg-black/50 backdrop-blur-md rounded-full p-3 hover:bg-black/70 transition-all border ${bookMusicEnabled
-                                ? 'border-yellow-400/50 shadow-lg shadow-yellow-400/20'
-                                : 'border-white/20'
-                                }`}
-                            title={bookMusicEnabled ? "Disable background music" : "Enable background music"}
-                        >
-                            <Music className={`w-6 h-6 ${bookMusicEnabled ? 'text-yellow-300' : 'text-white/50'}`} />
-                        </button>
+                                input[type="range"]::-webkit-slider-thumb {
+                                    -webkit-appearance: none;
+                                    width: 20px;
+                                    height: 20px;
+                                    background: linear-gradient(135deg, #FFD700, #FFA500);
+                                    border-radius: 50%;
+                                    cursor: pointer;
+                                    box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+                                    border: 2px solid white;
+                                }
+                            `}</style>
+                        </div>
                     ) : (
                         <div className="text-xs text-white/50 px-2">
                             {/* Debug: Show why button isn't showing */}

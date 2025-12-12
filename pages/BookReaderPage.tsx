@@ -2106,8 +2106,8 @@ const BookReaderPage: React.FC = () => {
                                         </>
                                     )}
 
-                                    {/* Cloned voices (always unlocked) */}
-                                    {clonedVoices.length > 0 && (
+                                    {/* Cloned voices - Hidden until feature is ready */}
+                                    {false && clonedVoices.length > 0 && (
                                         <>
                                             {clonedVoices.map(v => (
                                                 <button
@@ -2155,23 +2155,26 @@ const BookReaderPage: React.FC = () => {
                                         </>
                                     )}
 
-                                    {/* Separator */}
-                                    {(voices.length > 0 || clonedVoices.length > 0) && (
-                                        <div className="border-t border-white/20 my-1"></div>
+                                    {/* Create Voice Option - Hidden until feature is ready */}
+                                    {false && (
+                                        <>
+                                            {/* Separator */}
+                                            {(voices.length > 0 || clonedVoices.length > 0) && (
+                                                <div className="border-t border-white/20 my-1"></div>
+                                            )}
+                                            <button
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    setShowVoiceDropdown(false);
+                                                    setShowVoiceCloningModal(true);
+                                                }}
+                                                className="w-full text-left px-4 py-2 text-sm text-[#FFD700] font-bold hover:bg-white/10 transition-colors flex items-center gap-2"
+                                            >
+                                                <Mic className="w-4 h-4" />
+                                                Create Your Voice
+                                            </button>
+                                        </>
                                     )}
-
-                                    {/* Create Voice Option */}
-                                    <button
-                                        onClick={(e) => {
-                                            e.stopPropagation();
-                                            setShowVoiceDropdown(false);
-                                            setShowVoiceCloningModal(true);
-                                        }}
-                                        className="w-full text-left px-4 py-2 text-sm text-[#FFD700] font-bold hover:bg-white/10 transition-colors flex items-center gap-2"
-                                    >
-                                        <Mic className="w-4 h-4" />
-                                        Create Your Voice
-                                    </button>
 
                                     {/* No voices message */}
                                     {voices.length === 0 && clonedVoices.length === 0 && (

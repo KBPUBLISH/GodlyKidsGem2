@@ -3,13 +3,78 @@ const router = express.Router();
 const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
+const os = require('os');
+const crypto = require('crypto');
 const { bucket } = require('../config/storage');
+const ffmpeg = require('fluent-ffmpeg');
+const ffmpegInstaller = require('@ffmpeg-installer/ffmpeg');
+
+// Configure ffmpeg binary (bundled via @ffmpeg-installer/ffmpeg)
+try {
+    if (ffmpegInstaller?.path) {
+        ffmpeg.setFfmpegPath(ffmpegInstaller.path);
+    }
+} catch (e) {
+    console.warn('⚠️ ffmpeg binary not configured:', e);
+}
 
 // Create uploads directory if it doesn't exist
 const uploadsDir = path.join(__dirname, '../../uploads');
 if (!fs.existsSync(uploadsDir)) {
     fs.mkdirSync(uploadsDir, { recursive: true });
 }
+
+// --- Audio processing helpers (volume attenuation) ---
+const clamp01 = (n) => Math.min(1, Math.max(0, n));
+
+/**
+ * Reduce (or increase) audio volume by re-encoding to mp3 using ffmpeg.
+ * Returns { buffer, mimetype, ext }.
+ * NOTE: We re-encode to mp3 for consistent playback and tooling.
+ */
+const processAudioVolumeToMp3 = async ({ inputBuffer, inputExt, volume }) => {
+    const vol = clamp01(volume);
+    if (!Number.isFinite(vol) || vol <= 0) {
+        throw new Error('Invalid volume');
+    }
+
+    // If volume is ~1.0, skip processing
+    if (Math.abs(vol - 1) < 0.0001) {
+        return { buffer: inputBuffer, mimetype: 'audio/mpeg', ext: inputExt || '.mp3', processed: false };
+    }
+
+    const tmpDir = await fs.promises.mkdtemp(path.join(os.tmpdir(), 'gk-audio-'));
+    const id = crypto.randomBytes(8).toString('hex');
+    const inPath = path.join(tmpDir, `in-${id}${inputExt || '.bin'}`);
+    const outPath = path.join(tmpDir, `out-${id}.mp3`);
+
+    try {
+        await fs.promises.writeFile(inPath, inputBuffer);
+
+        await new Promise((resolve, reject) => {
+            ffmpeg(inPath)
+                .noVideo()
+                .audioFilters([`volume=${vol}`])
+                .audioCodec('libmp3lame')
+                .outputOptions([
+                    '-q:a 4', // VBR quality (good balance)
+                    '-map_metadata -1', // strip metadata
+                ])
+                .format('mp3')
+                .on('error', (err) => reject(err))
+                .on('end', () => resolve())
+                .save(outPath);
+        });
+
+        const outBuffer = await fs.promises.readFile(outPath);
+        return { buffer: outBuffer, mimetype: 'audio/mpeg', ext: '.mp3', processed: true };
+    } finally {
+        // Best-effort cleanup
+        try { await fs.promises.unlink(inPath); } catch { }
+        try { await fs.promises.unlink(outPath); } catch { }
+        try { await fs.promises.rmdir(tmpDir); } catch { }
+    }
+};
 
 // Configure multer for memory storage
 const upload = multer({
@@ -352,6 +417,9 @@ router.post('/audio', upload.single('file'), async (req, res) => {
         }
 
         const { bookId, type } = req.query;
+        const requestedVolumeRaw = req.query.volume ?? req.body?.volume;
+        const requestedVolume = requestedVolumeRaw !== undefined ? parseFloat(String(requestedVolumeRaw)) : undefined;
+        const volume = Number.isFinite(requestedVolume) ? clamp01(requestedVolume) : undefined;
 
         // Validate audio file type (more lenient - check extension if mimetype fails)
         const isAudioMimeType = req.file.mimetype.startsWith('audio/');
@@ -385,37 +453,71 @@ router.post('/audio', upload.single('file'), async (req, res) => {
         }
 
         console.log('Uploading audio to:', filePath);
+        if (volume !== undefined) {
+            console.log('🔉 Audio upload volume requested:', volume);
+        }
+
+        // If volume is provided and < 1, attenuate by re-encoding to mp3.
+        // This makes the resulting file quieter everywhere (including iOS builds).
+        let finalBuffer = req.file.buffer;
+        let finalMimetype = req.file.mimetype || 'audio/mpeg';
+        let finalFilename = req.file.originalname;
+        let finalFilePath = filePath;
+
+        if (volume !== undefined && volume > 0 && volume < 1) {
+            try {
+                const processed = await processAudioVolumeToMp3({
+                    inputBuffer: req.file.buffer,
+                    inputExt: fileExtension,
+                    volume,
+                });
+                finalBuffer = processed.buffer;
+                finalMimetype = processed.mimetype;
+                // rename to mp3 for consistency
+                const baseName = path.basename(finalFilename, fileExtension);
+                finalFilename = `${baseName}_vol${Math.round(volume * 100)}.mp3`;
+                // ensure storage path ends with .mp3
+                if (finalFilePath.toLowerCase().endsWith(fileExtension)) {
+                    finalFilePath = finalFilePath.slice(0, -fileExtension.length) + '.mp3';
+                } else if (!finalFilePath.toLowerCase().endsWith('.mp3')) {
+                    finalFilePath = `${finalFilePath}.mp3`;
+                }
+                console.log('✅ Audio volume processed:', { from: filePath, to: finalFilePath, filename: finalFilename });
+            } catch (e) {
+                console.warn('⚠️ Audio volume processing failed; uploading original:', e?.message || e);
+            }
+        }
 
         // Check if GCS is configured
         if (bucket && process.env.GCS_BUCKET_NAME) {
-            console.log('Uploading audio to GCS:', filePath);
+            console.log('Uploading audio to GCS:', finalFilePath);
             // Use Google Cloud Storage
-            const blob = bucket.file(filePath);
+            const blob = bucket.file(finalFilePath);
             const blobStream = blob.createWriteStream({
                 metadata: {
-                    contentType: req.file.mimetype,
+                    contentType: finalMimetype,
                 },
             });
 
             blobStream.on('error', (error) => {
                 console.error('GCS Upload error:', error);
                 // Fallback to local storage on GCS error
-                saveFileLocally(req.file, filePath, req)
-                    .then(url => res.status(200).json({ url, path: filePath, filename: req.file.originalname }))
+                saveFileLocally({ ...req.file, buffer: finalBuffer, mimetype: finalMimetype, originalname: finalFilename }, finalFilePath, req)
+                    .then(url => res.status(200).json({ url, path: finalFilePath, filename: finalFilename }))
                     .catch(err => res.status(500).json({ message: 'Upload failed', error: err.message }));
             });
 
             blobStream.on('finish', () => {
-                const publicUrl = `https://storage.googleapis.com/${bucket.name}/${filePath}`;
-                res.status(200).json({ url: publicUrl, path: filePath, filename: req.file.originalname });
+                const publicUrl = `https://storage.googleapis.com/${bucket.name}/${finalFilePath}`;
+                res.status(200).json({ url: publicUrl, path: finalFilePath, filename: finalFilename });
             });
 
-            blobStream.end(req.file.buffer);
+            blobStream.end(finalBuffer);
         } else {
             // Use local storage
             console.log('GCS not configured, using local storage for audio');
-            const url = await saveFileLocally(req.file, filePath, req);
-            res.status(200).json({ url, path: filePath, filename: req.file.originalname });
+            const url = await saveFileLocally({ ...req.file, buffer: finalBuffer, mimetype: finalMimetype, originalname: finalFilename }, finalFilePath, req);
+            res.status(200).json({ url, path: finalFilePath, filename: finalFilename });
         }
     } catch (error) {
         console.error('Audio upload error:', error);

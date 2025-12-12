@@ -385,14 +385,16 @@ const BookReaderPage: React.FC = () => {
 
                         const audio = new Audio(musicUrl);
                         audio.loop = true;
-                        audio.volume = 0.10; // Lowered from 0.15 to 0.10 (approx 33% lower, close to requested 20%)
+                        audio.volume = 0.20; // 20% volume for background music
                         audio.preload = 'auto';
                         bookBackgroundMusicRef.current = audio;
 
                         // Start playing book music automatically when loaded
                         audio.addEventListener('canplaythrough', () => {
+                            // Ensure volume is set correctly before playing
+                            audio.volume = 0.20;
                             if (bookMusicEnabledRef.current) {
-                                console.log('🎵 Book music ready - starting playback');
+                                console.log('🎵 Book music ready - starting playback at 20% volume');
                                 audio.play().catch(err => {
                                     console.warn('⚠️ Book music auto-play prevented:', err);
                                 });
@@ -2038,8 +2040,8 @@ const BookReaderPage: React.FC = () => {
 
                                 if (bookBackgroundMusicRef.current) {
                                     if (newState) {
-                                        // Update volume when playing
-                                        bookBackgroundMusicRef.current.volume = 0.10;
+                                        // Update volume when playing - 20% for background music
+                                        bookBackgroundMusicRef.current.volume = 0.20;
                                         bookBackgroundMusicRef.current.play().catch(err => {
                                             console.warn('Could not play book music:', err);
                                         });

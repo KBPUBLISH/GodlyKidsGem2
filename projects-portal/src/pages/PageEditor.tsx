@@ -41,7 +41,7 @@ const PageEditor: React.FC = () => {
     const [backgroundType, setBackgroundType] = useState<'image' | 'video'>('image');
     const [backgroundFile, setBackgroundFile] = useState<File | null>(null);
     const [scrollFile, setScrollFile] = useState<File | null>(null);
-    const [soundEffectFile, setSoundEffectFile] = useState<File | null>(null);
+    const [soundEffectFiles, setSoundEffectFiles] = useState<File[]>([]);
     const [textBoxes, setTextBoxes] = useState<TextBox[]>([]);
     const [isColoringPage, setIsColoringPage] = useState(false);
     const [coloringEndModalOnly, setColoringEndModalOnly] = useState(true); // Default: show in end modal only
@@ -50,7 +50,7 @@ const PageEditor: React.FC = () => {
     // Previews
     const [backgroundPreview, setBackgroundPreview] = useState<string | null>(null);
     const [scrollPreview, setScrollPreview] = useState<string | null>(null);
-    const [soundEffectUrl, setSoundEffectUrl] = useState<string | null>(null);
+    const [soundEffects, setSoundEffects] = useState<Array<{ url: string; filename?: string; uploadedAt?: string }>>([]);
     
     // Scroll Height Settings (percentages)
     const [scrollMidHeight, setScrollMidHeight] = useState(30); // Mid state height %
@@ -334,14 +334,15 @@ const PageEditor: React.FC = () => {
             setScrollMaxHeight(page.scrollMaxHeight);
         }
 
-        // Load sound effect if exists
-        if (page.files?.soundEffect?.url) {
-            setSoundEffectUrl(page.files.soundEffect.url);
-            setSoundEffectFile(null);
+        // Load sound effects (multi) if exists; fallback to legacy single
+        if (Array.isArray(page.files?.soundEffects) && page.files.soundEffects.length > 0) {
+            setSoundEffects(page.files.soundEffects);
+        } else if (page.files?.soundEffect?.url) {
+            setSoundEffects([page.files.soundEffect]);
         } else {
-            setSoundEffectUrl(null);
-            setSoundEffectFile(null);
+            setSoundEffects([]);
         }
+        setSoundEffectFiles([]);
 
         // Load text boxes with IDs for editing
         if (page.textBoxes && Array.isArray(page.textBoxes)) {
@@ -395,8 +396,8 @@ const PageEditor: React.FC = () => {
         setBackgroundFile(null);
         setBackgroundPreview(null);
         setScrollFile(null);
-        setSoundEffectFile(null);
-        setSoundEffectUrl(null);
+        setSoundEffectFiles([]);
+        setSoundEffects([]);
         setSelectedBoxId(null);
 
         // Apply template if it exists
@@ -686,21 +687,27 @@ const PageEditor: React.FC = () => {
                 console.log('No background file or preview, backgroundUrl will be empty');
             }
 
-            // Upload sound effect
-            let uploadedSoundEffectUrl = '';
-            if (soundEffectFile) {
-                const formData = new FormData();
-                formData.append('file', soundEffectFile);
-                const soundEffectUploadUrl = `/api/upload/sound-effect?bookId=${bookId}&pageNumber=${pageNumber}`;
-                const res = await apiClient.post(soundEffectUploadUrl, formData, {
-                    headers: { 'Content-Type': 'multipart/form-data' },
-                });
-                uploadedSoundEffectUrl = res.data.url;
-                setSoundEffectFile(null);
-                setSoundEffectUrl(uploadedSoundEffectUrl); // Update state with uploaded URL
-            } else if (soundEffectUrl) {
-                // Use existing URL if no new file
-                uploadedSoundEffectUrl = soundEffectUrl;
+            // Upload sound effects (multi)
+            const uploadedSoundEffects: Array<{ url: string; filename?: string; uploadedAt?: string }> = [];
+            if (soundEffectFiles.length > 0) {
+                for (const f of soundEffectFiles) {
+                    const formData = new FormData();
+                    formData.append('file', f);
+                    const soundEffectUploadUrl = `/api/upload/sound-effect?bookId=${bookId}&pageNumber=${pageNumber}`;
+                    const res = await apiClient.post(soundEffectUploadUrl, formData, {
+                        headers: { 'Content-Type': 'multipart/form-data' },
+                    });
+                    uploadedSoundEffects.push({
+                        url: res.data.url,
+                        filename: res.data.filename || f.name,
+                        uploadedAt: new Date().toISOString(),
+                    });
+                }
+                setSoundEffectFiles([]);
+            }
+            const finalSoundEffects = [...soundEffects, ...uploadedSoundEffects];
+            if (uploadedSoundEffects.length > 0) {
+                setSoundEffects(finalSoundEffects);
             }
 
             // Upload scroll
@@ -770,14 +777,14 @@ const PageEditor: React.FC = () => {
                 editingPageId
             });
 
-            // Only include soundEffect if it exists
-            if (uploadedSoundEffectUrl) {
-                payload.files = {
-                    soundEffect: {
-                        url: uploadedSoundEffectUrl,
-                        filename: soundEffectFile?.name || 'sound-effect.mp3'
-                    }
-                };
+            // Include sound effects if present
+            if (finalSoundEffects.length > 0) {
+                payload.files = payload.files || {};
+                payload.files.soundEffects = finalSoundEffects.map((s) => ({
+                    url: s.url,
+                    filename: s.filename || 'sound-effect.mp3',
+                    uploadedAt: s.uploadedAt ? new Date(s.uploadedAt) : undefined,
+                }));
             }
 
             console.log('Sending payload:', JSON.stringify(payload, null, 2));
@@ -1206,77 +1213,107 @@ const PageEditor: React.FC = () => {
 
                     <hr className="border-gray-100" />
 
-                    {/* Sound Effect */}
+                    {/* Sound Effects (multiple) */}
                     <div className="space-y-3">
-                        <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider">Sound Effect (1-3 sec)</label>
+                        <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider">Sound Effects (1-3 sec each)</label>
                         <div className="relative group">
                             <input
                                 type="file"
                                 accept="audio/*"
+                                multiple
                                 className="hidden"
                                 id="sound-effect-upload"
                                 onChange={e => {
-                                    const file = e.target.files?.[0];
-                                    if (file) {
+                                    const files = Array.from(e.target.files || []);
+                                    if (files.length === 0) return;
+
+                                    const valid: File[] = [];
+                                    for (const file of files) {
                                         // Validate file size (max 5MB)
                                         if (file.size > 5 * 1024 * 1024) {
-                                            alert('Sound effect file is too large. Maximum size is 5MB.');
-                                            return;
+                                            alert(`Sound effect "${file.name}" is too large. Maximum size is 5MB.`);
+                                            continue;
                                         }
-                                        setSoundEffectFile(file);
+                                        valid.push(file);
                                     }
+                                    if (valid.length > 0) {
+                                        setSoundEffectFiles(prev => [...prev, ...valid]);
+                                    }
+
+                                    // Reset input so selecting the same file again works
+                                    (e.target as HTMLInputElement).value = '';
                                 }}
                             />
                             <label
                                 htmlFor="sound-effect-upload"
                                 className="flex items-center justify-center w-full h-16 border-2 border-dashed border-gray-300 rounded-lg cursor-pointer hover:border-indigo-400 hover:bg-indigo-50 transition"
                             >
-                                {soundEffectUrl ? (
-                                    <div className="text-center text-gray-700">
-                                        <div className="flex items-center justify-center gap-2">
-                                            <svg className="w-5 h-5 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3" />
-                                            </svg>
-                                            <span className="text-xs font-medium">Sound Effect Added</span>
-                                        </div>
-                                        <button
-                                            onClick={(e) => {
-                                                e.stopPropagation();
-                                                setSoundEffectFile(null);
-                                                setSoundEffectUrl(null);
-                                            }}
-                                            className="mt-1 text-xs text-red-500 hover:text-red-700"
-                                        >
-                                            Remove
-                                        </button>
-                                    </div>
-                                ) : soundEffectFile ? (
-                                    <div className="text-center text-gray-700">
-                                        <div className="flex items-center justify-center gap-2">
-                                            <svg className="w-5 h-5 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3" />
-                                            </svg>
-                                            <span className="text-xs font-medium">{soundEffectFile.name}</span>
-                                        </div>
-                                        <button
-                                            onClick={(e) => {
-                                                e.stopPropagation();
-                                                setSoundEffectFile(null);
-                                            }}
-                                            className="mt-1 text-xs text-red-500 hover:text-red-700"
-                                        >
-                                            Remove
-                                        </button>
-                                    </div>
-                                ) : (
-                                    <div className="text-center text-gray-400">
-                                        <Upload className="w-5 h-5 mx-auto mb-1" />
-                                        <span className="text-xs">Upload Sound Effect</span>
-                                    </div>
-                                )}
+                                <div className="text-center text-gray-400">
+                                    <Upload className="w-5 h-5 mx-auto mb-1" />
+                                    <span className="text-xs">Upload Sound Effect(s)</span>
+                                </div>
                             </label>
                         </div>
-                        <p className="text-xs text-gray-500">Add a short sound effect (1-3 seconds) that plays when user taps the bubble</p>
+                        <p className="text-xs text-gray-500">
+                            Add one or more short sound effects (1-3 seconds). Each will show as a tappable bubble in the book.
+                        </p>
+
+                        {/* Pending uploads */}
+                        {soundEffectFiles.length > 0 && (
+                            <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3">
+                                <div className="text-xs font-semibold text-yellow-800 mb-2">
+                                    Pending uploads (will upload on Save)
+                                </div>
+                                <div className="space-y-2">
+                                    {soundEffectFiles.map((f, idx) => (
+                                        <div key={`${f.name}-${idx}`} className="flex items-center justify-between gap-2 text-xs">
+                                            <span className="truncate text-yellow-900">{f.name}</span>
+                                            <button
+                                                type="button"
+                                                onClick={() => setSoundEffectFiles(prev => prev.filter((_, i) => i !== idx))}
+                                                className="text-red-600 hover:text-red-800"
+                                            >
+                                                Remove
+                                            </button>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+
+                        {/* Existing sound effects */}
+                        {soundEffects.length > 0 && (
+                            <div className="bg-gray-50 border border-gray-200 rounded-lg p-3">
+                                <div className="text-xs font-semibold text-gray-700 mb-2">
+                                    Added sound effects
+                                </div>
+                                <div className="space-y-2">
+                                    {soundEffects.map((s, idx) => (
+                                        <div key={`${s.url}-${idx}`} className="flex items-center justify-between gap-2 text-xs">
+                                            <a
+                                                href={getMediaUrl(s.url)}
+                                                target="_blank"
+                                                rel="noreferrer"
+                                                className="truncate text-indigo-700 hover:underline"
+                                                title={s.filename || `Sound effect ${idx + 1}`}
+                                            >
+                                                {s.filename || `Sound effect ${idx + 1}`}
+                                            </a>
+                                            <button
+                                                type="button"
+                                                onClick={() => setSoundEffects(prev => prev.filter((_, i) => i !== idx))}
+                                                className="text-red-600 hover:text-red-800"
+                                            >
+                                                Remove
+                                            </button>
+                                        </div>
+                                    ))}
+                                </div>
+                                <div className="mt-2 text-[11px] text-gray-500">
+                                    Note: removing here detaches it from the page (does not delete from storage).
+                                </div>
+                            </div>
+                        )}
                     </div>
 
                     <hr className="border-gray-100" />

@@ -27,7 +27,8 @@ interface PageData {
     scrollHeight?: number;
     scrollMidHeight?: number; // Mid scroll height % (default 30)
     scrollMaxHeight?: number; // Max scroll height % (default 60)
-    soundEffectUrl?: string;
+    soundEffectUrl?: string; // legacy single
+    soundEffects?: Array<{ url: string; filename?: string }>; // new multi
 }
 
 // Scroll state types
@@ -68,7 +69,7 @@ export const BookPageRenderer: React.FC<BookPageRendererProps> = ({
     const showScroll = scrollState !== 'hidden';
     // Refs for text box containers to enable scrolling
     const textBoxRefs = useRef<{ [key: number]: HTMLDivElement | null }>({});
-    const soundEffectRef = useRef<HTMLAudioElement | null>(null);
+    const soundEffectRefs = useRef<Map<string, HTMLAudioElement>>(new Map());
     const videoRef = useRef<HTMLVideoElement | null>(null);
     const [bubblePopped, setBubblePopped] = useState(false);
     const [videoUnmuted, setVideoUnmuted] = useState(false);
@@ -139,21 +140,34 @@ export const BookPageRenderer: React.FC<BookPageRendererProps> = ({
         }
     }, [highlightedWordIndex, activeTextBoxIndex, showScroll]);
 
-    // Initialize sound effect audio
+    // Initialize sound effect audio(s)
     useEffect(() => {
-        if (page.soundEffectUrl) {
-            soundEffectRef.current = new Audio(page.soundEffectUrl);
-            soundEffectRef.current.volume = 0.7; // Set volume for sound effect
-            soundEffectRef.current.preload = 'auto';
-        }
-        
+        // Cleanup previous audios
+        soundEffectRefs.current.forEach((a) => {
+            try { a.pause(); } catch { }
+        });
+        soundEffectRefs.current.clear();
+
+        const urls = (page.soundEffects && page.soundEffects.length > 0)
+            ? page.soundEffects.map(s => s.url).filter(Boolean)
+            : (page.soundEffectUrl ? [page.soundEffectUrl] : []);
+
+        urls.forEach((url) => {
+            try {
+                const a = new Audio(url);
+                a.volume = 0.7;
+                a.preload = 'auto';
+                soundEffectRefs.current.set(url, a);
+            } catch { }
+        });
+
         return () => {
-            if (soundEffectRef.current) {
-                soundEffectRef.current.pause();
-                soundEffectRef.current = null;
-            }
+            soundEffectRefs.current.forEach((a) => {
+                try { a.pause(); } catch { }
+            });
+            soundEffectRefs.current.clear();
         };
-    }, [page.soundEffectUrl]);
+    }, [page.soundEffectUrl, page.soundEffects, page.id]);
 
     // Handle video audio - unmute on first user interaction (iOS requirement)
     useEffect(() => {
@@ -201,12 +215,13 @@ export const BookPageRenderer: React.FC<BookPageRendererProps> = ({
         setBubblePosition(randomPosition);
     }, [page.id]);
 
-    const handleBubbleClick = (e: React.MouseEvent) => {
+    const handleBubbleClick = (e: React.MouseEvent, url?: string) => {
         e.stopPropagation();
-        if (soundEffectRef.current && !bubblePopped) {
+        const audio = url ? soundEffectRefs.current.get(url) : null;
+        if (audio && !bubblePopped) {
             setBubblePopped(true);
-            soundEffectRef.current.currentTime = 0;
-            soundEffectRef.current.play().catch(err => {
+            audio.currentTime = 0;
+            audio.play().catch(err => {
                 console.warn('Could not play sound effect:', err);
             });
         }
@@ -413,33 +428,49 @@ export const BookPageRenderer: React.FC<BookPageRendererProps> = ({
                 })}
             </div>
 
-            {/* Floating Sound Effect Bubble */}
-            {page.soundEffectUrl && !bubblePopped && (
-                <div
-                    className="absolute z-30 cursor-pointer"
-                    style={{
-                        left: `${bubblePosition.x}%`,
-                        top: `${bubblePosition.y}%`,
-                        transform: 'translate(-50%, -50%)',
-                        animation: 'float 3s ease-in-out infinite'
-                    }}
-                    onClick={handleBubbleClick}
-                >
-                    <div className="relative">
-                        <div className="w-16 h-16 bg-gradient-to-br from-indigo-400 to-purple-500 rounded-full flex items-center justify-center shadow-lg hover:scale-110 transition-transform duration-200 border-2 border-white">
-                            <Music className="w-8 h-8 text-white" />
-                        </div>
-                        {/* Ripple effect */}
-                        <div className="absolute inset-0 rounded-full bg-indigo-400 animate-ping opacity-75"></div>
-                    </div>
-                    <style>{`
-                        @keyframes float {
-                            0%, 100% { transform: translate(-50%, -50%) translateY(0px); }
-                            50% { transform: translate(-50%, -50%) translateY(-10px); }
-                        }
-                    `}</style>
-                </div>
-            )}
+            {/* Floating Sound Effect Bubble(s) */}
+            {(() => {
+                const sfx = (page.soundEffects && page.soundEffects.length > 0)
+                    ? page.soundEffects.filter(s => !!s.url).slice(0, 3)
+                    : (page.soundEffectUrl ? [{ url: page.soundEffectUrl }] : []);
+
+                if (sfx.length === 0 || bubblePopped) return null;
+
+                return (
+                    <>
+                        {sfx.map((s, idx) => {
+                            const offsetX = (idx - (sfx.length - 1) / 2) * 12; // spread horizontally
+                            const offsetY = idx * 2;
+                            return (
+                                <div
+                                    key={`${s.url}-${idx}`}
+                                    className="absolute z-30 cursor-pointer"
+                                    style={{
+                                        left: `calc(${bubblePosition.x}% + ${offsetX}px)`,
+                                        top: `calc(${bubblePosition.y}% + ${offsetY}px)`,
+                                        transform: 'translate(-50%, -50%)',
+                                        animation: 'float 3s ease-in-out infinite'
+                                    }}
+                                    onClick={(e) => handleBubbleClick(e, s.url)}
+                                >
+                                    <div className="relative">
+                                        <div className="w-16 h-16 bg-gradient-to-br from-indigo-400 to-purple-500 rounded-full flex items-center justify-center shadow-lg hover:scale-110 transition-transform duration-200 border-2 border-white">
+                                            <Music className="w-8 h-8 text-white" />
+                                        </div>
+                                        <div className="absolute inset-0 rounded-full bg-indigo-400 animate-ping opacity-75"></div>
+                                    </div>
+                                    <style>{`
+                                        @keyframes float {
+                                            0%, 100% { transform: translate(-50%, -50%) translateY(0px); }
+                                            50% { transform: translate(-50%, -50%) translateY(-10px); }
+                                        }
+                                    `}</style>
+                                </div>
+                            );
+                        })}
+                    </>
+                );
+            })()}
 
             {/* Popped bubble animation */}
             {bubblePopped && (

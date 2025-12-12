@@ -1005,7 +1005,8 @@ const BookReaderPage: React.FC = () => {
         return {
             ...page,
             id: page._id,
-            soundEffectUrl: page.files?.soundEffect?.url || page.soundEffectUrl
+            soundEffectUrl: page.files?.soundEffect?.url || page.soundEffectUrl,
+            soundEffects: (page.files as any)?.soundEffects || (page.files?.soundEffect?.url ? [page.files.soundEffect] : undefined),
         };
     };
 

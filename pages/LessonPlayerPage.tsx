@@ -146,8 +146,32 @@ const LessonPlayerPage: React.FC = () => {
         }
         setMusicPaused(true);
 
-        // Cleanup audio on unmount
+        // Cleanup media on unmount (critical for iOS: otherwise video audio can continue after navigation)
         return () => {
+            // Stop main lesson video
+            if (videoRef.current) {
+                try {
+                    videoRef.current.pause();
+                    // Clear source to fully release media pipeline on iOS/WKWebView
+                    videoRef.current.removeAttribute('src');
+                    // @ts-expect-error - load exists on HTMLMediaElement
+                    videoRef.current.load?.();
+                } catch { }
+            }
+
+            // Stop any preloaded episode videos (these can continue playing audio on iOS if not released)
+            try {
+                preloadedVideosRef.current.forEach((v) => {
+                    try {
+                        v.pause();
+                        v.removeAttribute('src');
+                        // @ts-expect-error - load exists on HTMLMediaElement
+                        v.load?.();
+                    } catch { }
+                });
+                preloadedVideosRef.current.clear();
+            } catch { }
+
             if (audioRef.current) {
                 audioRef.current.pause();
                 audioRef.current = null;
@@ -938,7 +962,18 @@ const LessonPlayerPage: React.FC = () => {
 
                         {/* Close Button - Right side */}
                         <button
-                            onClick={() => navigate(-1)}
+                            onClick={() => {
+                                // Defensive: stop video immediately before leaving (iOS can keep audio alive otherwise)
+                                if (videoRef.current) {
+                                    try {
+                                        videoRef.current.pause();
+                                        videoRef.current.removeAttribute('src');
+                                        // @ts-expect-error - load exists on HTMLMediaElement
+                                        videoRef.current.load?.();
+                                    } catch { }
+                                }
+                                navigate(-1);
+                            }}
                             className="text-white p-2 bg-black/50 rounded-full hover:bg-black/70 transition-colors backdrop-blur-sm"
                         >
                             <X className="w-6 h-6" />

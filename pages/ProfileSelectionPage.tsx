@@ -105,7 +105,7 @@ const ProfileSelectionPage: React.FC = () => {
                 <h1 className="relative font-display font-extrabold text-[#5c2e0b] text-2xl tracking-wide drop-shadow-[0_1px_0_rgba(255,255,255,0.4)] text-center">
                   {t('chooseExplorer')}
                 </h1>
-                <p className="relative text-[#8B4513] text-sm text-center mt-1 font-medium">{t('whosPlayingToday')}</p>
+                <p className="relative text-[#FFE082] text-sm text-center mt-1 font-medium drop-shadow-[0_1px_1px_rgba(0,0,0,0.3)]">{t('whosPlayingToday')}</p>
 
                 {/* Nails */}
                 <div className="absolute top-1/2 -translate-y-1/2 left-3 w-3 h-3 bg-[#3e1f07] rounded-full shadow-[inset_0_1px_2px_rgba(0,0,0,0.5)]"></div>

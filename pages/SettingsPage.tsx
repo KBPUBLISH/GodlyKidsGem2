@@ -25,6 +25,9 @@ const SettingsPage: React.FC = () => {
   const [unlockedVoices, setUnlockedVoices] = useState<any[]>([]);
   const [loadingVoices, setLoadingVoices] = useState(false);
   const [showLanguageSelector, setShowLanguageSelector] = useState(false);
+  const [notificationsEnabled, setNotificationsEnabled] = useState(() => {
+    return localStorage.getItem('godlykids_notifications') !== 'false';
+  });
   
   // Restore purchases state
   const [isRestoring, setIsRestoring] = useState(false);
@@ -220,8 +223,8 @@ const SettingsPage: React.FC = () => {
                         </button>
                     </div>
 
-                    {/* Notifications - Coming Soon */}
-                    <div className="flex items-center justify-between opacity-50 pointer-events-none grayscale">
+                    {/* Notifications Toggle */}
+                    <div className="flex items-center justify-between">
                         <div className="flex items-center gap-3 text-[#5c2e0b]">
                             <div className="w-8 h-8 rounded-full bg-[#ffe0b2] flex items-center justify-center text-[#f57c00]">
                                 <Bell size={18} />
@@ -229,16 +232,39 @@ const SettingsPage: React.FC = () => {
                             <span className="font-bold">{t('notifications')}</span>
                         </div>
                         <button 
-                            className="w-12 h-7 rounded-full relative transition-colors duration-200 border-2 bg-[#8bc34a] border-[#689f38]"
+                            onClick={() => {
+                                const newValue = !notificationsEnabled;
+                                setNotificationsEnabled(newValue);
+                                localStorage.setItem('godlykids_notifications', String(newValue));
+                                
+                                // Try to communicate with native app for push notification permissions
+                                if (newValue) {
+                                    // Request notification permission via DeSpia bridge if available
+                                    if ((window as any).webkit?.messageHandlers?.despia) {
+                                        try {
+                                            (window as any).webkit.messageHandlers.despia.postMessage({
+                                                action: 'requestNotificationPermission'
+                                            });
+                                        } catch (e) {
+                                            console.log('📱 DeSpia notification request not available');
+                                        }
+                                    }
+                                    // Also try standard web notification API as fallback
+                                    if ('Notification' in window && Notification.permission === 'default') {
+                                        Notification.requestPermission();
+                                    }
+                                }
+                            }}
+                            className={`w-12 h-7 rounded-full relative transition-colors duration-200 border-2 ${notificationsEnabled ? 'bg-[#8bc34a] border-[#689f38]' : 'bg-gray-300 border-gray-400'}`}
                         >
-                            <div className="absolute top-0.5 w-5 h-5 bg-white rounded-full shadow-sm left-5"></div>
+                            <div className={`absolute top-0.5 w-5 h-5 bg-white rounded-full shadow-sm transition-all duration-200 ${notificationsEnabled ? 'left-5' : 'left-0.5'}`}></div>
                         </button>
                     </div>
                 </div>
             </section>
 
-            {/* Language Settings */}
-            <section className="bg-[#fff8e1] rounded-2xl p-5 border-2 border-[#eecaa0] shadow-sm">
+            {/* Language Settings - Hidden until more testing is done */}
+            {false && <section className="bg-[#fff8e1] rounded-2xl p-5 border-2 border-[#eecaa0] shadow-sm">
                 <h3 className="font-display font-bold text-[#8B4513] text-lg mb-4 uppercase tracking-wide opacity-80">{t('language')}</h3>
                 
                 <div className="space-y-3">
@@ -302,7 +328,7 @@ const SettingsPage: React.FC = () => {
                         Changes the language of the app interface and automatically translates book text.
                     </p>
                 </div>
-            </section>
+            </section>}
 
             {/* Voice Library - Hidden */}
             {false && clonedVoices.length > 0 && (

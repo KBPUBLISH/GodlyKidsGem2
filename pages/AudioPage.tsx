@@ -31,6 +31,7 @@ const AudioPage: React.FC = () => {
     const [playlists, setPlaylists] = useState<Playlist[]>([]);
     const [loading, setLoading] = useState(true);
     const [selectedCategory, setSelectedCategory] = useState<string>('All');
+    const [selectedType, setSelectedType] = useState<'All' | 'Song' | 'Audiobook'>('All');
     const navigate = useNavigate();
 
     console.log('📻 AudioPage: Component rendered');
@@ -157,9 +158,16 @@ const AudioPage: React.FC = () => {
     const playlistCategories = ['All', ...new Set(playlists.map(p => p.category).filter(Boolean))];
     const categories = playlistCategories.length > 1 ? playlistCategories : defaultCategories;
 
-    const filteredPlaylists = selectedCategory === 'All'
-        ? playlists
-        : playlists.filter(p => p.category === selectedCategory);
+    // Filter by both type and category
+    const filteredPlaylists = playlists.filter(p => {
+        const matchesType = selectedType === 'All' || p.type === selectedType;
+        const matchesCategory = selectedCategory === 'All' || p.category === selectedCategory;
+        return matchesType && matchesCategory;
+    });
+    
+    // Count playlists by type for the badges
+    const musicCount = playlists.filter(p => p.type === 'Song').length;
+    const audiobookCount = playlists.filter(p => p.type === 'Audiobook').length;
 
     // Debug logging
     console.log('📻 AudioPage: Render - playlists:', playlists.length, 'filtered:', filteredPlaylists.length, 'category:', selectedCategory);
@@ -210,7 +218,7 @@ const AudioPage: React.FC = () => {
                 </div>
 
                 {/* Title Section */}
-                <div className="relative z-20 px-6 pt-4 pb-6 text-center">
+                <div className="relative z-20 px-6 pt-4 pb-4 text-center">
                     <div className="flex items-center justify-center gap-3 mb-2">
                         <Headphones className="w-10 h-10 text-[#f3e5ab]" />
                         <h1 className="text-4xl font-black text-[#fdf6e3] drop-shadow-lg font-display">
@@ -220,6 +228,59 @@ const AudioPage: React.FC = () => {
                     <p className="text-[#e2cba5] font-medium text-lg">
                         Songs, Stories & More
                     </p>
+                </div>
+
+                {/* Type Filter Tabs (Music vs Audiobooks) */}
+                <div className="relative z-20 px-4 pb-3">
+                    <div className="flex justify-center gap-2">
+                        <button
+                            onClick={() => setSelectedType('All')}
+                            className={`flex items-center gap-2 px-5 py-2.5 rounded-xl font-bold text-sm transition-all ${
+                                selectedType === 'All'
+                                    ? 'bg-[#fdf6e3] text-[#8B4513] shadow-lg'
+                                    : 'bg-[#5c2e0b]/50 text-[#e2cba5] hover:bg-[#5c2e0b]/70'
+                            }`}
+                        >
+                            All
+                            <span className={`px-1.5 py-0.5 rounded-full text-xs ${
+                                selectedType === 'All' ? 'bg-[#8B4513]/20' : 'bg-white/10'
+                            }`}>
+                                {playlists.length}
+                            </span>
+                        </button>
+                        <button
+                            onClick={() => setSelectedType('Song')}
+                            className={`flex items-center gap-2 px-5 py-2.5 rounded-xl font-bold text-sm transition-all ${
+                                selectedType === 'Song'
+                                    ? 'bg-[#fdf6e3] text-[#8B4513] shadow-lg'
+                                    : 'bg-[#5c2e0b]/50 text-[#e2cba5] hover:bg-[#5c2e0b]/70'
+                            }`}
+                        >
+                            <Music size={16} />
+                            Music
+                            <span className={`px-1.5 py-0.5 rounded-full text-xs ${
+                                selectedType === 'Song' ? 'bg-[#8B4513]/20' : 'bg-white/10'
+                            }`}>
+                                {musicCount}
+                            </span>
+                        </button>
+                        <button
+                            onClick={() => setSelectedType('Audiobook')}
+                            className={`flex items-center gap-2 px-5 py-2.5 rounded-xl font-bold text-sm transition-all ${
+                                selectedType === 'Audiobook'
+                                    ? 'bg-[#fdf6e3] text-[#8B4513] shadow-lg'
+                                    : 'bg-[#5c2e0b]/50 text-[#e2cba5] hover:bg-[#5c2e0b]/70'
+                            }`}
+                        >
+                            <BookOpen size={16} />
+                            Audiobooks
+                            <span className={`px-1.5 py-0.5 rounded-full text-xs ${
+                                selectedType === 'Audiobook' ? 'bg-[#8B4513]/20' : 'bg-white/10'
+                            }`}>
+                                {audiobookCount}
+                            </span>
+                        </button>
+                    </div>
                 </div>
 
                 {/* Category Filter */}

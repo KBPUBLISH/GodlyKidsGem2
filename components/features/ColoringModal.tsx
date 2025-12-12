@@ -1,9 +1,10 @@
-import React, { useMemo, useState, useEffect } from 'react';
+import React, { useMemo, useState, useEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import { X, Sparkles, Home, ShoppingBag, Star, Pin, PinOff } from 'lucide-react';
 import DrawingCanvas from './DrawingCanvas';
 import { pinnedColoringService, parseColoringPageId } from '../../services/pinnedColoringService';
+
 interface ColoringModalProps {
     isOpen: boolean;
     onClose: () => void;
@@ -11,6 +12,105 @@ interface ColoringModalProps {
     // Unique identifier for saving progress (e.g., "book-123-page-5")
     pageId?: string;
 }
+
+// Storage key prefix (must match DrawingCanvas)
+const DRAWING_STORAGE_PREFIX = 'godlykids_coloring_';
+
+/**
+ * Composite the user's drawing with the line art into a single image.
+ * This ensures they align correctly when displayed at any size.
+ */
+const createCompositeImage = (
+    drawingDataUrl: string,
+    lineArtUrl: string
+): Promise<string> => {
+    return new Promise((resolve, reject) => {
+        // Load both images
+        const drawingImg = new Image();
+        const lineArtImg = new Image();
+        lineArtImg.crossOrigin = 'anonymous';
+        
+        let drawingLoaded = false;
+        let lineArtLoaded = false;
+        
+        const tryComposite = () => {
+            if (!drawingLoaded || !lineArtLoaded) return;
+            
+            try {
+                // Use line art dimensions as the base (this is the "correct" size)
+                const width = lineArtImg.width || 800;
+                const height = lineArtImg.height || 1000;
+                
+                // Create composite canvas
+                const canvas = document.createElement('canvas');
+                canvas.width = width;
+                canvas.height = height;
+                const ctx = canvas.getContext('2d');
+                if (!ctx) {
+                    reject(new Error('Could not get canvas context'));
+                    return;
+                }
+                
+                // 1. White background
+                ctx.fillStyle = '#FFFFFF';
+                ctx.fillRect(0, 0, width, height);
+                
+                // 2. Draw the user's coloring (scale to fit, cover mode)
+                const drawingAspect = drawingImg.width / drawingImg.height;
+                const canvasAspect = width / height;
+                
+                let drawWidth, drawHeight, drawX, drawY;
+                if (drawingAspect > canvasAspect) {
+                    // Drawing is wider - fit to height, crop sides
+                    drawHeight = height;
+                    drawWidth = height * drawingAspect;
+                    drawX = (width - drawWidth) / 2;
+                    drawY = 0;
+                } else {
+                    // Drawing is taller - fit to width, crop top/bottom
+                    drawWidth = width;
+                    drawHeight = width / drawingAspect;
+                    drawX = 0;
+                    drawY = 0; // Align to top
+                }
+                
+                ctx.drawImage(drawingImg, drawX, drawY, drawWidth, drawHeight);
+                
+                // 3. Draw line art on top with multiply blend mode
+                ctx.globalCompositeOperation = 'multiply';
+                ctx.drawImage(lineArtImg, 0, 0, width, height);
+                ctx.globalCompositeOperation = 'source-over';
+                
+                // Return as data URL
+                resolve(canvas.toDataURL('image/png'));
+            } catch (err) {
+                console.error('Error compositing image:', err);
+                reject(err);
+            }
+        };
+        
+        drawingImg.onload = () => {
+            drawingLoaded = true;
+            tryComposite();
+        };
+        drawingImg.onerror = () => {
+            reject(new Error('Failed to load drawing'));
+        };
+        
+        lineArtImg.onload = () => {
+            lineArtLoaded = true;
+            tryComposite();
+        };
+        lineArtImg.onerror = () => {
+            // If line art fails to load, just use the drawing alone
+            console.warn('Line art failed to load, using drawing only');
+            resolve(drawingDataUrl);
+        };
+        
+        drawingImg.src = drawingDataUrl;
+        lineArtImg.src = lineArtUrl;
+    });
+};
 
 // Helper to resolve media URLs (similar to apiService)
 const resolveMediaUrl = (url?: string): string => {
@@ -63,20 +163,53 @@ const ColoringModal: React.FC<ColoringModalProps> = ({ isOpen, onClose, backgrou
         setShowReward(true);
     };
 
-    const handlePinToggle = () => {
-        if (!pageId || !parsedPage?.bookId) return;
+    const [isPinning, setIsPinning] = useState(false);
+    
+    const handlePinToggle = useCallback(async () => {
+        if (!pageId || !parsedPage?.bookId || isPinning) return;
+        
         if (isPinnedThisPage) {
-            pinnedColoringService.unpin(parsedPage.bookId);
+            pinnedColoringService.unpinWithCleanup(parsedPage.bookId);
             setPinToast('Removed from fridge');
-        } else {
-            // Pass the resolved background URL so we can overlay line art on the fridge card
-            console.log('📌 Pinning coloring page:', { pageId, backgroundUrl: resolvedImageUrl });
-            const pinned = pinnedColoringService.pinFromPageId(pageId, resolvedImageUrl || undefined);
-            console.log('📌 Pin result:', pinned);
-            setPinToast(pinned ? 'Pinned to book!' : 'Could not pin (storage full?)');
+            window.setTimeout(() => setPinToast(null), 1500);
+            return;
         }
-        window.setTimeout(() => setPinToast(null), 1500);
-    };
+        
+        // Get the drawing from localStorage
+        const drawingDataUrl = localStorage.getItem(`${DRAWING_STORAGE_PREFIX}${pageId}`);
+        if (!drawingDataUrl) {
+            setPinToast('No drawing found to pin');
+            window.setTimeout(() => setPinToast(null), 1500);
+            return;
+        }
+        
+        setIsPinning(true);
+        setPinToast('Creating your artwork...');
+        
+        try {
+            let finalImageUrl = drawingDataUrl;
+            
+            // If we have line art, composite them together
+            if (resolvedImageUrl) {
+                console.log('📌 Compositing drawing with line art...');
+                finalImageUrl = await createCompositeImage(drawingDataUrl, resolvedImageUrl);
+                console.log('📌 Composite created successfully');
+            }
+            
+            // Store the composite image
+            const pinned = pinnedColoringService.pinWithComposite(pageId, finalImageUrl);
+            console.log('📌 Pin result:', pinned);
+            setPinToast(pinned ? 'Pinned to book! 🎨' : 'Could not pin (storage full?)');
+        } catch (err) {
+            console.error('📌 Error creating composite:', err);
+            // Fallback: pin without composite
+            const pinned = pinnedColoringService.pinFromPageId(pageId, resolvedImageUrl || undefined);
+            setPinToast(pinned ? 'Pinned to book!' : 'Could not pin');
+        } finally {
+            setIsPinning(false);
+            window.setTimeout(() => setPinToast(null), 2000);
+        }
+    }, [pageId, parsedPage?.bookId, isPinnedThisPage, resolvedImageUrl, isPinning]);
 
     const handleHome = () => {
         onClose();

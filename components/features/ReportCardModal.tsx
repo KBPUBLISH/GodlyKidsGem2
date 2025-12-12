@@ -87,7 +87,7 @@ const formatDuration = (minutes: number): string => {
 };
 
 const ReportCardModal: React.FC<ReportCardModalProps> = ({ isOpen, onClose }) => {
-  const { coins, coinTransactions, kids, activeKidId, parentName } = useUser();
+  const { coins, coinTransactions, kids, currentProfileId, parentName } = useUser();
   const { t } = useLanguage();
   const [activeTab, setActiveTab] = useState<'overview' | 'activity'>('overview');
   const [selectedPeriod, setSelectedPeriod] = useState<'week' | 'month'>('week');
@@ -102,8 +102,8 @@ const ReportCardModal: React.FC<ReportCardModalProps> = ({ isOpen, onClose }) =>
   });
   const [recentActivity, setRecentActivity] = useState<ActivityEntry[]>([]);
   
-  // Get current profile info
-  const activeKid = kids.find(k => k.id === activeKidId);
+  // Get current profile info - currentProfileId is null for parent, or kid's ID
+  const activeKid = kids.find(k => k.id === currentProfileId);
   const profileName = activeKid?.name || parentName || 'User';
   
   // Load stats when modal opens

@@ -1,7 +1,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
-import { Heart, BookOpen, Crown, PlayCircle, Headphones, Disc, Lock, Globe, Bookmark, Plus } from 'lucide-react';
+import { Heart, BookOpen, Crown, PlayCircle, Headphones, Disc, Lock, Globe, Bookmark, Plus, ArrowLeft } from 'lucide-react';
 import { useBooks } from '../context/BooksContext';
 import { useUser } from '../context/UserContext';
 import { Book } from '../types';
@@ -70,6 +70,7 @@ const BookDetailPage: React.FC = () => {
   const [isFavorited, setIsFavorited] = useState<boolean>(false);
   const [isInLibrary, setIsInLibrary] = useState<boolean>(false);
   const [isMembersOnly, setIsMembersOnly] = useState<boolean>(false);
+  const [bookDetailsLoaded, setBookDetailsLoaded] = useState<boolean>(false); // Prevent race condition on premium check
   const [pinnedDrawing, setPinnedDrawing] = useState<{ pageRef: string; pageId: string; dataUrl: string; backgroundUrl?: string } | null>(null);
   const [showDrawingModal, setShowDrawingModal] = useState(false);
   
@@ -161,14 +162,30 @@ const BookDetailPage: React.FC = () => {
       setPinnedDrawing(null);
       return;
     }
+    
+    // Try to get the composite image first (new format)
+    if (pinned.hasComposite) {
+      const compositeUrl = pinnedColoringService.getCompositeUrl(id);
+      if (compositeUrl) {
+        console.log('🖼️ Using pre-composited fridge image');
+        setPinnedDrawing({ 
+          pageRef: pinned.pageRef, 
+          pageId: pinned.pageId, 
+          dataUrl: compositeUrl,
+          // No backgroundUrl needed - it's already baked into the composite
+        });
+        return;
+      }
+    }
+    
+    // Fallback: old format with separate drawing + overlay
     const dataUrl = pinnedColoringService.getDrawingDataUrl(pinned.pageId);
     if (!dataUrl) {
-      // Drawing missing; keep things clean
       console.log('🖼️ Drawing data not found for pageId:', pinned.pageId);
       setPinnedDrawing(null);
       return;
     }
-    console.log('🖼️ Setting pinned drawing with backgroundUrl:', pinned.backgroundUrl);
+    console.log('🖼️ Using legacy format with backgroundUrl:', pinned.backgroundUrl);
     setPinnedDrawing({ 
       pageRef: pinned.pageRef, 
       pageId: pinned.pageId, 
@@ -204,6 +221,9 @@ const BookDetailPage: React.FC = () => {
   useEffect(() => {
     const fetchBookDetails = async () => {
       if (!id) return;
+      
+      // Reset loaded state when ID changes
+      setBookDetailsLoaded(false);
 
       try {
         // Fetch full book data from API
@@ -212,6 +232,7 @@ const BookDetailPage: React.FC = () => {
         // Store members-only status for UI display (don't redirect - show locked button instead)
         const bookIsMembersOnly = (fullBook as any)?.isMembersOnly === true;
         setIsMembersOnly(bookIsMembersOnly);
+        setBookDetailsLoaded(true); // Mark as loaded AFTER setting isMembersOnly
         
         if (fullBook && (fullBook as any).rawData) {
           const rawData = (fullBook as any).rawData;
@@ -409,8 +430,8 @@ const BookDetailPage: React.FC = () => {
         {/* Header Icons */}
         <div className="relative z-20 flex justify-between items-center px-4 pt-6 pb-2">
           {/* Back Button */}
-          <button onClick={handleBack} className="w-12 h-12 bg-[#90be6d] rounded-full border-4 border-[#f3e5ab] overflow-hidden shadow-[0_4px_0_rgba(0,0,0,0.3)] relative flex items-center justify-center transform transition-transform active:scale-95 group">
-            <div className="w-0 h-0 border-t-[8px] border-t-transparent border-r-[12px] border-r-white border-b-[8px] border-b-transparent mr-1"></div>
+          <button onClick={handleBack} className="w-10 h-10 bg-black/40 backdrop-blur-sm rounded-full flex items-center justify-center transform transition-all active:scale-95 hover:bg-black/60 border border-white/20 shadow-lg">
+            <ArrowLeft className="w-5 h-5 text-white" strokeWidth={2.5} />
           </button>
 
         </div>
@@ -444,7 +465,15 @@ const BookDetailPage: React.FC = () => {
             <>
               {/* Listen Button - Locked or Normal */}
               <div className="w-full max-w-sm">
-                {isLocked ? (
+                {!bookDetailsLoaded ? (
+                  // Loading state - disable buttons until we know if book is premium
+                  <button
+                    disabled
+                    className="w-full bg-gray-300 text-gray-500 font-display font-bold text-xl py-3 rounded-full shadow-[0_4px_0_#aaa] border-2 border-gray-400 transition-all text-center cursor-not-allowed"
+                  >
+                    Loading...
+                  </button>
+                ) : isLocked ? (
                   <button
                     onClick={() => navigate('/paywall', { state: { from: `/book-details/${id}` } })}
                     className="w-full bg-gradient-to-b from-[#FFD700] to-[#FFA500] hover:from-[#FFE44D] hover:to-[#FFB733] text-[#5c2e0b] font-display font-bold text-xl py-3 rounded-full shadow-[0_4px_0_#B8860B,0_8px_15px_rgba(0,0,0,0.4)] border-2 border-[#B8860B] active:translate-y-[4px] active:shadow-[0_0_0_#B8860B] transition-all text-center flex items-center justify-center gap-2"
@@ -504,7 +533,15 @@ const BookDetailPage: React.FC = () => {
             <>
               {/* Read / Continue Buttons */}
               <div className="flex w-full gap-3 max-w-sm">
-                {isLocked ? (
+                {!bookDetailsLoaded ? (
+                  // Loading state - disable buttons until we know if book is premium
+                  <button
+                    disabled
+                    className="flex-1 bg-gray-300 text-gray-500 font-display font-bold text-xl py-3 rounded-2xl shadow-[0_4px_0_#aaa] border-2 border-gray-400 transition-all text-center leading-none cursor-not-allowed"
+                  >
+                    Loading...
+                  </button>
+                ) : isLocked ? (
                   // Locked state - show premium button that goes to paywall
                   <button
                     onClick={() => navigate('/paywall', { state: { from: `/book-details/${id}` } })}
@@ -775,6 +812,11 @@ const BookDetailPage: React.FC = () => {
                 <button
                   onClick={() => {
                     if (!id) return;
+                    // Check if book is locked before allowing coloring access
+                    if (isLocked) {
+                      navigate('/paywall', { state: { from: `/book-details/${id}` } });
+                      return;
+                    }
                     navigate(`/read/${id}?coloring=${encodeURIComponent(pinnedDrawing.pageRef)}`);
                   }}
                   className="bg-[#6da34d] hover:bg-[#7db85b] text-white text-sm font-bold py-2 px-5 rounded-full shadow-[0_3px_0_#3d5c2b] active:translate-y-[3px] active:shadow-none transition-all border border-[#ffffff20] flex items-center gap-2"
@@ -787,7 +829,7 @@ const BookDetailPage: React.FC = () => {
                 <button
                   onClick={() => {
                     if (!id) return;
-                    pinnedColoringService.unpin(id);
+                    pinnedColoringService.unpinWithCleanup(id);
                     setPinnedDrawing(null);
                   }}
                   className="text-xs font-bold text-[#8B4513] hover:text-[#5c2e0b] underline underline-offset-2"
@@ -842,6 +884,11 @@ const BookDetailPage: React.FC = () => {
                   onClick={() => {
                     setShowDrawingModal(false);
                     if (!id) return;
+                    // Check if book is locked before allowing coloring access
+                    if (isLocked) {
+                      navigate('/paywall', { state: { from: `/book-details/${id}` } });
+                      return;
+                    }
                     navigate(`/read/${id}?coloring=${encodeURIComponent(pinnedDrawing.pageRef)}`);
                   }}
                   className="mt-4 w-full bg-[#6da34d] hover:bg-[#7db85b] text-white font-bold py-3 rounded-xl shadow-[0_4px_0_#3d5c2b] active:translate-y-[4px] active:shadow-none transition-all flex items-center justify-center gap-2"

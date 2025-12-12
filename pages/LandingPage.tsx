@@ -82,18 +82,18 @@ const LandingPage: React.FC = () => {
          />
       </div>
 
-      {/* Language Selector Button - Top Right */}
-      <button
+      {/* Language Selector Button - Hidden until more testing is done */}
+      {false && <button
         onClick={() => setShowLanguageModal(true)}
         className="absolute top-4 right-4 z-30 flex items-center gap-2 bg-black/30 backdrop-blur-md hover:bg-black/50 text-white px-3 py-2 rounded-full transition-all border border-white/20"
       >
         <span className="text-lg">{supportedLanguages[currentLanguage]?.flag || '🌐'}</span>
         <span className="text-sm font-medium">{supportedLanguages[currentLanguage]?.nativeName || 'English'}</span>
         <Globe className="w-4 h-4 opacity-70" />
-      </button>
+      </button>}
 
-      {/* Language Selection Modal */}
-      {showLanguageModal && (
+      {/* Language Selection Modal - Hidden until more testing is done */}
+      {false && showLanguageModal && (
         <div 
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm"
           onClick={() => setShowLanguageModal(false)}

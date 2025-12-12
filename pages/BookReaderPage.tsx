@@ -2108,11 +2108,16 @@ const BookReaderPage: React.FC = () => {
                                                 min="0"
                                                 max="100"
                                                 value={Math.round(musicVolume * 100)}
-                                                onChange={(e) => {
-                                                    const newVolume = parseInt(e.target.value) / 100;
+                                                onInput={(e) => {
+                                                    const target = e.target as HTMLInputElement;
+                                                    const newVolume = parseInt(target.value) / 100;
+                                                    console.log('🎵 Volume slider changed to:', newVolume);
                                                     setMusicVolume(newVolume);
                                                     if (bookBackgroundMusicRef.current) {
                                                         bookBackgroundMusicRef.current.volume = newVolume;
+                                                        console.log('🎵 Applied volume to audio element:', bookBackgroundMusicRef.current.volume);
+                                                    } else {
+                                                        console.warn('🎵 No audio ref available!');
                                                     }
                                                     // Reset auto-hide timer on interaction
                                                     if (volumeSliderTimeoutRef.current) {
@@ -2122,11 +2127,22 @@ const BookReaderPage: React.FC = () => {
                                                         setShowVolumeSlider(false);
                                                     }, 3000);
                                                 }}
-                                                className="absolute w-32 h-2 bg-white/20 rounded-full appearance-none cursor-pointer origin-center"
+                                                onChange={(e) => {
+                                                    // Also handle onChange for desktop browsers
+                                                    const target = e.target as HTMLInputElement;
+                                                    const newVolume = parseInt(target.value) / 100;
+                                                    setMusicVolume(newVolume);
+                                                    if (bookBackgroundMusicRef.current) {
+                                                        bookBackgroundMusicRef.current.volume = newVolume;
+                                                    }
+                                                }}
+                                                className="absolute w-32 h-3 bg-white/20 rounded-full appearance-none cursor-pointer origin-center touch-none"
                                                 style={{
                                                     transform: 'rotate(-90deg)',
                                                     WebkitAppearance: 'none',
                                                     background: `linear-gradient(to right, #FFD700 0%, #FFD700 ${musicVolume * 100}%, rgba(255,255,255,0.2) ${musicVolume * 100}%, rgba(255,255,255,0.2) 100%)`,
+                                                    touchAction: 'none',
+                                                    pointerEvents: 'auto',
                                                 }}
                                             />
                                         </div>
@@ -2163,13 +2179,18 @@ const BookReaderPage: React.FC = () => {
                                 }
                                 input[type="range"]::-webkit-slider-thumb {
                                     -webkit-appearance: none;
-                                    width: 20px;
-                                    height: 20px;
+                                    width: 28px;
+                                    height: 28px;
                                     background: linear-gradient(135deg, #FFD700, #FFA500);
                                     border-radius: 50%;
                                     cursor: pointer;
-                                    box-shadow: 0 2px 6px rgba(0,0,0,0.3);
-                                    border: 2px solid white;
+                                    box-shadow: 0 2px 8px rgba(0,0,0,0.4);
+                                    border: 3px solid white;
+                                    touch-action: none;
+                                }
+                                input[type="range"]::-webkit-slider-runnable-track {
+                                    height: 12px;
+                                    border-radius: 6px;
                                 }
                             `}</style>
                         </div>

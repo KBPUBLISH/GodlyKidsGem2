@@ -361,14 +361,27 @@ const LessonPlayerPage: React.FC = () => {
                 }
             }, 100);
             
-            return () => clearTimeout(timer);
+            // Fallback: If video doesn't load within 8 seconds, show play button
+            // This handles older iPhones where events might not fire
+            const fallbackTimer = setTimeout(() => {
+                if (!videoReady && !needsUserInteraction) {
+                    console.log('⚠️ Video load timeout - showing play button');
+                    setVideoReady(true);
+                    setNeedsUserInteraction(true);
+                }
+            }, 8000);
+            
+            return () => {
+                clearTimeout(timer);
+                clearTimeout(fallbackTimer);
+            };
         } else {
             // Pause video when leaving video screen
             if (videoRef.current) {
                 videoRef.current.pause();
             }
         }
-    }, [currentEpisodeIndex, currentScreen]);
+    }, [currentEpisodeIndex, currentScreen, videoReady, needsUserInteraction]);
 
     // Close dropdown when clicking outside
     useEffect(() => {
@@ -991,6 +1004,19 @@ const LessonPlayerPage: React.FC = () => {
                                 console.error('Video error:', e);
                                 setVideoReady(true); // Still show UI
                                 setNeedsUserInteraction(true);
+                            }}
+                            onStalled={() => {
+                                console.log('⚠️ Video stalled - network issue');
+                                // After 5 seconds of stalling, show play button
+                                setTimeout(() => {
+                                    if (!videoReady) {
+                                        setVideoReady(true);
+                                        setNeedsUserInteraction(true);
+                                    }
+                                }, 5000);
+                            }}
+                            onWaiting={() => {
+                                console.log('⏳ Video waiting for data...');
                             }}
                             playsInline
                             webkit-playsinline="true"

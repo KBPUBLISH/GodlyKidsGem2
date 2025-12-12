@@ -109,6 +109,8 @@ const LessonPlayerPage: React.FC = () => {
     // Video ready state - for older iPhones that block autoplay
     const [videoReady, setVideoReady] = useState(false);
     const [needsUserInteraction, setNeedsUserInteraction] = useState(false);
+    const [videoMuted, setVideoMuted] = useState(true);
+    const [needsSoundTap, setNeedsSoundTap] = useState(false);
 
     // Quiz state
     const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
@@ -874,7 +876,7 @@ const LessonPlayerPage: React.FC = () => {
                     </div>
 
                     {/* Header Bar - Episode selector on left, X button on right */}
-                    <div className="absolute top-2 left-2 right-2 z-30 flex items-center justify-between">
+                    <div className="absolute top-2 left-2 right-2 z-50 flex items-center justify-between">
                         {/* Episode Indicator - Left side */}
                         {hasEpisodes ? (
                             <div className="relative">
@@ -956,7 +958,8 @@ const LessonPlayerPage: React.FC = () => {
                             ref={videoRef}
                             src={getCurrentVideoUrl()}
                             className="w-full h-full object-contain cursor-pointer"
-                            crossOrigin="anonymous"
+                            autoPlay
+                            muted={videoMuted}
                             onClick={(e) => {
                                 e.stopPropagation();
                                 // Clear needs interaction flag on tap
@@ -969,6 +972,8 @@ const LessonPlayerPage: React.FC = () => {
                             onPlay={() => {
                                 setIsVideoPlaying(true);
                                 setNeedsUserInteraction(false);
+                                // If user pressed play, we can try to enable sound too
+                                setNeedsSoundTap(false);
                             }}
                             onPause={() => setIsVideoPlaying(false)}
                             onEnded={() => {
@@ -989,16 +994,31 @@ const LessonPlayerPage: React.FC = () => {
                             }}
                             onLoadedData={() => {
                                 setVideoReady(true);
-                                // Try to auto-play when video loads (if on video screen)
-                                if (videoRef.current && currentScreen === 'video') {
-                                    const playPromise = videoRef.current.play();
-                                    if (playPromise !== undefined) {
-                                        playPromise.catch(err => {
-                                            console.log('Autoplay prevented (older iOS):', err.name);
-                                            // Show play button for user to tap
+                                // Try autoplay WITH sound first (best UX on modern iPhones)
+                                if (!videoRef.current || currentScreen !== 'video') return;
+                                const v = videoRef.current;
+
+                                setNeedsSoundTap(false);
+                                // Attempt unmuted autoplay
+                                v.muted = false;
+                                setVideoMuted(false);
+
+                                const p = v.play();
+                                if (p !== undefined) {
+                                    p.catch(async () => {
+                                        // If iOS blocks autoplay with sound, autoplay muted instead
+                                        v.muted = true;
+                                        setVideoMuted(true);
+                                        try {
+                                            await v.play();
+                                            // Video is playing muted; user can tap to enable sound
+                                            setNeedsSoundTap(true);
+                                            setNeedsUserInteraction(false);
+                                        } catch (err) {
+                                            console.log('Autoplay failed even when muted:', err);
                                             setNeedsUserInteraction(true);
-                                        });
-                                    }
+                                        }
+                                    });
                                 }
                             }}
                             onError={(e) => {
@@ -1067,6 +1087,24 @@ const LessonPlayerPage: React.FC = () => {
                         </div>
                     )}
 
+                    {/* If autoplay succeeded muted, allow a single tap to enable sound */}
+                    {needsSoundTap && isVideoPlaying && (
+                        <div
+                            className="absolute inset-0 flex items-center justify-center z-40 cursor-pointer"
+                            onClick={() => {
+                                const v = videoRef.current;
+                                if (!v) return;
+                                v.muted = false;
+                                setVideoMuted(false);
+                                setNeedsSoundTap(false);
+                            }}
+                        >
+                            <div className="bg-black/60 backdrop-blur-sm text-white font-bold px-6 py-3 rounded-full border border-white/20 shadow-2xl">
+                                Tap to enable sound
+                            </div>
+                        </div>
+                    )}
+
                     {/* Tap indicator (shows briefly on tap) - Outside scroll container */}
                     {showVideoControls && !needsUserInteraction && (
                         <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-30">
@@ -1099,7 +1137,7 @@ const LessonPlayerPage: React.FC = () => {
 
                     {/* Continue Button - Shows on last episode (always visible so user can skip ahead) */}
                     {(!hasEpisodes || currentEpisodeIndex === totalEpisodes - 1) && (
-                        <div className="absolute bottom-32 left-0 right-0 flex justify-center z-30 animate-in fade-in slide-in-from-bottom-4 duration-500">
+                        <div className="absolute bottom-32 left-0 right-0 flex justify-center z-50 animate-in fade-in slide-in-from-bottom-4 duration-500">
                             <button
                                 onClick={() => setCurrentScreen('devotional')}
                                 className="flex items-center gap-3 bg-[#8B4513] hover:bg-[#A0522D] text-white px-8 py-4 rounded-full font-bold font-display text-lg shadow-2xl border-4 border-[#FFD700] transition-all transform hover:scale-105 active:scale-95"

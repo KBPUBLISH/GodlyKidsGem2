@@ -30,6 +30,7 @@ const BookEdit: React.FC = () => {
     const [audioFiles, setAudioFiles] = useState<Array<{ url: string; filename: string; uploadedAt?: string }>>([]);
     const [audioUploadVolume, setAudioUploadVolume] = useState<number>(0.2); // 20% default attenuation on upload
     const [uploadingAudio, setUploadingAudio] = useState(false);
+    const [reprocessingAudioIndex, setReprocessingAudioIndex] = useState<number | null>(null);
     const audioInputRef = useRef<HTMLInputElement>(null);
     const [availableGames, setAvailableGames] = useState<Array<{ gameId: string; name: string; enabled: boolean }>>([]);
     const [selectedGames, setSelectedGames] = useState<string[]>([]);
@@ -272,6 +273,44 @@ const BookEdit: React.FC = () => {
 
     const handleRemoveAudio = (index: number) => {
         setAudioFiles(audioFiles.filter((_, i) => i !== index));
+    };
+
+    const handleReprocessAudio = async (index: number) => {
+        if (!bookId) {
+            alert('Book ID is required');
+            return;
+        }
+        const vol = audioUploadVolume;
+        if (!Number.isFinite(vol) || vol <= 0 || vol > 1) {
+            alert('Upload Volume must be between 0 and 1');
+            return;
+        }
+        const ok = window.confirm(`Reprocess this audio to ${Math.round(vol * 100)}% volume?\n\nThis will replace the current audio file for this book.`);
+        if (!ok) return;
+
+        setReprocessingAudioIndex(index);
+        try {
+            const response = await apiClient.post(
+                `/api/upload/audio/reprocess?bookId=${bookId}&index=${index}&volume=${vol}`
+            );
+            const updated = {
+                url: response.data.url,
+                filename: response.data.filename || audioFiles[index]?.filename || `audio-${index}.mp3`,
+                uploadedAt: new Date().toISOString(),
+            };
+            setAudioFiles(prev => prev.map((a, i) => (i === index ? updated : a)));
+            alert('Audio reprocessed successfully.');
+        } catch (error: any) {
+            console.error('Audio reprocess failed:', error);
+            const msg =
+                error?.response?.data?.message ||
+                error?.response?.data?.error ||
+                error?.message ||
+                'Unknown error';
+            alert(`Failed to reprocess audio:\n${msg}`);
+        } finally {
+            setReprocessingAudioIndex(null);
+        }
     };
 
     const handleVideoUpload = async (file: File) => {
@@ -658,14 +697,30 @@ const BookEdit: React.FC = () => {
                                             )}
                                         </div>
                                     </div>
-                                    <button
-                                        type="button"
-                                        onClick={() => handleRemoveAudio(index)}
-                                        className="ml-3 p-1 text-red-600 hover:text-red-700 hover:bg-red-50 rounded transition-colors"
-                                        title="Remove audio file"
-                                    >
-                                        <X className="w-4 h-4" />
-                                    </button>
+                                            <div className="flex items-center gap-2 ml-3">
+                                                <button
+                                                    type="button"
+                                                    onClick={() => handleReprocessAudio(index)}
+                                                    disabled={reprocessingAudioIndex !== null}
+                                                    className={`px-3 py-1 text-xs font-semibold rounded-full border transition-colors ${
+                                                        reprocessingAudioIndex === index
+                                                            ? 'bg-indigo-600 text-white border-indigo-600'
+                                                            : 'bg-white text-indigo-700 border-indigo-200 hover:bg-indigo-50'
+                                                    } ${reprocessingAudioIndex !== null && reprocessingAudioIndex !== index ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                                    title="Reprocess audio volume (permanently)"
+                                                >
+                                                    {reprocessingAudioIndex === index ? 'Reprocessing…' : `Reprocess to ${Math.round(audioUploadVolume * 100)}%`}
+                                                </button>
+
+                                                <button
+                                                    type="button"
+                                                    onClick={() => handleRemoveAudio(index)}
+                                                    className="p-1 text-red-600 hover:text-red-700 hover:bg-red-50 rounded transition-colors"
+                                                    title="Remove audio file"
+                                                >
+                                                    <X className="w-4 h-4" />
+                                                </button>
+                                            </div>
                                 </div>
                             ))}
                         </div>

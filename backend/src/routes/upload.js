@@ -8,6 +8,8 @@ const crypto = require('crypto');
 const { bucket } = require('../config/storage');
 const ffmpeg = require('fluent-ffmpeg');
 const ffmpegInstaller = require('@ffmpeg-installer/ffmpeg');
+const axios = require('axios');
+const Book = require('../models/Book');
 
 // Configure ffmpeg binary (bundled via @ffmpeg-installer/ffmpeg)
 try {
@@ -26,6 +28,52 @@ if (!fs.existsSync(uploadsDir)) {
 
 // --- Audio processing helpers (volume attenuation) ---
 const clamp01 = (n) => Math.min(1, Math.max(0, n));
+
+const extractGcsPathFromUrl = (url) => {
+    try {
+        const u = String(url || '');
+        const marker = `https://storage.googleapis.com/${bucket?.name}/`;
+        if (bucket?.name && u.startsWith(marker)) {
+            return u.slice(marker.length);
+        }
+        // Also support storage.googleapis.com/<bucket>/<path> without https prefix variations
+        const m = u.match(/storage\.googleapis\.com\/([^/]+)\/(.+)$/i);
+        if (m && bucket?.name && m[1] === bucket.name) {
+            return m[2];
+        }
+    } catch { }
+    return null;
+};
+
+const extractLocalUploadsPathFromUrl = (url) => {
+    try {
+        const u = String(url || '');
+        const idx = u.indexOf('/uploads/');
+        if (idx >= 0) return u.slice(idx + '/uploads/'.length);
+    } catch { }
+    return null;
+};
+
+const fetchAudioBufferByUrl = async (url) => {
+    // Prefer GCS download when possible (fast + no external fetch)
+    const gcsPath = extractGcsPathFromUrl(url);
+    if (gcsPath && bucket) {
+        const [buf] = await bucket.file(gcsPath).download();
+        return { buffer: buf, source: 'gcs', sourcePath: gcsPath };
+    }
+
+    // Local uploads folder (backend serves /uploads/*)
+    const localRel = extractLocalUploadsPathFromUrl(url);
+    if (localRel) {
+        const localPath = path.join(uploadsDir, localRel);
+        const buf = await fs.promises.readFile(localPath);
+        return { buffer: buf, source: 'local', sourcePath: localRel };
+    }
+
+    // Fallback: HTTP fetch
+    const resp = await axios.get(url, { responseType: 'arraybuffer' });
+    return { buffer: Buffer.from(resp.data), source: 'http', sourcePath: null };
+};
 
 /**
  * Reduce (or increase) audio volume by re-encoding to mp3 using ffmpeg.
@@ -522,6 +570,101 @@ router.post('/audio', upload.single('file'), async (req, res) => {
     } catch (error) {
         console.error('Audio upload error:', error);
         res.status(500).json({ message: error.message });
+    }
+});
+
+// Reprocess an existing book background music file (no re-upload)
+// POST /api/upload/audio/reprocess?bookId=...&index=0&volume=0.2
+router.post('/audio/reprocess', async (req, res) => {
+    try {
+        const { bookId } = req.query;
+        const indexRaw = req.query.index;
+        const volumeRaw = req.query.volume ?? req.body?.volume;
+
+        if (!bookId) {
+            return res.status(400).json({ message: 'bookId is required' });
+        }
+        const index = parseInt(String(indexRaw), 10);
+        if (!Number.isFinite(index) || index < 0) {
+            return res.status(400).json({ message: 'index must be a non-negative integer' });
+        }
+        const volumeParsed = parseFloat(String(volumeRaw));
+        if (!Number.isFinite(volumeParsed) || volumeParsed <= 0 || volumeParsed > 1) {
+            return res.status(400).json({ message: 'volume must be a number between 0 and 1' });
+        }
+        const volume = clamp01(volumeParsed);
+
+        const book = await Book.findById(bookId);
+        if (!book) {
+            return res.status(404).json({ message: 'Book not found' });
+        }
+        if (!book.files) {
+            book.files = { coverImage: book.coverImage || null, images: [], videos: [], audio: [] };
+        }
+        if (!Array.isArray(book.files.audio) || !book.files.audio[index]) {
+            return res.status(404).json({ message: 'Audio file not found at given index' });
+        }
+
+        const current = book.files.audio[index];
+        const currentUrl = current.url;
+        if (!currentUrl) {
+            return res.status(400).json({ message: 'Selected audio has no url' });
+        }
+
+        // Fetch source audio
+        const fetched = await fetchAudioBufferByUrl(currentUrl);
+        const currentFilename = current.filename || `book-audio-${index}.mp3`;
+        const currentExt = path.extname(currentFilename).toLowerCase() || '.mp3';
+
+        // Process volume to mp3
+        const processed = await processAudioVolumeToMp3({
+            inputBuffer: fetched.buffer,
+            inputExt: currentExt,
+            volume,
+        });
+
+        const baseName = path.basename(currentFilename, currentExt);
+        const newFilename = `${baseName}_vol${Math.round(volume * 100)}.mp3`;
+        const newPath = generateFilePath(String(bookId), 'audio', newFilename);
+
+        let newUrl;
+        if (bucket && process.env.GCS_BUCKET_NAME) {
+            const blob = bucket.file(newPath);
+            await new Promise((resolve, reject) => {
+                const blobStream = blob.createWriteStream({
+                    metadata: { contentType: processed.mimetype || 'audio/mpeg' },
+                });
+                blobStream.on('error', reject);
+                blobStream.on('finish', resolve);
+                blobStream.end(processed.buffer);
+            });
+            newUrl = `https://storage.googleapis.com/${bucket.name}/${newPath}`;
+        } else {
+            newUrl = await saveFileLocally(
+                { buffer: processed.buffer, mimetype: processed.mimetype || 'audio/mpeg', originalname: newFilename },
+                newPath,
+                req
+            );
+        }
+
+        // Update book record
+        book.files.audio[index] = {
+            url: newUrl,
+            filename: newFilename,
+            uploadedAt: new Date(),
+        };
+        await book.save();
+
+        res.status(200).json({
+            url: newUrl,
+            path: newPath,
+            filename: newFilename,
+            index,
+            volume,
+        });
+    } catch (error) {
+        console.error('Audio reprocess error:', error);
+        res.status(500).json({ message: 'Reprocess failed', error: error.message });
     }
 });
 

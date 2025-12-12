@@ -130,11 +130,6 @@ const BookReaderPage: React.FC = () => {
     }, [selectedLanguage]);
     const wordAlignmentRef = useRef<{ words: Array<{ word: string; start: number; end: number }> } | null>(null);
     const bookBackgroundMusicRef = useRef<HTMLAudioElement | null>(null);
-    // iOS/WKWebView often ignores HTMLAudioElement.volume. Use WebAudio GainNode for reliable volume control.
-    const bookMusicCtxRef = useRef<AudioContext | null>(null);
-    const bookMusicGainRef = useRef<GainNode | null>(null);
-    const bookMusicSourceRef = useRef<MediaElementAudioSourceNode | null>(null);
-    const bookMusicWebAudioReadyRef = useRef<boolean>(false); // only true after a user gesture resumes AudioContext
     const voiceDropdownRef = useRef<HTMLDivElement>(null);
     const [autoPlayMode, setAutoPlayMode] = useState(false);
     const autoPlayModeRef = useRef(false);
@@ -159,15 +154,6 @@ const BookReaderPage: React.FC = () => {
     const preloadedBackgroundsRef = useRef<Set<string>>(new Set());
     
     const [bookMusicEnabled, setBookMusicEnabled] = useState(true); // Default to enabled
-    const [showVolumeSlider, setShowVolumeSlider] = useState(false);
-    const [musicVolume, setMusicVolume] = useState(() => {
-        const saved = localStorage.getItem('godlykids_book_music_volume');
-        const parsed = saved ? Number(saved) : 0.2;
-        return Number.isFinite(parsed) ? Math.min(1, Math.max(0, parsed)) : 0.2;
-    });
-    const volumeSliderTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-    const volumeSliderTrackRef = useRef<HTMLDivElement | null>(null);
-    const isDraggingVolumeRef = useRef(false);
 
     // Use ref to track music enabled state for intervals/callbacks
     const bookMusicEnabledRef = useRef<boolean>(bookMusicEnabled);
@@ -175,184 +161,7 @@ const BookReaderPage: React.FC = () => {
         bookMusicEnabledRef.current = bookMusicEnabled;
     }, [bookMusicEnabled]);
 
-    // Prevent re-wiring the same audio element on arbitrary taps (iOS can glitch/pause when MediaElementSource is recreated)
-    const bookMusicConnectedElRef = useRef<HTMLAudioElement | null>(null);
-
-    const ensureBookMusicGraph = useCallback((audioEl: HTMLAudioElement) => {
-        const Ctx = (window.AudioContext || (window as any).webkitAudioContext);
-        if (!Ctx) return;
-
-        if (!bookMusicCtxRef.current) {
-            bookMusicCtxRef.current = new Ctx();
-        }
-        const ctx = bookMusicCtxRef.current;
-
-        // If AudioContext isn't unlocked yet, DON'T connect to WebAudio (can cause silence on iOS).
-        // Use element volume as a fallback until the first user interaction.
-        if (!bookMusicWebAudioReadyRef.current || ctx.state === 'suspended') {
-            audioEl.volume = musicVolume;
-            return;
-        }
-
-        if (!bookMusicGainRef.current) {
-            bookMusicGainRef.current = ctx.createGain();
-            bookMusicGainRef.current.connect(ctx.destination);
-        }
-
-        // Keep element volume at 1, control loudness via GainNode (reliable on iOS once unlocked)
-        audioEl.volume = 1;
-        bookMusicGainRef.current.gain.value = musicVolume;
-
-        // Already wired this element? Don't recreate the source (prevents pausing/glitch on random taps)
-        if (bookMusicConnectedElRef.current === audioEl && bookMusicSourceRef.current) {
-            return;
-        }
-
-        // Preserve playback state - iOS can pause/silence when routing changes mid-play.
-        const wasPlaying = !audioEl.paused && !audioEl.ended;
-
-        // Re-create source for the current element; disconnect any previous source
-        if (bookMusicSourceRef.current) {
-            try { bookMusicSourceRef.current.disconnect(); } catch { }
-            bookMusicSourceRef.current = null;
-        }
-        try {
-            bookMusicSourceRef.current = ctx.createMediaElementSource(audioEl);
-            bookMusicSourceRef.current.connect(bookMusicGainRef.current);
-            bookMusicConnectedElRef.current = audioEl;
-
-            // If it was playing before, force a resume after the re-route (helps iOS).
-            if (wasPlaying) {
-                // Defer to next tick to let the connection settle.
-                setTimeout(() => {
-                    try {
-                        audioEl.play().catch(() => { });
-                    } catch { }
-                }, 0);
-            }
-        } catch (e) {
-            console.warn('🎵 Could not connect book music to WebAudio graph:', e);
-            // fallback: at least keep audio audible
-            audioEl.volume = musicVolume;
-        }
-    }, [musicVolume]);
-
-    const resumeBookMusicContext = useCallback(async () => {
-        try {
-            if (bookMusicCtxRef.current && bookMusicCtxRef.current.state === 'suspended') {
-                await bookMusicCtxRef.current.resume();
-            }
-        } catch { }
-    }, []);
-
-    const applyBookMusicVolume = useCallback((v: number) => {
-        const clamped = Math.min(1, Math.max(0, v));
-        setMusicVolume(clamped);
-        localStorage.setItem('godlykids_book_music_volume', String(clamped));
-
-        if (bookMusicGainRef.current) {
-            bookMusicGainRef.current.gain.value = clamped;
-        } else if (bookBackgroundMusicRef.current) {
-            // fallback for browsers that respect element volume
-            bookBackgroundMusicRef.current.volume = clamped;
-        }
-
-        // Only wire into WebAudio when the user actually adjusts volume (not on random page taps)
-        const audioEl = bookBackgroundMusicRef.current;
-        if (audioEl) {
-            resumeBookMusicContext().then(() => {
-                if (bookMusicCtxRef.current && bookMusicCtxRef.current.state === 'running') {
-                    bookMusicWebAudioReadyRef.current = true;
-                    ensureBookMusicGraph(audioEl);
-                    // If audio got paused by iOS during the route change, try to resume.
-                    if (bookMusicEnabledRef.current && audioEl.paused) {
-                        audioEl.play().catch(() => { });
-                    }
-                }
-            });
-        }
-    }, []);
-
-    const setVolumeFromClientY = useCallback((clientY: number) => {
-        const el = volumeSliderTrackRef.current;
-        if (!el) return;
-        const rect = el.getBoundingClientRect();
-        const y = Math.min(rect.bottom, Math.max(rect.top, clientY));
-        const pct = 1 - (y - rect.top) / rect.height; // top = 1, bottom = 0
-        applyBookMusicVolume(pct);
-    }, [applyBookMusicVolume]);
-
-    const restartVolumeAutoHide = useCallback(() => {
-        if (volumeSliderTimeoutRef.current) {
-            clearTimeout(volumeSliderTimeoutRef.current);
-        }
-        volumeSliderTimeoutRef.current = setTimeout(() => {
-            setShowVolumeSlider(false);
-        }, 3000);
-    }, []);
-
-    // Drag listeners for custom volume slider (works reliably on iOS)
-    useEffect(() => {
-        const handleMove = (e: TouchEvent | PointerEvent) => {
-            if (!isDraggingVolumeRef.current) return;
-            const clientY = (e as TouchEvent).touches
-                ? (e as TouchEvent).touches[0]?.clientY
-                : (e as PointerEvent).clientY;
-            if (typeof clientY === 'number') {
-                setVolumeFromClientY(clientY);
-                restartVolumeAutoHide();
-            }
-        };
-        const handleEnd = () => {
-            if (!isDraggingVolumeRef.current) return;
-            isDraggingVolumeRef.current = false;
-            restartVolumeAutoHide();
-        };
-
-        window.addEventListener('touchmove', handleMove, { passive: false });
-        window.addEventListener('touchend', handleEnd);
-        window.addEventListener('pointermove', handleMove as any);
-        window.addEventListener('pointerup', handleEnd as any);
-
-        return () => {
-            window.removeEventListener('touchmove', handleMove as any);
-            window.removeEventListener('touchend', handleEnd as any);
-            window.removeEventListener('pointermove', handleMove as any);
-            window.removeEventListener('pointerup', handleEnd as any);
-        };
-    }, [restartVolumeAutoHide, setVolumeFromClientY]);
-
-    // Keep gain node in sync if volume changes after graph is created
-    useEffect(() => {
-        if (bookMusicGainRef.current) {
-            bookMusicGainRef.current.gain.value = musicVolume;
-        }
-    }, [musicVolume]);
-
-    // iOS: unlock WebAudio on first user gesture (DO NOT rewire book music here; rewiring on random taps pauses music)
-    useEffect(() => {
-        const unlock = async () => {
-            // Ensure context exists
-            const Ctx = (window.AudioContext || (window as any).webkitAudioContext);
-            if (Ctx && !bookMusicCtxRef.current) {
-                bookMusicCtxRef.current = new Ctx();
-            }
-
-            await resumeBookMusicContext();
-            if (bookMusicCtxRef.current && bookMusicCtxRef.current.state === 'running') {
-                bookMusicWebAudioReadyRef.current = true;
-            }
-        };
-
-        // capture=true to run even if something stops propagation
-        window.addEventListener('pointerdown', unlock, { capture: true, once: true });
-        window.addEventListener('touchstart', unlock, { capture: true, once: true });
-
-        return () => {
-            window.removeEventListener('pointerdown', unlock as any, { capture: true } as any);
-            window.removeEventListener('touchstart', unlock as any, { capture: true } as any);
-        };
-    }, [ensureBookMusicGraph, resumeBookMusicContext]);
+    // NOTE: In-app volume control was removed. Volume is controlled via portal upload attenuation.
 
     const [hasBookMusic, setHasBookMusic] = useState(false);
     const [isFavorite, setIsFavorite] = useState(false);
@@ -580,11 +389,8 @@ const BookReaderPage: React.FC = () => {
                         audio.loop = true;
                         audio.preload = 'auto';
                         bookBackgroundMusicRef.current = audio;
-                        ensureBookMusicGraph(audio);
-
                         // Start playing book music automatically when loaded
-                        audio.addEventListener('canplaythrough', async () => {
-                            await resumeBookMusicContext();
+                        audio.addEventListener('canplaythrough', () => {
                             if (bookMusicEnabledRef.current) {
                                 console.log('🎵 Book music ready - starting playback');
                                 audio.play().catch(err => {
@@ -595,7 +401,6 @@ const BookReaderPage: React.FC = () => {
 
                         // Try to play immediately if already loaded
                         if (audio.readyState >= 3 && bookMusicEnabledRef.current) {
-                            await resumeBookMusicContext();
                             audio.play().catch(err => {
                                 console.warn('⚠️ Book music immediate play prevented:', err);
                             });
@@ -625,16 +430,12 @@ const BookReaderPage: React.FC = () => {
                 bookBackgroundMusicRef.current.src = '';
                 bookBackgroundMusicRef.current = null;
             }
-            // Disconnect WebAudio graph for book music source
-            if (bookMusicSourceRef.current) {
-                try { bookMusicSourceRef.current.disconnect(); } catch { }
-                bookMusicSourceRef.current = null;
-            }
+            // (Volume graph removed) nothing else to cleanup here.
 
             // Resume app music
             setMusicPaused(false);
         };
-    }, [bookId, setGameMode, setMusicPaused, ensureBookMusicGraph, resumeBookMusicContext]); // Removed bookMusicEnabled from dependencies
+    }, [bookId, setGameMode, setMusicPaused]); // Removed in-app volume graph dependencies
 
     // Ref to track current audio for cleanup (avoids stale closure issues)
     const currentAudioRef = useRef<HTMLAudioElement | null>(null);
@@ -2229,45 +2030,20 @@ const BookReaderPage: React.FC = () => {
                         )}
                     </div>
 
-                    {/* Background Music Toggle with Volume Control - Only show if book has music */}
+                    {/* Background Music Toggle - Only show if book has music */}
                     {hasBookMusic ? (
                         <div className="relative" onClick={(e) => e.stopPropagation()}>
                             <button
                                 onClick={(e) => {
                                     e.stopPropagation();
-                                    if (bookMusicEnabled) {
-                                        // If music is on, show/hide volume slider
-                                        setShowVolumeSlider(!showVolumeSlider);
-                                        // Auto-hide after 3 seconds
-                                        if (!showVolumeSlider) {
-                                            restartVolumeAutoHide();
-                                        }
-                                        // Defensive: if music somehow paused while enabled, resume it
-                                        if (bookBackgroundMusicRef.current && bookBackgroundMusicRef.current.paused) {
-                                            ensureBookMusicGraph(bookBackgroundMusicRef.current);
-                                            resumeBookMusicContext().then(() => {
-                                                if (bookMusicCtxRef.current && bookMusicCtxRef.current.state === 'running') {
-                                                    bookMusicWebAudioReadyRef.current = true;
-                                                    ensureBookMusicGraph(bookBackgroundMusicRef.current!);
-                                                }
-                                            });
-                                            bookBackgroundMusicRef.current.play().catch(() => { });
-                                        }
-                                    } else {
-                                        // If music is off, turn it on
-                                        setBookMusicEnabled(true);
-                                        if (bookBackgroundMusicRef.current) {
-                                            // Ensure WebAudio graph exists + is resumed (iOS)
-                                            ensureBookMusicGraph(bookBackgroundMusicRef.current);
-                                            resumeBookMusicContext().then(() => {
-                                                if (bookMusicCtxRef.current && bookMusicCtxRef.current.state === 'running') {
-                                                    bookMusicWebAudioReadyRef.current = true;
-                                                    ensureBookMusicGraph(bookBackgroundMusicRef.current!);
-                                                }
-                                            });
-                                            bookBackgroundMusicRef.current.play().catch(err => {
-                                                console.warn('Could not play book music:', err);
-                                            });
+                                    const next = !bookMusicEnabled;
+                                    setBookMusicEnabled(next);
+                                    const audio = bookBackgroundMusicRef.current;
+                                    if (audio) {
+                                        if (next) {
+                                            audio.play().catch(err => console.warn('Could not play book music:', err));
+                                        } else {
+                                            audio.pause();
                                         }
                                     }
                                 }}
@@ -2275,103 +2051,10 @@ const BookReaderPage: React.FC = () => {
                                     ? 'border-yellow-400/50 shadow-lg shadow-yellow-400/20'
                                     : 'border-white/20'
                                     }`}
-                                title={bookMusicEnabled ? "Tap to adjust volume" : "Enable background music"}
+                                title={bookMusicEnabled ? "Mute background music" : "Play background music"}
                             >
                                 <Music className={`w-6 h-6 ${bookMusicEnabled ? 'text-yellow-300' : 'text-white/50'}`} />
                             </button>
-
-                            {/* Volume Slider Dropdown */}
-                            {showVolumeSlider && bookMusicEnabled && (
-                                <div 
-                                    className="absolute top-full left-1/2 -translate-x-1/2 mt-2 bg-black/80 backdrop-blur-md rounded-xl border border-white/20 shadow-2xl p-3 z-50 animate-fade-in"
-                                    style={{
-                                        animation: 'slideDown 0.2s ease-out'
-                                    }}
-                                    onClick={(e) => e.stopPropagation()}
-                                >
-                                    {/* Vertical Volume Slider */}
-                                    <div className="flex flex-col items-center gap-2">
-                                        <div className="text-white/70 text-xs font-medium">Volume</div>
-                                        <div className="relative h-32 w-10 flex items-center justify-center">
-                                            <div
-                                                ref={volumeSliderTrackRef}
-                                                className="relative h-32 w-3 rounded-full bg-white/20 overflow-hidden"
-                                                style={{ touchAction: 'none' }}
-                                                onPointerDown={(e) => {
-                                                    e.stopPropagation();
-                                                    isDraggingVolumeRef.current = true;
-                                                    setVolumeFromClientY(e.clientY);
-                                                    restartVolumeAutoHide();
-                                                }}
-                                                onTouchStart={(e) => {
-                                                    e.stopPropagation();
-                                                    isDraggingVolumeRef.current = true;
-                                                    setVolumeFromClientY(e.touches[0].clientY);
-                                                    restartVolumeAutoHide();
-                                                }}
-                                            >
-                                                {/* Filled portion */}
-                                                <div
-                                                    className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-[#FFA500] to-[#FFD700]"
-                                                    style={{ height: `${musicVolume * 100}%` }}
-                                                />
-                                                {/* Thumb */}
-                                                <div
-                                                    className="absolute left-1/2 -translate-x-1/2 w-7 h-7 rounded-full bg-gradient-to-br from-[#FFD700] to-[#FFA500] border-[3px] border-white shadow-[0_2px_8px_rgba(0,0,0,0.4)]"
-                                                    style={{
-                                                        bottom: `calc(${musicVolume * 100}% - 14px)`,
-                                                        touchAction: 'none',
-                                                    }}
-                                                />
-                                            </div>
-                                        </div>
-                                        <div className="text-yellow-300 text-sm font-bold">{Math.round(musicVolume * 100)}%</div>
-                                        {/* Mute button */}
-                                        <button
-                                            onClick={(e) => {
-                                                e.stopPropagation();
-                                                setBookMusicEnabled(false);
-                                                setShowVolumeSlider(false);
-                                                if (bookBackgroundMusicRef.current) {
-                                                    bookBackgroundMusicRef.current.pause();
-                                                }
-                                            }}
-                                            className="mt-1 px-3 py-1 bg-red-500/20 hover:bg-red-500/40 text-red-300 text-xs font-medium rounded-full transition-colors"
-                                        >
-                                            Mute
-                                        </button>
-                                    </div>
-                                </div>
-                            )}
-
-                            {/* CSS for animations */}
-                            <style>{`
-                                @keyframes slideDown {
-                                    from {
-                                        opacity: 0;
-                                        transform: translateX(-50%) translateY(-10px);
-                                    }
-                                    to {
-                                        opacity: 1;
-                                        transform: translateX(-50%) translateY(0);
-                                    }
-                                }
-                                input[type="range"]::-webkit-slider-thumb {
-                                    -webkit-appearance: none;
-                                    width: 28px;
-                                    height: 28px;
-                                    background: linear-gradient(135deg, #FFD700, #FFA500);
-                                    border-radius: 50%;
-                                    cursor: pointer;
-                                    box-shadow: 0 2px 8px rgba(0,0,0,0.4);
-                                    border: 3px solid white;
-                                    touch-action: none;
-                                }
-                                input[type="range"]::-webkit-slider-runnable-track {
-                                    height: 12px;
-                                    border-radius: 6px;
-                                }
-                            `}</style>
                         </div>
                     ) : (
                         <div className="text-xs text-white/50 px-2">

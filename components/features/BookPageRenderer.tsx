@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { removeEmotionalCues } from '../../utils/textProcessing';
 import { Music } from 'lucide-react';
 
@@ -71,9 +71,9 @@ export const BookPageRenderer: React.FC<BookPageRendererProps> = ({
     const textBoxRefs = useRef<{ [key: number]: HTMLDivElement | null }>({});
     const soundEffectRefs = useRef<Map<string, HTMLAudioElement>>(new Map());
     const videoRef = useRef<HTMLVideoElement | null>(null);
-    const [bubblePopped, setBubblePopped] = useState(false);
     const [videoUnmuted, setVideoUnmuted] = useState(false);
     const [bubblePosition, setBubblePosition] = useState({ x: 75, y: 20 }); // Default position (top right area)
+    const [sfxPositions, setSfxPositions] = useState<Record<string, { x: number; y: number }>>({});
     
     // Swipe detection for scroll height changes
     const touchStartY = useRef<number>(0);
@@ -197,9 +197,74 @@ export const BookPageRenderer: React.FC<BookPageRendererProps> = ({
         }
     }, [page.backgroundUrl]);
 
-    // Reset bubble when page changes
+    const hashToUnit = (input: string): number => {
+        // deterministic 0..1 pseudo-random based on string
+        let h = 2166136261;
+        for (let i = 0; i < input.length; i++) {
+            h ^= input.charCodeAt(i);
+            h = Math.imul(h, 16777619);
+        }
+        // convert to [0,1)
+        return ((h >>> 0) % 10000) / 10000;
+    };
+
+    const generateScatteredPositions = useCallback((urls: string[]) => {
+        // Place bubbles in safe areas away from edges and UI.
+        // Percent coords (0-100). We'll keep y away from top toolbar (~0-12) and bottom controls (~80-100).
+        const candidates = [
+            { xMin: 15, xMax: 35, yMin: 18, yMax: 32 },
+            { xMin: 65, xMax: 85, yMin: 18, yMax: 32 },
+            { xMin: 15, xMax: 35, yMin: 38, yMax: 55 },
+            { xMin: 65, xMax: 85, yMin: 38, yMax: 55 },
+            { xMin: 35, xMax: 65, yMin: 22, yMax: 40 },
+            { xMin: 35, xMax: 65, yMin: 42, yMax: 60 },
+        ];
+
+        const placed: Array<{ x: number; y: number }> = [];
+        const out: Record<string, { x: number; y: number }> = {};
+
+        const minDist = 18; // minimum distance in percentage-space
+        const dist = (a: { x: number; y: number }, b: { x: number; y: number }) =>
+            Math.hypot(a.x - b.x, a.y - b.y);
+
+        urls.forEach((url, idx) => {
+            const seed = `${page.id}|${url}|${idx}`;
+            const pick = Math.floor(hashToUnit(seed) * candidates.length);
+            const altPick = Math.floor(hashToUnit(seed + '|alt') * candidates.length);
+            const choices = [candidates[pick], candidates[altPick], ...candidates];
+
+            let chosen: { x: number; y: number } | null = null;
+            for (let attempt = 0; attempt < Math.min(choices.length, 8); attempt++) {
+                const c = choices[attempt];
+                const rx = hashToUnit(seed + `|x|${attempt}`);
+                const ry = hashToUnit(seed + `|y|${attempt}`);
+                const p = {
+                    x: c.xMin + rx * (c.xMax - c.xMin),
+                    y: c.yMin + ry * (c.yMax - c.yMin),
+                };
+                if (placed.every(prev => dist(prev, p) >= minDist)) {
+                    chosen = p;
+                    break;
+                }
+            }
+            // fallback: if we couldn't satisfy distance, still place it
+            if (!chosen) {
+                const c = candidates[pick];
+                chosen = {
+                    x: c.xMin + hashToUnit(seed + '|fx') * (c.xMax - c.xMin),
+                    y: c.yMin + hashToUnit(seed + '|fy') * (c.yMax - c.yMin),
+                };
+            }
+
+            placed.push(chosen);
+            out[url] = chosen;
+        });
+
+        return out;
+    }, [page.id]);
+
+    // Reset bubble positions when page changes or sound effects change
     useEffect(() => {
-        setBubblePopped(false);
         // Randomize bubble position across different areas of the screen
         // Avoid the very center where text usually is, and edges where controls are
         const positions = [
@@ -213,18 +278,32 @@ export const BookPageRenderer: React.FC<BookPageRendererProps> = ({
         // Pick a random position from the array
         const randomPosition = positions[Math.floor(Math.random() * positions.length)];
         setBubblePosition(randomPosition);
-    }, [page.id]);
+
+        const urls = (page.soundEffects && page.soundEffects.length > 0)
+            ? page.soundEffects.map(s => s.url).filter(Boolean)
+            : (page.soundEffectUrl ? [page.soundEffectUrl] : []);
+        setSfxPositions(generateScatteredPositions(urls));
+    }, [page.id, page.soundEffectUrl, page.soundEffects, generateScatteredPositions]);
 
     const handleBubbleClick = (e: React.MouseEvent, url?: string) => {
         e.stopPropagation();
         const audio = url ? soundEffectRefs.current.get(url) : null;
-        if (audio && !bubblePopped) {
-            setBubblePopped(true);
+        if (!audio) return;
+
+        // Stop any other sound effects so only the tapped one plays
+        soundEffectRefs.current.forEach((a, key) => {
+            try {
+                a.pause();
+                a.currentTime = 0;
+            } catch { }
+        });
+
+        try {
             audio.currentTime = 0;
             audio.play().catch(err => {
                 console.warn('Could not play sound effect:', err);
             });
-        }
+        } catch { }
     };
 
     return (
@@ -434,20 +513,19 @@ export const BookPageRenderer: React.FC<BookPageRendererProps> = ({
                     ? page.soundEffects.filter(s => !!s.url).slice(0, 3)
                     : (page.soundEffectUrl ? [{ url: page.soundEffectUrl }] : []);
 
-                if (sfx.length === 0 || bubblePopped) return null;
+                if (sfx.length === 0) return null;
 
                 return (
                     <>
                         {sfx.map((s, idx) => {
-                            const offsetX = (idx - (sfx.length - 1) / 2) * 12; // spread horizontally
-                            const offsetY = idx * 2;
+                            const pos = sfxPositions[s.url] || { x: bubblePosition.x, y: bubblePosition.y };
                             return (
                                 <div
                                     key={`${s.url}-${idx}`}
                                     className="absolute z-30 cursor-pointer"
                                     style={{
-                                        left: `calc(${bubblePosition.x}% + ${offsetX}px)`,
-                                        top: `calc(${bubblePosition.y}% + ${offsetY}px)`,
+                                        left: `${pos.x}%`,
+                                        top: `${pos.y}%`,
                                         transform: 'translate(-50%, -50%)',
                                         animation: 'float 3s ease-in-out infinite'
                                     }}
@@ -471,29 +549,6 @@ export const BookPageRenderer: React.FC<BookPageRendererProps> = ({
                     </>
                 );
             })()}
-
-            {/* Popped bubble animation */}
-            {bubblePopped && (
-                <div
-                    className="absolute z-30 pointer-events-none"
-                    style={{
-                        left: `${bubblePosition.x}%`,
-                        top: `${bubblePosition.y}%`,
-                        transform: 'translate(-50%, -50%)',
-                        animation: 'pop 0.5s ease-out forwards'
-                    }}
-                >
-                    <div className="w-20 h-20 bg-gradient-to-br from-yellow-300 to-orange-400 rounded-full opacity-0 flex items-center justify-center">
-                        <Music className="w-10 h-10 text-white" />
-                    </div>
-                    <style>{`
-                        @keyframes pop {
-                            0% { transform: translate(-50%, -50%) scale(1); opacity: 1; }
-                            100% { transform: translate(-50%, -50%) scale(2); opacity: 0; }
-                        }
-                    `}</style>
-                </div>
-            )}
         </div>
     );
 };

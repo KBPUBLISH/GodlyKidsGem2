@@ -11,6 +11,7 @@ export const SUPPORTED_LANGUAGES: Record<string, { name: string; flag: string; n
     'nl': { name: 'Dutch', flag: '🇳🇱', nativeName: 'Nederlands' },
     'pl': { name: 'Polish', flag: '🇵🇱', nativeName: 'Polski' },
     'ru': { name: 'Russian', flag: '🇷🇺', nativeName: 'Русский' },
+    'ro': { name: 'Romanian', flag: '🇷🇴', nativeName: 'Română' },
     'zh': { name: 'Chinese', flag: '🇨🇳', nativeName: '中文' },
     'ja': { name: 'Japanese', flag: '🇯🇵', nativeName: '日本語' },
     'ko': { name: 'Korean', flag: '🇰🇷', nativeName: '한국어' },
@@ -28,6 +29,7 @@ export const LANGUAGE_VOICES: Record<string, string> = {
     'nl': 'ThT5KcBeYPX3keUQqHPh', // Dutch
     'pl': 'ThT5KcBeYPX3keUQqHPh', // Polish
     'ru': 'ThT5KcBeYPX3keUQqHPh', // Russian
+    'ro': 'ThT5KcBeYPX3keUQqHPh', // Romanian (use multilingual)
     'zh': 'ThT5KcBeYPX3keUQqHPh', // Chinese
     'ja': 'ThT5KcBeYPX3keUQqHPh', // Japanese
     'ko': 'ThT5KcBeYPX3keUQqHPh', // Korean

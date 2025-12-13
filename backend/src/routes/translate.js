@@ -15,6 +15,7 @@ const SUPPORTED_LANGUAGES = {
     'nl': 'Dutch',
     'pl': 'Polish',
     'ru': 'Russian',
+    'ro': 'Romanian',
     'zh': 'Chinese',
     'ja': 'Japanese',
     'ko': 'Korean',

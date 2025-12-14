@@ -804,6 +804,30 @@ const HomePage: React.FC = () => {
             const dayLessons = lessons;
             const isFutureDay = selectedDayIndex > todayIndex && todayIndex !== -1;
 
+            // No profile selected - prompt to switch or create
+            if (!currentProfileId) {
+              const hasKids = kids && kids.length > 0;
+              return (
+                <div className="rounded-2xl p-6 text-center border-2 border-[#FFD700]/50 shadow-lg" style={{ background: 'linear-gradient(135deg, #8B5CF6 0%, #7C3AED 50%, #6D28D9 100%)' }}>
+                  <div className="text-5xl mb-3">👧👦</div>
+                  <h3 className="text-white font-bold text-xl mb-2 drop-shadow-md">
+                    {hasKids ? 'Switch to a Child Profile' : 'Create a Child Profile'}
+                  </h3>
+                  <p className="text-white/90 text-sm mb-4">
+                    {hasKids 
+                      ? 'Daily lessons are personalized for each child. Select a child profile to see their lessons!'
+                      : 'Set up a profile for your child to unlock personalized daily video lessons!'}
+                  </p>
+                  <button
+                    onClick={() => navigate('/profiles')}
+                    className="px-6 py-3 bg-[#FFD700] text-[#3E1F07] font-bold rounded-full shadow-lg hover:bg-[#FFC000] transition-all transform hover:scale-105"
+                  >
+                    {hasKids ? '👤 Switch Profile' : '➕ Create Child Profile'}
+                  </button>
+                </div>
+              );
+            }
+
             if (dayLessons.length === 0) {
               return (
                 <div className="rounded-2xl p-6 text-center border-2 border-[#1E88E5]/50 shadow-lg" style={{ background: 'linear-gradient(135deg, #1565C0 0%, #1976D2 50%, #2196F3 100%)' }}>

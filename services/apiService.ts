@@ -1518,10 +1518,14 @@ export const ApiService = {
   },
 
   // Daily Lesson Planner (per child profile, per day)
-  getLessonPlannerDay: async (profileId: string, dateKey: string, ageGroup: string = 'all'): Promise<any | null> => {
+  getLessonPlannerDay: async (profileId: string, dateKey: string, ageGroup: string = 'all', forceRegenerate: boolean = false): Promise<any | null> => {
     try {
       const baseUrl = getApiBaseUrl();
-      const url = `${baseUrl}lessons/planner/day?profileId=${encodeURIComponent(profileId)}&dateKey=${encodeURIComponent(dateKey)}&ageGroup=${encodeURIComponent(ageGroup)}`;
+      let url = `${baseUrl}lessons/planner/day?profileId=${encodeURIComponent(profileId)}&dateKey=${encodeURIComponent(dateKey)}&ageGroup=${encodeURIComponent(ageGroup)}`;
+      if (forceRegenerate) {
+        url += '&force=true';
+      }
+      console.log('📅 Calling planner API:', url);
       const response = await fetchWithTimeout(url, { method: 'GET' });
       if (response.ok) {
         return await response.json();

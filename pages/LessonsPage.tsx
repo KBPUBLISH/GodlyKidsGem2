@@ -208,13 +208,11 @@ const LessonsPage: React.FC = () => {
                 <button
                     onClick={async () => {
                         const today = formatLocalDateKey(new Date());
-                        console.log('🧪 Manual test! profileId:', currentProfileId, 'dateKey:', today);
-                        if (!currentProfileId) {
-                            alert('No profile ID! Check console.');
-                            return;
-                        }
+                        // Use currentProfileId or a test ID
+                        const testProfileId = currentProfileId || 'test-profile-123';
+                        console.log('🧪 Manual test! profileId:', testProfileId, '(current:', currentProfileId, ') dateKey:', today);
                         try {
-                            const result = await ApiService.getLessonPlannerDay(currentProfileId, today, 'all');
+                            const result = await ApiService.getLessonPlannerDay(testProfileId, today, 'all');
                             console.log('🧪 Manual test result:', result);
                             alert('Result: ' + JSON.stringify(result?.slots?.length || 0) + ' slots. Check console!');
                         } catch (err) {
@@ -224,7 +222,7 @@ const LessonsPage: React.FC = () => {
                     }}
                     className="mb-4 px-4 py-2 bg-purple-600 text-white rounded-lg text-sm"
                 >
-                    🧪 Test API Call (Debug)
+                    🧪 Test API Call (profileId: {currentProfileId || 'none - will use test ID'})
                 </button>
 
                 {/* Week View - Portrait Style Thumbnails */}

@@ -62,10 +62,28 @@ const markGamePurchased = (gameId: string): void => {
 };
 
 
+// Helper to format date as YYYY-MM-DD in local time
+const formatLocalDateKey = (d: Date): string => {
+  const yyyy = d.getFullYear();
+  const mm = String(d.getMonth() + 1).padStart(2, '0');
+  const dd = String(d.getDate()).padStart(2, '0');
+  return `${yyyy}-${mm}-${dd}`;
+};
+
+// Convert kid age to lesson age group
+const ageToLessonAgeGroup = (age?: number): string => {
+  if (!age || !Number.isFinite(age)) return 'all';
+  if (age <= 6) return '4-6';
+  if (age <= 8) return '6-8';
+  if (age <= 10) return '8-10';
+  if (age <= 12) return '10-12';
+  return 'all';
+};
+
 const HomePage: React.FC = () => {
   const navigate = useNavigate();
   const { books, loading, error: booksError, refreshBooks } = useBooks();
-  const { coins, spendCoins } = useUser();
+  const { coins, spendCoins, currentProfileId, kids } = useUser();
   const [isRetrying, setIsRetrying] = useState(false);
 
   const [isHeaderVisible, setIsHeaderVisible] = useState(true);
@@ -96,12 +114,16 @@ const HomePage: React.FC = () => {
     } catch { return []; }
   };
   
-  // Lessons state - initialize from cache if available
+  // Lessons state - now using daily planner API
   const [lessons, setLessons] = useState<any[]>(() => getCached('lessons'));
   const [lessonsLoading, setLessonsLoading] = useState(() => getCached('lessons').length === 0);
   const [weekLessons, setWeekLessons] = useState<Map<string, any>>(new Map());
   const [selectedDayIndex, setSelectedDayIndex] = useState<number>(getSelectedDay());
   const todayIndex = getTodayIndex();
+  
+  // Daily planner state
+  const [dayPlans, setDayPlans] = useState<Map<string, any>>(new Map());
+  const loadedDaysRef = useRef<Set<string>>(new Set());
   
   // Welcome video state - plays once per app session when returning to home
   const [showWelcomeVideo, setShowWelcomeVideo] = useState(() => {
@@ -349,53 +371,72 @@ const HomePage: React.FC = () => {
     }
   };
 
+  // Load a single day's plan using the daily planner API
+  const loadDayPlan = async (dateKey: string, forceLoad = false) => {
+    if (!currentProfileId) {
+      console.log('📚 loadDayPlan: No currentProfileId, skipping');
+      return null;
+    }
+    
+    // Skip if already loaded
+    if (!forceLoad && loadedDaysRef.current.has(dateKey)) {
+      return dayPlans.get(dateKey);
+    }
+    
+    loadedDaysRef.current.add(dateKey);
+    console.log('📚 loadDayPlan: Fetching plan for', dateKey, 'profile:', currentProfileId);
+    
+    const kid = kids?.find((k: any) => String(k.id) === String(currentProfileId));
+    const ageGroup = ageToLessonAgeGroup(kid?.age);
+    
+    try {
+      const plan = await ApiService.getLessonPlannerDay(currentProfileId, dateKey, ageGroup);
+      console.log('📚 loadDayPlan: Got plan for', dateKey, ':', plan);
+      
+      if (plan && plan.slots) {
+        setDayPlans(prev => {
+          const next = new Map(prev);
+          next.set(dateKey, plan);
+          return next;
+        });
+        return plan;
+      }
+      return null;
+    } catch (error) {
+      console.error('📚 loadDayPlan: Error:', error);
+      loadedDaysRef.current.delete(dateKey);
+      return null;
+    }
+  };
+
   const fetchLessons = async () => {
     try {
-      console.log('📚 Fetching lessons from API...');
-      const data = await ApiService.getLessons();
-      console.log('📚 Lessons received:', data.length, data);
-      setLessons(data);
-
-      // Organize lessons by day for the fixed week (Monday to Sunday)
-      const weekMap = new Map<string, any>();
-      const weekDays = getWeekDays(); // Get Monday through Sunday of current week
-
-      // Also include published lessons without scheduled dates
-      const publishedLessons = data.filter((l: any) =>
-        l.status === 'published' && !l.scheduledDate
-      );
-
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
-
-      weekDays.forEach((date, index) => {
-        const dateKey = date.toISOString().split('T')[0];
-
-        // Find lesson scheduled for this date
-        // Compare date strings directly to avoid timezone conversion issues
-        let lesson = data.find((l: any) => {
-          if (!l.scheduledDate) return false;
-          // Extract date portion directly from the stored date string (UTC)
-          const scheduledStr = typeof l.scheduledDate === 'string'
-            ? l.scheduledDate.split('T')[0]
-            : new Date(l.scheduledDate).toISOString().split('T')[0];
-          return scheduledStr === dateKey;
-        });
-
-        // If no scheduled lesson and we have published lessons without dates,
-        // assign them in order to days without lessons (for the current week)
-        if (!lesson && publishedLessons[index]) {
-          lesson = publishedLessons[index];
+      console.log('📚 Fetching lessons - using daily planner API...');
+      console.log('📚 currentProfileId:', currentProfileId);
+      
+      // If we have a profile, use the daily planner
+      if (currentProfileId) {
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        const todayDateKey = formatLocalDateKey(today);
+        
+        // Load today's plan
+        const plan = await loadDayPlan(todayDateKey);
+        
+        if (plan && plan.slots) {
+          // Convert planner slots to lessons array for backward compatibility
+          const lessonsFromPlan = plan.slots.map((slot: any) => slot.lesson).filter(Boolean);
+          setLessons(lessonsFromPlan);
+          console.log('📚 Lessons from planner:', lessonsFromPlan.length);
         }
-
-        if (lesson) {
-          weekMap.set(dateKey, lesson);
-        }
-      });
-
-      console.log('📚 Week lessons map (Mon-Sun):', Array.from(weekMap.entries()));
-      setWeekLessons(weekMap);
-      cacheData('lessons', data);
+      } else {
+        // Fallback to old API if no profile (shouldn't happen in normal use)
+        console.log('📚 No profile, falling back to old lessons API...');
+        const data = await ApiService.getLessons();
+        console.log('📚 Lessons received (fallback):', data.length);
+        setLessons(data);
+        cacheData('lessons', data);
+      }
     } catch (error) {
       console.error('❌ Error fetching lessons:', error);
     } finally {
@@ -703,9 +744,26 @@ const HomePage: React.FC = () => {
           {/* Weekly Tracker - Compact Mon-Sat progress */}
           <WeeklyLessonTracker
             selectedDay={selectedDayIndex}
-            onDaySelect={(dayIndex) => {
+            onDaySelect={async (dayIndex) => {
               setSelectedDayIndex(dayIndex);
               setSelectedDay(dayIndex);
+              
+              // Load plan for selected day
+              if (currentProfileId) {
+                const weekDays = getWeekDays();
+                const selectedDate = weekDays[dayIndex];
+                if (selectedDate) {
+                  const dateKey = formatLocalDateKey(selectedDate);
+                  console.log('📚 Day selected:', dayIndex, 'dateKey:', dateKey);
+                  setLessonsLoading(true);
+                  const plan = await loadDayPlan(dateKey);
+                  if (plan && plan.slots) {
+                    const lessonsFromPlan = plan.slots.map((slot: any) => slot.lesson).filter(Boolean);
+                    setLessons(lessonsFromPlan);
+                  }
+                  setLessonsLoading(false);
+                }
+              }
             }}
             dayCompletions={[0, 1, 2, 3, 4].map(i => isDayComplete(lessons, i))}
             todayIndex={todayIndex}
@@ -719,11 +777,11 @@ const HomePage: React.FC = () => {
               color="#7c4dff"
             />
             {(() => {
-              const dayLessons = getLessonsForDay(lessons, selectedDayIndex);
-              const completedCount = dayLessons.filter((l: any) => isCompleted(l._id || l.id)).length;
-              return dayLessons.length > 0 ? (
+              // Use lessons directly from planner
+              const completedCount = lessons.filter((l: any) => isCompleted(l._id || l.id)).length;
+              return lessons.length > 0 ? (
                 <span className="text-white/60 text-xs font-semibold">
-                  {completedCount}/{dayLessons.length} Complete
+                  {completedCount}/{lessons.length} Complete
                 </span>
               ) : null;
             })()}
@@ -733,7 +791,8 @@ const HomePage: React.FC = () => {
           {lessonsLoading ? (
             <div className="text-white/70 text-center py-8 px-4">Loading lessons...</div>
           ) : (() => {
-            const dayLessons = getLessonsForDay(lessons, selectedDayIndex);
+            // Use lessons directly from planner (already loaded for selected day)
+            const dayLessons = lessons;
             const isFutureDay = selectedDayIndex > todayIndex && todayIndex !== -1;
 
             if (dayLessons.length === 0) {

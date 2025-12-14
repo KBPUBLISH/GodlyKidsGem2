@@ -70,6 +70,28 @@ const LessonsPage: React.FC = () => {
     
     // Track which days we've already requested (to avoid duplicate fetches)
     const loadedDaysRef = React.useRef<Set<string>>(new Set());
+    
+    // IMMEDIATE LOG - runs every render
+    console.log('🚨 LessonsPage RENDER - currentProfileId:', currentProfileId, 'typeof:', typeof currentProfileId);
+    
+    // Debug: log profile info on mount
+    useEffect(() => {
+        console.log('📅 LessonsPage mounted. currentProfileId:', currentProfileId, 'kids:', kids?.length || 0);
+        if (kids && kids.length > 0) {
+            console.log('📅 Kids list:', kids.map((k: any) => ({ id: k.id, name: k.name, age: k.age })));
+        }
+    }, [currentProfileId, kids]);
+    
+    // Force trigger on mount if we have a profile
+    useEffect(() => {
+        console.log('📅 Mount effect running, currentProfileId=', currentProfileId);
+        if (currentProfileId) {
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);
+            const dateKey = formatLocalDateKey(today);
+            console.log('📅 Will try to load today:', dateKey);
+        }
+    }, []);
 
     const loadDayPlan = useCallback(async (dateKey: string, forceLoad = false) => {
         if (!currentProfileId) {
@@ -177,8 +199,33 @@ const LessonsPage: React.FC = () => {
                 {!currentProfileId && (
                     <div className="mb-6 bg-black/30 border border-white/10 rounded-xl p-4 text-white/90">
                         Please select a kid profile to see daily lessons.
+                        <br />
+                        <span className="text-xs text-white/50">Debug: currentProfileId = {String(currentProfileId)}</span>
                     </div>
                 )}
+                
+                {/* Debug button to manually trigger API call */}
+                <button
+                    onClick={async () => {
+                        const today = formatLocalDateKey(new Date());
+                        console.log('🧪 Manual test! profileId:', currentProfileId, 'dateKey:', today);
+                        if (!currentProfileId) {
+                            alert('No profile ID! Check console.');
+                            return;
+                        }
+                        try {
+                            const result = await ApiService.getLessonPlannerDay(currentProfileId, today, 'all');
+                            console.log('🧪 Manual test result:', result);
+                            alert('Result: ' + JSON.stringify(result?.slots?.length || 0) + ' slots. Check console!');
+                        } catch (err) {
+                            console.error('🧪 Manual test error:', err);
+                            alert('Error! Check console.');
+                        }
+                    }}
+                    className="mb-4 px-4 py-2 bg-purple-600 text-white rounded-lg text-sm"
+                >
+                    🧪 Test API Call (Debug)
+                </button>
 
                 {/* Week View - Portrait Style Thumbnails */}
                 <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-7 gap-4 mb-8">

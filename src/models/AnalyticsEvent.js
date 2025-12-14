@@ -35,6 +35,7 @@ const analyticsEventSchema = new mongoose.Schema({
             'audio_play',
             'lesson_view',
             'lesson_complete',
+            'lesson_video_watched_50',
             
             // Engagement
             'book_like',

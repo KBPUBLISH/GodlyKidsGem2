@@ -8,6 +8,7 @@ interface InfluencerData {
     code: string;
     discountPercent: number;
     trialDays: number;
+    stripePromoCode?: string; // The actual Stripe promo code to use at checkout
     customSettings?: {
         headline?: string;
         subheadline?: string;
@@ -31,6 +32,30 @@ const InfluencerLandingPage: React.FC = () => {
     
     // Detect if we're on web vs native app
     const [isWebBrowser, setIsWebBrowser] = useState(true);
+    
+    // Show Stripe pricing table
+    const [showPricingTable, setShowPricingTable] = useState(false);
+    const [selectedPlan, setSelectedPlan] = useState<'annual' | 'monthly'>('annual');
+    
+    // Stripe pricing table IDs
+    const STRIPE_PRICING_TABLES = {
+        annual: 'prctbl_1SefAT8USLss96aardiaZqOG',
+        monthly: 'prctbl_1SefBm8USLss96aaHbYItb4a'
+    };
+    const STRIPE_PUBLISHABLE_KEY = 'pk_live_51RsvZq8USLss96aasJoMRHK4rNtluh1iy3k3jYmTn3IeJMGy8QD6O800RhihdrwZxksEDi4M4Tmo0bN7n6iYf25a00gMIEQ843';
+    
+    // Load Stripe pricing table script
+    useEffect(() => {
+        if (isWebBrowser && showPricingTable) {
+            // Check if script already loaded
+            if (!document.querySelector('script[src="https://js.stripe.com/v3/pricing-table.js"]')) {
+                const script = document.createElement('script');
+                script.src = 'https://js.stripe.com/v3/pricing-table.js';
+                script.async = true;
+                document.head.appendChild(script);
+            }
+        }
+    }, [isWebBrowser, showPricingTable]);
     
     useEffect(() => {
         // Check platform on mount
@@ -69,6 +94,10 @@ const InfluencerLandingPage: React.FC = () => {
                     localStorage.setItem('godlykids_influencer_name', data.name);
                     localStorage.setItem('godlykids_influencer_discount', String(data.discountPercent));
                     localStorage.setItem('godlykids_influencer_trial', String(data.trialDays));
+                    // Store the Stripe promo code if available (this is what gets applied at checkout)
+                    if (data.stripePromoCode) {
+                        localStorage.setItem('godlykids_promo_code', data.stripePromoCode);
+                    }
                 } else {
                     setError('This referral code is not valid or has expired');
                 }
@@ -120,39 +149,15 @@ const InfluencerLandingPage: React.FC = () => {
             return;
         }
 
-        // Web browser - need email for RevenueCat Web Billing
-        if (!email) {
-            setEmailError('Please enter your email address');
-            return;
+        // Web browser - show Stripe pricing table
+        console.log(`🌐 Web browser detected - showing Stripe pricing table`);
+        
+        // Track signup intent with influencer
+        if (code) {
+            await ApiService.trackInfluencerSignup(code, undefined, email || 'unknown');
         }
-
-        if (!validateEmail(email)) {
-            setEmailError('Please enter a valid email address');
-            return;
-        }
-
-        setIsSubmitting(true);
-
-        try {
-            // Track signup intent with influencer (before redirect to checkout)
-            if (code) {
-                await ApiService.trackInfluencerSignup(code, undefined, email);
-            }
-
-            // Store email for post-checkout
-            localStorage.setItem('godlykids_checkout_email', email);
-
-            // Redirect to RevenueCat Web Billing
-            // The product ID with the discounted price
-            const productId = 'prod3ebe8a0e5a';
-            const checkoutUrl = `https://billing.revenuecat.com/rcb-checkout/${productId}?email=${encodeURIComponent(email)}`;
-            
-            console.log(`🌐 Web browser detected - redirecting to RevenueCat Web Billing`);
-            window.location.href = checkoutUrl;
-        } catch (err) {
-            setEmailError('Something went wrong. Please try again.');
-            setIsSubmitting(false);
-        }
+        
+        setShowPricingTable(true);
     };
 
     const handleSignIn = () => {
@@ -225,73 +230,126 @@ const InfluencerLandingPage: React.FC = () => {
                         </p>
                     </div>
 
-                    {/* Features Grid */}
-                    <div className="grid grid-cols-2 gap-3 mb-6">
-                        <div className="bg-white/10 rounded-xl p-3 text-center">
-                            <BookOpen className="w-6 h-6 text-[#FFD700] mx-auto mb-1" />
-                            <p className="text-white text-xs font-medium">Bible Stories</p>
-                        </div>
-                        <div className="bg-white/10 rounded-xl p-3 text-center">
-                            <Play className="w-6 h-6 text-green-400 mx-auto mb-1" />
-                            <p className="text-white text-xs font-medium">Video Lessons</p>
-                        </div>
-                        <div className="bg-white/10 rounded-xl p-3 text-center">
-                            <Music className="w-6 h-6 text-pink-400 mx-auto mb-1" />
-                            <p className="text-white text-xs font-medium">Worship Songs</p>
-                        </div>
-                        <div className="bg-white/10 rounded-xl p-3 text-center">
-                            <Gamepad2 className="w-6 h-6 text-blue-400 mx-auto mb-1" />
-                            <p className="text-white text-xs font-medium">Fun Games</p>
-                        </div>
-                    </div>
+                    {/* Show Stripe Pricing Table OR Features/CTA */}
+                    {showPricingTable && isWebBrowser ? (
+                        <div className="stripe-pricing-container">
+                            {/* Plan Toggle */}
+                            <div className="flex rounded-xl bg-white/10 p-1 mb-4">
+                                <button
+                                    onClick={() => setSelectedPlan('annual')}
+                                    className={`flex-1 py-2 px-4 rounded-lg text-sm font-bold transition-all ${
+                                        selectedPlan === 'annual'
+                                            ? 'bg-[#FFD700] text-[#1a237e]'
+                                            : 'text-white/70 hover:text-white'
+                                    }`}
+                                >
+                                    Annual
+                                    <span className="block text-[10px] font-normal">Save 42%</span>
+                                </button>
+                                <button
+                                    onClick={() => setSelectedPlan('monthly')}
+                                    className={`flex-1 py-2 px-4 rounded-lg text-sm font-bold transition-all ${
+                                        selectedPlan === 'monthly'
+                                            ? 'bg-[#FFD700] text-[#1a237e]'
+                                            : 'text-white/70 hover:text-white'
+                                    }`}
+                                >
+                                    Monthly
+                                    <span className="block text-[10px] font-normal">Flexible</span>
+                                </button>
+                            </div>
 
-                    {/* CTA Form */}
-                    <form onSubmit={handleStartTrial} className="space-y-4">
-                        {/* Email input - only show on web browser */}
-                        {isWebBrowser && (
-                            <div className="relative">
-                                <Mail className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-white/50" />
-                                <input
-                                    type="email"
-                                    placeholder="Enter your email address"
-                                    value={email}
-                                    onChange={(e) => setEmail(e.target.value)}
-                                    className="w-full pl-12 pr-4 py-4 bg-white/20 border border-white/30 rounded-xl text-white placeholder-white/50 focus:outline-none focus:ring-2 focus:ring-[#FFD700] focus:border-transparent text-center"
-                                    disabled={isSubmitting}
+                            {/* Stripe Pricing Table - Annual */}
+                            <div style={{ display: selectedPlan === 'annual' ? 'block' : 'none' }}>
+                                <div 
+                                    dangerouslySetInnerHTML={{
+                                        __html: `
+                                            <stripe-pricing-table 
+                                                pricing-table-id="${STRIPE_PRICING_TABLES.annual}"
+                                                publishable-key="${STRIPE_PUBLISHABLE_KEY}">
+                                            </stripe-pricing-table>
+                                        `
+                                    }}
                                 />
                             </div>
-                        )}
 
-                        {emailError && (
-                            <div className="bg-red-500/20 border border-red-500/50 rounded-xl p-3 text-red-200 text-sm text-center">
-                                {emailError}
+                            {/* Stripe Pricing Table - Monthly */}
+                            <div style={{ display: selectedPlan === 'monthly' ? 'block' : 'none' }}>
+                                <div 
+                                    dangerouslySetInnerHTML={{
+                                        __html: `
+                                            <stripe-pricing-table 
+                                                pricing-table-id="${STRIPE_PRICING_TABLES.monthly}"
+                                                publishable-key="${STRIPE_PUBLISHABLE_KEY}">
+                                            </stripe-pricing-table>
+                                        `
+                                    }}
+                                />
                             </div>
-                        )}
 
-                        <button
-                            type="submit"
-                            disabled={isSubmitting}
-                            className="w-full py-4 bg-gradient-to-r from-[#FFD700] to-[#FFA500] text-[#1a237e] font-bold text-lg rounded-xl hover:from-[#FFC000] hover:to-[#FF9500] transition-all transform hover:scale-[1.02] shadow-lg flex items-center justify-center gap-2 disabled:opacity-70 disabled:cursor-not-allowed"
-                        >
-                            {isSubmitting ? (
-                                <>
-                                    <div className="w-5 h-5 border-2 border-[#1a237e]/30 border-t-[#1a237e] rounded-full animate-spin"></div>
-                                    Processing...
-                                </>
-                            ) : (
-                                <>
-                                    Start {influencer.trialDays}-Day Free Trial
-                                    <ArrowRight className="w-5 h-5" />
-                                </>
-                            )}
-                        </button>
+                            <button
+                                onClick={() => setShowPricingTable(false)}
+                                className="mt-4 text-white/60 text-sm hover:text-white underline"
+                            >
+                                ← Back to overview
+                            </button>
+                        </div>
+                    ) : (
+                        <>
+                            {/* Features Grid */}
+                            <div className="grid grid-cols-2 gap-3 mb-6">
+                                <div className="bg-white/10 rounded-xl p-3 text-center">
+                                    <BookOpen className="w-6 h-6 text-[#FFD700] mx-auto mb-1" />
+                                    <p className="text-white text-xs font-medium">Bible Stories</p>
+                                </div>
+                                <div className="bg-white/10 rounded-xl p-3 text-center">
+                                    <Play className="w-6 h-6 text-green-400 mx-auto mb-1" />
+                                    <p className="text-white text-xs font-medium">Video Lessons</p>
+                                </div>
+                                <div className="bg-white/10 rounded-xl p-3 text-center">
+                                    <Music className="w-6 h-6 text-pink-400 mx-auto mb-1" />
+                                    <p className="text-white text-xs font-medium">Worship Songs</p>
+                                </div>
+                                <div className="bg-white/10 rounded-xl p-3 text-center">
+                                    <Gamepad2 className="w-6 h-6 text-blue-400 mx-auto mb-1" />
+                                    <p className="text-white text-xs font-medium">Fun Games</p>
+                                </div>
+                            </div>
 
-                        <p className="text-white/50 text-xs text-center">
-                            {isWebBrowser 
-                                ? 'Cancel anytime during your free trial' 
-                                : 'You\'ll complete signup in the app'}
-                        </p>
-                    </form>
+                            {/* CTA Form */}
+                            <form onSubmit={handleStartTrial} className="space-y-4">
+                                {emailError && (
+                                    <div className="bg-red-500/20 border border-red-500/50 rounded-xl p-3 text-red-200 text-sm text-center">
+                                        {emailError}
+                                    </div>
+                                )}
+
+                                <button
+                                    type="submit"
+                                    disabled={isSubmitting}
+                                    className="w-full py-4 bg-gradient-to-r from-[#FFD700] to-[#FFA500] text-[#1a237e] font-bold text-lg rounded-xl hover:from-[#FFC000] hover:to-[#FF9500] transition-all transform hover:scale-[1.02] shadow-lg flex items-center justify-center gap-2 disabled:opacity-70 disabled:cursor-not-allowed"
+                                >
+                                    {isSubmitting ? (
+                                        <>
+                                            <div className="w-5 h-5 border-2 border-[#1a237e]/30 border-t-[#1a237e] rounded-full animate-spin"></div>
+                                            Processing...
+                                        </>
+                                    ) : (
+                                        <>
+                                            Start {influencer.trialDays}-Day Free Trial
+                                            <ArrowRight className="w-5 h-5" />
+                                        </>
+                                    )}
+                                </button>
+
+                                <p className="text-white/50 text-xs text-center">
+                                    {isWebBrowser 
+                                        ? 'Cancel anytime during your free trial' 
+                                        : 'You\'ll complete signup in the app'}
+                                </p>
+                            </form>
+                        </>
+                    )}
                 </div>
 
                 {/* Trust indicators */}

@@ -10,6 +10,7 @@ interface Influencer {
     commissionPercent: number;
     discountPercent: number;
     trialDays: number;
+    stripePromoCode: string; // Stripe coupon/promo code for discounts
     isActive: boolean;
     stats: {
         clicks: number;
@@ -27,6 +28,7 @@ interface FormData {
     commissionPercent: number;
     discountPercent: number;
     trialDays: number;
+    stripePromoCode: string;
     notes: string;
 }
 
@@ -37,6 +39,7 @@ const defaultFormData: FormData = {
     commissionPercent: 10,
     discountPercent: 25,
     trialDays: 7,
+    stripePromoCode: '',
     notes: ''
 };
 
@@ -99,6 +102,7 @@ const CodeManagement: React.FC = () => {
             commissionPercent: influencer.commissionPercent,
             discountPercent: influencer.discountPercent,
             trialDays: influencer.trialDays,
+            stripePromoCode: influencer.stripePromoCode || '',
             notes: ''
         });
         setFormError(null);
@@ -390,6 +394,19 @@ const CodeManagement: React.FC = () => {
                                         className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
                                     />
                                 </div>
+                            </div>
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">Stripe Promo Code</label>
+                                <input
+                                    type="text"
+                                    value={formData.stripePromoCode}
+                                    onChange={(e) => setFormData({ ...formData, stripePromoCode: e.target.value.toUpperCase() })}
+                                    placeholder="e.g., SARAH25OFF"
+                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 font-mono"
+                                />
+                                <p className="text-xs text-gray-500 mt-1">
+                                    Create this code in Stripe Dashboard → Products → Coupons
+                                </p>
                             </div>
                             <div>
                                 <label className="block text-sm font-medium text-gray-700 mb-1">Notes</label>

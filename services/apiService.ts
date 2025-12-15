@@ -1858,6 +1858,35 @@ export const ApiService = {
       return false;
     }
   },
+
+  // Create Stripe checkout session for web payments
+  createStripeCheckout: async (params: {
+    email: string;
+    plan: 'annual' | 'monthly';
+    promoCode?: string;
+    influencerCode?: string;
+    successUrl: string;
+    cancelUrl: string;
+  }): Promise<{ checkoutUrl?: string; error?: string }> => {
+    try {
+      const baseUrl = getApiBaseUrl();
+      const response = await fetchWithTimeout(`${baseUrl}stripe/create-checkout`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(params),
+      });
+      
+      if (response.ok) {
+        return await response.json();
+      } else {
+        const errorData = await response.json().catch(() => ({}));
+        return { error: errorData.message || 'Failed to create checkout session' };
+      }
+    } catch (error: any) {
+      console.error('❌ Failed to create Stripe checkout:', error);
+      return { error: error.message || 'Network error' };
+    }
+  },
 };
 
 // Log API configuration on startup

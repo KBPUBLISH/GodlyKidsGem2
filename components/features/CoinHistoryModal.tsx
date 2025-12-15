@@ -149,12 +149,15 @@ const CoinHistoryModal: React.FC<CoinHistoryModalProps> = ({ isOpen, onClose, on
             <X className="w-5 h-5 text-white/70" />
           </button>
           
-          {/* Out of Coins Alert */}
-          {outOfCoinsMode && coins === 0 && (
-            <div className="mb-4 bg-gradient-to-r from-red-500/20 to-orange-500/20 rounded-xl p-3 border border-red-500/30 text-center">
-              <p className="text-white font-bold text-lg">😱 Out of Coins!</p>
-              <p className="text-white/70 text-xs mt-1">
-                Refer a friend to earn <span className="text-[#FFD700] font-bold">500 gold coins!</span>
+          {/* Not Enough Coins Alert */}
+          {outOfCoinsMode && (
+            <div className="mb-4 bg-gradient-to-r from-red-500/20 to-orange-500/20 rounded-xl p-4 border border-red-500/30 text-center animate-pulse">
+              <p className="text-white font-bold text-lg">{coins === 0 ? '😱 Out of Coins!' : '💰 Need More Coins!'}</p>
+              <p className="text-white/70 text-sm mt-1">
+                {coins === 0 
+                  ? <>Refer a friend to earn <span className="text-[#FFD700] font-bold">500 gold coins!</span></>
+                  : <>You don't have enough coins for this item. Earn more below!</>
+                }
               </p>
             </div>
           )}
@@ -162,26 +165,26 @@ const CoinHistoryModal: React.FC<CoinHistoryModalProps> = ({ isOpen, onClose, on
           {/* Coin Balance */}
           <div className="text-center">
             <div className={`inline-flex items-center gap-3 px-6 py-3 rounded-2xl border ${
-              outOfCoinsMode && coins === 0 
+              outOfCoinsMode 
                 ? 'bg-gradient-to-r from-red-500/10 to-orange-500/10 border-red-500/30' 
                 : 'bg-gradient-to-r from-[#FFD700]/20 to-[#B8860B]/20 border-[#FFD700]/30'
             }`}>
               <div className="relative">
                 <div className={`w-14 h-14 rounded-full border-2 shadow-lg flex items-center justify-center ${
-                  outOfCoinsMode && coins === 0
-                    ? 'bg-gradient-to-br from-gray-400 to-gray-600 border-gray-500'
+                  outOfCoinsMode
+                    ? 'bg-gradient-to-br from-orange-400 to-red-600 border-red-500'
                     : 'bg-gradient-to-br from-[#FFE55C] to-[#DAA520] border-[#B8860B] animate-pulse'
                 }`}>
-                  <span className={`font-black text-xl ${outOfCoinsMode && coins === 0 ? 'text-gray-700' : 'text-[#5c2e0b]'}`}>G</span>
+                  <span className={`font-black text-xl ${outOfCoinsMode ? 'text-white' : 'text-[#5c2e0b]'}`}>G</span>
                 </div>
-                {!(outOfCoinsMode && coins === 0) && (
+                {!outOfCoinsMode && (
                   <div className="absolute top-1 left-1 w-3 h-3 bg-white/40 rounded-full"></div>
                 )}
               </div>
               <div className="text-left">
                 <p className="text-white/60 text-xs font-medium">Your Gold Coins</p>
                 <p className={`font-black text-3xl font-display ${
-                  outOfCoinsMode && coins === 0 ? 'text-red-400' : 'text-[#FFD700]'
+                  outOfCoinsMode ? 'text-red-400' : 'text-[#FFD700]'
                 }`}>
                   {coins.toLocaleString()}
                 </p>

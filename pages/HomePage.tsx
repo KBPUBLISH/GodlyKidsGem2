@@ -10,10 +10,9 @@ import { useLanguage } from '../context/LanguageContext';
 import StormySeaError from '../components/ui/StormySeaError';
 import DailyRewardModal from '../components/features/DailyRewardModal';
 import ChallengeGameModal from '../components/features/ChallengeGameModal';
-import StrengthGameModal from '../components/features/StrengthGameModal';
 import PrayerGameModal from '../components/features/PrayerGameModal';
 import ReviewPromptModal, { shouldShowReviewPrompt } from '../components/features/ReviewPromptModal';
-import { Key, Brain, Dumbbell, Heart, Video, Lock, Check, Play, CheckCircle, Clock, Coins } from 'lucide-react';
+import { Key, Brain, Heart, Video, Lock, Check, Play, CheckCircle, Clock, Coins } from 'lucide-react';
 import { ApiService } from '../services/apiService';
 import { 
   isCompleted, 
@@ -44,7 +43,6 @@ const getLessonStatus = (lesson: any): 'available' | 'locked' | 'completed' => {
 };
 
 // Profile-specific game engagement keys
-const getEngagementKey = (baseKey: string) => profileService.getProfileKey(baseKey);
 
 // Check if a purchasable game has been unlocked
 const isGamePurchased = (gameId: string): boolean => {
@@ -89,13 +87,8 @@ const HomePage: React.FC = () => {
   const [isHeaderVisible, setIsHeaderVisible] = useState(true);
   const [showDailyReward, setShowDailyReward] = useState(false);
   const [showChallengeGame, setShowChallengeGame] = useState(false);
-  const [showStrengthGame, setShowStrengthGame] = useState(false);
   const [showPrayerGame, setShowPrayerGame] = useState(false);
   const [showReviewPrompt, setShowReviewPrompt] = useState(false);
-  const [hasEngagedMemory, setHasEngagedMemory] = useState(false);
-  const [hasEngagedDailyKey, setHasEngagedDailyKey] = useState(false);
-  const [hasEngagedStrength, setHasEngagedStrength] = useState(false);
-  const [hasEngagedPrayer, setHasEngagedPrayer] = useState(false);
   
   // Game purchase state - tracks purchased games to update UI without reload
   const [purchasedGamesState, setPurchasedGamesState] = useState<string[]>(() => {
@@ -149,20 +142,57 @@ const HomePage: React.FC = () => {
       return cached ? new Set(JSON.parse(cached)) : new Set();
     } catch { return new Set(); }
   }());
-  const lastProfileRef = useRef<string | null | undefined>(undefined); // undefined = initial mount
+  // Use sessionStorage to track last profile across navigation (refs reset on remount)
+  const lastProfileRef = useRef<string | null | undefined>(() => {
+    try {
+      return sessionStorage.getItem('godlykids_home_lastProfile');
+    } catch {
+      return undefined;
+    }
+  }());
   
-  // Reset planner state when profile changes (but not on initial mount)
+  // Reset planner state when profile changes (but not on initial mount or navigation return)
   useEffect(() => {
-    // Skip the initial mount - let cached data show first
-    if (lastProfileRef.current === undefined) {
+    // Get the cached profile from sessionStorage
+    let cachedProfile: string | null = null;
+    try {
+      cachedProfile = sessionStorage.getItem('godlykids_home_lastProfile');
+    } catch {}
+    
+    console.log('📚 Profile check - current:', currentProfileId, 'cached:', cachedProfile, 'ref:', lastProfileRef.current);
+    
+    // If we have a valid profile and it matches the cache, we're returning from navigation
+    // Keep the cached lessons and don't reset anything
+    if (currentProfileId && cachedProfile === currentProfileId) {
+      console.log('📚 Same profile on return, keeping cached lessons');
       lastProfileRef.current = currentProfileId;
       return;
     }
     
-    // Only reset if profile actually changed
-    if (currentProfileId !== lastProfileRef.current) {
-      console.log('📚 Profile changed, resetting planner state');
+    // First mount with a profile - just store it, don't clear lessons
+    // (lessons were initialized from cache which is the correct data)
+    if (lastProfileRef.current === null || lastProfileRef.current === undefined) {
+      console.log('📚 First mount, storing profile');
       lastProfileRef.current = currentProfileId;
+      try {
+        if (currentProfileId) {
+          sessionStorage.setItem('godlykids_home_lastProfile', currentProfileId);
+        }
+      } catch {}
+      return;
+    }
+    
+    // Profile actually changed (different from what we had before)
+    if (currentProfileId !== lastProfileRef.current) {
+      console.log('📚 Profile changed from', lastProfileRef.current, 'to', currentProfileId, '- resetting');
+      lastProfileRef.current = currentProfileId;
+      try {
+        if (currentProfileId) {
+          sessionStorage.setItem('godlykids_home_lastProfile', currentProfileId);
+        } else {
+          sessionStorage.removeItem('godlykids_home_lastProfile');
+        }
+      } catch {}
       setDayPlans(new Map());
       loadedDaysRef.current = new Set();
       setLessons([]);
@@ -238,32 +268,6 @@ const HomePage: React.FC = () => {
 
   // Check if games have been engaged today (per-profile) - resets daily
   useEffect(() => {
-    const today = new Date().toDateString();
-    const lastEngagementDate = localStorage.getItem(getEngagementKey('daily_games_date'));
-    
-    // If it's a new day, reset all daily game engagements
-    if (lastEngagementDate !== today) {
-      localStorage.setItem(getEngagementKey('daily_games_date'), today);
-      localStorage.removeItem(getEngagementKey('memory_game_engaged'));
-      localStorage.removeItem(getEngagementKey('daily_key_engaged'));
-      localStorage.removeItem(getEngagementKey('strength_game_engaged'));
-      localStorage.removeItem(getEngagementKey('prayer_game_engaged'));
-      setHasEngagedMemory(false);
-      setHasEngagedDailyKey(false);
-      setHasEngagedStrength(false);
-      setHasEngagedPrayer(false);
-    } else {
-      // Same day - check existing engagement flags
-      const memoryEngaged = localStorage.getItem(getEngagementKey('memory_game_engaged')) === 'true';
-      const dailyKeyEngaged = localStorage.getItem(getEngagementKey('daily_key_engaged')) === 'true';
-      const strengthEngaged = localStorage.getItem(getEngagementKey('strength_game_engaged')) === 'true';
-      const prayerEngaged = localStorage.getItem(getEngagementKey('prayer_game_engaged')) === 'true';
-      setHasEngagedMemory(memoryEngaged);
-      setHasEngagedDailyKey(dailyKeyEngaged);
-      setHasEngagedStrength(strengthEngaged);
-      setHasEngagedPrayer(prayerEngaged);
-    }
-
     // Safeguard: If no books are loaded and we're not loading, try to refresh
     if (!loading && books.length === 0) {
       // Use a small timeout to avoid conflict with initial load
@@ -275,44 +279,18 @@ const HomePage: React.FC = () => {
   }, [loading, books, refreshBooks]);
 
   const handleDailyKeyClick = () => {
-    // Mark as engaged when user clicks (per-profile)
-    if (!hasEngagedDailyKey) {
-      localStorage.setItem(getEngagementKey('daily_key_engaged'), 'true');
-      setHasEngagedDailyKey(true);
-    }
     // Track game play for Report Card
-    activityTrackingService.trackGamePlayed('daily_key', 'Daily Key');
+    activityTrackingService.trackGamePlayed('daily_key', 'Key of Truth');
     setShowDailyReward(true);
   };
 
   const handleMemoryClick = () => {
-    // Mark as engaged when user clicks (per-profile)
-    if (!hasEngagedMemory) {
-      localStorage.setItem(getEngagementKey('memory_game_engaged'), 'true');
-      setHasEngagedMemory(true);
-    }
     // Track game play for Report Card
     activityTrackingService.trackGamePlayed('memory_challenge', 'Memory Challenge');
     setShowChallengeGame(true);
   };
 
-  const handleStrengthClick = () => {
-    // Mark as engaged when user clicks (per-profile)
-    if (!hasEngagedStrength) {
-      localStorage.setItem(getEngagementKey('strength_game_engaged'), 'true');
-      setHasEngagedStrength(true);
-    }
-    // Track game play for Report Card
-    activityTrackingService.trackGamePlayed('strength_game', 'Strength Game');
-    setShowStrengthGame(true);
-  };
-
   const handlePrayerClick = async () => {
-    // Mark as engaged when user clicks (per-profile)
-    if (!hasEngagedPrayer) {
-      localStorage.setItem(getEngagementKey('prayer_game_engaged'), 'true');
-      setHasEngagedPrayer(true);
-    }
     // Track game play for Report Card
     activityTrackingService.trackGamePlayed('prayer_game', 'Prayer Game');
 
@@ -771,11 +749,6 @@ const HomePage: React.FC = () => {
         onClose={() => setShowChallengeGame(false)}
       />
 
-      <StrengthGameModal
-        isOpen={showStrengthGame}
-        onClose={() => setShowStrengthGame(false)}
-      />
-
       <PrayerGameModal
         isOpen={showPrayerGame}
         onClose={() => setShowPrayerGame(false)}
@@ -1161,14 +1134,10 @@ const HomePage: React.FC = () => {
               
               {/* Daily Key Task */}
               <div
-                className={`relative w-[calc((100vw-48px-40px)/4)] flex-shrink-0 ${
-                  hasEngagedDailyKey ? 'cursor-default' : 'cursor-pointer'
-                }`}
-                onClick={() => !hasEngagedDailyKey && handleDailyKeyClick()}
+                className="relative w-[calc((100vw-48px-40px)/4)] flex-shrink-0 cursor-pointer"
+                onClick={() => handleDailyKeyClick()}
               >
-                <div className={`relative aspect-[9/16] rounded-xl overflow-hidden transition-all border-2 ${
-                  hasEngagedDailyKey ? 'border-[#FFD700]/30' : 'border-[#FFD700]'
-                }`}>
+                <div className="relative aspect-[9/16] rounded-xl overflow-hidden transition-all border-2 border-[#FFD700]">
                   {/* Background Gradient */}
                   <div className="absolute inset-0 bg-gradient-to-br from-[#8B4513] to-[#5c2e0b]" />
                   
@@ -1190,28 +1159,15 @@ const HomePage: React.FC = () => {
                     </span>
                   </div>
                   
-                  {/* Completed Overlay - Faded when done */}
-                  {hasEngagedDailyKey && (
-                    <>
-                      <div className="absolute inset-0 bg-black/50" />
-                      <div className="absolute top-2 right-2 bg-green-500 rounded-full p-1">
-                        <Check className="w-3 h-3 text-white" />
-                      </div>
-                    </>
-                  )}
                 </div>
               </div>
 
               {/* Memory Task */}
               <div
-                className={`relative w-[calc((100vw-48px-40px)/4)] flex-shrink-0 ${
-                  hasEngagedMemory ? 'cursor-default' : 'cursor-pointer'
-                }`}
-                onClick={() => !hasEngagedMemory && handleMemoryClick()}
+                className="relative w-[calc((100vw-48px-40px)/4)] flex-shrink-0 cursor-pointer"
+                onClick={() => handleMemoryClick()}
               >
-                <div className={`relative aspect-[9/16] rounded-xl overflow-hidden transition-all border-2 ${
-                  hasEngagedMemory ? 'border-[#3949ab]/30' : 'border-[#5c6bc0]'
-                }`}>
+                <div className="relative aspect-[9/16] rounded-xl overflow-hidden transition-all border-2 border-[#5c6bc0]">
                   {/* Background Gradient */}
                   <div className="absolute inset-0 bg-gradient-to-br from-[#1a237e] to-[#0d1442]" />
                   
@@ -1233,71 +1189,15 @@ const HomePage: React.FC = () => {
                     </span>
                   </div>
                   
-                  {/* Completed Overlay - Faded when done */}
-                  {hasEngagedMemory && (
-                    <>
-                      <div className="absolute inset-0 bg-black/50" />
-                      <div className="absolute top-2 right-2 bg-green-500 rounded-full p-1">
-                        <Check className="w-3 h-3 text-white" />
-                      </div>
-                    </>
-                  )}
-                </div>
-              </div>
-
-              {/* Strength Task */}
-              <div
-                className={`relative w-[calc((100vw-48px-40px)/4)] flex-shrink-0 ${
-                  hasEngagedStrength ? 'cursor-default' : 'cursor-pointer'
-                }`}
-                onClick={() => !hasEngagedStrength && handleStrengthClick()}
-              >
-                <div className={`relative aspect-[9/16] rounded-xl overflow-hidden transition-all border-2 ${
-                  hasEngagedStrength ? 'border-[#FF6B35]/30' : 'border-[#F7931E]'
-                }`}>
-                  {/* Background Gradient */}
-                  <div className="absolute inset-0 bg-gradient-to-br from-[#E64A19] to-[#BF360C]" />
-                  
-                  {/* Decorative Pattern */}
-                  <div className="absolute inset-0 opacity-20" style={{ 
-                    backgroundImage: 'radial-gradient(circle at 25% 25%, #FFD700 2%, transparent 8%), radial-gradient(circle at 75% 75%, #FFD700 2%, transparent 8%)'
-                  }} />
-                  
-                  {/* Icon */}
-                  <div className="absolute inset-0 flex flex-col items-center justify-center">
-                    <div className="w-16 h-16 rounded-full bg-[#FFD700]/20 flex items-center justify-center mb-2">
-                      <Dumbbell size={36} className="text-[#FFD700]" fill="#FFB300" />
-                    </div>
-                    <span className="text-[#FFD700] text-sm font-bold font-display text-center px-2">
-                      Strength
-                    </span>
-                    <span className="text-white/60 text-[10px] text-center px-2 mt-1">
-                      Build faith
-                    </span>
-                  </div>
-                  
-                  {/* Completed Overlay - Faded when done */}
-                  {hasEngagedStrength && (
-                    <>
-                      <div className="absolute inset-0 bg-black/50" />
-                      <div className="absolute top-2 right-2 bg-green-500 rounded-full p-1">
-                        <Check className="w-3 h-3 text-white" />
-                      </div>
-                    </>
-                  )}
                 </div>
               </div>
 
               {/* Prayer Task */}
               <div
-                className={`relative w-[calc((100vw-48px-40px)/4)] flex-shrink-0 ${
-                  hasEngagedPrayer ? 'cursor-default' : 'cursor-pointer'
-                }`}
-                onClick={() => !hasEngagedPrayer && handlePrayerClick()}
+                className="relative w-[calc((100vw-48px-40px)/4)] flex-shrink-0 cursor-pointer"
+                onClick={() => handlePrayerClick()}
               >
-                <div className={`relative aspect-[9/16] rounded-xl overflow-hidden transition-all border-2 ${
-                  hasEngagedPrayer ? 'border-[#AB47BC]/30' : 'border-[#BA68C8]'
-                }`}>
+                <div className="relative aspect-[9/16] rounded-xl overflow-hidden transition-all border-2 border-[#BA68C8]">
                   {/* Background Gradient */}
                   <div className="absolute inset-0 bg-gradient-to-br from-[#7B1FA2] to-[#4A148C]" />
                   
@@ -1319,15 +1219,6 @@ const HomePage: React.FC = () => {
                     </span>
                   </div>
                   
-                  {/* Completed Overlay - Faded when done */}
-                  {hasEngagedPrayer && (
-                    <>
-                      <div className="absolute inset-0 bg-black/50" />
-                      <div className="absolute top-2 right-2 bg-green-500 rounded-full p-1">
-                        <Check className="w-3 h-3 text-white" />
-                      </div>
-                    </>
-                  )}
                 </div>
               </div>
 

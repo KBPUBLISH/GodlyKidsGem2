@@ -300,6 +300,7 @@ const ShopModal: React.FC<ShopModalProps> = ({ isOpen, onClose, initialTab }) =>
 
     const {
         coins,
+        showNotEnoughCoins,
         purchaseItem,
         equipItem,
         unequipItem,
@@ -619,9 +620,17 @@ const ShopModal: React.FC<ShopModalProps> = ({ isOpen, onClose, initialTab }) =>
                     <WoodButton
                         variant="primary"
                         fullWidth
-                        className={`text-[10px] py-1.5 ${(coins < item.price || isDisabled) ? 'opacity-50 grayscale cursor-not-allowed' : ''}`}
-                        onClick={(e) => { e.stopPropagation(); handleBuy(item); }}
-                        disabled={coins < item.price || isDisabled}
+                        className={`text-[10px] py-1.5 ${(coins < item.price || isDisabled) ? 'opacity-50 grayscale' : ''}`}
+                        onClick={(e) => { 
+                          e.stopPropagation(); 
+                          if (coins < item.price && !isDisabled) {
+                            // Show "need more coins" modal
+                            showNotEnoughCoins();
+                          } else if (!isDisabled) {
+                            handleBuy(item); 
+                          }
+                        }}
+                        disabled={isDisabled}
                     >
                         {isDisabled ? t('needBody').toUpperCase() : item.price === 0 ? t('free').toUpperCase() : `${item.price} ${t('gold')}`}
                     </WoodButton>

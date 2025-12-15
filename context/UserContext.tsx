@@ -55,9 +55,10 @@ interface UserContextType {
   spendCoins: (amount: number, reason?: string) => boolean;
   coinTransactions: CoinTransaction[];
   
-  // Zero coins callback
+  // Zero coins / Not enough coins callback
   showReferralModal: boolean;
   setShowReferralModal: (show: boolean) => void;
+  showNotEnoughCoins: () => void; // Call this when user clicks on something they can't afford
   
   // Referral System
   referralCode: string;
@@ -151,6 +152,7 @@ const UserContext = createContext<UserContextType>({
   coinTransactions: [],
   showReferralModal: false,
   setShowReferralModal: () => {},
+  showNotEnoughCoins: () => {},
   referralCode: '',
   redeemedCodes: [],
   redeemCode: () => ({ success: false, message: '' }),
@@ -523,6 +525,11 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
     setCoinTransactions(prev => [transaction, ...prev].slice(0, 100));
     return true;
+  };
+
+  // Show the "not enough coins" modal - call this when user clicks on grayed-out items
+  const showNotEnoughCoins = () => {
+    setShowReferralModal(true);
   };
 
   const redeemCode = (code: string): { success: boolean; message: string } => {
@@ -1104,6 +1111,7 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
       coinTransactions,
       showReferralModal,
       setShowReferralModal,
+      showNotEnoughCoins,
       referralCode,
       redeemedCodes,
       redeemCode,

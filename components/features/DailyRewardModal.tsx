@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import WoodButton from '../ui/WoodButton';
-import { X, Star, Key, Clock } from 'lucide-react';
+import { X, Star, Key } from 'lucide-react';
 import { useUser } from '../../context/UserContext';
 import { useAudio } from '../../context/AudioContext';
 
@@ -31,13 +31,9 @@ const DAILY_VERSES = [
   { text: "Give thanks to the Lord for he is good", ref: "Psalm 107:1" }, // 9 words
 ];
 
-type GameState = 'cooldown' | 'intro' | 'ready' | 'playing' | 'game-over' | 'success' | 'claimed';
-
-import { profileService } from '../../services/profileService';
+type GameState = 'intro' | 'ready' | 'playing' | 'game-over' | 'success' | 'claimed';
 
 const GAME_DURATION = 30; // 30 seconds
-const COOLDOWN_HOURS = 12; // 12 hours cooldown
-const getStorageKey = () => profileService.getProfileKey('daily_verse_last_completion');
 
 const DailyRewardModal: React.FC<DailyRewardModalProps> = ({ isOpen, onClose }) => {
   const { addCoins } = useUser();
@@ -57,88 +53,20 @@ const DailyRewardModal: React.FC<DailyRewardModalProps> = ({ isOpen, onClose }) 
   const [timeLeft, setTimeLeft] = useState(GAME_DURATION);
   const [countDown, setCountDown] = useState<string>(''); // For "Ready Set Go"
   const [earnedStars, setEarnedStars] = useState(0);
-  const [timeUntilNext, setTimeUntilNext] = useState<string>(''); // Cooldown timer
-
   // Keep track of interval to clear it properly
   const timerRef = useRef<number | null>(null);
-  const cooldownTimerRef = useRef<number | null>(null);
-
-  // Helper function to check if cooldown is active
-  const getLastCompletionTime = (): number | null => {
-    try {
-      const stored = localStorage.getItem(getStorageKey());
-      return stored ? parseInt(stored, 10) : null;
-    } catch {
-      return null;
-    }
-  };
-
-  const isOnCooldown = (): boolean => {
-    const lastTime = getLastCompletionTime();
-    if (!lastTime) return false;
-    const now = Date.now();
-    const hoursSinceCompletion = (now - lastTime) / (1000 * 60 * 60);
-    return hoursSinceCompletion < COOLDOWN_HOURS;
-  };
-
-  const getTimeUntilNext = (): string => {
-    const lastTime = getLastCompletionTime();
-    if (!lastTime) return '';
-    
-    const now = Date.now();
-    const nextAvailable = lastTime + (COOLDOWN_HOURS * 60 * 60 * 1000);
-    const msRemaining = nextAvailable - now;
-    
-    if (msRemaining <= 0) return '';
-    
-    const hours = Math.floor(msRemaining / (1000 * 60 * 60));
-    const minutes = Math.floor((msRemaining % (1000 * 60 * 60)) / (1000 * 60));
-    const seconds = Math.floor((msRemaining % (1000 * 60)) / 1000);
-    
-    if (hours > 0) {
-      return `${hours}h ${minutes}m`;
-    } else if (minutes > 0) {
-      return `${minutes}m ${seconds}s`;
-    } else {
-      return `${seconds}s`;
-    }
-  };
 
   // --- SETUP ---
   useEffect(() => {
     if (isOpen) {
-      // Check if on cooldown
-      if (isOnCooldown()) {
-        setGameState('cooldown');
-        // Update cooldown timer every second
-        const updateCooldown = () => {
-          const timeRemaining = getTimeUntilNext();
-          setTimeUntilNext(timeRemaining);
-          
-          // If cooldown expired, allow play
-          if (!timeRemaining || !isOnCooldown()) {
-            setGameState('intro');
-            if (cooldownTimerRef.current) {
-              window.clearInterval(cooldownTimerRef.current);
-              cooldownTimerRef.current = null;
-            }
-          }
-        };
-        
-        updateCooldown();
-        cooldownTimerRef.current = window.setInterval(updateCooldown, 1000);
-      } else {
-        initializeGame();
-      }
+      initializeGame();
     } else {
       setGameState('intro'); // Reset on close
       if (timerRef.current) window.clearInterval(timerRef.current);
-      if (cooldownTimerRef.current) window.clearInterval(cooldownTimerRef.current);
     }
     
     return () => {
        if (timerRef.current) window.clearInterval(timerRef.current);
-       if (cooldownTimerRef.current) window.clearInterval(cooldownTimerRef.current);
     };
   }, [isOpen]);
 
@@ -266,12 +194,9 @@ const DailyRewardModal: React.FC<DailyRewardModalProps> = ({ isOpen, onClose }) 
 
   const handleClaim = () => {
     setIsClaiming(true);
-    // UPDATED COIN REWARDS: 50/25/10
-    const coinReward = earnedStars === 3 ? 50 : earnedStars === 2 ? 25 : 10;
-    addCoins(coinReward, `Daily Verse - ${earnedStars} ⭐`, 'daily');
-    
-    // Store completion timestamp (per-profile)
-    localStorage.setItem(getStorageKey(), Date.now().toString());
+    // Coin rewards: 30/20/10 for 3/2/1 stars
+    const coinReward = earnedStars === 3 ? 30 : earnedStars === 2 ? 20 : 10;
+    addCoins(coinReward, `Key of Truth - ${earnedStars} ⭐`, 'game');
     
     setTimeout(() => {
         onClose();
@@ -346,36 +271,6 @@ const DailyRewardModal: React.FC<DailyRewardModalProps> = ({ isOpen, onClose }) 
               <h2 className="font-display font-extrabold text-2xl text-[#FFD700] drop-shadow-md tracking-wide mb-4 uppercase">
                 Key of Truth
               </h2>
-
-              {/* --- PHASE 0: COOLDOWN SCREEN --- */}
-              {gameState === 'cooldown' && (
-                  <div className="flex flex-col items-center animate-in fade-in w-full flex-1 justify-center">
-                      
-                      {/* Clock Icon */}
-                      <div className="relative w-32 h-32 mb-6">
-                          <Clock size={80} className="text-[#FFD700] animate-pulse" />
-                      </div>
-
-                      <div className="bg-black/20 rounded-xl p-4 mb-6 backdrop-blur-sm border border-[#eecaa0]/20">
-                          <p className="text-[#eecaa0] font-bold text-lg mb-2">
-                            Come Back Soon!
-                          </p>
-                          <p className="text-white/70 text-sm leading-relaxed mb-3">
-                             You've already completed today's verse. The next challenge will be available in:
-                          </p>
-                          <div className="text-[#FFD700] font-display font-black text-3xl mb-2">
-                            {timeUntilNext || '0s'}
-                          </div>
-                          <p className="text-white/60 text-xs">
-                            (Resets every 12 hours)
-                          </p>
-                      </div>
-
-                      <WoodButton onClick={onClose} className="px-10 py-4 text-xl">
-                          CLOSE
-                      </WoodButton>
-                  </div>
-              )}
 
               {/* --- PHASE 1: INTRO SCREEN --- */}
               {gameState === 'intro' && (
@@ -527,7 +422,7 @@ const DailyRewardModal: React.FC<DailyRewardModalProps> = ({ isOpen, onClose }) 
 
                       <div className="w-full px-8">
                           <WoodButton variant="gold" fullWidth onClick={handleClaim} className="py-4 text-xl shadow-[0_0_20px_#FFD700]">
-                              CLAIM {earnedStars === 3 ? 50 : earnedStars === 2 ? 25 : 10} COINS
+                              CLAIM {earnedStars === 3 ? 30 : earnedStars === 2 ? 20 : 10} COINS
                           </WoodButton>
                       </div>
                   </div>

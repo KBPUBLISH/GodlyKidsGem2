@@ -136,20 +136,20 @@ const HomePage: React.FC = () => {
     } catch {}
     return new Map();
   });
-  const loadedDaysRef = useRef<Set<string>>(() => {
+  const loadedDaysRef = useRef<Set<string>>((() => {
     try {
       const cached = sessionStorage.getItem('godlykids_home_loadedDays');
-      return cached ? new Set(JSON.parse(cached)) : new Set();
-    } catch { return new Set(); }
-  }());
+      return cached ? new Set<string>(JSON.parse(cached)) : new Set<string>();
+    } catch { return new Set<string>(); }
+  })());
   // Use sessionStorage to track last profile across navigation (refs reset on remount)
-  const lastProfileRef = useRef<string | null | undefined>(() => {
+  const lastProfileRef = useRef<string | null | undefined>((() => {
     try {
       return sessionStorage.getItem('godlykids_home_lastProfile');
     } catch {
       return undefined;
     }
-  }());
+  })());
   
   // Reset planner state when profile changes (but not on initial mount or navigation return)
   useEffect(() => {

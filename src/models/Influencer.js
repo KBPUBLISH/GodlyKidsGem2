@@ -37,6 +37,12 @@ const influencerSchema = new mongoose.Schema({
         default: 7,
         min: 0
     },
+    stripePromoCode: {
+        type: String,
+        trim: true,
+        uppercase: true,
+        default: ''
+    },
     isActive: {
         type: Boolean,
         default: true

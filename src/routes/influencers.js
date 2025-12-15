@@ -14,7 +14,7 @@ router.get('/:code', async (req, res) => {
         const influencer = await Influencer.findOne({ 
             code: code.toUpperCase(), 
             isActive: true 
-        }).select('name code discountPercent trialDays customSettings');
+        }).select('name code discountPercent trialDays stripePromoCode customSettings');
 
         if (!influencer) {
             return res.status(404).json({ message: 'Influencer code not found' });
@@ -25,6 +25,7 @@ router.get('/:code', async (req, res) => {
             code: influencer.code,
             discountPercent: influencer.discountPercent,
             trialDays: influencer.trialDays,
+            stripePromoCode: influencer.stripePromoCode || '',
             customSettings: influencer.customSettings || {}
         });
     } catch (error) {

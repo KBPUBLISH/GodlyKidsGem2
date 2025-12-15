@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { ApiService } from '../services/apiService';
-import { Apple, Play, X, Check, Sparkles, Gift, Shield, Heart } from 'lucide-react';
+import { Check, Sparkles, Gift, Shield, Heart, Play } from 'lucide-react';
 
 interface InfluencerData {
     name: string;
@@ -32,7 +32,6 @@ const InfluencerLandingPage: React.FC = () => {
     const [isSubmitting, setIsSubmitting] = useState(false);
     
     // Success state
-    const [showDownloadPopup, setShowDownloadPopup] = useState(false);
     const [signupSuccess, setSignupSuccess] = useState(false);
 
     useEffect(() => {
@@ -96,15 +95,18 @@ const InfluencerLandingPage: React.FC = () => {
                     await ApiService.trackInfluencerSignup(code, result.user._id || result.user.id, email);
                 }
                 
-                setSignupSuccess(true);
-                setShowDownloadPopup(true);
+                // Store influencer info for onboarding to use
+                localStorage.setItem('godlykids_influencer_code', code?.toUpperCase() || '');
+                localStorage.setItem('godlykids_influencer_discount', String(influencer?.discountPercent || 0));
+                localStorage.setItem('godlykids_influencer_trial', String(influencer?.trialDays || 7));
                 
-                // Redirect to RevenueCat checkout after a brief delay
+                setSignupSuccess(true);
+                
+                // Redirect to onboarding after a brief delay
+                // The onboarding page has the full payment flow
                 setTimeout(() => {
-                    // Open RevenueCat Web Billing checkout
-                    const checkoutUrl = `https://billing.revenuecat.com/rcb-checkout/prod3ebe8a0e5a?email=${encodeURIComponent(email)}`;
-                    window.location.href = checkoutUrl;
-                }, 2000);
+                    navigate('/onboarding');
+                }, 1500);
             } else {
                 setFormError(result.error || 'Failed to create account. Please try again.');
             }
@@ -263,8 +265,9 @@ const InfluencerLandingPage: React.FC = () => {
                             <div className="w-16 h-16 bg-green-500 rounded-full flex items-center justify-center mx-auto mb-4">
                                 <Check className="w-8 h-8 text-white" />
                             </div>
-                            <h3 className="text-xl font-bold text-white mb-2">Account Created!</h3>
-                            <p className="text-white/80 mb-4">Redirecting to checkout...</p>
+                            <h3 className="text-xl font-bold text-white mb-2">Welcome to Godly Kids!</h3>
+                            <p className="text-white/80 mb-2">Your {influencer?.discountPercent}% discount has been applied!</p>
+                            <p className="text-white/60 text-sm mb-4">Setting up your account...</p>
                             <div className="w-8 h-8 border-2 border-white/30 border-t-white rounded-full animate-spin mx-auto"></div>
                         </div>
                     )}
@@ -282,50 +285,6 @@ const InfluencerLandingPage: React.FC = () => {
                 </p>
             </div>
 
-            {/* Download Popup */}
-            {showDownloadPopup && (
-                <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-                    <div className="bg-white rounded-3xl p-8 max-w-sm w-full text-center relative animate-in fade-in zoom-in duration-300">
-                        <button
-                            onClick={() => setShowDownloadPopup(false)}
-                            className="absolute top-4 right-4 text-gray-400 hover:text-gray-600"
-                        >
-                            <X className="w-6 h-6" />
-                        </button>
-
-                        <div className="text-5xl mb-4">📱</div>
-                        <h2 className="text-2xl font-bold text-gray-900 mb-2">Download the App!</h2>
-                        <p className="text-gray-600 mb-6">
-                            Get the best experience with our mobile app
-                        </p>
-
-                        <div className="space-y-3">
-                            <a
-                                href="https://apps.apple.com/app/godly-kids"
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="flex items-center justify-center gap-3 w-full py-3 bg-black text-white rounded-xl hover:bg-gray-800 transition-colors"
-                            >
-                                <Apple className="w-6 h-6" />
-                                <span className="font-semibold">Download on App Store</span>
-                            </a>
-                            <a
-                                href="https://play.google.com/store/apps/details?id=com.godlykids"
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="flex items-center justify-center gap-3 w-full py-3 bg-[#00C853] text-white rounded-xl hover:bg-[#00B84D] transition-colors"
-                            >
-                                <Play className="w-6 h-6" />
-                                <span className="font-semibold">Get on Google Play</span>
-                            </a>
-                        </div>
-
-                        <p className="mt-4 text-gray-500 text-sm">
-                            Or continue in your browser
-                        </p>
-                    </div>
-                </div>
-            )}
         </div>
     );
 };

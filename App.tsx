@@ -204,6 +204,7 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const isGamePage = location.pathname === '/game';
   const isResetPassword = location.pathname === '/reset-password';
   const isBookSeries = location.pathname.startsWith('/book-series/');
+  const isInfluencerPage = location.pathname.startsWith('/ref/');
 
   return (
     <div className="relative h-screen w-full overflow-hidden text-white flex flex-col">
@@ -215,11 +216,11 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
         {children}
       </div>
 
-      {/* Mini Player */}
-      <MiniPlayer />
+      {/* Mini Player - hide on influencer landing page */}
+      {!isInfluencerPage && <MiniPlayer />}
 
       {/* Only show BottomNavigation on main tab pages */}
-      {!isLanding && !isSignIn && !isOnboarding && !isBookDetail && !isPlayer && !isProfile && !isCreateProfile && !isEditProfile && !isPaywall && !isSettings && !isBookReader && !isAudioPage && !isLessonPage && !isGamePage && !isResetPassword && !isBookSeries && <BottomNavigation />}
+      {!isLanding && !isSignIn && !isOnboarding && !isBookDetail && !isPlayer && !isProfile && !isCreateProfile && !isEditProfile && !isPaywall && !isSettings && !isBookReader && !isAudioPage && !isLessonPage && !isGamePage && !isResetPassword && !isBookSeries && !isInfluencerPage && <BottomNavigation />}
     </div>
   );
 };

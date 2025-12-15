@@ -313,54 +313,6 @@ const BookEdit: React.FC = () => {
         }
     };
 
-    const handleReprocessAllAudio = async () => {
-        if (!bookId) {
-            alert('Book ID is required');
-            return;
-        }
-        if (!audioFiles.length) {
-            alert('No audio files to reprocess.');
-            return;
-        }
-        const vol = audioUploadVolume;
-        if (!Number.isFinite(vol) || vol <= 0 || vol > 1) {
-            alert('Upload Volume must be between 0 and 1');
-            return;
-        }
-        const ok = window.confirm(
-            `Reprocess ALL background music files to ${Math.round(vol * 100)}% volume?\n\n` +
-            `This will create new quieter files (new URLs) and update this book to use them.`
-        );
-        if (!ok) return;
-
-        setReprocessingAudioIndex(-1);
-        try {
-            const updated = [...audioFiles];
-            for (let i = 0; i < audioFiles.length; i++) {
-                const resp = await apiClient.post(
-                    `/api/upload/audio/reprocess?bookId=${bookId}&index=${i}&volume=${vol}`
-                );
-                updated[i] = {
-                    url: resp.data.url,
-                    filename: resp.data.filename || updated[i]?.filename || `audio-${i}.mp3`,
-                    uploadedAt: new Date().toISOString(),
-                };
-            }
-            setAudioFiles(updated);
-            alert('All audio reprocessed successfully.');
-        } catch (error: any) {
-            console.error('Audio reprocess-all failed:', error);
-            const msg =
-                error?.response?.data?.message ||
-                error?.response?.data?.error ||
-                error?.message ||
-                'Unknown error';
-            alert(`Failed to reprocess all audio:\n${msg}`);
-        } finally {
-            setReprocessingAudioIndex(null);
-        }
-    };
-
     const handleVideoUpload = async (file: File) => {
         if (!file.type.startsWith('video/') && !file.name.endsWith('.mp4')) {
             alert('Please select an MP4 video file');
@@ -701,46 +653,12 @@ const BookEdit: React.FC = () => {
                             <div>
                                 <p className="text-sm font-semibold text-indigo-900">Upload Volume</p>
                                 <p className="text-xs text-indigo-800/80">
-                                    This permanently makes the uploaded file quieter (best for iPhone). Example: “Reduce by 30%” = 70%.
+                                    This permanently makes the uploaded file quieter (best for iPhone). Recommended: 20%.
                                 </p>
                             </div>
                             <div className="text-indigo-900 font-bold tabular-nums">
                                 {Math.round(audioUploadVolume * 100)}%
                             </div>
-                        </div>
-                        <div className="mt-3 flex flex-wrap gap-2">
-                            <button
-                                type="button"
-                                onClick={() => setAudioUploadVolume(0.7)}
-                                className="px-3 py-1 text-xs font-semibold rounded-full border border-indigo-200 bg-white text-indigo-700 hover:bg-indigo-50"
-                                title="Reduce by 30%"
-                            >
-                                Reduce 30% (70%)
-                            </button>
-                            <button
-                                type="button"
-                                onClick={() => setAudioUploadVolume(0.5)}
-                                className="px-3 py-1 text-xs font-semibold rounded-full border border-indigo-200 bg-white text-indigo-700 hover:bg-indigo-50"
-                                title="Reduce by 50%"
-                            >
-                                Reduce 50% (50%)
-                            </button>
-                            <button
-                                type="button"
-                                onClick={() => setAudioUploadVolume(0.2)}
-                                className="px-3 py-1 text-xs font-semibold rounded-full border border-indigo-200 bg-white text-indigo-700 hover:bg-indigo-50"
-                                title="Very quiet (recommended for iPhone)"
-                            >
-                                Quiet (20%)
-                            </button>
-                            <button
-                                type="button"
-                                onClick={() => setAudioUploadVolume(1)}
-                                className="px-3 py-1 text-xs font-semibold rounded-full border border-indigo-200 bg-white text-indigo-700 hover:bg-indigo-50"
-                                title="Original volume"
-                            >
-                                Original (100%)
-                            </button>
                         </div>
                         <input
                             type="range"
@@ -761,24 +679,6 @@ const BookEdit: React.FC = () => {
                     {/* Existing Audio Files */}
                     {audioFiles.length > 0 && (
                         <div className="mb-4 space-y-2">
-                            <div className="flex items-center justify-between gap-3">
-                                <div className="text-xs text-gray-600">
-                                    Tip: use <span className="font-semibold">Reprocess</span> to generate a new quieter file URL for already-uploaded music.
-                                </div>
-                                <button
-                                    type="button"
-                                    onClick={handleReprocessAllAudio}
-                                    disabled={reprocessingAudioIndex !== null}
-                                    className={`px-3 py-1.5 text-xs font-semibold rounded-full border transition-colors ${
-                                        reprocessingAudioIndex === -1
-                                            ? 'bg-indigo-600 text-white border-indigo-600'
-                                            : 'bg-white text-indigo-700 border-indigo-200 hover:bg-indigo-50'
-                                    } ${reprocessingAudioIndex !== null && reprocessingAudioIndex !== -1 ? 'opacity-50 cursor-not-allowed' : ''}`}
-                                    title="Reprocess all audio files for this book"
-                                >
-                                    {reprocessingAudioIndex === -1 ? 'Reprocessing All…' : `Reprocess All to ${Math.round(audioUploadVolume * 100)}%`}
-                                </button>
-                            </div>
                             {audioFiles.map((audio, index) => (
                                 <div
                                     key={index}

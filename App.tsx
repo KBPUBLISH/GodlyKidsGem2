@@ -56,6 +56,7 @@ import LessonsPage from './pages/LessonsPage';
 import LessonPlayerPage from './pages/LessonPlayerPage';
 import VideoLessonDemo from './pages/VideoLessonDemo';
 import GameWebViewPage from './pages/GameWebViewPage';
+import InfluencerLandingPage from './pages/InfluencerLandingPage';
 import MiniPlayer from './components/audio/MiniPlayer';
 import BottomNavigation from './components/layout/BottomNavigation';
 import ErrorBoundary from './components/ErrorBoundary';
@@ -249,6 +250,7 @@ const App: React.FC = () => {
               <Layout>
                 <Routes>
                   <Route path="/" element={<LandingPage />} />
+                  <Route path="/ref/:code" element={<InfluencerLandingPage />} />
                   <Route path="/signin" element={<SignInPage />} />
                   <Route path="/sign-in" element={<SignInPage />} />
                   <Route path="/reset-password" element={<ResetPasswordPage />} />

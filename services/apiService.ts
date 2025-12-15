@@ -1788,6 +1788,76 @@ export const ApiService = {
       return null;
     }
   },
+
+  // ==========================================
+  // INFLUENCER API
+  // ==========================================
+
+  // Get influencer info by code (for landing page)
+  getInfluencer: async (code: string): Promise<any | null> => {
+    try {
+      const baseUrl = getApiBaseUrl();
+      const response = await fetchWithTimeout(`${baseUrl}influencers/${encodeURIComponent(code)}`, {
+        method: 'GET',
+      });
+      if (response.ok) {
+        return await response.json();
+      }
+      return null;
+    } catch (error) {
+      console.error('❌ Failed to get influencer:', error);
+      return null;
+    }
+  },
+
+  // Track influencer link click
+  trackInfluencerClick: async (code: string): Promise<boolean> => {
+    try {
+      const baseUrl = getApiBaseUrl();
+      const response = await fetchWithTimeout(`${baseUrl}influencers/${encodeURIComponent(code)}/click`, {
+        method: 'POST',
+      });
+      return response.ok;
+    } catch (error) {
+      console.error('❌ Failed to track influencer click:', error);
+      return false;
+    }
+  },
+
+  // Track influencer signup
+  trackInfluencerSignup: async (code: string, userId?: string, email?: string): Promise<any | null> => {
+    try {
+      const baseUrl = getApiBaseUrl();
+      const response = await fetchWithTimeout(`${baseUrl}influencers/${encodeURIComponent(code)}/signup`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId, email }),
+      });
+      if (response.ok) {
+        return await response.json();
+      }
+      return null;
+    } catch (error) {
+      console.error('❌ Failed to track influencer signup:', error);
+      return null;
+    }
+  },
+
+  // Track influencer conversion (purchase)
+  trackInfluencerConversion: async (code: string, userId?: string, amount?: number): Promise<boolean> => {
+    try {
+      const baseUrl = getApiBaseUrl();
+      const response = await fetchWithTimeout(`${baseUrl}influencers/${encodeURIComponent(code)}/conversion`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId, amount }),
+      });
+      return response.ok;
+    } catch (error) {
+      console.error('❌ Failed to track influencer conversion:', error);
+      return false;
+    }
+  },
 };
 
 // Log API configuration on startup

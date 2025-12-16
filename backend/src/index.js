@@ -98,8 +98,6 @@ app.use('/api/migration', require('./routes/migration'));
 app.use('/api/jobs', require('./routes/jobs'));
 app.use('/api/webhooks', require('./routes/webhooks'));
 app.use('/api/translate', require('./routes/translate'));
-app.use('/api/influencers', require('./routes/influencers'));
-app.use('/api/stripe', require('./routes/stripe'));
 app.use('/api/referrals', require('./routes/referrals'));
 
 // ===========================================

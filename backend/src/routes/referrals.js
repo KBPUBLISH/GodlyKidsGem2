@@ -1,249 +1,280 @@
 const express = require('express');
 const router = express.Router();
-const User = require('../models/User');
+const mongoose = require('mongoose');
+const AppUser = require('../models/AppUser');
+const User = require('../models/User'); // Fallback for legacy users
 
-// OneSignal configuration
-const ONESIGNAL_APP_ID = process.env.ONESIGNAL_APP_ID;
-const ONESIGNAL_REST_API_KEY = process.env.ONESIGNAL_REST_API_KEY;
+// Helper to check if a string is a valid MongoDB ObjectId
+const isValidObjectId = (id) => {
+    if (!id || typeof id !== 'string') return false;
+    // ObjectIds are exactly 24 hex characters
+    if (!/^[0-9a-fA-F]{24}$/.test(id)) return false;
+    try {
+        return new mongoose.Types.ObjectId(id).toString() === id;
+    } catch {
+        return false;
+    }
+};
 
-/**
- * Send push notification via OneSignal
- */
-async function sendPushNotification(playerId, title, message, data = {}) {
-  if (!ONESIGNAL_APP_ID || !ONESIGNAL_REST_API_KEY) {
-    console.log('⚠️ OneSignal not configured, skipping push notification');
-    return false;
-  }
-
-  try {
-    const response = await fetch('https://onesignal.com/api/v1/notifications', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Basic ${ONESIGNAL_REST_API_KEY}`,
-      },
-      body: JSON.stringify({
-        app_id: ONESIGNAL_APP_ID,
-        include_player_ids: [playerId],
-        headings: { en: title },
-        contents: { en: message },
-        data: data,
-        ios_sound: 'coin_sound.wav',
-        android_sound: 'coin_sound',
-      }),
-    });
-
-    const result = await response.json();
-    console.log('📬 Push notification sent:', result);
-    return true;
-  } catch (error) {
-    console.error('❌ Failed to send push notification:', error);
-    return false;
-  }
-}
+// Helper to build safe query for finding users by various IDs
+// This handles ObjectIds, emails, deviceIds, and custom user IDs
+const buildUserQuery = (userId) => {
+    const conditions = [
+        { email: userId },
+        { deviceId: userId }
+    ];
+    // Only add _id query if it's a valid ObjectId
+    if (isValidObjectId(userId)) {
+        conditions.unshift({ _id: userId });
+    }
+    return { $or: conditions };
+};
 
 /**
  * POST /api/referrals/sync
- * Sync user's referral code to the backend
+ * Sync referral code for a user
+ * Called after signup/purchase to ensure referral code is stored in backend
  */
 router.post('/sync', async (req, res) => {
-  try {
-    const { userId, email, referralCode } = req.body;
+    try {
+        const { userId, referralCode, referredBy } = req.body;
 
-    if (!referralCode) {
-      return res.status(400).json({ error: 'Referral code is required' });
+        if (!userId) {
+            return res.status(400).json({ 
+                success: false, 
+                message: 'userId is required' 
+            });
+        }
+
+        // Find user using safe query that handles various ID formats
+        // First try AppUser (main app users with referral fields)
+        let user = await AppUser.findOne(buildUserQuery(userId));
+        let userModel = 'AppUser';
+
+        // Fallback to User model (legacy/CMS users)
+        if (!user) {
+            try {
+                // User model only has email field, not deviceId
+                const userQuery = isValidObjectId(userId) 
+                    ? { $or: [{ _id: userId }, { email: userId }] }
+                    : { email: userId };
+                user = await User.findOne(userQuery);
+                if (user) userModel = 'User';
+            } catch (e) {
+                // Ignore - User model search failed
+            }
+        }
+
+        if (!user) {
+            // User doesn't exist yet - this is OK for anonymous users
+            // They may sync before creating an account
+            console.log(`ℹ️ User not found for referral sync: ${userId}`);
+            return res.json({ 
+                success: true, 
+                synced: false,
+                message: 'User not found - referral will sync when account is created'
+            });
+        }
+        
+        console.log(`📍 Found user in ${userModel} model: ${user.email || userId}`);
+
+        // Update referral data (only AppUser model has referral fields)
+        if (userModel === 'AppUser') {
+            const updateData = {};
+            
+            if (referralCode && !user.referralCode) {
+                updateData.referralCode = referralCode;
+            }
+            
+            if (referredBy && !user.referredBy) {
+                updateData.referredBy = referredBy;
+            }
+
+            if (Object.keys(updateData).length > 0) {
+                await AppUser.findByIdAndUpdate(user._id, updateData);
+                console.log(`✅ Synced referral code ${referralCode || 'N/A'} for user ${user.email || userId}`);
+            } else {
+                console.log(`ℹ️ Referral already synced for user ${user.email || userId}`);
+            }
+        } else {
+            // User model doesn't have referral fields - just acknowledge
+            console.log(`ℹ️ User found in legacy User model (no referral fields): ${user.email || userId}`);
+        }
+
+        return res.json({ 
+            success: true, 
+            synced: true,
+            referralCode: user.referralCode || referralCode
+        });
+
+    } catch (error) {
+        console.error('Referral sync error:', error);
+        // Return success with error flag - don't crash the app for referral sync failures
+        return res.status(200).json({ 
+            success: false, 
+            synced: false,
+            message: 'Referral sync failed',
+            error: error.message 
+        });
     }
-
-    // Find user by email or ID
-    let user = null;
-    if (userId) {
-      user = await User.findById(userId);
-    }
-    if (!user && email) {
-      user = await User.findOne({ email: email.toLowerCase() });
-    }
-
-    if (!user) {
-      return res.status(404).json({ error: 'User not found' });
-    }
-
-    // Check if this code is already taken by another user
-    const existingCode = await User.findOne({ 
-      referralCode: referralCode.toUpperCase(),
-      _id: { $ne: user._id }
-    });
-
-    if (existingCode) {
-      return res.status(409).json({ error: 'Referral code already in use' });
-    }
-
-    // Update user's referral code
-    user.referralCode = referralCode.toUpperCase();
-    await user.save();
-
-    console.log(`✅ Synced referral code ${referralCode} for user ${user.email}`);
-    res.json({ success: true, referralCode: user.referralCode });
-  } catch (error) {
-    console.error('❌ Error syncing referral code:', error);
-    res.status(500).json({ error: error.message });
-  }
-});
-
-/**
- * POST /api/referrals/update-push-token
- * Update user's push notification token
- */
-router.post('/update-push-token', async (req, res) => {
-  try {
-    const { userId, email, pushToken } = req.body;
-
-    if (!pushToken) {
-      return res.status(400).json({ error: 'Push token is required' });
-    }
-
-    // Find user by email or ID
-    let user = null;
-    if (userId) {
-      user = await User.findById(userId);
-    }
-    if (!user && email) {
-      user = await User.findOne({ email: email.toLowerCase() });
-    }
-
-    if (!user) {
-      return res.status(404).json({ error: 'User not found' });
-    }
-
-    user.pushToken = pushToken;
-    await user.save();
-
-    console.log(`✅ Updated push token for user ${user.email}`);
-    res.json({ success: true });
-  } catch (error) {
-    console.error('❌ Error updating push token:', error);
-    res.status(500).json({ error: error.message });
-  }
 });
 
 /**
  * POST /api/referrals/redeem
- * Redeem a referral code and notify the code owner
+ * Redeem a referral code (award coins to both users)
  */
 router.post('/redeem', async (req, res) => {
-  try {
-    const { code, redeemerUserId, redeemerEmail, redeemerName } = req.body;
+    try {
+        const { userId, codeToRedeem } = req.body;
 
-    if (!code) {
-      return res.status(400).json({ error: 'Referral code is required' });
-    }
-
-    const normalizedCode = code.toUpperCase().trim();
-
-    // Find the user who owns this referral code
-    const codeOwner = await User.findOne({ referralCode: normalizedCode });
-
-    if (!codeOwner) {
-      return res.status(404).json({ 
-        success: false, 
-        error: 'Invalid referral code',
-        message: "Hmm, that code doesn't look right. Double-check it!"
-      });
-    }
-
-    // Check if the redeemer is trying to use their own code
-    if (redeemerUserId && codeOwner._id.toString() === redeemerUserId) {
-      return res.status(400).json({ 
-        success: false, 
-        error: 'Cannot use own code',
-        message: "Nice try! You can't use your own referral code 😄"
-      });
-    }
-
-    if (redeemerEmail && codeOwner.email.toLowerCase() === redeemerEmail.toLowerCase()) {
-      return res.status(400).json({ 
-        success: false, 
-        error: 'Cannot use own code',
-        message: "Nice try! You can't use your own referral code 😄"
-      });
-    }
-
-    // Update code owner's stats
-    codeOwner.referralStats = codeOwner.referralStats || { totalReferrals: 0, coinsEarned: 0 };
-    codeOwner.referralStats.totalReferrals += 1;
-    codeOwner.referralStats.coinsEarned += 500;
-    await codeOwner.save();
-
-    console.log(`🎉 Referral code ${normalizedCode} redeemed! Owner: ${codeOwner.email}`);
-
-    // Send push notification to code owner
-    if (codeOwner.pushToken) {
-      const displayName = redeemerName || 'Someone';
-      await sendPushNotification(
-        codeOwner.pushToken,
-        '🎉 You earned 500 Gold Coins!',
-        `${displayName} used your referral code! Keep sharing to earn more!`,
-        { 
-          type: 'referral_used',
-          coinsEarned: 500 
+        if (!userId || !codeToRedeem) {
+            return res.status(400).json({ 
+                success: false, 
+                message: 'userId and codeToRedeem are required' 
+            });
         }
-      );
-    }
 
-    res.json({ 
-      success: true, 
-      message: '🎉 Awesome! You earned 500 gold coins!',
-      ownerNotified: !!codeOwner.pushToken
-    });
-  } catch (error) {
-    console.error('❌ Error redeeming referral code:', error);
-    res.status(500).json({ error: error.message });
-  }
+        const normalizedCode = codeToRedeem.trim().toUpperCase();
+
+        // Find the user redeeming the code
+        const user = await AppUser.findOne(buildUserQuery(userId));
+        
+        if (!user) {
+            return res.status(404).json({ 
+                success: false, 
+                message: 'User not found' 
+            });
+        }
+
+        // Check if user is trying to use their own code
+        if (user.referralCode === normalizedCode) {
+            return res.json({ 
+                success: false, 
+                message: "You can't use your own referral code!" 
+            });
+        }
+
+        // Check if user already has a referredBy
+        if (user.referredBy) {
+            return res.json({ 
+                success: false, 
+                message: "You've already used a referral code!" 
+            });
+        }
+
+        // Find the user who owns this referral code
+        const referrer = await AppUser.findOne({ referralCode: normalizedCode });
+        
+        if (!referrer) {
+            return res.json({ 
+                success: false, 
+                message: 'Invalid referral code' 
+            });
+        }
+
+        // Award coins to both users
+        const REFERRAL_BONUS = 100;
+
+        // Update the user who redeemed
+        await AppUser.findByIdAndUpdate(user._id, {
+            referredBy: normalizedCode,
+            $inc: { coins: REFERRAL_BONUS }
+        });
+
+        // Update the referrer
+        await AppUser.findByIdAndUpdate(referrer._id, {
+            $inc: { 
+                referralCount: 1,
+                coins: REFERRAL_BONUS 
+            }
+        });
+
+        console.log(`🎉 Referral redeemed: ${user.email || userId} used code ${normalizedCode} from ${referrer.email}`);
+
+        return res.json({ 
+            success: true, 
+            message: `🎉 You earned ${REFERRAL_BONUS} coins!`,
+            coinsAwarded: REFERRAL_BONUS
+        });
+
+    } catch (error) {
+        console.error('Referral redeem error:', error);
+        return res.status(500).json({ 
+            success: false, 
+            message: 'Failed to redeem referral code',
+            error: error.message 
+        });
+    }
 });
 
 /**
- * GET /api/referrals/validate/:code
- * Check if a referral code is valid (without redeeming)
+ * GET /api/referrals/code/:userId
+ * Get a user's referral code
  */
-router.get('/validate/:code', async (req, res) => {
-  try {
-    const code = req.params.code.toUpperCase().trim();
-    const codeOwner = await User.findOne({ referralCode: code });
+router.get('/code/:userId', async (req, res) => {
+    try {
+        const { userId } = req.params;
 
-    if (!codeOwner) {
-      return res.json({ valid: false });
+        const user = await AppUser.findOne(buildUserQuery(userId));
+        
+        if (!user) {
+            return res.status(404).json({ 
+                success: false, 
+                message: 'User not found' 
+            });
+        }
+
+        return res.json({ 
+            success: true, 
+            referralCode: user.referralCode,
+            referralCount: user.referralCount || 0
+        });
+
+    } catch (error) {
+        console.error('Get referral code error:', error);
+        return res.status(500).json({ 
+            success: false, 
+            message: 'Failed to get referral code',
+            error: error.message 
+        });
     }
-
-    res.json({ 
-      valid: true,
-      // Don't expose owner's full email for privacy
-      ownerInitial: codeOwner.username ? codeOwner.username.charAt(0).toUpperCase() : '?'
-    });
-  } catch (error) {
-    console.error('❌ Error validating referral code:', error);
-    res.status(500).json({ error: error.message });
-  }
 });
 
 /**
  * GET /api/referrals/stats/:userId
- * Get referral stats for a user
+ * Get referral statistics for a user
  */
 router.get('/stats/:userId', async (req, res) => {
-  try {
-    const user = await User.findById(req.params.userId);
+    try {
+        const { userId } = req.params;
 
-    if (!user) {
-      return res.status(404).json({ error: 'User not found' });
+        const user = await AppUser.findOne(buildUserQuery(userId));
+        
+        if (!user) {
+            return res.status(404).json({ 
+                success: false, 
+                message: 'User not found' 
+            });
+        }
+
+        return res.json({ 
+            success: true, 
+            stats: {
+                referralCode: user.referralCode,
+                referralCount: user.referralCount || 0,
+                referredBy: user.referredBy || null,
+                totalCoinsFromReferrals: (user.referralCount || 0) * 100
+            }
+        });
+
+    } catch (error) {
+        console.error('Get referral stats error:', error);
+        return res.status(500).json({ 
+            success: false, 
+            message: 'Failed to get referral stats',
+            error: error.message 
+        });
     }
-
-    res.json({
-      referralCode: user.referralCode,
-      stats: user.referralStats || { totalReferrals: 0, coinsEarned: 0 }
-    });
-  } catch (error) {
-    console.error('❌ Error getting referral stats:', error);
-    res.status(500).json({ error: error.message });
-  }
 });
 
 module.exports = router;

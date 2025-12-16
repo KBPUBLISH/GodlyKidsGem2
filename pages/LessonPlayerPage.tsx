@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { useParams, useNavigate, useLocation } from 'react-router-dom';
+import { useParams, useNavigate } from 'react-router-dom';
 import { ArrowLeft, Play, Pause, RotateCcw, Volume2, VolumeX, Check, ChevronRight, Star, Book, FlaskConical, Calculator, Hourglass, Languages, Palette, Cpu, Video, X, Lock, Loader2, Mic, ChevronLeft, Home, ShoppingBag } from 'lucide-react';
 import { ApiService } from '../services/apiService';
 import { markCompleted, getCompletion } from '../services/lessonService';
@@ -73,11 +73,7 @@ const getLessonIcon = (type: string) => {
 const LessonPlayerPage: React.FC = () => {
     const { lessonId } = useParams<{ lessonId: string }>();
     const navigate = useNavigate();
-    const location = useLocation();
-    const { addCoins, isOwned, purchaseItem, coins, isSubscribed, isVoiceUnlocked, currentProfileId } = useUser();
-    
-    // Get planner metadata passed from LessonsPage (if any)
-    const plannerMeta = (location.state as { dateKey?: string; slotIndex?: number; isDailyVerse?: boolean } | null) || {};
+    const { addCoins, isOwned, purchaseItem, coins, isSubscribed, isVoiceUnlocked } = useUser();
     const { setMusicPaused, musicEnabled } = useAudio();
     const { translateText, translateTexts, currentLanguage, t } = useLanguage();
 
@@ -121,9 +117,6 @@ const LessonPlayerPage: React.FC = () => {
     const [selectedAnswers, setSelectedAnswers] = useState<Map<number, number>>(new Map());
     const [quizSubmitted, setQuizSubmitted] = useState(false);
     const [correctAnswers, setCorrectAnswers] = useState(0);
-    
-    // 50% watch tracking (sent once per playback session to backend)
-    const has50SentRef = useRef(false);
 
     // Audio playback state
     const [isAudioPlaying, setIsAudioPlaying] = useState(false);
@@ -466,25 +459,6 @@ const LessonPlayerPage: React.FC = () => {
         if (videoRef.current) {
             const progress = (videoRef.current.currentTime / videoRef.current.duration) * 100;
             setVideoProgress(progress);
-            
-            // Report 50% watched to backend (once per session) for daily planner analytics
-            if (progress >= 50 && !has50SentRef.current && lessonId && currentProfileId) {
-                has50SentRef.current = true;
-                // Fire-and-forget - don't await
-                ApiService.reportLessonPlannerProgress(currentProfileId, lessonId, 0.5, plannerMeta.dateKey).catch(() => {});
-                // Also send analytics event with planner metadata if available
-                analyticsService.track({
-                    eventType: 'lesson_video_watched_50',
-                    targetType: 'lesson',
-                    targetId: lessonId,
-                    targetTitle: lesson?.title,
-                    metadata: {
-                        dateKey: plannerMeta.dateKey || null,
-                        slotIndex: plannerMeta.slotIndex ?? null,
-                        isDailyVerse: plannerMeta.isDailyVerse ?? false,
-                    },
-                });
-            }
 
             // Mark as watched if > 90% - but only for single videos or last episode
             const isLastEpisode = !hasEpisodes || currentEpisodeIndex >= totalEpisodes - 1;

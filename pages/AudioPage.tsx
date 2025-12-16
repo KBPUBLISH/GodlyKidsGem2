@@ -206,9 +206,9 @@ const AudioPage: React.FC = () => {
                     {/* Back Button */}
                     <button
                         onClick={() => navigate('/home')}
-                        className="w-12 h-12 bg-[#90be6d] rounded-full border-4 border-[#f3e5ab] overflow-hidden shadow-[0_4px_0_rgba(0,0,0,0.3)] relative flex items-center justify-center transform transition-transform active:scale-95 group"
+                        className="w-10 h-10 bg-black/40 backdrop-blur-sm rounded-full border-2 border-white/30 flex items-center justify-center transform transition-transform active:scale-95 hover:bg-black/60"
                     >
-                        <div className="w-0 h-0 border-t-[8px] border-t-transparent border-r-[12px] border-r-white border-b-[8px] border-b-transparent mr-1"></div>
+                        <ChevronLeft size={24} className="text-white" />
                     </button>
 
                     {/* Crown Icon */}

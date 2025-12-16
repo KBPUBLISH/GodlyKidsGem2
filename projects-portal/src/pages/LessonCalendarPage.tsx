@@ -1,16 +1,6 @@
 import React, { useEffect, useState } from 'react';
-import { ChevronLeft, ChevronRight, Calendar, Video, Clock, X, Trash2, Plus, BarChart3, Users, Eye, CheckCircle2 } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Calendar, Video, Clock, X, Trash2, Plus } from 'lucide-react';
 import apiClient from '../services/apiClient';
-
-interface DayAnalytics {
-    dateKey: string;
-    totals: {
-        activeKids: number;
-        plansCount: number;
-    };
-    watched50Buckets: { '0': number; '1': number; '2': number; '3': number };
-    completedLessonBuckets: { '0': number; '1': number; '2': number; '3': number };
-}
 
 interface Lesson {
     _id: string;
@@ -43,8 +33,6 @@ const LessonCalendarPage: React.FC = () => {
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
     const [showAddVideoSection, setShowAddVideoSection] = useState(false); // For modal add video
-    const [dayAnalytics, setDayAnalytics] = useState<DayAnalytics | null>(null);
-    const [loadingAnalytics, setLoadingAnalytics] = useState(false);
 
     const monthNames = [
         'January', 'February', 'March', 'April', 'May', 'June',
@@ -184,27 +172,6 @@ const LessonCalendarPage: React.FC = () => {
     useEffect(() => {
         fetchLessons();
     }, [currentDate]);
-
-    // Fetch analytics when a day is selected
-    useEffect(() => {
-        if (!selectedDay) {
-            setDayAnalytics(null);
-            return;
-        }
-        const dateKey = selectedDay.date.toISOString().split('T')[0];
-        setLoadingAnalytics(true);
-        apiClient.get(`/api/analytics/lessons/day?dateKey=${dateKey}`)
-            .then(res => {
-                setDayAnalytics(res.data);
-            })
-            .catch(err => {
-                console.error('Failed to fetch day analytics:', err);
-                setDayAnalytics(null);
-            })
-            .finally(() => {
-                setLoadingAnalytics(false);
-            });
-    }, [selectedDay]);
 
     // Attach lessons to calendar days
     const calendarDaysWithLessons = calendarDays.map(day => {
@@ -484,75 +451,6 @@ const LessonCalendarPage: React.FC = () => {
                                 <p className="text-gray-500 text-sm">No videos scheduled for this day</p>
                             </div>
                         )}
-
-                        {/* Day Analytics */}
-                        {loadingAnalytics ? (
-                            <div className="border-t border-gray-200 pt-4 mb-4">
-                                <div className="flex items-center gap-2 text-gray-500 text-sm">
-                                    <div className="w-4 h-4 border-2 border-indigo-600 border-t-transparent rounded-full animate-spin"></div>
-                                    Loading analytics...
-                                </div>
-                            </div>
-                        ) : dayAnalytics && dayAnalytics.totals.activeKids > 0 ? (
-                            <div className="border-t border-gray-200 pt-4 mb-4">
-                                <h4 className="font-semibold text-gray-700 flex items-center gap-2 mb-3">
-                                    <BarChart3 className="w-4 h-4 text-indigo-600" />
-                                    Day Analytics
-                                </h4>
-                                <div className="grid grid-cols-2 gap-3">
-                                    <div className="bg-indigo-50 rounded-lg p-3">
-                                        <div className="flex items-center gap-2 text-indigo-700 mb-1">
-                                            <Users className="w-4 h-4" />
-                                            <span className="text-sm font-medium">Active Kids</span>
-                                        </div>
-                                        <p className="text-2xl font-bold text-indigo-900">{dayAnalytics.totals.activeKids}</p>
-                                    </div>
-                                    <div className="bg-green-50 rounded-lg p-3">
-                                        <div className="flex items-center gap-2 text-green-700 mb-1">
-                                            <Eye className="w-4 h-4" />
-                                            <span className="text-sm font-medium">Watched 50%+</span>
-                                        </div>
-                                        <div className="text-xs text-green-600 space-y-0.5">
-                                            <p>0 videos: <strong>{dayAnalytics.watched50Buckets['0']}</strong> kids</p>
-                                            <p>1 video: <strong>{dayAnalytics.watched50Buckets['1']}</strong> kids</p>
-                                            <p>2 videos: <strong>{dayAnalytics.watched50Buckets['2']}</strong> kids</p>
-                                            <p>3 videos: <strong>{dayAnalytics.watched50Buckets['3']}</strong> kids</p>
-                                        </div>
-                                    </div>
-                                    <div className="bg-purple-50 rounded-lg p-3 col-span-2">
-                                        <div className="flex items-center gap-2 text-purple-700 mb-1">
-                                            <CheckCircle2 className="w-4 h-4" />
-                                            <span className="text-sm font-medium">Lessons Completed</span>
-                                        </div>
-                                        <div className="grid grid-cols-4 gap-2 text-xs text-purple-600">
-                                            <div className="text-center">
-                                                <p className="font-bold text-lg">{dayAnalytics.completedLessonBuckets['0']}</p>
-                                                <p>0 done</p>
-                                            </div>
-                                            <div className="text-center">
-                                                <p className="font-bold text-lg">{dayAnalytics.completedLessonBuckets['1']}</p>
-                                                <p>1 done</p>
-                                            </div>
-                                            <div className="text-center">
-                                                <p className="font-bold text-lg">{dayAnalytics.completedLessonBuckets['2']}</p>
-                                                <p>2 done</p>
-                                            </div>
-                                            <div className="text-center">
-                                                <p className="font-bold text-lg">{dayAnalytics.completedLessonBuckets['3']}</p>
-                                                <p>3 done</p>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                        ) : dayAnalytics ? (
-                            <div className="border-t border-gray-200 pt-4 mb-4">
-                                <p className="text-sm text-gray-500 flex items-center gap-2">
-                                    <BarChart3 className="w-4 h-4" />
-                                    No kids opened the app on this day yet.
-                                </p>
-                            </div>
-                        ) : null}
 
                         {/* Add Video Section */}
                         {showAddVideoSection ? (

@@ -1,18 +1,18 @@
 import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
 import { Book } from '../types';
 import { ApiService } from '../services/apiService';
+import { MOCK_BOOKS, API_BASE_URL } from '../constants';
+import { authService } from '../services/authService';
 
 interface BooksContextType {
   books: Book[];
   loading: boolean;
-  error: string | null;
   refreshBooks: () => Promise<void>;
 }
 
 const BooksContext = createContext<BooksContextType>({
   books: [],
   loading: true,
-  error: null,
   refreshBooks: async () => { },
 });
 
@@ -21,7 +21,6 @@ export const useBooks = () => useContext(BooksContext);
 export const BooksProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [books, setBooks] = useState<Book[]>([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
 
   const loadData = async () => {
     // Prevent infinite loops - don't load if already loading
@@ -31,17 +30,41 @@ export const BooksProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     }
 
     isLoadingRef.current = true;
-    setError(null); // Clear any previous error
 
     // Only show loading if we have no data to prevent flashing on manual refresh
     if (books.length === 0) setLoading(true);
 
     try {
-      console.log('📚 BooksContext: Loading books from API...');
+      console.log('📚 BooksContext: Loading books...');
 
-      // Always try to load from API - books are public content
+
+      // Check if user is authenticated
+      const isAuthenticated = authService.isAuthenticated();
+      const isLocalBackend = API_BASE_URL.includes('localhost');
+      console.log('🔑 BooksContext: User authenticated:', isAuthenticated);
+      console.log('🏠 BooksContext: Using local backend:', isLocalBackend);
+
+      // Skip auth check for local development
+      if (!isAuthenticated && !isLocalBackend) {
+        console.warn('⚠️ BooksContext: User not authenticated. Using mock data until login.');
+        console.warn('💡 Please log in to see real data from the dev database.');
+        setBooks(MOCK_BOOKS);
+        setLoading(false);
+        isLoadingRef.current = false;
+        return;
+      }
+
+
       const data = await ApiService.getBooks();
       console.log('📚 BooksContext: Received', data.length, 'books');
+
+      // Check if this is actually mock data by comparing structure
+      // Real API data will have different IDs/titles than mock
+      const isActuallyMockData = data.length === MOCK_BOOKS.length &&
+        data.every((book, index) => {
+          const mockBook = MOCK_BOOKS[index];
+          return mockBook && book.id === mockBook.id && book.title === mockBook.title;
+        });
 
       // Check for real cover URLs
       const hasRealCovers = data.some(book =>
@@ -51,22 +74,28 @@ export const BooksProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         book.coverUrl.length > 0
       );
 
-      if (hasRealCovers) {
-        console.log('✅ BooksContext: Using REAL API data with real covers from database');
-        console.log('📊 Books with real covers:', data.filter(b => b.coverUrl && !b.coverUrl.includes('picsum')).length);
+      if (isActuallyMockData) {
+        console.warn('⚠️ BooksContext: Received mock data (structure matches MOCK_BOOKS)');
+        console.warn('💡 This means API call failed and fell back to mock data');
+        console.warn('📊 Check console for API error messages above');
       } else {
-        console.log('✅ BooksContext: Using API data from database');
+        // This is real API data - use it even if covers are placeholders
+        if (hasRealCovers) {
+          console.log('✅ BooksContext: Using REAL API data with real covers from dev database');
+          console.log('📊 Books with real covers:', data.filter(b => b.coverUrl && !b.coverUrl.includes('picsum')).length);
+        } else {
+          console.log('✅ BooksContext: Using REAL API data from dev database');
+          console.log('💡 Data structure differs from mock - this is real API data');
+          console.log('📊 Covers may be placeholders but data is from API');
+        }
       }
 
       setBooks(data);
-      setError(null);
       hasLoadedRef.current = true;
-    } catch (err) {
-      console.error("❌ BooksContext: Failed to load books", err);
-      // Set error state instead of showing mock data
-      const errorMessage = err instanceof Error ? err.message : 'Failed to load books';
-      setError(errorMessage);
-      setBooks([]); // Clear books on error - don't show mock data
+    } catch (error) {
+      console.error("❌ BooksContext: Failed to load books", error);
+      // On error, use mock data as fallback
+      setBooks(MOCK_BOOKS);
     } finally {
       setLoading(false);
       isLoadingRef.current = false;
@@ -83,18 +112,42 @@ export const BooksProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       return;
     }
 
-    // Always load books - they are public content
-    console.log('📚 BooksContext: Initial load - fetching books from API');
-    loadData();
+    // Check authentication before loading
+    const isAuthenticated = authService.isAuthenticated();
+    const isLocalBackend = API_BASE_URL.includes('localhost');
+    console.log('📚 BooksContext: Initial load, authenticated:', isAuthenticated);
+    console.log('📚 BooksContext: Using local backend:', isLocalBackend);
+
+    if (isAuthenticated || isLocalBackend) {
+      loadData();
+    } else {
+      console.log('📚 BooksContext: Not authenticated, using mock data');
+      setBooks(MOCK_BOOKS);
+      setLoading(false);
+    }
   }, []);
 
-  // Also reload when route changes (e.g., after navigation) - but only once
+  // Also reload when route changes (e.g., after login navigation or guest navigation) - but only once
   useEffect(() => {
     const handleHashChange = () => {
       const isLandingPage = window.location.hash === '#/' || window.location.hash === '';
-      if (!isLandingPage && !hasLoadedRef.current && !isLoadingRef.current) {
-        console.log('📚 BooksContext: Route changed, loading books from API');
-        loadData();
+      if (!isLandingPage && !hasLoadedRef.current) {
+        const isAuthenticated = authService.isAuthenticated();
+        const isLocalBackend = API_BASE_URL.includes('localhost');
+        console.log('📚 BooksContext: Route changed, authenticated:', isAuthenticated);
+        console.log('📚 BooksContext: Using local backend:', isLocalBackend);
+        if (!isLoadingRef.current) {
+          if (isAuthenticated || isLocalBackend) {
+            console.log('📚 BooksContext: Reloading books after route change');
+            loadData();
+          } else {
+            // Guest user - load mock books
+            console.log('📚 BooksContext: Loading mock books for guest user after route change');
+            setBooks(MOCK_BOOKS);
+            setLoading(false);
+            hasLoadedRef.current = true;
+          }
+        }
       }
     };
 
@@ -149,7 +202,7 @@ export const BooksProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   }
 
   return (
-    <BooksContext.Provider value={{ books, loading, error, refreshBooks: loadData }}>
+    <BooksContext.Provider value={{ books, loading, refreshBooks: loadData }}>
       {children}
     </BooksContext.Provider>
   );

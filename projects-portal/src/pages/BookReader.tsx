@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
+import axios from 'axios';
 import { ChevronLeft, ChevronRight, X } from 'lucide-react';
-import apiClient, { getMediaUrl } from '../services/apiClient';
 
 interface TextBox {
     text: string;
@@ -21,8 +21,6 @@ interface Page {
     backgroundType?: 'image' | 'video';
     scrollUrl?: string;
     scrollHeight?: number;
-    scrollMidHeight?: number; // Mid scroll height % (default 30)
-    scrollMaxHeight?: number; // Max scroll height % (default 60)
     textBoxes?: TextBox[];
 }
 
@@ -48,7 +46,7 @@ const BookReader: React.FC = () => {
         const fetchPages = async () => {
             if (!bookId) return;
             try {
-                const res = await apiClient.get(`/api/pages/book/${bookId}`);
+                const res = await axios.get(`http://localhost:5001/api/pages/book/${bookId}`);
                 setPages(res.data);
             } catch (err) {
                 console.error('Failed to fetch pages:', err);
@@ -82,7 +80,10 @@ const BookReader: React.FC = () => {
     };
 
     const resolveUrl = (url?: string) => {
-        return getMediaUrl(url);
+        if (!url) return '';
+        if (url.startsWith('http')) return url;
+        if (url.startsWith('/uploads')) return `http://localhost:5001${url}`;
+        return url;
     };
 
     if (loading) {
@@ -214,8 +215,8 @@ const BookReader: React.FC = () => {
                         }}
                     >
                         {currentPage.textBoxes?.map((box, idx) => {
-                            // Calculate scroll top position - use mid height for text box positioning
-                            const scrollHeightVal = `${currentPage.scrollMidHeight || 30}%`;
+                            // Calculate scroll top position
+                            const scrollHeightVal = currentPage.scrollHeight ? `${currentPage.scrollHeight}px` : '30%';
                             const scrollTopVal = `calc(100% - ${scrollHeightVal})`;
 
                             return (
@@ -251,7 +252,7 @@ const BookReader: React.FC = () => {
                         <div
                             className={`absolute bottom-0 left-0 right-0 transition-transform duration-500 ease-in-out z-10 ${showScroll ? 'translate-y-0' : 'translate-y-full'
                                 }`}
-                            style={{ height: `${currentPage.scrollMidHeight || 30}%` }}
+                            style={{ height: currentPage.scrollHeight ? `${currentPage.scrollHeight}px` : '30%' }}
                             onClick={(e) => e.stopPropagation()}
                         >
                             {/* The Scroll Image */}

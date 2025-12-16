@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Check, X, Loader2, RefreshCw, AlertCircle, CheckCircle, Mail, Gift } from 'lucide-react';
+import { Check, X, Loader2, RefreshCw, AlertCircle, CheckCircle, Mail } from 'lucide-react';
 import { useUser } from '../context/UserContext';
 import { useSubscription } from '../context/SubscriptionContext';
 import ParentGateModal from '../components/features/ParentGateModal';
@@ -32,21 +32,6 @@ const PaywallPage: React.FC = () => {
   // Restore modal state
   const [showRestoreModal, setShowRestoreModal] = useState(false);
   const [restoreEmail, setRestoreEmail] = useState('');
-  
-  // Promo code state
-  const [showPromoCode, setShowPromoCode] = useState(false);
-  const [promoCode, setPromoCode] = useState('');
-  const [promoCodeApplied, setPromoCodeApplied] = useState(false);
-  
-  // Check for influencer code on mount
-  useEffect(() => {
-    const influencerCode = localStorage.getItem('godlykids_influencer_code');
-    if (influencerCode) {
-      setPromoCode(influencerCode);
-      setPromoCodeApplied(true);
-      setShowPromoCode(true);
-    }
-  }, []);
 
   // If user already has premium, redirect to home
   useEffect(() => {
@@ -357,56 +342,6 @@ const PaywallPage: React.FC = () => {
                         </div>
                     </div>
 
-                </div>
-
-                {/* Promo Code Section */}
-                <div className="w-full mb-4">
-                  {!showPromoCode ? (
-                    <button
-                      type="button"
-                      onClick={() => setShowPromoCode(true)}
-                      className="text-[#7c4dff] text-sm font-medium flex items-center gap-1 mx-auto hover:text-[#651fff] transition-colors"
-                    >
-                      <Gift size={14} />
-                      Have a promo code?
-                    </button>
-                  ) : (
-                    <div className="bg-gray-50 rounded-xl p-3 border border-gray-200">
-                      <div className="flex items-center gap-2">
-                        <div className="flex-1 relative">
-                          <input
-                            type="text"
-                            placeholder="Enter promo code"
-                            value={promoCode}
-                            onChange={(e) => {
-                              const code = e.target.value.toUpperCase();
-                              setPromoCode(code);
-                              setPromoCodeApplied(code.length > 0);
-                              // Store code for payment processing
-                              if (code) {
-                                localStorage.setItem('godlykids_promo_code', code);
-                              } else {
-                                localStorage.removeItem('godlykids_promo_code');
-                              }
-                            }}
-                            className="w-full px-3 py-2 bg-white border border-gray-300 rounded-lg text-[#1a237e] text-sm font-mono uppercase tracking-wider focus:outline-none focus:ring-2 focus:ring-[#7c4dff] focus:border-transparent"
-                            disabled={promoCodeApplied && promoCode === localStorage.getItem('godlykids_influencer_code')}
-                          />
-                          {promoCodeApplied && (
-                            <div className="absolute right-2 top-1/2 -translate-y-1/2">
-                              <Check size={18} className="text-[#4CAF50]" />
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                      {promoCodeApplied && promoCode && (
-                        <p className="text-[#4CAF50] text-xs mt-2 flex items-center gap-1">
-                          <Check size={12} />
-                          Code "{promoCode}" will be applied at checkout
-                        </p>
-                      )}
-                    </div>
-                  )}
                 </div>
 
                 {/* CTA Button */}

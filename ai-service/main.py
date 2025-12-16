@@ -1,7 +1,3 @@
-# CRITICAL: Apply compatibility patch FIRST, before ANY other imports
-# This must happen before transformers or TTS are imported
-import patch_transformers
-
 import os
 import torch
 from fastapi import FastAPI, UploadFile, File, Form, HTTPException
@@ -88,5 +84,4 @@ async def generate_speech(
         raise HTTPException(status_code=500, detail=str(e))
 
 if __name__ == "__main__":
-    # Run without reload to avoid import issues with the patch
-    uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=False)
+    uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)

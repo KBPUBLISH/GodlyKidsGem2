@@ -17,6 +17,7 @@ import { analyticsService } from '../services/analyticsService';
 import { pinnedColoringService } from '../services/pinnedColoringService';
 import GameWebView from '../components/features/GameWebView';
 import ChallengeGameModal from '../components/features/ChallengeGameModal';
+import StrengthGameModal from '../components/features/StrengthGameModal';
 import PrayerGameModal from '../components/features/PrayerGameModal';
 
 // Default placeholder image
@@ -62,6 +63,7 @@ const BookDetailPage: React.FC = () => {
   const [totalPages, setTotalPages] = useState<number>(0);
   const [selectedGame, setSelectedGame] = useState<{ title: string; url: string } | null>(null);
   const [showChallengeGame, setShowChallengeGame] = useState(false);
+  const [showStrengthGame, setShowStrengthGame] = useState(false);
   const [showPrayerGame, setShowPrayerGame] = useState(false);
   const [readCount, setReadCount] = useState<number>(0);
   const [favoriteCount, setFavoriteCount] = useState<number>(0);
@@ -609,6 +611,8 @@ const BookDetailPage: React.FC = () => {
                                 // Open modal games based on gameId
                                 if (game.gameId === 'challenge') {
                                   setShowChallengeGame(true);
+                                } else if (game.gameId === 'strength') {
+                                  setShowStrengthGame(true);
                                 } else if (game.gameId === 'prayer') {
                                   setShowPrayerGame(true);
                                 }
@@ -954,6 +958,10 @@ const BookDetailPage: React.FC = () => {
       <ChallengeGameModal
         isOpen={showChallengeGame}
         onClose={() => setShowChallengeGame(false)}
+      />
+      <StrengthGameModal
+        isOpen={showStrengthGame}
+        onClose={() => setShowStrengthGame(false)}
       />
       <PrayerGameModal
         isOpen={showPrayerGame}

@@ -34,7 +34,6 @@ interface Activity {
 
 type LessonType = 
     | 'Bible Study' 
-    | 'Daily Verse'
     | 'Science' 
     | 'Math' 
     | 'History' 
@@ -524,7 +523,6 @@ const LessonForm: React.FC = () => {
                                 className="w-full rounded-md border border-gray-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500"
                             >
                                 <option value="Bible Study">📖 Bible Study</option>
-                                <option value="Daily Verse">📅 Daily Verse</option>
                                 <option value="Science">🔬 Science</option>
                                 <option value="Math">🔢 Math</option>
                                 <option value="History">📜 History</option>

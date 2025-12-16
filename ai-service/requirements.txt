@@ -1,10 +1,9 @@
 fastapi
 uvicorn
 python-multipart
-TTS>=0.22.0
-torch>=2.0.0
-torchaudio>=2.0.0
+TTS
+torch
+torchaudio
 pydub
 numpy
 scipy
-transformers>=4.33.0

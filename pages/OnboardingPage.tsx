@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ChevronLeft, Check, Plus, Trash2, UserCircle, Mic, X, ChevronDown, ChevronUp, BookOpen, Music, Sparkles, Users, Loader2, Lock, Crown, ClipboardList, RefreshCw, Volume2, Eye, EyeOff, Gift } from 'lucide-react';
+import { ChevronLeft, Check, Plus, Trash2, UserCircle, Mic, X, ChevronDown, ChevronUp, BookOpen, Music, Sparkles, Users, Loader2, Lock, Crown, ClipboardList, RefreshCw, Volume2, Eye, EyeOff } from 'lucide-react';
 import WoodButton from '../components/ui/WoodButton';
 import { useUser } from '../context/UserContext';
 import { useAudio } from '../context/AudioContext';
@@ -86,21 +86,6 @@ const PaywallStep: React.FC<{
   const [showTermsModal, setShowTermsModal] = useState(false);
   const [termsModalUrl, setTermsModalUrl] = useState('');
   const [termsModalTitle, setTermsModalTitle] = useState('');
-  
-  // Promo code state
-  const [showPromoCode, setShowPromoCode] = useState(false);
-  const [promoCode, setPromoCode] = useState('');
-  const [promoCodeApplied, setPromoCodeApplied] = useState(false);
-  
-  // Check for influencer code on mount
-  useEffect(() => {
-    const influencerCode = localStorage.getItem('godlykids_influencer_code');
-    if (influencerCode) {
-      setPromoCode(influencerCode);
-      setPromoCodeApplied(true);
-      setShowPromoCode(true);
-    }
-  }, []);
 
   const isValidEmail = (emailStr: string) => {
     return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailStr);
@@ -483,56 +468,6 @@ const PaywallStep: React.FC<{
                 <span className="font-display font-extrabold text-xl text-[#3E1F07]">$9.99<span className="text-xs font-normal">/mo</span></span>
               </div>
             </div>
-          </div>
-
-          {/* Promo Code Section */}
-          <div className="mb-4">
-            {!showPromoCode ? (
-              <button
-                type="button"
-                onClick={() => setShowPromoCode(true)}
-                className="text-[#1976D2] text-sm font-medium flex items-center gap-1 mx-auto hover:underline"
-              >
-                <Gift size={14} />
-                Have a promo code?
-              </button>
-            ) : (
-              <div className="bg-gray-50 rounded-xl p-3 border border-gray-200">
-                <div className="flex items-center gap-2">
-                  <div className="flex-1 relative">
-                    <input
-                      type="text"
-                      placeholder="Enter promo code"
-                      value={promoCode}
-                      onChange={(e) => {
-                        const code = e.target.value.toUpperCase();
-                        setPromoCode(code);
-                        setPromoCodeApplied(code.length > 0);
-                        // Store code for payment processing
-                        if (code) {
-                          localStorage.setItem('godlykids_promo_code', code);
-                        } else {
-                          localStorage.removeItem('godlykids_promo_code');
-                        }
-                      }}
-                      className="w-full px-3 py-2 bg-white border border-gray-300 rounded-lg text-[#3E1F07] text-sm font-mono uppercase tracking-wider focus:outline-none focus:ring-2 focus:ring-[#FFD700] focus:border-transparent"
-                      disabled={promoCodeApplied && promoCode === localStorage.getItem('godlykids_influencer_code')}
-                    />
-                    {promoCodeApplied && (
-                      <div className="absolute right-2 top-1/2 -translate-y-1/2">
-                        <Check size={18} className="text-[#4CAF50]" />
-                      </div>
-                    )}
-                  </div>
-                </div>
-                {promoCodeApplied && promoCode && (
-                  <p className="text-[#4CAF50] text-xs mt-2 flex items-center gap-1">
-                    <Check size={12} />
-                    Code "{promoCode}" will be applied at checkout
-                  </p>
-                )}
-              </div>
-            )}
           </div>
 
           {/* Error Display */}

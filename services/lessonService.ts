@@ -1,6 +1,5 @@
 /**
  * Service for managing lesson completions, streaks, and weekly resets PER PROFILE
- * Supports multiple lessons per day (Mon-Sat, Sunday is rest day)
  */
 import { profileService } from './profileService';
 
@@ -8,127 +7,18 @@ interface LessonCompletion {
     lessonId: string;
     completedAt: number; // timestamp
     weekStart: number; // timestamp of Monday midnight for the week
-    dayIndex: number; // 0-5 for Mon-Sat
     correctAnswers?: number; // number of correct quiz answers
     coinsEarned?: number; // total coins earned from this lesson
-}
-
-interface DayProgress {
-    dayIndex: number; // 0-5 for Mon-Sat
-    totalLessons: number;
-    completedLessons: number;
-    isComplete: boolean;
 }
 
 const BASE_COMPLETIONS_KEY = 'godlykids_lesson_completions';
 const BASE_STREAK_KEY = 'godlykids_lesson_streak';
 const BASE_WEEK_START_KEY = 'godlykids_last_week_start';
-const BASE_SELECTED_DAY_KEY = 'godlykids_selected_day';
 
 // Get profile-specific keys
 const getCompletionsKey = () => profileService.getProfileKey(BASE_COMPLETIONS_KEY);
 const getStreakKey = () => profileService.getProfileKey(BASE_STREAK_KEY);
 const getWeekStartKey = () => profileService.getProfileKey(BASE_WEEK_START_KEY);
-const getSelectedDayKey = () => profileService.getProfileKey(BASE_SELECTED_DAY_KEY);
-
-/**
- * Get the current day index (0-4 for Mon-Fri, -1 for weekend)
- */
-export const getTodayIndex = (): number => {
-    const today = new Date();
-    const dayOfWeek = today.getDay(); // 0 = Sunday, 1 = Monday, etc.
-    
-    // Weekend (Saturday = 6, Sunday = 0) = -1 (rest days)
-    // Mon-Fri = 0-4
-    if (dayOfWeek === 0 || dayOfWeek === 6) return -1;
-    return dayOfWeek - 1; // Monday = 0, Tuesday = 1, ..., Friday = 4
-};
-
-/**
- * Get the selected day index (defaults to today or Friday if weekend)
- */
-export const getSelectedDay = (): number => {
-    const saved = localStorage.getItem(getSelectedDayKey());
-    if (saved !== null) {
-        const parsed = parseInt(saved, 10);
-        if (parsed >= 0 && parsed <= 4) return parsed;
-    }
-    
-    // Default to today's index, or Friday if weekend
-    const todayIndex = getTodayIndex();
-    return todayIndex === -1 ? 4 : todayIndex; // If weekend, default to Friday
-};
-
-/**
- * Set the selected day index
- */
-export const setSelectedDay = (dayIndex: number): void => {
-    if (dayIndex >= 0 && dayIndex <= 4) {
-        localStorage.setItem(getSelectedDayKey(), dayIndex.toString());
-    }
-};
-
-/**
- * Get lessons for a specific day of the week
- */
-export const getLessonsForDay = (lessons: any[], dayIndex: number): any[] => {
-    const monday = getMondayOfWeek();
-    const targetDate = new Date(monday);
-    targetDate.setDate(monday.getDate() + dayIndex);
-    targetDate.setHours(0, 0, 0, 0);
-    
-    const targetDateStr = targetDate.toISOString().split('T')[0];
-    
-    return lessons.filter(lesson => {
-        if (!lesson.scheduledDate) return false;
-        // Extract date portion directly from the stored date string (UTC)
-        // This avoids timezone conversion issues
-        const scheduledStr = typeof lesson.scheduledDate === 'string' 
-            ? lesson.scheduledDate.split('T')[0]
-            : new Date(lesson.scheduledDate).toISOString().split('T')[0];
-        return scheduledStr === targetDateStr;
-    });
-};
-
-/**
- * Get progress for all 5 days (Mon-Fri)
- */
-export const getWeekProgress = (lessons: any[]): DayProgress[] => {
-    const progress: DayProgress[] = [];
-    
-    for (let i = 0; i < 5; i++) {
-        const dayLessons = getLessonsForDay(lessons, i);
-        const completedCount = dayLessons.filter(l => isCompleted(l._id || l.id)).length;
-        
-        progress.push({
-            dayIndex: i,
-            totalLessons: dayLessons.length,
-            completedLessons: completedCount,
-            isComplete: dayLessons.length > 0 && completedCount === dayLessons.length,
-        });
-    }
-    
-    return progress;
-};
-
-/**
- * Check if a specific day is fully completed
- */
-export const isDayComplete = (lessons: any[], dayIndex: number): boolean => {
-    const dayLessons = getLessonsForDay(lessons, dayIndex);
-    if (dayLessons.length === 0) return false;
-    return dayLessons.every(l => isCompleted(l._id || l.id));
-};
-
-/**
- * Get completion percentage for a specific day
- */
-export const getDayCompletionPercent = (lessons: any[], dayIndex: number): number => {
-    const dayLessons = getLessonsForDay(lessons, dayIndex);
-    if (dayLessons.length === 0) return 0;
-    const completedCount = dayLessons.filter(l => isCompleted(l._id || l.id)).length;
-    return Math.round((completedCount / dayLessons.length) * 100);
-};
 
 /**
  * Get the start of the current week (Monday midnight in user's local time)
@@ -233,15 +123,10 @@ export const isCompleted = (lessonId: string): boolean => {
 export const markCompleted = (
     lessonId: string,
     correctAnswers: number = 0,
-    coinsEarned: number = 0,
-    dayIndex?: number
+    coinsEarned: number = 0
 ): void => {
     const completions = getCompletions();
     const weekStart = getWeekStart();
-    
-    // Determine day index if not provided
-    const actualDayIndex = dayIndex !== undefined ? dayIndex : getTodayIndex();
-    const safeDayIndex = actualDayIndex === -1 ? 4 : actualDayIndex; // If weekend, use Friday
     
     // Remove existing completion for this lesson if any
     const filtered = completions.filter(c => c.lessonId !== lessonId);
@@ -251,7 +136,6 @@ export const markCompleted = (
         lessonId,
         completedAt: Date.now(),
         weekStart,
-        dayIndex: safeDayIndex,
         correctAnswers,
         coinsEarned,
     };

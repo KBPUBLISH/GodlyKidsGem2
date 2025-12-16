@@ -354,19 +354,6 @@ export const analyticsService = {
         });
     },
 
-    /**
-     * Track lesson video watched 50%+ (for daily planner analytics)
-     */
-    lessonVideoWatched50: (lessonId: string, title?: string, meta?: { dateKey?: string; slotIndex?: number; isDailyVerse?: boolean }) => {
-        analyticsService.track({
-            eventType: 'lesson_video_watched_50',
-            targetType: 'lesson',
-            targetId: lessonId,
-            targetTitle: title,
-            metadata: meta || {},
-        });
-    },
-
     // ==========================================
     // FEATURE EVENTS
     // ==========================================

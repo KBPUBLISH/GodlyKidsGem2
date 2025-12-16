@@ -222,14 +222,12 @@ When word highlighting is working:
 
 Make sure these are set in `backend/.env`:
 ```
-ELEVENLABS_API_KEY=your_elevenlabs_api_key_here
-MONGO_URI=your_mongodb_connection_string_here
+ELEVENLABS_API_KEY=9ecbf47636c1f24951383e57cbbc2e524ce678f9e26fd4d7db9b43d5f7bcdc00
+MONGO_URI=mongodb+srv://admingodlykids:6duHzeJOpuP0JUIO@cluster1.kgoqec.mongodb.net/godlykids?retryWrites=true&w=majority&appName=Cluster1
 PORT=5001
-GCS_BUCKET_NAME=your_bucket_name
+GCS_BUCKET_NAME=developmentgk
 GOOGLE_APPLICATION_CREDENTIALS=./service-account-key.json
 ```
-
-**⚠️ SECURITY NOTE: Never commit actual credentials to git!**
 
 ## Current Status
 

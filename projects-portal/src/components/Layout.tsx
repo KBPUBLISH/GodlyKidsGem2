@@ -1,6 +1,6 @@
 import React from 'react';
 import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom';
-import { Book, Music, Layout as LayoutIcon, Home, Tag, Volume2, Gamepad2, Video, LogOut, Bell, Music2, Star, CalendarDays, BarChart3, Library, Link2 } from 'lucide-react';
+import { Book, Music, Layout as LayoutIcon, Home, Tag, Volume2, Gamepad2, Video, LogOut, Bell, Music2, Star, CalendarDays, BarChart3, Library } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 
 const Layout: React.FC = () => {
@@ -29,7 +29,6 @@ const Layout: React.FC = () => {
         { path: '/games', icon: Gamepad2, label: 'Games' },
         { path: '/notifications', icon: Bell, label: 'Notifications' },
         { path: '/music', icon: Music2, label: 'Music' },
-        { path: '/codes', icon: Link2, label: 'Code Management' },
     ];
 
     return (

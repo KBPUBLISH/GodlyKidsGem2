@@ -44,13 +44,9 @@ const BookForm: React.FC = () => {
             try {
                 // Only fetch book categories
                 const response = await apiClient.get('/api/categories?type=book');
-                // Handle paginated response or direct array
-                const categoriesData = Array.isArray(response.data) 
-                    ? response.data 
-                    : (response.data.data || response.data.categories || []);
-                setCategories(categoriesData);
-                if (categoriesData.length > 0 && !formData.category) {
-                    setFormData(prev => ({ ...prev, category: categoriesData[0].name }));
+                setCategories(response.data);
+                if (response.data.length > 0 && !formData.category) {
+                    setFormData(prev => ({ ...prev, category: response.data[0].name }));
                 }
             } catch (error) {
                 console.error('Error fetching categories:', error);

@@ -56,26 +56,9 @@ import LessonsPage from './pages/LessonsPage';
 import LessonPlayerPage from './pages/LessonPlayerPage';
 import VideoLessonDemo from './pages/VideoLessonDemo';
 import GameWebViewPage from './pages/GameWebViewPage';
-import InfluencerLandingPage from './pages/InfluencerLandingPage';
-import CheckoutSuccessPage from './pages/CheckoutSuccessPage';
 import MiniPlayer from './components/audio/MiniPlayer';
 import BottomNavigation from './components/layout/BottomNavigation';
 import ErrorBoundary from './components/ErrorBoundary';
-import CoinHistoryModal from './components/features/CoinHistoryModal';
-import { useUser } from './context/UserContext';
-
-// Global Coin Modal - shows when user runs out of coins (outOfCoinsMode)
-const GlobalCoinModal: React.FC = () => {
-  const { showReferralModal, setShowReferralModal } = useUser();
-  return (
-    <CoinHistoryModal 
-      isOpen={showReferralModal} 
-      onClose={() => setShowReferralModal(false)}
-      onOpenShop={() => {}} // No-op since we're just showing referral
-      outOfCoinsMode={true}
-    />
-  );
-};
 import { BooksProvider } from './context/BooksContext';
 import { UserProvider } from './context/UserContext';
 import { AudioProvider } from './context/AudioContext';
@@ -220,7 +203,6 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const isGamePage = location.pathname === '/game';
   const isResetPassword = location.pathname === '/reset-password';
   const isBookSeries = location.pathname.startsWith('/book-series/');
-  const isInfluencerPage = location.pathname.startsWith('/ref/');
 
   return (
     <div className="relative h-screen w-full overflow-hidden text-white flex flex-col">
@@ -232,11 +214,11 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
         {children}
       </div>
 
-      {/* Mini Player - hide on influencer landing page */}
-      {!isInfluencerPage && <MiniPlayer />}
+      {/* Mini Player */}
+      <MiniPlayer />
 
       {/* Only show BottomNavigation on main tab pages */}
-      {!isLanding && !isSignIn && !isOnboarding && !isBookDetail && !isPlayer && !isProfile && !isCreateProfile && !isEditProfile && !isPaywall && !isSettings && !isBookReader && !isAudioPage && !isLessonPage && !isGamePage && !isResetPassword && !isBookSeries && !isInfluencerPage && <BottomNavigation />}
+      {!isLanding && !isSignIn && !isOnboarding && !isBookDetail && !isPlayer && !isProfile && !isCreateProfile && !isEditProfile && !isPaywall && !isSettings && !isBookReader && !isAudioPage && !isLessonPage && !isGamePage && !isResetPassword && !isBookSeries && <BottomNavigation />}
     </div>
   );
 };
@@ -261,15 +243,12 @@ const App: React.FC = () => {
       <LanguageProvider>
       <AudioProvider>
         <UserProvider>
-          <GlobalCoinModal />
           <SubscriptionProvider>
             <BooksProvider>
               <HashRouter>
               <Layout>
                 <Routes>
                   <Route path="/" element={<LandingPage />} />
-                  <Route path="/ref/:code" element={<InfluencerLandingPage />} />
-                  <Route path="/checkout-success" element={<CheckoutSuccessPage />} />
                   <Route path="/signin" element={<SignInPage />} />
                   <Route path="/sign-in" element={<SignInPage />} />
                   <Route path="/reset-password" element={<ResetPasswordPage />} />

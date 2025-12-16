@@ -23,7 +23,6 @@ import Notifications from './pages/Notifications';
 import MusicManagement from './pages/MusicManagement';
 import FeaturedContent from './pages/FeaturedContent';
 import AnalyticsDashboard from './pages/AnalyticsDashboard';
-import CodeManagement from './pages/CodeManagement';
 
 function App() {
   return (
@@ -62,7 +61,6 @@ function App() {
             <Route path="music" element={<MusicManagement />} />
             <Route path="featured" element={<FeaturedContent />} />
             <Route path="analytics" element={<AnalyticsDashboard />} />
-            <Route path="codes" element={<CodeManagement />} />
           </Route>
         </Routes>
       </Router>

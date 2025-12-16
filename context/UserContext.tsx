@@ -1,6 +1,5 @@
 
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
-import { ApiService } from '../services/apiService';
 // Removed import of KidProfile due to missing export in ../types
 
 export interface ShopItem {
@@ -54,11 +53,6 @@ interface UserContextType {
   addCoins: (amount: number, reason?: string, source?: CoinTransaction['source']) => void;
   spendCoins: (amount: number, reason?: string) => boolean;
   coinTransactions: CoinTransaction[];
-  
-  // Zero coins / Not enough coins callback
-  showReferralModal: boolean;
-  setShowReferralModal: (show: boolean) => void;
-  showNotEnoughCoins: () => void; // Call this when user clicks on something they can't afford
   
   // Referral System
   referralCode: string;
@@ -150,9 +144,6 @@ const UserContext = createContext<UserContextType>({
   addCoins: () => {},
   spendCoins: () => false,
   coinTransactions: [],
-  showReferralModal: false,
-  setShowReferralModal: () => {},
-  showNotEnoughCoins: () => {},
   referralCode: '',
   redeemedCodes: [],
   redeemCode: () => ({ success: false, message: '' }),
@@ -231,7 +222,6 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const [coins, setCoins] = useState(saved?.coins ?? 500); // New users start with 500 coins
   const [coinTransactions, setCoinTransactions] = useState<CoinTransaction[]>(saved?.coinTransactions ?? []);
-  const [showReferralModal, setShowReferralModal] = useState(false); // Trigger when coins hit 0
   const [referralCode] = useState<string>(saved?.referralCode ?? generateReferralCode());
   const [redeemedCodes, setRedeemedCodes] = useState<string[]>(saved?.redeemedCodes ?? []);
   const [ownedItems, setOwnedItems] = useState<string[]>(saved?.ownedItems ?? ['f1', 'anim1']); // anim1 is default breathe
@@ -460,33 +450,6 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
   }, [isSubscribed]);
 
-  // Sync referral code to backend (for push notifications when someone uses it)
-  useEffect(() => {
-    const syncReferralCodeToBackend = async () => {
-      const userEmail = localStorage.getItem('godlykids_user_email');
-      const userId = localStorage.getItem('godlykids_user_id');
-      
-      // Only sync if we have a user email (logged in)
-      if (!userEmail && !userId) return;
-      
-      // Check if we've already synced this code
-      const syncedCode = localStorage.getItem('godlykids_synced_referral_code');
-      if (syncedCode === referralCode) return;
-      
-      console.log('🔄 Syncing referral code to backend:', referralCode);
-      const result = await ApiService.syncReferralCode(userId, userEmail, referralCode);
-      
-      if (result.success) {
-        localStorage.setItem('godlykids_synced_referral_code', referralCode);
-        console.log('✅ Referral code synced to backend');
-      } else {
-        console.log('⚠️ Could not sync referral code:', result.error);
-      }
-    };
-    
-    syncReferralCodeToBackend();
-  }, [referralCode]);
-
   const addCoins = (amount: number, reason: string = 'Coins earned', source: CoinTransaction['source'] = 'other') => {
     setCoins(prev => prev + amount);
     
@@ -504,16 +467,7 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const spendCoins = (amount: number, reason: string = 'Purchase'): boolean => {
     if (coins < amount) return false;
     
-    const newBalance = coins - amount;
-    setCoins(newBalance);
-    
-    // Trigger referral modal when coins hit 0
-    if (newBalance === 0) {
-      // Small delay to let the UI update first
-      setTimeout(() => {
-        setShowReferralModal(true);
-      }, 500);
-    }
+    setCoins(prev => prev - amount);
     
     // Record transaction (negative amount)
     const transaction: CoinTransaction = {
@@ -525,11 +479,6 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
     setCoinTransactions(prev => [transaction, ...prev].slice(0, 100));
     return true;
-  };
-
-  // Show the "not enough coins" modal - call this when user clicks on grayed-out items
-  const showNotEnoughCoins = () => {
-    setShowReferralModal(true);
   };
 
   const redeemCode = (code: string): { success: boolean; message: string } => {
@@ -545,33 +494,18 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
       return { success: false, message: "You've already used this code!" };
     }
     
-    // Accept any code that matches our format (WORD+WORD+NUMBER)
+    // For now, accept any code that matches our format (WORD+WORD+NUMBER)
+    // In production, this would validate against a backend
     const codePattern = /^[A-Z]+[A-Z]+\d+$/;
     if (!codePattern.test(normalizedCode)) {
       return { success: false, message: "Hmm, that doesn't look like a valid code. Try again!" };
     }
     
-    // Redeem successful locally!
+    // Redeem successful!
     setRedeemedCodes(prev => [...prev, normalizedCode]);
-    addCoins(500, `Referral from friend`, 'referral');
+    addCoins(100, `Referral from friend`, 'referral');
     
-    // Also notify the backend to send push notification to code owner
-    // This runs async in the background - don't block the user
-    const userEmail = localStorage.getItem('godlykids_user_email');
-    const userId = localStorage.getItem('godlykids_user_id');
-    const userName = parentName || 'A friend';
-    
-    ApiService.redeemReferralCode(normalizedCode, userId || undefined, userEmail || undefined, userName)
-      .then(result => {
-        if (result.success) {
-          console.log('✅ Referral code owner notified via push notification');
-        }
-      })
-      .catch(err => {
-        console.log('⚠️ Could not notify code owner (backend may not have their code registered):', err);
-      });
-    
-    return { success: true, message: "🎉 Awesome! You earned 500 gold coins!" };
+    return { success: true, message: "🎉 Awesome! You earned 100 gold coins!" };
   };
 
   const addKid = (kid: KidProfile) => {
@@ -1109,9 +1043,6 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
       addCoins,
       spendCoins,
       coinTransactions,
-      showReferralModal,
-      setShowReferralModal,
-      showNotEnoughCoins,
       referralCode,
       redeemedCodes,
       redeemCode,

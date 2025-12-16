@@ -434,54 +434,6 @@ const PlaylistPlayerPage: React.FC = () => {
                         <div className={`absolute top-0 right-0 w-10 h-10 border-t-[6px] border-r-[6px] border-[#FFD700] rounded-tr-lg transition-opacity duration-300 ${isPlaying ? 'opacity-100' : 'opacity-70'}`}></div>
                         <div className={`absolute bottom-0 left-0 w-10 h-10 border-b-[6px] border-l-[6px] border-[#FFD700] rounded-bl-lg transition-opacity duration-300 ${isPlaying ? 'opacity-100' : 'opacity-70'}`}></div>
                         <div className={`absolute bottom-0 right-0 w-10 h-10 border-b-[6px] border-r-[6px] border-[#FFD700] rounded-br-lg transition-opacity duration-300 ${isPlaying ? 'opacity-100' : 'opacity-70'}`}></div>
-                        
-                        {/* Realistic vinyl record spinning effect when playing */}
-                        {isPlaying && (
-                            <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                                <div 
-                                    className="w-24 h-24 rounded-full relative"
-                                    style={{
-                                        animation: 'spin 3s linear infinite',
-                                        background: `
-                                            radial-gradient(circle at center,
-                                                #1a1a1a 0%,
-                                                #1a1a1a 15%,
-                                                #ff6b35 15%,
-                                                #ff6b35 17%,
-                                                #1a1a1a 17%,
-                                                #1a1a1a 100%
-                                            )
-                                        `,
-                                        boxShadow: '0 0 20px rgba(0,0,0,0.5), inset 0 0 30px rgba(0,0,0,0.8)',
-                                    }}
-                                >
-                                    {/* Vinyl grooves */}
-                                    <div 
-                                        className="absolute inset-0 rounded-full"
-                                        style={{
-                                            background: `
-                                                repeating-radial-gradient(
-                                                    circle at center,
-                                                    transparent 0px,
-                                                    transparent 2px,
-                                                    rgba(255,255,255,0.03) 2px,
-                                                    rgba(255,255,255,0.03) 3px
-                                                )
-                                            `,
-                                        }}
-                                    />
-                                    {/* Shine/reflection */}
-                                    <div 
-                                        className="absolute inset-0 rounded-full"
-                                        style={{
-                                            background: 'linear-gradient(135deg, rgba(255,255,255,0.1) 0%, transparent 50%, rgba(0,0,0,0.2) 100%)',
-                                        }}
-                                    />
-                                    {/* Center hole */}
-                                    <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-3 h-3 rounded-full bg-[#1a1a1a] border border-gray-700" />
-                                </div>
-                            </div>
-                        )}
                     </div>
                 </div>
 

@@ -99,6 +99,16 @@ const HomePage: React.FC = () => {
   // Lessons state - initialize from cache if available
   const [lessons, setLessons] = useState<any[]>(() => getCached('lessons'));
   const [lessonsLoading, setLessonsLoading] = useState(() => getCached('lessons').length === 0);
+  
+  // Debug: Log profile and lessons on mount
+  console.log('🏠 HomePage MOUNT - Profile:', currentProfileId, 'Kids:', kids.length, 'Cached lessons:', getCached('lessons').length);
+  
+  // When profile changes, clear the debounce so we refetch
+  useEffect(() => {
+    console.log('👤 Profile changed to:', currentProfileId);
+    // Clear fetch debounce to allow fresh fetch
+    sessionStorage.removeItem('godlykids_home_last_fetch');
+  }, [currentProfileId]);
   const [weekLessons, setWeekLessons] = useState<Map<string, any>>(new Map());
   const [selectedDayIndex, setSelectedDayIndex] = useState<number>(getSelectedDay());
   const todayIndex = getTodayIndex();
@@ -361,9 +371,10 @@ const HomePage: React.FC = () => {
 
   const fetchLessons = async () => {
     try {
-      console.log('📚 Fetching lessons from API...');
+      console.log('📚 Fetching lessons from API... (Profile:', currentProfileId, ')');
       const data = await ApiService.getLessons();
-      console.log('📚 Lessons received:', data.length, data);
+      console.log('📚 Lessons received:', data.length, 'for profile:', currentProfileId);
+      console.log('📚 Lessons data:', JSON.stringify(data.map((l: any) => ({ id: l._id, title: l.title, video: l.video?.url ? 'has video' : 'no video' }))));
       setLessons(data);
 
       // Organize lessons by day for the fixed week (Monday to Sunday)

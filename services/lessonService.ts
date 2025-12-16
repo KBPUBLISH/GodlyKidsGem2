@@ -250,13 +250,35 @@ export const getTodayIndex = (): number => {
 const SELECTED_DAY_KEY = 'godlykids_selected_day';
 
 /**
+ * Normalize a day index to be within 0..6. Defaults to today's index if invalid.
+ */
+const normalizeDayIndex = (dayIndex: number): number => {
+    if (!Number.isFinite(dayIndex)) return getTodayIndex();
+    if (dayIndex < 0) return 0;
+    if (dayIndex > 6) return 6;
+    return dayIndex;
+};
+
+/**
+ * Local date key (YYYY-MM-DD) using local timezone (NOT UTC).
+ * Using toISOString() can shift the date on devices depending on timezone.
+ */
+const toLocalDateKey = (date: Date): string => {
+    const y = date.getFullYear();
+    const m = String(date.getMonth() + 1).padStart(2, '0');
+    const d = String(date.getDate()).padStart(2, '0');
+    return `${y}-${m}-${d}`;
+};
+
+/**
  * Get the currently selected day index (defaults to today)
  */
 export const getSelectedDay = (): number => {
     try {
         const saved = sessionStorage.getItem(SELECTED_DAY_KEY);
         if (saved !== null) {
-            return parseInt(saved, 10);
+            const parsed = parseInt(saved, 10);
+            return normalizeDayIndex(parsed);
         }
     } catch (e) {
         // Ignore
@@ -269,7 +291,7 @@ export const getSelectedDay = (): number => {
  */
 export const setSelectedDay = (dayIndex: number): void => {
     try {
-        sessionStorage.setItem(SELECTED_DAY_KEY, dayIndex.toString());
+        sessionStorage.setItem(SELECTED_DAY_KEY, normalizeDayIndex(dayIndex).toString());
     } catch (e) {
         // Ignore
     }
@@ -280,15 +302,16 @@ export const setSelectedDay = (dayIndex: number): void => {
  */
 export const getLessonsForDay = (lessons: any[], dayIndex: number): any[] => {
     const weekDays = getWeekDays();
-    const targetDate = weekDays[dayIndex];
+    const safeIndex = normalizeDayIndex(dayIndex);
+    const targetDate = weekDays[safeIndex];
     
     if (!targetDate) return [];
     
-    const targetDateStr = targetDate.toISOString().split('T')[0];
+    const targetDateStr = toLocalDateKey(targetDate);
     
     return lessons.filter(lesson => {
         if (!lesson.scheduledDate) return false;
-        const lessonDateStr = new Date(lesson.scheduledDate).toISOString().split('T')[0];
+        const lessonDateStr = toLocalDateKey(new Date(lesson.scheduledDate));
         return lessonDateStr === targetDateStr;
     });
 };

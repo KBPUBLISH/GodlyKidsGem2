@@ -4,7 +4,6 @@ import { ChevronLeft, ChevronRight, X, Play, Pause, Volume2, Mic, Check, Music, 
 import { ApiService } from '../services/apiService';
 import { voiceCloningService, ClonedVoice } from '../services/voiceCloningService';
 import { translationService, SUPPORTED_LANGUAGES } from '../services/translationService';
-import VoiceCloningModal from '../components/features/VoiceCloningModal';
 import ColoringModal from '../components/features/ColoringModal';
 import BookQuizModal from '../components/features/BookQuizModal';
 import { useAudio } from '../context/AudioContext';
@@ -113,7 +112,6 @@ const BookReaderPage: React.FC = () => {
     const [selectedVoiceId, setSelectedVoiceId] = useState<string>('21m00Tcm4TlvDq8ikWAM'); // Default Rachel
     const [wordAlignment, setWordAlignment] = useState<{ words: Array<{ word: string; start: number; end: number }> } | null>(null);
     const [currentWordIndex, setCurrentWordIndex] = useState<number>(-1);
-    const [showVoiceCloningModal, setShowVoiceCloningModal] = useState(false);
     const [showVoiceDropdown, setShowVoiceDropdown] = useState(false);
     
     // Translation state
@@ -2488,17 +2486,6 @@ const BookReaderPage: React.FC = () => {
                                             {(voices.length > 0 || clonedVoices.length > 0) && (
                                                 <div className="border-t border-white/20 my-1"></div>
                                             )}
-                                            <button
-                                                onClick={(e) => {
-                                                    e.stopPropagation();
-                                                    setShowVoiceDropdown(false);
-                                                    setShowVoiceCloningModal(true);
-                                                }}
-                                                className="w-full text-left px-4 py-2 text-sm text-[#FFD700] font-bold hover:bg-white/10 transition-colors flex items-center gap-2"
-                                            >
-                                                <Mic className="w-4 h-4" />
-                                                Create Your Voice
-                                            </button>
                                         </>
                                     )}
 
@@ -3254,18 +3241,6 @@ const BookReaderPage: React.FC = () => {
                 </div>
             )}
 
-            {/* Voice Cloning Modal */}
-            <VoiceCloningModal
-                isOpen={showVoiceCloningModal}
-                onClose={() => setShowVoiceCloningModal(false)}
-                onVoiceCloned={(voice) => {
-                    // Reload cloned voices
-                    const cloned = voiceCloningService.getClonedVoices();
-                    setClonedVoices(cloned);
-                    // Optionally select the newly cloned voice
-                    setSelectedVoiceId(voice.voice_id);
-                }}
-            />
 
             {/* Coloring Modal */}
             <ColoringModal

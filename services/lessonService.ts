@@ -293,5 +293,14 @@ export const getLessonsForDay = (lessons: any[], dayIndex: number): any[] => {
     });
 };
 
+/**
+ * Check if all lessons for a day are complete
+ */
+export const isDayComplete = (lessons: any[], dayIndex: number): boolean => {
+    const dayLessons = getLessonsForDay(lessons, dayIndex);
+    if (dayLessons.length === 0) return false;
+    return dayLessons.every(lesson => isCompleted(lesson._id || lesson.id));
+};
+
 // All functions are exported as named exports above
 // No default export to avoid circular dependency issues

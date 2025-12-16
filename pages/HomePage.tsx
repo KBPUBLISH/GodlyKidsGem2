@@ -10,9 +10,10 @@ import { useLanguage } from '../context/LanguageContext';
 import StormySeaError from '../components/ui/StormySeaError';
 import DailyRewardModal from '../components/features/DailyRewardModal';
 import ChallengeGameModal from '../components/features/ChallengeGameModal';
+import StrengthGameModal from '../components/features/StrengthGameModal';
 import PrayerGameModal from '../components/features/PrayerGameModal';
 import ReviewPromptModal, { shouldShowReviewPrompt } from '../components/features/ReviewPromptModal';
-import { Key, Brain, Heart, Video, Lock, Check, Play, CheckCircle, Clock, Coins } from 'lucide-react';
+import { Key, Brain, Dumbbell, Heart, Video, Lock, Check, Play, CheckCircle, Clock, Coins } from 'lucide-react';
 import { ApiService } from '../services/apiService';
 import { 
   isCompleted, 
@@ -43,6 +44,7 @@ const getLessonStatus = (lesson: any): 'available' | 'locked' | 'completed' => {
 };
 
 // Profile-specific game engagement keys
+const getEngagementKey = (baseKey: string) => profileService.getProfileKey(baseKey);
 
 // Check if a purchasable game has been unlocked
 const isGamePurchased = (gameId: string): boolean => {
@@ -60,35 +62,22 @@ const markGamePurchased = (gameId: string): void => {
 };
 
 
-// Helper to format date as YYYY-MM-DD in local time
-const formatLocalDateKey = (d: Date): string => {
-  const yyyy = d.getFullYear();
-  const mm = String(d.getMonth() + 1).padStart(2, '0');
-  const dd = String(d.getDate()).padStart(2, '0');
-  return `${yyyy}-${mm}-${dd}`;
-};
-
-// Convert kid age to lesson age group
-const ageToLessonAgeGroup = (age?: number): string => {
-  if (!age || !Number.isFinite(age)) return 'all';
-  if (age <= 6) return '4-6';
-  if (age <= 8) return '6-8';
-  if (age <= 10) return '8-10';
-  if (age <= 12) return '10-12';
-  return 'all';
-};
-
 const HomePage: React.FC = () => {
   const navigate = useNavigate();
   const { books, loading, error: booksError, refreshBooks } = useBooks();
-  const { coins, spendCoins, currentProfileId, kids } = useUser();
+  const { coins, spendCoins, kids, currentProfileId } = useUser();
   const [isRetrying, setIsRetrying] = useState(false);
 
   const [isHeaderVisible, setIsHeaderVisible] = useState(true);
   const [showDailyReward, setShowDailyReward] = useState(false);
   const [showChallengeGame, setShowChallengeGame] = useState(false);
+  const [showStrengthGame, setShowStrengthGame] = useState(false);
   const [showPrayerGame, setShowPrayerGame] = useState(false);
   const [showReviewPrompt, setShowReviewPrompt] = useState(false);
+  const [hasEngagedMemory, setHasEngagedMemory] = useState(false);
+  const [hasEngagedDailyKey, setHasEngagedDailyKey] = useState(false);
+  const [hasEngagedStrength, setHasEngagedStrength] = useState(false);
+  const [hasEngagedPrayer, setHasEngagedPrayer] = useState(false);
   
   // Game purchase state - tracks purchased games to update UI without reload
   const [purchasedGamesState, setPurchasedGamesState] = useState<string[]>(() => {
@@ -107,103 +96,12 @@ const HomePage: React.FC = () => {
     } catch { return []; }
   };
   
-  // Lessons state - using daily planner API with sessionStorage cache for navigation
-  const [lessons, setLessons] = useState<any[]>(() => {
-    try {
-      const cached = sessionStorage.getItem('godlykids_home_lessons');
-      return cached ? JSON.parse(cached) : [];
-    } catch { return []; }
-  });
-  const [lessonsLoading, setLessonsLoading] = useState(() => {
-    // If we have cached lessons, don't show loading initially
-    try {
-      const cached = sessionStorage.getItem('godlykids_home_lessons');
-      return !cached || JSON.parse(cached).length === 0;
-    } catch { return true; }
-  });
+  // Lessons state - initialize from cache if available
+  const [lessons, setLessons] = useState<any[]>(() => getCached('lessons'));
+  const [lessonsLoading, setLessonsLoading] = useState(() => getCached('lessons').length === 0);
   const [weekLessons, setWeekLessons] = useState<Map<string, any>>(new Map());
   const [selectedDayIndex, setSelectedDayIndex] = useState<number>(getSelectedDay());
   const todayIndex = getTodayIndex();
-  
-  // Daily planner state - restore from sessionStorage for navigation
-  const [dayPlans, setDayPlans] = useState<Map<string, any>>(() => {
-    try {
-      const cached = sessionStorage.getItem('godlykids_home_dayPlans');
-      if (cached) {
-        const parsed = JSON.parse(cached);
-        return new Map(Object.entries(parsed));
-      }
-    } catch {}
-    return new Map();
-  });
-  const loadedDaysRef = useRef<Set<string>>((() => {
-    try {
-      const cached = sessionStorage.getItem('godlykids_home_loadedDays');
-      return cached ? new Set<string>(JSON.parse(cached)) : new Set<string>();
-    } catch { return new Set<string>(); }
-  })());
-  // Use sessionStorage to track last profile across navigation (refs reset on remount)
-  const lastProfileRef = useRef<string | null | undefined>((() => {
-    try {
-      return sessionStorage.getItem('godlykids_home_lastProfile');
-    } catch {
-      return undefined;
-    }
-  })());
-  
-  // Reset planner state when profile changes (but not on initial mount or navigation return)
-  useEffect(() => {
-    // Get the cached profile from sessionStorage
-    let cachedProfile: string | null = null;
-    try {
-      cachedProfile = sessionStorage.getItem('godlykids_home_lastProfile');
-    } catch {}
-    
-    console.log('📚 Profile check - current:', currentProfileId, 'cached:', cachedProfile, 'ref:', lastProfileRef.current);
-    
-    // If we have a valid profile and it matches the cache, we're returning from navigation
-    // Keep the cached lessons and don't reset anything
-    if (currentProfileId && cachedProfile === currentProfileId) {
-      console.log('📚 Same profile on return, keeping cached lessons');
-      lastProfileRef.current = currentProfileId;
-      return;
-    }
-    
-    // First mount with a profile - just store it, don't clear lessons
-    // (lessons were initialized from cache which is the correct data)
-    if (lastProfileRef.current === null || lastProfileRef.current === undefined) {
-      console.log('📚 First mount, storing profile');
-      lastProfileRef.current = currentProfileId;
-      try {
-        if (currentProfileId) {
-          sessionStorage.setItem('godlykids_home_lastProfile', currentProfileId);
-        }
-      } catch {}
-      return;
-    }
-    
-    // Profile actually changed (different from what we had before)
-    if (currentProfileId !== lastProfileRef.current) {
-      console.log('📚 Profile changed from', lastProfileRef.current, 'to', currentProfileId, '- resetting');
-      lastProfileRef.current = currentProfileId;
-      try {
-        if (currentProfileId) {
-          sessionStorage.setItem('godlykids_home_lastProfile', currentProfileId);
-        } else {
-          sessionStorage.removeItem('godlykids_home_lastProfile');
-        }
-      } catch {}
-      setDayPlans(new Map());
-      loadedDaysRef.current = new Set();
-      setLessons([]);
-      // Clear cache when profile changes
-      sessionStorage.removeItem('godlykids_home_lessons');
-      sessionStorage.removeItem('godlykids_home_dayPlans');
-      sessionStorage.removeItem('godlykids_home_loadedDays');
-      // Trigger a refetch for the new profile
-      sessionStorage.removeItem('godlykids_home_last_fetch');
-    }
-  }, [currentProfileId]);
   
   // Welcome video state - plays once per app session when returning to home
   const [showWelcomeVideo, setShowWelcomeVideo] = useState(() => {
@@ -268,6 +166,32 @@ const HomePage: React.FC = () => {
 
   // Check if games have been engaged today (per-profile) - resets daily
   useEffect(() => {
+    const today = new Date().toDateString();
+    const lastEngagementDate = localStorage.getItem(getEngagementKey('daily_games_date'));
+    
+    // If it's a new day, reset all daily game engagements
+    if (lastEngagementDate !== today) {
+      localStorage.setItem(getEngagementKey('daily_games_date'), today);
+      localStorage.removeItem(getEngagementKey('memory_game_engaged'));
+      localStorage.removeItem(getEngagementKey('daily_key_engaged'));
+      localStorage.removeItem(getEngagementKey('strength_game_engaged'));
+      localStorage.removeItem(getEngagementKey('prayer_game_engaged'));
+      setHasEngagedMemory(false);
+      setHasEngagedDailyKey(false);
+      setHasEngagedStrength(false);
+      setHasEngagedPrayer(false);
+    } else {
+      // Same day - check existing engagement flags
+      const memoryEngaged = localStorage.getItem(getEngagementKey('memory_game_engaged')) === 'true';
+      const dailyKeyEngaged = localStorage.getItem(getEngagementKey('daily_key_engaged')) === 'true';
+      const strengthEngaged = localStorage.getItem(getEngagementKey('strength_game_engaged')) === 'true';
+      const prayerEngaged = localStorage.getItem(getEngagementKey('prayer_game_engaged')) === 'true';
+      setHasEngagedMemory(memoryEngaged);
+      setHasEngagedDailyKey(dailyKeyEngaged);
+      setHasEngagedStrength(strengthEngaged);
+      setHasEngagedPrayer(prayerEngaged);
+    }
+
     // Safeguard: If no books are loaded and we're not loading, try to refresh
     if (!loading && books.length === 0) {
       // Use a small timeout to avoid conflict with initial load
@@ -279,18 +203,44 @@ const HomePage: React.FC = () => {
   }, [loading, books, refreshBooks]);
 
   const handleDailyKeyClick = () => {
+    // Mark as engaged when user clicks (per-profile)
+    if (!hasEngagedDailyKey) {
+      localStorage.setItem(getEngagementKey('daily_key_engaged'), 'true');
+      setHasEngagedDailyKey(true);
+    }
     // Track game play for Report Card
-    activityTrackingService.trackGamePlayed('daily_key', 'Key of Truth');
+    activityTrackingService.trackGamePlayed('daily_key', 'Daily Key');
     setShowDailyReward(true);
   };
 
   const handleMemoryClick = () => {
+    // Mark as engaged when user clicks (per-profile)
+    if (!hasEngagedMemory) {
+      localStorage.setItem(getEngagementKey('memory_game_engaged'), 'true');
+      setHasEngagedMemory(true);
+    }
     // Track game play for Report Card
     activityTrackingService.trackGamePlayed('memory_challenge', 'Memory Challenge');
     setShowChallengeGame(true);
   };
 
+  const handleStrengthClick = () => {
+    // Mark as engaged when user clicks (per-profile)
+    if (!hasEngagedStrength) {
+      localStorage.setItem(getEngagementKey('strength_game_engaged'), 'true');
+      setHasEngagedStrength(true);
+    }
+    // Track game play for Report Card
+    activityTrackingService.trackGamePlayed('strength_game', 'Strength Game');
+    setShowStrengthGame(true);
+  };
+
   const handlePrayerClick = async () => {
+    // Mark as engaged when user clicks (per-profile)
+    if (!hasEngagedPrayer) {
+      localStorage.setItem(getEngagementKey('prayer_game_engaged'), 'true');
+      setHasEngagedPrayer(true);
+    }
     // Track game play for Report Card
     activityTrackingService.trackGamePlayed('prayer_game', 'Prayer Game');
 
@@ -384,27 +334,6 @@ const HomePage: React.FC = () => {
     }
   };
   
-  // Helper to cache lessons with sessionStorage for navigation persistence
-  const cacheLessons = (lessonsData: any[]) => {
-    try {
-      sessionStorage.setItem('godlykids_home_lessons', JSON.stringify(lessonsData));
-    } catch (e) {
-      console.log('⚠️ Failed to cache lessons');
-    }
-  };
-  
-  // Helper to cache day plans
-  const cacheDayPlans = (plans: Map<string, any>) => {
-    try {
-      const obj: Record<string, any> = {};
-      plans.forEach((value, key) => { obj[key] = value; });
-      sessionStorage.setItem('godlykids_home_dayPlans', JSON.stringify(obj));
-      sessionStorage.setItem('godlykids_home_loadedDays', JSON.stringify([...loadedDaysRef.current]));
-    } catch (e) {
-      console.log('⚠️ Failed to cache day plans');
-    }
-  };
-  
   // Fetch dynamic games from backend
   const fetchDynamicGames = async () => {
     try {
@@ -420,72 +349,53 @@ const HomePage: React.FC = () => {
     }
   };
 
-  // Load a single day's plan using the daily planner API
-  const loadDayPlan = async (dateKey: string, forceLoad = false) => {
-    if (!currentProfileId) {
-      console.log('📚 loadDayPlan: No currentProfileId, skipping');
-      return null;
-    }
-    
-    // Skip if already loaded
-    if (!forceLoad && loadedDaysRef.current.has(dateKey)) {
-      return dayPlans.get(dateKey);
-    }
-    
-    loadedDaysRef.current.add(dateKey);
-    console.log('📚 loadDayPlan: Fetching plan for', dateKey, 'profile:', currentProfileId);
-    
-    const kid = kids?.find((k: any) => String(k.id) === String(currentProfileId));
-    const ageGroup = ageToLessonAgeGroup(kid?.age);
-    
-    try {
-      const plan = await ApiService.getLessonPlannerDay(currentProfileId, dateKey, ageGroup);
-      console.log('📚 loadDayPlan: Got plan for', dateKey, ':', plan);
-      
-      if (plan && plan.slots) {
-        setDayPlans(prev => {
-          const next = new Map(prev);
-          next.set(dateKey, plan);
-          // Cache for navigation persistence
-          setTimeout(() => cacheDayPlans(next), 0);
-          return next;
-        });
-        return plan;
-      }
-      return null;
-    } catch (error) {
-      console.error('📚 loadDayPlan: Error:', error);
-      loadedDaysRef.current.delete(dateKey);
-      return null;
-    }
-  };
-
   const fetchLessons = async () => {
     try {
-      console.log('📚 Fetching lessons - using daily planner API...');
-      console.log('📚 currentProfileId:', currentProfileId);
-      
-      // If we have a profile, use the daily planner
-      if (currentProfileId) {
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
-        const todayDateKey = formatLocalDateKey(today);
-        
-        // Load today's plan
-        const plan = await loadDayPlan(todayDateKey);
-        
-        if (plan && plan.slots) {
-          // Convert planner slots to lessons array for backward compatibility
-          const lessonsFromPlan = plan.slots.map((slot: any) => slot.lesson).filter(Boolean);
-          setLessons(lessonsFromPlan);
-          cacheLessons(lessonsFromPlan); // Cache for navigation persistence
-          console.log('📚 Lessons from planner:', lessonsFromPlan.length);
+      console.log('📚 Fetching lessons from API...');
+      const data = await ApiService.getLessons();
+      console.log('📚 Lessons received:', data.length, data);
+      setLessons(data);
+
+      // Organize lessons by day for the fixed week (Monday to Sunday)
+      const weekMap = new Map<string, any>();
+      const weekDays = getWeekDays(); // Get Monday through Sunday of current week
+
+      // Also include published lessons without scheduled dates
+      const publishedLessons = data.filter((l: any) =>
+        l.status === 'published' && !l.scheduledDate
+      );
+
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+
+      weekDays.forEach((date, index) => {
+        const dateKey = date.toISOString().split('T')[0];
+
+        // Find lesson scheduled for this date
+        // Compare date strings directly to avoid timezone conversion issues
+        let lesson = data.find((l: any) => {
+          if (!l.scheduledDate) return false;
+          // Extract date portion directly from the stored date string (UTC)
+          const scheduledStr = typeof l.scheduledDate === 'string'
+            ? l.scheduledDate.split('T')[0]
+            : new Date(l.scheduledDate).toISOString().split('T')[0];
+          return scheduledStr === dateKey;
+        });
+
+        // If no scheduled lesson and we have published lessons without dates,
+        // assign them in order to days without lessons (for the current week)
+        if (!lesson && publishedLessons[index]) {
+          lesson = publishedLessons[index];
         }
-      } else {
-        // No profile - show empty state (user needs to select a child profile)
-        console.log('📚 No profile selected - lessons require a child profile');
-        setLessons([]);
-      }
+
+        if (lesson) {
+          weekMap.set(dateKey, lesson);
+        }
+      });
+
+      console.log('📚 Week lessons map (Mon-Sun):', Array.from(weekMap.entries()));
+      setWeekLessons(weekMap);
+      cacheData('lessons', data);
     } catch (error) {
       console.error('❌ Error fetching lessons:', error);
     } finally {
@@ -749,6 +659,11 @@ const HomePage: React.FC = () => {
         onClose={() => setShowChallengeGame(false)}
       />
 
+      <StrengthGameModal
+        isOpen={showStrengthGame}
+        onClose={() => setShowStrengthGame(false)}
+      />
+
       <PrayerGameModal
         isOpen={showPrayerGame}
         onClose={() => setShowPrayerGame(false)}
@@ -788,27 +703,9 @@ const HomePage: React.FC = () => {
           {/* Weekly Tracker - Compact Mon-Sat progress */}
           <WeeklyLessonTracker
             selectedDay={selectedDayIndex}
-            onDaySelect={async (dayIndex) => {
+            onDaySelect={(dayIndex) => {
               setSelectedDayIndex(dayIndex);
               setSelectedDay(dayIndex);
-              
-              // Load plan for selected day
-              if (currentProfileId) {
-                const weekDays = getWeekDays();
-                const selectedDate = weekDays[dayIndex];
-                if (selectedDate) {
-                  const dateKey = formatLocalDateKey(selectedDate);
-                  console.log('📚 Day selected:', dayIndex, 'dateKey:', dateKey);
-                  setLessonsLoading(true);
-                  const plan = await loadDayPlan(dateKey);
-                  if (plan && plan.slots) {
-                    const lessonsFromPlan = plan.slots.map((slot: any) => slot.lesson).filter(Boolean);
-                    setLessons(lessonsFromPlan);
-                    cacheLessons(lessonsFromPlan); // Cache for navigation persistence
-                  }
-                  setLessonsLoading(false);
-                }
-              }
             }}
             dayCompletions={[0, 1, 2, 3, 4].map(i => isDayComplete(lessons, i))}
             todayIndex={todayIndex}
@@ -822,47 +719,51 @@ const HomePage: React.FC = () => {
               color="#7c4dff"
             />
             {(() => {
-              // Use lessons directly from planner
-              const completedCount = lessons.filter((l: any) => isCompleted(l._id || l.id)).length;
-              return lessons.length > 0 ? (
+              const dayLessons = getLessonsForDay(lessons, selectedDayIndex);
+              const completedCount = dayLessons.filter((l: any) => isCompleted(l._id || l.id)).length;
+              return dayLessons.length > 0 ? (
                 <span className="text-white/60 text-xs font-semibold">
-                  {completedCount}/{lessons.length} Complete
+                  {completedCount}/{dayLessons.length} Complete
                 </span>
               ) : null;
             })()}
           </div>
 
+          {/* Create Child Profile Banner - Shows for parents with no kids */}
+          {currentProfileId === null && kids.length === 0 && (
+            <div 
+              className="rounded-2xl p-6 mb-4 text-center shadow-lg"
+              style={{ background: 'linear-gradient(135deg, #7C4DFF 0%, #9C27B0 100%)' }}
+            >
+              {/* Child avatars */}
+              <div className="flex justify-center gap-2 mb-3">
+                <span className="text-4xl">👦</span>
+                <span className="text-4xl">👧</span>
+              </div>
+              
+              <h3 className="text-white font-bold text-xl mb-2 font-display">
+                Create a Child Profile
+              </h3>
+              <p className="text-white/90 text-sm mb-4">
+                Set up a profile for your child to unlock personalized daily video lessons!
+              </p>
+              
+              <button
+                onClick={() => navigate('/create-profile')}
+                className="inline-flex items-center gap-2 bg-white text-[#7C4DFF] font-bold px-6 py-3 rounded-full shadow-lg hover:shadow-xl transition-all hover:scale-105 active:scale-95"
+              >
+                <span className="text-lg">+</span>
+                Create Child Profile
+              </button>
+            </div>
+          )}
+
           {/* Lessons Path - Gamified Learning Path Style */}
           {lessonsLoading ? (
             <div className="text-white/70 text-center py-8 px-4">Loading lessons...</div>
           ) : (() => {
-            // Use lessons directly from planner (already loaded for selected day)
-            const dayLessons = lessons;
+            const dayLessons = getLessonsForDay(lessons, selectedDayIndex);
             const isFutureDay = selectedDayIndex > todayIndex && todayIndex !== -1;
-
-            // No profile selected - prompt to switch or create
-            if (!currentProfileId) {
-              const hasKids = kids && kids.length > 0;
-              return (
-                <div className="rounded-2xl p-6 text-center border-2 border-[#FFD700]/50 shadow-lg" style={{ background: 'linear-gradient(135deg, #8B5CF6 0%, #7C3AED 50%, #6D28D9 100%)' }}>
-                  <div className="text-5xl mb-3">👧👦</div>
-                  <h3 className="text-white font-bold text-xl mb-2 drop-shadow-md">
-                    {hasKids ? 'Switch to a Child Profile' : 'Create a Child Profile'}
-                  </h3>
-                  <p className="text-white/90 text-sm mb-4">
-                    {hasKids 
-                      ? 'Daily lessons are personalized for each child. Select a child profile to see their lessons!'
-                      : 'Set up a profile for your child to unlock personalized daily video lessons!'}
-                  </p>
-                  <button
-                    onClick={() => navigate('/profiles')}
-                    className="px-6 py-3 bg-[#FFD700] text-[#3E1F07] font-bold rounded-full shadow-lg hover:bg-[#FFC000] transition-all transform hover:scale-105"
-                  >
-                    {hasKids ? '👤 Switch Profile' : '➕ Create Child Profile'}
-                  </button>
-                </div>
-              );
-            }
 
             if (dayLessons.length === 0) {
               return (
@@ -1134,10 +1035,14 @@ const HomePage: React.FC = () => {
               
               {/* Daily Key Task */}
               <div
-                className="relative w-[calc((100vw-48px-40px)/4)] flex-shrink-0 cursor-pointer"
-                onClick={() => handleDailyKeyClick()}
+                className={`relative w-[calc((100vw-48px-40px)/4)] flex-shrink-0 ${
+                  hasEngagedDailyKey ? 'cursor-default' : 'cursor-pointer'
+                }`}
+                onClick={() => !hasEngagedDailyKey && handleDailyKeyClick()}
               >
-                <div className="relative aspect-[9/16] rounded-xl overflow-hidden transition-all border-2 border-[#FFD700]">
+                <div className={`relative aspect-[9/16] rounded-xl overflow-hidden transition-all border-2 ${
+                  hasEngagedDailyKey ? 'border-[#FFD700]/30' : 'border-[#FFD700]'
+                }`}>
                   {/* Background Gradient */}
                   <div className="absolute inset-0 bg-gradient-to-br from-[#8B4513] to-[#5c2e0b]" />
                   
@@ -1159,15 +1064,28 @@ const HomePage: React.FC = () => {
                     </span>
                   </div>
                   
+                  {/* Completed Overlay - Faded when done */}
+                  {hasEngagedDailyKey && (
+                    <>
+                      <div className="absolute inset-0 bg-black/50" />
+                      <div className="absolute top-2 right-2 bg-green-500 rounded-full p-1">
+                        <Check className="w-3 h-3 text-white" />
+                      </div>
+                    </>
+                  )}
                 </div>
               </div>
 
               {/* Memory Task */}
               <div
-                className="relative w-[calc((100vw-48px-40px)/4)] flex-shrink-0 cursor-pointer"
-                onClick={() => handleMemoryClick()}
+                className={`relative w-[calc((100vw-48px-40px)/4)] flex-shrink-0 ${
+                  hasEngagedMemory ? 'cursor-default' : 'cursor-pointer'
+                }`}
+                onClick={() => !hasEngagedMemory && handleMemoryClick()}
               >
-                <div className="relative aspect-[9/16] rounded-xl overflow-hidden transition-all border-2 border-[#5c6bc0]">
+                <div className={`relative aspect-[9/16] rounded-xl overflow-hidden transition-all border-2 ${
+                  hasEngagedMemory ? 'border-[#3949ab]/30' : 'border-[#5c6bc0]'
+                }`}>
                   {/* Background Gradient */}
                   <div className="absolute inset-0 bg-gradient-to-br from-[#1a237e] to-[#0d1442]" />
                   
@@ -1189,15 +1107,71 @@ const HomePage: React.FC = () => {
                     </span>
                   </div>
                   
+                  {/* Completed Overlay - Faded when done */}
+                  {hasEngagedMemory && (
+                    <>
+                      <div className="absolute inset-0 bg-black/50" />
+                      <div className="absolute top-2 right-2 bg-green-500 rounded-full p-1">
+                        <Check className="w-3 h-3 text-white" />
+                      </div>
+                    </>
+                  )}
+                </div>
+              </div>
+
+              {/* Strength Task */}
+              <div
+                className={`relative w-[calc((100vw-48px-40px)/4)] flex-shrink-0 ${
+                  hasEngagedStrength ? 'cursor-default' : 'cursor-pointer'
+                }`}
+                onClick={() => !hasEngagedStrength && handleStrengthClick()}
+              >
+                <div className={`relative aspect-[9/16] rounded-xl overflow-hidden transition-all border-2 ${
+                  hasEngagedStrength ? 'border-[#FF6B35]/30' : 'border-[#F7931E]'
+                }`}>
+                  {/* Background Gradient */}
+                  <div className="absolute inset-0 bg-gradient-to-br from-[#E64A19] to-[#BF360C]" />
+                  
+                  {/* Decorative Pattern */}
+                  <div className="absolute inset-0 opacity-20" style={{ 
+                    backgroundImage: 'radial-gradient(circle at 25% 25%, #FFD700 2%, transparent 8%), radial-gradient(circle at 75% 75%, #FFD700 2%, transparent 8%)'
+                  }} />
+                  
+                  {/* Icon */}
+                  <div className="absolute inset-0 flex flex-col items-center justify-center">
+                    <div className="w-16 h-16 rounded-full bg-[#FFD700]/20 flex items-center justify-center mb-2">
+                      <Dumbbell size={36} className="text-[#FFD700]" fill="#FFB300" />
+                    </div>
+                    <span className="text-[#FFD700] text-sm font-bold font-display text-center px-2">
+                      Strength
+                    </span>
+                    <span className="text-white/60 text-[10px] text-center px-2 mt-1">
+                      Build faith
+                    </span>
+                  </div>
+                  
+                  {/* Completed Overlay - Faded when done */}
+                  {hasEngagedStrength && (
+                    <>
+                      <div className="absolute inset-0 bg-black/50" />
+                      <div className="absolute top-2 right-2 bg-green-500 rounded-full p-1">
+                        <Check className="w-3 h-3 text-white" />
+                      </div>
+                    </>
+                  )}
                 </div>
               </div>
 
               {/* Prayer Task */}
               <div
-                className="relative w-[calc((100vw-48px-40px)/4)] flex-shrink-0 cursor-pointer"
-                onClick={() => handlePrayerClick()}
+                className={`relative w-[calc((100vw-48px-40px)/4)] flex-shrink-0 ${
+                  hasEngagedPrayer ? 'cursor-default' : 'cursor-pointer'
+                }`}
+                onClick={() => !hasEngagedPrayer && handlePrayerClick()}
               >
-                <div className="relative aspect-[9/16] rounded-xl overflow-hidden transition-all border-2 border-[#BA68C8]">
+                <div className={`relative aspect-[9/16] rounded-xl overflow-hidden transition-all border-2 ${
+                  hasEngagedPrayer ? 'border-[#AB47BC]/30' : 'border-[#BA68C8]'
+                }`}>
                   {/* Background Gradient */}
                   <div className="absolute inset-0 bg-gradient-to-br from-[#7B1FA2] to-[#4A148C]" />
                   
@@ -1219,6 +1193,15 @@ const HomePage: React.FC = () => {
                     </span>
                   </div>
                   
+                  {/* Completed Overlay - Faded when done */}
+                  {hasEngagedPrayer && (
+                    <>
+                      <div className="absolute inset-0 bg-black/50" />
+                      <div className="absolute top-2 right-2 bg-green-500 rounded-full p-1">
+                        <Check className="w-3 h-3 text-white" />
+                      </div>
+                    </>
+                  )}
                 </div>
               </div>
 

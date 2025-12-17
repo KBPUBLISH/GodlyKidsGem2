@@ -1,6 +1,6 @@
 
 import React, { useMemo, useEffect } from 'react';
-import { HashRouter, Routes, Route, useLocation } from 'react-router-dom';
+import { HashRouter, Routes, Route, useLocation, Navigate } from 'react-router-dom';
 import LandingPage from './pages/LandingPage';
 import SignInPage from './pages/SignInPage';
 import ResetPasswordPage from './pages/ResetPasswordPage';
@@ -76,23 +76,13 @@ if (!(window as any).__GK_APP_BOOTED__) {
     }
   } catch {}
 
-  // DeSpia wrapper can launch the app with OneSignal "push open" query params.
-  // In a WKWebView wrapper these can trigger unstable OneSignal web SDK flows.
-  // Strip them immediately so routing is stable.
+  // DeSpia detection for tracing (URL normalization is now done in index.tsx BEFORE React mounts)
   try {
     const ua = navigator.userAgent || '';
     const isCustomAppUA = /despia/i.test(ua);
     if (isCustomAppUA) {
       try { (window as any).__GK_TRACE__?.('despia_detected', { ua }); } catch {}
-      const url = new URL(window.location.href);
-      const before = url.toString();
-      Array.from(url.searchParams.keys()).forEach((k) => {
-        if (/^onesignal/i.test(k) || /^idcc/i.test(k)) url.searchParams.delete(k);
-      });
-      if (url.toString() !== before) {
-        try { (window as any).__GK_TRACE__?.('strip_query_params', { before, after: url.toString() }); } catch {}
-        window.history.replaceState({}, '', url.toString());
-      }
+      // NOTE: URL stripping moved to index.tsx to avoid conflicts with React Router
     }
   } catch {}
 
@@ -541,6 +531,8 @@ const App: React.FC = () => {
                   <Route path="/settings" element={<SettingsPage />} />
                   <Route path="/demo/video-lesson" element={<VideoLessonDemo />} />
                   <Route path="/game" element={<GameWebViewPage />} />
+                  {/* Catch-all route - prevents white screen when route doesn't match */}
+                  <Route path="*" element={<Navigate to="/home" replace />} />
                 </Routes>
               </Layout>
             </HashRouter>

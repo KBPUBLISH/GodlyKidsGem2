@@ -12,6 +12,32 @@ if (!(window as any).__GK_APP_BOOTED__) {
   (window as any).__GK_APP_BOOTED__ = true;
   console.log('🚀 APP BOOT (WebView created)', new Date().toISOString());
 
+  // Feature trace ring buffer: records high-level steps that ran leading up to a crash.
+  // Stored in localStorage so opaque iOS "Script error." crashes still include context.
+  try {
+    const TRACE_KEY = 'gk_feature_trace';
+    const trace = (event: string, data?: any) => {
+      try {
+        const entry = {
+          event,
+          data: data ?? null,
+          url: window.location.href,
+          vis: document.visibilityState,
+          ts: new Date().toISOString(),
+        };
+        const existing = JSON.parse(localStorage.getItem(TRACE_KEY) || '[]');
+        existing.push(entry);
+        localStorage.setItem(TRACE_KEY, JSON.stringify(existing.slice(-60)));
+      } catch {}
+    };
+
+    (window as any).__GK_TRACE__ = trace;
+    trace('app_boot');
+    document.addEventListener('visibilitychange', () => {
+      trace('visibility_change', { visibility: document.visibilityState });
+    });
+  } catch {}
+
   // DeSpia wrapper can launch the app with OneSignal "push open" query params.
   // In a WKWebView wrapper these can trigger unstable OneSignal web SDK flows.
   // Strip them immediately so routing is stable.
@@ -19,12 +45,14 @@ if (!(window as any).__GK_APP_BOOTED__) {
     const ua = navigator.userAgent || '';
     const isCustomAppUA = /despia/i.test(ua);
     if (isCustomAppUA) {
+      try { (window as any).__GK_TRACE__?.('despia_detected', { ua }); } catch {}
       const url = new URL(window.location.href);
       const before = url.toString();
       Array.from(url.searchParams.keys()).forEach((k) => {
         if (/^onesignal/i.test(k) || /^idcc/i.test(k)) url.searchParams.delete(k);
       });
       if (url.toString() !== before) {
+        try { (window as any).__GK_TRACE__?.('strip_query_params', { before, after: url.toString() }); } catch {}
         window.history.replaceState({}, '', url.toString());
       }
     }
@@ -89,6 +117,11 @@ if (!(window as any).__GK_APP_BOOTED__) {
   
   // GLOBAL ERROR HANDLERS - catch ALL JS errors, not just React ones
   window.onerror = (message, source, lineno, colno, error) => {
+    let featureTrace: any[] = [];
+    try {
+      featureTrace = JSON.parse(localStorage.getItem('gk_feature_trace') || '[]');
+    } catch {}
+
     const details = {
       name: error?.name || 'Error',
       message: String(message || ''),
@@ -101,6 +134,7 @@ if (!(window as any).__GK_APP_BOOTED__) {
       screen: `${window.innerWidth}x${window.innerHeight}`,
       devicePixelRatio: window.devicePixelRatio,
       visibility: document.visibilityState,
+      featureTrace,
       ts: new Date().toISOString(),
     };
     console.error('💥 GLOBAL ERROR:', details);
@@ -326,6 +360,11 @@ const PanoramaBackground: React.FC = () => {
 
 const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const location = useLocation();
+  useEffect(() => {
+    try {
+      (window as any).__GK_TRACE__?.('route_change', { path: location.pathname, hash: location.hash, search: location.search });
+    } catch {}
+  }, [location.pathname, location.hash, location.search]);
   const isLanding = location.pathname === '/';
   const isSignIn = location.pathname === '/signin';
   const isOnboarding = location.pathname === '/onboarding';
@@ -367,8 +406,11 @@ const App: React.FC = () => {
   useEffect(() => {
     (async () => {
       try {
+        try { (window as any).__GK_TRACE__?.('notifications_init_start'); } catch {}
         await NotificationService.init();
+        try { (window as any).__GK_TRACE__?.('notifications_init_done'); } catch {}
       } catch (e) {
+        try { (window as any).__GK_TRACE__?.('notifications_init_error', { message: (e as any)?.message || String(e) }); } catch {}
         console.error('❌ NotificationService.init crashed:', e);
       }
     })();
@@ -376,9 +418,11 @@ const App: React.FC = () => {
 
   // Initialize activity tracking for Report Card
   useEffect(() => {
+    try { (window as any).__GK_TRACE__?.('activity_tracking_start'); } catch {}
     activityTrackingService.startTimeTracking();
     
     return () => {
+      try { (window as any).__GK_TRACE__?.('activity_tracking_stop'); } catch {}
       activityTrackingService.stopTimeTracking();
     };
   }, []);

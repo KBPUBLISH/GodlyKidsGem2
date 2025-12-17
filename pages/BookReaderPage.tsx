@@ -39,7 +39,10 @@ interface Page {
     scrollHeight?: number;
     scrollMidHeight?: number; // Mid scroll height % (default 30)
     scrollMaxHeight?: number; // Max scroll height % (default 60)
-    textBoxes?: TextBox[];
+    textBoxes?: TextBox[]; // Legacy: some pages may have textBoxes at root
+    content?: {
+        textBoxes?: TextBox[]; // Primary location of textBoxes from DB
+    };
     files?: {
         soundEffect?: {
             url?: string;
@@ -1263,10 +1266,14 @@ const BookReaderPage: React.FC = () => {
         autoPlayModeRef.current = true;
 
         // Play the first text box on the page (use translated text if available)
-        if (currentPage.textBoxes && currentPage.textBoxes.length > 0) {
+        // Note: textBoxes is nested under content in the database schema
+        const pageTextBoxes = currentPage.content?.textBoxes || currentPage.textBoxes;
+        if (pageTextBoxes && pageTextBoxes.length > 0) {
             const translatedTextBoxes = getTranslatedTextBoxes(currentPage);
-            const firstBoxText = translatedTextBoxes[0]?.text || currentPage.textBoxes[0].text;
+            const firstBoxText = translatedTextBoxes[0]?.text || pageTextBoxes[0].text;
             handlePlayText(firstBoxText, 0, e, true); // Pass autoPlay flag
+        } else {
+            console.warn('⚠️ No text boxes found on current page');
         }
     };
 
@@ -1281,7 +1288,8 @@ const BookReaderPage: React.FC = () => {
             if (pageIndex >= pages.length - 1) break; // Don't preload "The End" page
             
             const page = pages[pageIndex];
-            if (!page || !page.textBoxes) continue;
+            const pageTextBoxes = page?.content?.textBoxes || page?.textBoxes;
+            if (!page || !pageTextBoxes) continue;
             
             // For non-English, check if translation is available before preloading
             // If not available, skip preloading - it will be generated on-demand
@@ -1295,8 +1303,8 @@ const BookReaderPage: React.FC = () => {
             }
             
             // Preload each text box on the page
-            for (let textBoxIndex = 0; textBoxIndex < page.textBoxes.length; textBoxIndex++) {
-                const textBox = page.textBoxes[textBoxIndex];
+            for (let textBoxIndex = 0; textBoxIndex < pageTextBoxes.length; textBoxIndex++) {
+                const textBox = pageTextBoxes[textBoxIndex];
                 if (!textBox.text) continue;
                 
                 // Include language in cache key for multilingual support
@@ -1828,10 +1836,11 @@ const BookReaderPage: React.FC = () => {
                                         // Check again if auto-play is still enabled and we're on the correct page
                                         if (autoPlayModeRef.current && currentPageIndexRef.current === nextPageIndex) {
                                             const nextPage = pages[nextPageIndex];
-                                            if (nextPage && nextPage.textBoxes && nextPage.textBoxes.length > 0) {
+                                            const nextPageTextBoxes = nextPage?.content?.textBoxes || nextPage?.textBoxes;
+                                            if (nextPage && nextPageTextBoxes && nextPageTextBoxes.length > 0) {
                                                 // Use translated text if available
                                                 const translatedTextBoxes = getTranslatedTextBoxes(nextPage);
-                                                const firstBoxText = translatedTextBoxes[0]?.text || nextPage.textBoxes[0].text;
+                                                const firstBoxText = translatedTextBoxes[0]?.text || nextPageTextBoxes[0].text;
                                                 console.log('▶️ Auto-play: Starting next page audio');
                                                 isAutoPlayingRef.current = false; // Reset flag before calling
                                                 const syntheticEvent = { stopPropagation: () => { } } as React.MouseEvent;
@@ -1905,10 +1914,11 @@ const BookReaderPage: React.FC = () => {
                                     // Check again if auto-play is still enabled and we're on the correct page
                                     if (autoPlayModeRef.current && currentPageIndexRef.current === nextPageIndex) {
                                         const nextPage = pages[nextPageIndex];
-                                        if (nextPage && nextPage.textBoxes && nextPage.textBoxes.length > 0) {
+                                        const nextPageTextBoxes = nextPage?.content?.textBoxes || nextPage?.textBoxes;
+                                        if (nextPage && nextPageTextBoxes && nextPageTextBoxes.length > 0) {
                                             // Use translated text if available
                                             const translatedTextBoxes = getTranslatedTextBoxes(nextPage);
-                                            const firstBoxText = translatedTextBoxes[0]?.text || nextPage.textBoxes[0].text;
+                                            const firstBoxText = translatedTextBoxes[0]?.text || nextPageTextBoxes[0].text;
                                             console.log('▶️ Auto-play: Starting next page audio');
                                             isAutoPlayingRef.current = false; // Reset flag before calling
                                             const syntheticEvent = { stopPropagation: () => { } } as React.MouseEvent;

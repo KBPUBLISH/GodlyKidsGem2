@@ -235,7 +235,9 @@ export const BookPageRenderer: React.FC<BookPageRendererProps> = ({
                     pointerEvents: 'none',
                 }}
             >
-                {page.backgroundType === 'video' ? (
+                {/* Auto-detect video based on backgroundType OR file extension */}
+                {(page.backgroundType === 'video' || 
+                  (page.backgroundUrl && /\.(mp4|webm|mov|m4v)$/i.test(page.backgroundUrl))) ? (
                     <video
                         ref={videoRef}
                         src={page.backgroundUrl}

@@ -217,15 +217,20 @@ const PageEditor: React.FC = () => {
             setScrollPreview(null);
         }
 
-        // Load scroll height (default to 33%)
-        const savedScrollHeight = page.scrollHeight || page.files?.scroll?.height;
+        // Load scroll height (default to 33%) - check multiple possible field names
+        const savedScrollHeight = page.scrollHeight || page.scrollMidHeight || page.files?.scroll?.height;
         console.log('📏 Scroll height:', savedScrollHeight);
         setScrollHeight(savedScrollHeight || 33);
 
-        // Load text boxes with IDs for editing (check both root and content.textBoxes)
+        // Load text boxes with IDs for editing
+        // IMPORTANT: Check content.textBoxes FIRST (where data actually lives), 
+        // then fall back to root textBoxes only if content.textBoxes is empty/missing
         console.log('📝 page.textBoxes:', page.textBoxes);
         console.log('📝 page.content?.textBoxes:', page.content?.textBoxes);
-        const textBoxesData = page.textBoxes || page.content?.textBoxes || [];
+        const contentTextBoxes = page.content?.textBoxes || [];
+        const rootTextBoxes = page.textBoxes || [];
+        // Prefer content.textBoxes if it has data, otherwise use root textBoxes
+        const textBoxesData = contentTextBoxes.length > 0 ? contentTextBoxes : rootTextBoxes;
         console.log('📝 Final textBoxesData:', textBoxesData);
         
         if (Array.isArray(textBoxesData) && textBoxesData.length > 0) {
@@ -953,7 +958,7 @@ const PageEditor: React.FC = () => {
 
                                 <div className="p-2 bg-white group-hover:bg-indigo-50 transition">
                                     <p className="text-xs text-gray-600 truncate">
-                                        {(page.textBoxes?.length || page.content?.textBoxes?.length || 0)} text box{(page.textBoxes?.length || page.content?.textBoxes?.length || 0) !== 1 ? 'es' : ''}
+                                        {(page.content?.textBoxes?.length || page.textBoxes?.length || 0)} text box{(page.content?.textBoxes?.length || page.textBoxes?.length || 0) !== 1 ? 'es' : ''}
                                     </p>
                                 </div>
                             </div>

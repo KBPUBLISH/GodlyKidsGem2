@@ -135,7 +135,7 @@ const ColoringModal: React.FC<ColoringModalProps> = ({ isOpen, onClose, backgrou
     const [showReward, setShowReward] = useState(false);
     const [resolvedImageUrl, setResolvedImageUrl] = useState<string>('');
     const [pinToast, setPinToast] = useState<string | null>(null);
-    const [isPinning, setIsPinning] = useState(false); // Moved before early return
+    const [isPinning, setIsPinning] = useState(false);
 
     const parsedPage = useMemo(() => parseColoringPageId(pageId), [pageId]);
     const pinnedForBook = useMemo(() => {
@@ -157,14 +157,7 @@ const ColoringModal: React.FC<ColoringModalProps> = ({ isOpen, onClose, backgrou
         }
     }, [backgroundImageUrl]);
 
-    // Early return AFTER all hooks
-    if (!isOpen) return null;
-
-    const handleComplete = () => {
-        // No coins awarded for coloring - just show completion
-        setShowReward(true);
-    };
-    
+    // ALL HOOKS MUST BE ABOVE THIS LINE - useCallback moved here
     const handlePinToggle = useCallback(async () => {
         if (!pageId || !parsedPage?.bookId || isPinning) return;
         
@@ -210,6 +203,14 @@ const ColoringModal: React.FC<ColoringModalProps> = ({ isOpen, onClose, backgrou
             window.setTimeout(() => setPinToast(null), 2000);
         }
     }, [pageId, parsedPage?.bookId, isPinnedThisPage, resolvedImageUrl, isPinning]);
+
+    // Early return AFTER all hooks
+    if (!isOpen) return null;
+
+    const handleComplete = () => {
+        // No coins awarded for coloring - just show completion
+        setShowReward(true);
+    };
 
     const handleHome = () => {
         onClose();

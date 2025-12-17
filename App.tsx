@@ -243,20 +243,28 @@ if (!(window as any).__GK_APP_BOOTED__) {
     // Prevent white screen - show overlay so user knows what happened
     try {
       const escapeHtml = (s: any) => String(s ?? '').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+      const payload = JSON.stringify(details, null, 2);
+      const payloadEnc = encodeURIComponent(payload);
       const errorDiv = document.createElement('div');
       errorDiv.id = 'gk_global_error_overlay';
       errorDiv.innerHTML = `
         <div style="position:fixed;inset:0;background:#1a3a52;display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:99999;padding:20px;text-align:center;">
           <div style="font-size:48px;margin-bottom:16px;">🌊</div>
           <h1 style="color:white;font-size:20px;font-weight:bold;margin-bottom:8px;">Oops! Something went wrong</h1>
-          <p style="color:rgba(255,255,255,0.7);margin-bottom:12px;max-width:320px;">Tap “Show details” and screenshot it.</p>
+          <p style="color:rgba(255,255,255,0.7);margin-bottom:12px;max-width:340px;">Tap “Copy details” and paste it into chat (or tap “Show details”).</p>
 
-          <button onclick="var el=document.getElementById('gk_err'); if(el) el.style.display='block';"
-            style="background:rgba(255,255,255,0.15);color:white;font-weight:bold;padding:10px 18px;border-radius:9999px;border:none;margin-bottom:10px;">
-            Show details
-          </button>
+          <div style="display:flex;gap:10px;flex-wrap:wrap;justify-content:center;margin-bottom:10px;">
+            <button onclick="(function(){var t=decodeURIComponent('${payloadEnc}'); var done=false; try{navigator.clipboard&&navigator.clipboard.writeText&&navigator.clipboard.writeText(t).then(function(){done=true; alert('Copied! Paste it into chat.');}).catch(function(){});}catch(e){} try{if(done) return; var ta=document.createElement('textarea'); ta.value=t; ta.style.position='fixed'; ta.style.left='-9999px'; document.body.appendChild(ta); ta.focus(); ta.select(); var ok=false; try{ok=document.execCommand('copy');}catch(e){} document.body.removeChild(ta); if(ok){alert('Copied! Paste it into chat.'); return;} }catch(e){} try{prompt('Copy the crash details below:', t);}catch(e){} })()"
+              style="background:rgba(255,255,255,0.25);color:white;font-weight:bold;padding:10px 18px;border-radius:9999px;border:none;">
+              Copy details
+            </button>
+            <button onclick="var el=document.getElementById('gk_err'); if(el) el.style.display='block';"
+              style="background:rgba(255,255,255,0.15);color:white;font-weight:bold;padding:10px 18px;border-radius:9999px;border:none;">
+              Show details
+            </button>
+          </div>
 
-          <pre id="gk_err" style="display:none;white-space:pre-wrap;text-align:left;max-width:380px;max-height:240px;overflow:auto;background:rgba(0,0,0,0.35);color:rgba(255,255,255,0.85);padding:12px;border-radius:12px;font-size:12px;">${escapeHtml(JSON.stringify(details, null, 2))}</pre>
+          <pre id="gk_err" style="display:none;white-space:pre-wrap;text-align:left;max-width:380px;max-height:240px;overflow:auto;background:rgba(0,0,0,0.35);color:rgba(255,255,255,0.85);padding:12px;border-radius:12px;font-size:12px;">${escapeHtml(payload)}</pre>
 
           <div style="display:flex;gap:10px;margin-top:12px;flex-wrap:wrap;justify-content:center;">
             <button onclick="try{localStorage.removeItem('gk_api_lessons');}catch(e){}; try{sessionStorage.clear();}catch(e){}; location.reload();"

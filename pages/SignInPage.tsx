@@ -269,18 +269,21 @@ const SignInPage: React.FC = () => {
               <form onSubmit={handleEmailFormSubmit} className="space-y-3">
                 <div className="space-y-2">
                   <div className="relative">
-                    <Mail className="absolute left-3 top-1/2 -translate-y-1/2 text-white/60 z-10" size={18} />
+                    <Mail className="absolute left-3 top-1/2 -translate-y-1/2 text-white/60 z-10 pointer-events-none" size={18} />
                     <input
                       type="email"
                       placeholder="Email"
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
                       disabled={loading !== null}
-                      className="w-full bg-[rgba(255,255,255,0.15)] border border-white/20 rounded-xl py-3 pl-10 pr-4 text-white placeholder:text-white/60 focus:outline-none focus:bg-[rgba(255,255,255,0.2)] focus:border-white/30 transition-colors text-base"
+                      className="w-full bg-[rgba(255,255,255,0.15)] border border-white/20 rounded-xl py-3 pl-10 pr-4 placeholder:text-white/60 focus:outline-none focus:bg-[rgba(255,255,255,0.2)] focus:border-white/30 transition-colors"
                       style={{ 
                         fontSize: '16px', // Prevents iOS auto-zoom
                         WebkitAppearance: 'none',
                         caretColor: 'white',
+                        color: 'white',
+                        WebkitTextFillColor: 'white',
+                        opacity: 1,
                       }}
                       required
                       autoComplete="email"
@@ -288,18 +291,21 @@ const SignInPage: React.FC = () => {
                   </div>
                   
                   <div className="relative">
-                    <Lock className="absolute left-3 top-1/2 -translate-y-1/2 text-white/60 z-10" size={18} />
+                    <Lock className="absolute left-3 top-1/2 -translate-y-1/2 text-white/60 z-10 pointer-events-none" size={18} />
                     <input
                       type={showPassword ? 'text' : 'password'}
                       placeholder="Password"
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
                       disabled={loading !== null}
-                      className="w-full bg-[rgba(255,255,255,0.15)] border border-white/20 rounded-xl py-3 pl-10 pr-10 text-white placeholder:text-white/60 focus:outline-none focus:bg-[rgba(255,255,255,0.2)] focus:border-white/30 transition-colors text-base"
+                      className="w-full bg-[rgba(255,255,255,0.15)] border border-white/20 rounded-xl py-3 pl-10 pr-10 placeholder:text-white/60 focus:outline-none focus:bg-[rgba(255,255,255,0.2)] focus:border-white/30 transition-colors"
                       style={{ 
                         fontSize: '16px', // Prevents iOS auto-zoom
                         WebkitAppearance: 'none',
                         caretColor: 'white',
+                        color: 'white',
+                        WebkitTextFillColor: 'white',
+                        opacity: 1,
                       }}
                       required
                       autoComplete="current-password"
@@ -411,18 +417,21 @@ const SignInPage: React.FC = () => {
                 )}
                 
                 <div className="relative mb-4">
-                  <Mail className="absolute left-3 top-1/2 -translate-y-1/2 text-white/60 z-10" size={18} />
+                  <Mail className="absolute left-3 top-1/2 -translate-y-1/2 text-white/60 z-10 pointer-events-none" size={18} />
                   <input
                     type="email"
                     placeholder="Enter your email"
                     value={forgotEmail}
                     onChange={(e) => setForgotEmail(e.target.value)}
                     disabled={forgotLoading}
-                    className="w-full bg-[rgba(255,255,255,0.15)] border border-white/20 rounded-xl py-3 pl-10 pr-4 text-white placeholder:text-white/60 focus:outline-none focus:bg-[rgba(255,255,255,0.2)] focus:border-white/30 transition-colors text-base"
+                    className="w-full bg-[rgba(255,255,255,0.15)] border border-white/20 rounded-xl py-3 pl-10 pr-4 placeholder:text-white/60 focus:outline-none focus:bg-[rgba(255,255,255,0.2)] focus:border-white/30 transition-colors"
                     style={{ 
                       fontSize: '16px',
                       WebkitAppearance: 'none',
                       caretColor: 'white',
+                      color: 'white',
+                      WebkitTextFillColor: 'white',
+                      opacity: 1,
                     }}
                     autoFocus
                   />
@@ -509,30 +518,37 @@ const SignInPage: React.FC = () => {
             <div className="space-y-3 mb-4">
               {/* Email (read-only) */}
               <div className="relative">
-                <Mail className="absolute left-3 top-1/2 -translate-y-1/2 text-white/60 z-10" size={18} />
+                <Mail className="absolute left-3 top-1/2 -translate-y-1/2 text-white/60 z-10 pointer-events-none" size={18} />
                 <input
                   type="email"
                   value={legacyEmail}
                   disabled
-                  className="w-full bg-white/5 border border-white/10 rounded-xl py-3 pl-10 pr-4 text-white/60 cursor-not-allowed text-base"
-                  style={{ fontSize: '16px' }}
+                  className="w-full bg-white/5 border border-white/10 rounded-xl py-3 pl-10 pr-4 text-white/60 cursor-not-allowed"
+                  style={{ 
+                    fontSize: '16px',
+                    WebkitTextFillColor: 'rgba(255,255,255,0.6)',
+                    opacity: 1,
+                  }}
                 />
               </div>
               
               {/* New Password */}
               <div className="relative">
-                <Lock className="absolute left-3 top-1/2 -translate-y-1/2 text-white/60 z-10" size={18} />
+                <Lock className="absolute left-3 top-1/2 -translate-y-1/2 text-white/60 z-10 pointer-events-none" size={18} />
                 <input
                   type={showNewPassword ? 'text' : 'password'}
                   placeholder="New Password (min 6 characters)"
                   value={newPassword}
                   onChange={(e) => setNewPassword(e.target.value)}
                   disabled={legacyLoading}
-                  className="w-full bg-[rgba(255,255,255,0.15)] border border-white/20 rounded-xl py-3 pl-10 pr-10 text-white placeholder:text-white/60 focus:outline-none focus:bg-[rgba(255,255,255,0.2)] focus:border-[#FFD700] transition-colors text-base"
+                  className="w-full bg-[rgba(255,255,255,0.15)] border border-white/20 rounded-xl py-3 pl-10 pr-10 placeholder:text-white/60 focus:outline-none focus:bg-[rgba(255,255,255,0.2)] focus:border-[#FFD700] transition-colors"
                   style={{ 
                     fontSize: '16px',
                     WebkitAppearance: 'none',
                     caretColor: 'white',
+                    color: 'white',
+                    WebkitTextFillColor: 'white',
+                    opacity: 1,
                   }}
                   autoFocus
                 />
@@ -548,18 +564,21 @@ const SignInPage: React.FC = () => {
               
               {/* Confirm Password */}
               <div className="relative">
-                <Lock className="absolute left-3 top-1/2 -translate-y-1/2 text-white/60 z-10" size={18} />
+                <Lock className="absolute left-3 top-1/2 -translate-y-1/2 text-white/60 z-10 pointer-events-none" size={18} />
                 <input
                   type={showNewPassword ? 'text' : 'password'}
                   placeholder="Confirm New Password"
                   value={confirmNewPassword}
                   onChange={(e) => setConfirmNewPassword(e.target.value)}
                   disabled={legacyLoading}
-                  className="w-full bg-[rgba(255,255,255,0.15)] border border-white/20 rounded-xl py-3 pl-10 pr-4 text-white placeholder:text-white/60 focus:outline-none focus:bg-[rgba(255,255,255,0.2)] focus:border-[#FFD700] transition-colors text-base"
+                  className="w-full bg-[rgba(255,255,255,0.15)] border border-white/20 rounded-xl py-3 pl-10 pr-4 placeholder:text-white/60 focus:outline-none focus:bg-[rgba(255,255,255,0.2)] focus:border-[#FFD700] transition-colors"
                   style={{ 
                     fontSize: '16px',
                     WebkitAppearance: 'none',
                     caretColor: 'white',
+                    color: 'white',
+                    WebkitTextFillColor: 'white',
+                    opacity: 1,
                   }}
                 />
               </div>

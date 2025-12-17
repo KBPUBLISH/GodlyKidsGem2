@@ -12,6 +12,37 @@ if (!(window as any).__GK_APP_BOOTED__) {
   (window as any).__GK_APP_BOOTED__ = true;
   console.log('🚀 APP BOOT (WebView created)', new Date().toISOString());
 
+  // Lightweight in-app log buffer (helps diagnose opaque iOS "Script error." with no stack).
+  try {
+    const LOG_KEY = 'gk_log_buffer';
+    const pushLog = (level: string, args: any[]) => {
+      try {
+        const entry = {
+          level,
+          msg: args?.map((a) => {
+            if (typeof a === 'string') return a;
+            try { return JSON.stringify(a); } catch { return String(a); }
+          }).join(' '),
+          url: window.location.href,
+          ts: new Date().toISOString(),
+        };
+        const existing = JSON.parse(localStorage.getItem(LOG_KEY) || '[]');
+        existing.push(entry);
+        localStorage.setItem(LOG_KEY, JSON.stringify(existing.slice(-30)));
+      } catch {}
+    };
+
+    const origLog = console.log.bind(console);
+    const origWarn = console.warn.bind(console);
+    const origErr = console.error.bind(console);
+    const origInfo = console.info.bind(console);
+
+    console.log = (...args: any[]) => { pushLog('log', args); origLog(...args); };
+    console.warn = (...args: any[]) => { pushLog('warn', args); origWarn(...args); };
+    console.error = (...args: any[]) => { pushLog('error', args); origErr(...args); };
+    console.info = (...args: any[]) => { pushLog('info', args); origInfo(...args); };
+  } catch {}
+
   // DeSpia wrapper sometimes produces malformed URLs like:
   // https://.../?topInset=0&bottomInset=0.0/book/XYZ
   // where the intended route is appended into a query param. Normalize that early.
@@ -58,24 +89,43 @@ if (!(window as any).__GK_APP_BOOTED__) {
         const isResourceError =
           target &&
           (target.tagName === 'SCRIPT' || target.tagName === 'LINK' || target.tagName === 'IMG');
-        if (!isResourceError) return;
+        const details = isResourceError
+          ? {
+              type: 'resource',
+              tagName: target.tagName,
+              src: target.src || target.href || '',
+              url: window.location.href,
+              userAgent: navigator.userAgent,
+              screen: `${window.innerWidth}x${window.innerHeight}`,
+              devicePixelRatio: window.devicePixelRatio,
+              visibility: document.visibilityState,
+              ts: new Date().toISOString(),
+            }
+          : {
+              type: 'error_event',
+              message: String(event?.message || ''),
+              filename: String(event?.filename || ''),
+              lineno: Number(event?.lineno || 0),
+              colno: Number(event?.colno || 0),
+              stack: String(event?.error?.stack || ''),
+              url: window.location.href,
+              userAgent: navigator.userAgent,
+              screen: `${window.innerWidth}x${window.innerHeight}`,
+              devicePixelRatio: window.devicePixelRatio,
+              visibility: document.visibilityState,
+              ts: new Date().toISOString(),
+            };
 
-        const details = {
-          type: 'resource',
-          tagName: target.tagName,
-          src: target.src || target.href || '',
-          url: window.location.href,
-          userAgent: navigator.userAgent,
-          screen: `${window.innerWidth}x${window.innerHeight}`,
-          devicePixelRatio: window.devicePixelRatio,
-          visibility: document.visibilityState,
-          ts: new Date().toISOString(),
-        };
-        console.error('💥 RESOURCE LOAD ERROR:', details);
+        if (isResourceError) {
+          console.error('💥 RESOURCE LOAD ERROR:', details);
+        } else {
+          console.error('💥 ERROR EVENT:', details);
+        }
+
         try {
           const existing = JSON.parse(localStorage.getItem('gk_last_errors') || '[]');
           existing.push(details);
-          localStorage.setItem('gk_last_errors', JSON.stringify(existing.slice(-5)));
+          localStorage.setItem('gk_last_errors', JSON.stringify(existing.slice(-8)));
         } catch {}
       },
       true
@@ -143,6 +193,8 @@ if (!(window as any).__GK_APP_BOOTED__) {
   window.onerror = (message, source, lineno, colno, error) => {
     // Pull in last resource error if this is the opaque iOS "Script error." case.
     let lastResourceError: any = null;
+    let lastErrorEvent: any = null;
+    let lastLogs: any[] = [];
     try {
       const existing = JSON.parse(localStorage.getItem('gk_last_errors') || '[]');
       for (let i = existing.length - 1; i >= 0; i--) {
@@ -151,6 +203,15 @@ if (!(window as any).__GK_APP_BOOTED__) {
           break;
         }
       }
+      for (let i = existing.length - 1; i >= 0; i--) {
+        if (existing[i]?.type === 'error_event') {
+          lastErrorEvent = existing[i];
+          break;
+        }
+      }
+    } catch {}
+    try {
+      lastLogs = JSON.parse(localStorage.getItem('gk_log_buffer') || '[]');
     } catch {}
 
     const details = {
@@ -166,6 +227,8 @@ if (!(window as any).__GK_APP_BOOTED__) {
       devicePixelRatio: window.devicePixelRatio,
       visibility: document.visibilityState,
       lastResourceError,
+      lastErrorEvent,
+      lastLogs,
       ts: new Date().toISOString(),
     };
     console.error('💥 GLOBAL ERROR:', details);

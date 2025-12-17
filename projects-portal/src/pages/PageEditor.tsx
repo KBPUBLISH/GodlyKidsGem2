@@ -35,6 +35,7 @@ const PageEditor: React.FC = () => {
     const [backgroundType, setBackgroundType] = useState<'image' | 'video'>('image');
     const [backgroundFile, setBackgroundFile] = useState<File | null>(null);
     const [scrollFile, setScrollFile] = useState<File | null>(null);
+    const [scrollHeight, setScrollHeight] = useState<number>(33); // Percentage: 30%, 33%, 50%, 60%
     const [textBoxes, setTextBoxes] = useState<TextBox[]>([]);
     const [loading, setLoading] = useState(false);
 
@@ -92,6 +93,9 @@ const PageEditor: React.FC = () => {
                         // Apply template to new page
                         if (template.scrollUrl) {
                             setScrollPreview(template.scrollUrl);
+                        }
+                        if (template.scrollHeight) {
+                            setScrollHeight(template.scrollHeight);
                         }
                         if (template.textBoxes && template.textBoxes.length > 0) {
                             const boxesWithIds = template.textBoxes.map((box: any, idx: number) => ({
@@ -157,23 +161,34 @@ const PageEditor: React.FC = () => {
     const loadPage = (page: any) => {
         setEditingPageId(page._id);
         setPageNumber(page.pageNumber);
-        setBackgroundType(page.backgroundType || 'image');
+        setBackgroundType(page.backgroundType || page.files?.background?.type || 'image');
 
-        // Set background preview if URL exists
-        if (page.backgroundUrl) {
-            setBackgroundPreview(resolveUrl(page.backgroundUrl));
+        // Set background preview if URL exists (check both legacy and new locations)
+        const bgUrl = page.backgroundUrl || page.files?.background?.url;
+        if (bgUrl) {
+            setBackgroundPreview(resolveUrl(bgUrl));
             setBackgroundFile(null); // Clear file since we're using existing URL
+        } else {
+            setBackgroundPreview(null);
         }
 
-        // Set scroll preview if URL exists
-        if (page.scrollUrl) {
-            setScrollPreview(resolveUrl(page.scrollUrl));
+        // Set scroll preview if URL exists (check both legacy and new locations)
+        const scrollUrl = page.scrollUrl || page.files?.scroll?.url;
+        if (scrollUrl) {
+            setScrollPreview(resolveUrl(scrollUrl));
             setScrollFile(null);
+        } else {
+            setScrollPreview(null);
         }
 
-        // Load text boxes with IDs for editing
-        if (page.textBoxes && Array.isArray(page.textBoxes)) {
-            const boxesWithIds = page.textBoxes.map((box: any, idx: number) => ({
+        // Load scroll height (default to 33%)
+        const savedScrollHeight = page.scrollHeight || page.files?.scroll?.height;
+        setScrollHeight(savedScrollHeight || 33);
+
+        // Load text boxes with IDs for editing (check both root and content.textBoxes)
+        const textBoxesData = page.textBoxes || page.content?.textBoxes || [];
+        if (Array.isArray(textBoxesData) && textBoxesData.length > 0) {
+            const boxesWithIds = textBoxesData.map((box: any, idx: number) => ({
                 ...box,
                 id: `${page._id}-${idx}`,
                 fontFamily: box.fontFamily || 'Comic Sans MS',
@@ -200,6 +215,7 @@ const PageEditor: React.FC = () => {
         setBackgroundFile(null);
         setBackgroundPreview(null);
         setScrollFile(null);
+        setScrollHeight(33); // Reset to default
         setSelectedBoxId(null);
 
         // Apply template if it exists
@@ -370,7 +386,7 @@ const PageEditor: React.FC = () => {
                 backgroundUrl,
                 backgroundType,
                 scrollUrl,
-                scrollHeight: 200, // Fixed for now, could make dynamic
+                scrollHeight,
                 textBoxes: textBoxes.map(({ id, ...rest }) => rest), // Remove ID before sending
             };
 
@@ -542,6 +558,43 @@ const PageEditor: React.FC = () => {
                                 )}
                             </label>
                         </div>
+                        
+                        {/* Scroll Height Control */}
+                        {scrollPreview && (
+                            <div className="space-y-2">
+                                <label className="block text-xs text-gray-500">Overlay Height</label>
+                                <div className="flex gap-2">
+                                    {[30, 33, 50, 60].map(height => (
+                                        <button
+                                            key={height}
+                                            type="button"
+                                            onClick={() => setScrollHeight(height)}
+                                            className={`flex-1 py-2 text-xs font-semibold rounded-lg transition ${
+                                                scrollHeight === height
+                                                    ? 'bg-indigo-600 text-white'
+                                                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                                            }`}
+                                        >
+                                            {height}%
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+                        
+                        {/* Clear Scroll Button */}
+                        {scrollPreview && (
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    setScrollFile(null);
+                                    setScrollPreview(null);
+                                }}
+                                className="w-full py-2 text-xs text-red-600 hover:bg-red-50 rounded-lg transition"
+                            >
+                                Remove Scroll Overlay
+                            </button>
+                        )}
                     </div>
 
                     <hr className="border-gray-100" />
@@ -701,7 +754,10 @@ const PageEditor: React.FC = () => {
 
                     {/* Scroll Overlay Layer */}
                     {scrollPreview && (
-                        <div className="absolute bottom-0 left-0 right-0 h-1/3 pointer-events-none z-10">
+                        <div 
+                            className="absolute bottom-0 left-0 right-0 pointer-events-none z-10"
+                            style={{ height: `${scrollHeight}%` }}
+                        >
                             <img src={scrollPreview} className="w-full h-full object-fill" alt="Scroll" />
                         </div>
                     )}
@@ -854,7 +910,7 @@ const PageEditor: React.FC = () => {
                                     // Save template to localStorage
                                     const template = {
                                         scrollUrl: scrollPreview || '',
-                                        scrollHeight: 200,
+                                        scrollHeight,
                                         textBoxes: textBoxes.map(({ id, ...rest }) => rest)
                                     };
                                     localStorage.setItem(`pageTemplate_${bookId}`, JSON.stringify(template));

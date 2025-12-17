@@ -21,7 +21,11 @@ interface Page {
     backgroundType?: 'image' | 'video';
     scrollUrl?: string;
     scrollHeight?: number;
-    textBoxes?: TextBox[];
+    scrollMidHeight?: number;
+    textBoxes?: TextBox[]; // Legacy field
+    content?: {
+        textBoxes?: TextBox[]; // Primary location from DB
+    };
 }
 
 const BookReader: React.FC = () => {
@@ -212,9 +216,10 @@ const BookReader: React.FC = () => {
                                 : 'translateY(0)'
                         }}
                     >
-                        {currentPage.textBoxes?.map((box, idx) => {
-                            // Calculate scroll top position
-                            const scrollHeightVal = currentPage.scrollHeight ? `${currentPage.scrollHeight}px` : '30%';
+                        {/* Use content.textBoxes first (primary), fall back to root textBoxes (legacy) */}
+                        {(currentPage.content?.textBoxes || currentPage.textBoxes)?.map((box, idx) => {
+                            // Calculate scroll top position - use scrollMidHeight if available
+                            const scrollHeightVal = currentPage.scrollMidHeight ? `${currentPage.scrollMidHeight}%` : (currentPage.scrollHeight ? `${currentPage.scrollHeight}px` : '30%');
                             const scrollTopVal = `calc(100% - ${scrollHeightVal})`;
 
                             return (

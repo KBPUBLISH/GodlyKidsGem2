@@ -2096,30 +2096,48 @@ const BookReaderPage: React.FC = () => {
                     {/* Background Music Toggle - Simple on/off */}
                     {hasBookMusic ? (
                         <button
-                            onClick={(e) => {
+                            onClick={async (e) => {
                                 e.stopPropagation();
                                 // Toggle music on/off
                                 const newEnabled = !bookMusicEnabled;
                                 setBookMusicEnabled(newEnabled);
                                 
                                 if (newEnabled) {
-                                    // Turn music on
+                                    // Turn music on - must resume AudioContext FIRST on iOS
                                     if (bookBackgroundMusicRef.current) {
-                                        ensureBookMusicGraph(bookBackgroundMusicRef.current);
-                                        resumeBookMusicContext().then(() => {
-                                            if (bookMusicCtxRef.current && bookMusicCtxRef.current.state === 'running') {
-                                                bookMusicWebAudioReadyRef.current = true;
-                                                ensureBookMusicGraph(bookBackgroundMusicRef.current!);
-                                            }
-                                        });
-                                        bookBackgroundMusicRef.current.play().catch(err => {
+                                        const audio = bookBackgroundMusicRef.current;
+                                        
+                                        // Step 1: Resume AudioContext (required on iOS after pause)
+                                        await resumeBookMusicContext();
+                                        
+                                        // Step 2: Mark WebAudio as ready if context is running
+                                        if (bookMusicCtxRef.current && bookMusicCtxRef.current.state === 'running') {
+                                            bookMusicWebAudioReadyRef.current = true;
+                                        }
+                                        
+                                        // Step 3: Ensure graph is connected with proper volume
+                                        ensureBookMusicGraph(audio);
+                                        
+                                        // Step 4: Set volume directly as fallback (iOS sometimes ignores WebAudio)
+                                        if (bookMusicGainRef.current) {
+                                            bookMusicGainRef.current.gain.value = musicVolume;
+                                        } else {
+                                            audio.volume = musicVolume;
+                                        }
+                                        
+                                        // Step 5: Play the audio
+                                        try {
+                                            await audio.play();
+                                            console.log('🎵 Book music resumed');
+                                        } catch (err) {
                                             console.warn('Could not play book music:', err);
-                                        });
+                                        }
                                     }
                                 } else {
                                     // Turn music off
                                     if (bookBackgroundMusicRef.current) {
                                         bookBackgroundMusicRef.current.pause();
+                                        console.log('🎵 Book music paused');
                                     }
                                 }
                             }}

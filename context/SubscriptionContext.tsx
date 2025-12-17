@@ -30,12 +30,19 @@ const getApiBaseUrl = (): string => {
     (window.location.hostname === 'localhost' ? 'http://localhost:5001' : 'https://backendgk2-0.onrender.com');
 };
 
-// Helper to get user ID for subscription check
-const getUserId = (): string | null => {
-  // Prefer authService user record (correct key: godly_kids_user)
+// Helper to get ALL possible user identifiers for subscription check
+// Returns array of unique identifiers to check: [email, mongoId, deviceId]
+const getAllUserIds = (): string[] => {
+  const ids: string[] = [];
+  
+  // Get user from authService
   const user = authService.getUser();
   if (user) {
-    return (user as any)._id || (user as any).id || user.email || null;
+    // Email is most important - subscriptions are often linked by email
+    if (user.email) ids.push(user.email);
+    // MongoDB ID
+    if ((user as any)._id) ids.push((user as any)._id);
+    if ((user as any).id && (user as any).id !== (user as any)._id) ids.push((user as any).id);
   }
 
   // Back-compat: some older code stored this key
@@ -43,14 +50,28 @@ const getUserId = (): string | null => {
   if (legacyUserStr) {
     try {
       const legacyUser = JSON.parse(legacyUserStr);
-      return legacyUser._id || legacyUser.id || legacyUser.email || null;
+      if (legacyUser.email && !ids.includes(legacyUser.email)) ids.push(legacyUser.email);
+      if (legacyUser._id && !ids.includes(legacyUser._id)) ids.push(legacyUser._id);
     } catch {
       // ignore
     }
   }
+  
+  // Email stored separately
+  const storedEmail = localStorage.getItem('godlykids_user_email');
+  if (storedEmail && !ids.includes(storedEmail)) ids.push(storedEmail);
 
-  // Fallback to device id
-  return localStorage.getItem('godlykids_device_id') || localStorage.getItem('device_id');
+  // Device ID as fallback
+  const deviceId = localStorage.getItem('godlykids_device_id') || localStorage.getItem('device_id');
+  if (deviceId && !ids.includes(deviceId)) ids.push(deviceId);
+  
+  return ids;
+};
+
+// Legacy helper (for backwards compatibility)
+const getUserId = (): string | null => {
+  const ids = getAllUserIds();
+  return ids.length > 0 ? ids[0] : null;
 };
 
 export const SubscriptionProvider: React.FC<SubscriptionProviderProps> = ({ children }) => {
@@ -70,11 +91,16 @@ export const SubscriptionProvider: React.FC<SubscriptionProviderProps> = ({ chil
       return true;
     }
     
-    // 2. Check backend webhook status (in case webhook arrived)
-    const userId = getUserId();
-    if (userId) {
+    // 2. Check backend webhook status using ALL possible identifiers
+    // The subscription might be linked to email, MongoDB ID, or device ID
+    const userIds = getAllUserIds();
+    const apiBaseUrl = getApiBaseUrl();
+    
+    console.log('🔍 Checking purchase status for identifiers:', userIds);
+    
+    for (const userId of userIds) {
       try {
-        const apiBaseUrl = getApiBaseUrl();
+        console.log(`🔍 Checking purchase status for: ${userId}`);
         const response = await fetch(`${apiBaseUrl}/api/webhooks/purchase-status/${encodeURIComponent(userId)}`, {
           method: 'GET',
           headers: { 'Content-Type': 'application/json' },
@@ -83,14 +109,14 @@ export const SubscriptionProvider: React.FC<SubscriptionProviderProps> = ({ chil
         if (response.ok) {
           const data = await response.json();
           if (data.isPremium) {
-            console.log('✅ Premium confirmed by backend');
+            console.log(`✅ Premium confirmed by backend for: ${userId}`);
             localStorage.setItem('godlykids_premium', 'true');
             window.dispatchEvent(new CustomEvent('revenuecat:premiumChanged', { detail: { isPremium: true } }));
             return true;
           }
         }
       } catch (error) {
-        console.log('⚠️ Backend check failed, continuing...');
+        console.log(`⚠️ Backend check failed for ${userId}, continuing...`);
       }
     }
     

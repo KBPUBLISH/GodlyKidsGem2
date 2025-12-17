@@ -12,6 +12,11 @@ if (!(window as any).__GK_APP_BOOTED__) {
   (window as any).__GK_APP_BOOTED__ = true;
   console.log('🚀 APP BOOT (WebView created)', new Date().toISOString());
 
+  // Detect Despia early - we need this for crash detection logic
+  const ua = navigator.userAgent || '';
+  const isDespia = /despia/i.test(ua);
+  (window as any).__GK_IS_DESPIA__ = isDespia;
+
   // Feature trace ring buffer: records high-level steps that ran leading up to a crash.
   // Stored in localStorage so opaque iOS "Script error." crashes still include context.
   try {
@@ -35,14 +40,22 @@ if (!(window as any).__GK_APP_BOOTED__) {
     trace('app_boot');
     document.addEventListener('visibilitychange', () => {
       trace('visibility_change', { visibility: document.visibilityState });
+      // Track when app goes to background for Despia WebView recreation detection
+      if (document.visibilityState === 'hidden') {
+        try {
+          localStorage.setItem('gk_last_hidden_ts', String(Date.now()));
+        } catch {}
+      }
     });
   } catch {}
 
   // Crash recovery: detect if we crashed recently and are in a crash loop
+  // BUT: In Despia, WebView recreations after soft-close are EXPECTED, not crashes
   try {
     const CRASH_KEY = 'gk_crash_timestamps';
     const CRASH_WINDOW_MS = 30000; // 30 seconds
     const MAX_CRASHES = 3;
+    const DESPIA_REBOOT_GRACE_MS = 5000; // Despia WebView recreations within 5s of hidden are expected
     
     const now = Date.now();
     let crashes: number[] = [];
@@ -50,11 +63,30 @@ if (!(window as any).__GK_APP_BOOTED__) {
       crashes = JSON.parse(localStorage.getItem(CRASH_KEY) || '[]');
     } catch {}
     
+    // In Despia, check if this is a WebView recreation (not a crash)
+    // If app_boot happens shortly after visibility_hidden, it's a Despia soft-close/reopen
+    let isExpectedDespiaReboot = false;
+    if (isDespia) {
+      try {
+        const lastHiddenTs = parseInt(localStorage.getItem('gk_last_hidden_ts') || '0', 10);
+        const timeSinceHidden = now - lastHiddenTs;
+        // If we rebooted within 5 seconds of going hidden, this is expected Despia behavior
+        // Despia recreates the WebView on soft-close/reopen, this is NOT a crash
+        if (lastHiddenTs > 0 && timeSinceHidden < DESPIA_REBOOT_GRACE_MS) {
+          isExpectedDespiaReboot = true;
+          console.log('📱 Despia WebView recreation detected (normal soft-close/reopen)');
+          try { (window as any).__GK_TRACE__?.('despia_reboot_expected', { timeSinceHidden }); } catch {}
+        }
+      } catch {}
+    }
+    
     // Clean old crash timestamps
     crashes = crashes.filter((t: number) => now - t < CRASH_WINDOW_MS);
     
-    // If we crashed too many times recently, enter recovery mode
-    if (crashes.length >= MAX_CRASHES) {
+    // Only enter recovery mode if these are REAL crashes, not Despia reboots
+    // For Despia, we also require more crashes since some are false positives
+    const effectiveMaxCrashes = isDespia ? MAX_CRASHES + 2 : MAX_CRASHES;
+    if (crashes.length >= effectiveMaxCrashes && !isExpectedDespiaReboot) {
       console.warn('⚠️ CRASH RECOVERY MODE - too many recent crashes, clearing state');
       (window as any).__GK_RECOVERY_MODE__ = true;
       try { (window as any).__GK_TRACE__?.('crash_recovery_mode', { crashes: crashes.length }); } catch {}
@@ -73,18 +105,20 @@ if (!(window as any).__GK_APP_BOOTED__) {
     } else {
       // Record that we're starting (we'll remove this on successful render)
       (window as any).__GK_BOOT_TIMESTAMP__ = now;
+      
+      // In Despia, clear crash history on expected reboots to prevent false accumulation
+      if (isExpectedDespiaReboot && crashes.length > 0) {
+        console.log('🧹 Clearing crash history (expected Despia reboot)');
+        localStorage.removeItem(CRASH_KEY);
+      }
     }
   } catch {}
 
-  // DeSpia detection for tracing (URL normalization is now done in index.tsx BEFORE React mounts)
-  try {
-    const ua = navigator.userAgent || '';
-    const isCustomAppUA = /despia/i.test(ua);
-    if (isCustomAppUA) {
-      try { (window as any).__GK_TRACE__?.('despia_detected', { ua }); } catch {}
-      // NOTE: URL stripping moved to index.tsx to avoid conflicts with React Router
-    }
-  } catch {}
+  // DeSpia tracing (URL normalization is now done in index.tsx BEFORE React mounts)
+  // Note: isDespia is already detected and stored in __GK_IS_DESPIA__ above
+  if (isDespia) {
+    try { (window as any).__GK_TRACE__?.('despia_detected', { ua }); } catch {}
+  }
 
   // Capture resource load failures (chunk/script/css) which often show as "Script error."
   try {
@@ -176,6 +210,34 @@ if (!(window as any).__GK_APP_BOOTED__) {
   
   // GLOBAL ERROR HANDLERS - catch ALL JS errors, not just React ones
   window.onerror = (message, source, lineno, colno, error) => {
+    // In Despia, "Script error." with no details (lineno=0, colno=0) during WebView recreation
+    // is a cross-origin error from external scripts - this is NOT a real crash
+    const isOpaqueScriptError = 
+      String(message || '').toLowerCase().includes('script error') && 
+      (lineno === 0 || !lineno) && 
+      (colno === 0 || !colno) && 
+      (!error?.stack || error.stack === '');
+    
+    const isDespia = (window as any).__GK_IS_DESPIA__;
+    
+    // Check if this is happening during a Despia WebView recreation
+    let isDespiaTransition = false;
+    if (isDespia) {
+      try {
+        const bootTimestamp = (window as any).__GK_BOOT_TIMESTAMP__ || 0;
+        const timeSinceBoot = Date.now() - bootTimestamp;
+        // If error happens within 3 seconds of boot, it's likely a transition error
+        isDespiaTransition = timeSinceBoot < 3000;
+      } catch {}
+    }
+    
+    // In Despia during transitions, opaque script errors are expected - just log and ignore
+    if (isDespia && isOpaqueScriptError && isDespiaTransition) {
+      console.log('📱 Ignoring opaque script error during Despia WebView transition');
+      try { (window as any).__GK_TRACE__?.('despia_transition_error_ignored', { message: String(message || '') }); } catch {}
+      return true; // Suppress the error - don't show overlay or count as crash
+    }
+    
     let featureTrace: any[] = [];
     try {
       featureTrace = JSON.parse(localStorage.getItem('gk_feature_trace') || '[]');
@@ -193,6 +255,8 @@ if (!(window as any).__GK_APP_BOOTED__) {
       screen: `${window.innerWidth}x${window.innerHeight}`,
       devicePixelRatio: window.devicePixelRatio,
       visibility: document.visibilityState,
+      isDespiaTransition,
+      isOpaqueScriptError,
       featureTrace,
       ts: new Date().toISOString(),
     };
@@ -202,14 +266,17 @@ if (!(window as any).__GK_APP_BOOTED__) {
     } catch {}
 
     // Record crash timestamp for crash loop detection
-    try {
-      const CRASH_KEY = 'gk_crash_timestamps';
-      let crashes: number[] = [];
-      try { crashes = JSON.parse(localStorage.getItem(CRASH_KEY) || '[]'); } catch {}
-      crashes.push(Date.now());
-      // Keep only last 10 crash timestamps
-      localStorage.setItem(CRASH_KEY, JSON.stringify(crashes.slice(-10)));
-    } catch {}
+    // BUT: Don't count opaque errors in Despia as real crashes
+    if (!(isDespia && isOpaqueScriptError)) {
+      try {
+        const CRASH_KEY = 'gk_crash_timestamps';
+        let crashes: number[] = [];
+        try { crashes = JSON.parse(localStorage.getItem(CRASH_KEY) || '[]'); } catch {}
+        crashes.push(Date.now());
+        // Keep only last 10 crash timestamps
+        localStorage.setItem(CRASH_KEY, JSON.stringify(crashes.slice(-10)));
+      } catch {}
+    }
 
     // Persist last errors so we can inspect on-device
     try {

@@ -108,15 +108,50 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     const sfxContextRef = useRef<AudioContext | null>(null);
 
     // Get or create SFX AudioContext (reuse for all sound effects)
+    // Protected against errors during Despia WebView transitions
     const getSfxContext = useCallback(() => {
-        if (!sfxContextRef.current || sfxContextRef.current.state === 'closed') {
-            sfxContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
+        try {
+            // In Despia during early boot, skip audio context creation to avoid transition errors
+            const isDespia = typeof window !== 'undefined' && (window as any).__GK_IS_DESPIA__;
+            if (isDespia) {
+                const bootTimestamp = (window as any).__GK_BOOT_TIMESTAMP__ || 0;
+                const timeSinceBoot = Date.now() - bootTimestamp;
+                // Skip audio during first 500ms of boot to avoid transition issues
+                if (timeSinceBoot < 500) {
+                    throw new Error('Skipping audio during Despia transition');
+                }
+            }
+            
+            if (!sfxContextRef.current || sfxContextRef.current.state === 'closed') {
+                sfxContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
+            }
+            // Resume if suspended (happens after user interaction is required)
+            if (sfxContextRef.current.state === 'suspended') {
+                sfxContextRef.current.resume().catch(() => {
+                    // Ignore resume errors - can happen during visibility changes
+                });
+            }
+            return sfxContextRef.current;
+        } catch (e) {
+            // Return a dummy context-like object that won't crash when used
+            console.log('AudioContext unavailable:', e);
+            return {
+                createOscillator: () => ({
+                    connect: () => {},
+                    start: () => {},
+                    stop: () => {},
+                    frequency: { setValueAtTime: () => {} },
+                    type: 'sine'
+                }),
+                createGain: () => ({
+                    connect: () => {},
+                    gain: { setValueAtTime: () => {}, exponentialRampToValueAtTime: () => {} }
+                }),
+                destination: {},
+                currentTime: 0,
+                state: 'suspended'
+            } as unknown as AudioContext;
         }
-        // Resume if suspended (happens after user interaction is required)
-        if (sfxContextRef.current.state === 'suspended') {
-            sfxContextRef.current.resume();
-        }
-        return sfxContextRef.current;
     }, []);
 
     // Create audio element once on mount
@@ -248,63 +283,81 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         }
     }, [currentPlaylist, currentTrackIndex, updateMediaSession]);
 
+    // Safe wrapper for mediaSession operations - prevents errors during Despia WebView transitions
+    const safeMediaSessionAction = useCallback((action: string, handler: ((details?: any) => void) | null) => {
+        try {
+            if ('mediaSession' in navigator && navigator.mediaSession.setActionHandler) {
+                navigator.mediaSession.setActionHandler(action as MediaSessionAction, handler);
+            }
+        } catch (e) {
+            // Silently fail - this can happen during WebView transitions in Despia
+            console.log('MediaSession action setup skipped:', action, e);
+        }
+    }, []);
+    
     // Set up Media Session action handlers once
     useEffect(() => {
         if (!('mediaSession' in navigator)) return;
 
-        navigator.mediaSession.setActionHandler('play', () => {
-            audioRef.current?.play();
-        });
+        // In Despia, delay media session setup slightly to avoid race conditions during WebView creation
+        const isDespia = typeof window !== 'undefined' && (window as any).__GK_IS_DESPIA__;
+        const setupDelay = isDespia ? 100 : 0;
+        
+        const timeoutId = setTimeout(() => {
+            safeMediaSessionAction('play', () => {
+                audioRef.current?.play();
+            });
 
-        navigator.mediaSession.setActionHandler('pause', () => {
-            audioRef.current?.pause();
-        });
+            safeMediaSessionAction('pause', () => {
+                audioRef.current?.pause();
+            });
 
-        navigator.mediaSession.setActionHandler('nexttrack', () => {
-            if (currentPlaylist && currentTrackIndex < currentPlaylist.items.length - 1) {
-                setCurrentTrackIndex(prev => prev + 1);
-            }
-        });
+            safeMediaSessionAction('nexttrack', () => {
+                if (currentPlaylist && currentTrackIndex < currentPlaylist.items.length - 1) {
+                    setCurrentTrackIndex(prev => prev + 1);
+                }
+            });
 
-        navigator.mediaSession.setActionHandler('previoustrack', () => {
-            if (currentTrackIndex > 0) {
-                setCurrentTrackIndex(prev => prev - 1);
-            }
-        });
+            safeMediaSessionAction('previoustrack', () => {
+                if (currentTrackIndex > 0) {
+                    setCurrentTrackIndex(prev => prev - 1);
+                }
+            });
 
-        navigator.mediaSession.setActionHandler('seekto', (details) => {
-            if (audioRef.current && details.seekTime !== undefined) {
-                audioRef.current.currentTime = details.seekTime;
-            }
-        });
+            safeMediaSessionAction('seekto', (details: any) => {
+                if (audioRef.current && details?.seekTime !== undefined) {
+                    audioRef.current.currentTime = details.seekTime;
+                }
+            });
 
-        navigator.mediaSession.setActionHandler('seekbackward', (details) => {
-            if (audioRef.current) {
-                audioRef.current.currentTime = Math.max(0, audioRef.current.currentTime - (details.seekOffset || 10));
-            }
-        });
+            safeMediaSessionAction('seekbackward', (details: any) => {
+                if (audioRef.current) {
+                    audioRef.current.currentTime = Math.max(0, audioRef.current.currentTime - (details?.seekOffset || 10));
+                }
+            });
 
-        navigator.mediaSession.setActionHandler('seekforward', (details) => {
-            if (audioRef.current) {
-                audioRef.current.currentTime = Math.min(
-                    audioRef.current.duration || 0,
-                    audioRef.current.currentTime + (details.seekOffset || 10)
-                );
-            }
-        });
+            safeMediaSessionAction('seekforward', (details: any) => {
+                if (audioRef.current) {
+                    audioRef.current.currentTime = Math.min(
+                        audioRef.current.duration || 0,
+                        audioRef.current.currentTime + (details?.seekOffset || 10)
+                    );
+                }
+            });
+        }, setupDelay);
 
         return () => {
-            try {
-                navigator.mediaSession.setActionHandler('play', null);
-                navigator.mediaSession.setActionHandler('pause', null);
-                navigator.mediaSession.setActionHandler('nexttrack', null);
-                navigator.mediaSession.setActionHandler('previoustrack', null);
-                navigator.mediaSession.setActionHandler('seekto', null);
-                navigator.mediaSession.setActionHandler('seekbackward', null);
-                navigator.mediaSession.setActionHandler('seekforward', null);
-            } catch { }
+            clearTimeout(timeoutId);
+            // Cleanup handlers - wrapped to prevent errors during Despia transitions
+            safeMediaSessionAction('play', null);
+            safeMediaSessionAction('pause', null);
+            safeMediaSessionAction('nexttrack', null);
+            safeMediaSessionAction('previoustrack', null);
+            safeMediaSessionAction('seekto', null);
+            safeMediaSessionAction('seekbackward', null);
+            safeMediaSessionAction('seekforward', null);
         };
-    }, [currentPlaylist, currentTrackIndex]);
+    }, [currentPlaylist, currentTrackIndex, safeMediaSessionAction]);
 
     // --- Simple SFX using Web Audio API ---
     const playTone = useCallback((freq: number, dur: number, vol: number = 0.15) => {

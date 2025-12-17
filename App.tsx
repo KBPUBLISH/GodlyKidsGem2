@@ -308,6 +308,8 @@ import { SubscriptionProvider } from './context/SubscriptionContext';
 import { LanguageProvider } from './context/LanguageContext';
 import NotificationService from './services/notificationService';
 import { activityTrackingService } from './services/activityTrackingService';
+import { DespiaService } from './services/despiaService';
+import { authService } from './services/authService';
 
 // --- ASSETS & HELPERS ---
 
@@ -472,7 +474,19 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
 
 const App: React.FC = () => {
   // Check if we're in DeSpia wrapper - if so, skip risky initializations
-  const isDespia = typeof navigator !== 'undefined' && /despia/i.test(navigator.userAgent || '');
+  const isDespia = DespiaService.isNative();
+
+  // Link user ID to DeSpia native OneSignal SDK on app boot (if already logged in)
+  useEffect(() => {
+    if (!isDespia) return;
+    
+    const user = authService.getUser();
+    const userId = user?._id || user?.id;
+    if (userId) {
+      console.log('📱 Linking existing user to native OneSignal:', userId);
+      DespiaService.setOneSignalUserId(userId);
+    }
+  }, [isDespia]);
 
   // Initialize OneSignal notifications (skip in DeSpia)
   useEffect(() => {

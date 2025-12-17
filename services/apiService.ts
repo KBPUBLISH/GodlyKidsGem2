@@ -1,6 +1,7 @@
 import { API_BASE_URL, MOCK_BOOKS } from '../constants';
 import { Book } from '../types';
 import { authService } from './authService';
+import { DespiaService } from './despiaService';
 
 // ============================================
 // LocalStorage-backed caching to survive WebView restarts
@@ -721,6 +722,12 @@ export const ApiService = {
         if (data.user) {
           authService.setUser(data.user);
           console.log('✅ User data stored:', data.user);
+          
+          // Link user ID to DeSpia native OneSignal SDK
+          const userId = data.user._id || data.user.id;
+          if (userId) {
+            DespiaService.setOneSignalUserId(userId);
+          }
         }
 
         // Trigger books reload by dispatching event
@@ -862,6 +869,12 @@ export const ApiService = {
           authService.setToken(token, undefined, refreshToken);
           if (data.user) {
             authService.setUser(data.user);
+            
+            // Link user ID to DeSpia native OneSignal SDK
+            const userId = data.user._id || data.user.id;
+            if (userId) {
+              DespiaService.setOneSignalUserId(userId);
+            }
           }
         }
 

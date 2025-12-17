@@ -51,3 +51,4 @@ export function extractEmotionalCues(text: string): string[] {
   return matches.map(m => m.replace(/[\[\]]/g, '').toLowerCase());
 }
 
+

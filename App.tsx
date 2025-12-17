@@ -45,21 +45,29 @@ if (!(window as any).__GK_APP_BOOTED__) {
     );
   } catch {}
 
-  // On iOS standalone/custom app shells, proactively unregister OneSignal SW to avoid stale-cache chunk failures.
+  // In native wrappers, proactively unregister OneSignal SW to avoid stale-cache chunk failures on resume.
   try {
+    // Manual override (for testing): localStorage.setItem('gk_force_onesignal', '1')
+    let forceOneSignal = false;
+    try {
+      forceOneSignal = localStorage.getItem('gk_force_onesignal') === '1';
+    } catch {}
+    if (forceOneSignal) {
+      // If you force-enable OneSignal, don't unregister its SW/caches.
+      // (This may reintroduce crash-on-resume in some iOS app shells.)
+    } else {
     const ua = navigator.userAgent || '';
     const platform = (navigator as any).platform || '';
     const isIOS =
       /iPad|iPhone|iPod/i.test(ua) ||
       /iPad|iPhone|iPod/i.test(platform) ||
       ((navigator as any).platform === 'MacIntel' && (navigator as any).maxTouchPoints > 1);
-    const isStandalone =
-      window.matchMedia?.('(display-mode: standalone)')?.matches ||
-      (navigator as any).standalone === true;
     const isCustomAppUA = /despia/i.test(ua);
+    const uaLower = ua.toLowerCase();
+    const isWKWebViewWrapper = uaLower.includes('wkwebview') && !uaLower.includes('safari');
 
     // IMPORTANT: the app wrapper UA may not include "iPhone", so don't gate on isIOS for the custom-UA case.
-    if (((isIOS && isStandalone) || isCustomAppUA) && 'serviceWorker' in navigator) {
+    if ((isCustomAppUA || (isIOS && isWKWebViewWrapper)) && 'serviceWorker' in navigator) {
       navigator.serviceWorker.getRegistrations?.().then((regs) => {
         regs?.forEach((reg) => {
           const scriptURL = (reg as any)?.active?.scriptURL || '';
@@ -77,6 +85,7 @@ if (!(window as any).__GK_APP_BOOTED__) {
           }
         });
       }).catch?.(() => {});
+    }
     }
   } catch {}
   

@@ -5,6 +5,34 @@ const ONESIGNAL_APP_ID = import.meta.env.VITE_ONESIGNAL_APP_ID || '';
 
 let isInitialized = false;
 
+const shouldDisableOneSignal = (): boolean => {
+  try {
+    // Some environments (iOS WKWebView / certain "app shell" wrappers) can crash on resume
+    // due to OneSignal Web SDK script behavior. We prefer stability over push here.
+    const ua = navigator.userAgent || '';
+    const isIOS =
+      /iPad|iPhone|iPod/i.test(ua) ||
+      // iPadOS reports as Mac sometimes
+      ((navigator as any).platform === 'MacIntel' && (navigator as any).maxTouchPoints > 1);
+    const isStandalone =
+      window.matchMedia?.('(display-mode: standalone)')?.matches ||
+      (navigator as any).standalone === true;
+    const isCustomAppUA = /despia/i.test(ua);
+
+    // If push isn't supported, don't initialize.
+    const pushSupported = 'serviceWorker' in navigator && 'PushManager' in window;
+    if (!pushSupported) return true;
+
+    // Disable on iOS standalone (most crash-prone) and on our custom app UA.
+    if (isIOS && (isStandalone || isCustomAppUA)) return true;
+
+    return false;
+  } catch {
+    // If detection fails, default to safe behavior (do not initialize).
+    return true;
+  }
+};
+
 export const NotificationService = {
   /**
    * Initialize OneSignal
@@ -15,6 +43,11 @@ export const NotificationService = {
       if (!ONESIGNAL_APP_ID) {
         console.warn('⚠️ OneSignal App ID not configured. Set VITE_ONESIGNAL_APP_ID environment variable.');
       }
+      return false;
+    }
+
+    if (shouldDisableOneSignal()) {
+      console.warn('⚠️ OneSignal init skipped (unsupported or crash-prone environment).');
       return false;
     }
 

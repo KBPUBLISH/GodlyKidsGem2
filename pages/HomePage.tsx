@@ -32,6 +32,24 @@ import { bookCompletionService } from '../services/bookCompletionService';
 import { profileService } from '../services/profileService';
 import { activityTrackingService } from '../services/activityTrackingService';
 
+// Helper to format date as YYYY-MM-DD in local time
+const formatLocalDateKey = (d: Date): string => {
+  const yyyy = d.getFullYear();
+  const mm = String(d.getMonth() + 1).padStart(2, '0');
+  const dd = String(d.getDate()).padStart(2, '0');
+  return `${yyyy}-${mm}-${dd}`;
+};
+
+// Convert kid age to lesson age group
+const ageToLessonAgeGroup = (age?: number): string => {
+  if (!age || !Number.isFinite(age)) return 'all';
+  if (age <= 6) return '4-6';
+  if (age <= 8) return '6-8';
+  if (age <= 10) return '8-10';
+  if (age <= 12) return '10-12';
+  return 'all';
+};
+
 // Inline getLessonStatus to avoid circular dependency
 const getLessonStatus = (lesson: any): 'available' | 'locked' | 'completed' => {
   if (isCompleted(lesson._id || lesson.id)) {
@@ -109,7 +127,11 @@ const HomePage: React.FC = () => {
     // Clear fetch debounce to allow fresh fetch
     sessionStorage.removeItem('godlykids_home_last_fetch');
   }, [currentProfileId]);
-  
+
+  // Daily planner state: one locked plan per day (3 lessons/day) per kid profile
+  const [dayPlans, setDayPlans] = useState<Map<string, any>>(new Map());
+  const loadedDaysRef = useRef<Set<string>>(new Set());
+
   const [weekLessons, setWeekLessons] = useState<Map<string, any>>(new Map());
   const [selectedDayIndex, setSelectedDayIndex] = useState<number>(getSelectedDay());
   const todayIndex = getTodayIndex();
@@ -378,53 +400,56 @@ const HomePage: React.FC = () => {
     }
   };
 
+  // Load a single day's plan using the daily planner API (3 lessons/day, avoids repeats, prefers unwatched)
+  const loadDayPlan = async (dateKey: string, forceLoad = false) => {
+    if (!currentProfileId) return null;
+
+    if (!forceLoad && loadedDaysRef.current.has(dateKey)) {
+      return dayPlans.get(dateKey);
+    }
+
+    loadedDaysRef.current.add(dateKey);
+    const kid = kids?.find((k: any) => String(k.id) === String(currentProfileId));
+    const ageGroup = ageToLessonAgeGroup(kid?.age);
+
+    try {
+      const plan = await ApiService.getLessonPlannerDay(currentProfileId, dateKey, ageGroup);
+      if (plan && plan.slots) {
+        setDayPlans(prev => {
+          const next = new Map(prev);
+          next.set(dateKey, plan);
+          return next;
+        });
+        return plan;
+      }
+      loadedDaysRef.current.delete(dateKey);
+      return null;
+    } catch (e) {
+      loadedDaysRef.current.delete(dateKey);
+      return null;
+    }
+  };
+
   const fetchLessons = async () => {
     try {
-      console.log('📚 Fetching lessons from API... (Profile:', currentProfileId, ')');
+      // For kid profiles, use daily planner (3 lessons/day)
+      if (currentProfileId) {
+        const weekDays = getWeekDays();
+        const selectedDate = weekDays[selectedDayIndex] || new Date();
+        selectedDate.setHours(0, 0, 0, 0);
+        const dateKey = formatLocalDateKey(selectedDate);
+
+        const plan = await loadDayPlan(dateKey);
+        const lessonsFromPlan = plan?.slots?.map((s: any) => s.lesson).filter(Boolean) || [];
+        setLessons(lessonsFromPlan);
+        cacheData('lessons', lessonsFromPlan);
+        setWeekLessons(new Map()); // not used in planner mode
+        return;
+      }
+
+      // Parent profile fallback: fetch all lessons (used mainly for portal/dev)
       const data = await ApiService.getLessons();
-      console.log('📚 Lessons received:', data.length, 'for profile:', currentProfileId);
-      console.log('📚 Lessons data:', JSON.stringify(data.map((l: any) => ({ id: l._id, title: l.title, video: l.video?.url ? 'has video' : 'no video' }))));
       setLessons(data);
-
-      // Organize lessons by day for the fixed week (Monday to Sunday)
-      const weekMap = new Map<string, any>();
-      const weekDays = getWeekDays(); // Get Monday through Sunday of current week
-
-      // Also include published lessons without scheduled dates
-      const publishedLessons = data.filter((l: any) =>
-        l.status === 'published' && !l.scheduledDate
-      );
-
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
-
-      weekDays.forEach((date, index) => {
-        const dateKey = date.toISOString().split('T')[0];
-
-        // Find lesson scheduled for this date
-        // Compare date strings directly to avoid timezone conversion issues
-        let lesson = data.find((l: any) => {
-          if (!l.scheduledDate) return false;
-          // Extract date portion directly from the stored date string (UTC)
-          const scheduledStr = typeof l.scheduledDate === 'string'
-            ? l.scheduledDate.split('T')[0]
-            : new Date(l.scheduledDate).toISOString().split('T')[0];
-          return scheduledStr === dateKey;
-        });
-
-        // If no scheduled lesson and we have published lessons without dates,
-        // assign them in order to days without lessons (for the current week)
-        if (!lesson && publishedLessons[index]) {
-          lesson = publishedLessons[index];
-        }
-
-        if (lesson) {
-          weekMap.set(dateKey, lesson);
-        }
-      });
-
-      console.log('📚 Week lessons map (Mon-Sun):', Array.from(weekMap.entries()));
-      setWeekLessons(weekMap);
       cacheData('lessons', data);
     } catch (error) {
       console.error('❌ Error fetching lessons:', error);
@@ -753,6 +778,18 @@ const HomePage: React.FC = () => {
             onDaySelect={(dayIndex) => {
               setSelectedDayIndex(dayIndex);
               setSelectedDay(dayIndex);
+              // In kid profile, load the selected day's plan immediately
+              if (currentProfileId) {
+                const weekDays = getWeekDays();
+                const selectedDate = weekDays[dayIndex] || new Date();
+                selectedDate.setHours(0, 0, 0, 0);
+                const dateKey = formatLocalDateKey(selectedDate);
+                loadDayPlan(dateKey).then((plan) => {
+                  const lessonsFromPlan = plan?.slots?.map((s: any) => s.lesson).filter(Boolean) || [];
+                  setLessons(lessonsFromPlan);
+                  cacheData('lessons', lessonsFromPlan);
+                });
+              }
             }}
             dayCompletions={[0, 1, 2, 3, 4, 5, 6].map(i => isDayComplete(lessons, i))}
             todayIndex={todayIndex}
@@ -776,28 +813,24 @@ const HomePage: React.FC = () => {
             })()}
           </div>
 
-          {/* Create Child Profile Banner - Shows for parents with no kids */}
-          {currentProfileId === null && kids.length === 0 && (
-            <div 
-              className="rounded-2xl p-6 mb-4 text-center shadow-lg"
-              style={{ background: 'linear-gradient(135deg, #7C4DFF 0%, #9C27B0 100%)' }}
-            >
-              {/* Child avatars */}
+          {/* Parent CTA - always show a single "Create Child Profile" card (clean white UI) */}
+          {currentProfileId === null && (
+            <div className="rounded-2xl p-6 mb-4 shadow-lg bg-white text-center border border-black/5">
               <div className="flex justify-center gap-2 mb-3">
                 <span className="text-4xl">👦</span>
                 <span className="text-4xl">👧</span>
               </div>
-              
-              <h3 className="text-white font-bold text-xl mb-2 font-display">
+
+              <h3 className="text-[#1a3a52] font-bold text-xl mb-2 font-display">
                 Create a Child Profile
               </h3>
-              <p className="text-white/90 text-sm mb-4">
-                Set up a profile for your child to unlock personalized daily video lessons!
+              <p className="text-black/60 text-sm mb-4">
+                Daily Lessons are personalized for kids. Create a child profile to start watching.
               </p>
-              
+
               <button
                 onClick={() => navigate('/profile')}
-                className="inline-flex items-center gap-2 bg-white text-[#7C4DFF] font-bold px-6 py-3 rounded-full shadow-lg hover:shadow-xl transition-all hover:scale-105 active:scale-95"
+                className="inline-flex items-center justify-center gap-2 bg-[#1a3a52] text-white font-bold px-6 py-3 rounded-full shadow-md hover:shadow-lg transition-all active:scale-95"
               >
                 <span className="text-lg">+</span>
                 Create Child Profile
@@ -805,32 +838,8 @@ const HomePage: React.FC = () => {
             </div>
           )}
 
-          {/* Switch to Child Account Banner - Shows for parents who have kids */}
-          {currentProfileId === null && kids.length > 0 && (
-            <div 
-              className="rounded-2xl p-6 mb-4 text-center shadow-lg"
-              style={{ background: 'linear-gradient(135deg, #FF6B35 0%, #F7931E 100%)' }}
-            >
-              <div className="text-4xl mb-3">👦👧</div>
-              
-              <h3 className="text-white font-bold text-lg mb-2 font-display">
-                Switch to Your Child's Account
-              </h3>
-              <p className="text-white/90 text-sm mb-4">
-                Sign into your child's profile to view their personalized daily lessons!
-              </p>
-              
-              <button
-                onClick={() => navigate('/profile')}
-                className="inline-flex items-center gap-2 bg-white text-[#FF6B35] font-bold px-6 py-3 rounded-full shadow-lg hover:shadow-xl transition-all hover:scale-105 active:scale-95"
-              >
-                Switch Profile
-              </button>
-            </div>
-          )}
-
           {/* Lessons Path - Gamified Learning Path Style */}
-          {lessonsLoading ? (
+          {currentProfileId === null ? null : lessonsLoading ? (
             <div className="text-white/70 text-center py-8 px-4">Loading lessons...</div>
           ) : (() => {
             const dayLessons = getLessonsForDay(lessons, selectedDayIndex);

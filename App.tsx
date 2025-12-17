@@ -281,7 +281,13 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
 const App: React.FC = () => {
   // Initialize OneSignal notifications
   useEffect(() => {
-    NotificationService.init();
+    (async () => {
+      try {
+        await NotificationService.init();
+      } catch (e) {
+        console.error('❌ NotificationService.init crashed:', e);
+      }
+    })();
   }, []);
 
   // Initialize activity tracking for Report Card

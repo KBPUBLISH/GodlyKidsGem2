@@ -1537,6 +1537,51 @@ export const ApiService = {
     }
   },
 
+  // ==========================
+  // Daily Lesson Planner API
+  // ==========================
+  getLessonPlannerDay: async (
+    profileId: string,
+    dateKey: string,
+    ageGroup: string = 'all',
+    forceRegenerate: boolean = false
+  ): Promise<any | null> => {
+    try {
+      const baseUrl = getApiBaseUrl();
+      let url = `${baseUrl}lessons/planner/day?profileId=${encodeURIComponent(profileId)}&dateKey=${encodeURIComponent(dateKey)}&ageGroup=${encodeURIComponent(ageGroup)}`;
+      if (forceRegenerate) url += `&force=true`;
+      console.log('📅 Calling planner API:', url);
+      const response = await fetchWithTimeout(url, { method: 'GET' });
+      if (response.ok) return await response.json();
+      const errorText = await response.text().catch(() => 'Unknown error');
+      console.warn('⚠️ Failed to fetch planner day:', response.status, errorText);
+      return null;
+    } catch (error) {
+      console.error('❌ Failed to fetch planner day:', error);
+      return null;
+    }
+  },
+
+  reportLessonPlannerProgress: async (
+    profileId: string,
+    lessonId: string,
+    percentWatched: number,
+    dateKey?: string
+  ): Promise<boolean> => {
+    try {
+      const baseUrl = getApiBaseUrl();
+      const response = await fetchWithTimeout(`${baseUrl}lessons/planner/progress`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ profileId, lessonId, percentWatched, dateKey }),
+      });
+      return response.ok;
+    } catch (error) {
+      console.error('❌ Failed to report planner progress:', error);
+      return false;
+    }
+  },
+
   // Games API - Get games for Daily Tasks & IQ Games section
   getDailyTaskGames: async (): Promise<any[]> => {
     const cacheKey = 'daily_task_games';

@@ -48,15 +48,18 @@ if (!(window as any).__GK_APP_BOOTED__) {
   // On iOS standalone/custom app shells, proactively unregister OneSignal SW to avoid stale-cache chunk failures.
   try {
     const ua = navigator.userAgent || '';
+    const platform = (navigator as any).platform || '';
     const isIOS =
       /iPad|iPhone|iPod/i.test(ua) ||
+      /iPad|iPhone|iPod/i.test(platform) ||
       ((navigator as any).platform === 'MacIntel' && (navigator as any).maxTouchPoints > 1);
     const isStandalone =
       window.matchMedia?.('(display-mode: standalone)')?.matches ||
       (navigator as any).standalone === true;
     const isCustomAppUA = /despia/i.test(ua);
 
-    if (isIOS && (isStandalone || isCustomAppUA) && 'serviceWorker' in navigator) {
+    // IMPORTANT: the app wrapper UA may not include "iPhone", so don't gate on isIOS for the custom-UA case.
+    if (((isIOS && isStandalone) || isCustomAppUA) && 'serviceWorker' in navigator) {
       navigator.serviceWorker.getRegistrations?.().then((regs) => {
         regs?.forEach((reg) => {
           const scriptURL = (reg as any)?.active?.scriptURL || '';
@@ -65,6 +68,15 @@ if (!(window as any).__GK_APP_BOOTED__) {
           }
         });
       });
+
+      // Also drop OneSignal-related caches when possible (stale SW + caches can cause resume crashes).
+      (window as any).caches?.keys?.().then((keys: string[]) => {
+        keys?.forEach((key) => {
+          if (/onesignal/i.test(key)) {
+            (window as any).caches.delete(key).catch?.(() => {});
+          }
+        });
+      }).catch?.(() => {});
     }
   } catch {}
   

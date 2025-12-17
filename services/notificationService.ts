@@ -10,8 +10,10 @@ const shouldDisableOneSignal = (): boolean => {
     // Some environments (iOS WKWebView / certain "app shell" wrappers) can crash on resume
     // due to OneSignal Web SDK script behavior. We prefer stability over push here.
     const ua = navigator.userAgent || '';
+    const platform = (navigator as any).platform || '';
     const isIOS =
       /iPad|iPhone|iPod/i.test(ua) ||
+      /iPad|iPhone|iPod/i.test(platform) ||
       // iPadOS reports as Mac sometimes
       ((navigator as any).platform === 'MacIntel' && (navigator as any).maxTouchPoints > 1);
     const isStandalone =
@@ -23,8 +25,10 @@ const shouldDisableOneSignal = (): boolean => {
     const pushSupported = 'serviceWorker' in navigator && 'PushManager' in window;
     if (!pushSupported) return true;
 
-    // Disable on iOS standalone (most crash-prone) and on our custom app UA.
-    if (isIOS && (isStandalone || isCustomAppUA)) return true;
+    // Disable on iOS standalone (most crash-prone) and ALWAYS disable inside our custom app wrapper UA.
+    // The wrapper UA may not include "iPhone", so don't gate on isIOS for this case.
+    if (isCustomAppUA) return true;
+    if (isIOS && isStandalone) return true;
 
     return false;
   } catch {

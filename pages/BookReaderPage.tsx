@@ -2831,15 +2831,16 @@ const BookReaderPage: React.FC = () => {
                 <WoodButton
                     onClick={handlePlayPage}
                     className="p-3"
-                >
-                    {loadingAudio ? (
-                        <div className="w-6 h-6 border-4 border-[#3e2723] border-t-transparent rounded-full animate-spin" />
-                    ) : playing ? (
-                        <Pause className="w-8 h-8 fill-current" />
-                    ) : (
-                        <Play className="w-8 h-8 fill-current ml-1" />
-                    )}
-                </WoodButton>
+                    icon={
+                        loadingAudio ? (
+                            <div className="w-6 h-6 border-4 border-[#3e2723] border-t-transparent rounded-full animate-spin" />
+                        ) : playing ? (
+                            <Pause className="w-8 h-8 fill-current" />
+                        ) : (
+                            <Play className="w-8 h-8 fill-current ml-1" />
+                        )
+                    }
+                />
             </div>
 
             {/* Page Counter - Bottom Right (Clickable for page navigation) */}

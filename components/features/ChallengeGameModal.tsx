@@ -3,8 +3,8 @@ import React, { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import WoodButton from '../ui/WoodButton';
 import { 
-  X, Star, Brain, BookOpen, Fish, Flame, Crown, Anchor, Heart, Cross,
-  Sun, Moon, Music, Shield, Gift, Key, Bird, Droplets, Mountain, Clock
+  X, Star, Brain, BookOpen, Fish, Flame, Crown, Anchor, Heart,
+  Sun, Moon, Music, Shield, Gift, Key, Bird, Droplets, Mountain
 } from 'lucide-react';
 import { useUser } from '../../context/UserContext';
 import { useAudio } from '../../context/AudioContext';
@@ -15,14 +15,11 @@ interface ChallengeGameModalProps {
   onClose: () => void;
 }
 
-type GameState = 'cooldown' | 'intro' | 'ready' | 'playing' | 'game-over' | 'success' | 'claimed';
+type GameState = 'intro' | 'ready' | 'playing' | 'game-over' | 'success' | 'claimed';
 
 const GAME_DURATION = 60; // 60 seconds for matching game
-import { profileService } from '../../services/profileService';
 
 const GAME_PAIRS_COUNT = 6;
-const COOLDOWN_HOURS = 12; // 12 hours cooldown
-const getStorageKey = () => profileService.getProfileKey('memory_game_last_completion');
 
 // Expanded Pool of Biblical Symbols
 const SYMBOL_POOL = [
@@ -70,38 +67,14 @@ const ChallengeGameModal: React.FC<ChallengeGameModalProps> = ({ isOpen, onClose
   const [timeLeft, setTimeLeft] = useState(GAME_DURATION);
   const [countDown, setCountDown] = useState<string>('');
   const [earnedStars, setEarnedStars] = useState(0);
-  const [timeUntilNext, setTimeUntilNext] = useState<string>(''); // Cooldown timer
 
   const timerRef = useRef<number | null>(null);
   const flipTimeoutRef = useRef<number | null>(null);
-  const cooldownTimerRef = useRef<number | null>(null);
 
   // --- SETUP ---
   useEffect(() => {
     if (isOpen) {
-      // Check if on cooldown
-      if (isOnCooldown()) {
-        setGameState('cooldown');
-        // Update cooldown timer every second
-        const updateCooldown = () => {
-          const timeRemaining = getTimeUntilNext();
-          setTimeUntilNext(timeRemaining);
-          
-          // If cooldown expired, allow play
-          if (!timeRemaining || !isOnCooldown()) {
-            setGameState('intro');
-            if (cooldownTimerRef.current) {
-              window.clearInterval(cooldownTimerRef.current);
-              cooldownTimerRef.current = null;
-            }
-          }
-        };
-        
-        updateCooldown();
-        cooldownTimerRef.current = window.setInterval(updateCooldown, 1000);
-      } else {
-        initializeGame();
-      }
+      initializeGame();
     } else {
       setGameState('intro');
       cleanup();
@@ -112,48 +85,6 @@ const ChallengeGameModal: React.FC<ChallengeGameModalProps> = ({ isOpen, onClose
   const cleanup = () => {
       if (timerRef.current) window.clearInterval(timerRef.current);
       if (flipTimeoutRef.current) window.clearTimeout(flipTimeoutRef.current);
-      if (cooldownTimerRef.current) window.clearInterval(cooldownTimerRef.current);
-  };
-
-  // Helper function to check if cooldown is active
-  const getLastCompletionTime = (): number | null => {
-    try {
-      const stored = localStorage.getItem(getStorageKey());
-      return stored ? parseInt(stored, 10) : null;
-    } catch {
-      return null;
-    }
-  };
-
-  const isOnCooldown = (): boolean => {
-    const lastTime = getLastCompletionTime();
-    if (!lastTime) return false;
-    const now = Date.now();
-    const hoursSinceCompletion = (now - lastTime) / (1000 * 60 * 60);
-    return hoursSinceCompletion < COOLDOWN_HOURS;
-  };
-
-  const getTimeUntilNext = (): string => {
-    const lastTime = getLastCompletionTime();
-    if (!lastTime) return '';
-    
-    const now = Date.now();
-    const nextAvailable = lastTime + (COOLDOWN_HOURS * 60 * 60 * 1000);
-    const msRemaining = nextAvailable - now;
-    
-    if (msRemaining <= 0) return '';
-    
-    const hours = Math.floor(msRemaining / (1000 * 60 * 60));
-    const minutes = Math.floor((msRemaining % (1000 * 60 * 60)) / (1000 * 60));
-    const seconds = Math.floor((msRemaining % (1000 * 60)) / 1000);
-    
-    if (hours > 0) {
-      return `${hours}h ${minutes}m`;
-    } else if (minutes > 0) {
-      return `${minutes}m ${seconds}s`;
-    } else {
-      return `${seconds}s`;
-    }
   };
 
   // --- TIMER LOGIC ---
@@ -287,12 +218,9 @@ const ChallengeGameModal: React.FC<ChallengeGameModalProps> = ({ isOpen, onClose
 
   const handleClaim = () => {
     setIsClaiming(true);
-    // COIN REWARDS: 50/25/10
-    const coinReward = earnedStars === 3 ? 50 : earnedStars === 2 ? 25 : 10;
+    // COIN REWARDS: 30/20/10
+    const coinReward = earnedStars === 3 ? 30 : earnedStars === 2 ? 20 : 10;
     addCoins(coinReward, `Memory Challenge - ${earnedStars} ⭐`, 'game');
-    
-    // Store completion timestamp (per-profile)
-    localStorage.setItem(getStorageKey(), Date.now().toString());
     
     setTimeout(() => {
         onClose();
@@ -358,36 +286,6 @@ const ChallengeGameModal: React.FC<ChallengeGameModalProps> = ({ isOpen, onClose
               <h2 className="font-display font-extrabold text-2xl text-white drop-shadow-md tracking-wide mb-4 uppercase">
                 {t('divinePairs')}
               </h2>
-
-              {/* COOLDOWN SCREEN */}
-              {gameState === 'cooldown' && (
-                  <div className="flex flex-col items-center animate-in fade-in w-full flex-1 justify-center">
-                      
-                      {/* Clock Icon */}
-                      <div className="relative w-32 h-32 mb-6">
-                          <Clock size={80} className="text-[#90caf9] animate-pulse" />
-                      </div>
-
-                      <div className="bg-black/20 rounded-xl p-4 mb-6 backdrop-blur-sm border border-white/10">
-                          <p className="text-white/90 font-bold text-lg mb-2">
-                            {t('comeBackSoon')}
-                          </p>
-                          <p className="text-white/60 text-sm leading-relaxed mb-3">
-                             {t('memoryChallengeCompleted')}
-                          </p>
-                          <div className="text-[#90caf9] font-display font-black text-3xl mb-2">
-                            {timeUntilNext || '0s'}
-                          </div>
-                          <p className="text-white/50 text-xs">
-                            {t('resetsEvery12Hours')}
-                          </p>
-                      </div>
-
-                      <WoodButton onClick={onClose} variant="primary" className="px-10 py-4 text-xl bg-[#303f9f] hover:bg-[#3949ab]">
-                          {t('close').toUpperCase()}
-                      </WoodButton>
-                  </div>
-              )}
 
               {/* INTRO */}
               {gameState === 'intro' && (
@@ -509,7 +407,7 @@ const ChallengeGameModal: React.FC<ChallengeGameModalProps> = ({ isOpen, onClose
 
                       <div className="w-full px-8">
                           <WoodButton variant="gold" fullWidth onClick={handleClaim} className="py-4 text-xl shadow-[0_0_20px_#FFD700]">
-                              {t('claimCoins')} {earnedStars === 3 ? 50 : earnedStars === 2 ? 25 : 10} {t('coins').toUpperCase()}
+                              {t('claimCoins')} {earnedStars === 3 ? 30 : earnedStars === 2 ? 20 : 10} {t('coins').toUpperCase()}
                           </WoodButton>
                       </div>
                   </div>

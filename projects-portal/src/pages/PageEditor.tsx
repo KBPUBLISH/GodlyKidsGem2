@@ -472,7 +472,10 @@ const PageEditor: React.FC = () => {
             if (backgroundFile) {
                 const formData = new FormData();
                 formData.append('file', backgroundFile);
-                const endpoint = backgroundType === 'image' ? '/api/upload/image' : '/api/upload/video';
+                // Include bookId, type=pages, and pageNumber for proper GCS path
+                const endpoint = backgroundType === 'image' 
+                    ? `/api/upload/image?bookId=${bookId}&type=pages&pageNumber=${pageNumber}` 
+                    : `/api/upload/video?bookId=${bookId}&type=pages&pageNumber=${pageNumber}`;
                 const res = await apiClient.post(endpoint, formData, {
                     headers: { 'Content-Type': 'multipart/form-data' },
                 });

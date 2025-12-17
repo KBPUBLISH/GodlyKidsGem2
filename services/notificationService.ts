@@ -44,15 +44,20 @@ export const NotificationService = {
    * Call this once when the app loads
    */
   init: async (): Promise<boolean> => {
+    // Log trace for debugging
+    try { (window as any).__GK_TRACE__?.('notifications_init_start'); } catch {}
+
     if (isInitialized || !ONESIGNAL_APP_ID) {
       if (!ONESIGNAL_APP_ID) {
         console.warn('⚠️ OneSignal App ID not configured. Set VITE_ONESIGNAL_APP_ID environment variable.');
       }
+      try { (window as any).__GK_TRACE__?.('notifications_init_done', { reason: 'already_init_or_no_appid' }); } catch {}
       return false;
     }
 
     if (shouldDisableOneSignal()) {
       console.warn('⚠️ OneSignal init skipped (unsupported or crash-prone environment).');
+      try { (window as any).__GK_TRACE__?.('notifications_init_done', { reason: 'disabled_env' }); } catch {}
       return false;
     }
 

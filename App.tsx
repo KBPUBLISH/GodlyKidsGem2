@@ -38,6 +38,44 @@ if (!(window as any).__GK_APP_BOOTED__) {
     });
   } catch {}
 
+  // Crash recovery: detect if we crashed recently and are in a crash loop
+  try {
+    const CRASH_KEY = 'gk_crash_timestamps';
+    const CRASH_WINDOW_MS = 30000; // 30 seconds
+    const MAX_CRASHES = 3;
+    
+    const now = Date.now();
+    let crashes: number[] = [];
+    try {
+      crashes = JSON.parse(localStorage.getItem(CRASH_KEY) || '[]');
+    } catch {}
+    
+    // Clean old crash timestamps
+    crashes = crashes.filter((t: number) => now - t < CRASH_WINDOW_MS);
+    
+    // If we crashed too many times recently, enter recovery mode
+    if (crashes.length >= MAX_CRASHES) {
+      console.warn('⚠️ CRASH RECOVERY MODE - too many recent crashes, clearing state');
+      (window as any).__GK_RECOVERY_MODE__ = true;
+      try { (window as any).__GK_TRACE__?.('crash_recovery_mode', { crashes: crashes.length }); } catch {}
+      
+      // Clear potentially problematic state
+      localStorage.removeItem('godlykids_home_last_fetch');
+      localStorage.removeItem('godlykids_lessons');
+      localStorage.removeItem(CRASH_KEY);
+      
+      // Clear all caches
+      if ('caches' in window) {
+        caches.keys().then((names) => {
+          names.forEach((name) => caches.delete(name).catch(() => {}));
+        });
+      }
+    } else {
+      // Record that we're starting (we'll remove this on successful render)
+      (window as any).__GK_BOOT_TIMESTAMP__ = now;
+    }
+  } catch {}
+
   // DeSpia wrapper can launch the app with OneSignal "push open" query params.
   // In a WKWebView wrapper these can trigger unstable OneSignal web SDK flows.
   // Strip them immediately so routing is stable.
@@ -91,7 +129,8 @@ if (!(window as any).__GK_APP_BOOTED__) {
     );
   } catch {}
 
-  // On iOS standalone/custom app shells, proactively unregister OneSignal SW to avoid stale-cache chunk failures.
+  // On iOS standalone/custom app shells, proactively unregister ALL service workers 
+  // and clear caches to avoid stale-cache chunk failures and "Script error." crashes.
   try {
     const ua = navigator.userAgent || '';
     const isIOS =
@@ -102,8 +141,38 @@ if (!(window as any).__GK_APP_BOOTED__) {
       (navigator as any).standalone === true;
     const isCustomAppUA = /despia/i.test(ua);
 
-    // IMPORTANT: DeSpia UA may not contain "iPhone", so don't gate this on isIOS for custom UA.
-    if (((isIOS && isStandalone) || isCustomAppUA) && 'serviceWorker' in navigator) {
+    // In DeSpia wrapper, be VERY aggressive about cleanup
+    if (isCustomAppUA && 'serviceWorker' in navigator) {
+      // Unregister ALL service workers (not just OneSignal)
+      navigator.serviceWorker.getRegistrations?.().then((regs) => {
+        regs?.forEach((reg) => {
+          console.log('🧹 Unregistering service worker:', reg.scope);
+          reg.unregister().catch(() => {});
+        });
+      });
+      
+      // Clear ALL caches
+      if ('caches' in window) {
+        caches.keys().then((names) => {
+          names.forEach((name) => {
+            console.log('🧹 Clearing cache:', name);
+            caches.delete(name).catch(() => {});
+          });
+        });
+      }
+      
+      // Clear OneSignal localStorage keys
+      try {
+        const keysToRemove = Object.keys(localStorage).filter(k => 
+          /onesignal|idcc/i.test(k)
+        );
+        keysToRemove.forEach(k => {
+          console.log('🧹 Removing localStorage key:', k);
+          localStorage.removeItem(k);
+        });
+      } catch {}
+    } else if ((isIOS && isStandalone) && 'serviceWorker' in navigator) {
+      // For non-DeSpia iOS standalone, just unregister OneSignal SWs
       navigator.serviceWorker.getRegistrations?.().then((regs) => {
         regs?.forEach((reg) => {
           const scriptURL = (reg as any)?.active?.scriptURL || '';
@@ -140,6 +209,16 @@ if (!(window as any).__GK_APP_BOOTED__) {
     console.error('💥 GLOBAL ERROR:', details);
     try {
       (window as any).__GK_LAST_ERROR_DETAILS__ = details;
+    } catch {}
+
+    // Record crash timestamp for crash loop detection
+    try {
+      const CRASH_KEY = 'gk_crash_timestamps';
+      let crashes: number[] = [];
+      try { crashes = JSON.parse(localStorage.getItem(CRASH_KEY) || '[]'); } catch {}
+      crashes.push(Date.now());
+      // Keep only last 10 crash timestamps
+      localStorage.setItem(CRASH_KEY, JSON.stringify(crashes.slice(-10)));
     } catch {}
 
     // Persist last errors so we can inspect on-device

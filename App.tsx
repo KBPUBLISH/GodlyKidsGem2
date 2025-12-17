@@ -12,6 +12,43 @@ if (!(window as any).__GK_APP_BOOTED__) {
   (window as any).__GK_APP_BOOTED__ = true;
   console.log('🚀 APP BOOT (WebView created)', new Date().toISOString());
 
+  // DeSpia wrapper sometimes produces malformed URLs like:
+  // https://.../?topInset=0&bottomInset=0.0/book/XYZ
+  // where the intended route is appended into a query param. Normalize that early.
+  try {
+    const ua = (navigator.userAgent || '').toLowerCase();
+    const isCustomAppUA = ua.includes('despia');
+    if (isCustomAppUA) {
+      const url = new URL(window.location.href);
+      const insetKeys = ['topInset', 'bottomInset', 'leftInset', 'rightInset'];
+      let extractedPath: string | null = null;
+
+      insetKeys.forEach((k) => {
+        const raw = url.searchParams.get(k);
+        if (!raw) return;
+        // Extract leading number; capture any trailing path accidentally appended.
+        const m = raw.match(/^(-?\d+(?:\.\d+)?)(.*)$/);
+        if (!m) return;
+        const numPart = m[1];
+        const trailing = (m[2] || '').trim();
+        if (trailing && (trailing.startsWith('/') || trailing.startsWith('#'))) {
+          extractedPath = trailing.startsWith('#') ? trailing.slice(1) : trailing;
+        }
+        // Always normalize to numeric portion
+        url.searchParams.set(k, numPart);
+      });
+
+      // If we extracted a route, move it into the hash router.
+      if (extractedPath && !url.hash) {
+        url.hash = `#${extractedPath.startsWith('/') ? extractedPath : `/${extractedPath}`}`;
+      }
+
+      if (url.toString() !== window.location.href) {
+        window.history.replaceState({}, '', url.toString());
+      }
+    }
+  } catch {}
+
   // Capture resource load failures (chunk/script/css) which often show as "Script error."
   try {
     window.addEventListener(
@@ -104,6 +141,18 @@ if (!(window as any).__GK_APP_BOOTED__) {
   
   // GLOBAL ERROR HANDLERS - catch ALL JS errors, not just React ones
   window.onerror = (message, source, lineno, colno, error) => {
+    // Pull in last resource error if this is the opaque iOS "Script error." case.
+    let lastResourceError: any = null;
+    try {
+      const existing = JSON.parse(localStorage.getItem('gk_last_errors') || '[]');
+      for (let i = existing.length - 1; i >= 0; i--) {
+        if (existing[i]?.type === 'resource') {
+          lastResourceError = existing[i];
+          break;
+        }
+      }
+    } catch {}
+
     const details = {
       name: error?.name || 'Error',
       message: String(message || ''),
@@ -116,6 +165,7 @@ if (!(window as any).__GK_APP_BOOTED__) {
       screen: `${window.innerWidth}x${window.innerHeight}`,
       devicePixelRatio: window.devicePixelRatio,
       visibility: document.visibilityState,
+      lastResourceError,
       ts: new Date().toISOString(),
     };
     console.error('💥 GLOBAL ERROR:', details);

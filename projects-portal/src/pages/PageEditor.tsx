@@ -77,6 +77,8 @@ const PageEditor: React.FC = () => {
             if (!bookId) return;
             try {
                 const res = await apiClient.get(`/api/pages/book/${bookId}`);
+                console.log('📚 Fetched pages for book:', bookId, res.data);
+                console.log('📚 First page textBoxes sample:', res.data[0]?.textBoxes, res.data[0]?.content?.textBoxes);
                 setExistingPages(res.data);
 
                 // Auto-set page number to next available
@@ -159,12 +161,16 @@ const PageEditor: React.FC = () => {
 
     // Load existing page for editing
     const loadPage = (page: any) => {
+        console.log('📄 Loading page:', page._id, 'pageNumber:', page.pageNumber);
+        console.log('📄 Page data:', JSON.stringify(page, null, 2));
+        
         setEditingPageId(page._id);
         setPageNumber(page.pageNumber);
         setBackgroundType(page.backgroundType || page.files?.background?.type || 'image');
 
         // Set background preview if URL exists (check both legacy and new locations)
         const bgUrl = page.backgroundUrl || page.files?.background?.url;
+        console.log('🖼️ Background URL:', bgUrl);
         if (bgUrl) {
             setBackgroundPreview(resolveUrl(bgUrl));
             setBackgroundFile(null); // Clear file since we're using existing URL
@@ -174,6 +180,7 @@ const PageEditor: React.FC = () => {
 
         // Set scroll preview if URL exists (check both legacy and new locations)
         const scrollUrl = page.scrollUrl || page.files?.scroll?.url;
+        console.log('📜 Scroll URL:', scrollUrl);
         if (scrollUrl) {
             setScrollPreview(resolveUrl(scrollUrl));
             setScrollFile(null);
@@ -183,10 +190,15 @@ const PageEditor: React.FC = () => {
 
         // Load scroll height (default to 33%)
         const savedScrollHeight = page.scrollHeight || page.files?.scroll?.height;
+        console.log('📏 Scroll height:', savedScrollHeight);
         setScrollHeight(savedScrollHeight || 33);
 
         // Load text boxes with IDs for editing (check both root and content.textBoxes)
+        console.log('📝 page.textBoxes:', page.textBoxes);
+        console.log('📝 page.content?.textBoxes:', page.content?.textBoxes);
         const textBoxesData = page.textBoxes || page.content?.textBoxes || [];
+        console.log('📝 Final textBoxesData:', textBoxesData);
+        
         if (Array.isArray(textBoxesData) && textBoxesData.length > 0) {
             const boxesWithIds = textBoxesData.map((box: any, idx: number) => ({
                 ...box,
@@ -196,8 +208,10 @@ const PageEditor: React.FC = () => {
                 color: box.color || '#4a3b2a',
                 width: box.width || 30
             }));
+            console.log('📝 Loaded text boxes:', boxesWithIds);
             setTextBoxes(boxesWithIds);
         } else {
+            console.log('📝 No text boxes found, setting empty array');
             setTextBoxes([]);
         }
 
@@ -886,7 +900,7 @@ const PageEditor: React.FC = () => {
 
                                 <div className="p-2 bg-white group-hover:bg-indigo-50 transition">
                                     <p className="text-xs text-gray-600 truncate">
-                                        {page.textBoxes?.length || 0} text box{page.textBoxes?.length !== 1 ? 'es' : ''}
+                                        {(page.textBoxes?.length || page.content?.textBoxes?.length || 0)} text box{(page.textBoxes?.length || page.content?.textBoxes?.length || 0) !== 1 ? 'es' : ''}
                                     </p>
                                 </div>
                             </div>

@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Plus, Edit, Trash2, Tag } from 'lucide-react';
-import axios from 'axios';
+import apiClient from '../services/apiClient';
 
 interface Category {
     _id: string;
@@ -30,7 +30,7 @@ const Categories: React.FC = () => {
 
     const fetchCategories = async () => {
         try {
-            const response = await axios.get('http://localhost:5001/api/categories');
+            const response = await apiClient.get('/api/categories');
             setCategories(response.data);
         } catch (error) {
             console.error('Error fetching categories:', error);
@@ -76,9 +76,9 @@ const Categories: React.FC = () => {
         setSaving(true);
         try {
             if (editingCategory) {
-                await axios.put(`http://localhost:5001/api/categories/${editingCategory._id}`, formData);
+                await apiClient.put(`/api/categories/${editingCategory._id}`, formData);
             } else {
-                await axios.post('http://localhost:5001/api/categories', formData);
+                await apiClient.post('/api/categories', formData);
             }
             await fetchCategories();
             handleCloseModal();
@@ -96,7 +96,7 @@ const Categories: React.FC = () => {
         }
         setDeleting(id);
         try {
-            await axios.delete(`http://localhost:5001/api/categories/${id}`);
+            await apiClient.delete(`/api/categories/${id}`);
             await fetchCategories();
         } catch (error: any) {
             console.error('Error deleting category:', error);

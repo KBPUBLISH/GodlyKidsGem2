@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useParams } from 'react-router-dom';
-import axios from 'axios';
+import { apiClient, getMediaUrl, getApiUrl } from '../services/apiClient';
 import {
     Save,
     Image as ImageIcon,
@@ -75,7 +75,7 @@ const PageEditor: React.FC = () => {
         const fetchPages = async () => {
             if (!bookId) return;
             try {
-                const res = await axios.get(`http://localhost:5001/api/pages/book/${bookId}`);
+                const res = await apiClient.get(`/api/pages/book/${bookId}`);
                 setExistingPages(res.data);
 
                 // Auto-set page number to next available
@@ -150,9 +150,7 @@ const PageEditor: React.FC = () => {
     // Helper to resolve image URLs
     const resolveUrl = (url?: string) => {
         if (!url) return '';
-        if (url.startsWith('http')) return url;
-        if (url.startsWith('/uploads')) return `http://localhost:5001${url}`;
-        return url;
+        return getMediaUrl(url);
     };
 
     // Load existing page for editing
@@ -345,7 +343,7 @@ const PageEditor: React.FC = () => {
                 const formData = new FormData();
                 formData.append('file', backgroundFile);
                 const endpoint = backgroundType === 'image' ? '/api/upload/image' : '/api/upload/video';
-                const res = await axios.post(`http://localhost:5001${endpoint}`, formData, {
+                const res = await apiClient.post(endpoint, formData, {
                     headers: { 'Content-Type': 'multipart/form-data' },
                 });
                 backgroundUrl = res.data.url;
@@ -360,7 +358,7 @@ const PageEditor: React.FC = () => {
             if (scrollFile) {
                 const formData = new FormData();
                 formData.append('file', scrollFile);
-                const res = await axios.post('http://localhost:5001/api/upload/image', formData, {
+                const res = await apiClient.post('/api/upload/image', formData, {
                     headers: { 'Content-Type': 'multipart/form-data' },
                 });
                 scrollUrl = res.data.url;
@@ -380,9 +378,9 @@ const PageEditor: React.FC = () => {
 
             // Use PUT to update existing page, POST to create new
             if (editingPageId) {
-                await axios.put(`http://localhost:5001/api/pages/${editingPageId}`, payload);
+                await apiClient.put(`/api/pages/${editingPageId}`, payload);
                 // Refresh pages list
-                const res = await axios.get(`http://localhost:5001/api/pages/book/${bookId}`);
+                const res = await apiClient.get(`/api/pages/book/${bookId}`);
                 setExistingPages(res.data);
 
                 // Reload the updated page into the editor to keep state in sync
@@ -393,10 +391,10 @@ const PageEditor: React.FC = () => {
 
                 alert('Page updated successfully!');
             } else {
-                await axios.post('http://localhost:5001/api/pages', payload);
+                await apiClient.post('/api/pages', payload);
 
                 // Refresh pages list
-                const res = await axios.get(`http://localhost:5001/api/pages/book/${bookId}`);
+                const res = await apiClient.get(`/api/pages/book/${bookId}`);
                 setExistingPages(res.data);
 
                 // If this is page 1 and no template exists, ask if user wants to create one

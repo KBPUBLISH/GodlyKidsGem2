@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import axios from 'axios';
+import { apiClient, getMediaUrl } from '../services/apiClient';
 import { ChevronLeft, ChevronRight, X } from 'lucide-react';
 
 interface TextBox {
@@ -46,7 +46,7 @@ const BookReader: React.FC = () => {
         const fetchPages = async () => {
             if (!bookId) return;
             try {
-                const res = await axios.get(`http://localhost:5001/api/pages/book/${bookId}`);
+                const res = await apiClient.get(`/api/pages/book/${bookId}`);
                 setPages(res.data);
             } catch (err) {
                 console.error('Failed to fetch pages:', err);
@@ -81,9 +81,7 @@ const BookReader: React.FC = () => {
 
     const resolveUrl = (url?: string) => {
         if (!url) return '';
-        if (url.startsWith('http')) return url;
-        if (url.startsWith('/uploads')) return `http://localhost:5001${url}`;
-        return url;
+        return getMediaUrl(url);
     };
 
     if (loading) {

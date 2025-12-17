@@ -350,6 +350,11 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   // --- PERSISTENCE EFFECT ---
   useEffect(() => {
+    // Skip persistence if we're in the middle of a reset/signout
+    if (isResetting.current) {
+      return;
+    }
+    
     const stateToSave = {
       coins,
       coinTransactions,
@@ -682,6 +687,9 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   // Track if this is the initial mount to avoid unnecessary saves
   const isInitialMount = useRef(true);
+  
+  // Flag to prevent persistence effect from writing after signout/reset
+  const isResetting = useRef(false);
 
   // Auto-save avatar changes to current profile (with debounce to avoid excessive saves)
   useEffect(() => {
@@ -978,13 +986,20 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, [currentProfileId, equippedAvatar, parentAvatarData]);
 
   const resetUser = () => {
+    // Set flag to prevent persistence effect from writing during reset
+    isResetting.current = true;
+    
+    // Reset all in-memory state to defaults
     setCoins(500); // New users start with 500 gold coins
     setCoinTransactions([]);
     setRedeemedCodes([]);
     setOwnedItems(['f1', 'anim1']);
     setUnlockedVoices([]);
-    setParentName('');
+    setParentName(''); // Empty string signals no user data
     setKids([]);
+    setCurrentProfileId(null); // Reset to parent profile
+    setParentAvatarData(null); // Clear parent avatar cache
+    setParentEconomyData(null); // Clear parent economy cache
     setEquippedAvatar('head-toast');
     setEquippedFrame('border-[#8B4513]');
     setEquippedHat(null);
@@ -1010,6 +1025,8 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setHatScale(1);
     setSavedCharacters([]);
     setIsSubscribed(false);
+    
+    // Clear the main storage key
     localStorage.removeItem(STORAGE_KEY);
     
     // Clear all progress-related data for a fresh start

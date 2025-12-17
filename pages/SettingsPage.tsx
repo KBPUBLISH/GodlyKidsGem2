@@ -16,7 +16,7 @@ import ParentGateModal from '../components/features/ParentGateModal';
 
 const SettingsPage: React.FC = () => {
   const navigate = useNavigate();
-  const { isSubscribed, isVoiceUnlocked, setIsSubscribed } = useUser();
+  const { isSubscribed, isVoiceUnlocked, setIsSubscribed, resetUser } = useUser();
   const { sfxEnabled, toggleSfx, playBack } = useAudio();
   const { currentLanguage, setLanguage, supportedLanguages, isTranslating, t } = useLanguage();
   const [clonedVoices, setClonedVoices] = useState<ClonedVoice[]>([]);
@@ -568,15 +568,20 @@ const SettingsPage: React.FC = () => {
             {/* Logout */}
             <button 
                 onClick={() => {
-                    // Clear all user data
-                    localStorage.removeItem('godly_kids_data_v6');
+                    // IMPORTANT: Reset in-memory state FIRST to prevent persistence effect
+                    // from immediately re-writing data to localStorage
+                    resetUser();
+                    
+                    // Clear additional user data not handled by resetUser
                     localStorage.removeItem('godlykids_app_language');
                     localStorage.removeItem('godlykids_reader_language');
                     // Clear subscription/identity data to prevent cross-account leakage
                     localStorage.removeItem('godlykids_user_email');
                     localStorage.removeItem('godlykids_premium');
                     localStorage.removeItem('godlykids_device_id');
-                    // Sign out from auth service
+                    localStorage.removeItem('godlykids_user');
+                    localStorage.removeItem('device_id');
+                    // Sign out from auth service (clears token and user)
                     authService.signOut();
                     // Navigate to landing page
                     navigate('/', { replace: true });

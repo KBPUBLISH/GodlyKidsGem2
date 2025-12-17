@@ -12,6 +12,24 @@ if (!(window as any).__GK_APP_BOOTED__) {
   (window as any).__GK_APP_BOOTED__ = true;
   console.log('🚀 APP BOOT (WebView created)', new Date().toISOString());
 
+  // DeSpia wrapper can launch the app with OneSignal "push open" query params.
+  // In a WKWebView wrapper these can trigger unstable OneSignal web SDK flows.
+  // Strip them immediately so routing is stable.
+  try {
+    const ua = navigator.userAgent || '';
+    const isCustomAppUA = /despia/i.test(ua);
+    if (isCustomAppUA) {
+      const url = new URL(window.location.href);
+      const before = url.toString();
+      Array.from(url.searchParams.keys()).forEach((k) => {
+        if (/^onesignal/i.test(k) || /^idcc/i.test(k)) url.searchParams.delete(k);
+      });
+      if (url.toString() !== before) {
+        window.history.replaceState({}, '', url.toString());
+      }
+    }
+  } catch {}
+
   // Capture resource load failures (chunk/script/css) which often show as "Script error."
   try {
     window.addEventListener(
@@ -56,7 +74,8 @@ if (!(window as any).__GK_APP_BOOTED__) {
       (navigator as any).standalone === true;
     const isCustomAppUA = /despia/i.test(ua);
 
-    if (isIOS && (isStandalone || isCustomAppUA) && 'serviceWorker' in navigator) {
+    // IMPORTANT: DeSpia UA may not contain "iPhone", so don't gate this on isIOS for custom UA.
+    if (((isIOS && isStandalone) || isCustomAppUA) && 'serviceWorker' in navigator) {
       navigator.serviceWorker.getRegistrations?.().then((regs) => {
         regs?.forEach((reg) => {
           const scriptURL = (reg as any)?.active?.scriptURL || '';

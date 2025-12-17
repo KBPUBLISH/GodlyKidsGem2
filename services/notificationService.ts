@@ -19,12 +19,17 @@ const shouldDisableOneSignal = (): boolean => {
       (navigator as any).standalone === true;
     const isCustomAppUA = /despia/i.test(ua);
 
+    // Always disable the OneSignal *web* SDK inside our native wrapper UA.
+    // Notifications should be handled by the native wrapper (OneSignal iOS SDK),
+    // and the web SDK can crash or behave unpredictably in WKWebView.
+    if (isCustomAppUA) return true;
+
     // If push isn't supported, don't initialize.
     const pushSupported = 'serviceWorker' in navigator && 'PushManager' in window;
     if (!pushSupported) return true;
 
     // Disable on iOS standalone (most crash-prone) and on our custom app UA.
-    if (isIOS && (isStandalone || isCustomAppUA)) return true;
+    if (isIOS && isStandalone) return true;
 
     return false;
   } catch {

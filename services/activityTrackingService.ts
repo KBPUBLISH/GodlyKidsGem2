@@ -29,21 +29,34 @@ class ActivityTrackingService {
 
   // Initialize time tracking when app starts
   startTimeTracking(): void {
-    this.sessionStartTime = Date.now();
-    this.lastActiveTime = Date.now();
-    
-    // Update time every minute while app is active
-    if (this.timeTrackingInterval) {
-      clearInterval(this.timeTrackingInterval);
-    }
-    
-    this.timeTrackingInterval = setInterval(() => {
-      this.updateTimeSpent();
-    }, 60000); // Every minute
-    
-    // Also listen for visibility changes
-    if (typeof document !== 'undefined') {
-      document.addEventListener('visibilitychange', this.handleVisibilityChange);
+    try {
+      this.sessionStartTime = Date.now();
+      this.lastActiveTime = Date.now();
+      
+      // Update time every minute while app is active
+      if (this.timeTrackingInterval) {
+        clearInterval(this.timeTrackingInterval);
+      }
+      
+      this.timeTrackingInterval = setInterval(() => {
+        try {
+          this.updateTimeSpent();
+        } catch (e) {
+          console.error('Activity tracking update error:', e);
+        }
+      }, 60000); // Every minute
+      
+      // Also listen for visibility changes (but be defensive)
+      if (typeof document !== 'undefined') {
+        try {
+          document.removeEventListener('visibilitychange', this.handleVisibilityChange);
+          document.addEventListener('visibilitychange', this.handleVisibilityChange);
+        } catch (e) {
+          console.error('Visibility listener error:', e);
+        }
+      }
+    } catch (e) {
+      console.error('Activity tracking start error:', e);
     }
   }
 

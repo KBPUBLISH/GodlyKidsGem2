@@ -196,11 +196,22 @@ const HomePage: React.FC = () => {
 
   // Check if we should show the review prompt (immediately on home page)
   useEffect(() => {
+    // Skip in DeSpia to reduce crash surface
+    const isDespia = /despia/i.test(navigator.userAgent);
+    if (isDespia) {
+      console.log('⏭️ Skipping review prompt in DeSpia wrapper');
+      return;
+    }
+    
     // Short delay to let the page render first
     const timer = setTimeout(() => {
-      if (shouldShowReviewPrompt()) {
-        console.log('🌟 Showing review prompt on home page!');
-        setShowReviewPrompt(true);
+      try {
+        if (shouldShowReviewPrompt()) {
+          console.log('🌟 Showing review prompt on home page!');
+          setShowReviewPrompt(true);
+        }
+      } catch (e) {
+        console.error('Review prompt error:', e);
       }
     }, 1000); // 1 second delay after page load
     

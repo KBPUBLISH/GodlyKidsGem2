@@ -1504,11 +1504,11 @@ const BookReaderPage: React.FC = () => {
                     console.warn(`⚠️ No translation available for ${currentLang}, using original text with multilingual TTS`);
                 }
                 
-                const processedText = processTextWithEmotionalCues(textToSpeak);
+                const processed = processTextWithEmotionalCues(textToSpeak);
                 // For non-English, strip emotional cues (multilingual model doesn't support them)
                 const ttsText = currentLang !== 'en' 
                     ? removeEmotionalCues(textToSpeak) 
-                    : processedText.ttsText;
+                    : processed.processedText;
                     
                 console.log(`🎤 Generating TTS for page ${actualPageIndex + 1}, text box ${index + 1} (lang: ${currentLang})${isUsingTranslation ? ' [TRANSLATED]' : ''}`);
                 console.log(`📝 Text to speak: "${ttsText.substring(0, 80)}..."`);

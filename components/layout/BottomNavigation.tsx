@@ -186,28 +186,24 @@ const BottomNavigation: React.FC = () => {
               <div className="absolute -bottom-2 left-1/2 -translate-x-1/2 w-0 h-0 border-l-[8px] border-l-transparent border-r-[8px] border-r-transparent border-t-[8px] border-t-[#FFD700]"></div>
             </div>
             
-            {/* Animated Finger */}
+            {/* Animated Hand Icon - Simple curved arrow */}
             <div className="relative">
               <svg 
                 viewBox="0 0 64 64" 
-                className="w-16 h-16 animate-wheel-hint drop-shadow-lg"
+                className="w-14 h-14 animate-wheel-hint drop-shadow-lg"
               >
-                {/* Hand pointing */}
-                <g transform="rotate(-30 32 32)">
-                  {/* Finger */}
-                  <ellipse cx="32" cy="20" rx="8" ry="14" fill="#FFDAB9" stroke="#D2691E" strokeWidth="1.5"/>
-                  {/* Knuckle */}
-                  <ellipse cx="32" cy="32" rx="10" ry="8" fill="#FFDAB9" stroke="#D2691E" strokeWidth="1.5"/>
-                  {/* Palm hint */}
-                  <ellipse cx="32" cy="42" rx="14" ry="10" fill="#FFDAB9" stroke="#D2691E" strokeWidth="1.5"/>
-                  {/* Fingernail */}
-                  <ellipse cx="32" cy="10" rx="5" ry="4" fill="#FFE4C4" stroke="#D2691E" strokeWidth="0.5"/>
+                {/* Simple curved rotation arrow */}
+                <g fill="none" stroke="#FFD700" strokeWidth="4" strokeLinecap="round">
+                  {/* Curved arrow path */}
+                  <path d="M 20 32 A 14 14 0 1 1 44 32" />
+                  {/* Arrow head */}
+                  <path d="M 40 24 L 44 32 L 36 32" strokeLinejoin="round" />
                 </g>
               </svg>
               
               {/* Circular motion indicator */}
               <div className="absolute inset-0 flex items-center justify-center">
-                <div className="w-20 h-20 border-2 border-dashed border-[#FFD700]/50 rounded-full animate-spin-slow"></div>
+                <div className="w-16 h-16 border-2 border-dashed border-[#FFD700]/40 rounded-full animate-spin-slow"></div>
               </div>
             </div>
             

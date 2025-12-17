@@ -40,6 +40,7 @@ const PageEditor: React.FC = () => {
     const [backgroundFile, setBackgroundFile] = useState<File | null>(null);
     const [scrollFile, setScrollFile] = useState<File | null>(null);
     const [scrollHeight, setScrollHeight] = useState<number>(33); // Percentage: 30%, 33%, 50%, 60%
+    const [soundEffectFile, setSoundEffectFile] = useState<File | null>(null);
     const [textBoxes, setTextBoxes] = useState<TextBox[]>([]);
     const [loading, setLoading] = useState(false);
     const [enhancingText, setEnhancingText] = useState(false);
@@ -47,6 +48,8 @@ const PageEditor: React.FC = () => {
     // Previews
     const [backgroundPreview, setBackgroundPreview] = useState<string | null>(null);
     const [scrollPreview, setScrollPreview] = useState<string | null>(null);
+    const [soundEffectPreview, setSoundEffectPreview] = useState<string | null>(null);
+    const [soundEffectFilename, setSoundEffectFilename] = useState<string | null>(null);
 
     // UI State
     const [selectedBoxId, setSelectedBoxId] = useState<string | null>(null);
@@ -251,6 +254,19 @@ const PageEditor: React.FC = () => {
         console.log('📏 Scroll height:', savedScrollHeight);
         setScrollHeight(savedScrollHeight || 33);
 
+        // Load sound effect if exists
+        const soundEffectUrl = page.soundEffectUrl || page.files?.soundEffect?.url;
+        const soundEffectName = page.files?.soundEffect?.filename;
+        console.log('🔊 Sound effect URL:', soundEffectUrl);
+        if (soundEffectUrl) {
+            setSoundEffectPreview(resolveUrl(soundEffectUrl));
+            setSoundEffectFilename(soundEffectName || 'Sound Effect');
+            setSoundEffectFile(null);
+        } else {
+            setSoundEffectPreview(null);
+            setSoundEffectFilename(null);
+        }
+
         // Load text boxes with IDs for editing
         // IMPORTANT: Check content.textBoxes FIRST (where data actually lives), 
         // then fall back to root textBoxes only if content.textBoxes is empty/missing
@@ -293,6 +309,9 @@ const PageEditor: React.FC = () => {
         setBackgroundPreview(null);
         setScrollFile(null);
         setScrollHeight(33); // Reset to default
+        setSoundEffectFile(null);
+        setSoundEffectPreview(null);
+        setSoundEffectFilename(null);
         setSelectedBoxId(null);
 
         // Apply template if it exists
@@ -457,6 +476,21 @@ const PageEditor: React.FC = () => {
                 scrollUrl = res.data.url;
             }
 
+            // Upload sound effect - include bookId and pageNumber for proper GCS path
+            let soundEffectUrl = '';
+            if (soundEffectPreview && soundEffectPreview.startsWith('http')) {
+                soundEffectUrl = soundEffectPreview;
+            }
+
+            if (soundEffectFile) {
+                const formData = new FormData();
+                formData.append('file', soundEffectFile);
+                const res = await apiClient.post(`/api/upload/sound-effect?bookId=${bookId}&pageNumber=${pageNumber}`, formData, {
+                    headers: { 'Content-Type': 'multipart/form-data' },
+                });
+                soundEffectUrl = res.data.url;
+            }
+
             const payload = {
                 bookId,
                 pageNumber,
@@ -465,6 +499,7 @@ const PageEditor: React.FC = () => {
                 scrollUrl,
                 scrollHeight,
                 scrollMidHeight: scrollHeight, // Store as scrollMidHeight for app compatibility
+                soundEffectUrl, // Sound effect bubble audio
                 textBoxes: textBoxes.map(({ id, ...rest }) => rest), // Remove ID before sending
             };
 
@@ -697,6 +732,75 @@ const PageEditor: React.FC = () => {
                             >
                                 Remove Scroll Overlay
                             </button>
+                        )}
+                    </div>
+
+                    <hr className="border-gray-100" />
+
+                    {/* Sound Effect Bubble */}
+                    <div className="space-y-3">
+                        <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                            Sound Effect Bubble
+                        </label>
+                        <p className="text-xs text-gray-400">
+                            Audio that plays when user taps the bubble
+                        </p>
+                        <div className="relative group">
+                            <input
+                                type="file"
+                                accept="audio/*"
+                                className="hidden"
+                                id="soundeffect-upload"
+                                onChange={e => {
+                                    const file = e.target.files?.[0];
+                                    if (file) {
+                                        setSoundEffectFile(file);
+                                        setSoundEffectPreview(URL.createObjectURL(file));
+                                        setSoundEffectFilename(file.name);
+                                    }
+                                }}
+                            />
+                            <label
+                                htmlFor="soundeffect-upload"
+                                className="flex items-center justify-center w-full py-3 border-2 border-dashed border-gray-300 rounded-lg cursor-pointer hover:border-green-400 hover:bg-green-50 transition"
+                            >
+                                {soundEffectPreview ? (
+                                    <div className="flex items-center gap-2 text-green-600">
+                                        <Music className="w-5 h-5" />
+                                        <span className="text-xs font-medium truncate max-w-[150px]">
+                                            {soundEffectFilename || 'Sound Effect'}
+                                        </span>
+                                    </div>
+                                ) : (
+                                    <div className="text-center text-gray-400">
+                                        <Music className="w-6 h-6 mx-auto mb-1" />
+                                        <span className="text-xs">Upload Sound Effect</span>
+                                    </div>
+                                )}
+                            </label>
+                        </div>
+                        
+                        {/* Preview/Play Button */}
+                        {soundEffectPreview && (
+                            <div className="space-y-2">
+                                <audio 
+                                    src={soundEffectPreview} 
+                                    controls 
+                                    className="w-full h-8"
+                                    style={{ height: '32px' }}
+                                />
+                                <button
+                                    type="button"
+                                    onClick={() => {
+                                        setSoundEffectFile(null);
+                                        setSoundEffectPreview(null);
+                                        setSoundEffectFilename(null);
+                                    }}
+                                    className="w-full py-2 text-xs text-red-600 hover:bg-red-50 rounded-lg transition"
+                                >
+                                    Remove Sound Effect
+                                </button>
+                            </div>
                         )}
                     </div>
 
@@ -958,6 +1062,26 @@ const PageEditor: React.FC = () => {
                         </div>
                         );
                     })}
+
+                    {/* Sound Effect Bubble Preview */}
+                    {soundEffectPreview && (
+                        <div
+                            className="absolute z-30 cursor-pointer"
+                            style={{
+                                right: '15%',
+                                top: '15%',
+                                animation: 'float 3s ease-in-out infinite'
+                            }}
+                            title="Sound Effect Bubble - will appear at random position in app"
+                        >
+                            <div className="w-16 h-16 bg-gradient-to-br from-yellow-300 to-orange-400 rounded-full shadow-lg flex items-center justify-center border-4 border-white/50 hover:scale-110 transition-transform">
+                                <Music className="w-8 h-8 text-white drop-shadow" />
+                            </div>
+                            <p className="text-xs text-white text-center mt-1 bg-black/50 rounded px-1">
+                                Tap to play
+                            </p>
+                        </div>
+                    )}
 
                     {/* Empty State Hint */}
                     {!backgroundPreview && (

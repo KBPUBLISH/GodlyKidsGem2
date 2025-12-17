@@ -47,6 +47,86 @@ if (!(window as any).__GK_APP_BOOTED__) {
         } catch {}
       }
     });
+    
+    // DESPIA FIX: Add focusin/focusout handlers for proper state reconstruction
+    // These have full WebKit WebView support and help prevent race conditions with React Router
+    // when the app returns from background in Despia
+    if (isDespia) {
+      let focusDebounceTimer: ReturnType<typeof setTimeout> | null = null;
+      let lastFocusState: 'in' | 'out' | null = null;
+      
+      // Track focus state to detect when app is regaining focus
+      (window as any).__GK_FOCUS_STATE__ = 'unknown';
+      
+      document.addEventListener('focusin', (e) => {
+        // Debounce rapid focusin events
+        if (focusDebounceTimer) clearTimeout(focusDebounceTimer);
+        
+        focusDebounceTimer = setTimeout(() => {
+          if (lastFocusState === 'out') {
+            // App is regaining focus after being unfocused
+            console.log('📱 Despia focusin: App regained focus');
+            trace('despia_focusin', { target: (e.target as HTMLElement)?.tagName || 'unknown' });
+            (window as any).__GK_FOCUS_STATE__ = 'in';
+            
+            // Signal to React components that they should reconstruct state
+            // This helps prevent race conditions with React Router
+            (window as any).__GK_FOCUS_RESTORED_AT__ = Date.now();
+            
+            // Dispatch a custom event that components can listen for
+            try {
+              window.dispatchEvent(new CustomEvent('gk:focusrestored', { 
+                detail: { timestamp: Date.now() } 
+              }));
+            } catch {}
+          }
+          lastFocusState = 'in';
+        }, 50); // Small debounce to prevent rapid firing
+      });
+      
+      document.addEventListener('focusout', (e) => {
+        // Only track if focus is truly leaving the document
+        // (not just moving between elements)
+        if (focusDebounceTimer) clearTimeout(focusDebounceTimer);
+        
+        focusDebounceTimer = setTimeout(() => {
+          // Check if focus is still within the document
+          if (!document.hasFocus()) {
+            console.log('📱 Despia focusout: App lost focus');
+            trace('despia_focusout', { target: (e.target as HTMLElement)?.tagName || 'unknown' });
+            (window as any).__GK_FOCUS_STATE__ = 'out';
+            lastFocusState = 'out';
+            
+            // Store the current route so we can restore it properly
+            try {
+              const currentHash = window.location.hash || '#/home';
+              localStorage.setItem('gk_last_route', currentHash);
+            } catch {}
+          }
+        }, 100); // Longer debounce for focusout to ensure it's a real app blur
+      });
+      
+      // Also handle window blur/focus as backup
+      window.addEventListener('blur', () => {
+        trace('despia_window_blur');
+        (window as any).__GK_FOCUS_STATE__ = 'out';
+        lastFocusState = 'out';
+      });
+      
+      window.addEventListener('focus', () => {
+        trace('despia_window_focus');
+        if (lastFocusState === 'out') {
+          (window as any).__GK_FOCUS_STATE__ = 'in';
+          (window as any).__GK_FOCUS_RESTORED_AT__ = Date.now();
+          try {
+            window.dispatchEvent(new CustomEvent('gk:focusrestored', { 
+              detail: { timestamp: Date.now() } 
+            }));
+          } catch {}
+        }
+        lastFocusState = 'in';
+      });
+    }
   } catch {}
 
   // Crash recovery: detect if we crashed recently and are in a crash loop
@@ -501,6 +581,13 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   useEffect(() => {
     try {
       (window as any).__GK_TRACE__?.('route_change', { path: location.pathname, hash: location.hash, search: location.search });
+      
+      // DESPIA FIX: Save current route for restoration after soft-close/reopen
+      // This allows us to restore the user to their last location when the app returns from background
+      if ((window as any).__GK_IS_DESPIA__ && location.pathname && location.pathname !== '/') {
+        const routeToSave = `#${location.pathname}${location.search || ''}`;
+        localStorage.setItem('gk_last_route', routeToSave);
+      }
     } catch {}
   }, [location.pathname, location.hash, location.search]);
   const isLanding = location.pathname === '/';
@@ -542,6 +629,48 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
 const App: React.FC = () => {
   // Check if we're in DeSpia wrapper - if so, skip risky initializations
   const isDespia = DespiaService.isNative();
+
+  // DESPIA FIX: Handle focus restoration to prevent race conditions with React Router
+  // When the app regains focus after being in background, we need to ensure React
+  // state is properly reconstructed before any routing or state updates happen
+  useEffect(() => {
+    if (!isDespia) return;
+    
+    const handleFocusRestored = (e: Event) => {
+      const detail = (e as CustomEvent).detail;
+      console.log('📱 Despia: Focus restored, ensuring state consistency', detail);
+      
+      // Mark that we're in focus restoration mode - prevents other handlers
+      // from causing issues during the transition
+      (window as any).__GK_FOCUS_RESTORING__ = true;
+      
+      // Small delay to let React complete any pending updates
+      setTimeout(() => {
+        (window as any).__GK_FOCUS_RESTORING__ = false;
+        
+        // Verify the current route is valid
+        try {
+          const currentHash = window.location.hash;
+          const lastRoute = localStorage.getItem('gk_last_route');
+          
+          // If hash is empty or malformed, restore to last known good route
+          if (!currentHash || currentHash === '#' || currentHash === '#/') {
+            const targetRoute = lastRoute || '#/home';
+            console.log('📱 Despia: Restoring route to:', targetRoute);
+            window.location.hash = targetRoute;
+          }
+        } catch {}
+        
+        // Dispatch event to notify components focus restoration is complete
+        try {
+          window.dispatchEvent(new CustomEvent('gk:focusrestorecomplete'));
+        } catch {}
+      }, 100);
+    };
+    
+    window.addEventListener('gk:focusrestored', handleFocusRestored);
+    return () => window.removeEventListener('gk:focusrestored', handleFocusRestored);
+  }, [isDespia]);
 
   // Link user ID to DeSpia native OneSignal SDK on app boot (if already logged in)
   useEffect(() => {

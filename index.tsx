@@ -26,19 +26,41 @@ import App from './App';
         needsUpdate = true;
       });
       
-      // 2. Ensure hash exists for HashRouter (default to #/home if missing)
-      if (!url.hash || url.hash === '#' || url.hash === '#/') {
-        url.hash = '#/home';
+      // 2. Check if this is a focus restoration after soft-close
+      // If so, try to restore the last known route
+      let targetHash = url.hash;
+      const lastHiddenTs = parseInt(localStorage.getItem('gk_last_hidden_ts') || '0', 10);
+      const timeSinceHidden = Date.now() - lastHiddenTs;
+      const isReturningFromBackground = lastHiddenTs > 0 && timeSinceHidden < 10000; // Within 10 seconds
+      
+      if (isReturningFromBackground) {
+        const lastRoute = localStorage.getItem('gk_last_route');
+        console.log('📱 Despia: Returning from background, last route:', lastRoute);
+        
+        // If current hash is empty/default but we have a saved route, restore it
+        if ((!url.hash || url.hash === '#' || url.hash === '#/') && lastRoute) {
+          targetHash = lastRoute;
+          console.log('📱 Despia: Restoring to saved route:', targetHash);
+        }
+      }
+      
+      // 3. Ensure hash exists for HashRouter (default to #/home if missing)
+      if (!targetHash || targetHash === '#' || targetHash === '#/') {
+        targetHash = '#/home';
+      }
+      
+      // 4. Remove trailing slashes from hash (but keep #/home not #/home/)
+      if (targetHash.length > 2 && targetHash.endsWith('/')) {
+        targetHash = targetHash.slice(0, -1);
+      }
+      
+      // 5. Apply changes if needed
+      if (url.hash !== targetHash || paramsToRemove.length > 0) {
+        url.hash = targetHash;
         needsUpdate = true;
       }
       
-      // 3. Remove trailing slashes from hash (but keep #/home not #/home/)
-      if (url.hash.length > 2 && url.hash.endsWith('/')) {
-        url.hash = url.hash.slice(0, -1);
-        needsUpdate = true;
-      }
-      
-      // 4. Apply URL changes BEFORE React mounts (sync, no history manipulation during render)
+      // 6. Apply URL changes BEFORE React mounts (sync, no history manipulation during render)
       if (needsUpdate) {
         console.log('🔧 URL normalized before React mount:', url.toString());
         window.history.replaceState(null, '', url.toString());

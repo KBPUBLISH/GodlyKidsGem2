@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { X, Coins, Gift, BookOpen, Gamepad2, Calendar, Users, ShoppingBag, TrendingUp, TrendingDown, Share2, Copy, Check, Sparkles, Mic, User, ArrowRight } from 'lucide-react';
+import { X, Coins, Gift, BookOpen, Gamepad2, Calendar, Users, ShoppingBag, TrendingUp, TrendingDown, Share2, Copy, Check, Sparkles, Mic, User, ArrowRight, Loader2 } from 'lucide-react';
 import { useUser, CoinTransaction } from '../../context/UserContext';
+import { getApiBaseUrl } from '../../services/apiService';
+import { authService } from '../../services/authService';
 
 interface CoinHistoryModalProps {
   isOpen: boolean;
@@ -91,7 +93,7 @@ const CoinHistoryModal: React.FC<CoinHistoryModalProps> = ({ isOpen, onClose, on
   const handleShare = async () => {
     const shareData = {
       title: 'Join Godly Kids! 🌟',
-      text: `Hey! Use my special code ${referralCode} when you join Godly Kids and we BOTH get 100 gold coins! 🪙✨`,
+      text: `Hey! Use my special code ${referralCode} when you join Godly Kids and we BOTH get 500 gold coins! 🪙✨`,
       url: 'https://app.godlykids.com',
     };
     
@@ -106,12 +108,51 @@ const CoinHistoryModal: React.FC<CoinHistoryModalProps> = ({ isOpen, onClose, on
     }
   };
 
-  const handleRedeemCode = () => {
+  const [isRedeeming, setIsRedeeming] = useState(false);
+
+  const handleRedeemCode = async () => {
     if (!codeInput.trim()) {
       setRedeemMessage({ type: 'error', text: 'Please enter a code!' });
       return;
     }
     
+    setIsRedeeming(true);
+    
+    try {
+      // Get user ID for backend API call
+      const user = authService.getUser();
+      const userId = user?._id || user?.id || localStorage.getItem('godlykids_user_email') || localStorage.getItem('device_id');
+      
+      if (userId) {
+        // Try backend API first (awards coins to both users + sends notification)
+        const baseUrl = getApiBaseUrl();
+        const response = await fetch(`${baseUrl}referrals/redeem`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ userId, codeToRedeem: codeInput })
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+          // Also update local state to reflect the coins
+          redeemCode(codeInput); // This updates local state
+          setRedeemMessage({ type: 'success', text: data.message || '🎉 You earned 500 gold coins!' });
+          setCodeInput('');
+          setTimeout(() => setRedeemMessage(null), 3000);
+          setIsRedeeming(false);
+          return;
+        } else {
+          setRedeemMessage({ type: 'error', text: data.message || 'Invalid code' });
+          setIsRedeeming(false);
+          return;
+        }
+      }
+    } catch (error) {
+      console.warn('Backend referral API failed, falling back to local:', error);
+    }
+    
+    // Fallback to local redemption if backend fails
     const result = redeemCode(codeInput);
     setRedeemMessage({ 
       type: result.success ? 'success' : 'error', 
@@ -122,6 +163,8 @@ const CoinHistoryModal: React.FC<CoinHistoryModalProps> = ({ isOpen, onClose, on
       setCodeInput('');
       setTimeout(() => setRedeemMessage(null), 3000);
     }
+    
+    setIsRedeeming(false);
   };
 
   if (!isOpen) return null;
@@ -230,7 +273,7 @@ const CoinHistoryModal: React.FC<CoinHistoryModalProps> = ({ isOpen, onClose, on
                   <div>
                     <h3 className="text-white font-bold text-base">Ask Your Parents! 👨‍👩‍👧</h3>
                     <p className="text-white/70 text-xs mt-1">
-                      Share your special code with friends and family. When they join, you BOTH get <span className="text-[#FFD700] font-bold">100 gold coins!</span> Get 5 friends to join and earn <span className="text-[#FFD700] font-bold">500 coins!</span>
+                      Share your special code with friends and family. When they join, you BOTH get <span className="text-[#FFD700] font-bold">500 gold coins!</span>
                     </p>
                   </div>
                 </div>
@@ -291,9 +334,10 @@ const CoinHistoryModal: React.FC<CoinHistoryModalProps> = ({ isOpen, onClose, on
                   />
                   <button
                     onClick={handleRedeemCode}
-                    className="px-4 py-3 bg-green-500 hover:bg-green-600 rounded-xl font-bold text-white transition-all active:scale-[0.98] shrink-0"
+                    disabled={isRedeeming}
+                    className="px-4 py-3 bg-green-500 hover:bg-green-600 rounded-xl font-bold text-white transition-all active:scale-[0.98] shrink-0 disabled:opacity-50 disabled:cursor-not-allowed"
                   >
-                    <ArrowRight className="w-5 h-5" />
+                    {isRedeeming ? <Loader2 className="w-5 h-5 animate-spin" /> : <ArrowRight className="w-5 h-5" />}
                   </button>
                 </div>
                 

@@ -18,7 +18,7 @@ const DRAWING_STORAGE_PREFIX = 'godlykids_coloring_';
 
 /**
  * Composite the user's drawing with the line art into a single image.
- * This ensures they align correctly when displayed at any size.
+ * Both images are scaled using "contain" mode to match the display.
  */
 const createCompositeImage = (
     drawingDataUrl: string,
@@ -37,51 +37,79 @@ const createCompositeImage = (
             if (!drawingLoaded || !lineArtLoaded) return;
             
             try {
-                // Use line art dimensions as the base (this is the "correct" size)
-                const width = lineArtImg.width || 800;
-                const height = lineArtImg.height || 1000;
+                // Use drawing canvas dimensions as the output size (what user sees)
+                const outputWidth = drawingImg.width || 800;
+                const outputHeight = drawingImg.height || 1000;
                 
-                // Create composite canvas
+                // Create composite canvas matching the drawing dimensions
                 const canvas = document.createElement('canvas');
-                canvas.width = width;
-                canvas.height = height;
+                canvas.width = outputWidth;
+                canvas.height = outputHeight;
                 const ctx = canvas.getContext('2d');
                 if (!ctx) {
                     reject(new Error('Could not get canvas context'));
                     return;
                 }
                 
-                // 1. White background
-                ctx.fillStyle = '#FFFFFF';
-                ctx.fillRect(0, 0, width, height);
+                // 1. Draw the user's coloring (full canvas - this IS the background + colors)
+                ctx.drawImage(drawingImg, 0, 0, outputWidth, outputHeight);
                 
-                // 2. Draw the user's coloring (scale to fit, cover mode)
-                const drawingAspect = drawingImg.width / drawingImg.height;
-                const canvasAspect = width / height;
+                // 2. Calculate "contain" scaling for line art to match display
+                const lineArtAspect = lineArtImg.width / lineArtImg.height;
+                const canvasAspect = outputWidth / outputHeight;
                 
-                let drawWidth, drawHeight, drawX, drawY;
-                if (drawingAspect > canvasAspect) {
-                    // Drawing is wider - fit to height, crop sides
-                    drawHeight = height;
-                    drawWidth = height * drawingAspect;
-                    drawX = (width - drawWidth) / 2;
-                    drawY = 0;
+                let lineWidth, lineHeight, lineX, lineY;
+                if (lineArtAspect > canvasAspect) {
+                    // Line art is wider - fit to width
+                    lineWidth = outputWidth;
+                    lineHeight = outputWidth / lineArtAspect;
+                    lineX = 0;
+                    lineY = (outputHeight - lineHeight) / 2;
                 } else {
-                    // Drawing is taller - fit to width, crop top/bottom
-                    drawWidth = width;
-                    drawHeight = width / drawingAspect;
-                    drawX = 0;
-                    drawY = 0; // Align to top
+                    // Line art is taller - fit to height
+                    lineHeight = outputHeight;
+                    lineWidth = outputHeight * lineArtAspect;
+                    lineX = (outputWidth - lineWidth) / 2;
+                    lineY = 0;
                 }
                 
-                ctx.drawImage(drawingImg, drawX, drawY, drawWidth, drawHeight);
-                
-                // 3. Draw line art on top with multiply blend mode
-                ctx.globalCompositeOperation = 'multiply';
-                ctx.drawImage(lineArtImg, 0, 0, width, height);
-                ctx.globalCompositeOperation = 'source-over';
+                // 3. Process line art to extract just the dark lines (make white transparent)
+                const tempCanvas = document.createElement('canvas');
+                tempCanvas.width = lineArtImg.width;
+                tempCanvas.height = lineArtImg.height;
+                const tempCtx = tempCanvas.getContext('2d');
+                if (tempCtx) {
+                    tempCtx.drawImage(lineArtImg, 0, 0);
+                    const imageData = tempCtx.getImageData(0, 0, tempCanvas.width, tempCanvas.height);
+                    const data = imageData.data;
+                    
+                    // Make light pixels transparent, keep dark pixels as lines
+                    for (let i = 0; i < data.length; i += 4) {
+                        const brightness = (data[i] + data[i + 1] + data[i + 2]) / 3;
+                        if (brightness > 200) {
+                            // Light pixel - make transparent
+                            data[i + 3] = 0;
+                        } else {
+                            // Dark pixel - make it black with appropriate alpha
+                            data[i] = 0;
+                            data[i + 1] = 0;
+                            data[i + 2] = 0;
+                            data[i + 3] = Math.min(255, (255 - brightness) * 2);
+                        }
+                    }
+                    tempCtx.putImageData(imageData, 0, 0);
+                    
+                    // 4. Draw processed line art on top (positioned with contain scaling)
+                    ctx.drawImage(tempCanvas, lineX, lineY, lineWidth, lineHeight);
+                } else {
+                    // Fallback: draw line art with multiply blend mode
+                    ctx.globalCompositeOperation = 'multiply';
+                    ctx.drawImage(lineArtImg, lineX, lineY, lineWidth, lineHeight);
+                    ctx.globalCompositeOperation = 'source-over';
+                }
                 
                 // Return as data URL
+                console.log('📸 Composite created:', outputWidth, 'x', outputHeight);
                 resolve(canvas.toDataURL('image/png'));
             } catch (err) {
                 console.error('Error compositing image:', err);
@@ -101,9 +129,9 @@ const createCompositeImage = (
             lineArtLoaded = true;
             tryComposite();
         };
-        lineArtImg.onerror = () => {
-            // If line art fails to load, just use the drawing alone
-            console.warn('Line art failed to load, using drawing only');
+        lineArtImg.onerror = (err) => {
+            // If line art fails to load (CORS), just use the drawing alone
+            console.warn('Line art failed to load (likely CORS), using drawing only:', err);
             resolve(drawingDataUrl);
         };
         

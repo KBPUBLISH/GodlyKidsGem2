@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { X, Coins, Gift, BookOpen, Gamepad2, Calendar, Users, ShoppingBag, TrendingUp, TrendingDown, Share2, Copy, Check, Sparkles, Mic, User, ArrowRight, Loader2 } from 'lucide-react';
 import { useUser, CoinTransaction } from '../../context/UserContext';
 import { authService } from '../../services/authService';
+import { NotificationService } from '../../services/notificationService';
 
 interface CoinHistoryModalProps {
   isOpen: boolean;
@@ -83,10 +84,10 @@ const CoinHistoryModal: React.FC<CoinHistoryModalProps> = ({ isOpen, onClose, on
     };
   }, [isOpen]);
 
-  // Sync referral code to backend when modal opens (so others can redeem it)
+  // Sync referral code and push notification to backend when modal opens
   useEffect(() => {
     if (isOpen && referralCode) {
-      const syncReferralCode = async () => {
+      const syncReferralAndPush = async () => {
         try {
           const user = authService.getUser();
           const userId = user?.email || user?._id || user?.id || localStorage.getItem('godlykids_user_email') || localStorage.getItem('device_id');
@@ -97,17 +98,21 @@ const CoinHistoryModal: React.FC<CoinHistoryModalProps> = ({ isOpen, onClose, on
             ? 'http://localhost:5001' 
             : 'https://backendgk2-0.onrender.com';
           
+          // Sync referral code
           await fetch(`${apiBase}/api/referrals/sync`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ userId, referralCode })
           });
           console.log('✅ Referral code synced to backend:', referralCode);
+          
+          // Also register for push notifications so they can receive referral alerts
+          await NotificationService.registerPushWithBackend(userId);
         } catch (error) {
           console.warn('Failed to sync referral code:', error);
         }
       };
-      syncReferralCode();
+      syncReferralAndPush();
     }
   }, [isOpen, referralCode]);
   
@@ -120,7 +125,7 @@ const CoinHistoryModal: React.FC<CoinHistoryModalProps> = ({ isOpen, onClose, on
   const handleShare = async () => {
     const shareData = {
       title: 'Join Godly Kids! 🌟',
-      text: `Hey! Use my special code ${referralCode} when you join Godly Kids and we BOTH get 500 gold coins! 🪙✨`,
+      text: `Hey! Use my special code ${referralCode} when you join Godly Kids and we BOTH get 250 gold coins! 🪙✨`,
       url: 'https://app.godlykids.com',
     };
     
@@ -167,7 +172,7 @@ const CoinHistoryModal: React.FC<CoinHistoryModalProps> = ({ isOpen, onClose, on
         if (data.success) {
           // Also update local state to reflect the coins
           redeemCode(codeInput); // This updates local state
-          setRedeemMessage({ type: 'success', text: data.message || '🎉 You earned 500 gold coins!' });
+          setRedeemMessage({ type: 'success', text: data.message || '🎉 You earned 250 gold coins!' });
           setCodeInput('');
           setTimeout(() => setRedeemMessage(null), 3000);
           setIsRedeeming(false);
@@ -303,7 +308,7 @@ const CoinHistoryModal: React.FC<CoinHistoryModalProps> = ({ isOpen, onClose, on
                   <div>
                     <h3 className="text-white font-bold text-base">Ask Your Parents! 👨‍👩‍👧</h3>
                     <p className="text-white/70 text-xs mt-1">
-                      Share your special code with friends and family. When they join, you BOTH get <span className="text-[#FFD700] font-bold">500 gold coins!</span>
+                      Share your code with friends! Each friend who uses it earns you BOTH <span className="text-[#FFD700] font-bold">250 gold coins!</span> No limit!
                     </p>
                   </div>
                 </div>

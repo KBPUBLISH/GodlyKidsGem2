@@ -250,6 +250,53 @@ export const NotificationService = {
     } catch (error) {
       console.error('Error opting in:', error);
     }
+  },
+
+  /**
+   * Register push notification player ID with backend for targeted notifications
+   * Call this after user signs in or when referral code is generated
+   */
+  registerPushWithBackend: async (userId: string): Promise<boolean> => {
+    if (!userId) return false;
+    
+    try {
+      let playerId: string | null = null;
+      
+      if (isDespia()) {
+        // In Despia, the player ID is set via native SDK
+        // We can't get it from JS, but the backend will receive it
+        // when Despia calls setonesignalplayerid
+        console.log('📱 Despia detected - player ID set via native SDK');
+        return true;
+      } else {
+        // On web, get player ID from OneSignal web SDK
+        playerId = await NotificationService.getPlayerId();
+      }
+      
+      if (!playerId) {
+        console.log('📵 No player ID available yet (user may not have subscribed to notifications)');
+        return false;
+      }
+      
+      // Register with backend
+      const response = await fetch('https://backendgk2-0.onrender.com/api/referrals/register-push', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId, oneSignalPlayerId: playerId })
+      });
+      
+      const data = await response.json();
+      if (data.success) {
+        console.log('✅ Push notification registered with backend');
+        return true;
+      } else {
+        console.warn('⚠️ Failed to register push with backend:', data.message);
+        return false;
+      }
+    } catch (error) {
+      console.error('Error registering push with backend:', error);
+      return false;
+    }
   }
 };
 

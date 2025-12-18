@@ -535,9 +535,9 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
     
     // Redeem successful!
     setRedeemedCodes(prev => [...prev, normalizedCode]);
-    addCoins(500, `Referral from friend`, 'referral');
+    addCoins(250, `Referral from friend`, 'referral');
     
-    return { success: true, message: "🎉 Awesome! You earned 500 gold coins!" };
+    return { success: true, message: "🎉 Awesome! You earned 250 gold coins!" };
   };
 
   const addKid = (kid: KidProfile) => {

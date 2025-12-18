@@ -82,6 +82,34 @@ const CoinHistoryModal: React.FC<CoinHistoryModalProps> = ({ isOpen, onClose, on
       document.body.removeAttribute('data-modal-open');
     };
   }, [isOpen]);
+
+  // Sync referral code to backend when modal opens (so others can redeem it)
+  useEffect(() => {
+    if (isOpen && referralCode) {
+      const syncReferralCode = async () => {
+        try {
+          const user = authService.getUser();
+          const userId = user?.email || user?._id || user?.id || localStorage.getItem('godlykids_user_email') || localStorage.getItem('device_id');
+          
+          if (!userId) return;
+          
+          const apiBase = window.location.hostname === 'localhost' 
+            ? 'http://localhost:5001' 
+            : 'https://backendgk2-0.onrender.com';
+          
+          await fetch(`${apiBase}/api/referrals/sync`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ userId, referralCode })
+          });
+          console.log('✅ Referral code synced to backend:', referralCode);
+        } catch (error) {
+          console.warn('Failed to sync referral code:', error);
+        }
+      };
+      syncReferralCode();
+    }
+  }, [isOpen, referralCode]);
   
   const handleCopyCode = () => {
     navigator.clipboard.writeText(referralCode);

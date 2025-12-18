@@ -583,27 +583,59 @@ const BookReaderPage: React.FC = () => {
     }, []); // Empty array = only runs on unmount
 
     // Effect: Stop audio when page becomes hidden (user switches tabs/apps)
+    // Book music should NOT play in background - only playlists should do that
     useEffect(() => {
-        const handleVisibilityChange = () => {
-            if (document.hidden) {
-                console.log('📖 Page hidden - stopping book audio');
-                // Stop TTS narration using ref
-                if (currentAudioRef.current) {
-                    currentAudioRef.current.pause();
-                }
-                setPlaying(false);
-                
-                // Stop book background music
-                if (bookBackgroundMusicRef.current) {
-                    bookBackgroundMusicRef.current.pause();
+        const stopBookAudio = () => {
+            console.log('📖 Stopping book audio (app backgrounded)');
+            // Stop TTS narration
+            if (currentAudioRef.current) {
+                currentAudioRef.current.pause();
+            }
+            setPlaying(false);
+            
+            // Stop book background music - should NOT continue in background
+            if (bookBackgroundMusicRef.current) {
+                bookBackgroundMusicRef.current.pause();
+            }
+            
+            // Clear MediaSession to prevent lock screen controls for book music
+            if ('mediaSession' in navigator) {
+                try {
+                    navigator.mediaSession.metadata = null;
+                    navigator.mediaSession.playbackState = 'none';
+                } catch (e) {
+                    // Ignore - some browsers don't support clearing
                 }
             }
         };
 
+        const handleVisibilityChange = () => {
+            if (document.hidden) {
+                stopBookAudio();
+            }
+        };
+
+        // iOS: 'pagehide' fires more reliably than visibilitychange when app is backgrounded
+        const handlePageHide = () => {
+            stopBookAudio();
+        };
+
+        // Additional fallback: 'blur' event on window
+        const handleBlur = () => {
+            // Only stop if document is actually hidden (not just losing focus within app)
+            if (document.hidden) {
+                stopBookAudio();
+            }
+        };
+
         document.addEventListener('visibilitychange', handleVisibilityChange);
+        window.addEventListener('pagehide', handlePageHide);
+        window.addEventListener('blur', handleBlur);
         
         return () => {
             document.removeEventListener('visibilitychange', handleVisibilityChange);
+            window.removeEventListener('pagehide', handlePageHide);
+            window.removeEventListener('blur', handleBlur);
         };
     }, []); // Empty array - event handler uses refs, not stale state
 

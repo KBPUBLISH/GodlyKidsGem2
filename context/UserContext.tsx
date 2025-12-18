@@ -1,5 +1,6 @@
 
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
+import { authService } from '../services/authService';
 // Removed import of KidProfile due to missing export in ../types
 
 export interface ShopItem {
@@ -75,6 +76,7 @@ interface UserContextType {
   addKid: (kid: any) => void;
   updateKid: (id: string, updates: Partial<any>) => void;
   removeKid: (id: string) => void;
+  giftCoinsToKid: (kidId: string, amount: number) => { success: boolean; message: string };
   
   // Active Profile
   currentProfileId: string | null; // null = parent, otherwise kid id
@@ -157,6 +159,7 @@ const UserContext = createContext<UserContextType>({
   addKid: () => {},
   updateKid: () => {},
   removeKid: () => {},
+  giftCoinsToKid: () => ({ success: false, message: '' }),
   equippedAvatar: '',
   equippedFrame: '',
   equippedHat: null,
@@ -358,6 +361,58 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
     unlockedVoices: string[];
     redeemedCodes: string[];
   } | null>(saved?.parentEconomyData ?? null);
+
+  // --- SYNC COINS FROM BACKEND ON APP LOAD ---
+  useEffect(() => {
+    const syncCoinsFromBackend = async () => {
+      try {
+        const user = authService.getUser();
+        const userId = user?.email || user?._id || user?.id || localStorage.getItem('godlykids_user_email') || localStorage.getItem('device_id');
+        
+        if (!userId) {
+          console.log('🔄 No userId available for coin sync');
+          return;
+        }
+        
+        console.log('🔄 Syncing coins from backend for:', userId);
+        
+        const apiBase = window.location.hostname === 'localhost' 
+          ? 'http://localhost:5001' 
+          : 'https://backendgk2-0.onrender.com';
+        
+        const response = await fetch(`${apiBase}/api/referrals/stats/${encodeURIComponent(userId)}`);
+        const data = await response.json();
+        
+        if (data.success && data.stats) {
+          const backendCoins = data.stats.coins || 0;
+          
+          console.log(`🔄 Backend has ${backendCoins} coins, local has ${coins} coins`);
+          
+          // If backend has more coins than local, sync the difference
+          // This happens when friends use your referral code
+          if (backendCoins > coins) {
+            const difference = backendCoins - coins;
+            console.log(`🔄 Syncing ${difference} coins from backend (referral rewards)`);
+            setCoins(backendCoins);
+            setCoinTransactions(prev => [{
+              id: `sync-${Date.now()}`,
+              amount: difference,
+              reason: 'Referral rewards synced',
+              source: 'referral',
+              timestamp: Date.now()
+            }, ...prev]);
+          }
+        }
+      } catch (error) {
+        console.warn('🔄 Failed to sync coins from backend:', error);
+      }
+    };
+    
+    // Only sync if user has a referral code (meaning they've been onboarded)
+    if (referralCode) {
+      syncCoinsFromBackend();
+    }
+  }, [referralCode]); // Only run when referralCode is available (on mount)
 
   // --- PERSISTENCE EFFECT ---
   useEffect(() => {
@@ -570,6 +625,44 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setKids(prev => prev.map(kid => 
       kid.id === id ? { ...kid, ...updates } : kid
     ));
+  };
+
+  // Gift coins from parent wallet to a kid's wallet
+  const giftCoinsToKid = (kidId: string, amount: number): { success: boolean; message: string } => {
+    // Validate amount
+    if (amount <= 0) {
+      return { success: false, message: 'Please enter a valid amount' };
+    }
+    
+    // Check if parent has enough coins
+    if (coins < amount) {
+      return { success: false, message: `You don't have enough coins! You have ${coins} coins.` };
+    }
+    
+    // Find the kid
+    const kid = kids.find(k => k.id === kidId);
+    if (!kid) {
+      return { success: false, message: 'Kid not found' };
+    }
+    
+    // Deduct from parent
+    setCoins(prev => prev - amount);
+    setCoinTransactions(prev => [{
+      id: Date.now().toString(),
+      amount: -amount,
+      reason: `Gift to ${kid.name}`,
+      source: 'other',
+      timestamp: Date.now()
+    }, ...prev]);
+    
+    // Add to kid
+    setKids(prev => prev.map(k => 
+      k.id === kidId 
+        ? { ...k, coins: (k.coins || 0) + amount } 
+        : k
+    ));
+    
+    return { success: true, message: `🎁 Gave ${amount} coins to ${kid.name}!` };
   };
 
   // Helper to get current avatar state
@@ -1104,6 +1197,7 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
       addKid,
       updateKid,
       removeKid,
+      giftCoinsToKid,
       equippedAvatar,
       equippedFrame,
       equippedHat,

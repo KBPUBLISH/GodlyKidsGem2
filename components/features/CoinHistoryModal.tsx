@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { X, Coins, Gift, BookOpen, Gamepad2, Calendar, Users, ShoppingBag, TrendingUp, TrendingDown, Share2, Copy, Check, Sparkles, Mic, User, ArrowRight, Loader2 } from 'lucide-react';
+import { X, Coins, Gift, BookOpen, Gamepad2, Calendar, Users, ShoppingBag, TrendingUp, TrendingDown, Share2, Copy, Check, Sparkles, Mic, User, ArrowRight, Loader2, Heart } from 'lucide-react';
 import { useUser, CoinTransaction } from '../../context/UserContext';
 import { authService } from '../../services/authService';
 import { NotificationService } from '../../services/notificationService';
+import GiftCoinsModal from './GiftCoinsModal';
 
 interface CoinHistoryModalProps {
   isOpen: boolean;
@@ -65,12 +66,13 @@ const formatTimeAgo = (timestamp: number): string => {
 };
 
 const CoinHistoryModal: React.FC<CoinHistoryModalProps> = ({ isOpen, onClose, onOpenShop }) => {
-  const { coins, coinTransactions, referralCode, redeemCode, addCoins } = useUser();
+  const { coins, coinTransactions, referralCode, redeemCode, addCoins, kids } = useUser();
   const [copied, setCopied] = useState(false);
   const [codeInput, setCodeInput] = useState('');
   const [redeemMessage, setRedeemMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [activeTab, setActiveTab] = useState<'earn' | 'history'>('earn');
   const [isSyncing, setIsSyncing] = useState(false);
+  const [showGiftModal, setShowGiftModal] = useState(false);
 
   // Hide BottomNavigation when modal is open
   useEffect(() => {
@@ -432,6 +434,30 @@ const CoinHistoryModal: React.FC<CoinHistoryModalProps> = ({ isOpen, onClose, on
                   </div>
                 </div>
               </div>
+
+              {/* Gift Coins to Kids - Only show if parent has kids */}
+              {kids.length > 0 && (
+                <div className="bg-gradient-to-br from-purple-900/40 to-pink-900/40 rounded-2xl p-4 border border-purple-500/30">
+                  <div className="flex items-center gap-3 mb-3">
+                    <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-purple-400 to-pink-500 flex items-center justify-center shadow-lg">
+                      <Heart className="w-6 h-6 text-white" />
+                    </div>
+                    <div>
+                      <h3 className="text-white font-bold text-base">Gift Coins to Kids 💝</h3>
+                      <p className="text-white/70 text-xs mt-0.5">
+                        Share your coins with your children!
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => setShowGiftModal(true)}
+                    className="w-full py-3 bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 rounded-xl font-bold text-white transition-all active:scale-[0.98] flex items-center justify-center gap-2"
+                  >
+                    <Gift className="w-5 h-5" />
+                    Gift Coins Now
+                  </button>
+                </div>
+              )}
             </div>
           ) : (
             /* History Tab */
@@ -503,6 +529,12 @@ const CoinHistoryModal: React.FC<CoinHistoryModalProps> = ({ isOpen, onClose, on
           </button>
         </div>
       </div>
+      
+      {/* Gift Coins Modal */}
+      <GiftCoinsModal 
+        isOpen={showGiftModal} 
+        onClose={() => setShowGiftModal(false)} 
+      />
     </div>
   );
 };

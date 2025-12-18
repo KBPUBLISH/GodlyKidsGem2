@@ -2101,37 +2101,64 @@ const BookReaderPage: React.FC = () => {
                                 // Toggle music on/off
                                 const newEnabled = !bookMusicEnabled;
                                 setBookMusicEnabled(newEnabled);
+                                console.log('🎵 Music toggle clicked. New state:', newEnabled ? 'ENABLED' : 'DISABLED');
                                 
                                 if (newEnabled) {
                                     // Turn music on - must resume AudioContext FIRST on iOS
                                     if (bookBackgroundMusicRef.current) {
                                         const audio = bookBackgroundMusicRef.current;
+                                        console.log('🎵 Attempting to resume music. Audio state:', {
+                                            paused: audio.paused,
+                                            muted: audio.muted,
+                                            volume: audio.volume,
+                                            currentTime: audio.currentTime,
+                                            readyState: audio.readyState
+                                        });
                                         
                                         // Step 1: Resume AudioContext (required on iOS after pause)
-                                        await resumeBookMusicContext();
+                                        try {
+                                            await resumeBookMusicContext();
+                                            console.log('🎵 AudioContext resumed. State:', bookMusicCtxRef.current?.state);
+                                        } catch (err) {
+                                            console.warn('🎵 Could not resume AudioContext:', err);
+                                        }
                                         
                                         // Step 2: Mark WebAudio as ready if context is running
                                         if (bookMusicCtxRef.current && bookMusicCtxRef.current.state === 'running') {
                                             bookMusicWebAudioReadyRef.current = true;
                                         }
                                         
-                                        // Step 3: Ensure graph is connected with proper volume
+                                        // Step 3: Ensure audio element is unmuted and has volume
+                                        audio.muted = false;
+                                        
+                                        // Step 4: Ensure graph is connected with proper volume
                                         ensureBookMusicGraph(audio);
                                         
-                                        // Step 4: Set volume directly as fallback (iOS sometimes ignores WebAudio)
+                                        // Step 5: Set volume directly as fallback (iOS sometimes ignores WebAudio)
                                         if (bookMusicGainRef.current) {
                                             bookMusicGainRef.current.gain.value = musicVolume;
-                                        } else {
-                                            audio.volume = musicVolume;
+                                            console.log('🎵 GainNode volume set to:', musicVolume);
                                         }
+                                        // Always also set element volume as fallback for iOS
+                                        audio.volume = bookMusicGainRef.current ? 1.0 : musicVolume;
                                         
-                                        // Step 5: Play the audio
-                                        try {
-                                            await audio.play();
-                                            console.log('🎵 Book music resumed');
-                                        } catch (err) {
-                                            console.warn('Could not play book music:', err);
-                                        }
+                                        // Step 6: Play the audio with retry
+                                        const tryPlay = async (attempt: number = 1): Promise<void> => {
+                                            try {
+                                                await audio.play();
+                                                console.log('🎵 Book music playing! (attempt ' + attempt + ')');
+                                            } catch (err: any) {
+                                                console.warn('🎵 Play attempt ' + attempt + ' failed:', err?.message || err);
+                                                if (attempt < 3) {
+                                                    // Small delay and retry
+                                                    await new Promise(r => setTimeout(r, 100));
+                                                    return tryPlay(attempt + 1);
+                                                }
+                                            }
+                                        };
+                                        await tryPlay();
+                                    } else {
+                                        console.warn('🎵 No audio element to resume');
                                     }
                                 } else {
                                     // Turn music off

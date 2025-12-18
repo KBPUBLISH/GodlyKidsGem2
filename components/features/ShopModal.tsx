@@ -388,6 +388,9 @@ const ShopModal: React.FC<ShopModalProps> = ({ isOpen, onClose, initialTab }) =>
             const voicePrice = item.price > 0 ? item.price : 200; // Default price for premium voices
             if (coins >= voicePrice) {
                 handleBuy({ ...item, price: voicePrice });
+            } else {
+                // Not enough coins - redirect to Gold Coins page to earn more
+                setShowCoinHistory(true);
             }
             return;
         }
@@ -408,6 +411,9 @@ const ShopModal: React.FC<ShopModalProps> = ({ isOpen, onClose, initialTab }) =>
             // Premium item requires subscription
             onClose();
             navigate('/paywall');
+        } else if (coins < item.price && item.price > 0) {
+            // Not enough coins - redirect to Gold Coins page to earn more via referrals
+            setShowCoinHistory(true);
         }
     };
 
@@ -619,11 +625,19 @@ const ShopModal: React.FC<ShopModalProps> = ({ isOpen, onClose, initialTab }) =>
                     <WoodButton
                         variant="primary"
                         fullWidth
-                        className={`text-[10px] py-1.5 ${(coins < item.price || isDisabled) ? 'opacity-50 grayscale cursor-not-allowed' : ''}`}
-                        onClick={(e) => { e.stopPropagation(); handleBuy(item); }}
-                        disabled={coins < item.price || isDisabled}
+                        className={`text-[10px] py-1.5 ${isDisabled ? 'opacity-50 grayscale cursor-not-allowed' : coins < item.price ? 'bg-gradient-to-r from-[#FFD700]/80 to-[#B8860B]/80 animate-pulse' : ''}`}
+                        onClick={(e) => { 
+                            e.stopPropagation(); 
+                            // If not enough coins, redirect to Gold Coins page to earn more
+                            if (coins < item.price && !isDisabled) {
+                                setShowCoinHistory(true);
+                                return;
+                            }
+                            handleBuy(item); 
+                        }}
+                        disabled={isDisabled}
                     >
-                        {isDisabled ? t('needBody').toUpperCase() : item.price === 0 ? t('free').toUpperCase() : `${item.price} ${t('gold')}`}
+                        {isDisabled ? t('needBody').toUpperCase() : item.price === 0 ? t('free').toUpperCase() : coins < item.price ? `GET COINS` : `${item.price} ${t('gold')}`}
                     </WoodButton>
                 )}
             </div>

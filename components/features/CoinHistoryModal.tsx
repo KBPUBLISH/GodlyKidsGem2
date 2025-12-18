@@ -230,7 +230,7 @@ const CoinHistoryModal: React.FC<CoinHistoryModalProps> = ({ isOpen, onClose, on
                   <div>
                     <h3 className="text-white font-bold text-base">Ask Your Parents! 👨‍👩‍👧</h3>
                     <p className="text-white/70 text-xs mt-1">
-                      Share your special code with friends and family. When they join, you BOTH get <span className="text-[#FFD700] font-bold">100 gold coins!</span>
+                      Share your special code with friends and family. When they join, you BOTH get <span className="text-[#FFD700] font-bold">100 gold coins!</span> Get 5 friends to join and earn <span className="text-[#FFD700] font-bold">500 coins!</span>
                     </p>
                   </div>
                 </div>

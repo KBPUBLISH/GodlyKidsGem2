@@ -211,7 +211,18 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const loadState = () => {
     try {
       const saved = localStorage.getItem(STORAGE_KEY);
-      return saved ? JSON.parse(saved) : null;
+      console.log('📦 UserContext loading saved state:', saved ? 'Found data' : 'No data');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        console.log('📦 Loaded user data:', {
+          parentName: parsed.parentName,
+          kidsCount: parsed.kids?.length || 0,
+          kidNames: parsed.kids?.map((k: any) => k.name) || [],
+          coins: parsed.coins
+        });
+        return parsed;
+      }
+      return null;
     } catch (e) {
       console.error("Failed to load user data", e);
       return null;
@@ -352,19 +363,24 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
   useEffect(() => {
     // Skip persistence if we're in the middle of a reset/signout
     if (isResetting.current) {
+      console.log('💾 Skipping save - isResetting is true');
       return;
     }
     
     // Skip persistence if signing out flag is set (survives page navigation)
     if (sessionStorage.getItem('godlykids_signing_out') === 'true') {
+      console.log('💾 Skipping save - signing_out flag is set');
       return;
     }
     
     // Skip persistence if user data is empty/reset (parentName is '' after signout)
     // This prevents default values from being written back to localStorage
     if (parentName === '' && kids.length === 0) {
+      console.log('💾 Skipping save - empty state (parentName empty AND no kids)');
       return;
     }
+    
+    console.log('💾 Saving user data:', { parentName, kidsCount: kids.length, kidNames: kids.map(k => k.name) });
     
     const stateToSave = {
       coins,

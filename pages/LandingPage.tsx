@@ -18,8 +18,17 @@ const LandingPage: React.FC = () => {
   useEffect(() => {
     try {
       const savedData = localStorage.getItem(STORAGE_KEY);
+      console.log('🏠 LandingPage checking localStorage:', savedData ? 'Found data' : 'No data');
+      
       if (savedData) {
         const userData = JSON.parse(savedData);
+        console.log('🏠 LandingPage parsed data:', {
+          parentName: userData.parentName,
+          kidsCount: userData.kids?.length || 0,
+          kidNames: userData.kids?.map((k: any) => k.name) || [],
+          isSubscribed: userData.isSubscribed
+        });
+        
         // User has completed onboarding if they have:
         // - A parent name set (not the default 'Parent')
         // - Or have kids added
@@ -28,6 +37,8 @@ const LandingPage: React.FC = () => {
           (userData.parentName && userData.parentName !== 'Parent' && userData.parentName !== '') ||
           (userData.kids && userData.kids.length > 0) ||
           userData.isSubscribed;
+        
+        console.log('🏠 hasCompletedOnboarding:', hasCompletedOnboarding);
         
         if (hasCompletedOnboarding) {
           // If user has kids, go to profile selection so they can choose
@@ -42,6 +53,8 @@ const LandingPage: React.FC = () => {
           }
           return;
         }
+      } else {
+        console.log('🏠 No saved data found in localStorage');
       }
     } catch (e) {
       console.error('Error checking user data:', e);

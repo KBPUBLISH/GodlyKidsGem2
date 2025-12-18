@@ -407,31 +407,45 @@ const Dashboard: React.FC = () => {
                         </button>
                     </div>
                 </div>
-                <div className="h-48 flex items-end gap-1">
+                <div className="h-48 flex items-end gap-[2px] px-2">
                     {(timeView === 'daily' ? data.dailySignups : data.weeklySignups).map((item, idx) => {
                         const max = timeView === 'daily' ? maxDaily : maxWeekly;
-                        const height = (item.count / max) * 100;
+                        const height = item.count > 0 ? Math.max((item.count / max) * 100, 8) : 0;
                         return (
                             <div 
                                 key={idx} 
-                                className="flex-1 flex flex-col items-center group"
+                                className="flex-1 flex flex-col items-center justify-end group min-w-[8px]"
+                                style={{ height: '100%' }}
                             >
                                 <div 
-                                    className="w-full bg-indigo-500 rounded-t hover:bg-indigo-600 transition-colors cursor-pointer relative"
-                                    style={{ height: `${Math.max(height, 2)}%` }}
+                                    className={`w-full rounded-t transition-colors cursor-pointer relative ${
+                                        item.count > 0 
+                                            ? 'bg-indigo-500 hover:bg-indigo-600' 
+                                            : 'bg-gray-200'
+                                    }`}
+                                    style={{ 
+                                        height: item.count > 0 ? `${height}%` : '3px',
+                                        minHeight: item.count > 0 ? '12px' : '3px'
+                                    }}
                                 >
-                                    <div className="absolute -top-8 left-1/2 -translate-x-1/2 bg-gray-800 text-white text-xs px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">
-                                        {item.count} signups
-                                    </div>
+                                    {item.count > 0 && (
+                                        <div className="absolute -top-8 left-1/2 -translate-x-1/2 bg-gray-800 text-white text-xs px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-10">
+                                            {item.count} signup{item.count !== 1 ? 's' : ''}
+                                        </div>
+                                    )}
                                 </div>
                                 {(timeView === 'daily' && idx % 5 === 0) || timeView === 'weekly' ? (
-                                    <span className="text-[10px] text-gray-400 mt-1 -rotate-45 origin-left">
-                                        {formatShortDate('date' in item ? item.date : item.weekStart)}
+                                    <span className="text-[10px] text-gray-400 mt-1 -rotate-45 origin-left whitespace-nowrap">
+                                        {formatShortDate('date' in item ? item.date : (item as any).weekStart)}
                                     </span>
                                 ) : null}
                             </div>
                         );
                     })}
+                </div>
+                {/* Chart total */}
+                <div className="text-right mt-2 text-sm text-gray-500">
+                    Total: {(timeView === 'daily' ? data.dailySignups : data.weeklySignups).reduce((sum, item) => sum + item.count, 0)} signups
                 </div>
             </div>
 

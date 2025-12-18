@@ -60,7 +60,18 @@ interface AnalyticsData {
     users: UserData[];
 }
 
-const API_BASE = import.meta.env.VITE_API_BASE_URL || 'https://backendgk2-0.onrender.com/api';
+// Ensure API_BASE always ends with /api
+const getApiBase = () => {
+    let base = import.meta.env.VITE_API_BASE_URL || 'https://backendgk2-0.onrender.com';
+    // Remove trailing slash if present
+    base = base.replace(/\/$/, '');
+    // Add /api if not present
+    if (!base.endsWith('/api')) {
+        base = `${base}/api`;
+    }
+    return base;
+};
+const API_BASE = getApiBase();
 
 const Dashboard: React.FC = () => {
     const [data, setData] = useState<AnalyticsData | null>(null);

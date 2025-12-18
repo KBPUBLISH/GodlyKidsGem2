@@ -126,7 +126,7 @@ const CoinHistoryModal: React.FC<CoinHistoryModalProps> = ({ isOpen, onClose, on
       if (userId) {
         // Try backend API first (awards coins to both users + sends notification)
         const baseUrl = getApiBaseUrl();
-        const response = await fetch(`${baseUrl}referrals/redeem`, {
+        const response = await fetch(`${baseUrl}api/referrals/redeem`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ userId, codeToRedeem: codeInput })

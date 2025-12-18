@@ -1,6 +1,7 @@
 
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import { authService } from '../services/authService';
+import { profileService, CloudProfile } from '../services/profileService';
 // Removed import of KidProfile due to missing export in ../types
 
 export interface ShopItem {
@@ -362,57 +363,104 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
     redeemedCodes: string[];
   } | null>(saved?.parentEconomyData ?? null);
 
-  // --- SYNC COINS FROM BACKEND ON APP LOAD ---
+  // --- SYNC FULL PROFILE FROM CLOUD ON APP LOAD ---
+  // This loads profile data from backend when signing in on a new device
+  const [hasLoadedFromCloud, setHasLoadedFromCloud] = useState(false);
+  
   useEffect(() => {
-    const syncCoinsFromBackend = async () => {
+    const syncProfileFromCloud = async () => {
       try {
         const user = authService.getUser();
         const userId = user?.email || user?._id || user?.id || localStorage.getItem('godlykids_user_email') || localStorage.getItem('device_id');
         
         if (!userId) {
-          console.log('🔄 No userId available for coin sync');
+          console.log('☁️ No userId available for cloud sync');
           return;
         }
         
-        console.log('🔄 Syncing coins from backend for:', userId);
+        console.log('☁️ Loading profile from cloud for:', userId);
         
-        const apiBase = window.location.hostname === 'localhost' 
-          ? 'http://localhost:5001' 
-          : 'https://backendgk2-0.onrender.com';
+        // Load full profile from cloud
+        const cloudProfile = await profileService.loadFromCloud(userId);
         
-        const response = await fetch(`${apiBase}/api/referrals/stats/${encodeURIComponent(userId)}`);
-        const data = await response.json();
-        
-        if (data.success && data.stats) {
-          const backendCoins = data.stats.coins || 0;
+        if (cloudProfile) {
+          console.log('☁️ Cloud profile found:', {
+            parentName: cloudProfile.parentName,
+            kidsCount: cloudProfile.kids?.length || 0,
+            coins: cloudProfile.coins
+          });
           
-          console.log(`🔄 Backend has ${backendCoins} coins, local has ${coins} coins`);
+          // Check if local data is empty/default (new device)
+          const localIsEmpty = parentName === 'Parent' && kids.length === 0;
+          const cloudHasData = cloudProfile.parentName || cloudProfile.kids?.length > 0;
           
-          // If backend has more coins than local, sync the difference
-          // This happens when friends use your referral code
-          if (backendCoins > coins) {
-            const difference = backendCoins - coins;
-            console.log(`🔄 Syncing ${difference} coins from backend (referral rewards)`);
-            setCoins(backendCoins);
+          if (localIsEmpty && cloudHasData) {
+            console.log('☁️ Local data is empty, loading full profile from cloud');
+            
+            // Load parent name
+            if (cloudProfile.parentName) {
+              setParentName(cloudProfile.parentName);
+            }
+            
+            // Load kid profiles
+            if (cloudProfile.kids && cloudProfile.kids.length > 0) {
+              setKids(cloudProfile.kids);
+            }
+            
+            // Load equipped items
+            if (cloudProfile.equippedAvatar) {
+              setEquippedAvatar(cloudProfile.equippedAvatar);
+            }
+            if (cloudProfile.equippedShip) {
+              setEquippedShip(cloudProfile.equippedShip);
+            }
+            if (cloudProfile.equippedWheel) {
+              setEquippedWheel(cloudProfile.equippedWheel);
+            }
+            if (cloudProfile.equippedPet) {
+              setEquippedPet(cloudProfile.equippedPet);
+            }
+            
+            // Load unlocked items
+            if (cloudProfile.unlockedVoices && cloudProfile.unlockedVoices.length > 0) {
+              setUnlockedVoices(cloudProfile.unlockedVoices);
+            }
+            
+            console.log('☁️ Profile loaded from cloud successfully!');
+          }
+          
+          // Always sync coins from cloud (take the higher value)
+          if (cloudProfile.coins > coins) {
+            const difference = cloudProfile.coins - coins;
+            console.log(`☁️ Syncing ${difference} coins from cloud`);
+            setCoins(cloudProfile.coins);
             setCoinTransactions(prev => [{
-              id: `sync-${Date.now()}`,
+              id: `cloud-sync-${Date.now()}`,
               amount: difference,
-              reason: 'Referral rewards synced',
+              reason: 'Synced from cloud',
               source: 'referral',
               timestamp: Date.now()
             }, ...prev]);
           }
+        } else {
+          console.log('☁️ No cloud profile found, using local data');
         }
+        
+        setHasLoadedFromCloud(true);
       } catch (error) {
-        console.warn('🔄 Failed to sync coins from backend:', error);
+        console.warn('☁️ Failed to sync profile from cloud:', error);
+        setHasLoadedFromCloud(true);
       }
     };
     
-    // Only sync if user has a referral code (meaning they've been onboarded)
-    if (referralCode) {
-      syncCoinsFromBackend();
+    // Only sync if we have an authenticated user (email)
+    const user = authService.getUser();
+    if (user?.email) {
+      syncProfileFromCloud();
+    } else {
+      setHasLoadedFromCloud(true);
     }
-  }, [referralCode]); // Only run when referralCode is available (on mount)
+  }, []); // Run once on mount
 
   // --- SYNC PROFILE TO BACKEND (including kids) ---
   const syncProfileToBackend = useCallback(async (kidsToSync?: any[]) => {
@@ -533,6 +581,29 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
       parentEconomyData
     };
     localStorage.setItem(STORAGE_KEY, JSON.stringify(stateToSave));
+    
+    // Also save to cloud (debounced by profileService)
+    const user = authService.getUser();
+    const userId = user?.email || localStorage.getItem('godlykids_user_email');
+    if (userId && hasLoadedFromCloud) {
+      // Save important profile data to cloud for cross-device sync
+      profileService.saveToCloud(userId, {
+        parentName,
+        kids: kids.map(k => ({
+          id: k.id,
+          name: k.name,
+          age: k.age || 0,
+          avatar: k.avatar,
+          avatarSeed: k.avatarSeed,
+        })),
+        coins,
+        equippedAvatar,
+        equippedShip,
+        equippedWheel,
+        equippedPet,
+        unlockedVoices,
+      });
+    }
   }, [
     coins, coinTransactions, referralCode, redeemedCodes, ownedItems, unlockedVoices, parentName, kids, currentProfileId, parentEconomyData,
       equippedAvatar, equippedFrame, equippedHat, equippedBody,
@@ -542,7 +613,11 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
     leftArmScale, rightArmScale, legsScale, headScale, bodyScale, hatScale,
     savedCharacters,
     isSubscribed,
-    parentAvatarData
+    parentAvatarData,
+    hasLoadedFromCloud,
+    equippedShip,
+    equippedWheel,
+    equippedPet
   ]);
 
   // Sync subscription status from godlykids_premium (RevenueCat source of truth)

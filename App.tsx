@@ -454,6 +454,17 @@ import LessonsPage from './pages/LessonsPage';
 import LessonPlayerPage from './pages/LessonPlayerPage';
 import VideoLessonDemo from './pages/VideoLessonDemo';
 import GameWebViewPage from './pages/GameWebViewPage';
+import NewUserWelcomePage, { shouldShowWelcome } from './pages/NewUserWelcomePage';
+
+// Wrapper component that checks if new user should see welcome screen
+const HomePageWithWelcomeCheck: React.FC = () => {
+  // Check if this is a new user who hasn't seen the welcome screen
+  if (shouldShowWelcome()) {
+    return <Navigate to="/welcome" replace />;
+  }
+  return <HomePage />;
+};
+
 import MiniPlayer from './components/audio/MiniPlayer';
 import BottomNavigation from './components/layout/BottomNavigation';
 import ErrorBoundary from './components/ErrorBoundary';
@@ -674,6 +685,7 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const isGamePage = location.pathname === '/game';
   const isResetPassword = location.pathname === '/reset-password';
   const isBookSeries = location.pathname.startsWith('/book-series/');
+  const isWelcome = location.pathname === '/welcome';
 
   return (
     <div className="relative h-screen w-full overflow-hidden text-white flex flex-col">
@@ -689,7 +701,7 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
       <MiniPlayer />
 
       {/* Only show BottomNavigation on main tab pages */}
-      {!isLanding && !isSignIn && !isOnboarding && !isBookDetail && !isPlayer && !isProfile && !isCreateProfile && !isEditProfile && !isPaywall && !isSettings && !isBookReader && !isAudioPage && !isLessonPage && !isGamePage && !isResetPassword && !isBookSeries && <BottomNavigation />}
+      {!isLanding && !isSignIn && !isOnboarding && !isWelcome && !isBookDetail && !isPlayer && !isProfile && !isCreateProfile && !isEditProfile && !isPaywall && !isSettings && !isBookReader && !isAudioPage && !isLessonPage && !isGamePage && !isResetPassword && !isBookSeries && <BottomNavigation />}
     </div>
   );
 };
@@ -813,7 +825,8 @@ const App: React.FC = () => {
                   <Route path="/sign-in" element={<SignInPage />} />
                   <Route path="/reset-password" element={<ResetPasswordPage />} />
                   <Route path="/onboarding" element={<OnboardingPage />} />
-                  <Route path="/home" element={<HomePage />} />
+                  <Route path="/welcome" element={<NewUserWelcomePage />} />
+                  <Route path="/home" element={<HomePageWithWelcomeCheck />} />
                   <Route path="/listen" element={<ListenPage />} />
                   <Route path="/read" element={<ReadPage />} />
                   <Route path="/library" element={<LibraryPage />} />

@@ -82,17 +82,22 @@ const LandingPage: React.FC = () => {
       */}
 
       {/* Ship Image - Full coverage background in upper section */}
-      <div className="absolute top-0 left-0 right-0 h-[55%] z-10 pointer-events-none">
+      {/* Responsive: taller on mobile to show more of the ship */}
+      <div className="absolute top-0 left-0 right-0 h-[60%] sm:h-[55%] z-10 pointer-events-none">
         <img 
           src="/assets/images/ship.jpg" 
           alt="" 
-          className="w-full h-full object-cover object-center"
+          className="w-full h-full object-cover"
+          style={{
+            // Focus on the ship (center-top) on mobile, center on larger screens
+            objectPosition: 'center 30%',
+          }}
         />
         {/* Gradient overlay at bottom to blend with content area */}
         <div 
-          className="absolute bottom-0 left-0 right-0 h-24"
+          className="absolute bottom-0 left-0 right-0 h-32 sm:h-24"
           style={{
-            background: 'linear-gradient(to bottom, transparent, rgba(0, 30, 60, 0.9))'
+            background: 'linear-gradient(to bottom, transparent, rgba(0, 30, 60, 0.95))'
           }}
         />
       </div>

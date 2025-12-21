@@ -1105,7 +1105,7 @@ const HomePage: React.FC = () => {
               
               {/* Daily Key Task */}
               <div
-                className={`relative w-[65vw] max-w-[280px] flex-shrink-0 snap-center ${
+                className={`relative w-[52vw] max-w-[220px] flex-shrink-0 snap-center ${
                   hasEngagedDailyKey ? 'cursor-default' : 'cursor-pointer'
                 }`}
                 onClick={() => !hasEngagedDailyKey && handleDailyKeyClick()}
@@ -1123,13 +1123,13 @@ const HomePage: React.FC = () => {
                   
                   {/* Icon & Content - Centered */}
                   <div className="absolute inset-0 flex flex-col items-center justify-center">
-                    <div className="w-24 h-24 rounded-full bg-[#FFD700]/20 flex items-center justify-center mb-4 border-2 border-[#FFD700]/30">
-                      <Key size={56} className="text-[#FFD700]" fill="#B8860B" />
+                    <div className="w-16 h-16 rounded-full bg-[#FFD700]/20 flex items-center justify-center mb-3 border-2 border-[#FFD700]/30">
+                      <Key size={36} className="text-[#FFD700]" fill="#B8860B" />
                     </div>
-                    <span className="text-[#FFD700] text-2xl font-bold font-display text-center px-4">
+                    <span className="text-[#FFD700] text-lg font-bold font-display text-center px-3">
                       Daily Key
                     </span>
-                    <span className="text-white/70 text-sm text-center px-4 mt-2">
+                    <span className="text-white/70 text-xs text-center px-3 mt-1">
                       Unlock rewards
                     </span>
                   </div>
@@ -1138,8 +1138,8 @@ const HomePage: React.FC = () => {
                   {hasEngagedDailyKey && (
                     <>
                       <div className="absolute inset-0 bg-black/50" />
-                      <div className="absolute top-4 right-4 bg-green-500 rounded-full p-2">
-                        <Check className="w-5 h-5 text-white" />
+                      <div className="absolute top-3 right-3 bg-green-500 rounded-full p-1.5">
+                        <Check className="w-4 h-4 text-white" />
                       </div>
                     </>
                   )}
@@ -1148,7 +1148,7 @@ const HomePage: React.FC = () => {
 
               {/* Memory Task */}
               <div
-                className={`relative w-[65vw] max-w-[280px] flex-shrink-0 snap-center ${
+                className={`relative w-[52vw] max-w-[220px] flex-shrink-0 snap-center ${
                   hasEngagedMemory ? 'cursor-default' : 'cursor-pointer'
                 }`}
                 onClick={() => !hasEngagedMemory && handleMemoryClick()}
@@ -1166,13 +1166,13 @@ const HomePage: React.FC = () => {
                   
                   {/* Icon & Content - Centered */}
                   <div className="absolute inset-0 flex flex-col items-center justify-center">
-                    <div className="w-24 h-24 rounded-full bg-[#5c6bc0]/30 flex items-center justify-center mb-4 border-2 border-[#5c6bc0]/30">
-                      <Brain size={56} className="text-[#90caf9]" fill="#64b5f6" />
+                    <div className="w-16 h-16 rounded-full bg-[#5c6bc0]/30 flex items-center justify-center mb-3 border-2 border-[#5c6bc0]/30">
+                      <Brain size={36} className="text-[#90caf9]" fill="#64b5f6" />
                     </div>
-                    <span className="text-[#90caf9] text-2xl font-bold font-display text-center px-4">
+                    <span className="text-[#90caf9] text-lg font-bold font-display text-center px-3">
                       Memory
                     </span>
-                    <span className="text-white/70 text-sm text-center px-4 mt-2">
+                    <span className="text-white/70 text-xs text-center px-3 mt-1">
                       Bible challenge
                     </span>
                   </div>
@@ -1181,8 +1181,8 @@ const HomePage: React.FC = () => {
                   {hasEngagedMemory && (
                     <>
                       <div className="absolute inset-0 bg-black/50" />
-                      <div className="absolute top-4 right-4 bg-green-500 rounded-full p-2">
-                        <Check className="w-5 h-5 text-white" />
+                      <div className="absolute top-3 right-3 bg-green-500 rounded-full p-1.5">
+                        <Check className="w-4 h-4 text-white" />
                       </div>
                     </>
                   )}
@@ -1191,7 +1191,7 @@ const HomePage: React.FC = () => {
 
               {/* Prayer Task */}
               <div
-                className={`relative w-[65vw] max-w-[280px] flex-shrink-0 snap-center ${
+                className={`relative w-[52vw] max-w-[220px] flex-shrink-0 snap-center ${
                   hasEngagedPrayer ? 'cursor-default' : 'cursor-pointer'
                 }`}
                 onClick={() => !hasEngagedPrayer && handlePrayerClick()}
@@ -1209,13 +1209,13 @@ const HomePage: React.FC = () => {
                   
                   {/* Icon & Content - Centered */}
                   <div className="absolute inset-0 flex flex-col items-center justify-center">
-                    <div className="w-24 h-24 rounded-full bg-[#F06292]/20 flex items-center justify-center mb-4 border-2 border-[#F06292]/30">
-                      <Heart size={56} className="text-[#F06292]" fill="#EC407A" />
+                    <div className="w-16 h-16 rounded-full bg-[#F06292]/20 flex items-center justify-center mb-3 border-2 border-[#F06292]/30">
+                      <Heart size={36} className="text-[#F06292]" fill="#EC407A" />
                     </div>
-                    <span className="text-[#F06292] text-2xl font-bold font-display text-center px-4">
+                    <span className="text-[#F06292] text-lg font-bold font-display text-center px-3">
                       Prayer
                     </span>
-                    <span className="text-white/70 text-sm text-center px-4 mt-2">
+                    <span className="text-white/70 text-xs text-center px-3 mt-1">
                       Connect with God
                     </span>
                   </div>
@@ -1224,8 +1224,8 @@ const HomePage: React.FC = () => {
                   {hasEngagedPrayer && (
                     <>
                       <div className="absolute inset-0 bg-black/50" />
-                      <div className="absolute top-4 right-4 bg-green-500 rounded-full p-2">
-                        <Check className="w-5 h-5 text-white" />
+                      <div className="absolute top-3 right-3 bg-green-500 rounded-full p-1.5">
+                        <Check className="w-4 h-4 text-white" />
                       </div>
                     </>
                   )}
@@ -1244,7 +1244,7 @@ const HomePage: React.FC = () => {
                 return (
                   <div
                     key={gameId}
-                    className="relative w-[65vw] max-w-[280px] flex-shrink-0 snap-center cursor-pointer"
+                    className="relative w-[52vw] max-w-[220px] flex-shrink-0 snap-center cursor-pointer"
                     onClick={() => {
                       if (isLocked) {
                         // Show purchase confirmation
@@ -1291,24 +1291,24 @@ const HomePage: React.FC = () => {
                       {/* Lock Overlay for Purchasable Games */}
                       {isLocked && (
                         <div className="absolute inset-0 bg-black/40 flex flex-col items-center justify-center z-10">
-                          <div className="bg-black/70 rounded-full p-4 border-2 border-[#FFD700] mb-3">
-                            <Lock size={32} className="text-[#FFD700]" />
+                          <div className="bg-black/70 rounded-full p-3 border-2 border-[#FFD700] mb-2">
+                            <Lock size={24} className="text-[#FFD700]" />
                           </div>
-                          <div className="bg-[#FFD700] rounded-full px-4 py-2 flex items-center gap-2">
-                            <Coins size={18} className="text-[#5c2e0b]" />
-                            <span className="text-base font-bold text-[#5c2e0b]">{game.goldCoinPrice}</span>
+                          <div className="bg-[#FFD700] rounded-full px-3 py-1.5 flex items-center gap-1.5">
+                            <Coins size={14} className="text-[#5c2e0b]" />
+                            <span className="text-sm font-bold text-[#5c2e0b]">{game.goldCoinPrice}</span>
                           </div>
                         </div>
                       )}
                       
                       {/* Overlay with game info */}
-                      <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 via-black/40 to-transparent pt-20 pb-6 px-4">
-                        <span className="text-white text-xl font-bold font-display text-center block drop-shadow-lg">
+                      <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 via-black/40 to-transparent pt-16 pb-4 px-3">
+                        <span className="text-white text-base font-bold font-display text-center block drop-shadow-lg">
                           {game.name}
                         </span>
                         {game.description && !isLocked && (
-                          <span className="text-white/80 text-sm text-center block mt-2 drop-shadow">
-                            {game.description.substring(0, 50)}...
+                          <span className="text-white/80 text-xs text-center block mt-1 drop-shadow">
+                            {game.description.substring(0, 40)}...
                           </span>
                         )}
                       </div>

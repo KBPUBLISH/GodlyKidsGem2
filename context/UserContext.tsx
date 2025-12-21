@@ -1253,6 +1253,21 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
     // This prevents re-initialization from writing default data back
     sessionStorage.setItem('godlykids_signing_out', 'true');
     
+    // CRITICAL: Clear storage FIRST before any state changes
+    // This prevents any race conditions with persistence effects
+    localStorage.removeItem(STORAGE_KEY);
+    localStorage.removeItem('godlykids_lesson_completions');
+    localStorage.removeItem('godlykids_lesson_streak');
+    localStorage.removeItem('godlykids_last_week_start');
+    localStorage.removeItem('godlykids_read_counts');
+    localStorage.removeItem('godlykids_completed_books');
+    localStorage.removeItem('godlykids_reading_progress');
+    localStorage.removeItem('godlykids_favorites');
+    localStorage.removeItem('godlykids_library');
+    localStorage.removeItem('godlykids_play_counts');
+    localStorage.removeItem('godlykids_default_voice');
+    localStorage.removeItem('godlykids_welcome_seen');
+    
     // Reset all in-memory state to defaults
     setCoins(500); // New users start with 500 gold coins
     setCoinTransactions([]);
@@ -1290,32 +1305,18 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setSavedCharacters([]);
     setIsSubscribed(false);
     
-    // Clear the main storage key
-    localStorage.removeItem(STORAGE_KEY);
-    
-    // Clear all progress-related data for a fresh start
-    localStorage.removeItem('godlykids_lesson_completions');
-    localStorage.removeItem('godlykids_lesson_streak');
-    localStorage.removeItem('godlykids_last_week_start');
-    localStorage.removeItem('godlykids_read_counts');
-    localStorage.removeItem('godlykids_completed_books');
-    localStorage.removeItem('godlykids_reading_progress');
-    localStorage.removeItem('godlykids_favorites');
-    localStorage.removeItem('godlykids_library');
-    localStorage.removeItem('godlykids_play_counts');
-    localStorage.removeItem('godlykids_default_voice');
-    
-    // Clear game engagement flags
+    // Additional cleanup (game engagement and cooldowns)
+    // Note: Main storage and progress data already cleared at start of function
     localStorage.removeItem('memory_game_engaged');
     localStorage.removeItem('daily_key_engaged');
     localStorage.removeItem('strength_game_engaged');
     localStorage.removeItem('prayer_game_engaged');
-    
-    // Clear game cooldowns
     localStorage.removeItem('daily_verse_last_completion');
     localStorage.removeItem('challenge_game_last_completion');
     localStorage.removeItem('strength_game_last_completion');
     localStorage.removeItem('prayer_game_last_completion');
+    
+    console.log('🚪 User data reset complete');
   };
 
   return (

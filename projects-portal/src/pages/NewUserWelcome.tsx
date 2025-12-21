@@ -36,9 +36,9 @@ interface WelcomeConfig {
 const NewUserWelcome: React.FC = () => {
   const [config, setConfig] = useState<WelcomeConfig>({
     section: 'new-user-welcome',
-    title: 'Welcome to Godly Kids!',
+    title: 'Choose a Bedtime Story',
     subtitle: 'Pick something to start your adventure.',
-    maxItems: 6,
+    maxItems: 20,
     skipButtonText: 'Skip for now',
     showSkipButton: true,
   });
@@ -102,10 +102,6 @@ const NewUserWelcome: React.FC = () => {
   };
 
   const addItem = (item: ContentItem) => {
-    if (selectedItems.length >= config.maxItems) {
-      alert(`Maximum ${config.maxItems} items allowed`);
-      return;
-    }
     if (selectedItems.some(i => i._id === item._id)) {
       return; // Already added
     }
@@ -272,7 +268,7 @@ const NewUserWelcome: React.FC = () => {
                 onChange={(e) => setConfig({ ...config, maxItems: parseInt(e.target.value) })}
                 className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
               >
-                {[3, 4, 5, 6, 8, 10, 12].map(n => (
+                {[4, 6, 8, 10, 12, 16, 20, 30, 50].map(n => (
                   <option key={n} value={n}>{n} items</option>
                 ))}
               </select>
@@ -445,8 +441,7 @@ const NewUserWelcome: React.FC = () => {
 
                       <button
                         onClick={() => addItem(item)}
-                        disabled={selectedItems.length >= config.maxItems}
-                        className="p-1.5 text-indigo-600 hover:bg-indigo-50 rounded disabled:opacity-30 disabled:cursor-not-allowed"
+                        className="p-1.5 text-indigo-600 hover:bg-indigo-50 rounded"
                       >
                         <Plus className="w-5 h-5" />
                       </button>

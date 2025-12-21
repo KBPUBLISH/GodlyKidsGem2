@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Sparkles, BookOpen, Music, Video, ChevronRight, Loader2 } from 'lucide-react';
+import { Sparkles, BookOpen, Music, Video } from 'lucide-react';
 import { API_BASE_URL } from '../constants';
 import WoodButton from '../components/ui/WoodButton';
 import { useAudio } from '../context/AudioContext';
@@ -77,11 +77,10 @@ const NewUserWelcomePage: React.FC = () => {
     subtitle: 'Pick something to start your adventure',
     skipButtonText: 'Skip for now',
     showSkipButton: true,
-    maxItems: 6,
+    maxItems: 20, // No longer limiting
   });
   const [items, setItems] = useState<ContentItem[]>([]);
   const [loading, setLoading] = useState(true);
-  const [selectedItem, setSelectedItem] = useState<ContentItem | null>(null);
   const [showContent, setShowContent] = useState(false);
 
   // Generate random small dot stars
@@ -151,26 +150,21 @@ const NewUserWelcomePage: React.FC = () => {
     localStorage.setItem('godlykids_welcome_seen', 'true');
   };
 
+  // Direct navigation - no extra tap needed
   const handleItemClick = (item: ContentItem) => {
     playClick();
-    setSelectedItem(item);
-  };
-
-  const handleStartWithItem = () => {
-    if (!selectedItem) return;
-    
     markWelcomeSeen();
     
-    // Navigate based on content type
-    switch (selectedItem.type) {
+    // Navigate directly based on content type
+    switch (item.type) {
       case 'book':
-        navigate(`/book/${selectedItem._id}`);
+        navigate(`/book/${item._id}`);
         break;
       case 'playlist':
-        navigate(`/audio/playlist/${selectedItem._id}`);
+        navigate(`/audio/playlist/${item._id}`);
         break;
       case 'lesson':
-        navigate(`/lesson/${selectedItem._id}`);
+        navigate(`/lesson/${item._id}`);
         break;
       default:
         navigate('/home');
@@ -214,12 +208,7 @@ const NewUserWelcomePage: React.FC = () => {
     return (
       <div className="h-full flex items-center justify-center bg-gradient-to-b from-[#0a0a1a] via-[#1a1a3a] to-[#0d0d20]">
         <div className="text-center">
-          <div className="relative">
-            <Loader2 className="w-16 h-16 animate-spin text-[#FFD700] mx-auto mb-4" />
-            <div className="absolute inset-0 animate-pulse">
-              <Sparkles className="w-16 h-16 text-[#FFD700]/30 mx-auto" />
-            </div>
-          </div>
+          <Sparkles className="w-12 h-12 text-[#FFD700] mx-auto mb-4 animate-pulse" />
           <p className="text-white/80 font-medium text-lg">Loading your adventure...</p>
           <div className="flex justify-center gap-1 mt-3">
             {[0, 1, 2].map((i) => (
@@ -338,27 +327,19 @@ const NewUserWelcomePage: React.FC = () => {
           </div>
         </div>
 
-        {/* Content Grid - Animated cards with pop-in effect */}
+        {/* Content Grid - Animated cards with pop-in effect - tap to go directly */}
         <div className="grid grid-cols-2 gap-3 mb-8">
           {items.slice(0, config.maxItems).map((item, index) => (
             <button
               key={item._id}
               onClick={() => handleItemClick(item)}
-              className={`relative rounded-xl overflow-hidden shadow-xl transition-all duration-300 transform ${
-                selectedItem?._id === item._id
-                  ? 'ring-4 ring-[#E8B923] scale-[1.03]'
-                  : 'ring-1 ring-white/10 hover:ring-white/30 hover:scale-[1.02] active:scale-[0.98]'
-              }`}
+              className="relative rounded-xl overflow-hidden shadow-xl transition-all duration-300 transform ring-1 ring-white/10 hover:ring-[#E8B923]/50 hover:scale-[1.02] active:scale-[0.95]"
               style={{
                 opacity: showContent ? 1 : 0,
-                transform: showContent 
-                  ? (selectedItem?._id === item._id ? 'scale(1.03)' : 'scale(1)') 
-                  : 'scale(0.6) translateY(30px)',
+                transform: showContent ? 'scale(1)' : 'scale(0.6) translateY(30px)',
                 transition: `all 0.6s cubic-bezier(0.34, 1.56, 0.64, 1)`,
                 transitionDelay: `${0.2 + index * 0.08}s`,
-                boxShadow: selectedItem?._id === item._id 
-                  ? '0 0 30px rgba(232, 185, 35, 0.4), 0 10px 30px rgba(0,0,0,0.3)' 
-                  : '0 4px 20px rgba(0,0,0,0.3)',
+                boxShadow: '0 4px 20px rgba(0,0,0,0.3)',
               }}
             >
               {/* Image */}
@@ -389,65 +370,28 @@ const NewUserWelcomePage: React.FC = () => {
                   {getTypeLabel(item.type)}
                 </div>
               </div>
-
-              {/* Golden checkmark for selected */}
-              {selectedItem?._id === item._id && (
-                <div 
-                  className="absolute top-2 right-2 w-7 h-7 bg-[#E8B923] rounded-full flex items-center justify-center shadow-lg"
-                  style={{ boxShadow: '0 0 15px rgba(232, 185, 35, 0.6)' }}
-                >
-                  <svg className="w-4 h-4 text-[#0c1445]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
-                  </svg>
-                </div>
-              )}
             </button>
           ))}
         </div>
 
-        {/* Action Buttons - Animated */}
-        <div 
-          className="space-y-3"
-          style={{
-            opacity: showContent ? 1 : 0,
-            transform: showContent ? 'translateY(0)' : 'translateY(20px)',
-            transition: 'all 0.6s ease-out',
-            transitionDelay: '0.6s',
-          }}
-        >
-          {/* Gold "Let's Go" Button */}
-          <button
-            onClick={handleStartWithItem}
-            disabled={!selectedItem}
-            className={`w-full py-4 rounded-2xl font-bold text-lg transition-all duration-300 ${
-              selectedItem 
-                ? 'bg-gradient-to-r from-[#FFD700] via-[#FFC107] to-[#FFD700] text-[#5c2e0b] shadow-lg shadow-[#FFD700]/30 hover:shadow-[#FFD700]/50 hover:scale-[1.02] active:scale-[0.98]'
-                : 'bg-white/10 text-white/50 cursor-not-allowed'
-            }`}
-            style={selectedItem ? { animation: 'glowPulse 2s ease-in-out infinite' } : {}}
+        {/* Skip Button only - animated */}
+        {config.showSkipButton && (
+          <div 
+            style={{
+              opacity: showContent ? 1 : 0,
+              transform: showContent ? 'translateY(0)' : 'translateY(20px)',
+              transition: 'all 0.6s ease-out',
+              transitionDelay: '0.6s',
+            }}
           >
-            <span className="flex items-center justify-center gap-2">
-              {selectedItem ? (
-                <>
-                  Let's Go!
-                  <ChevronRight className="w-5 h-5" />
-                </>
-              ) : (
-                '✨ Pick something above'
-              )}
-            </span>
-          </button>
-
-          {/* Skip Button - glass style */}
-          {config.showSkipButton && (
             <button
               onClick={handleSkip}
               className="w-full py-3 text-white/50 font-medium hover:text-white/80 transition-colors hover:bg-white/5 rounded-xl"
             >
               {config.skipButtonText}
             </button>
-          )}
-        </div>
+          </div>
+        )}
       </div>
     </div>
   );

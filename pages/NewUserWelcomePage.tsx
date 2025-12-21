@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Sparkles, BookOpen, Music, Video, ChevronRight, Loader2 } from 'lucide-react';
 import { API_BASE_URL } from '../constants';
@@ -21,12 +21,60 @@ interface WelcomeConfig {
   maxItems: number;
 }
 
+// Small twinkling dot star
+const TwinklingStar: React.FC<{ delay: number; size: number; top: string; left: string }> = ({ delay, size, top, left }) => (
+  <div
+    className="absolute rounded-full bg-white"
+    style={{
+      width: size,
+      height: size,
+      top,
+      left,
+      animation: `twinkle ${2 + Math.random() * 2}s ease-in-out infinite`,
+      animationDelay: `${delay}s`,
+      opacity: 0.6 + Math.random() * 0.4,
+    }}
+  />
+);
+
+// Diamond/Cross shaped star (like in the reference image)
+const DiamondStar: React.FC<{ size: number; top: string; left: string; delay: number }> = ({ size, top, left, delay }) => (
+  <svg
+    className="absolute"
+    style={{ top, left, animation: `twinkle ${3 + Math.random()}s ease-in-out infinite`, animationDelay: `${delay}s` }}
+    width={size}
+    height={size}
+    viewBox="0 0 24 24"
+  >
+    {/* 4-point star shape */}
+    <path
+      d="M12 0 L14 10 L24 12 L14 14 L12 24 L10 14 L0 12 L10 10 Z"
+      fill="white"
+      opacity="0.9"
+    />
+  </svg>
+);
+
+// Shooting star component
+const ShootingStar: React.FC<{ delay: number; top: number }> = ({ delay, top }) => (
+  <div
+    className="absolute w-1 h-1 bg-white rounded-full"
+    style={{
+      top: `${top}%`,
+      left: '-5%',
+      animation: `shootingStar 4s linear infinite`,
+      animationDelay: `${delay}s`,
+      boxShadow: '0 0 6px 2px rgba(255, 255, 255, 0.6)',
+    }}
+  />
+);
+
 const NewUserWelcomePage: React.FC = () => {
   const navigate = useNavigate();
   const { playClick } = useAudio();
   const [config, setConfig] = useState<WelcomeConfig>({
-    title: 'Welcome to Godly Kids!',
-    subtitle: 'Pick something to start your adventure.',
+    title: 'Choose a Bedtime Story',
+    subtitle: 'Pick something to start your adventure',
     skipButtonText: 'Skip for now',
     showSkipButton: true,
     maxItems: 6,
@@ -34,10 +82,40 @@ const NewUserWelcomePage: React.FC = () => {
   const [items, setItems] = useState<ContentItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedItem, setSelectedItem] = useState<ContentItem | null>(null);
+  const [showContent, setShowContent] = useState(false);
+
+  // Generate random small dot stars
+  const smallStars = useMemo(() => 
+    Array.from({ length: 60 }, (_, i) => ({
+      id: i,
+      delay: Math.random() * 4,
+      size: 1 + Math.random() * 2,
+      top: `${Math.random() * 100}%`,
+      left: `${Math.random() * 100}%`,
+    })), []
+  );
+
+  // Generate diamond/cross shaped stars (fewer, larger, more prominent)
+  const diamondStars = useMemo(() => 
+    Array.from({ length: 12 }, (_, i) => ({
+      id: i,
+      delay: Math.random() * 3,
+      size: 8 + Math.random() * 12,
+      top: `${5 + Math.random() * 90}%`,
+      left: `${5 + Math.random() * 90}%`,
+    })), []
+  );
 
   useEffect(() => {
     fetchWelcomeContent();
   }, []);
+
+  // Trigger content animation after loading
+  useEffect(() => {
+    if (!loading && items.length > 0) {
+      setTimeout(() => setShowContent(true), 100);
+    }
+  }, [loading, items]);
 
   const fetchWelcomeContent = async () => {
     try {
@@ -51,8 +129,8 @@ const NewUserWelcomePage: React.FC = () => {
       if (data.success) {
         if (data.config) {
           setConfig({
-            title: data.config.title || 'Welcome to Godly Kids!',
-            subtitle: data.config.subtitle || 'Pick something to start your adventure.',
+            title: data.config.title || 'Choose a Bedtime Story',
+            subtitle: data.config.subtitle || 'Pick something to start your adventure',
             skipButtonText: data.config.skipButtonText || 'Skip for now',
             showSkipButton: data.config.showSkipButton !== false,
             maxItems: data.config.maxItems || 6,
@@ -123,19 +201,33 @@ const NewUserWelcomePage: React.FC = () => {
 
   const getTypeBadgeColor = (type: string) => {
     switch (type) {
-      case 'book': return 'bg-[#8B4513]/80 text-white';
-      case 'playlist': return 'bg-[#FFD700]/90 text-[#5c2e0b]';
-      case 'lesson': return 'bg-[#228B22]/80 text-white';
-      default: return 'bg-[#8B4513]/80 text-white';
+      case 'book': return 'bg-gradient-to-r from-[#6366f1] to-[#8b5cf6] text-white';
+      case 'playlist': return 'bg-gradient-to-r from-[#FFD700] to-[#FFA500] text-[#1a1a3a]';
+      case 'lesson': return 'bg-gradient-to-r from-[#10b981] to-[#34d399] text-white';
+      default: return 'bg-white/20 text-white';
     }
   };
 
   if (loading) {
     return (
-      <div className="h-full flex items-center justify-center">
+      <div className="h-full flex items-center justify-center bg-gradient-to-b from-[#0a0a1a] via-[#1a1a3a] to-[#0d0d20]">
         <div className="text-center">
-          <Loader2 className="w-12 h-12 animate-spin text-[#FFD700] mx-auto mb-4" />
-          <p className="text-white/80 font-medium">Loading your adventure...</p>
+          <div className="relative">
+            <Loader2 className="w-16 h-16 animate-spin text-[#FFD700] mx-auto mb-4" />
+            <div className="absolute inset-0 animate-pulse">
+              <Sparkles className="w-16 h-16 text-[#FFD700]/30 mx-auto" />
+            </div>
+          </div>
+          <p className="text-white/80 font-medium text-lg">Loading your adventure...</p>
+          <div className="flex justify-center gap-1 mt-3">
+            {[0, 1, 2].map((i) => (
+              <div
+                key={i}
+                className="w-2 h-2 bg-[#FFD700] rounded-full animate-bounce"
+                style={{ animationDelay: `${i * 0.15}s` }}
+              />
+            ))}
+          </div>
         </div>
       </div>
     );
@@ -150,51 +242,125 @@ const NewUserWelcomePage: React.FC = () => {
 
   return (
     <div className="h-full overflow-auto">
-      {/* Wood panel background */}
-      <div className="absolute inset-0 bg-gradient-to-b from-[#2a1810] via-[#3d2317] to-[#1a0f0a]" />
-      
-      {/* Wood grain texture overlay */}
+      {/* Deep navy night sky gradient - matching reference */}
       <div 
-        className="absolute inset-0 opacity-10 pointer-events-none"
-        style={{ 
-          backgroundImage: 'repeating-linear-gradient(90deg, transparent, transparent 50px, rgba(0,0,0,0.1) 50px, rgba(0,0,0,0.1) 51px)',
+        className="absolute inset-0"
+        style={{
+          background: 'linear-gradient(180deg, #0c1445 0%, #152057 30%, #1a3068 60%, #1e3a70 100%)',
+        }}
+      />
+      
+      {/* Stars layer */}
+      <div className="absolute inset-0 overflow-hidden pointer-events-none">
+        {/* Small twinkling dots */}
+        {smallStars.map((star) => (
+          <TwinklingStar key={`small-${star.id}`} {...star} />
+        ))}
+        
+        {/* Larger diamond/cross shaped stars */}
+        {diamondStars.map((star) => (
+          <DiamondStar key={`diamond-${star.id}`} {...star} />
+        ))}
+        
+        {/* Shooting stars */}
+        <ShootingStar delay={3} top={15} />
+        <ShootingStar delay={8} top={25} />
+        <ShootingStar delay={14} top={10} />
+      </div>
+
+      {/* Subtle glow at horizon */}
+      <div 
+        className="absolute inset-0 pointer-events-none"
+        style={{
+          background: 'radial-gradient(ellipse at 50% 100%, rgba(30, 58, 112, 0.5) 0%, transparent 50%)',
         }}
       />
 
+      {/* CSS Animations */}
+      <style>{`
+        @keyframes twinkle {
+          0%, 100% { opacity: 0.4; transform: scale(0.8); }
+          50% { opacity: 1; transform: scale(1.1); }
+        }
+        @keyframes shootingStar {
+          0% { transform: translateX(0) translateY(0); opacity: 1; }
+          70% { opacity: 0.8; }
+          100% { transform: translateX(120vw) translateY(30vh); opacity: 0; }
+        }
+        @keyframes glowPulse {
+          0%, 100% { box-shadow: 0 0 20px rgba(255, 215, 0, 0.4); }
+          50% { box-shadow: 0 0 35px rgba(255, 215, 0, 0.7); }
+        }
+        @keyframes textGlow {
+          0%, 100% { text-shadow: 0 0 10px rgba(255, 215, 0, 0.5), 0 2px 4px rgba(0,0,0,0.3); }
+          50% { text-shadow: 0 0 20px rgba(255, 215, 0, 0.8), 0 2px 4px rgba(0,0,0,0.3); }
+        }
+      `}</style>
+
       <div className="relative z-10 px-5 py-8 pb-32 max-w-lg mx-auto">
-        {/* Header with gold accent */}
-        <div className="text-center mb-8">
-          {/* Golden sparkle icon */}
-          <div className="w-20 h-20 bg-gradient-to-br from-[#FFD700] to-[#B8860B] rounded-full flex items-center justify-center mx-auto mb-5 shadow-lg shadow-[#FFD700]/30 border-4 border-[#8B4513]">
-            <Sparkles className="w-10 h-10 text-[#5c2e0b]" />
-          </div>
+        {/* Header with golden script text - like reference */}
+        <div 
+          className="text-center mb-8 pt-4"
+          style={{
+            opacity: showContent ? 1 : 0,
+            transform: showContent ? 'translateY(0)' : 'translateY(-20px)',
+            transition: 'all 0.8s ease-out',
+          }}
+        >
+          {/* Golden script title - matching reference style */}
+          <h1 
+            className="text-4xl sm:text-5xl font-bold mb-3"
+            style={{
+              fontFamily: "'Brush Script MT', 'Segoe Script', 'Bradley Hand', cursive",
+              color: '#E8B923',
+              textShadow: '0 0 15px rgba(232, 185, 35, 0.5), 0 2px 4px rgba(0,0,0,0.4)',
+              animation: 'textGlow 3s ease-in-out infinite',
+              letterSpacing: '1px',
+            }}
+          >
+            {config.title}
+          </h1>
           
-          {/* Wood plank title */}
-          <div className="bg-[#8B4513] rounded-xl px-6 py-4 shadow-lg border-b-4 border-[#5c2e0b] mb-4 inline-block">
-            <h1 className="text-2xl font-bold text-white drop-shadow-md font-display">
-              {config.title}
-            </h1>
-          </div>
-          
-          <p className="text-white/80 text-lg">
+          <p 
+            className="text-white/80 text-lg mt-2"
+            style={{ textShadow: '0 1px 3px rgba(0,0,0,0.5)' }}
+          >
             {config.subtitle}
           </p>
+          
+          {/* Small decorative star divider */}
+          <div className="flex items-center justify-center gap-2 mt-4 mb-2">
+            <div className="w-8 h-[1px] bg-gradient-to-r from-transparent to-white/30" />
+            <Sparkles className="w-5 h-5 text-[#E8B923]" />
+            <div className="w-8 h-[1px] bg-gradient-to-l from-transparent to-white/30" />
+          </div>
         </div>
 
-        {/* Content Grid - Wood card style */}
-        <div className="grid grid-cols-2 gap-4 mb-8">
-          {items.slice(0, config.maxItems).map((item) => (
+        {/* Content Grid - Animated cards with pop-in effect */}
+        <div className="grid grid-cols-2 gap-3 mb-8">
+          {items.slice(0, config.maxItems).map((item, index) => (
             <button
               key={item._id}
               onClick={() => handleItemClick(item)}
-              className={`relative rounded-xl overflow-hidden shadow-lg transition-all duration-300 transform border-4 ${
+              className={`relative rounded-xl overflow-hidden shadow-xl transition-all duration-300 transform ${
                 selectedItem?._id === item._id
-                  ? 'border-[#FFD700] scale-105 shadow-[#FFD700]/30'
-                  : 'border-[#5c2e0b] hover:border-[#8B4513] hover:scale-102 active:scale-98'
+                  ? 'ring-4 ring-[#E8B923] scale-[1.03]'
+                  : 'ring-1 ring-white/10 hover:ring-white/30 hover:scale-[1.02] active:scale-[0.98]'
               }`}
+              style={{
+                opacity: showContent ? 1 : 0,
+                transform: showContent 
+                  ? (selectedItem?._id === item._id ? 'scale(1.03)' : 'scale(1)') 
+                  : 'scale(0.6) translateY(30px)',
+                transition: `all 0.6s cubic-bezier(0.34, 1.56, 0.64, 1)`,
+                transitionDelay: `${0.2 + index * 0.08}s`,
+                boxShadow: selectedItem?._id === item._id 
+                  ? '0 0 30px rgba(232, 185, 35, 0.4), 0 10px 30px rgba(0,0,0,0.3)' 
+                  : '0 4px 20px rgba(0,0,0,0.3)',
+              }}
             >
               {/* Image */}
-              <div className="aspect-square bg-[#3d2317]">
+              <div className="aspect-square bg-[#152057]">
                 {item.imageUrl ? (
                   <img
                     src={item.imageUrl}
@@ -203,29 +369,32 @@ const NewUserWelcomePage: React.FC = () => {
                     loading="lazy"
                   />
                 ) : (
-                  <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-[#8B4513] to-[#5c2e0b]">
-                    <div className="text-white/30 scale-150">
+                  <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-[#1a3068] to-[#152057]">
+                    <div className="text-white/20 scale-[2]">
                       {getTypeIcon(item.type)}
                     </div>
                   </div>
                 )}
               </div>
 
-              {/* Wood plank info bar */}
-              <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-[#2a1810] via-[#3d2317]/95 to-transparent p-3 pt-10">
-                <p className="text-white font-bold text-sm line-clamp-2 leading-tight mb-1 drop-shadow-md">
+              {/* Gradient info bar */}
+              <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-[#0c1445]/95 via-[#0c1445]/80 to-transparent p-3 pt-14">
+                <p className="text-white font-bold text-sm line-clamp-2 leading-tight mb-1.5" style={{ textShadow: '0 1px 3px rgba(0,0,0,0.8)' }}>
                   {item.title}
                 </p>
-                <div className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-bold ${getTypeBadgeColor(item.type)}`}>
+                <div className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold ${getTypeBadgeColor(item.type)}`}>
                   {getTypeIcon(item.type)}
                   {getTypeLabel(item.type)}
                 </div>
               </div>
 
-              {/* Gold checkmark for selected */}
+              {/* Golden checkmark for selected */}
               {selectedItem?._id === item._id && (
-                <div className="absolute top-2 right-2 w-8 h-8 bg-gradient-to-br from-[#FFD700] to-[#B8860B] rounded-full flex items-center justify-center shadow-lg border-2 border-[#8B4513]">
-                  <svg className="w-5 h-5 text-[#5c2e0b]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <div 
+                  className="absolute top-2 right-2 w-7 h-7 bg-[#E8B923] rounded-full flex items-center justify-center shadow-lg"
+                  style={{ boxShadow: '0 0 15px rgba(232, 185, 35, 0.6)' }}
+                >
+                  <svg className="w-4 h-4 text-[#0c1445]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
                   </svg>
                 </div>
@@ -234,15 +403,26 @@ const NewUserWelcomePage: React.FC = () => {
           ))}
         </div>
 
-        {/* Action Buttons */}
-        <div className="space-y-3">
+        {/* Action Buttons - Animated */}
+        <div 
+          className="space-y-3"
+          style={{
+            opacity: showContent ? 1 : 0,
+            transform: showContent ? 'translateY(0)' : 'translateY(20px)',
+            transition: 'all 0.6s ease-out',
+            transitionDelay: '0.6s',
+          }}
+        >
           {/* Gold "Let's Go" Button */}
-          <WoodButton
-            variant="gold"
-            fullWidth
+          <button
             onClick={handleStartWithItem}
             disabled={!selectedItem}
-            className={`text-lg py-4 ${!selectedItem ? 'opacity-50 cursor-not-allowed' : ''}`}
+            className={`w-full py-4 rounded-2xl font-bold text-lg transition-all duration-300 ${
+              selectedItem 
+                ? 'bg-gradient-to-r from-[#FFD700] via-[#FFC107] to-[#FFD700] text-[#5c2e0b] shadow-lg shadow-[#FFD700]/30 hover:shadow-[#FFD700]/50 hover:scale-[1.02] active:scale-[0.98]'
+                : 'bg-white/10 text-white/50 cursor-not-allowed'
+            }`}
+            style={selectedItem ? { animation: 'glowPulse 2s ease-in-out infinite' } : {}}
           >
             <span className="flex items-center justify-center gap-2">
               {selectedItem ? (
@@ -251,16 +431,16 @@ const NewUserWelcomePage: React.FC = () => {
                   <ChevronRight className="w-5 h-5" />
                 </>
               ) : (
-                'Pick something above'
+                '✨ Pick something above'
               )}
             </span>
-          </WoodButton>
+          </button>
 
-          {/* Skip Button - wood style */}
+          {/* Skip Button - glass style */}
           {config.showSkipButton && (
             <button
               onClick={handleSkip}
-              className="w-full py-3 text-white/70 font-medium hover:text-white transition-colors"
+              className="w-full py-3 text-white/50 font-medium hover:text-white/80 transition-colors hover:bg-white/5 rounded-xl"
             >
               {config.skipButtonText}
             </button>

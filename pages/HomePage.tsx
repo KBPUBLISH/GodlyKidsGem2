@@ -1100,17 +1100,17 @@ const HomePage: React.FC = () => {
             icon="🧠"
             color="#4CAF50"
           />
-          <div className="w-screen overflow-x-auto no-scrollbar pb-4 -mx-4">
-            <div className="flex space-x-3 px-4">
+          <div className="w-screen overflow-x-auto no-scrollbar pb-4 -mx-4 sm:w-full sm:mx-0">
+            <div className="flex space-x-3 px-4 sm:flex-wrap sm:gap-3 sm:space-x-0">
               
               {/* Daily Key Task */}
               <div
-                className={`relative w-[calc((100vw-48px-30px)/3)] flex-shrink-0 ${
+                className={`relative w-[calc((100vw-48px-30px)/3)] sm:w-[140px] md:w-[160px] flex-shrink-0 ${
                   hasEngagedDailyKey ? 'cursor-default' : 'cursor-pointer'
                 }`}
                 onClick={() => !hasEngagedDailyKey && handleDailyKeyClick()}
               >
-                <div className={`relative aspect-[9/16] rounded-xl overflow-hidden transition-all border-2 ${
+                <div className={`relative aspect-[3/4] sm:aspect-[4/5] rounded-xl overflow-hidden transition-all border-2 ${
                   hasEngagedDailyKey ? 'border-[#FFD700]/30' : 'border-[#FFD700]'
                 }`}>
                   {/* Background Gradient */}
@@ -1148,12 +1148,12 @@ const HomePage: React.FC = () => {
 
               {/* Memory Task */}
               <div
-                className={`relative w-[calc((100vw-48px-30px)/3)] flex-shrink-0 ${
+                className={`relative w-[calc((100vw-48px-30px)/3)] sm:w-[140px] md:w-[160px] flex-shrink-0 ${
                   hasEngagedMemory ? 'cursor-default' : 'cursor-pointer'
                 }`}
                 onClick={() => !hasEngagedMemory && handleMemoryClick()}
               >
-                <div className={`relative aspect-[9/16] rounded-xl overflow-hidden transition-all border-2 ${
+                <div className={`relative aspect-[3/4] sm:aspect-[4/5] rounded-xl overflow-hidden transition-all border-2 ${
                   hasEngagedMemory ? 'border-[#3949ab]/30' : 'border-[#5c6bc0]'
                 }`}>
                   {/* Background Gradient */}
@@ -1191,12 +1191,12 @@ const HomePage: React.FC = () => {
 
               {/* Prayer Task */}
               <div
-                className={`relative w-[calc((100vw-48px-30px)/3)] flex-shrink-0 ${
+                className={`relative w-[calc((100vw-48px-30px)/3)] sm:w-[140px] md:w-[160px] flex-shrink-0 ${
                   hasEngagedPrayer ? 'cursor-default' : 'cursor-pointer'
                 }`}
                 onClick={() => !hasEngagedPrayer && handlePrayerClick()}
               >
-                <div className={`relative aspect-[9/16] rounded-xl overflow-hidden transition-all border-2 ${
+                <div className={`relative aspect-[3/4] sm:aspect-[4/5] rounded-xl overflow-hidden transition-all border-2 ${
                   hasEngagedPrayer ? 'border-[#AB47BC]/30' : 'border-[#BA68C8]'
                 }`}>
                   {/* Background Gradient */}
@@ -1244,7 +1244,7 @@ const HomePage: React.FC = () => {
                 return (
                   <div
                     key={gameId}
-                    className="relative w-[calc((100vw-48px-30px)/3)] flex-shrink-0 cursor-pointer"
+                    className="relative w-[calc((100vw-48px-30px)/3)] sm:w-[140px] md:w-[160px] flex-shrink-0 cursor-pointer"
                     onClick={() => {
                       if (isLocked) {
                         // Show purchase confirmation
@@ -1276,7 +1276,7 @@ const HomePage: React.FC = () => {
                       }
                     }}
                   >
-                    <div className={`relative aspect-[9/16] rounded-xl overflow-hidden transition-all border-2 ${isLocked ? 'border-[#FFD700]' : 'border-[#4CAF50]'}`}>
+                    <div className={`relative aspect-[3/4] sm:aspect-[4/5] rounded-xl overflow-hidden transition-all border-2 ${isLocked ? 'border-[#FFD700]' : 'border-[#4CAF50]'}`}>
                       {/* Cover Image or Gradient Background */}
                       {game.coverImage ? (
                         <img 

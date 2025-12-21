@@ -456,13 +456,13 @@ import VideoLessonDemo from './pages/VideoLessonDemo';
 import GameWebViewPage from './pages/GameWebViewPage';
 import NewUserWelcomePage, { shouldShowWelcome } from './pages/NewUserWelcomePage';
 
-// Wrapper component that checks if new user should see welcome screen
-const HomePageWithWelcomeCheck: React.FC = () => {
-  // Check if this is a new user who hasn't seen the welcome screen
+// Landing page wrapper - shows welcome screen first for brand new users
+const LandingPageWithWelcomeCheck: React.FC = () => {
+  // Brand new users should see welcome screen FIRST (before landing page)
   if (shouldShowWelcome()) {
     return <Navigate to="/welcome" replace />;
   }
-  return <HomePage />;
+  return <LandingPage />;
 };
 
 import MiniPlayer from './components/audio/MiniPlayer';
@@ -820,13 +820,13 @@ const App: React.FC = () => {
               <ReferralPromptWrapper>
               <Layout>
                 <Routes>
-                  <Route path="/" element={<LandingPage />} />
+                  <Route path="/" element={<LandingPageWithWelcomeCheck />} />
                   <Route path="/signin" element={<SignInPage />} />
                   <Route path="/sign-in" element={<SignInPage />} />
                   <Route path="/reset-password" element={<ResetPasswordPage />} />
                   <Route path="/onboarding" element={<OnboardingPage />} />
                   <Route path="/welcome" element={<NewUserWelcomePage />} />
-                  <Route path="/home" element={<HomePageWithWelcomeCheck />} />
+                  <Route path="/home" element={<HomePage />} />
                   <Route path="/listen" element={<ListenPage />} />
                   <Route path="/read" element={<ReadPage />} />
                   <Route path="/library" element={<LibraryPage />} />

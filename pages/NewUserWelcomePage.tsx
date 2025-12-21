@@ -120,8 +120,10 @@ const NewUserWelcomePage: React.FC = () => {
   const fetchWelcomeContent = async () => {
     try {
       const envUrl = import.meta.env.VITE_API_BASE_URL;
-      const baseUrl = envUrl || API_BASE_URL;
-      const apiBase = baseUrl.endsWith('/api') ? baseUrl : `${baseUrl}/api`;
+      let baseUrl = envUrl || API_BASE_URL;
+      // Normalize: remove trailing slashes and ensure single /api
+      baseUrl = baseUrl.replace(/\/+$/, '').replace(/\/api$/, '');
+      const apiBase = `${baseUrl}/api`;
       
       const response = await fetch(`${apiBase}/featured/new-user`);
       const data = await response.json();

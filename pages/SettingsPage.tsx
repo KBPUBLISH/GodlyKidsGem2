@@ -630,14 +630,28 @@ const SettingsPage: React.FC = () => {
                     // Clear Despia route restoration data (prevents redirect back to home)
                     localStorage.removeItem('gk_last_route');
                     localStorage.removeItem('gk_last_hidden_ts');
+                    // Clear the main user data storage key directly
+                    localStorage.removeItem('godly_kids_data_v7');
+                    // Clear auth token
+                    localStorage.removeItem('godlykids_auth_token');
                     // Sign out from auth service (clears token and user)
                     authService.signOut();
                     
-                    // Force full page reload to clear all React state
-                    // Use hash format for HashRouter compatibility
-                    // This ensures no ghost data persists in memory
-                    window.location.replace(window.location.origin + window.location.pathname + '#/');
-                    window.location.reload();
+                    // For Despia/WebView: Use setTimeout to ensure all cleanup completes
+                    // before navigation, and use a more aggressive reload approach
+                    setTimeout(() => {
+                      // Clear any remaining items
+                      const keysToRemove = Object.keys(localStorage).filter(k => 
+                        k.startsWith('godlykids') || k.startsWith('gk_') || k.startsWith('godly_kids')
+                      );
+                      keysToRemove.forEach(k => localStorage.removeItem(k));
+                      
+                      // Force navigation to landing page with full reload
+                      // This works better in WebViews than replace + reload
+                      window.location.href = window.location.origin + window.location.pathname + '#/';
+                      // Additional reload after a short delay to ensure state is fully cleared
+                      setTimeout(() => window.location.reload(), 100);
+                    }, 50);
                 }}
                 className="w-full bg-[#ffcdd2] hover:bg-[#ef9a9a] text-[#c62828] font-bold py-4 rounded-xl border-b-4 border-[#e57373] active:border-b-0 active:translate-y-1 shadow-sm flex items-center justify-center gap-2 transition-all"
             >

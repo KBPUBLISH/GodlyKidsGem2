@@ -22,6 +22,7 @@ import LessonCalendarPage from './pages/LessonCalendarPage';
 import Notifications from './pages/Notifications';
 import MusicManagement from './pages/MusicManagement';
 import FeaturedContent from './pages/FeaturedContent';
+import NewUserWelcome from './pages/NewUserWelcome';
 import AnalyticsDashboard from './pages/AnalyticsDashboard';
 
 function App() {
@@ -60,6 +61,7 @@ function App() {
             <Route path="notifications" element={<Notifications />} />
             <Route path="music" element={<MusicManagement />} />
             <Route path="featured" element={<FeaturedContent />} />
+            <Route path="new-user-welcome" element={<NewUserWelcome />} />
             <Route path="analytics" element={<AnalyticsDashboard />} />
           </Route>
         </Routes>

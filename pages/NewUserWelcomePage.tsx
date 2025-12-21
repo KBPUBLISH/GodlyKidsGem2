@@ -2,6 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Sparkles, BookOpen, Music, Video, ChevronRight, Loader2 } from 'lucide-react';
 import { API_BASE_URL } from '../constants';
+import WoodButton from '../components/ui/WoodButton';
+import { useAudio } from '../context/AudioContext';
 
 interface ContentItem {
   _id: string;
@@ -21,6 +23,7 @@ interface WelcomeConfig {
 
 const NewUserWelcomePage: React.FC = () => {
   const navigate = useNavigate();
+  const { playClick } = useAudio();
   const [config, setConfig] = useState<WelcomeConfig>({
     title: 'Welcome to Godly Kids!',
     subtitle: 'Pick something to start your adventure.',
@@ -69,6 +72,7 @@ const NewUserWelcomePage: React.FC = () => {
   };
 
   const handleItemClick = (item: ContentItem) => {
+    playClick();
     setSelectedItem(item);
   };
 
@@ -94,6 +98,7 @@ const NewUserWelcomePage: React.FC = () => {
   };
 
   const handleSkip = () => {
+    playClick();
     markWelcomeSeen();
     navigate('/home');
   };
@@ -116,21 +121,21 @@ const NewUserWelcomePage: React.FC = () => {
     }
   };
 
-  const getTypeColor = (type: string) => {
+  const getTypeBadgeColor = (type: string) => {
     switch (type) {
-      case 'book': return 'from-blue-400 to-blue-600';
-      case 'playlist': return 'from-purple-400 to-purple-600';
-      case 'lesson': return 'from-green-400 to-green-600';
-      default: return 'from-gray-400 to-gray-600';
+      case 'book': return 'bg-[#8B4513]/80 text-white';
+      case 'playlist': return 'bg-[#FFD700]/90 text-[#5c2e0b]';
+      case 'lesson': return 'bg-[#228B22]/80 text-white';
+      default: return 'bg-[#8B4513]/80 text-white';
     }
   };
 
   if (loading) {
     return (
-      <div className="h-full flex items-center justify-center bg-gradient-to-b from-amber-50 via-orange-50 to-amber-100">
+      <div className="h-full flex items-center justify-center">
         <div className="text-center">
-          <Loader2 className="w-12 h-12 animate-spin text-amber-500 mx-auto mb-4" />
-          <p className="text-amber-800 font-medium">Loading your adventure...</p>
+          <Loader2 className="w-12 h-12 animate-spin text-[#FFD700] mx-auto mb-4" />
+          <p className="text-white/80 font-medium">Loading your adventure...</p>
         </div>
       </div>
     );
@@ -144,43 +149,52 @@ const NewUserWelcomePage: React.FC = () => {
   }
 
   return (
-    <div className="h-full overflow-auto bg-gradient-to-b from-amber-50 via-orange-50 to-amber-100">
-      {/* Decorative Background Elements */}
-      <div className="absolute inset-0 overflow-hidden pointer-events-none">
-        <div className="absolute top-10 left-10 w-20 h-20 bg-yellow-200/40 rounded-full blur-2xl" />
-        <div className="absolute top-32 right-8 w-16 h-16 bg-orange-200/40 rounded-full blur-xl" />
-        <div className="absolute bottom-40 left-6 w-24 h-24 bg-amber-200/40 rounded-full blur-2xl" />
-        <div className="absolute bottom-20 right-12 w-12 h-12 bg-yellow-300/30 rounded-full blur-lg" />
-      </div>
+    <div className="h-full overflow-auto">
+      {/* Wood panel background */}
+      <div className="absolute inset-0 bg-gradient-to-b from-[#2a1810] via-[#3d2317] to-[#1a0f0a]" />
+      
+      {/* Wood grain texture overlay */}
+      <div 
+        className="absolute inset-0 opacity-10 pointer-events-none"
+        style={{ 
+          backgroundImage: 'repeating-linear-gradient(90deg, transparent, transparent 50px, rgba(0,0,0,0.1) 50px, rgba(0,0,0,0.1) 51px)',
+        }}
+      />
 
       <div className="relative z-10 px-5 py-8 pb-32 max-w-lg mx-auto">
-        {/* Header */}
+        {/* Header with gold accent */}
         <div className="text-center mb-8">
-          <div className="w-20 h-20 bg-gradient-to-br from-amber-400 to-orange-500 rounded-full flex items-center justify-center mx-auto mb-5 shadow-lg shadow-amber-300/50">
-            <Sparkles className="w-10 h-10 text-white" />
+          {/* Golden sparkle icon */}
+          <div className="w-20 h-20 bg-gradient-to-br from-[#FFD700] to-[#B8860B] rounded-full flex items-center justify-center mx-auto mb-5 shadow-lg shadow-[#FFD700]/30 border-4 border-[#8B4513]">
+            <Sparkles className="w-10 h-10 text-[#5c2e0b]" />
           </div>
-          <h1 className="text-3xl font-bold text-amber-900 mb-2">
-            {config.title}
-          </h1>
-          <p className="text-amber-700 text-lg">
+          
+          {/* Wood plank title */}
+          <div className="bg-[#8B4513] rounded-xl px-6 py-4 shadow-lg border-b-4 border-[#5c2e0b] mb-4 inline-block">
+            <h1 className="text-2xl font-bold text-white drop-shadow-md font-display">
+              {config.title}
+            </h1>
+          </div>
+          
+          <p className="text-white/80 text-lg">
             {config.subtitle}
           </p>
         </div>
 
-        {/* Content Grid */}
+        {/* Content Grid - Wood card style */}
         <div className="grid grid-cols-2 gap-4 mb-8">
           {items.slice(0, config.maxItems).map((item) => (
             <button
               key={item._id}
               onClick={() => handleItemClick(item)}
-              className={`relative rounded-2xl overflow-hidden shadow-lg transition-all duration-300 transform ${
+              className={`relative rounded-xl overflow-hidden shadow-lg transition-all duration-300 transform border-4 ${
                 selectedItem?._id === item._id
-                  ? 'ring-4 ring-amber-500 ring-offset-2 scale-105'
-                  : 'hover:scale-102 active:scale-98'
+                  ? 'border-[#FFD700] scale-105 shadow-[#FFD700]/30'
+                  : 'border-[#5c2e0b] hover:border-[#8B4513] hover:scale-102 active:scale-98'
               }`}
             >
               {/* Image */}
-              <div className="aspect-square bg-gray-100">
+              <div className="aspect-square bg-[#3d2317]">
                 {item.imageUrl ? (
                   <img
                     src={item.imageUrl}
@@ -189,29 +203,29 @@ const NewUserWelcomePage: React.FC = () => {
                     loading="lazy"
                   />
                 ) : (
-                  <div className={`w-full h-full flex items-center justify-center bg-gradient-to-br ${getTypeColor(item.type)}`}>
-                    <div className="text-white opacity-50 scale-150">
+                  <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-[#8B4513] to-[#5c2e0b]">
+                    <div className="text-white/30 scale-150">
                       {getTypeIcon(item.type)}
                     </div>
                   </div>
                 )}
               </div>
 
-              {/* Overlay Info */}
-              <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 via-black/50 to-transparent p-3 pt-10">
-                <p className="text-white font-semibold text-sm line-clamp-2 leading-tight mb-1">
+              {/* Wood plank info bar */}
+              <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-[#2a1810] via-[#3d2317]/95 to-transparent p-3 pt-10">
+                <p className="text-white font-bold text-sm line-clamp-2 leading-tight mb-1 drop-shadow-md">
                   {item.title}
                 </p>
-                <div className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-white/20 text-white`}>
+                <div className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-bold ${getTypeBadgeColor(item.type)}`}>
                   {getTypeIcon(item.type)}
                   {getTypeLabel(item.type)}
                 </div>
               </div>
 
-              {/* Selection Checkmark */}
+              {/* Gold checkmark for selected */}
               {selectedItem?._id === item._id && (
-                <div className="absolute top-2 right-2 w-7 h-7 bg-amber-500 rounded-full flex items-center justify-center shadow-lg">
-                  <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <div className="absolute top-2 right-2 w-8 h-8 bg-gradient-to-br from-[#FFD700] to-[#B8860B] rounded-full flex items-center justify-center shadow-lg border-2 border-[#8B4513]">
+                  <svg className="w-5 h-5 text-[#5c2e0b]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
                   </svg>
                 </div>
@@ -222,31 +236,31 @@ const NewUserWelcomePage: React.FC = () => {
 
         {/* Action Buttons */}
         <div className="space-y-3">
-          {/* Start Button */}
-          <button
+          {/* Gold "Let's Go" Button */}
+          <WoodButton
+            variant="gold"
+            fullWidth
             onClick={handleStartWithItem}
             disabled={!selectedItem}
-            className={`w-full py-4 px-6 rounded-2xl font-bold text-lg flex items-center justify-center gap-2 transition-all duration-300 ${
-              selectedItem
-                ? 'bg-gradient-to-r from-amber-500 to-orange-500 text-white shadow-lg shadow-amber-400/50 hover:shadow-xl hover:shadow-amber-400/60 active:scale-98'
-                : 'bg-gray-200 text-gray-400 cursor-not-allowed'
-            }`}
+            className={`text-lg py-4 ${!selectedItem ? 'opacity-50 cursor-not-allowed' : ''}`}
           >
-            {selectedItem ? (
-              <>
-                Let's Go!
-                <ChevronRight className="w-5 h-5" />
-              </>
-            ) : (
-              'Pick something above'
-            )}
-          </button>
+            <span className="flex items-center justify-center gap-2">
+              {selectedItem ? (
+                <>
+                  Let's Go!
+                  <ChevronRight className="w-5 h-5" />
+                </>
+              ) : (
+                'Pick something above'
+              )}
+            </span>
+          </WoodButton>
 
-          {/* Skip Button */}
+          {/* Skip Button - wood style */}
           {config.showSkipButton && (
             <button
               onClick={handleSkip}
-              className="w-full py-3 text-amber-700 font-medium hover:text-amber-800 transition-colors"
+              className="w-full py-3 text-white/70 font-medium hover:text-white transition-colors"
             >
               {config.skipButtonText}
             </button>
@@ -263,4 +277,3 @@ export default NewUserWelcomePage;
 export const shouldShowWelcome = (): boolean => {
   return !localStorage.getItem('godlykids_welcome_seen');
 };
-

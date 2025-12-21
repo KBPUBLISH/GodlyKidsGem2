@@ -1093,24 +1093,24 @@ const HomePage: React.FC = () => {
           </>
         )}
 
-        {/* Daily Tasks & IQ Games Section - Portrait Thumbnail Carousel Style */}
+        {/* Daily Tasks & IQ Games Section - Vertical 9:16 Sliding Cards */}
         <section className="mt-4">
           <SectionTitle 
             title="Daily Tasks & IQ Games" 
             icon="🧠"
             color="#4CAF50"
           />
-          <div className="w-screen overflow-x-auto no-scrollbar pb-4 -mx-4 sm:w-full sm:mx-0">
-            <div className="flex space-x-3 px-4 sm:flex-wrap sm:gap-3 sm:space-x-0">
+          <div className="w-screen overflow-x-auto no-scrollbar pb-4 -mx-4 snap-x snap-mandatory">
+            <div className="flex space-x-4 px-4">
               
               {/* Daily Key Task */}
               <div
-                className={`relative w-[calc((100vw-48px-30px)/3)] sm:w-[140px] md:w-[160px] flex-shrink-0 ${
+                className={`relative w-[65vw] max-w-[280px] flex-shrink-0 snap-center ${
                   hasEngagedDailyKey ? 'cursor-default' : 'cursor-pointer'
                 }`}
                 onClick={() => !hasEngagedDailyKey && handleDailyKeyClick()}
               >
-                <div className={`relative aspect-[3/4] sm:aspect-[4/5] rounded-xl overflow-hidden transition-all border-2 ${
+                <div className={`relative aspect-[9/16] rounded-2xl overflow-hidden transition-all border-3 shadow-xl ${
                   hasEngagedDailyKey ? 'border-[#FFD700]/30' : 'border-[#FFD700]'
                 }`}>
                   {/* Background Gradient */}
@@ -1118,28 +1118,28 @@ const HomePage: React.FC = () => {
                   
                   {/* Decorative Pattern */}
                   <div className="absolute inset-0 opacity-20" style={{ 
-                    backgroundImage: 'radial-gradient(circle at 30% 20%, #FFD700 2%, transparent 8%), radial-gradient(circle at 70% 80%, #FFD700 2%, transparent 8%)'
+                    backgroundImage: 'radial-gradient(circle at 30% 20%, #FFD700 3%, transparent 10%), radial-gradient(circle at 70% 80%, #FFD700 3%, transparent 10%), radial-gradient(circle at 50% 50%, #FFD700 2%, transparent 8%)'
                   }} />
                   
-                  {/* Icon */}
+                  {/* Icon & Content - Centered */}
                   <div className="absolute inset-0 flex flex-col items-center justify-center">
-                    <div className="w-16 h-16 rounded-full bg-[#FFD700]/20 flex items-center justify-center mb-2">
-                      <Key size={36} className="text-[#FFD700]" fill="#B8860B" />
+                    <div className="w-24 h-24 rounded-full bg-[#FFD700]/20 flex items-center justify-center mb-4 border-2 border-[#FFD700]/30">
+                      <Key size={56} className="text-[#FFD700]" fill="#B8860B" />
                     </div>
-                    <span className="text-[#FFD700] text-sm font-bold font-display text-center px-2">
+                    <span className="text-[#FFD700] text-2xl font-bold font-display text-center px-4">
                       Daily Key
                     </span>
-                    <span className="text-white/60 text-[10px] text-center px-2 mt-1">
+                    <span className="text-white/70 text-sm text-center px-4 mt-2">
                       Unlock rewards
                     </span>
                   </div>
                   
-                  {/* Completed Overlay - Faded when done */}
+                  {/* Completed Overlay */}
                   {hasEngagedDailyKey && (
                     <>
                       <div className="absolute inset-0 bg-black/50" />
-                      <div className="absolute top-2 right-2 bg-green-500 rounded-full p-1">
-                        <Check className="w-3 h-3 text-white" />
+                      <div className="absolute top-4 right-4 bg-green-500 rounded-full p-2">
+                        <Check className="w-5 h-5 text-white" />
                       </div>
                     </>
                   )}
@@ -1148,12 +1148,12 @@ const HomePage: React.FC = () => {
 
               {/* Memory Task */}
               <div
-                className={`relative w-[calc((100vw-48px-30px)/3)] sm:w-[140px] md:w-[160px] flex-shrink-0 ${
+                className={`relative w-[65vw] max-w-[280px] flex-shrink-0 snap-center ${
                   hasEngagedMemory ? 'cursor-default' : 'cursor-pointer'
                 }`}
                 onClick={() => !hasEngagedMemory && handleMemoryClick()}
               >
-                <div className={`relative aspect-[3/4] sm:aspect-[4/5] rounded-xl overflow-hidden transition-all border-2 ${
+                <div className={`relative aspect-[9/16] rounded-2xl overflow-hidden transition-all border-3 shadow-xl ${
                   hasEngagedMemory ? 'border-[#3949ab]/30' : 'border-[#5c6bc0]'
                 }`}>
                   {/* Background Gradient */}
@@ -1161,28 +1161,28 @@ const HomePage: React.FC = () => {
                   
                   {/* Decorative Pattern */}
                   <div className="absolute inset-0 opacity-20" style={{ 
-                    backgroundImage: 'radial-gradient(circle at 20% 30%, #90caf9 2%, transparent 8%), radial-gradient(circle at 80% 70%, #90caf9 2%, transparent 8%)'
+                    backgroundImage: 'radial-gradient(circle at 20% 30%, #90caf9 3%, transparent 10%), radial-gradient(circle at 80% 70%, #90caf9 3%, transparent 10%), radial-gradient(circle at 50% 50%, #90caf9 2%, transparent 8%)'
                   }} />
                   
-                  {/* Icon */}
+                  {/* Icon & Content - Centered */}
                   <div className="absolute inset-0 flex flex-col items-center justify-center">
-                    <div className="w-16 h-16 rounded-full bg-[#5c6bc0]/30 flex items-center justify-center mb-2">
-                      <Brain size={36} className="text-[#90caf9]" fill="#64b5f6" />
+                    <div className="w-24 h-24 rounded-full bg-[#5c6bc0]/30 flex items-center justify-center mb-4 border-2 border-[#5c6bc0]/30">
+                      <Brain size={56} className="text-[#90caf9]" fill="#64b5f6" />
                     </div>
-                    <span className="text-[#90caf9] text-sm font-bold font-display text-center px-2">
+                    <span className="text-[#90caf9] text-2xl font-bold font-display text-center px-4">
                       Memory
                     </span>
-                    <span className="text-white/60 text-[10px] text-center px-2 mt-1">
+                    <span className="text-white/70 text-sm text-center px-4 mt-2">
                       Bible challenge
                     </span>
                   </div>
                   
-                  {/* Completed Overlay - Faded when done */}
+                  {/* Completed Overlay */}
                   {hasEngagedMemory && (
                     <>
                       <div className="absolute inset-0 bg-black/50" />
-                      <div className="absolute top-2 right-2 bg-green-500 rounded-full p-1">
-                        <Check className="w-3 h-3 text-white" />
+                      <div className="absolute top-4 right-4 bg-green-500 rounded-full p-2">
+                        <Check className="w-5 h-5 text-white" />
                       </div>
                     </>
                   )}
@@ -1191,12 +1191,12 @@ const HomePage: React.FC = () => {
 
               {/* Prayer Task */}
               <div
-                className={`relative w-[calc((100vw-48px-30px)/3)] sm:w-[140px] md:w-[160px] flex-shrink-0 ${
+                className={`relative w-[65vw] max-w-[280px] flex-shrink-0 snap-center ${
                   hasEngagedPrayer ? 'cursor-default' : 'cursor-pointer'
                 }`}
                 onClick={() => !hasEngagedPrayer && handlePrayerClick()}
               >
-                <div className={`relative aspect-[3/4] sm:aspect-[4/5] rounded-xl overflow-hidden transition-all border-2 ${
+                <div className={`relative aspect-[9/16] rounded-2xl overflow-hidden transition-all border-3 shadow-xl ${
                   hasEngagedPrayer ? 'border-[#AB47BC]/30' : 'border-[#BA68C8]'
                 }`}>
                   {/* Background Gradient */}
@@ -1204,28 +1204,28 @@ const HomePage: React.FC = () => {
                   
                   {/* Decorative Pattern */}
                   <div className="absolute inset-0 opacity-20" style={{ 
-                    backgroundImage: 'radial-gradient(circle at 30% 40%, #F06292 2%, transparent 8%), radial-gradient(circle at 70% 60%, #F06292 2%, transparent 8%)'
+                    backgroundImage: 'radial-gradient(circle at 30% 40%, #F06292 3%, transparent 10%), radial-gradient(circle at 70% 60%, #F06292 3%, transparent 10%), radial-gradient(circle at 50% 50%, #F06292 2%, transparent 8%)'
                   }} />
                   
-                  {/* Icon */}
+                  {/* Icon & Content - Centered */}
                   <div className="absolute inset-0 flex flex-col items-center justify-center">
-                    <div className="w-16 h-16 rounded-full bg-[#F06292]/20 flex items-center justify-center mb-2">
-                      <Heart size={36} className="text-[#F06292]" fill="#EC407A" />
+                    <div className="w-24 h-24 rounded-full bg-[#F06292]/20 flex items-center justify-center mb-4 border-2 border-[#F06292]/30">
+                      <Heart size={56} className="text-[#F06292]" fill="#EC407A" />
                     </div>
-                    <span className="text-[#F06292] text-sm font-bold font-display text-center px-2">
+                    <span className="text-[#F06292] text-2xl font-bold font-display text-center px-4">
                       Prayer
                     </span>
-                    <span className="text-white/60 text-[10px] text-center px-2 mt-1">
+                    <span className="text-white/70 text-sm text-center px-4 mt-2">
                       Connect with God
                     </span>
                   </div>
                   
-                  {/* Completed Overlay - Faded when done */}
+                  {/* Completed Overlay */}
                   {hasEngagedPrayer && (
                     <>
                       <div className="absolute inset-0 bg-black/50" />
-                      <div className="absolute top-2 right-2 bg-green-500 rounded-full p-1">
-                        <Check className="w-3 h-3 text-white" />
+                      <div className="absolute top-4 right-4 bg-green-500 rounded-full p-2">
+                        <Check className="w-5 h-5 text-white" />
                       </div>
                     </>
                   )}
@@ -1244,7 +1244,7 @@ const HomePage: React.FC = () => {
                 return (
                   <div
                     key={gameId}
-                    className="relative w-[calc((100vw-48px-30px)/3)] sm:w-[140px] md:w-[160px] flex-shrink-0 cursor-pointer"
+                    className="relative w-[65vw] max-w-[280px] flex-shrink-0 snap-center cursor-pointer"
                     onClick={() => {
                       if (isLocked) {
                         // Show purchase confirmation
@@ -1276,7 +1276,7 @@ const HomePage: React.FC = () => {
                       }
                     }}
                   >
-                    <div className={`relative aspect-[3/4] sm:aspect-[4/5] rounded-xl overflow-hidden transition-all border-2 ${isLocked ? 'border-[#FFD700]' : 'border-[#4CAF50]'}`}>
+                    <div className={`relative aspect-[9/16] rounded-2xl overflow-hidden transition-all border-3 shadow-xl ${isLocked ? 'border-[#FFD700]' : 'border-[#4CAF50]'}`}>
                       {/* Cover Image or Gradient Background */}
                       {game.coverImage ? (
                         <img 
@@ -1291,24 +1291,24 @@ const HomePage: React.FC = () => {
                       {/* Lock Overlay for Purchasable Games */}
                       {isLocked && (
                         <div className="absolute inset-0 bg-black/40 flex flex-col items-center justify-center z-10">
-                          <div className="bg-black/70 rounded-full p-2 border-2 border-[#FFD700] mb-2">
-                            <Lock size={20} className="text-[#FFD700]" />
+                          <div className="bg-black/70 rounded-full p-4 border-2 border-[#FFD700] mb-3">
+                            <Lock size={32} className="text-[#FFD700]" />
                           </div>
-                          <div className="bg-[#FFD700] rounded-full px-2 py-1 flex items-center gap-1">
-                            <Coins size={12} className="text-[#5c2e0b]" />
-                            <span className="text-[10px] font-bold text-[#5c2e0b]">{game.goldCoinPrice}</span>
+                          <div className="bg-[#FFD700] rounded-full px-4 py-2 flex items-center gap-2">
+                            <Coins size={18} className="text-[#5c2e0b]" />
+                            <span className="text-base font-bold text-[#5c2e0b]">{game.goldCoinPrice}</span>
                           </div>
                         </div>
                       )}
                       
                       {/* Overlay with game info */}
-                      <div className="absolute inset-0 bg-black/30 flex flex-col items-center justify-end pb-3">
-                        <span className="text-white text-sm font-bold font-display text-center px-2 drop-shadow-lg">
+                      <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 via-black/40 to-transparent pt-20 pb-6 px-4">
+                        <span className="text-white text-xl font-bold font-display text-center block drop-shadow-lg">
                           {game.name}
                         </span>
                         {game.description && !isLocked && (
-                          <span className="text-white/80 text-[10px] text-center px-2 mt-1 drop-shadow">
-                            {game.description.substring(0, 30)}...
+                          <span className="text-white/80 text-sm text-center block mt-2 drop-shadow">
+                            {game.description.substring(0, 50)}...
                           </span>
                         )}
                       </div>

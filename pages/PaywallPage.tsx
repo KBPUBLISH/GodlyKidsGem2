@@ -7,6 +7,7 @@ import { useSubscription } from '../context/SubscriptionContext';
 import ParentGateModal from '../components/features/ParentGateModal';
 import { authService } from '../services/authService';
 import { getApiBaseUrl } from '../services/apiService';
+import { facebookPixelService } from '../services/facebookPixelService';
 
 const PaywallPage: React.FC = () => {
   const navigate = useNavigate();
@@ -32,6 +33,12 @@ const PaywallPage: React.FC = () => {
   // Restore modal state
   const [showRestoreModal, setShowRestoreModal] = useState(false);
   const [restoreEmail, setRestoreEmail] = useState('');
+  
+  // Facebook Pixel - Track paywall view (parent-gated area)
+  useEffect(() => {
+    facebookPixelService.init();
+    facebookPixelService.trackPaywallView();
+  }, []);
 
   // If user already has premium, redirect to home
   useEffect(() => {
@@ -51,12 +58,20 @@ const PaywallPage: React.FC = () => {
     setShowParentGate(false);
     setIsPurchasing(true);
     setError(null);
+    
+    // Facebook Pixel - Track checkout initiation
+    const price = selectedPlan === 'annual' ? 49.99 : 9.99;
+    facebookPixelService.trackInitiateCheckout(selectedPlan, price);
 
     try {
       // Purchase through DeSpia/RevenueCat native integration
       const result = await purchase(selectedPlan);
 
       if (result.success) {
+        // Facebook Pixel - Track successful purchase
+        facebookPixelService.trackPurchase(selectedPlan, price);
+        facebookPixelService.trackSubscribe(selectedPlan, price);
+        
         // Update local state
         subscribe();
         navigate('/home');

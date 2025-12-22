@@ -1,9 +1,10 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ChevronLeft, Mail, Lock, Eye, EyeOff, X, Loader2, Sparkles } from 'lucide-react';
 import WoodButton from '../components/ui/WoodButton';
 import { ApiService, getApiBaseUrl } from '../services/apiService';
 import { useUser } from '../context/UserContext';
+import { facebookPixelService } from '../services/facebookPixelService';
 
 const SignInPage: React.FC = () => {
   const navigate = useNavigate();
@@ -13,6 +14,12 @@ const SignInPage: React.FC = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
+  
+  // Facebook Pixel - Track sign-in page view (parent-gated area)
+  useEffect(() => {
+    facebookPixelService.init();
+    facebookPixelService.trackPageView('Sign In');
+  }, []);
   
   // Forgot password modal state
   const [showForgotPassword, setShowForgotPassword] = useState(false);

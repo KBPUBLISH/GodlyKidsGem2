@@ -12,6 +12,7 @@ import WebViewModal from '../components/features/WebViewModal';
 import { ApiService } from '../services/apiService';
 import { filterVisibleVoices } from '../services/voiceManagementService';
 import { cleanVoiceDescription, cleanVoiceCategory } from '../utils/voiceUtils';
+import { facebookPixelService } from '../services/facebookPixelService';
 
 // Use Funny Heads instead of generic human seeds
 const FUNNY_HEADS = [
@@ -870,6 +871,11 @@ const OnboardingPage: React.FC = () => {
         setUserEmail(email);
         setUserPassword(password);
         window.dispatchEvent(new Event('authTokenUpdated'));
+        
+        // Facebook Pixel - Track sign up (parent-gated)
+        facebookPixelService.init();
+        facebookPixelService.trackSignUp('email');
+        
         return true;
       } else {
         // If account already exists, try logging in instead
@@ -1015,6 +1021,10 @@ const OnboardingPage: React.FC = () => {
       console.log('🛒 Starting purchase for plan:', selectedPlan);
       console.log('🛒 This will open the Apple subscription sheet...');
       
+      // Facebook Pixel - Track checkout initiation (parent-gated)
+      const price = selectedPlan === 'annual' ? 49.99 : 9.99;
+      facebookPixelService.trackInitiateCheckout(selectedPlan, price);
+      
       // Use quick mode - this triggers the Apple sheet and returns quickly
       // User can complete the purchase while already in the app
       const result = await purchase(selectedPlan, true);
@@ -1031,6 +1041,11 @@ const OnboardingPage: React.FC = () => {
         subscribe();
         setSubscribedDuringOnboarding(true);
         setIsPurchasing(false);
+        
+        // Facebook Pixel - Track successful purchase (parent-gated)
+        const purchasePrice = selectedPlan === 'annual' ? 49.99 : 9.99;
+        facebookPixelService.trackPurchase(selectedPlan, purchasePrice);
+        facebookPixelService.trackSubscribe(selectedPlan, purchasePrice);
         
         // NOW navigate to home - payment is confirmed
         navigate('/home');

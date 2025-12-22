@@ -568,111 +568,49 @@ export const RevenueCatService = {
   },
 
   /**
-   * Web-based purchase via RevenueCat Billing
-   * Opens RevenueCat's hosted checkout page
+   * Web-based purchase via Stripe Checkout
+   * Redirects directly to Stripe's hosted checkout page
    */
   purchaseWeb: async (productId: 'annual' | 'monthly'): Promise<{ success: boolean; error?: string }> => {
-    // Use Web Billing product IDs (Stripe products) for web purchases
-    const webProductId = productId === 'annual' ? WEB_PRODUCT_IDS.ANNUAL : WEB_PRODUCT_IDS.MONTHLY;
     const userId = getUserId();
+    const userEmail = localStorage.getItem('godlykids_user_email') || '';
     
-    console.log('🌐 Starting web purchase via RevenueCat Billing');
-    console.log('   Product:', webProductId);
+    console.log('🌐 Starting web purchase via Stripe Checkout');
+    console.log('   Plan:', productId);
     console.log('   User ID:', userId);
-    console.log('   Web Billing Enabled:', WEB_BILLING_ENABLED);
-    
-    // Check if web billing is enabled
-    if (!WEB_BILLING_ENABLED) {
-      console.log('⚠️ Web billing not enabled - directing user to app stores');
-      return { 
-        success: false, 
-        error: 'Web purchases are not available yet. Please download our app from the App Store or Google Play to subscribe.' 
-      };
-    }
+    console.log('   Email:', userEmail);
     
     try {
-      // RevenueCat Web Billing uses billing.revenuecat.com
-      // Build the checkout URL
-      const checkoutUrl = `https://billing.revenuecat.com/${REVENUECAT_WEB_API_KEY}/checkout?customer_id=${encodeURIComponent(userId)}`;
+      // Get API base URL
+      const API_BASE = import.meta.env.VITE_API_BASE_URL || 'https://backendgk2-0.onrender.com';
+      const apiUrl = API_BASE.endsWith('/api') ? API_BASE.replace('/api', '') : API_BASE;
       
-      console.log('🔗 Opening RevenueCat checkout:', checkoutUrl);
+      // Create Stripe checkout session via backend
+      const response = await fetch(`${apiUrl}/api/stripe/create-checkout-session`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          plan: productId,
+          userId: userId,
+          email: userEmail,
+          successUrl: `${window.location.origin}${window.location.pathname}#/payment-success`,
+          cancelUrl: `${window.location.origin}${window.location.pathname}#/paywall`,
+        }),
+      });
       
-      // Open checkout in new window/tab
-      const checkoutWindow = window.open(checkoutUrl, '_blank', 'width=500,height=700');
+      const data = await response.json();
       
-      if (!checkoutWindow) {
-        return { success: false, error: 'Please allow popups to complete purchase' };
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to create checkout session');
       }
       
-      // Poll for completion (webhook will update backend)
-      const apiBaseUrl = localStorage.getItem('godlykids_api_url') || 
-        (window.location.hostname === 'localhost' ? 'http://localhost:5001' : 'https://backendgk2-0.onrender.com');
+      console.log('🔗 Redirecting to Stripe checkout:', data.url);
       
-      return new Promise((resolve) => {
-        let pollCount = 0;
-        const maxPolls = 300; // 5 minutes for web checkout (user might need time)
-        
-        const pollInterval = setInterval(async () => {
-          pollCount++;
-          
-          // Check if checkout window was closed
-          if (checkoutWindow.closed && pollCount > 10) {
-            // Window closed - check if purchase completed
-            try {
-              const response = await fetch(`${apiBaseUrl}/api/webhooks/purchase-status/${encodeURIComponent(userId)}`);
-              const data = await response.json();
-              
-              if (data.isPremium) {
-                clearInterval(pollInterval);
-                localStorage.setItem('godlykids_premium', 'true');
-                resolve({ success: true });
-                return;
-              }
-            } catch (e) {
-              // Ignore error, will timeout
-            }
-            
-            // Give a bit more time after window closes
-            if (pollCount > 30) {
-              clearInterval(pollInterval);
-              resolve({ success: false, error: 'Checkout window closed. If you completed payment, please tap Restore Purchases.' });
-              return;
-            }
-          }
-          
-          // Poll backend for webhook confirmation
-          try {
-            const response = await fetch(`${apiBaseUrl}/api/webhooks/purchase-status/${encodeURIComponent(userId)}`);
-            const data = await response.json();
-            
-            if (data.isPremium) {
-              clearInterval(pollInterval);
-              if (checkoutWindow && !checkoutWindow.closed) {
-                checkoutWindow.close();
-              }
-              localStorage.setItem('godlykids_premium', 'true');
-              resolve({ success: true });
-              return;
-            }
-          } catch (error) {
-            // Continue polling
-          }
-          
-          // Log progress every 30 seconds
-          if (pollCount % 30 === 0) {
-            console.log(`⏳ Waiting for web checkout completion... (${pollCount}s)`);
-          }
-          
-          // Timeout
-          if (pollCount >= maxPolls) {
-            clearInterval(pollInterval);
-            if (checkoutWindow && !checkoutWindow.closed) {
-              checkoutWindow.close();
-            }
-            resolve({ success: false, error: 'Checkout timeout. If you completed payment, please tap Restore Purchases.' });
-          }
-        }, 1000);
-      });
+      // Redirect directly to Stripe checkout
+      // User will be redirected back to success/cancel URL after checkout
+      window.location.href = data.url;
+      
+      return { success: true };
       
     } catch (error: any) {
       console.error('Web purchase error:', error);

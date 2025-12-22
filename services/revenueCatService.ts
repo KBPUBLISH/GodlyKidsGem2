@@ -25,6 +25,12 @@ export const PRODUCT_IDS = {
   MONTHLY: 'kbpublish.godlykids.monthly',
 };
 
+// Web Billing product IDs (Stripe products linked in RevenueCat Web Billing)
+const WEB_PRODUCT_IDS = {
+  ANNUAL: 'prod_TeXtJJ1NvlbB02',
+  MONTHLY: 'prod_TeY185r82P9lPF',
+};
+
 // DeSpia URL scheme interface
 declare global {
   interface Window {
@@ -566,11 +572,12 @@ export const RevenueCatService = {
    * Opens RevenueCat's hosted checkout page
    */
   purchaseWeb: async (productId: 'annual' | 'monthly'): Promise<{ success: boolean; error?: string }> => {
-    const rcProductId = productId === 'annual' ? PRODUCT_IDS.ANNUAL : PRODUCT_IDS.MONTHLY;
+    // Use Web Billing product IDs (Stripe products) for web purchases
+    const webProductId = productId === 'annual' ? WEB_PRODUCT_IDS.ANNUAL : WEB_PRODUCT_IDS.MONTHLY;
     const userId = getUserId();
     
     console.log('🌐 Starting web purchase via RevenueCat Billing');
-    console.log('   Product:', rcProductId);
+    console.log('   Product:', webProductId);
     console.log('   User ID:', userId);
     console.log('   Web Billing Enabled:', WEB_BILLING_ENABLED);
     
@@ -585,8 +592,8 @@ export const RevenueCatService = {
     
     try {
       // RevenueCat Web Billing uses a redirect-based checkout
-      // Build the checkout URL
-      const checkoutUrl = `https://pay.rev.cat/${REVENUECAT_WEB_API_KEY}/purchase/${rcProductId}?customer_id=${encodeURIComponent(userId)}`;
+      // Build the checkout URL with web product ID
+      const checkoutUrl = `https://pay.rev.cat/${REVENUECAT_WEB_API_KEY}/purchase/${webProductId}?customer_id=${encodeURIComponent(userId)}`;
       
       console.log('🔗 Opening RevenueCat checkout:', checkoutUrl);
       

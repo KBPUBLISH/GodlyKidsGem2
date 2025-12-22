@@ -591,9 +591,9 @@ export const RevenueCatService = {
     }
     
     try {
-      // RevenueCat Web Billing uses a redirect-based checkout
-      // Build the checkout URL with web product ID
-      const checkoutUrl = `https://pay.rev.cat/${REVENUECAT_WEB_API_KEY}/purchase/${webProductId}?customer_id=${encodeURIComponent(userId)}`;
+      // RevenueCat Web Billing uses billing.revenuecat.com
+      // Build the checkout URL
+      const checkoutUrl = `https://billing.revenuecat.com/${REVENUECAT_WEB_API_KEY}/checkout?customer_id=${encodeURIComponent(userId)}`;
       
       console.log('🔗 Opening RevenueCat checkout:', checkoutUrl);
       

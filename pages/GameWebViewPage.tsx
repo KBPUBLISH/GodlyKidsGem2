@@ -8,6 +8,12 @@ const GameWebViewPage: React.FC = () => {
   const gameUrl = searchParams.get('url') || '';
   const gameName = searchParams.get('name') || 'Game';
   
+  // Debug logging
+  console.log('🎮 GameWebViewPage loaded');
+  console.log('🎮 URL param:', gameUrl);
+  console.log('🎮 Name param:', gameName);
+  console.log('🎮 Full search params:', searchParams.toString());
+  
   const [loading, setLoading] = useState(true);
   const [isFullscreen, setIsFullscreen] = useState(false);
 
@@ -92,7 +98,14 @@ const GameWebViewPage: React.FC = () => {
           title={gameName}
           allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; fullscreen"
           allowFullScreen
-          onLoad={() => setLoading(false)}
+          onLoad={() => {
+            console.log('🎮 iframe loaded successfully for:', gameUrl);
+            setLoading(false);
+          }}
+          onError={(e) => {
+            console.error('🎮 iframe error:', e);
+            setLoading(false);
+          }}
           style={{
             position: 'absolute',
             top: 0,

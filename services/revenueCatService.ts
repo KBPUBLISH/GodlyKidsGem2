@@ -609,9 +609,14 @@ export const RevenueCatService = {
       
       // Redirect directly to Stripe checkout
       // User will be redirected back to success/cancel URL after checkout
+      // IMPORTANT: Return "pending" - don't grant premium until payment is confirmed!
+      // The redirect will happen, and when user returns to /payment-success, 
+      // that page will verify the payment and grant premium
       window.location.href = data.url;
       
-      return { success: true };
+      // Return pending - DO NOT return success here!
+      // Premium should only be granted after Stripe confirms payment
+      return { success: false, error: 'REDIRECT_TO_STRIPE' };
       
     } catch (error: any) {
       console.error('Web purchase error:', error);

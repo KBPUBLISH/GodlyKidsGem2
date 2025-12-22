@@ -458,6 +458,7 @@ import LessonPlayerPage from './pages/LessonPlayerPage';
 import VideoLessonDemo from './pages/VideoLessonDemo';
 import GameWebViewPage from './pages/GameWebViewPage';
 import NewUserWelcomePage, { shouldShowWelcome } from './pages/NewUserWelcomePage';
+import PaymentSuccessPage from './pages/PaymentSuccessPage';
 
 // Home page wrapper - shows welcome screen for new users who completed onboarding
 const HomePageWithWelcomeCheck: React.FC = () => {
@@ -826,6 +827,7 @@ const App: React.FC = () => {
                   <Route path="/reset-password" element={<ResetPasswordPage />} />
                   <Route path="/onboarding" element={<OnboardingPage />} />
                   <Route path="/welcome" element={<NewUserWelcomePage />} />
+                  <Route path="/payment-success" element={<PaymentSuccessPage />} />
                   <Route path="/home" element={<HomePageWithWelcomeCheck />} />
                   <Route path="/listen" element={<ListenPage />} />
                   <Route path="/read" element={<ReadPage />} />

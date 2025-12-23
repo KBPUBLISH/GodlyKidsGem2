@@ -12,6 +12,7 @@ import DailyRewardModal from '../components/features/DailyRewardModal';
 import ChallengeGameModal from '../components/features/ChallengeGameModal';
 import PrayerGameModal from '../components/features/PrayerGameModal';
 import ReviewPromptModal, { shouldShowReviewPrompt } from '../components/features/ReviewPromptModal';
+import EmailSignupModal from '../components/features/EmailSignupModal';
 import { Key, Brain, Heart, Video, Lock, Check, Play, CheckCircle, Clock, Coins } from 'lucide-react';
 import { ApiService } from '../services/apiService';
 import { 
@@ -90,6 +91,7 @@ const HomePage: React.FC = () => {
   const [showChallengeGame, setShowChallengeGame] = useState(false);
   const [showPrayerGame, setShowPrayerGame] = useState(false);
   const [showReviewPrompt, setShowReviewPrompt] = useState(false);
+  const [showEmailSignup, setShowEmailSignup] = useState(false);
   // Game engagement tracking removed - games can be played unlimited times
   
   // Game purchase state - tracks purchased games to update UI without reload
@@ -210,6 +212,25 @@ const HomePage: React.FC = () => {
       }
     }, 1000); // 1 second delay after page load
     
+    return () => clearTimeout(timer);
+  }, []);
+
+  // Show email signup popup for web users after 30 seconds
+  useEffect(() => {
+    // Skip in DeSpia native app
+    const isDespia = /despia/i.test(navigator.userAgent);
+    if (isDespia) return;
+
+    // Skip if already submitted or dismissed this session
+    const hasSubmitted = localStorage.getItem('gk_email_signup_submitted');
+    const hasDismissed = sessionStorage.getItem('gk_email_signup_dismissed');
+    if (hasSubmitted || hasDismissed) return;
+
+    // Show after 30 seconds in the app
+    const timer = setTimeout(() => {
+      setShowEmailSignup(true);
+    }, 30000);
+
     return () => clearTimeout(timer);
   }, []);
 
@@ -692,6 +713,11 @@ const HomePage: React.FC = () => {
       <ReviewPromptModal
         isOpen={showReviewPrompt}
         onReviewSubmitted={() => setShowReviewPrompt(false)}
+      />
+
+      <EmailSignupModal
+        isOpen={showEmailSignup}
+        onClose={() => setShowEmailSignup(false)}
       />
 
       <div className="px-4 pt-28 space-y-2 pb-52">

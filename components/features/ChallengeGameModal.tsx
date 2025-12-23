@@ -4,7 +4,7 @@ import { createPortal } from 'react-dom';
 import WoodButton from '../ui/WoodButton';
 import { 
   X, Star, Brain, BookOpen, Fish, Flame, Crown, Anchor, Heart,
-  Sun, Moon, Music, Shield, Gift, Key, Bird, Droplets, Mountain, Cross
+  Sun, Moon, Music, Shield, Gift, Key, Bird, Droplets, Mountain
 } from 'lucide-react';
 import { useUser } from '../../context/UserContext';
 import { useAudio } from '../../context/AudioContext';
@@ -348,8 +348,11 @@ const ChallengeGameModal: React.FC<ChallengeGameModalProps> = ({ isOpen, onClose
                                       {/* Front (Hidden) */}
                                       <div className="absolute inset-0 w-full h-full backface-hidden bg-[#283593] rounded-xl border-2 border-[#5c6bc0] shadow-md flex items-center justify-center group hover:brightness-110">
                                           {/* Cross Pattern */}
-                                          <div className="opacity-20">
-                                              <Cross size={40} className="text-white" />
+                                          <div className="opacity-30">
+                                              <svg width="40" height="40" viewBox="0 0 40 40" className="text-white">
+                                                <rect x="17" y="5" width="6" height="30" fill="currentColor" rx="1" />
+                                                <rect x="8" y="12" width="24" height="6" fill="currentColor" rx="1" />
+                                              </svg>
                                           </div>
                                       </div>
 

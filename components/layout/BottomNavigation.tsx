@@ -7,10 +7,20 @@ import { useLanguage } from '../../context/LanguageContext';
 // Key for storing wheel hint state
 const WHEEL_HINT_KEY = 'godlykids_wheel_hint_shown';
 
+// Helper to get initial tab from pathname
+const getTabFromPath = (pathname: string): string => {
+  if (pathname === '/home' || pathname === '/') return 'explore';
+  if (pathname === '/listen') return 'listen';
+  if (pathname === '/read') return 'read';
+  if (pathname === '/library') return 'library';
+  return 'explore'; // Default to explore
+};
+
 const BottomNavigation: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
-  const [activeTab, setActiveTab] = useState('explore');
+  // Initialize activeTab based on current route immediately (not in useEffect)
+  const [activeTab, setActiveTab] = useState(() => getTabFromPath(location.pathname));
   const { playTab, currentPlaylist } = useAudio();
   const { t } = useLanguage();
   const isPlayerActive = !!currentPlaylist;
@@ -66,10 +76,7 @@ const BottomNavigation: React.FC = () => {
   ];
 
   useEffect(() => {
-    if (location.pathname === '/home') setActiveTab('explore');
-    else if (location.pathname === '/listen') setActiveTab('listen');
-    else if (location.pathname === '/read') setActiveTab('read');
-    else if (location.pathname === '/library') setActiveTab('library');
+    setActiveTab(getTabFromPath(location.pathname));
   }, [location.pathname]);
 
   const handleNav = (id: string, path: string) => {

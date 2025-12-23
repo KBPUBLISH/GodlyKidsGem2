@@ -1,13 +1,20 @@
 
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Check, X, Loader2, RefreshCw, AlertCircle, CheckCircle, Mail } from 'lucide-react';
+import { Check, X, Loader2, RefreshCw, AlertCircle, CheckCircle, Mail, UserPlus } from 'lucide-react';
 import { useUser } from '../context/UserContext';
 import { useSubscription } from '../context/SubscriptionContext';
 import ParentGateModal from '../components/features/ParentGateModal';
 import { authService } from '../services/authService';
 import { getApiBaseUrl } from '../services/apiService';
 import { facebookPixelService } from '../services/facebookPixelService';
+
+// Check if user has a real account (not just device ID)
+const hasAccount = (): boolean => {
+  const userEmail = localStorage.getItem('godlykids_user_email');
+  const user = authService.getUser();
+  return !!(userEmail || user?.email);
+};
 
 const PaywallPage: React.FC = () => {
   const navigate = useNavigate();
@@ -34,6 +41,9 @@ const PaywallPage: React.FC = () => {
   const [showRestoreModal, setShowRestoreModal] = useState(false);
   const [restoreEmail, setRestoreEmail] = useState('');
   
+  // Account required modal state
+  const [showAccountRequired, setShowAccountRequired] = useState(false);
+  
   // Facebook Pixel - Track paywall view (parent-gated area)
   useEffect(() => {
     facebookPixelService.init();
@@ -50,6 +60,13 @@ const PaywallPage: React.FC = () => {
 
   const handleSubscribeClick = () => {
     setError(null);
+    
+    // Check if user has an account - require account before purchase
+    if (!hasAccount()) {
+      setShowAccountRequired(true);
+      return;
+    }
+    
     // Show parent gate before processing
     setShowParentGate(true);
   };
@@ -478,6 +495,58 @@ const PaywallPage: React.FC = () => {
             onClose={() => setShowParentGate(false)} 
             onSuccess={handleGateSuccess} 
         />
+
+        {/* Account Required Modal */}
+        {showAccountRequired && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            <div 
+              className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+              onClick={() => setShowAccountRequired(false)}
+            />
+            <div className="relative bg-white rounded-2xl p-6 w-full max-w-sm shadow-2xl animate-in zoom-in-95 duration-200">
+              <button
+                onClick={() => setShowAccountRequired(false)}
+                className="absolute top-3 right-3 text-gray-400 hover:text-gray-600"
+              >
+                <X size={24} />
+              </button>
+              
+              <div className="flex flex-col items-center text-center">
+                <div className="w-16 h-16 bg-[#ede7f6] rounded-full flex items-center justify-center mb-4">
+                  <UserPlus size={32} className="text-[#7c4dff]" />
+                </div>
+                
+                <h2 className="text-[#1a237e] font-display font-bold text-xl mb-2">
+                  Create an Account First
+                </h2>
+                <p className="text-gray-600 text-sm mb-6">
+                  To manage your subscription and sync your progress across devices, please create a free account before subscribing.
+                </p>
+                
+                <button
+                  onClick={() => {
+                    setShowAccountRequired(false);
+                    navigate('/onboarding');
+                  }}
+                  className="w-full bg-gradient-to-r from-[#7c4dff] to-[#536dfe] text-white font-bold py-3 px-4 rounded-xl shadow-lg flex items-center justify-center gap-2 mb-3"
+                >
+                  <UserPlus size={18} />
+                  Create Free Account
+                </button>
+                
+                <button
+                  onClick={() => {
+                    setShowAccountRequired(false);
+                    navigate('/signin');
+                  }}
+                  className="text-[#7c4dff] text-sm font-semibold hover:underline"
+                >
+                  Already have an account? Sign In
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Restore Purchases Modal */}
         {showRestoreModal && (

@@ -154,6 +154,10 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         }
     }, []);
 
+    // Track listening time - store last tracked time to calculate deltas
+    const lastListeningTimeRef = useRef<number>(0);
+    const listeningTimeAccumulatorRef = useRef<number>(0);
+
     // Create audio element once on mount
     useEffect(() => {
         const audio = document.createElement('audio');
@@ -166,6 +170,22 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
             if (!isNaN(audio.duration) && audio.duration > 0) {
                 setProgress((audio.currentTime / audio.duration) * 100);
             }
+
+            // Track listening time - accumulate seconds listened
+            const now = Date.now();
+            if (lastListeningTimeRef.current > 0 && !audio.paused) {
+                const deltaSeconds = (now - lastListeningTimeRef.current) / 1000;
+                // Only count if delta is reasonable (< 5 seconds to avoid big jumps after pause)
+                if (deltaSeconds > 0 && deltaSeconds < 5) {
+                    listeningTimeAccumulatorRef.current += deltaSeconds;
+                    // Sync to localStorage every 10 seconds
+                    if (listeningTimeAccumulatorRef.current >= 10) {
+                        activityTrackingService.trackAudioListeningTime(Math.floor(listeningTimeAccumulatorRef.current));
+                        listeningTimeAccumulatorRef.current = 0;
+                    }
+                }
+            }
+            lastListeningTimeRef.current = now;
         });
 
         audio.addEventListener('loadedmetadata', () => {
@@ -193,9 +213,19 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
         audio.addEventListener('pause', () => {
             setIsPlaying(false);
+            // Save any accumulated listening time when paused
+            if (listeningTimeAccumulatorRef.current > 0) {
+                activityTrackingService.trackAudioListeningTime(Math.floor(listeningTimeAccumulatorRef.current));
+                listeningTimeAccumulatorRef.current = 0;
+            }
+            lastListeningTimeRef.current = 0;
         });
 
         return () => {
+            // Save remaining listening time on unmount
+            if (listeningTimeAccumulatorRef.current > 0) {
+                activityTrackingService.trackAudioListeningTime(Math.floor(listeningTimeAccumulatorRef.current));
+            }
             audio.pause();
             audio.src = '';
         };

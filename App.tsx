@@ -655,6 +655,9 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     try {
       (window as any).__GK_TRACE__?.('route_change', { path: location.pathname, hash: location.hash, search: location.search });
       
+      // Track page visit for analytics (how far users get in the app)
+      activityTrackingService.trackPageVisit(location.pathname);
+      
       // DESPIA FIX: Save current route for restoration after soft-close/reopen
       // This allows us to restore the user to their last location when the app returns from background
       // SKIP saving game routes - they have query params that won't work after force quit

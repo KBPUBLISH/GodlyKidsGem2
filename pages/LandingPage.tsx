@@ -218,12 +218,6 @@ const LandingPage: React.FC = () => {
           </div>
       </div>
 
-      {/* Email Signup Modal for Web Users */}
-      <EmailSignupModal
-        isOpen={showEmailSignup}
-        onClose={() => setShowEmailSignup(false)}
-      />
-
       {/* Terms & Conditions WebView Modal */}
       {showTermsModal && (
         <div className="fixed inset-0 z-[100] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">

@@ -9,6 +9,9 @@ export interface ActivityStats {
   gamesPlayed: number;
   lessonsCompleted: number;
   timeSpentMinutes: number;
+  audioListeningTimeSeconds: number;
+  onboardingStep: number;
+  farthestPageReached: string;
 }
 
 interface ActivityEntry {
@@ -244,6 +247,57 @@ class ActivityTrackingService {
     }
   }
 
+  // Track audio listening time (in seconds)
+  trackAudioListeningTime(seconds: number): void {
+    if (seconds <= 0) return;
+    const key = this.getKey('audio_listening_time_seconds');
+    const currentTotal = parseInt(localStorage.getItem(key) || '0');
+    localStorage.setItem(key, (currentTotal + seconds).toString());
+  }
+
+  // Track page navigation (to see how far users get)
+  trackPageVisit(pagePath: string): void {
+    const key = this.getKey('farthest_page_reached');
+    const currentFarthest = localStorage.getItem(key) || '/';
+    
+    // Simple depth scoring based on page path
+    const getDepth = (path: string): number => {
+      const depthMap: Record<string, number> = {
+        '/': 0,
+        '/onboarding': 1,
+        '/profile': 2,
+        '/home': 3,
+        '/audio': 4,
+        '/explore': 4,
+        '/books': 5,
+        '/playlist': 5,
+        '/book': 6,
+        '/paywall': 7,
+        '/settings': 7,
+      };
+      // Match the start of the path
+      for (const [prefix, depth] of Object.entries(depthMap).sort((a, b) => b[0].length - a[0].length)) {
+        if (path.startsWith(prefix)) return depth;
+      }
+      return 0;
+    };
+
+    if (getDepth(pagePath) > getDepth(currentFarthest)) {
+      localStorage.setItem(key, pagePath);
+      console.log('📍 New farthest page:', pagePath);
+    }
+  }
+
+  // Track onboarding step reached
+  trackOnboardingStep(step: number): void {
+    const key = this.getKey('onboarding_step_reached');
+    const currentStep = parseInt(localStorage.getItem(key) || '0');
+    if (step > currentStep) {
+      localStorage.setItem(key, step.toString());
+      console.log('📊 Onboarding step reached:', step);
+    }
+  }
+
   private getActivityEntries(key: string): ActivityEntry[] {
     try {
       const data = localStorage.getItem(key);
@@ -292,6 +346,18 @@ class ActivityTrackingService {
       const timeKey = this.getKey(`time_spent_${dayKey}`);
       timeSpentMinutes += parseInt(localStorage.getItem(timeKey) || '0');
     }
+
+    // Audio listening time (all-time, not filtered by period for now)
+    const audioKey = this.getKey('audio_listening_time_seconds');
+    const audioListeningTimeSeconds = parseInt(localStorage.getItem(audioKey) || '0');
+
+    // Onboarding step (all-time)
+    const onboardingKey = this.getKey('onboarding_step_reached');
+    const onboardingStep = parseInt(localStorage.getItem(onboardingKey) || '0');
+
+    // Farthest page (all-time)
+    const farthestKey = this.getKey('farthest_page_reached');
+    const farthestPageReached = localStorage.getItem(farthestKey) || '/';
     
     return {
       booksRead,
@@ -300,6 +366,9 @@ class ActivityTrackingService {
       gamesPlayed,
       lessonsCompleted,
       timeSpentMinutes,
+      audioListeningTimeSeconds,
+      onboardingStep,
+      farthestPageReached,
     };
   }
 
@@ -373,10 +442,14 @@ class ActivityTrackingService {
             totalSessions: sessionCount,
             totalTimeSpent: allTimeStats.timeSpentMinutes * 60, // Convert to seconds
             booksRead: allTimeStats.booksRead,
-            playlistsPlayed: allTimeStats.songsListened, // Approximate
+            pagesRead: allTimeStats.pagesRead,
+            playlistsPlayed: allTimeStats.songsListened,
+            audioListeningTime: allTimeStats.audioListeningTimeSeconds,
             lessonsCompleted: allTimeStats.lessonsCompleted,
             gamesPlayed: allTimeStats.gamesPlayed,
-            coloringSessions: 0, // TODO: track this
+            coloringSessions: 0,
+            onboardingStep: allTimeStats.onboardingStep,
+            farthestPageReached: allTimeStats.farthestPageReached,
           }
         })
       });
@@ -422,6 +495,18 @@ class ActivityTrackingService {
     // Total time spent
     const totalTimeKey = this.getKey('total_time_spent_minutes');
     const timeSpentMinutes = parseInt(localStorage.getItem(totalTimeKey) || '0');
+
+    // Audio listening time
+    const audioKey = this.getKey('audio_listening_time_seconds');
+    const audioListeningTimeSeconds = parseInt(localStorage.getItem(audioKey) || '0');
+
+    // Onboarding step
+    const onboardingKey = this.getKey('onboarding_step_reached');
+    const onboardingStep = parseInt(localStorage.getItem(onboardingKey) || '0');
+
+    // Farthest page
+    const farthestKey = this.getKey('farthest_page_reached');
+    const farthestPageReached = localStorage.getItem(farthestKey) || '/';
     
     return {
       booksRead,
@@ -430,6 +515,9 @@ class ActivityTrackingService {
       gamesPlayed,
       lessonsCompleted,
       timeSpentMinutes,
+      audioListeningTimeSeconds,
+      onboardingStep,
+      farthestPageReached,
     };
   }
 

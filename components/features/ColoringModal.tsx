@@ -192,6 +192,14 @@ const ColoringModal: React.FC<ColoringModalProps> = ({ isOpen, onClose, backgrou
     // Ref to DrawingCanvas for screenshot capture
     const drawingCanvasRef = useRef<DrawingCanvasRef>(null);
 
+    // Reset showReward when modal opens so user can color again
+    useEffect(() => {
+        if (isOpen) {
+            setShowReward(false);
+            setPinToast(null);
+        }
+    }, [isOpen]);
+
     const parsedPage = useMemo(() => parseColoringPageId(pageId), [pageId]);
     const pinnedForBook = useMemo(() => {
         if (!parsedPage?.bookId) return null;

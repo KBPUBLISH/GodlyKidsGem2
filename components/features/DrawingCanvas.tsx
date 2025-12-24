@@ -1,5 +1,5 @@
 import React, { useRef, useEffect, useState, useCallback, forwardRef, useImperativeHandle } from 'react';
-import { Eraser, RotateCcw, Download, Save, ZoomIn, ZoomOut, Move } from 'lucide-react';
+import { Eraser, RotateCcw, Download, Save, ZoomIn, ZoomOut, Move, X } from 'lucide-react';
 
 interface DrawingCanvasProps {
     prompt: string;
@@ -100,6 +100,15 @@ const DrawingCanvas = forwardRef<DrawingCanvasRef, DrawingCanvasProps>(({ prompt
     const [brushSize, setBrushSize] = useState(18); // Crayon default size
     const [isEraser, setIsEraser] = useState(false);
     const [isCompleted, setIsCompleted] = useState(false);
+    
+    // Zoom/Pan state
+    const [zoomMode, setZoomMode] = useState(false);
+    const [scale, setScale] = useState(1);
+    const [panOffset, setPanOffset] = useState({ x: 0, y: 0 });
+    const [isPanning, setIsPanning] = useState(false);
+    const lastPinchDistanceRef = useRef<number | null>(null);
+    const lastPanPosRef = useRef<{ x: number; y: number } | null>(null);
+    const zoomContainerRef = useRef<HTMLDivElement>(null);
 
     // Track if canvas has been initialized
     const [canvasReady, setCanvasReady] = useState(false);
@@ -549,14 +558,108 @@ const DrawingCanvas = forwardRef<DrawingCanvasRef, DrawingCanvasProps>(({ prompt
         stopDrawing();
     }, [stopDrawing]);
 
+    // Calculate distance between two touch points (for pinch zoom)
+    const getTouchDistance = useCallback((touches: TouchList) => {
+        if (touches.length < 2) return 0;
+        const dx = touches[0].clientX - touches[1].clientX;
+        const dy = touches[0].clientY - touches[1].clientY;
+        return Math.sqrt(dx * dx + dy * dy);
+    }, []);
+
+    // Get center point between two touches
+    const getTouchCenter = useCallback((touches: TouchList) => {
+        if (touches.length < 2) return { x: touches[0].clientX, y: touches[0].clientY };
+        return {
+            x: (touches[0].clientX + touches[1].clientX) / 2,
+            y: (touches[0].clientY + touches[1].clientY) / 2
+        };
+    }, []);
+
     // Add non-passive event listeners for touch to prevent scrolling while drawing
     useEffect(() => {
         const canvas = canvasRef.current;
         if (!canvas) return;
 
-        const handleTouchStart = (e: TouchEvent) => startDrawing(e as any);
-        const handleTouchMove = (e: TouchEvent) => draw(e as any);
-        const handleTouchEnd = () => stopDrawing();
+        const handleTouchStart = (e: TouchEvent) => {
+            // If zoom mode is enabled and 2 fingers, start pinch/pan
+            if (zoomMode && e.touches.length === 2) {
+                e.preventDefault();
+                lastPinchDistanceRef.current = getTouchDistance(e.touches);
+                const center = getTouchCenter(e.touches);
+                lastPanPosRef.current = center;
+                setIsPanning(true);
+                return;
+            }
+            // Single finger - draw (only if not in zoom mode or scale is 1)
+            if (e.touches.length === 1) {
+                if (zoomMode && scale > 1) {
+                    // In zoom mode with zoom active, single finger pans
+                    e.preventDefault();
+                    lastPanPosRef.current = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+                    setIsPanning(true);
+                } else {
+                    // Normal drawing
+                    startDrawing(e as any);
+                }
+            }
+        };
+
+        const handleTouchMove = (e: TouchEvent) => {
+            // Pinch zoom with 2 fingers
+            if (zoomMode && e.touches.length === 2) {
+                e.preventDefault();
+                
+                // Calculate new scale from pinch distance
+                const newDistance = getTouchDistance(e.touches);
+                if (lastPinchDistanceRef.current) {
+                    const scaleDelta = newDistance / lastPinchDistanceRef.current;
+                    setScale(prev => Math.min(4, Math.max(1, prev * scaleDelta)));
+                }
+                lastPinchDistanceRef.current = newDistance;
+
+                // Pan while pinching
+                const center = getTouchCenter(e.touches);
+                if (lastPanPosRef.current) {
+                    const dx = center.x - lastPanPosRef.current.x;
+                    const dy = center.y - lastPanPosRef.current.y;
+                    setPanOffset(prev => ({ x: prev.x + dx, y: prev.y + dy }));
+                }
+                lastPanPosRef.current = center;
+                return;
+            }
+
+            // Single finger pan when zoomed
+            if (zoomMode && scale > 1 && e.touches.length === 1 && isPanning) {
+                e.preventDefault();
+                if (lastPanPosRef.current) {
+                    const dx = e.touches[0].clientX - lastPanPosRef.current.x;
+                    const dy = e.touches[0].clientY - lastPanPosRef.current.y;
+                    setPanOffset(prev => ({ x: prev.x + dx, y: prev.y + dy }));
+                }
+                lastPanPosRef.current = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+                return;
+            }
+
+            // Normal drawing
+            if (!isPanning) {
+                draw(e as any);
+            }
+        };
+
+        const handleTouchEnd = (e: TouchEvent) => {
+            if (e.touches.length === 0) {
+                lastPinchDistanceRef.current = null;
+                lastPanPosRef.current = null;
+                setIsPanning(false);
+                stopDrawing();
+            } else if (e.touches.length === 1) {
+                // Went from 2 fingers to 1
+                lastPinchDistanceRef.current = null;
+                if (zoomMode && scale > 1) {
+                    lastPanPosRef.current = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+                }
+            }
+        };
 
         canvas.addEventListener('touchstart', handleTouchStart, { passive: false });
         canvas.addEventListener('touchmove', handleTouchMove, { passive: false });
@@ -567,7 +670,21 @@ const DrawingCanvas = forwardRef<DrawingCanvasRef, DrawingCanvasProps>(({ prompt
             canvas.removeEventListener('touchmove', handleTouchMove);
             canvas.removeEventListener('touchend', handleTouchEnd);
         };
-    }, [startDrawing, draw, stopDrawing]);
+    }, [startDrawing, draw, stopDrawing, zoomMode, scale, isPanning, getTouchDistance, getTouchCenter]);
+
+    // Reset zoom when zoom mode is turned off
+    const resetZoom = useCallback(() => {
+        setScale(1);
+        setPanOffset({ x: 0, y: 0 });
+    }, []);
+
+    // Toggle zoom mode
+    const toggleZoomMode = useCallback(() => {
+        if (zoomMode) {
+            resetZoom();
+        }
+        setZoomMode(!zoomMode);
+    }, [zoomMode, resetZoom]);
 
 
     const clearCanvas = () => {
@@ -622,37 +739,64 @@ const DrawingCanvas = forwardRef<DrawingCanvasRef, DrawingCanvasProps>(({ prompt
 
     return (
         <div className="flex flex-col h-full min-h-0">
-            {/* Canvas Container - Layered structure */}
+            {/* Canvas Container - Layered structure with zoom support */}
             <div 
                 ref={containerRef}
                 className="flex-1 bg-white rounded-lg overflow-hidden shadow-lg mb-2 relative min-h-0"
                 style={{ maxHeight: 'calc(100% - 200px)' }} /* Leave room for crayons & tools */
             >
-                {/* Bottom Layer: Drawing Canvas (user colors here) */}
-                <canvas
-                    ref={canvasRef}
-                    className="absolute inset-0 w-full h-full touch-none cursor-crosshair"
-                    onMouseDown={startDrawing}
-                    onMouseMove={draw}
-                    onMouseUp={stopDrawing}
-                    onMouseLeave={handleMouseLeave}
-                />
-                
-                {/* Top Layer: Line art overlay (in layered mode) */}
-                {layeredMode && processedLineArt && (
-                    <img
-                        ref={overlayRef}
-                        src={processedLineArt}
-                        alt="Coloring lines"
-                        className="absolute inset-0 w-full h-full pointer-events-none"
-                        style={{ 
-                            zIndex: 10,
-                            mixBlendMode: 'multiply', // Makes white transparent, keeps black lines
-                            objectFit: 'contain', // Fit entire image within container
-                            objectPosition: 'center center' // Center the image
-                        }}
-                    />
+                {/* Zoom indicator */}
+                {zoomMode && (
+                    <div className="absolute top-2 left-2 z-30 bg-black/70 text-white text-xs px-2 py-1 rounded-full flex items-center gap-1">
+                        <ZoomIn size={12} />
+                        <span>{Math.round(scale * 100)}%</span>
+                        {scale > 1 && (
+                            <button 
+                                onClick={resetZoom}
+                                className="ml-1 bg-white/20 rounded-full p-0.5 hover:bg-white/40"
+                            >
+                                <X size={10} />
+                            </button>
+                        )}
+                    </div>
                 )}
+
+                {/* Zoomable/Pannable Container */}
+                <div
+                    ref={zoomContainerRef}
+                    className="absolute inset-0"
+                    style={{
+                        transform: `scale(${scale}) translate(${panOffset.x / scale}px, ${panOffset.y / scale}px)`,
+                        transformOrigin: 'center center',
+                        transition: isPanning ? 'none' : 'transform 0.1s ease-out'
+                    }}
+                >
+                    {/* Bottom Layer: Drawing Canvas (user colors here) */}
+                    <canvas
+                        ref={canvasRef}
+                        className={`absolute inset-0 w-full h-full touch-none ${zoomMode && scale > 1 ? 'cursor-move' : 'cursor-crosshair'}`}
+                        onMouseDown={startDrawing}
+                        onMouseMove={draw}
+                        onMouseUp={stopDrawing}
+                        onMouseLeave={handleMouseLeave}
+                    />
+                    
+                    {/* Top Layer: Line art overlay (in layered mode) */}
+                    {layeredMode && processedLineArt && (
+                        <img
+                            ref={overlayRef}
+                            src={processedLineArt}
+                            alt="Coloring lines"
+                            className="absolute inset-0 w-full h-full pointer-events-none"
+                            style={{ 
+                                zIndex: 10,
+                                mixBlendMode: 'multiply', // Makes white transparent, keeps black lines
+                                objectFit: 'contain', // Fit entire image within container
+                                objectPosition: 'center center' // Center the image
+                            }}
+                        />
+                    )}
+                </div>
                 
                 {/* Loading indicator */}
                 {isProcessingImage && (
@@ -712,6 +856,18 @@ const DrawingCanvas = forwardRef<DrawingCanvasRef, DrawingCanvasProps>(({ prompt
 
                 {/* Tool Buttons */}
                 <div className="flex items-center gap-1.5">
+                    {/* Zoom Toggle */}
+                    <button
+                        onClick={toggleZoomMode}
+                        className={`p-2 rounded-lg transition-all ${zoomMode
+                            ? 'bg-[#4CAF50] text-white shadow-lg'
+                            : 'bg-white/15 text-white hover:bg-white/25'
+                            }`}
+                        title={zoomMode ? "Exit Zoom Mode (pinch to zoom)" : "Enable Zoom Mode (pinch to zoom)"}
+                    >
+                        {zoomMode ? <ZoomOut className="w-5 h-5" /> : <ZoomIn className="w-5 h-5" />}
+                    </button>
+
                     {/* Eraser */}
                     <button
                         onClick={() => setIsEraser(!isEraser)}
@@ -744,8 +900,20 @@ const DrawingCanvas = forwardRef<DrawingCanvasRef, DrawingCanvasProps>(({ prompt
                 </div>
             </div>
 
+            {/* Zoom Mode Hint */}
+            {zoomMode && (
+                <div className="flex items-center justify-center gap-2 mt-2 text-xs text-[#4CAF50] bg-[#4CAF50]/10 rounded-lg py-1.5 px-3">
+                    <ZoomIn size={14} />
+                    <span>
+                        {scale > 1 
+                            ? "Pinch or drag to pan • Tap zoom button to exit" 
+                            : "Pinch with two fingers to zoom in"}
+                    </span>
+                </div>
+            )}
+
             {/* Auto-save Status */}
-            {storageKey && (
+            {storageKey && !zoomMode && (
                 <div className="flex items-center justify-center gap-2 mt-2 text-xs">
                     {lastSaved ? (
                         <span className="text-green-400 flex items-center gap-1">

@@ -29,8 +29,11 @@ const EmailSignupModal: React.FC<EmailSignupModalProps> = ({ isOpen, onClose }) 
     try {
       const deviceId = localStorage.getItem('device_id') || `web_${Date.now()}`;
       const baseUrl = getApiBaseUrl();
+      const url = `${baseUrl}referrals/email-signup`;
       
-      const response = await fetch(`${baseUrl}referrals/email-signup`, {
+      console.log('📧 Email signup request:', { url, deviceId, email });
+      
+      const response = await fetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -40,7 +43,18 @@ const EmailSignupModal: React.FC<EmailSignupModalProps> = ({ isOpen, onClose }) 
         })
       });
 
+      console.log('📧 Email signup response status:', response.status);
+      
+      // Handle non-JSON responses (like 404 HTML pages)
+      const contentType = response.headers.get('content-type');
+      if (!contentType || !contentType.includes('application/json')) {
+        console.error('📧 Non-JSON response:', await response.text());
+        setError('Server error. The feature may still be deploying - try again in a minute.');
+        return;
+      }
+
       const data = await response.json();
+      console.log('📧 Email signup response:', data);
 
       if (data.success) {
         setIsSuccess(true);
@@ -55,7 +69,7 @@ const EmailSignupModal: React.FC<EmailSignupModalProps> = ({ isOpen, onClose }) 
         setError(data.message || 'Something went wrong. Please try again.');
       }
     } catch (err) {
-      console.error('Email signup error:', err);
+      console.error('📧 Email signup error:', err);
       setError('Could not connect to server. Please try again.');
     } finally {
       setIsSubmitting(false);

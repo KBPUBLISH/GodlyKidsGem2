@@ -53,8 +53,19 @@ const EmailSignupModal: React.FC<EmailSignupModalProps> = ({ isOpen, onClose }) 
         return;
       }
 
-      const data = await response.json();
-      console.log('📧 Email signup response:', data);
+      let data;
+      const responseText = await response.text();
+      console.log('📧 Email signup raw response:', responseText);
+      
+      try {
+        data = JSON.parse(responseText);
+      } catch (parseError) {
+        console.error('📧 Failed to parse JSON:', parseError);
+        setError('Server returned invalid response. Please try again.');
+        return;
+      }
+      
+      console.log('📧 Email signup parsed response:', data);
 
       if (data.success) {
         setIsSuccess(true);

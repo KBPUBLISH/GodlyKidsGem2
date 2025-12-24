@@ -75,20 +75,64 @@ const DrawingCanvas = forwardRef<DrawingCanvasRef, DrawingCanvasProps>(({ prompt
     // Expose captureScreenshot method via ref
     useImperativeHandle(ref, () => ({
         captureScreenshot: async (): Promise<string | null> => {
-            if (!containerRef.current) return null;
+            const drawingCanvas = canvasRef.current;
+            const lineArtImg = overlayRef.current;
+            
+            if (!drawingCanvas) return null;
             
             try {
-                // Dynamically import html2canvas to avoid SSR issues
-                const html2canvas = (await import('html2canvas')).default;
+                // Get the container dimensions for proper aspect ratio
+                const container = containerRef.current;
+                if (!container) return null;
                 
-                const canvas = await html2canvas(containerRef.current, {
-                    useCORS: true,
-                    allowTaint: true,
-                    backgroundColor: '#FFFFFF',
-                    scale: 2, // Higher quality
-                });
+                const containerWidth = container.clientWidth;
+                const containerHeight = container.clientHeight;
                 
-                return canvas.toDataURL('image/png');
+                // Create output canvas at container size
+                const outputCanvas = document.createElement('canvas');
+                outputCanvas.width = containerWidth * 2; // 2x for quality
+                outputCanvas.height = containerHeight * 2;
+                const ctx = outputCanvas.getContext('2d');
+                if (!ctx) return null;
+                
+                ctx.scale(2, 2); // Scale for quality
+                
+                // 1. Fill white background
+                ctx.fillStyle = '#FFFFFF';
+                ctx.fillRect(0, 0, containerWidth, containerHeight);
+                
+                // 2. Draw user's coloring from the canvas (scaled to fit)
+                ctx.drawImage(drawingCanvas, 0, 0, containerWidth, containerHeight);
+                
+                // 3. Draw line art on top with multiply blend mode
+                if (lineArtImg && lineArtImg.complete && lineArtImg.naturalWidth > 0) {
+                    // Calculate "contain" positioning to match the overlay display
+                    const imgAspect = lineArtImg.naturalWidth / lineArtImg.naturalHeight;
+                    const containerAspect = containerWidth / containerHeight;
+                    
+                    let drawWidth, drawHeight, drawX, drawY;
+                    if (imgAspect > containerAspect) {
+                        // Image is wider - fit to width
+                        drawWidth = containerWidth;
+                        drawHeight = containerWidth / imgAspect;
+                        drawX = 0;
+                        drawY = (containerHeight - drawHeight) / 2;
+                    } else {
+                        // Image is taller - fit to height
+                        drawHeight = containerHeight;
+                        drawWidth = containerHeight * imgAspect;
+                        drawX = (containerWidth - drawWidth) / 2;
+                        drawY = 0;
+                    }
+                    
+                    // Apply multiply blend mode for line art
+                    ctx.globalCompositeOperation = 'multiply';
+                    ctx.drawImage(lineArtImg, drawX, drawY, drawWidth, drawHeight);
+                    ctx.globalCompositeOperation = 'source-over';
+                }
+                
+                console.log('📸 Manual composite screenshot created');
+                return outputCanvas.toDataURL('image/png');
             } catch (err) {
                 console.error('📸 Screenshot capture failed:', err);
                 return null;

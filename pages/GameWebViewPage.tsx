@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { ArrowLeft, Loader2, Maximize2, Minimize2 } from 'lucide-react';
+import { ArrowLeft, Loader2, Maximize2, Minimize2, ExternalLink } from 'lucide-react';
 
 const GameWebViewPage: React.FC = () => {
   const navigate = useNavigate();
@@ -8,14 +8,19 @@ const GameWebViewPage: React.FC = () => {
   const gameUrl = searchParams.get('url') || '';
   const gameName = searchParams.get('name') || 'Game';
   
+  // Detect if running in Despia WebView
+  const isDespia = !!(window as any).__GK_IS_DESPIA__;
+  
   // Debug logging
   console.log('🎮 GameWebViewPage loaded');
   console.log('🎮 URL param:', gameUrl);
   console.log('🎮 Name param:', gameName);
   console.log('🎮 Full search params:', searchParams.toString());
+  console.log('🎮 Is Despia:', isDespia);
   
   const [loading, setLoading] = useState(true);
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [iframeError, setIframeError] = useState(false);
 
   const handleBack = () => {
     // Clear any saved route that might have the game URL
@@ -41,6 +46,21 @@ const GameWebViewPage: React.FC = () => {
       navigate('/home', { replace: true });
     }
   }, [gameUrl, navigate]);
+  
+  // Timeout detection - if iframe doesn't load within 10 seconds, show fallback
+  useEffect(() => {
+    if (!gameUrl) return;
+    
+    const timeout = setTimeout(() => {
+      if (loading) {
+        console.log('🎮 iframe loading timeout - showing fallback');
+        setLoading(false);
+        setIframeError(true);
+      }
+    }, 10000); // 10 second timeout
+    
+    return () => clearTimeout(timeout);
+  }, [gameUrl, loading]);
 
   if (!gameUrl) {
     // Show loading while redirecting
@@ -105,6 +125,7 @@ const GameWebViewPage: React.FC = () => {
           onError={(e) => {
             console.error('🎮 iframe error:', e);
             setLoading(false);
+            setIframeError(true);
           }}
           style={{
             position: 'absolute',
@@ -123,6 +144,33 @@ const GameWebViewPage: React.FC = () => {
           >
             <Minimize2 size={24} />
           </button>
+        )}
+        
+        {/* Iframe Error Fallback - Option to open in external browser */}
+        {iframeError && (
+          <div className="absolute inset-0 flex items-center justify-center bg-gradient-to-br from-[#1a1a2e] to-[#16213e] z-20">
+            <div className="text-center p-6">
+              <p className="text-white text-lg mb-4">
+                This game couldn't load in the app.
+              </p>
+              <button
+                onClick={() => {
+                  // Open in external browser
+                  window.open(gameUrl, '_blank');
+                }}
+                className="bg-[#4CAF50] hover:bg-[#45a049] text-white font-bold py-3 px-6 rounded-xl flex items-center gap-2 mx-auto"
+              >
+                <ExternalLink size={20} />
+                Open in Browser
+              </button>
+              <button
+                onClick={handleBack}
+                className="mt-4 text-white/70 hover:text-white underline"
+              >
+                Go Back
+              </button>
+            </div>
+          </div>
         )}
       </div>
     </div>

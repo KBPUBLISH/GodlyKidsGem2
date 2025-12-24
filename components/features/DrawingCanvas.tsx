@@ -458,20 +458,40 @@ const DrawingCanvas = forwardRef<DrawingCanvasRef, DrawingCanvasProps>(({ prompt
 
     const getCoordinates = useCallback((e: any) => {
         const canvas = canvasRef.current;
-        if (!canvas) return { x: 0, y: 0 };
+        const container = containerRef.current;
+        if (!canvas || !container) return { x: 0, y: 0 };
 
         const rect = canvas.getBoundingClientRect();
+        const containerRect = container.getBoundingClientRect();
+        
         // Handle both React synthetic events and native DOM events
         const clientX = e.touches ? e.touches[0].clientX : e.clientX;
         const clientY = e.touches ? e.touches[0].clientY : e.clientY;
 
-        // Since we scaled the context by devicePixelRatio, coordinates should be in CSS pixels
-        // which is what we get from getBoundingClientRect
+        // When zoomed, the canvas rect is scaled, so we need to convert
+        // screen coordinates to canvas coordinates by accounting for:
+        // 1. The position relative to the container
+        // 2. The zoom scale
+        // 3. The pan offset
+        
+        // Get position relative to container center (since transformOrigin is center)
+        const containerCenterX = containerRect.width / 2;
+        const containerCenterY = containerRect.height / 2;
+        
+        // Position relative to container
+        const relX = clientX - containerRect.left;
+        const relY = clientY - containerRect.top;
+        
+        // Convert from screen space to canvas space
+        // Account for scale and pan offset
+        const canvasX = (relX - containerCenterX - panOffset.x) / scale + containerCenterX;
+        const canvasY = (relY - containerCenterY - panOffset.y) / scale + containerCenterY;
+
         return {
-            x: clientX - rect.left,
-            y: clientY - rect.top,
+            x: canvasX,
+            y: canvasY,
         };
-    }, []);
+    }, [scale, panOffset]);
 
     const startDrawing = useCallback((e: any) => {
         if (e.cancelable) e.preventDefault();

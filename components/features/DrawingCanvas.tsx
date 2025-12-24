@@ -461,18 +461,22 @@ const DrawingCanvas = forwardRef<DrawingCanvasRef, DrawingCanvasProps>(({ prompt
         const container = containerRef.current;
         if (!canvas || !container) return { x: 0, y: 0 };
 
-        const rect = canvas.getBoundingClientRect();
-        const containerRect = container.getBoundingClientRect();
-        
         // Handle both React synthetic events and native DOM events
         const clientX = e.touches ? e.touches[0].clientX : e.clientX;
         const clientY = e.touches ? e.touches[0].clientY : e.clientY;
 
-        // When zoomed, the canvas rect is scaled, so we need to convert
-        // screen coordinates to canvas coordinates by accounting for:
-        // 1. The position relative to the container
-        // 2. The zoom scale
-        // 3. The pan offset
+        // When NOT zoomed (scale === 1 and no pan), use simple direct coordinates
+        // This ensures no shift when zoom mode is toggled
+        if (scale === 1 && panOffset.x === 0 && panOffset.y === 0) {
+            const rect = canvas.getBoundingClientRect();
+            return {
+                x: clientX - rect.left,
+                y: clientY - rect.top,
+            };
+        }
+
+        // When zoomed, we need to convert screen coordinates to canvas coordinates
+        const containerRect = container.getBoundingClientRect();
         
         // Get position relative to container center (since transformOrigin is center)
         const containerCenterX = containerRect.width / 2;

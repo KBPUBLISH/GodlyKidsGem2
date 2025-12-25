@@ -543,6 +543,64 @@ class ActivityTrackingService {
       this.syncStatsToBackend();
     }, 2000);
   }
+
+  // ============================================
+  // ONBOARDING ANALYTICS
+  // ============================================
+  
+  private onboardingSessionId: string | null = null;
+  
+  // Get or create onboarding session ID
+  private getOnboardingSessionId(): string {
+    if (!this.onboardingSessionId) {
+      this.onboardingSessionId = `onb_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+    }
+    return this.onboardingSessionId;
+  }
+  
+  // Track onboarding event
+  async trackOnboardingEvent(
+    event: string, 
+    metadata?: { 
+      step?: number; 
+      planType?: string; 
+      kidsCount?: number; 
+      voiceSelected?: string;
+    }
+  ): Promise<void> {
+    try {
+      const user = authService.getUser();
+      const userId = user?.email || user?._id || localStorage.getItem('godlykids_device_id') || `anon_${Date.now()}`;
+      
+      const API_BASE = (import.meta as any).env?.VITE_API_BASE_URL || 'https://backendgk2-0.onrender.com';
+      const apiUrl = API_BASE.endsWith('/api') ? API_BASE : `${API_BASE}/api`;
+      
+      const platform = (window as any).__GK_IS_DESPIA__ ? 'ios' : 'web';
+      
+      await fetch(`${apiUrl}/analytics/onboarding/event`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userId,
+          sessionId: this.getOnboardingSessionId(),
+          event,
+          metadata: {
+            ...metadata,
+            platform,
+          },
+        }),
+      });
+      
+      console.log(`📊 Onboarding event tracked: ${event}`, metadata);
+    } catch (error) {
+      console.error('Failed to track onboarding event:', error);
+    }
+  }
+  
+  // Reset onboarding session (call when onboarding completes or user leaves)
+  resetOnboardingSession(): void {
+    this.onboardingSessionId = null;
+  }
 }
 
 export const activityTrackingService = new ActivityTrackingService();

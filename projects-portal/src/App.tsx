@@ -24,6 +24,7 @@ import MusicManagement from './pages/MusicManagement';
 import FeaturedContent from './pages/FeaturedContent';
 import NewUserWelcome from './pages/NewUserWelcome';
 import AnalyticsDashboard from './pages/AnalyticsDashboard';
+import OnboardingAnalytics from './pages/OnboardingAnalytics';
 
 function App() {
   return (
@@ -63,6 +64,7 @@ function App() {
             <Route path="featured" element={<FeaturedContent />} />
             <Route path="new-user-welcome" element={<NewUserWelcome />} />
             <Route path="analytics" element={<AnalyticsDashboard />} />
+            <Route path="onboarding-analytics" element={<OnboardingAnalytics />} />
           </Route>
         </Routes>
       </Router>

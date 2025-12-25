@@ -13,6 +13,7 @@ import { ApiService } from '../services/apiService';
 import { filterVisibleVoices } from '../services/voiceManagementService';
 import { cleanVoiceDescription, cleanVoiceCategory } from '../utils/voiceUtils';
 import { facebookPixelService } from '../services/facebookPixelService';
+import { activityTrackingService } from '../services/activityTrackingService';
 
 // Use Funny Heads instead of generic human seeds
 const FUNNY_HEADS = [
@@ -642,6 +643,9 @@ const OnboardingPage: React.FC = () => {
   // Only reset if there is no existing saved state (fresh install) or if explicitly requested.
   useEffect(() => {
     try {
+      // Track onboarding started
+      activityTrackingService.trackOnboardingEvent('onboarding_started');
+      
       const hasSavedState = !!localStorage.getItem('godly_kids_data_v6');
       const url = new URL(window.location.href);
       const forceReset = url.searchParams.get('reset') === '1' || sessionStorage.getItem('godlykids_force_reset') === 'true';
@@ -668,6 +672,8 @@ const OnboardingPage: React.FC = () => {
     sessionStorage.removeItem('godlykids_signing_out');
     setParentName(pName);
     setEquippedAvatar(pAvatar);
+    // Track step 1 completion
+    activityTrackingService.trackOnboardingEvent('step_1_complete', { step: 1 });
     setStep(2);
   };
 
@@ -703,6 +709,8 @@ const OnboardingPage: React.FC = () => {
 
   const handleStep2Continue = () => {
     playClick();
+    // Track step 2 completion with kids count
+    activityTrackingService.trackOnboardingEvent('step_2_complete', { step: 2, kidsCount: kids.length });
     // Go to voice selection step
     setStep(3);
   };
@@ -779,11 +787,18 @@ const OnboardingPage: React.FC = () => {
     unlockVoice(selectedVoiceId); // Unlock the selected voice for free
     console.log(`🎤 Onboarding: Unlocked voice ${selectedVoiceId}`);
     
+    // Track step 3 completion
+    activityTrackingService.trackOnboardingEvent('step_3_complete', { step: 3, voiceSelected: selectedVoiceId });
+    
     // ONLY skip paywall if subscribed during THIS onboarding session
     if (subscribedDuringOnboarding) {
       playSuccess();
+      activityTrackingService.trackOnboardingEvent('onboarding_complete');
+      activityTrackingService.resetOnboardingSession();
       navigate('/home');
     } else {
+      // Track paywall view
+      activityTrackingService.trackOnboardingEvent('step_4_viewed', { step: 4, kidsCount: kids.length });
       setStep(4); // Go to unlock/paywall step
     }
   };
@@ -903,6 +918,8 @@ const OnboardingPage: React.FC = () => {
   };
   
   const handleSubscribeClick = (email: string, password: string) => {
+    // Track subscribe button clicked
+    activityTrackingService.trackOnboardingEvent('subscribe_clicked', { planType: selectedPlan });
     setUserEmail(email);
     setUserPassword(password);
     setShowParentGate(true);
@@ -1455,6 +1472,11 @@ const OnboardingPage: React.FC = () => {
               onCreateAccount={handleCreateAccount}
               onSubscribe={handleSubscribeClick}
               onSkip={() => {
+                // Track skip event
+                activityTrackingService.trackOnboardingEvent('skip_clicked', { kidsCount: kids.length });
+                activityTrackingService.trackOnboardingEvent('onboarding_complete');
+                activityTrackingService.resetOnboardingSession();
+                
                 // User skipped without subscribing - limit to 1 kid account
                 let finalKids = [...kids]; // Copy kids array
                 if (kids.length > 1) {

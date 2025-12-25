@@ -798,12 +798,14 @@ const App: React.FC = () => {
     // Always start the backend sync (important for dashboard stats)
     activityTrackingService.startBackendSync();
     
+    // Always start time tracking (needed for dashboard stats)
+    // In Despia, we'll use a simplified version without visibility handlers
+    activityTrackingService.startTimeTracking(isDespia);
+    
     if (isDespia) {
-      // In Despia, skip visibility handlers but still track basic stats
-      console.log('📱 Activity tracking (Despia mode - basic stats only)');
+      console.log('📱 Activity tracking (Despia mode - with simplified time tracking)');
     } else {
-      // In web mode, also start time tracking with visibility handlers
-      activityTrackingService.startTimeTracking();
+      console.log('📱 Activity tracking (Web mode - full time tracking)');
     }
     
     return () => {

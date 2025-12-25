@@ -68,8 +68,9 @@ class ActivityTrackingService {
     this.backendSyncStarted = false;
   }
 
-  // Initialize time tracking when app starts (full tracking with visibility handlers)
-  startTimeTracking(): void {
+  // Initialize time tracking when app starts
+  // skipVisibilityHandlers: true for Despia (native app handles visibility differently)
+  startTimeTracking(skipVisibilityHandlers: boolean = false): void {
     try {
       this.sessionStartTime = Date.now();
       this.lastActiveTime = Date.now();
@@ -87,8 +88,8 @@ class ActivityTrackingService {
         }
       }, 60000); // Every minute
       
-      // Also listen for visibility changes (but be defensive)
-      if (typeof document !== 'undefined') {
+      // Listen for visibility changes (skip for Despia - native app handles this differently)
+      if (!skipVisibilityHandlers && typeof document !== 'undefined') {
         try {
           document.removeEventListener('visibilitychange', this.handleVisibilityChange);
           document.addEventListener('visibilitychange', this.handleVisibilityChange);
@@ -96,6 +97,8 @@ class ActivityTrackingService {
           console.error('Visibility listener error:', e);
         }
       }
+      
+      console.log(`⏱️ Time tracking started (visibility handlers: ${!skipVisibilityHandlers})`);
     } catch (e) {
       console.error('Activity tracking start error:', e);
     }

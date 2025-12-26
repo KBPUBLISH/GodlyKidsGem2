@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { 
     Users, UserPlus, Coins, Baby, Calendar, TrendingUp, 
-    Activity, Crown, Smartphone, Globe, Monitor, RefreshCw,
+    Activity, Smartphone, Globe, Monitor, RefreshCw,
     ChevronDown, ChevronUp, Search, ArrowUpRight, ArrowDownRight,
     BookOpen, Clock, Headphones, Music, Gamepad2, FileText
 } from 'lucide-react';

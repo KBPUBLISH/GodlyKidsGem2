@@ -65,7 +65,6 @@ const PageEditor: React.FC = () => {
     // Video sequence settings (multiple videos that play in order)
     const [useVideoSequence, setUseVideoSequence] = useState(false);
     const [videoSequence, setVideoSequence] = useState<VideoSequenceItem[]>([]);
-    const [uploadingVideo, setUploadingVideo] = useState(false);
 
     // Previews
     const [backgroundPreview, setBackgroundPreview] = useState<string | null>(null);

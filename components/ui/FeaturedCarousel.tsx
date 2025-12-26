@@ -68,7 +68,21 @@ const SimplePagePreview: React.FC<{
 
     ApiService.getBookPages(bookId)
       .then(pages => {
-        const url = pages?.[0]?.files?.background?.url || pages?.[0]?.backgroundUrl;
+        const firstPage = pages?.[0];
+        // Check multiple possible sources for the first page preview:
+        // 1. Video sequence (for books using multiple videos)
+        // 2. files.background.url (new schema)
+        // 3. backgroundUrl (legacy field)
+        let url = null;
+        
+        if (firstPage?.useVideoSequence && firstPage?.videoSequence?.length > 0) {
+          // Sort by order and get first video
+          const sortedVideos = [...firstPage.videoSequence].sort((a: any, b: any) => a.order - b.order);
+          url = sortedVideos[0]?.url;
+        } else {
+          url = firstPage?.files?.background?.url || firstPage?.backgroundUrl;
+        }
+        
         if (!cancelled && url) {
           setPageToCache(bookId, url);
           setPageLoaded(false);

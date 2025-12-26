@@ -46,6 +46,11 @@ const BookEdit: React.FC = () => {
     const [uploadingVideoThumbnail, setUploadingVideoThumbnail] = useState(false);
     const videoInputRef = useRef<HTMLInputElement>(null);
     const videoThumbnailInputRef = useRef<HTMLInputElement>(null);
+    
+    // Intro video (studio logo animation before book starts)
+    const [introVideoUrl, setIntroVideoUrl] = useState<string>('');
+    const [uploadingIntroVideo, setUploadingIntroVideo] = useState(false);
+    const introVideoInputRef = useRef<HTMLInputElement>(null);
 
     // Load existing book data
     useEffect(() => {
@@ -100,6 +105,9 @@ const BookEdit: React.FC = () => {
                 } else {
                     setBookVideos([]);
                 }
+                
+                // Load intro video URL
+                setIntroVideoUrl(b.introVideoUrl || '');
             } catch (err) {
                 console.error('Failed to fetch book:', err);
             } finally {
@@ -388,6 +396,7 @@ const BookEdit: React.FC = () => {
                 games: selectedGames,
                 bookGames: bookGames,
                 bookVideos: bookVideos,
+                introVideoUrl: introVideoUrl || null, // Studio intro video
             };
             console.log('Updating book with payload:', payload);
             await apiClient.put(`/api/books/${bookId}`, payload);
@@ -1255,6 +1264,101 @@ const BookEdit: React.FC = () => {
                                 </button>
                             )}
                         </div>
+                    </div>
+                </div>
+                
+                {/* Intro Video (Studio Logo Animation) Section */}
+                <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                        <Video className="w-4 h-4 inline mr-2" />
+                        Intro Video (Studio Animation)
+                    </label>
+                    <p className="text-xs text-gray-500 mb-3">
+                        Upload a short video (like a studio logo animation) that plays before the book starts. This is optional - if not set, the book will start immediately.
+                    </p>
+                    
+                    {/* Current Intro Video */}
+                    {introVideoUrl && (
+                        <div className="mb-4 p-4 bg-indigo-50 rounded-lg border border-indigo-200">
+                            <div className="flex items-center justify-between">
+                                <div className="flex items-center gap-3">
+                                    <Video className="w-5 h-5 text-indigo-600" />
+                                    <div>
+                                        <p className="text-sm font-medium text-indigo-900">Intro video set</p>
+                                        <p className="text-xs text-indigo-700 truncate max-w-[300px]">{introVideoUrl}</p>
+                                    </div>
+                                </div>
+                                <button
+                                    type="button"
+                                    onClick={() => setIntroVideoUrl('')}
+                                    className="p-2 text-red-600 hover:bg-red-50 rounded transition-colors"
+                                    title="Remove intro video"
+                                >
+                                    <X className="w-4 h-4" />
+                                </button>
+                            </div>
+                            {/* Preview */}
+                            <video
+                                src={introVideoUrl}
+                                className="mt-3 w-full max-w-md rounded-lg border border-indigo-300"
+                                controls
+                                muted
+                            />
+                        </div>
+                    )}
+                    
+                    {/* Upload Intro Video */}
+                    <div className="border-2 border-dashed border-gray-300 rounded-lg p-4 text-center hover:border-indigo-400 transition-colors">
+                        <input
+                            ref={introVideoInputRef}
+                            type="file"
+                            accept="video/mp4,video/*"
+                            onChange={async (e) => {
+                                const file = e.target.files?.[0];
+                                if (file && bookId) {
+                                    if (!file.type.startsWith('video/') && !file.name.endsWith('.mp4')) {
+                                        alert('Please select an MP4 video file');
+                                        return;
+                                    }
+                                    
+                                    setUploadingIntroVideo(true);
+                                    const formData = new FormData();
+                                    formData.append('file', file);
+                                    
+                                    try {
+                                        const response = await apiClient.post(
+                                            `/api/upload/video?bookId=${bookId}&type=video`,
+                                            formData,
+                                            { headers: { 'Content-Type': 'multipart/form-data' } }
+                                        );
+                                        setIntroVideoUrl(response.data.url);
+                                    } catch (error: any) {
+                                        console.error('Intro video upload failed:', error);
+                                        const errorMessage = error.response?.data?.message || error.message || 'Unknown error';
+                                        alert(`Failed to upload intro video:\n${errorMessage}`);
+                                    } finally {
+                                        setUploadingIntroVideo(false);
+                                        if (introVideoInputRef.current) {
+                                            introVideoInputRef.current.value = '';
+                                        }
+                                    }
+                                }
+                            }}
+                            className="hidden"
+                            id="intro-video-upload"
+                        />
+                        <label
+                            htmlFor="intro-video-upload"
+                            className="cursor-pointer flex flex-col items-center gap-2"
+                        >
+                            <Video className={`w-8 h-8 ${uploadingIntroVideo ? 'text-indigo-500 animate-pulse' : 'text-gray-400'}`} />
+                            <span className="text-sm text-gray-600">
+                                {uploadingIntroVideo ? 'Uploading intro video...' : 'Upload intro video (optional)'}
+                            </span>
+                            <span className="text-xs text-gray-500">
+                                MP4 format, recommended: 3-10 seconds
+                            </span>
+                        </label>
                     </div>
                 </div>
                 

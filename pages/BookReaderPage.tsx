@@ -107,6 +107,11 @@ const BookReaderPage: React.FC = () => {
     const [scrollState, setScrollState] = useState<ScrollState>('mid');
     const [bookTitle, setBookTitle] = useState<string>('Book');
     const [bookOrientation, setBookOrientation] = useState<'portrait' | 'landscape'>('portrait');
+    
+    // Studio intro video state (per-book, set in portal)
+    const [showIntroVideo, setShowIntroVideo] = useState(false);
+    const [introVideoUrl, setIntroVideoUrl] = useState<string | null>(null);
+    const introVideoRef = useRef<HTMLVideoElement>(null);
 
     // Keep ref in sync with state
     const scrollStateRef = useRef<ScrollState>('mid');
@@ -465,6 +470,12 @@ const BookReaderPage: React.FC = () => {
                     
                     // Increment book opened counter for review prompt
                     incrementActivityCounter('book');
+                    
+                    // Check for intro video
+                    if ((book as any)?.introVideoUrl) {
+                        setIntroVideoUrl((book as any).introVideoUrl);
+                        setShowIntroVideo(true);
+                    }
                     
                 // Set book orientation
                 const rawData = (book as any)?.rawData;
@@ -2053,6 +2064,33 @@ const BookReaderPage: React.FC = () => {
                     className="bg-indigo-600 px-4 py-2 rounded hover:bg-indigo-700 transition"
                 >
                     Go Back
+                </button>
+            </div>
+        );
+    }
+
+    // Show intro video (studio animation) before the book starts
+    if (showIntroVideo && introVideoUrl) {
+        return (
+            <div className="fixed inset-0 bg-black flex items-center justify-center z-50">
+                <video
+                    ref={introVideoRef}
+                    src={introVideoUrl}
+                    className="w-full h-full object-contain"
+                    autoPlay
+                    playsInline
+                    onEnded={() => setShowIntroVideo(false)}
+                    onError={() => {
+                        console.warn('Intro video failed to load, skipping');
+                        setShowIntroVideo(false);
+                    }}
+                />
+                {/* Skip button */}
+                <button
+                    onClick={() => setShowIntroVideo(false)}
+                    className="absolute bottom-8 right-8 px-6 py-2 bg-white/20 hover:bg-white/30 text-white text-sm font-medium rounded-full backdrop-blur-sm transition-all"
+                >
+                    Skip
                 </button>
             </div>
         );

@@ -758,12 +758,15 @@ const PageEditor: React.FC = () => {
                             />
                             <label
                                 htmlFor="bg-upload"
-                                className="flex items-center justify-center w-full h-32 border-2 border-dashed border-gray-300 rounded-lg cursor-pointer hover:border-indigo-400 hover:bg-indigo-50 transition"
+                                className="flex items-center justify-center w-full h-32 border-2 border-dashed border-gray-300 rounded-lg cursor-pointer hover:border-indigo-400 hover:bg-indigo-50 transition relative"
                             >
                                 {backgroundPreview ? (
-                                    backgroundType === 'image' ?
-                                        <img src={backgroundPreview} className="w-full h-full object-cover rounded-lg opacity-50 group-hover:opacity-40" /> :
-                                        <video src={backgroundPreview} className="w-full h-full object-cover rounded-lg opacity-50 group-hover:opacity-40" autoPlay loop muted playsInline />
+                                    <>
+                                        {backgroundType === 'image' ?
+                                            <img src={backgroundPreview} className="w-full h-full object-cover rounded-lg opacity-50 group-hover:opacity-40" /> :
+                                            <video src={backgroundPreview} className="w-full h-full object-cover rounded-lg opacity-50 group-hover:opacity-40" autoPlay loop muted playsInline />
+                                        }
+                                    </>
                                 ) : (
                                     <div className="text-center text-gray-400">
                                         {backgroundType === 'image' ? <ImageIcon className="w-8 h-8 mx-auto mb-1" /> : <Video className="w-8 h-8 mx-auto mb-1" />}
@@ -771,7 +774,37 @@ const PageEditor: React.FC = () => {
                                     </div>
                                 )}
                             </label>
+                            {/* Remove Background Button */}
+                            {backgroundPreview && (
+                                <button
+                                    type="button"
+                                    onClick={(e) => {
+                                        e.preventDefault();
+                                        e.stopPropagation();
+                                        setBackgroundFile(null);
+                                        setBackgroundPreview(null);
+                                    }}
+                                    className="absolute top-1 right-1 bg-red-500 text-white p-1 rounded-full hover:bg-red-600 transition shadow-md z-10"
+                                    title="Remove background"
+                                >
+                                    <X className="w-4 h-4" />
+                                </button>
+                            )}
                         </div>
+                        
+                        {/* Remove Background Text Button */}
+                        {backgroundPreview && (
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    setBackgroundFile(null);
+                                    setBackgroundPreview(null);
+                                }}
+                                className="w-full py-2 text-xs text-red-600 hover:bg-red-50 rounded-lg transition"
+                            >
+                                Remove Background
+                            </button>
+                        )}
                     </div>
 
                     <hr className="border-gray-100" />
@@ -787,18 +820,31 @@ const PageEditor: React.FC = () => {
                         </p>
                         
                         {/* Toggle to enable video sequence */}
-                        <label className="flex items-center gap-2 cursor-pointer">
+                        <label className="flex items-center gap-2 cursor-pointer bg-indigo-50 p-2 rounded-lg border border-indigo-200">
                             <input
                                 type="checkbox"
                                 checked={useVideoSequence}
                                 onChange={(e) => setUseVideoSequence(e.target.checked)}
                                 className="w-4 h-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500"
                             />
-                            <span className="text-sm text-gray-700">Use video sequence</span>
+                            <span className="text-sm text-gray-700 font-medium">Use video sequence instead of background</span>
                         </label>
                         
+                        {!useVideoSequence && (
+                            <p className="text-xs text-amber-600 bg-amber-50 p-2 rounded">
+                                ⚠️ Check the box above to enable video sequence mode
+                            </p>
+                        )}
+                        
                         {useVideoSequence && (
-                            <div className="space-y-3 bg-gray-50 p-3 rounded-lg">
+                            <div className="space-y-3 bg-gray-50 p-3 rounded-lg border-2 border-indigo-300">
+                                {/* Empty state message */}
+                                {videoSequence.length === 0 && (
+                                    <p className="text-xs text-amber-600 bg-amber-50 p-2 rounded text-center">
+                                        ⬇️ Add at least one video below to use video sequence
+                                    </p>
+                                )}
+                                
                                 {/* Video list */}
                                 {videoSequence.length > 0 && (
                                     <div className="space-y-2">

@@ -16,7 +16,11 @@ import {
     Sparkles,
     Loader2,
     Music,
-    X
+    X,
+    Plus,
+    ChevronUp,
+    ChevronDown,
+    Film
 } from 'lucide-react';
 
 interface TextBox {
@@ -29,6 +33,15 @@ interface TextBox {
     fontFamily: string;
     fontSize: number;
     color: string;
+}
+
+interface VideoSequenceItem {
+    id: string; // Temporary ID for UI
+    url?: string; // Uploaded URL
+    file?: File; // File to upload
+    filename: string;
+    order: number;
+    preview?: string; // Object URL for preview
 }
 
 const PageEditor: React.FC = () => {
@@ -48,6 +61,11 @@ const PageEditor: React.FC = () => {
     // Coloring page settings
     const [isColoringPage, setIsColoringPage] = useState(false);
     const [coloringEndModalOnly, setColoringEndModalOnly] = useState(true); // Default: coloring pages show in end modal
+    
+    // Video sequence settings (multiple videos that play in order)
+    const [useVideoSequence, setUseVideoSequence] = useState(false);
+    const [videoSequence, setVideoSequence] = useState<VideoSequenceItem[]>([]);
+    const [uploadingVideo, setUploadingVideo] = useState(false);
 
     // Previews
     const [backgroundPreview, setBackgroundPreview] = useState<string | null>(null);
@@ -319,6 +337,20 @@ const PageEditor: React.FC = () => {
         // Load coloring page settings
         setIsColoringPage(page.isColoringPage || false);
         setColoringEndModalOnly(page.coloringEndModalOnly !== false); // Default to true if not set
+        
+        // Load video sequence settings
+        setUseVideoSequence(page.useVideoSequence || false);
+        if (page.videoSequence && page.videoSequence.length > 0) {
+            const loadedVideos: VideoSequenceItem[] = page.videoSequence.map((v: any, idx: number) => ({
+                id: `loaded-${page._id}-${idx}`,
+                url: v.url,
+                filename: v.filename || `Video ${v.order}`,
+                order: v.order,
+            }));
+            setVideoSequence(loadedVideos);
+        } else {
+            setVideoSequence([]);
+        }
 
         setSelectedBoxId(null);
     };
@@ -343,6 +375,14 @@ const PageEditor: React.FC = () => {
         // Reset coloring page settings
         setIsColoringPage(false);
         setColoringEndModalOnly(true);
+        
+        // Reset video sequence settings
+        setUseVideoSequence(false);
+        // Cleanup object URLs
+        videoSequence.forEach(v => {
+            if (v.preview) URL.revokeObjectURL(v.preview);
+        });
+        setVideoSequence([]);
 
         // Apply template if it exists
         if (pageTemplate) {
@@ -524,6 +564,40 @@ const PageEditor: React.FC = () => {
                 soundEffectUrl = res.data.url;
             }
 
+            // Upload video sequence files
+            const uploadedVideoSequence: { url: string; filename: string; order: number }[] = [];
+            if (useVideoSequence && videoSequence.length > 0) {
+                for (const video of videoSequence.sort((a, b) => a.order - b.order)) {
+                    if (video.file) {
+                        // Upload new video file
+                        const formData = new FormData();
+                        formData.append('file', video.file);
+                        try {
+                            const res = await apiClient.post(
+                                `/api/upload/video?bookId=${bookId}&type=sequence&pageNumber=${pageNumber}`,
+                                formData,
+                                { headers: { 'Content-Type': 'multipart/form-data' } }
+                            );
+                            uploadedVideoSequence.push({
+                                url: res.data.url,
+                                filename: video.filename,
+                                order: video.order,
+                            });
+                        } catch (uploadErr) {
+                            console.error('Failed to upload video sequence item:', uploadErr);
+                            alert(`Failed to upload video: ${video.filename}`);
+                        }
+                    } else if (video.url) {
+                        // Keep existing URL
+                        uploadedVideoSequence.push({
+                            url: video.url,
+                            filename: video.filename,
+                            order: video.order,
+                        });
+                    }
+                }
+            }
+
             const payload = {
                 bookId,
                 pageNumber,
@@ -536,6 +610,9 @@ const PageEditor: React.FC = () => {
                 textBoxes: textBoxes.map(({ id, ...rest }) => rest), // Remove ID before sending
                 isColoringPage,
                 coloringEndModalOnly: isColoringPage ? coloringEndModalOnly : false, // Only relevant if it's a coloring page
+                // Video sequence settings
+                useVideoSequence: useVideoSequence && uploadedVideoSequence.length > 0,
+                videoSequence: uploadedVideoSequence,
             };
 
             console.log('Sending payload:', JSON.stringify(payload, null, 2));
@@ -696,6 +773,168 @@ const PageEditor: React.FC = () => {
                                 )}
                             </label>
                         </div>
+                    </div>
+
+                    <hr className="border-gray-100" />
+
+                    {/* Video Sequence - Multiple videos that play in order */}
+                    <div className="space-y-3">
+                        <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider flex items-center gap-2">
+                            <Film className="w-4 h-4" />
+                            Video Sequence
+                        </label>
+                        <p className="text-xs text-gray-400">
+                            Upload multiple videos to play in sequence. They will loop until the page audio finishes.
+                        </p>
+                        
+                        {/* Toggle to enable video sequence */}
+                        <label className="flex items-center gap-2 cursor-pointer">
+                            <input
+                                type="checkbox"
+                                checked={useVideoSequence}
+                                onChange={(e) => setUseVideoSequence(e.target.checked)}
+                                className="w-4 h-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500"
+                            />
+                            <span className="text-sm text-gray-700">Use video sequence</span>
+                        </label>
+                        
+                        {useVideoSequence && (
+                            <div className="space-y-3 bg-gray-50 p-3 rounded-lg">
+                                {/* Video list */}
+                                {videoSequence.length > 0 && (
+                                    <div className="space-y-2">
+                                        {videoSequence.sort((a, b) => a.order - b.order).map((video, index) => (
+                                            <div 
+                                                key={video.id}
+                                                className="flex items-center gap-2 bg-white p-2 rounded-lg border border-gray-200 shadow-sm"
+                                            >
+                                                {/* Order badge */}
+                                                <div className="w-6 h-6 bg-indigo-600 text-white rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0">
+                                                    {video.order}
+                                                </div>
+                                                
+                                                {/* Video preview thumbnail */}
+                                                <div className="w-16 h-10 bg-gray-200 rounded overflow-hidden flex-shrink-0">
+                                                    {(video.preview || video.url) && (
+                                                        <video 
+                                                            src={video.preview || resolveUrl(video.url)}
+                                                            className="w-full h-full object-cover"
+                                                            muted
+                                                        />
+                                                    )}
+                                                </div>
+                                                
+                                                {/* Filename */}
+                                                <span className="flex-1 text-xs text-gray-600 truncate">
+                                                    {video.filename}
+                                                </span>
+                                                
+                                                {/* Reorder buttons */}
+                                                <div className="flex flex-col gap-0.5">
+                                                    <button
+                                                        type="button"
+                                                        disabled={index === 0}
+                                                        onClick={() => {
+                                                            // Move up
+                                                            setVideoSequence(prev => {
+                                                                const sorted = [...prev].sort((a, b) => a.order - b.order);
+                                                                if (index === 0) return prev;
+                                                                const current = sorted[index];
+                                                                const above = sorted[index - 1];
+                                                                return prev.map(v => {
+                                                                    if (v.id === current.id) return { ...v, order: above.order };
+                                                                    if (v.id === above.id) return { ...v, order: current.order };
+                                                                    return v;
+                                                                });
+                                                            });
+                                                        }}
+                                                        className="p-0.5 text-gray-400 hover:text-gray-600 disabled:opacity-30"
+                                                    >
+                                                        <ChevronUp className="w-3 h-3" />
+                                                    </button>
+                                                    <button
+                                                        type="button"
+                                                        disabled={index === videoSequence.length - 1}
+                                                        onClick={() => {
+                                                            // Move down
+                                                            setVideoSequence(prev => {
+                                                                const sorted = [...prev].sort((a, b) => a.order - b.order);
+                                                                if (index === sorted.length - 1) return prev;
+                                                                const current = sorted[index];
+                                                                const below = sorted[index + 1];
+                                                                return prev.map(v => {
+                                                                    if (v.id === current.id) return { ...v, order: below.order };
+                                                                    if (v.id === below.id) return { ...v, order: current.order };
+                                                                    return v;
+                                                                });
+                                                            });
+                                                        }}
+                                                        className="p-0.5 text-gray-400 hover:text-gray-600 disabled:opacity-30"
+                                                    >
+                                                        <ChevronDown className="w-3 h-3" />
+                                                    </button>
+                                                </div>
+                                                
+                                                {/* Delete button */}
+                                                <button
+                                                    type="button"
+                                                    onClick={() => {
+                                                        // Revoke object URL if exists
+                                                        if (video.preview) URL.revokeObjectURL(video.preview);
+                                                        setVideoSequence(prev => {
+                                                            const filtered = prev.filter(v => v.id !== video.id);
+                                                            // Re-order remaining items
+                                                            return filtered.sort((a, b) => a.order - b.order).map((v, i) => ({ ...v, order: i + 1 }));
+                                                        });
+                                                    }}
+                                                    className="p-1 text-red-400 hover:text-red-600"
+                                                >
+                                                    <Trash2 className="w-3 h-3" />
+                                                </button>
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+                                
+                                {/* Add video button */}
+                                <div className="relative">
+                                    <input
+                                        type="file"
+                                        accept="video/*"
+                                        className="hidden"
+                                        id="video-sequence-upload"
+                                        onChange={(e) => {
+                                            const file = e.target.files?.[0];
+                                            if (file) {
+                                                const newVideo: VideoSequenceItem = {
+                                                    id: `video-${Date.now()}`,
+                                                    file,
+                                                    filename: file.name,
+                                                    order: videoSequence.length + 1,
+                                                    preview: URL.createObjectURL(file),
+                                                };
+                                                setVideoSequence(prev => [...prev, newVideo]);
+                                                // Reset input
+                                                e.target.value = '';
+                                            }
+                                        }}
+                                    />
+                                    <label
+                                        htmlFor="video-sequence-upload"
+                                        className="flex items-center justify-center gap-2 w-full py-2 border-2 border-dashed border-indigo-300 rounded-lg cursor-pointer hover:border-indigo-400 hover:bg-indigo-50 transition text-indigo-600 text-sm font-medium"
+                                    >
+                                        <Plus className="w-4 h-4" />
+                                        Add Video ({videoSequence.length}/10)
+                                    </label>
+                                </div>
+                                
+                                {videoSequence.length > 0 && (
+                                    <p className="text-xs text-indigo-600 text-center">
+                                        ✨ Videos will play in order: {videoSequence.sort((a, b) => a.order - b.order).map(v => v.order).join(' → ')} → loop
+                                    </p>
+                                )}
+                            </div>
+                        )}
                     </div>
 
                     <hr className="border-gray-100" />

@@ -29,6 +29,12 @@ interface TextBox {
     color?: string;
 }
 
+interface VideoSequenceItem {
+    url: string;
+    filename?: string;
+    order: number;
+}
+
 interface Page {
     _id: string;
     pageNumber: number;
@@ -40,6 +46,9 @@ interface Page {
     scrollHeight?: number;
     scrollMidHeight?: number; // Mid scroll height % (default 30)
     scrollMaxHeight?: number; // Max scroll height % (default 60)
+    // Video sequence - multiple videos that play in order
+    useVideoSequence?: boolean;
+    videoSequence?: VideoSequenceItem[];
     textBoxes?: TextBox[]; // Legacy: some pages may have textBoxes at root
     content?: {
         textBoxes?: TextBox[]; // Primary location of textBoxes from DB

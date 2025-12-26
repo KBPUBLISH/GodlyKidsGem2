@@ -17,6 +17,12 @@ interface TextBox {
     endTime?: number;
 }
 
+interface VideoSequenceItem {
+    url: string;
+    filename?: string;
+    order: number;
+}
+
 interface PageData {
     id: string;
     pageNumber: number;
@@ -28,6 +34,9 @@ interface PageData {
     scrollMidHeight?: number; // Mid scroll height % (default 30)
     scrollMaxHeight?: number; // Max scroll height % (default 60)
     soundEffectUrl?: string;
+    // Video sequence - multiple videos that play in order
+    useVideoSequence?: boolean;
+    videoSequence?: VideoSequenceItem[];
 }
 
 // Scroll state types
@@ -71,8 +80,16 @@ export const BookPageRenderer: React.FC<BookPageRendererProps> = ({
     const soundEffectRef = useRef<HTMLAudioElement | null>(null);
     const videoRef = useRef<HTMLVideoElement | null>(null);
     const [bubblePopped, setBubblePopped] = useState(false);
-    const [videoUnmuted, setVideoUnmuted] = useState(false);
     const [bubblePosition, setBubblePosition] = useState({ x: 75, y: 20 }); // Default position (top right area)
+    
+    // Video sequence state
+    const [currentVideoIndex, setCurrentVideoIndex] = useState(0);
+    const sortedVideoSequence = React.useMemo(() => {
+        if (!page.useVideoSequence || !page.videoSequence || page.videoSequence.length === 0) {
+            return [];
+        }
+        return [...page.videoSequence].sort((a, b) => a.order - b.order);
+    }, [page.useVideoSequence, page.videoSequence]);
     
     // Swipe detection for scroll height changes
     const touchStartY = useRef<number>(0);
@@ -155,37 +172,18 @@ export const BookPageRenderer: React.FC<BookPageRendererProps> = ({
         };
     }, [page.soundEffectUrl]);
 
-    // Handle video audio - unmute on first user interaction (iOS requirement)
-    useEffect(() => {
-        const handleUserInteraction = () => {
-            if (videoRef.current && !videoUnmuted) {
-                videoRef.current.muted = false;
-                videoRef.current.volume = 0.3; // Background audio at 30% volume
-                setVideoUnmuted(true);
-                console.log('🎬 Video unmuted after user interaction');
-            }
-        };
-
-        // Listen for first user interaction to unmute video
-        document.addEventListener('touchstart', handleUserInteraction, { once: true });
-        document.addEventListener('click', handleUserInteraction, { once: true });
-
-        return () => {
-            document.removeEventListener('touchstart', handleUserInteraction);
-            document.removeEventListener('click', handleUserInteraction);
-        };
-    }, [videoUnmuted]);
-
-    // Set video volume when video ref is available
+    // Set video volume when video loads
     useEffect(() => {
         if (videoRef.current) {
-            videoRef.current.volume = 0.3; // Background audio at 30% volume
+            videoRef.current.volume = 1.0; // Full volume for video's native audio
+            videoRef.current.muted = false;
         }
-    }, [page.backgroundUrl]);
+    }, [currentVideoIndex, page.backgroundUrl]);
 
-    // Reset bubble when page changes
+    // Reset bubble and video sequence when page changes
     useEffect(() => {
         setBubblePopped(false);
+        setCurrentVideoIndex(0); // Reset video sequence to first video
         // Randomize bubble position across different areas of the screen
         // Avoid the very center where text usually is, and edges where controls are
         const positions = [
@@ -200,6 +198,20 @@ export const BookPageRenderer: React.FC<BookPageRendererProps> = ({
         const randomPosition = positions[Math.floor(Math.random() * positions.length)];
         setBubblePosition(randomPosition);
     }, [page.id]);
+    
+    // Handle video sequence - move to next video when current one ends
+    const handleVideoEnded = () => {
+        if (sortedVideoSequence.length > 0) {
+            const nextIndex = (currentVideoIndex + 1) % sortedVideoSequence.length;
+            console.log(`🎬 Video ${currentVideoIndex + 1} ended, switching to video ${nextIndex + 1} of ${sortedVideoSequence.length}`);
+            setCurrentVideoIndex(nextIndex);
+        }
+    };
+    
+    // Get current video URL for sequence playback
+    const currentSequenceVideoUrl = sortedVideoSequence.length > 0 
+        ? sortedVideoSequence[currentVideoIndex]?.url 
+        : null;
 
     const handleBubbleClick = (e: React.MouseEvent) => {
         e.stopPropagation();
@@ -235,8 +247,35 @@ export const BookPageRenderer: React.FC<BookPageRendererProps> = ({
                     pointerEvents: 'none',
                 }}
             >
-                {/* Auto-detect video based on backgroundType OR file extension */}
-                {(page.backgroundType === 'video' || 
+                {/* Video Sequence Mode - multiple videos playing in sequence */}
+                {page.useVideoSequence && sortedVideoSequence.length > 0 && currentSequenceVideoUrl ? (
+                    <video
+                        ref={videoRef}
+                        key={`video-seq-${currentVideoIndex}`} // Force re-mount when video changes
+                        src={currentSequenceVideoUrl}
+                        className="absolute inset-0 w-full h-full object-cover min-w-full min-h-full"
+                        autoPlay
+                        playsInline
+                        preload="auto"
+                        onEnded={handleVideoEnded} // Move to next video in sequence
+                        onLoadedData={() => {
+                            // Set full volume for video's native audio
+                            if (videoRef.current) {
+                                videoRef.current.volume = 1.0;
+                                videoRef.current.muted = false;
+                            }
+                        }}
+                        style={{
+                            objectFit: 'cover',
+                            width: '100%',
+                            height: '100%',
+                            position: 'absolute',
+                            top: 0,
+                            left: 0,
+                        }}
+                    />
+                ) : /* Auto-detect video based on backgroundType OR file extension */
+                (page.backgroundType === 'video' || 
                   (page.backgroundUrl && /\.(mp4|webm|mov|m4v)$/i.test(page.backgroundUrl))) ? (
                     <video
                         ref={videoRef}
@@ -244,13 +283,13 @@ export const BookPageRenderer: React.FC<BookPageRendererProps> = ({
                         className="absolute inset-0 w-full h-full object-cover min-w-full min-h-full"
                         autoPlay
                         loop
-                        muted={!videoUnmuted} // Start muted for iOS autoplay, unmute on user interaction
                         playsInline
                         preload="auto"
                         onLoadedData={() => {
-                            // Set volume once video is loaded
+                            // Set full volume for video's native audio
                             if (videoRef.current) {
-                                videoRef.current.volume = 0.3;
+                                videoRef.current.volume = 1.0;
+                                videoRef.current.muted = false;
                             }
                         }}
                         style={{

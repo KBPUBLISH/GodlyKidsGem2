@@ -5,17 +5,20 @@ import { ArrowLeft, Loader2, Maximize2, Minimize2, ExternalLink } from 'lucide-r
 const GameWebViewPage: React.FC = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const gameUrl = searchParams.get('url') || '';
+  const rawGameUrl = searchParams.get('url') || '';
   const gameName = searchParams.get('name') || 'Game';
+  
+  // Add cache-busting param to avoid stale content
+  const gameUrl = rawGameUrl ? `${rawGameUrl}${rawGameUrl.includes('?') ? '&' : '?'}_cb=${Date.now()}` : '';
   
   // Detect if running in Despia WebView
   const isDespia = !!(window as any).__GK_IS_DESPIA__;
   
   // Debug logging
   console.log('🎮 GameWebViewPage loaded');
-  console.log('🎮 URL param:', gameUrl);
+  console.log('🎮 Raw URL:', rawGameUrl);
+  console.log('🎮 Cache-busted URL:', gameUrl);
   console.log('🎮 Name param:', gameName);
-  console.log('🎮 Full search params:', searchParams.toString());
   console.log('🎮 Is Despia:', isDespia);
   
   const [loading, setLoading] = useState(true);
@@ -40,12 +43,12 @@ const GameWebViewPage: React.FC = () => {
   // If no game URL provided, redirect to home immediately
   // This handles the case where app reopens on this page after force quit
   useEffect(() => {
-    if (!gameUrl) {
+    if (!rawGameUrl) {
       console.log('🎮 GameWebViewPage: No URL provided, redirecting to home');
       localStorage.removeItem('gk_last_route');
       navigate('/home', { replace: true });
     }
-  }, [gameUrl, navigate]);
+  }, [rawGameUrl, navigate]);
   
   // Timeout detection - if iframe doesn't load within 10 seconds, show fallback
   useEffect(() => {
@@ -62,7 +65,7 @@ const GameWebViewPage: React.FC = () => {
     return () => clearTimeout(timeout);
   }, [gameUrl, loading]);
 
-  if (!gameUrl) {
+  if (!rawGameUrl) {
     // Show loading while redirecting
     return (
       <div className="min-h-screen bg-gradient-to-br from-[#1a1a2e] to-[#16213e] flex items-center justify-center">

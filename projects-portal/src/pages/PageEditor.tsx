@@ -1469,9 +1469,8 @@ const PageEditor: React.FC = () => {
                                 alt="Scroll"
                                 crossOrigin="anonymous"
                                 onLoad={() => console.log('✅ Scroll image loaded:', scrollPreview)}
-                                onError={(e) => {
+                                onError={() => {
                                     console.error('❌ Scroll image failed to load:', scrollPreview);
-                                    // Don't show alert - it's annoying. Just log it.
                                 }}
                             />
                         </div>

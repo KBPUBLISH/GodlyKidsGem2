@@ -577,6 +577,23 @@ class ActivityTrackingService {
       
       const platform = (window as any).__GK_IS_DESPIA__ ? 'ios' : 'web';
       
+      // Store onboarding step in localStorage for stats sync
+      // Use the same key pattern as getAllTimeStats() expects
+      const onboardingKey = this.getKey('onboarding_step_reached');
+      if (metadata?.step !== undefined) {
+        const currentStep = parseInt(localStorage.getItem(onboardingKey) || '0');
+        if (metadata.step > currentStep) {
+          localStorage.setItem(onboardingKey, metadata.step.toString());
+          console.log(`📊 Onboarding step updated: ${metadata.step} (key: ${onboardingKey})`);
+        }
+      }
+      
+      // Mark onboarding complete if event indicates it
+      if (event === 'onboarding_complete') {
+        localStorage.setItem(onboardingKey, '5'); // Mark as completed (step 5 = done)
+        console.log(`📊 Onboarding marked complete (step 5)`);
+      }
+      
       await fetch(`${apiUrl}/analytics/onboarding/event`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -592,6 +609,9 @@ class ActivityTrackingService {
       });
       
       console.log(`📊 Onboarding event tracked: ${event}`, metadata);
+      
+      // Trigger a stats sync to update the user's onboarding step in the database
+      setTimeout(() => this.syncStatsToBackend(), 1000);
     } catch (error) {
       console.error('Failed to track onboarding event:', error);
     }

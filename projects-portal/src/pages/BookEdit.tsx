@@ -662,7 +662,7 @@ const BookEdit: React.FC = () => {
                             <div>
                                 <p className="text-sm font-semibold text-indigo-900">Upload Volume</p>
                                 <p className="text-xs text-indigo-800/80">
-                                    This permanently makes the uploaded file quieter (best for iPhone). Recommended: 20%.
+                                    This permanently makes the uploaded file quieter (best for iPhone). Recommended: 40%.
                                 </p>
                             </div>
                             <div className="text-indigo-900 font-bold tabular-nums">

@@ -344,6 +344,11 @@ const PageEditor: React.FC = () => {
         setColoringEndModalOnly(page.coloringEndModalOnly !== false); // Default to true if not set
         
         // Load video sequence settings
+        console.log('🎬 Video sequence settings:', {
+            useVideoSequence: page.useVideoSequence,
+            videoSequenceLength: page.videoSequence?.length || 0,
+            videoSequence: page.videoSequence
+        });
         setUseVideoSequence(page.useVideoSequence || false);
         if (page.videoSequence && page.videoSequence.length > 0) {
             const loadedVideos: VideoSequenceItem[] = page.videoSequence.map((v: any, idx: number) => ({
@@ -1462,10 +1467,11 @@ const PageEditor: React.FC = () => {
                                 src={scrollPreview} 
                                 className="w-full h-full object-fill" 
                                 alt="Scroll"
+                                crossOrigin="anonymous"
+                                onLoad={() => console.log('✅ Scroll image loaded:', scrollPreview)}
                                 onError={(e) => {
                                     console.error('❌ Scroll image failed to load:', scrollPreview);
-                                    // Try to show what URL was attempted
-                                    alert(`Scroll image failed to load:\n${scrollPreview}`);
+                                    // Don't show alert - it's annoying. Just log it.
                                 }}
                             />
                         </div>
@@ -1551,6 +1557,9 @@ const PageEditor: React.FC = () => {
                             <div className="text-gray-400 text-center">
                                 <p className="text-xl font-semibold">Canvas Empty</p>
                                 <p className="text-sm">Upload a background or add video sequence</p>
+                                <p className="text-xs mt-2 text-gray-500">
+                                    Debug: bg={backgroundPreview ? 'yes' : 'no'}, useVidSeq={useVideoSequence ? 'yes' : 'no'}, vidCount={videoSequence.length}
+                                </p>
                             </div>
                         </div>
                     )}

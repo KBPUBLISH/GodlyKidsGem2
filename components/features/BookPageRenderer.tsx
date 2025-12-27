@@ -439,36 +439,34 @@ export const BookPageRenderer: React.FC<BookPageRendererProps> = ({
                 className="absolute inset-0 pointer-events-none z-20"
             >
                 {page.textBoxes?.map((box, idx) => {
-                    // Calculate scroll heights - "design" height is what portal shows (mid), current depends on state
-                    const designScrollHeight = page.scrollMidHeight || 30; // What the portal shows when positioning text
-                    const designScrollTop = 100 - designScrollHeight; // e.g., 70% for 30% scroll
+                    // Portal shows 60% scroll height when editing - that's where text was positioned
+                    // The "design" scroll height is the MAX height (what portal shows)
+                    const designScrollHeight = page.scrollMaxHeight || 60; // Portal shows max height when editing
+                    const designScrollTop = 100 - designScrollHeight; // e.g., 40% from top for 60% scroll
+                    const scrollOffset = page.scrollOffsetY || 0;
                     
+                    // Current scroll height depends on app state (mid/max/hidden)
                     const currentScrollHeightNum = scrollState === 'max' 
                         ? (page.scrollMaxHeight || 60) 
                         : (page.scrollMidHeight || 30);
-                    const scrollOffset = page.scrollOffsetY || 0;
                     const currentScrollTop = 100 - currentScrollHeightNum - scrollOffset;
                     
                     const isActive = activeTextBoxIndex === idx;
                     const shouldHideTextBoxes = page.scrollUrl && scrollState === 'hidden';
                     
                     // Calculate text position that scales with scroll height
-                    // If text is inside the scroll area, maintain its offset from scroll top
                     let textTopStyle: string;
                     let textMaxHeightStyle: string;
                     
                     if (page.scrollUrl) {
-                        // Check if text was positioned inside the scroll area (in design/portal view)
-                        if (box.y >= designScrollTop) {
-                            // Text is inside scroll - calculate offset from scroll top and maintain it
-                            const offsetFromScrollTop = box.y - designScrollTop;
-                            textTopStyle = `calc(${currentScrollTop}% + ${offsetFromScrollTop}% + 12px)`;
-                            textMaxHeightStyle = `calc(100% - ${currentScrollTop}% - ${offsetFromScrollTop}% - 70px)`;
-                        } else {
-                            // Text is above scroll - keep absolute position
-                            textTopStyle = `${box.y}%`;
-                            textMaxHeightStyle = `calc(100% - ${box.y}% - 60px)`;
-                        }
+                        // Text was positioned relative to 60% scroll (design view)
+                        // Calculate the offset from the TOP of the scroll (not the screen)
+                        const offsetFromDesignScrollTop = box.y - designScrollTop;
+                        
+                        // Apply same offset from current scroll top
+                        // This makes text "stick" to the top of the scroll as it shrinks/expands
+                        textTopStyle = `calc(${currentScrollTop}% + ${Math.max(0, offsetFromDesignScrollTop)}% + ${scrollOffset}% + 8px)`;
+                        textMaxHeightStyle = `calc(${currentScrollHeightNum}% - ${Math.max(0, offsetFromDesignScrollTop)}% - 60px)`;
                     } else {
                         // No scroll - use absolute position
                         textTopStyle = `${box.y}%`;

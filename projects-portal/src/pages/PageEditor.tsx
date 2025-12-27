@@ -4,6 +4,7 @@ import { apiClient, getMediaUrl } from '../services/apiClient';
 import {
     Save,
     Image as ImageIcon,
+    Images,
     Type,
     Move,
     Trash2,
@@ -38,6 +39,15 @@ interface TextBox {
 interface VideoSequenceItem {
     id: string; // Temporary ID for UI
     url?: string; // Uploaded URL
+    filename: string;
+    order: number;
+    file?: File;
+    preview?: string;
+}
+
+interface ImageSequenceItem {
+    id: string; // Temporary ID for UI
+    url?: string; // Uploaded URL
     file?: File; // File to upload
     filename: string;
     order: number;
@@ -66,6 +76,11 @@ const PageEditor: React.FC = () => {
     // Video sequence settings (multiple videos that play in order)
     const [useVideoSequence, setUseVideoSequence] = useState(false);
     const [videoSequence, setVideoSequence] = useState<VideoSequenceItem[]>([]);
+    
+    // Image sequence settings (multiple images that cycle with transitions)
+    const [useImageSequence, setUseImageSequence] = useState(false);
+    const [imageSequence, setImageSequence] = useState<ImageSequenceItem[]>([]);
+    const [imageSequenceDuration, setImageSequenceDuration] = useState(3); // seconds per image
 
     // Previews
     const [backgroundPreview, setBackgroundPreview] = useState<string | null>(null);
@@ -361,6 +376,26 @@ const PageEditor: React.FC = () => {
         } else {
             setVideoSequence([]);
         }
+        
+        // Load image sequence settings
+        console.log('🖼️ Image sequence settings:', {
+            useImageSequence: page.useImageSequence,
+            imageSequenceLength: page.imageSequence?.length || 0,
+            imageSequence: page.imageSequence
+        });
+        setUseImageSequence(page.useImageSequence || false);
+        setImageSequenceDuration(page.imageSequenceDuration || 3);
+        if (page.imageSequence && page.imageSequence.length > 0) {
+            const loadedImages: ImageSequenceItem[] = page.imageSequence.map((img: any, idx: number) => ({
+                id: `loaded-img-${page._id}-${idx}`,
+                url: img.url,
+                filename: img.filename || `Image ${img.order}`,
+                order: img.order,
+            }));
+            setImageSequence(loadedImages);
+        } else {
+            setImageSequence([]);
+        }
 
         setSelectedBoxId(null);
     };
@@ -394,6 +429,14 @@ const PageEditor: React.FC = () => {
             if (v.preview) URL.revokeObjectURL(v.preview);
         });
         setVideoSequence([]);
+        
+        // Reset image sequence settings
+        setUseImageSequence(false);
+        setImageSequenceDuration(3);
+        imageSequence.forEach(img => {
+            if (img.preview) URL.revokeObjectURL(img.preview);
+        });
+        setImageSequence([]);
 
         // Apply template if it exists
         if (pageTemplate) {
@@ -647,6 +690,40 @@ const PageEditor: React.FC = () => {
                     }
                 }
             }
+            
+            // Upload image sequence files
+            const uploadedImageSequence: { url: string; filename: string; order: number }[] = [];
+            if (useImageSequence && imageSequence.length > 0) {
+                for (const img of imageSequence.sort((a, b) => a.order - b.order)) {
+                    if (img.file) {
+                        // Upload new image file
+                        const formData = new FormData();
+                        formData.append('file', img.file);
+                        try {
+                            const res = await apiClient.post(
+                                `/api/upload/image?bookId=${bookId}&type=image-sequence&pageNumber=${pageNumber}`,
+                                formData,
+                                { headers: { 'Content-Type': 'multipart/form-data' } }
+                            );
+                            uploadedImageSequence.push({
+                                url: res.data.url,
+                                filename: img.filename,
+                                order: img.order,
+                            });
+                        } catch (uploadErr) {
+                            console.error('Failed to upload image sequence item:', uploadErr);
+                            alert(`Failed to upload image: ${img.filename}`);
+                        }
+                    } else if (img.url) {
+                        // Keep existing URL
+                        uploadedImageSequence.push({
+                            url: img.url,
+                            filename: img.filename,
+                            order: img.order,
+                        });
+                    }
+                }
+            }
 
             const payload = {
                 bookId,
@@ -668,6 +745,10 @@ const PageEditor: React.FC = () => {
                 // Video sequence settings
                 useVideoSequence: useVideoSequence && uploadedVideoSequence.length > 0,
                 videoSequence: uploadedVideoSequence,
+                // Image sequence settings
+                useImageSequence: useImageSequence && uploadedImageSequence.length > 0,
+                imageSequence: uploadedImageSequence,
+                imageSequenceDuration,
             };
 
             console.log('📤 Sending payload:', JSON.stringify(payload, null, 2));
@@ -1037,6 +1118,201 @@ const PageEditor: React.FC = () => {
                                 {videoSequence.length > 0 && (
                                     <p className="text-xs text-indigo-600 text-center">
                                         ✨ Videos will play in order: {videoSequence.sort((a, b) => a.order - b.order).map(v => v.order).join(' → ')} → loop
+                                    </p>
+                                )}
+                            </div>
+                        )}
+                    </div>
+
+                    <hr className="border-gray-100" />
+
+                    {/* Image Sequence */}
+                    <div className="space-y-3">
+                        <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider flex items-center gap-2">
+                            <Images className="w-4 h-4" />
+                            Image Sequence
+                        </label>
+                        <p className="text-xs text-gray-400">
+                            Upload multiple images that cycle with smooth transitions. Perfect for animated backgrounds.
+                        </p>
+                        
+                        {/* Toggle to enable image sequence */}
+                        <label className="flex items-center gap-2 cursor-pointer bg-emerald-50 p-2 rounded-lg border border-emerald-200">
+                            <input
+                                type="checkbox"
+                                checked={useImageSequence}
+                                onChange={(e) => {
+                                    setUseImageSequence(e.target.checked);
+                                    // Disable video sequence if enabling image sequence
+                                    if (e.target.checked) {
+                                        setUseVideoSequence(false);
+                                    }
+                                }}
+                                className="w-4 h-4 text-emerald-600 border-gray-300 rounded focus:ring-emerald-500"
+                            />
+                            <span className="text-sm text-gray-700 font-medium">Use image sequence instead of static background</span>
+                        </label>
+                        
+                        {!useImageSequence && (
+                            <p className="text-xs text-amber-600 bg-amber-50 p-2 rounded">
+                                ⚠️ Check the box above to enable image sequence mode
+                            </p>
+                        )}
+                        
+                        {useImageSequence && (
+                            <div className="space-y-3 bg-gray-50 p-3 rounded-lg border-2 border-emerald-300">
+                                {/* Duration setting */}
+                                <div className="flex items-center gap-3">
+                                    <label className="text-xs text-gray-600 whitespace-nowrap">Duration per image:</label>
+                                    <input
+                                        type="number"
+                                        min={1}
+                                        max={10}
+                                        value={imageSequenceDuration}
+                                        onChange={(e) => setImageSequenceDuration(Math.max(1, Math.min(10, parseInt(e.target.value) || 3)))}
+                                        className="w-16 px-2 py-1 text-sm border rounded"
+                                    />
+                                    <span className="text-xs text-gray-500">seconds</span>
+                                </div>
+                                
+                                {/* Empty state message */}
+                                {imageSequence.length === 0 && (
+                                    <p className="text-xs text-amber-600 bg-amber-50 p-2 rounded text-center">
+                                        ⬇️ Add at least one image below to use image sequence
+                                    </p>
+                                )}
+                                
+                                {/* Image list */}
+                                {imageSequence.length > 0 && (
+                                    <div className="space-y-2">
+                                        {imageSequence.sort((a, b) => a.order - b.order).map((img, index) => (
+                                            <div 
+                                                key={img.id}
+                                                className="flex items-center gap-2 bg-white p-2 rounded-lg border border-gray-200 shadow-sm"
+                                            >
+                                                {/* Order badge */}
+                                                <div className="w-6 h-6 bg-emerald-600 text-white rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0">
+                                                    {img.order}
+                                                </div>
+                                                
+                                                {/* Image preview thumbnail */}
+                                                <div className="w-16 h-10 bg-gray-200 rounded overflow-hidden flex-shrink-0">
+                                                    {(img.preview || img.url) && (
+                                                        <img 
+                                                            src={img.preview || resolveUrl(img.url)}
+                                                            className="w-full h-full object-cover"
+                                                            alt={img.filename}
+                                                        />
+                                                    )}
+                                                </div>
+                                                
+                                                {/* Filename */}
+                                                <span className="flex-1 text-xs text-gray-600 truncate">
+                                                    {img.filename}
+                                                </span>
+                                                
+                                                {/* Reorder buttons */}
+                                                <div className="flex flex-col gap-0.5">
+                                                    <button
+                                                        type="button"
+                                                        disabled={index === 0}
+                                                        onClick={() => {
+                                                            // Move up
+                                                            setImageSequence(prev => {
+                                                                const sorted = [...prev].sort((a, b) => a.order - b.order);
+                                                                if (index === 0) return prev;
+                                                                const current = sorted[index];
+                                                                const above = sorted[index - 1];
+                                                                return prev.map(i => {
+                                                                    if (i.id === current.id) return { ...i, order: above.order };
+                                                                    if (i.id === above.id) return { ...i, order: current.order };
+                                                                    return i;
+                                                                });
+                                                            });
+                                                        }}
+                                                        className="p-0.5 text-gray-400 hover:text-gray-600 disabled:opacity-30"
+                                                    >
+                                                        <ChevronUp className="w-3 h-3" />
+                                                    </button>
+                                                    <button
+                                                        type="button"
+                                                        disabled={index === imageSequence.length - 1}
+                                                        onClick={() => {
+                                                            // Move down
+                                                            setImageSequence(prev => {
+                                                                const sorted = [...prev].sort((a, b) => a.order - b.order);
+                                                                if (index === sorted.length - 1) return prev;
+                                                                const current = sorted[index];
+                                                                const below = sorted[index + 1];
+                                                                return prev.map(i => {
+                                                                    if (i.id === current.id) return { ...i, order: below.order };
+                                                                    if (i.id === below.id) return { ...i, order: current.order };
+                                                                    return i;
+                                                                });
+                                                            });
+                                                        }}
+                                                        className="p-0.5 text-gray-400 hover:text-gray-600 disabled:opacity-30"
+                                                    >
+                                                        <ChevronDown className="w-3 h-3" />
+                                                    </button>
+                                                </div>
+                                                
+                                                {/* Delete button */}
+                                                <button
+                                                    type="button"
+                                                    onClick={() => {
+                                                        // Revoke object URL if exists
+                                                        if (img.preview) URL.revokeObjectURL(img.preview);
+                                                        setImageSequence(prev => {
+                                                            const filtered = prev.filter(i => i.id !== img.id);
+                                                            // Re-order remaining items
+                                                            return filtered.sort((a, b) => a.order - b.order).map((i, idx) => ({ ...i, order: idx + 1 }));
+                                                        });
+                                                    }}
+                                                    className="p-1 text-red-400 hover:text-red-600"
+                                                >
+                                                    <Trash2 className="w-3 h-3" />
+                                                </button>
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+                                
+                                {/* Add image button */}
+                                <div className="relative">
+                                    <input
+                                        type="file"
+                                        accept="image/*"
+                                        className="hidden"
+                                        id="image-sequence-upload"
+                                        onChange={(e) => {
+                                            const file = e.target.files?.[0];
+                                            if (file) {
+                                                const newImage: ImageSequenceItem = {
+                                                    id: `img-${Date.now()}`,
+                                                    file,
+                                                    filename: file.name,
+                                                    order: imageSequence.length + 1,
+                                                    preview: URL.createObjectURL(file),
+                                                };
+                                                setImageSequence(prev => [...prev, newImage]);
+                                                // Reset input
+                                                e.target.value = '';
+                                            }
+                                        }}
+                                    />
+                                    <label
+                                        htmlFor="image-sequence-upload"
+                                        className="flex items-center justify-center gap-2 w-full py-2 border-2 border-dashed border-emerald-300 rounded-lg cursor-pointer hover:border-emerald-400 hover:bg-emerald-50 transition text-emerald-600 text-sm font-medium"
+                                    >
+                                        <Plus className="w-4 h-4" />
+                                        Add Image ({imageSequence.length}/20)
+                                    </label>
+                                </div>
+                                
+                                {imageSequence.length > 0 && (
+                                    <p className="text-xs text-emerald-600 text-center">
+                                        🎨 Images will transition every {imageSequenceDuration}s: {imageSequence.sort((a, b) => a.order - b.order).map(i => i.order).join(' → ')} → loop
                                     </p>
                                 )}
                             </div>

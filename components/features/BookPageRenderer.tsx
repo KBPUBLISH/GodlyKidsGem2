@@ -23,6 +23,12 @@ interface VideoSequenceItem {
     order: number;
 }
 
+interface ImageSequenceItem {
+    url: string;
+    filename?: string;
+    order: number;
+}
+
 interface PageData {
     id: string;
     pageNumber: number;
@@ -38,6 +44,10 @@ interface PageData {
     // Video sequence - multiple videos that play in order
     useVideoSequence?: boolean;
     videoSequence?: VideoSequenceItem[];
+    // Image sequence - multiple images that cycle with transitions
+    useImageSequence?: boolean;
+    imageSequence?: ImageSequenceItem[];
+    imageSequenceDuration?: number; // seconds per image (default 3)
 }
 
 // Scroll state types
@@ -105,6 +115,46 @@ export const BookPageRenderer: React.FC<BookPageRendererProps> = ({
     const nextVideoIndex = sortedVideoSequence.length > 0 
         ? (currentVideoIndex + 1) % sortedVideoSequence.length 
         : 0;
+    
+    // Image sequence state - for cycling through images with transitions
+    const [currentImageIndex, setCurrentImageIndex] = useState(0);
+    const [imageOpacity, setImageOpacity] = useState<number[]>([1, 0]); // Opacity for crossfade [current, next]
+    const imageSequenceTimerRef = useRef<NodeJS.Timeout | null>(null);
+    
+    const sortedImageSequence = React.useMemo(() => {
+        if (!page.useImageSequence || !page.imageSequence || page.imageSequence.length === 0) {
+            return [];
+        }
+        return [...page.imageSequence].sort((a, b) => a.order - b.order);
+    }, [page.useImageSequence, page.imageSequence]);
+    
+    // Image sequence cycling effect
+    useEffect(() => {
+        if (!page.useImageSequence || sortedImageSequence.length <= 1) {
+            return;
+        }
+        
+        const duration = (page.imageSequenceDuration || 3) * 1000; // Convert to ms
+        
+        // Set up the cycling timer
+        imageSequenceTimerRef.current = setInterval(() => {
+            setCurrentImageIndex(prev => {
+                const nextIndex = (prev + 1) % sortedImageSequence.length;
+                return nextIndex;
+            });
+        }, duration);
+        
+        return () => {
+            if (imageSequenceTimerRef.current) {
+                clearInterval(imageSequenceTimerRef.current);
+            }
+        };
+    }, [page.useImageSequence, sortedImageSequence.length, page.imageSequenceDuration]);
+    
+    // Reset image index when page changes
+    useEffect(() => {
+        setCurrentImageIndex(0);
+    }, [page.id]);
     
     // Swipe detection for scroll height changes
     const touchStartY = useRef<number>(0);
@@ -347,6 +397,32 @@ export const BookPageRenderer: React.FC<BookPageRendererProps> = ({
                             }}
                         />
                     </>
+                ) : /* Image Sequence Mode - crossfade transitions */
+                page.useImageSequence && sortedImageSequence.length > 0 ? (
+                    <div className="absolute inset-0 w-full h-full">
+                        {/* Render current and next images for smooth crossfade */}
+                        {sortedImageSequence.map((img, index) => {
+                            const isCurrent = index === currentImageIndex;
+                            const isNext = index === (currentImageIndex + 1) % sortedImageSequence.length;
+                            // Only render current and next images for performance
+                            if (!isCurrent && !isNext && sortedImageSequence.length > 2) return null;
+                            
+                            return (
+                                <img
+                                    key={img.url}
+                                    src={img.url}
+                                    alt={`Background ${index + 1}`}
+                                    className="absolute inset-0 w-full h-full object-cover"
+                                    style={{
+                                        opacity: isCurrent ? 1 : 0,
+                                        transition: 'opacity 1s ease-in-out',
+                                        zIndex: isCurrent ? 2 : 1,
+                                    }}
+                                    loading={isCurrent ? 'eager' : 'lazy'}
+                                />
+                            );
+                        })}
+                    </div>
                 ) : /* Auto-detect video based on backgroundType OR file extension */
                 (page.backgroundType === 'video' || 
                   (page.backgroundUrl && /\.(mp4|webm|mov|m4v)$/i.test(page.backgroundUrl))) ? (

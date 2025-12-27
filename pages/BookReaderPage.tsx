@@ -35,6 +35,12 @@ interface VideoSequenceItem {
     order: number;
 }
 
+interface ImageSequenceItem {
+    url: string;
+    filename?: string;
+    order: number;
+}
+
 interface Page {
     _id: string;
     pageNumber: number;
@@ -50,6 +56,10 @@ interface Page {
     // Video sequence - multiple videos that play in order
     useVideoSequence?: boolean;
     videoSequence?: VideoSequenceItem[];
+    // Image sequence - multiple images that cycle with transitions
+    useImageSequence?: boolean;
+    imageSequence?: ImageSequenceItem[];
+    imageSequenceDuration?: number; // seconds per image (default 3)
     textBoxes?: TextBox[]; // Legacy: some pages may have textBoxes at root
     content?: {
         textBoxes?: TextBox[]; // Primary location of textBoxes from DB
@@ -1050,6 +1060,9 @@ const BookReaderPage: React.FC = () => {
             scrollUrl_FINAL: extractedScrollUrl,
             hasVideoSequence: page.useVideoSequence,
             videoSequenceCount: page.videoSequence?.length || 0,
+            hasImageSequence: page.useImageSequence,
+            imageSequenceCount: page.imageSequence?.length || 0,
+            imageSequenceDuration: page.imageSequenceDuration,
         });
         
         const mapped = {

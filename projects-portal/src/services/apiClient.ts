@@ -34,6 +34,11 @@ export const getUploadUrl = (endpoint: string, params?: Record<string, string>):
 export const getMediaUrl = (url: string | undefined): string => {
   if (!url) return '';
   
+  // If it's a blob URL (local file preview), return as-is
+  if (url.startsWith('blob:')) {
+    return url;
+  }
+  
   // If it's already a full URL (GCS or other), return as-is
   if (url.startsWith('http://') || url.startsWith('https://')) {
     return url;

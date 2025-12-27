@@ -547,10 +547,12 @@ const PageEditor: React.FC = () => {
 
             // Upload scroll - include bookId and type=scroll for proper GCS path
             let scrollUrl = '';
-            if (scrollPreview && scrollPreview.startsWith('http')) {
+            // Only use existing URL if it's a real HTTP URL (not blob:)
+            if (scrollPreview && scrollPreview.startsWith('http') && !scrollPreview.startsWith('blob:')) {
                 scrollUrl = scrollPreview;
             }
 
+            // If we have a new file to upload, upload it
             if (scrollFile) {
                 const formData = new FormData();
                 formData.append('file', scrollFile);
@@ -558,6 +560,7 @@ const PageEditor: React.FC = () => {
                     headers: { 'Content-Type': 'multipart/form-data' },
                 });
                 scrollUrl = res.data.url;
+                console.log('📜 Uploaded scroll image:', scrollUrl);
             }
 
             // Upload sound effect - include bookId and pageNumber for proper GCS path

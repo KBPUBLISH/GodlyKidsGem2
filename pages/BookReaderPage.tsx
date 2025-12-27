@@ -1035,22 +1035,6 @@ const BookReaderPage: React.FC = () => {
     // Helper to map page data to include all file URLs
     const mapPage = (page: Page | undefined) => {
         if (!page) return null;
-        
-        // Get scroll values - ensure they're different for 3-state scroll to work
-        const scrollMidHeight = page.scrollMidHeight || 30;
-        const scrollMaxHeight = page.scrollMaxHeight || 60;
-        
-        // Debug log for scroll heights
-        if (page.scrollUrl || (page as any).files?.scroll?.url) {
-            console.log('📜 Page scroll config:', {
-                pageNumber: page.pageNumber,
-                scrollMidHeight,
-                scrollMaxHeight,
-                scrollOffsetY: page.scrollOffsetY || 0,
-                raw: { mid: page.scrollMidHeight, max: page.scrollMaxHeight }
-            });
-        }
-        
         return {
             ...page,
             id: page._id,
@@ -1058,10 +1042,6 @@ const BookReaderPage: React.FC = () => {
             soundEffectUrl: page.files?.soundEffect?.url || page.soundEffectUrl,
             scrollUrl: page.scrollUrl || (page as any).files?.scroll?.url,
             backgroundUrl: page.backgroundUrl || page.files?.background?.url,
-            // Ensure scroll heights are set with defaults
-            scrollMidHeight,
-            scrollMaxHeight,
-            scrollOffsetY: page.scrollOffsetY || 0,
         };
     };
 

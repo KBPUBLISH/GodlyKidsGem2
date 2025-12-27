@@ -136,17 +136,24 @@ export const BookPageRenderer: React.FC<BookPageRendererProps> = ({
         }
         
         const duration = (page.imageSequenceDuration || 3) * 1000; // Convert to ms
+        console.log('🖼️ Image sequence timer setup:', {
+            duration: duration / 1000 + 's',
+            imageCount: sortedImageSequence.length,
+            pageImageSequenceDuration: page.imageSequenceDuration,
+        });
         
         // Set up the cycling timer
         imageSequenceTimerRef.current = setInterval(() => {
             setCurrentImageIndex(prev => {
                 const nextIndex = (prev + 1) % sortedImageSequence.length;
+                console.log('🖼️ Image sequence transition:', prev, '->', nextIndex);
                 return nextIndex;
             });
         }, duration);
         
         return () => {
             if (imageSequenceTimerRef.current) {
+                console.log('🖼️ Image sequence timer cleared');
                 clearInterval(imageSequenceTimerRef.current);
             }
         };

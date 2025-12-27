@@ -107,6 +107,7 @@ const PageEditor: React.FC = () => {
         textBoxes: Omit<TextBox, 'id'>[];
     } | null>(null);
     const [showTemplateDialog, setShowTemplateDialog] = useState(false);
+    const [applyLayoutToAllPages, setApplyLayoutToAllPages] = useState(false); // Copy layout to all other pages
 
     // Resizable panels
     const [leftPanelWidth, setLeftPanelWidth] = useState(320); // 320px = w-80
@@ -775,8 +776,44 @@ const PageEditor: React.FC = () => {
                 if (updatedPage) {
                     loadPage(updatedPage);
                 }
-
-                alert('Page updated successfully!');
+                
+                // If applyLayoutToAllPages is checked, update all other pages with the same layout
+                if (applyLayoutToAllPages && pageNumber === 1) {
+                    const otherPages = existingPages.filter(p => p.pageNumber !== 1);
+                    let updatedCount = 0;
+                    
+                    for (const otherPage of otherPages) {
+                        try {
+                            // Create layout payload (only scroll and textbox layout, not background)
+                            const layoutPayload = {
+                                scrollUrl,
+                                scrollHeight,
+                                scrollMidHeight: Math.max(30, scrollHeight - 30),
+                                scrollMaxHeight: scrollHeight,
+                                scrollOffsetY,
+                                // Copy text boxes but update the text content from existing page
+                                textBoxes: textBoxes.map(({ id, ...rest }) => ({
+                                    ...rest,
+                                    text: '' // Empty text - user fills in for each page
+                                })),
+                            };
+                            
+                            await apiClient.put(`/api/pages/${otherPage._id}`, layoutPayload);
+                            updatedCount++;
+                        } catch (err) {
+                            console.error(`Failed to update page ${otherPage.pageNumber}:`, err);
+                        }
+                    }
+                    
+                    alert(`Page updated and layout applied to ${updatedCount} other pages!`);
+                    setApplyLayoutToAllPages(false); // Reset checkbox
+                    
+                    // Refresh pages list
+                    const refreshRes = await apiClient.get(`/api/pages/book/${bookId}`);
+                    setExistingPages(refreshRes.data);
+                } else {
+                    alert('Page updated successfully!');
+                }
             } else {
                 await apiClient.post('/api/pages', payload);
 
@@ -867,6 +904,24 @@ const PageEditor: React.FC = () => {
                                 className="w-20 border rounded px-2 py-1 text-sm"
                             />
                         </div>
+                        
+                        {/* Copy layout to other pages - only show for page 1 */}
+                        {pageNumber === 1 && existingPages.length > 1 && (scrollPreview || textBoxes.length > 0) && (
+                            <label className="flex items-center gap-2 cursor-pointer bg-amber-50 p-2 rounded-lg border border-amber-200">
+                                <input
+                                    type="checkbox"
+                                    checked={applyLayoutToAllPages}
+                                    onChange={(e) => setApplyLayoutToAllPages(e.target.checked)}
+                                    className="w-4 h-4 text-amber-600 border-gray-300 rounded focus:ring-amber-500"
+                                />
+                                <div>
+                                    <span className="text-sm text-gray-700 font-medium">Apply layout to all pages</span>
+                                    <p className="text-xs text-amber-600">
+                                        Copy scroll & text box positions to {existingPages.length - 1} other page{existingPages.length > 2 ? 's' : ''}
+                                    </p>
+                                </div>
+                            </label>
+                        )}
                     </div>
 
                     <hr className="border-gray-100" />
@@ -1848,6 +1903,27 @@ const PageEditor: React.FC = () => {
                             );
                         }
                         
+                        // If image sequence is enabled and has images, show the first image as background
+                        if (useImageSequence && imageSequence.length > 0) {
+                            const sortedImages = [...imageSequence].sort((a, b) => a.order - b.order);
+                            const firstImage = sortedImages[0];
+                            const imageSrc = firstImage.preview || resolveUrl(firstImage.url);
+                            
+                            return (
+                                <div className="absolute inset-0 pointer-events-none">
+                                    <img 
+                                        src={imageSrc} 
+                                        className="w-full h-full object-cover" 
+                                        alt="Background"
+                                    />
+                                    {/* Indicator that this is from image sequence */}
+                                    <div className="absolute top-2 left-2 bg-emerald-600 text-white text-xs px-2 py-1 rounded-full z-10">
+                                        🖼️ Image Sequence ({imageSequence.length} images)
+                                    </div>
+                                </div>
+                            );
+                        }
+                        
                         // Regular background
                         if (backgroundPreview) {
                             return (
@@ -1970,14 +2046,11 @@ const PageEditor: React.FC = () => {
                     )}
 
                     {/* Empty State Hint */}
-                    {!backgroundPreview && !(useVideoSequence && videoSequence.length > 0) && (
+                    {!backgroundPreview && !(useVideoSequence && videoSequence.length > 0) && !(useImageSequence && imageSequence.length > 0) && (
                         <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
                             <div className="text-gray-400 text-center">
                                 <p className="text-xl font-semibold">Canvas Empty</p>
-                                <p className="text-sm">Upload a background or add video sequence</p>
-                                <p className="text-xs mt-2 text-gray-500">
-                                    Debug: bg={backgroundPreview ? 'yes' : 'no'}, useVidSeq={useVideoSequence ? 'yes' : 'no'}, vidCount={videoSequence.length}
-                                </p>
+                                <p className="text-sm">Upload a background, video sequence, or image sequence</p>
                             </div>
                         </div>
                     )}

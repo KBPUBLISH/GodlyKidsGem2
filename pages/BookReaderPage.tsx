@@ -181,7 +181,7 @@ const BookReaderPage: React.FC = () => {
     const preloadedBackgroundsRef = useRef<Set<string>>(new Set());
     
     const [bookMusicEnabled, setBookMusicEnabled] = useState(true); // Default to enabled
-    const [musicVolume] = useState(0.2); // Fixed volume at 20%
+    const [musicVolume] = useState(0.4); // Fixed volume at 40%
 
     // Use ref to track music enabled state for intervals/callbacks
     const bookMusicEnabledRef = useRef<boolean>(bookMusicEnabled);

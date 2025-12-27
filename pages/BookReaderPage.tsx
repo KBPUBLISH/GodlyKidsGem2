@@ -62,6 +62,9 @@ interface Page {
             url?: string;
             type?: string;
         };
+        scroll?: {
+            url?: string;
+        };
     };
     soundEffectUrl?: string;
 }
@@ -1035,12 +1038,22 @@ const BookReaderPage: React.FC = () => {
     // Helper to map page data to include all file URLs
     const mapPage = (page: Page | undefined) => {
         if (!page) return null;
+        
+        // Debug: log what we're getting from the API
+        console.log('📄 mapPage input:', {
+            pageNumber: page.pageNumber,
+            scrollUrl: page.scrollUrl,
+            filesScroll: page.files?.scroll?.url,
+            backgroundUrl: page.backgroundUrl,
+            filesBackground: page.files?.background?.url,
+        });
+        
         return {
             ...page,
             id: page._id,
             // Extract URLs from files object if not at root level
             soundEffectUrl: page.files?.soundEffect?.url || page.soundEffectUrl,
-            scrollUrl: page.scrollUrl || (page as any).files?.scroll?.url,
+            scrollUrl: page.scrollUrl || page.files?.scroll?.url,
             backgroundUrl: page.backgroundUrl || page.files?.background?.url,
         };
     };

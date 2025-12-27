@@ -573,22 +573,27 @@ const PageEditor: React.FC = () => {
                 scrollUrl = res.data.url;
                 console.log('📜 Uploaded scroll image:', scrollUrl);
             } else if (scrollPreview && scrollPreview.startsWith('blob:')) {
-                // CRITICAL: If we have a blob URL but no file, we need to fetch and upload it
-                // This happens when user selected a scroll but the file reference was lost
-                console.log('⚠️ Blob URL detected without file - fetching and uploading...');
+                // CRITICAL: Blob URLs are temporary and expire - try to upload but don't block save
+                console.log('⚠️ Blob URL detected without file - attempting to fetch and upload...');
                 try {
                     const response = await fetch(scrollPreview);
-                    const blob = await response.blob();
-                    const formData = new FormData();
-                    formData.append('file', blob, 'scroll-image.png');
-                    const res = await apiClient.post(`/api/upload/image?bookId=${bookId}&type=scroll`, formData, {
-                        headers: { 'Content-Type': 'multipart/form-data' },
-                    });
-                    scrollUrl = res.data.url;
-                    console.log('📜 Uploaded blob scroll image:', scrollUrl);
+                    if (response.ok) {
+                        const blob = await response.blob();
+                        const formData = new FormData();
+                        formData.append('file', blob, 'scroll-image.png');
+                        const res = await apiClient.post(`/api/upload/image?bookId=${bookId}&type=scroll`, formData, {
+                            headers: { 'Content-Type': 'multipart/form-data' },
+                        });
+                        scrollUrl = res.data.url;
+                        console.log('📜 Uploaded blob scroll image:', scrollUrl);
+                    } else {
+                        console.warn('⚠️ Blob URL expired - clearing scroll. Please re-upload.');
+                        scrollUrl = ''; // Clear broken scroll
+                    }
                 } catch (err) {
-                    console.error('❌ Failed to upload blob scroll:', err);
-                    alert('Warning: Scroll image could not be saved. Please re-upload the scroll image.');
+                    // Blob URL expired or invalid - just clear it and continue saving
+                    console.warn('⚠️ Blob URL fetch failed (likely expired) - clearing scroll:', err);
+                    scrollUrl = ''; // Clear broken scroll, allow save to continue
                 }
             }
             

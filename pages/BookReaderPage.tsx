@@ -108,7 +108,7 @@ const BookReaderPage: React.FC = () => {
     const [pages, setPages] = useState<Page[]>([]);
     const [currentPageIndex, setCurrentPageIndex] = useState(0);
     const [loading, setLoading] = useState(true);
-    const [scrollState, setScrollState] = useState<ScrollState>('mid');
+    const [scrollState, setScrollState] = useState<ScrollState>('max'); // Default to max (60%) - how all books were created
     const [bookTitle, setBookTitle] = useState<string>('Book');
     const [bookOrientation, setBookOrientation] = useState<'portrait' | 'landscape'>('portrait');
     
@@ -119,7 +119,7 @@ const BookReaderPage: React.FC = () => {
     const introVideoRef = useRef<HTMLVideoElement>(null);
 
     // Keep ref in sync with state
-    const scrollStateRef = useRef<ScrollState>('mid');
+    const scrollStateRef = useRef<ScrollState>('max');
     useEffect(() => {
         scrollStateRef.current = scrollState;
     }, [scrollState]);

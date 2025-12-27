@@ -52,7 +52,7 @@ const PageEditor: React.FC = () => {
     const [backgroundType, setBackgroundType] = useState<'image' | 'video'>('image');
     const [backgroundFile, setBackgroundFile] = useState<File | null>(null);
     const [scrollFile, setScrollFile] = useState<File | null>(null);
-    const [scrollHeight, setScrollHeight] = useState<number>(33); // Percentage: 30%, 33%, 50%, 60%
+    const [scrollHeight, setScrollHeight] = useState<number>(60); // Percentage: 30%, 33%, 50%, 60% - Default to 60% (how all books were made)
     const [scrollOffsetY, setScrollOffsetY] = useState<number>(0); // Vertical offset from bottom in percentage
     const [soundEffectFile, setSoundEffectFile] = useState<File | null>(null);
     const [textBoxes, setTextBoxes] = useState<TextBox[]>([]);
@@ -611,9 +611,11 @@ const PageEditor: React.FC = () => {
                 backgroundType,
                 scrollUrl,
                 scrollHeight,
-                scrollMidHeight: scrollHeight, // Store as scrollMidHeight for app compatibility
-                // Calculate max height: if mid is low (30-40%), max is 60%; if mid is high (50-60%), max is 80-90%
-                scrollMaxHeight: scrollHeight <= 40 ? 60 : Math.min(scrollHeight + 30, 90),
+                // scrollHeight is the main/default height shown in app (what was used when positioning text)
+                // scrollMaxHeight = the selected height (default state in app)
+                // scrollMidHeight = smaller height for when user swipes down
+                scrollMidHeight: Math.max(30, scrollHeight - 30), // Mid is 30% less than max, minimum 30%
+                scrollMaxHeight: scrollHeight, // Max is the selected height (default in app)
                 scrollOffsetY, // Vertical offset for scroll position
                 soundEffectUrl, // Sound effect bubble audio
                 textBoxes: textBoxes.map(({ id, ...rest }) => rest), // Remove ID before sending
@@ -1029,9 +1031,9 @@ const PageEditor: React.FC = () => {
                         {/* Scroll Height Control */}
                         {scrollPreview && (
                             <div className="space-y-2">
-                                <label className="block text-xs text-gray-500">Scroll Height (tap to toggle)</label>
+                                <label className="block text-xs text-gray-500">Scroll Height</label>
                                 <div className="flex gap-2">
-                                    {[30, 33, 40, 50].map(height => (
+                                    {[30, 40, 50, 60].map(height => (
                                         <button
                                             key={height}
                                             type="button"
@@ -1047,7 +1049,7 @@ const PageEditor: React.FC = () => {
                                     ))}
                                 </div>
                                 <p className="text-xs text-gray-400">
-                                    This is the "mid" height. Swipe up in app for "max" height ({scrollHeight <= 40 ? 60 : Math.min(scrollHeight + 30, 90)}%)
+                                    Default scroll height shown in app. Swipe down for smaller, tap to hide.
                                 </p>
                             </div>
                         )}

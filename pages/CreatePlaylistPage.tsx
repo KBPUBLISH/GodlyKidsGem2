@@ -58,8 +58,8 @@ const CreatePlaylistPage: React.FC = () => {
         console.log('👤 User ID:', userId);
         
         if (!userId) {
-            console.log('⚠️ No user ID found');
-            alert('Please sign in to generate AI covers');
+            console.log('⚠️ No user ID found, showing sign up prompt');
+            setShowSignUpPrompt(true);
             return;
         }
         
@@ -98,7 +98,7 @@ const CreatePlaylistPage: React.FC = () => {
         
         const userId = getUserId();
         if (!userId) {
-            alert('Please sign in to create playlists');
+            setShowSignUpPrompt(true);
             return;
         }
         

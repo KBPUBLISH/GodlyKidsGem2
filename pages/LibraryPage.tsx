@@ -179,13 +179,6 @@ const LibraryPage: React.FC = () => {
     ? userPlaylists.filter(p => p.name.toLowerCase().includes(searchQuery.toLowerCase()))
     : userPlaylists;
 
-  const hasNoContent = 
-    filteredFavoriteBooks.length === 0 && 
-    filteredFavoritePlaylists.length === 0 && 
-    filteredRecentBooks.length === 0 && 
-    filteredRecentPlaylists.length === 0 &&
-    filteredUserPlaylists.length === 0;
-
   const isLoading = loading || playlistsLoading || userPlaylistsLoading;
 
   // Delete a user playlist
@@ -392,19 +385,18 @@ const LibraryPage: React.FC = () => {
 
         {isLoading ? (
           <div className="text-white font-display text-center mt-10">Checking backpack...</div>
-        ) : hasNoContent ? (
-          <div className="flex flex-col items-center justify-center mt-10 bg-black/20 p-6 rounded-2xl backdrop-blur-sm">
-            {searchQuery ? (
-              <p className="text-white font-display text-lg mb-2">No matching content found.</p>
-            ) : (
-              <>
-                <p className="text-white font-display text-lg mb-2">Your backpack is empty!</p>
-                <p className="text-blue-100 text-sm text-center">Go explore and start reading or listening to fill up your library.</p>
-              </>
-            )}
-          </div>
         ) : (
           <>
+            {/* My Playlists Section - ALWAYS show at the top so users can create playlists */}
+            <section className="mb-6">
+              <SectionTitle 
+                title="My Playlists" 
+                icon="🎶"
+                color="#E040FB"
+              />
+              {renderUserPlaylistRow()}
+            </section>
+
             {/* Favorite Books Section */}
             {filteredFavoriteBooks.length > 0 && (
               <section className="mb-6">
@@ -428,16 +420,6 @@ const LibraryPage: React.FC = () => {
                 {renderPlaylistRow(filteredFavoritePlaylists)}
               </section>
             )}
-
-            {/* My Playlists Section - Always show to encourage creation */}
-            <section className="mb-6">
-              <SectionTitle 
-                title="My Playlists" 
-                icon="🎶"
-                color="#E040FB"
-              />
-              {renderUserPlaylistRow()}
-            </section>
 
             {/* Reading History Section */}
             {filteredRecentBooks.length > 0 && (
@@ -463,12 +445,20 @@ const LibraryPage: React.FC = () => {
               </section>
             )}
 
-            {/* Empty state for individual sections when searching */}
-            {searchQuery && filteredFavoriteBooks.length === 0 && filteredFavoritePlaylists.length === 0 && 
-             filteredRecentBooks.length === 0 && filteredRecentPlaylists.length === 0 && (
-              <div className="flex flex-col items-center justify-center mt-10 bg-black/20 p-6 rounded-2xl backdrop-blur-sm">
-                <p className="text-white font-display text-lg mb-2">No matching content found.</p>
-                <p className="text-blue-100 text-sm text-center">Try a different search term.</p>
+            {/* Empty backpack message - show only when there's nothing except My Playlists */}
+            {filteredFavoriteBooks.length === 0 && 
+             filteredFavoritePlaylists.length === 0 && 
+             filteredRecentBooks.length === 0 && 
+             filteredRecentPlaylists.length === 0 && (
+              <div className="flex flex-col items-center justify-center mt-4 bg-black/20 p-6 rounded-2xl backdrop-blur-sm">
+                {searchQuery ? (
+                  <p className="text-white font-display text-lg mb-2">No matching content found.</p>
+                ) : (
+                  <>
+                    <p className="text-white font-display text-lg mb-2">Your backpack is empty!</p>
+                    <p className="text-blue-100 text-sm text-center">Go explore and start reading or listening to fill up your library.</p>
+                  </>
+                )}
               </div>
             )}
           </>

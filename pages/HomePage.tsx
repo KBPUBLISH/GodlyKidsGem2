@@ -894,7 +894,8 @@ const HomePage: React.FC = () => {
               <div 
                 className="relative rounded-2xl overflow-hidden py-6 px-4 border-2 border-[#1E88E5]/50 shadow-lg"
                 style={{
-                  background: 'linear-gradient(180deg, #1565C0 0%, #1976D2 40%, #42A5F5 70%, #64B5F6 100%)'
+                  background: 'linear-gradient(180deg, #1565C0 0%, #1976D2 40%, #42A5F5 70%, #64B5F6 100%)',
+                  minHeight: dayLessons.length <= 2 ? 'calc(100vh - 320px)' : 'auto'
                 }}
               >
                 {/* Sun decoration */}
@@ -1097,6 +1098,36 @@ const HomePage: React.FC = () => {
                       </div>
                     </div>
                   )}
+                </div>
+
+                {/* Ocean waves at bottom of lessons container */}
+                <div className="absolute bottom-0 left-0 right-0 h-24 overflow-hidden pointer-events-none">
+                  {/* Deep water base */}
+                  <div className="absolute bottom-0 left-0 right-0 h-16 bg-gradient-to-t from-[#1a4a6e] to-transparent" />
+                  
+                  {/* Back wave */}
+                  <svg
+                    className="absolute bottom-8 left-0 w-[200%] h-12 animate-[wave_8s_ease-in-out_infinite]"
+                    viewBox="0 0 1200 60"
+                    preserveAspectRatio="none"
+                  >
+                    <path
+                      d="M0,30 Q150,50 300,30 T600,30 T900,30 T1200,30 L1200,60 L0,60 Z"
+                      fill="rgba(30, 80, 120, 0.5)"
+                    />
+                  </svg>
+                  
+                  {/* Front wave */}
+                  <svg
+                    className="absolute bottom-4 left-0 w-[200%] h-10 animate-[wave_6s_ease-in-out_infinite_reverse]"
+                    viewBox="0 0 1200 60"
+                    preserveAspectRatio="none"
+                  >
+                    <path
+                      d="M0,30 Q150,10 300,30 T600,30 T900,30 T1200,30 L1200,60 L0,60 Z"
+                      fill="rgba(40, 100, 140, 0.6)"
+                    />
+                  </svg>
                 </div>
               </div>
             );
@@ -1711,6 +1742,14 @@ const HomePage: React.FC = () => {
         }
         .animate-\\[spin_4s_linear_infinite_reverse\\] {
           animation: spin-reverse 4s linear infinite;
+        }
+        @keyframes wave {
+          0%, 100% {
+            transform: translateX(0);
+          }
+          50% {
+            transform: translateX(-25%);
+          }
         }
       `}</style>
 

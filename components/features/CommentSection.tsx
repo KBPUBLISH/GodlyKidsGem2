@@ -52,6 +52,22 @@ const colorStyles: Record<string, { border: string; bg: string; text: string }> 
 // Random rotation values for scattered effect
 const rotations = [-6, -4, -2, 0, 2, 4, 6];
 
+// Faith-based bonus comment options (always available)
+const FAITH_COMMENTS: CommentOption[] = [
+    { text: "I love Jesus!", emoji: "❤️", color: "pink" },
+    { text: "The Bible is awesome!", emoji: "📖", color: "purple" },
+    { text: "God is so good!", emoji: "✨", color: "gold" },
+    { text: "Jesus loves me!", emoji: "💕", color: "rose" },
+    { text: "Thank you God!", emoji: "🙏", color: "blue" },
+    { text: "Faith is amazing!", emoji: "⭐", color: "amber" },
+    { text: "God bless everyone!", emoji: "🌟", color: "yellow" },
+    { text: "I trust in God!", emoji: "💪", color: "green" },
+    { text: "Heaven is real!", emoji: "☁️", color: "cyan" },
+    { text: "Praise the Lord!", emoji: "🎉", color: "orange" },
+    { text: "Jesus is my friend!", emoji: "🤗", color: "teal" },
+    { text: "God's love is forever!", emoji: "💖", color: "indigo" },
+];
+
 // Fun kid-friendly display names (randomly assigned based on comment ID)
 const funAdjectives = [
     'Little', 'Happy', 'Brave', 'Sunny', 'Bright', 'Joyful', 'Kind', 'Sweet',
@@ -102,6 +118,26 @@ const CommentSection: React.FC<CommentSectionProps> = (props) => {
     const [generating, setGenerating] = useState(false);
     const [posting, setPosting] = useState<string | null>(null);
     const [showSuccess, setShowSuccess] = useState(false);
+    const [showMoreComments, setShowMoreComments] = useState(false);
+    
+    // Combine AI-generated comments with faith-based bonus comments
+    const allCommentOptions = useMemo(() => {
+        // Combine and deduplicate (in case AI generates similar ones)
+        const combined = [...commentOptions];
+        FAITH_COMMENTS.forEach(fc => {
+            if (!combined.some(c => c.text.toLowerCase() === fc.text.toLowerCase())) {
+                combined.push(fc);
+            }
+        });
+        return combined;
+    }, [commentOptions]);
+    
+    // Show first 6 comments initially, all when expanded
+    const INITIAL_COMMENT_COUNT = 6;
+    const visibleCommentOptions = showMoreComments 
+        ? allCommentOptions 
+        : allCommentOptions.slice(0, INITIAL_COMMENT_COUNT);
+    const hasMoreComments = allCommentOptions.length > INITIAL_COMMENT_COUNT;
     
     // Audio for sound effects
     const { playClick, playSuccess: playSfxSuccess } = useAudio();
@@ -118,11 +154,11 @@ const CommentSection: React.FC<CommentSectionProps> = (props) => {
 
     // Generate random positions and rotations for blocks
     const blockStyles = useMemo(() => {
-        return commentOptions.map((_, index) => ({
+        return allCommentOptions.map((_, index) => ({
             rotation: rotations[index % rotations.length],
             delay: index * 50,
         }));
-    }, [commentOptions.length]);
+    }, [allCommentOptions.length]);
 
     // Load comments and options on mount
     useEffect(() => {
@@ -311,7 +347,7 @@ const CommentSection: React.FC<CommentSectionProps> = (props) => {
 
                 {/* Comment Blocks - Scattered Layout */}
                 <div className="relative flex flex-wrap gap-3 justify-center py-4">
-                    {commentOptions.map((option, index) => {
+                    {visibleCommentOptions.map((option, index) => {
                         const style = getColorStyle(option.color);
                         const blockStyle = blockStyles[index];
                         const isPosting = posting === option.text;
@@ -349,6 +385,41 @@ const CommentSection: React.FC<CommentSectionProps> = (props) => {
                         );
                     })}
                 </div>
+                
+                {/* Show More / Show Less Button */}
+                {hasMoreComments && (
+                    <div className="flex justify-center pt-2 pb-4">
+                        <button
+                            onClick={() => setShowMoreComments(!showMoreComments)}
+                            className={`
+                                flex items-center gap-2 px-4 py-2 rounded-full 
+                                font-bold text-sm transition-all duration-300
+                                hover:scale-105 active:scale-95
+                                ${isUnderwater 
+                                    ? 'bg-white/20 text-white border-2 border-white/30 hover:bg-white/30' 
+                                    : 'bg-[#8B4513]/10 text-[#8B4513] border-2 border-[#8B4513]/30 hover:bg-[#8B4513]/20'
+                                }
+                            `}
+                        >
+                            {showMoreComments ? (
+                                <>
+                                    <span>Show Less</span>
+                                    <span className="text-lg">👆</span>
+                                </>
+                            ) : (
+                                <>
+                                    <span>Show More</span>
+                                    <span className="text-lg">✨</span>
+                                    <span className={`px-1.5 py-0.5 rounded-full text-xs ${
+                                        isUnderwater ? 'bg-white/20' : 'bg-[#8B4513]/20'
+                                    }`}>
+                                        +{allCommentOptions.length - INITIAL_COMMENT_COUNT}
+                                    </span>
+                                </>
+                            )}
+                        </button>
+                    </div>
+                )}
 
                 {/* Empty State - Only show if no comments exist yet */}
                 {postedComments.length === 0 && (

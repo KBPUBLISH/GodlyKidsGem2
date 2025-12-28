@@ -767,10 +767,27 @@ const PlaylistDetailPage: React.FC = () => {
                         );
                     })}
                 </div>
+            </div>
+            
+            {/* Underwater Section - Below the waves */}
+            <div className="relative bg-gradient-to-b from-[#0077B6] via-[#005f8a] to-[#1a4a5e]">
+                {/* Sandy beach floor texture */}
+                <div className="absolute inset-0 opacity-20" style={{
+                    backgroundImage: `url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23D4A574' fill-opacity='0.4'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")`,
+                }} />
                 
-                {/* Comment Section for Playlist */}
+                {/* Light rays from above */}
+                <div className="absolute top-0 left-1/4 w-32 h-48 bg-gradient-to-b from-white/10 to-transparent transform -skew-x-12" />
+                <div className="absolute top-0 right-1/3 w-24 h-40 bg-gradient-to-b from-white/5 to-transparent transform skew-x-12" />
+                
+                {/* Bubbles */}
+                <div className="absolute top-8 left-[15%] w-3 h-3 bg-white/20 rounded-full animate-bounce" style={{ animationDelay: '0s', animationDuration: '3s' }} />
+                <div className="absolute top-16 left-[45%] w-2 h-2 bg-white/15 rounded-full animate-bounce" style={{ animationDelay: '1s', animationDuration: '4s' }} />
+                <div className="absolute top-12 right-[25%] w-4 h-4 bg-white/10 rounded-full animate-bounce" style={{ animationDelay: '2s', animationDuration: '3.5s' }} />
+                
+                {/* Comment Section for Playlist - Underwater */}
                 {playlist && playlist._id && (
-                    <div className="relative z-20 mx-4 mb-8 mt-4">
+                    <div className="relative z-10 px-4 py-8 pb-24">
                         <CommentSection
                             contentId={playlist._id}
                             contentType="playlist"
@@ -778,9 +795,13 @@ const PlaylistDetailPage: React.FC = () => {
                             description={playlist.description}
                             songTitles={playlist.items?.map((item: any) => item.title)}
                             playlistType={playlist.type as 'Song' | 'Audiobook'}
+                            variant="underwater"
                         />
                     </div>
                 )}
+                
+                {/* Sea floor decorations */}
+                <div className="absolute bottom-0 left-0 right-0 h-16 bg-gradient-to-t from-[#C19A6B]/30 to-transparent" />
             </div>
             
             {/* Mini Player - shows when audio is playing */}

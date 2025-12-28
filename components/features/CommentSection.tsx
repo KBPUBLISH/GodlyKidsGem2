@@ -19,6 +19,9 @@ interface CommentSectionProps {
     songTitles?: string[];
     playlistType?: 'Song' | 'Audiobook'; // Differentiates music vs audiobook/sermon content
     
+    // Visual variant
+    variant?: 'default' | 'underwater'; // 'underwater' for glass-like appearance
+    
     // Deprecated props (kept for backwards compatibility)
     bookId?: string;
     bookTitle?: string;
@@ -79,6 +82,19 @@ const CommentSection: React.FC<CommentSectionProps> = (props) => {
     const description = props.description || props.bookDescription;
     const songTitles = props.songTitles;
     const playlistType = props.playlistType;
+    const variant = props.variant || 'default';
+    
+    // Theme-based styling
+    const isUnderwater = variant === 'underwater';
+    const containerClass = isUnderwater 
+        ? 'bg-white/10 backdrop-blur-md rounded-3xl p-5 mt-6 overflow-hidden border-2 border-white/20 shadow-lg'
+        : 'bg-gradient-to-b from-[#f5e6c8] to-[#ecd9b5] rounded-3xl p-5 mt-6 overflow-hidden border-2 border-[#d4b483] shadow-lg';
+    const loadingContainerClass = isUnderwater
+        ? 'bg-white/10 backdrop-blur-md rounded-3xl p-6 mt-6 border-2 border-white/20'
+        : 'bg-gradient-to-b from-[#f5e6c8] to-[#ecd9b5] rounded-3xl p-6 mt-6 border-2 border-[#d4b483]';
+    const textPrimaryClass = isUnderwater ? 'text-white' : 'text-[#3E1F07]';
+    const textSecondaryClass = isUnderwater ? 'text-white/80' : 'text-[#5c2e0b]';
+    const textMutedClass = isUnderwater ? 'text-white/60' : 'text-[#8B4513]/70';
 
     const [commentOptions, setCommentOptions] = useState<CommentOption[]>([]);
     const [postedComments, setPostedComments] = useState<Comment[]>([]);
@@ -223,17 +239,17 @@ const CommentSection: React.FC<CommentSectionProps> = (props) => {
 
     if (loading) {
         return (
-            <div className="bg-gradient-to-b from-[#f5e6c8] to-[#ecd9b5] rounded-3xl p-6 mt-6 border-2 border-[#d4b483]">
+            <div className={loadingContainerClass}>
                 <div className="flex items-center justify-center gap-3 py-8">
-                    <Loader2 className="w-6 h-6 text-[#8B4513] animate-spin" />
-                    <span className="text-[#5c2e0b]">Loading comments...</span>
+                    <Loader2 className={`w-6 h-6 animate-spin ${isUnderwater ? 'text-white' : 'text-[#8B4513]'}`} />
+                    <span className={textSecondaryClass}>Loading comments...</span>
                 </div>
             </div>
         );
     }
 
     return (
-        <div className="bg-gradient-to-b from-[#f5e6c8] to-[#ecd9b5] rounded-3xl p-5 mt-6 overflow-hidden border-2 border-[#d4b483] shadow-lg">
+        <div className={containerClass}>
             {/* Success Toast */}
             {showSuccess && (
                 <div className="fixed top-20 left-1/2 -translate-x-1/2 z-50 bg-green-500 text-white px-4 py-2 rounded-full shadow-lg animate-bounce">
@@ -245,8 +261,8 @@ const CommentSection: React.FC<CommentSectionProps> = (props) => {
             {postedComments.length > 0 && (
                 <div className="mb-6">
                     <div className="flex items-center gap-2 mb-4">
-                        <Send className="w-4 h-4 text-[#8B4513]" />
-                        <h3 className="text-[#3E1F07] font-bold text-lg font-display">
+                        <Send className={`w-4 h-4 ${isUnderwater ? 'text-white/80' : 'text-[#8B4513]'}`} />
+                        <h3 className={`font-bold text-lg font-display ${textPrimaryClass}`}>
                             {othersText} ({postedComments.length})
                         </h3>
                     </div>
@@ -269,7 +285,7 @@ const CommentSection: React.FC<CommentSectionProps> = (props) => {
                                         <p className={`font-medium text-sm ${style.text}`}>
                                             {comment.commentText}
                                         </p>
-                                        <p className="text-[#8B4513]/60 text-xs mt-1">
+                                        <p className={`text-xs mt-1 ${isUnderwater ? 'text-white/50' : 'text-[#8B4513]/60'}`}>
                                             {getFunDisplayName(comment._id)} • {formatTimeAgo(comment.createdAt)}
                                         </p>
                                     </div>
@@ -283,8 +299,8 @@ const CommentSection: React.FC<CommentSectionProps> = (props) => {
             {/* Leave a Comment Header - SECOND */}
             <div className={`${postedComments.length > 0 ? 'pt-6 border-t border-[#d4b483]' : ''}`}>
                 <div className="flex items-center gap-2 mb-4">
-                    <MessageCircle className="w-5 h-5 text-[#8B4513]" />
-                    <h3 className="text-[#3E1F07] font-bold text-lg font-display">Leave a Comment!</h3>
+                    <MessageCircle className={`w-5 h-5 ${isUnderwater ? 'text-white/80' : 'text-[#8B4513]'}`} />
+                    <h3 className={`font-bold text-lg font-display ${textPrimaryClass}`}>Leave a Comment!</h3>
                     {generating && (
                         <div className="flex items-center gap-1 ml-2 text-purple-600 text-xs">
                             <Sparkles className="w-3 h-3 animate-pulse" />
@@ -336,7 +352,7 @@ const CommentSection: React.FC<CommentSectionProps> = (props) => {
 
                 {/* Empty State - Only show if no comments exist yet */}
                 {postedComments.length === 0 && (
-                    <div className="text-center py-2 text-[#8B4513]/60 text-sm">
+                    <div className={`text-center py-2 text-sm ${isUnderwater ? 'text-white/60' : 'text-[#8B4513]/60'}`}>
                         Be the first to leave a comment! 👆
                     </div>
                 )}

@@ -1239,6 +1239,13 @@ const HomePage: React.FC = () => {
                         <div className={`absolute inset-0 bg-gradient-to-br ${isLocked ? 'from-[#8B4513] to-[#5c2e0b]' : 'from-[#4CAF50] to-[#2E7D32]'}`} />
                       )}
                       
+                      {/* Age Rating Badge */}
+                      {game.ageRating && game.ageRating !== 'All Ages' && (
+                        <div className="absolute top-2 left-2 bg-blue-500/90 backdrop-blur-sm text-white text-xs font-bold px-2 py-1 rounded-full z-20 shadow-lg">
+                          {game.ageRating}
+                        </div>
+                      )}
+                      
                       {/* Lock Overlay for Purchasable Games */}
                       {isLocked && (
                         <div className="absolute inset-0 bg-black/40 flex flex-col items-center justify-center z-10">

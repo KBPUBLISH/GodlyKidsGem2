@@ -20,7 +20,10 @@ interface Game {
     };
     isPurchasable?: boolean;
     goldCoinPrice?: number;
+    ageRating?: string;
 }
+
+const AGE_OPTIONS = ['All Ages', '3+', '4+', '5+', '6+', '7+', '8+', '9+', '10+'];
 
 const Games: React.FC = () => {
     const [games, setGames] = useState<Game[]>([]);
@@ -44,6 +47,7 @@ const Games: React.FC = () => {
         },
         isPurchasable: false,
         goldCoinPrice: 0,
+        ageRating: 'All Ages',
     });
     const [uploadingCover, setUploadingCover] = useState(false);
     const [uploadingEditCover, setUploadingEditCover] = useState(false);
@@ -132,6 +136,7 @@ const Games: React.FC = () => {
             settings: game.settings || {},
             isPurchasable: game.isPurchasable || false,
             goldCoinPrice: game.goldCoinPrice || 0,
+            ageRating: game.ageRating || 'All Ages',
         });
     };
 
@@ -485,6 +490,23 @@ const Games: React.FC = () => {
                                 </label>
                             </div>
 
+                            {/* Age Rating */}
+                            <div>
+                                <label className="block text-sm font-semibold text-gray-700 mb-2">
+                                    Age Rating
+                                </label>
+                                <select
+                                    value={formData.ageRating || 'All Ages'}
+                                    onChange={(e) => setFormData({ ...formData, ageRating: e.target.value })}
+                                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                                >
+                                    {AGE_OPTIONS.map(age => (
+                                        <option key={age} value={age}>{age}</option>
+                                    ))}
+                                </select>
+                                <p className="text-xs text-gray-500 mt-1">This will display as a badge on the game cover</p>
+                            </div>
+
                             {/* Purchase with Gold Coins Section */}
                             <div className="border-t border-gray-200 pt-4">
                                 <h3 className="text-lg font-bold text-gray-800 mb-4 flex items-center gap-2">
@@ -800,6 +822,23 @@ const Games: React.FC = () => {
                                 <label htmlFor="showInDailyTasks-new" className="text-sm font-semibold text-gray-700">
                                     Show in "Daily Tasks & IQ Games" category
                                 </label>
+                            </div>
+
+                            {/* Age Rating */}
+                            <div>
+                                <label className="block text-sm font-semibold text-gray-700 mb-2">
+                                    Age Rating
+                                </label>
+                                <select
+                                    value={newGame.ageRating}
+                                    onChange={(e) => setNewGame({ ...newGame, ageRating: e.target.value })}
+                                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                                >
+                                    {AGE_OPTIONS.map(age => (
+                                        <option key={age} value={age}>{age}</option>
+                                    ))}
+                                </select>
+                                <p className="text-xs text-gray-500 mt-1">This will display as a badge on the game cover</p>
                             </div>
 
                             {/* Purchase with Gold Coins Section */}

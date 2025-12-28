@@ -250,12 +250,6 @@ const LibraryPage: React.FC = () => {
                     <ListMusic className="w-16 h-16 text-white/60" />
                   </div>
                 )}
-                {/* AI Generated Badge */}
-                {playlist.aiGenerated?.isAiGenerated && (
-                  <div className="absolute top-2 left-2 bg-purple-500/80 backdrop-blur-sm px-2 py-1 rounded-full">
-                    <span className="text-white text-xs font-medium">✨ AI</span>
-                  </div>
-                )}
               </div>
               <div className="p-3">
                 <h3 className="text-white font-bold text-sm truncate">{playlist.name}</h3>

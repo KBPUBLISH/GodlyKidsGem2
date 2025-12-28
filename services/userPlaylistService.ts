@@ -221,10 +221,10 @@ class UserPlaylistService {
         try {
             console.log('🎨 Generating cover:', { prompt, style, playlistName });
             
-            const response = await fetch(`${this.baseUrl}/ai/generate-image`, {
+            const response = await fetch(`${this.baseUrl}/ai/playlist-cover`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ prompt, style }),
+                body: JSON.stringify({ prompt, style, playlistName, userId }),
             });
             
             if (response.ok) {

@@ -120,9 +120,9 @@ const CreatePlaylistPage: React.FC = () => {
     };
     
     return (
-        <div className="min-h-screen bg-gradient-to-b from-[#1a0f05] to-[#2d1809] flex flex-col">
+        <div className="h-full bg-gradient-to-b from-[#1a0f05] to-[#2d1809] flex flex-col overflow-hidden">
             {/* Header */}
-            <div className="sticky top-0 z-50 bg-gradient-to-b from-[#2d1809] to-transparent px-4 py-3">
+            <div className="flex-shrink-0 bg-gradient-to-b from-[#2d1809] to-transparent px-4 py-3 pt-8">
                 <div className="flex items-center justify-between">
                     <button
                         onClick={() => navigate('/library')}
@@ -137,8 +137,8 @@ const CreatePlaylistPage: React.FC = () => {
                 </div>
             </div>
             
-            {/* Content */}
-            <div className="flex-1 px-4 py-6 space-y-6">
+            {/* Scrollable Content */}
+            <div className="flex-1 overflow-y-auto px-4 py-6 space-y-6 pb-32">
                 {/* Cover Preview */}
                 <div className="flex flex-col items-center">
                     <div className="w-48 h-48 rounded-2xl overflow-hidden shadow-2xl border-4 border-[#5D4037] mb-4">

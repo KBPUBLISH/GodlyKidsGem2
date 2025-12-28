@@ -19,6 +19,7 @@ import GameWebView from '../components/features/GameWebView';
 import ChallengeGameModal from '../components/features/ChallengeGameModal';
 import StrengthGameModal from '../components/features/StrengthGameModal';
 import PrayerGameModal from '../components/features/PrayerGameModal';
+import CommentSection from '../components/features/CommentSection';
 
 // Default placeholder image
 const DEFAULT_COVER = 'https://via.placeholder.com/400x400/8B4513/FFFFFF?text=Book+Cover';
@@ -1118,6 +1119,15 @@ const BookDetailPage: React.FC = () => {
                 </div>
               ))}
             </div>
+          )}
+
+          {/* Comment Section */}
+          {id && book && (
+            <CommentSection
+              bookId={id}
+              bookTitle={book.title}
+              bookDescription={book.description}
+            />
           )}
         </div>
       </div>

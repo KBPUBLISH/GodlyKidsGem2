@@ -35,23 +35,48 @@ const CreatePlaylistPage: React.FC = () => {
     };
     
     const handleGenerateCover = async () => {
-        if (!coverPrompt.trim()) return;
+        console.log('🎨 Generate cover clicked', { coverPrompt, selectedStyle });
+        
+        if (!coverPrompt.trim()) {
+            console.log('⚠️ No prompt provided');
+            alert('Please enter a description for your cover');
+            return;
+        }
         
         const userId = getUserId();
-        if (!userId) return;
+        console.log('👤 User ID:', userId);
+        
+        if (!userId) {
+            console.log('⚠️ No user ID found');
+            alert('Please sign in to generate AI covers');
+            return;
+        }
         
         setGeneratingCover(true);
-        const result = await userPlaylistService.generateCover(
-            coverPrompt,
-            selectedStyle,
-            name || 'My Playlist',
-            userId
-        );
+        console.log('🎨 Calling generateCover...');
         
-        if (result) {
-            setCoverImage(result.imageUrl);
+        try {
+            const result = await userPlaylistService.generateCover(
+                coverPrompt,
+                selectedStyle,
+                name || 'My Playlist',
+                userId
+            );
+            
+            console.log('🎨 Generation result:', result);
+            
+            if (result) {
+                setCoverImage(result.imageUrl);
+                console.log('✅ Cover image set:', result.imageUrl);
+            } else {
+                alert('Failed to generate cover. Please try again.');
+            }
+        } catch (error) {
+            console.error('❌ Error generating cover:', error);
+            alert('Error generating cover. Please try again.');
+        } finally {
+            setGeneratingCover(false);
         }
-        setGeneratingCover(false);
     };
     
     const handleCreate = async () => {

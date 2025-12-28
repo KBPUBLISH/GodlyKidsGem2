@@ -52,7 +52,7 @@ const BookDetailPage: React.FC = () => {
   const { books, loading } = useBooks();
   useAudio(); // keep hook call if needed elsewhere; background music UI is removed
   const { t, translateText, currentLanguage } = useLanguage();
-  const { isSubscribed } = useUser();
+  const { isSubscribed, isVoiceUnlocked } = useUser();
   const [translatedTitle, setTranslatedTitle] = useState<string>('');
   const [translatedDescription, setTranslatedDescription] = useState<string>('');
   const [book, setBook] = useState<Book | null>(null);
@@ -422,10 +422,14 @@ const BookDetailPage: React.FC = () => {
 
   const handleContinue = () => {
     if (id && savedPageIndex !== null && savedPageIndex >= 0) {
-      // Navigate with continue flag to resume from saved progress
-      navigate(`/read/${id}?continue=true`);
+      // Navigate with page number to resume from saved progress
+      // Use page number instead of continue=true for more reliable navigation
+      const pageNum = savedPageIndex + 1; // Convert 0-based index to 1-based page number
+      console.log(`📖 Continue reading: navigating to page ${pageNum} (savedPageIndex: ${savedPageIndex})`);
+      navigate(`/read/${id}?page=${pageNum}`);
     } else {
       // No saved progress, just start from beginning
+      console.log('📖 No saved progress, starting from beginning');
       navigate(`/read/${id}`);
     }
   };
@@ -577,25 +581,63 @@ const BookDetailPage: React.FC = () => {
           ) : (
             // --- STANDARD BOOK ACTIONS ---
             <>
-              {/* Voice Reward Indicator */}
+              {/* Voice Reward Indicator with Progress */}
               {rewardVoice && (
-                <div className="w-full max-w-sm mb-3 bg-gradient-to-r from-amber-500/20 to-yellow-500/20 backdrop-blur-sm rounded-2xl p-3 border-2 border-amber-400/50 flex items-center gap-3">
-                  {rewardVoice.characterImage ? (
-                    <img 
-                      src={rewardVoice.characterImage} 
-                      alt={rewardVoice.name}
-                      className="w-12 h-12 rounded-full object-cover border-2 border-amber-300 shadow-lg"
-                    />
-                  ) : (
-                    <div className="w-12 h-12 rounded-full bg-amber-400 flex items-center justify-center border-2 border-amber-300">
-                      <span className="text-2xl">🎤</span>
+                <div className={`w-full max-w-sm mb-3 backdrop-blur-sm rounded-2xl p-3 border-2 ${
+                  isVoiceUnlocked(rewardVoice.voiceId) 
+                    ? 'bg-gradient-to-r from-green-500/30 to-emerald-500/30 border-green-400/50' 
+                    : 'bg-gradient-to-r from-amber-500/20 to-yellow-500/20 border-amber-400/50'
+                }`}>
+                  <div className="flex items-center gap-3">
+                    {rewardVoice.characterImage ? (
+                      <img 
+                        src={rewardVoice.characterImage} 
+                        alt={rewardVoice.name}
+                        className={`w-14 h-14 rounded-full object-cover border-2 shadow-lg ${
+                          isVoiceUnlocked(rewardVoice.voiceId) ? 'border-green-300' : 'border-amber-300'
+                        }`}
+                      />
+                    ) : (
+                      <div className={`w-14 h-14 rounded-full flex items-center justify-center border-2 ${
+                        isVoiceUnlocked(rewardVoice.voiceId) ? 'bg-green-400 border-green-300' : 'bg-amber-400 border-amber-300'
+                      }`}>
+                        <span className="text-2xl">{isVoiceUnlocked(rewardVoice.voiceId) ? '✅' : '🎤'}</span>
+                      </div>
+                    )}
+                    <div className="flex-1">
+                      {isVoiceUnlocked(rewardVoice.voiceId) ? (
+                        <>
+                          <p className="text-green-200 text-xs font-medium flex items-center gap-1">
+                            <span>✨</span> Voice Unlocked!
+                          </p>
+                          <p className="text-white font-bold text-sm">{rewardVoice.name} Voice</p>
+                        </>
+                      ) : (
+                        <>
+                          <p className="text-amber-100 text-xs font-medium">🎁 Complete to Unlock</p>
+                          <p className="text-white font-bold text-sm">{rewardVoice.name} Voice</p>
+                          {/* Progress Bar */}
+                          {totalPages > 0 && (
+                            <div className="mt-2">
+                              <div className="flex justify-between text-[10px] text-amber-200/80 mb-1">
+                                <span>{savedPageIndex !== null ? savedPageIndex + 1 : 0} / {totalPages} pages</span>
+                                <span>{Math.round(((savedPageIndex !== null ? savedPageIndex + 1 : 0) / totalPages) * 100)}%</span>
+                              </div>
+                              <div className="h-2 bg-black/30 rounded-full overflow-hidden">
+                                <div 
+                                  className="h-full bg-gradient-to-r from-amber-400 to-yellow-300 rounded-full transition-all duration-500"
+                                  style={{ 
+                                    width: `${Math.min(((savedPageIndex !== null ? savedPageIndex + 1 : 0) / totalPages) * 100, 100)}%` 
+                                  }}
+                                />
+                              </div>
+                            </div>
+                          )}
+                        </>
+                      )}
                     </div>
-                  )}
-                  <div className="flex-1">
-                    <p className="text-amber-100 text-xs font-medium">🎁 Complete to Unlock</p>
-                    <p className="text-white font-bold text-sm">{rewardVoice.name} Voice</p>
+                    <span className="text-2xl">{isVoiceUnlocked(rewardVoice.voiceId) ? '🎉' : '✨'}</span>
                   </div>
-                  <span className="text-2xl">✨</span>
                 </div>
               )}
               

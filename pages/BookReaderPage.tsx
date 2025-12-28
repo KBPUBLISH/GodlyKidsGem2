@@ -153,9 +153,13 @@ const BookReaderPage: React.FC = () => {
     const [bookRewardVoiceId, setBookRewardVoiceId] = useState<string | null>(null);
     const [showVoiceUnlockModal, setShowVoiceUnlockModal] = useState(false);
     const [unlockedVoice, setUnlockedVoice] = useState<{ name: string; characterImage?: string } | null>(null);
+    // Track if user has overridden the book's default voice
+    const [useBookDefaultVoice, setUseBookDefaultVoice] = useState(true);
     
-    // Get the effective voice ID to use for TTS (book's default overrides user's selection)
-    const effectiveVoiceId = bookDefaultVoiceId || selectedVoiceId;
+    // Get the effective voice ID to use for TTS
+    // If book has default and user hasn't overridden, use book's default
+    // Otherwise use user's selected voice
+    const effectiveVoiceId = (bookDefaultVoiceId && useBookDefaultVoice) ? bookDefaultVoiceId : selectedVoiceId;
     const [wordAlignment, setWordAlignment] = useState<{ words: Array<{ word: string; start: number; end: number }> } | null>(null);
     const [currentWordIndex, setCurrentWordIndex] = useState<number>(-1);
     const [showVoiceDropdown, setShowVoiceDropdown] = useState(false);
@@ -855,6 +859,8 @@ const BookReaderPage: React.FC = () => {
                 const pageParam = searchParams.get('page');
                 const continueParam = searchParams.get('continue');
                 
+                console.log('📖 URL params check:', { pageParam, continueParam, url: window.location.href });
+                
                 if (pageParam) {
                     // Specific page requested (e.g., from Continue button)
                     const pageNum = parseInt(pageParam, 10);
@@ -862,19 +868,22 @@ const BookReaderPage: React.FC = () => {
                         const pageIndex = pageNum - 1; // Convert to 0-based
                         setCurrentPageIndex(pageIndex);
                         currentPageIndexRef.current = pageIndex;
-                        console.log(`📖 Navigated to page ${pageNum} from URL`);
+                        console.log(`📖 Navigated to page ${pageNum} from URL param`);
                     }
                 } else if (continueParam === 'true') {
                     // Continue reading - load saved progress
                     const progress = readingProgressService.getProgress(bookId);
+                    console.log('📖 Continue reading - progress data:', progress);
                     if (progress && progress.currentPageIndex >= 0 && progress.currentPageIndex < data.length) {
                         setCurrentPageIndex(progress.currentPageIndex);
                         currentPageIndexRef.current = progress.currentPageIndex;
                         console.log(`📖 Restored reading progress: Page ${progress.currentPageIndex + 1} of ${data.length}`);
+                    } else {
+                        console.log('📖 No valid progress found, starting from page 1');
                     }
                 } else {
                     // "Read" button - start fresh from page 1
-                    console.log(`📖 Starting book from page 1`);
+                    console.log(`📖 Starting book from page 1 (no continue param)`);
                     // Page index is already 0 by default
                 }
             } catch (err) {
@@ -1117,6 +1126,17 @@ const BookReaderPage: React.FC = () => {
 
     const currentPage = mapPage(pages[currentPageIndex]);
     const isTheEndPage = currentPage?.id === 'the-end-page' || currentPageIndex === pages.length - 1;
+
+    // Trigger voice unlock when user reaches "The End" page
+    useEffect(() => {
+        if (isTheEndPage && pages.length > 0 && bookId) {
+            console.log('🎁 User reached The End page - triggering voice unlock check');
+            // Mark book as completed
+            bookCompletionService.markBookCompleted(bookId);
+            // Trigger voice unlock
+            handleUnlockRewardVoice();
+        }
+    }, [isTheEndPage, pages.length, bookId]); // eslint-disable-line react-hooks/exhaustive-deps
 
     // Handle unlocking the reward voice when book is completed
     const handleUnlockRewardVoice = async () => {
@@ -2587,54 +2607,86 @@ const BookReaderPage: React.FC = () => {
                                 setShowVoiceDropdown(!showVoiceDropdown);
                             }}
                             className={`backdrop-blur-md rounded-full px-2.5 py-1.5 flex items-center gap-1.5 hover:bg-black/60 transition-colors ${
-                                bookDefaultVoiceId ? 'bg-amber-600/60 ring-2 ring-amber-400/50' : 'bg-black/40'
+                                bookDefaultVoiceId && useBookDefaultVoice ? 'bg-amber-600/60 ring-2 ring-amber-400/50' : 'bg-black/40'
                             }`}
                         >
                             <Volume2 className="w-4 h-4 text-white" />
                             <span className="text-white text-xs max-w-[100px] truncate">
-                                {/* Show the effective voice (book default overrides user selection) */}
-                                {bookDefaultVoiceId ? (
-                                    <>
-                                        {voices.find(v => v.voice_id === bookDefaultVoiceId)?.name || 
-                                         voices.find(v => v.voice_id === bookDefaultVoiceId)?.customName ||
-                                         'Book Voice'}
-                                    </>
-                                ) : (
-                                    voices.find(v => v.voice_id === selectedVoiceId)?.name ||
-                                    clonedVoices.find(v => v.voice_id === selectedVoiceId)?.name ||
-                                    'Voice'
-                                )}
+                                {/* Show the effective voice being used */}
+                                {voices.find(v => v.voice_id === effectiveVoiceId)?.name || 
+                                 voices.find(v => v.voice_id === effectiveVoiceId)?.customName ||
+                                 clonedVoices.find(v => v.voice_id === effectiveVoiceId)?.name ||
+                                 'Voice'}
                             </span>
-                            {bookDefaultVoiceId && <span className="text-amber-300 text-[10px]">📖</span>}
+                            {bookDefaultVoiceId && useBookDefaultVoice && <span className="text-amber-300 text-[10px]">📖</span>}
                         </button>
 
                         {/* Dropdown Menu */}
                         {showVoiceDropdown && (
-                            <div className="absolute top-full right-0 mt-2 bg-black/95 backdrop-blur-md rounded-xl border border-white/20 shadow-2xl z-50 min-w-[200px] max-w-[280px] max-h-[400px] overflow-y-auto">
+                            <div className="absolute top-full right-0 mt-2 bg-black/95 backdrop-blur-md rounded-xl border border-white/20 shadow-2xl z-50 min-w-[220px] max-w-[280px] max-h-[400px] overflow-y-auto">
                                 <div className="py-2">
+                                    {/* Book Default Voice Section - only show if book has a default */}
+                                    {bookDefaultVoiceId && (
+                                        <>
+                                            <div className="px-4 py-1 text-xs text-amber-400/80 uppercase tracking-wider flex items-center gap-1">
+                                                <span>📖</span> Book Narrator
+                                            </div>
+                                            <button
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    setUseBookDefaultVoice(true);
+                                                    setShowVoiceDropdown(false);
+                                                }}
+                                                className={`w-full text-left px-4 py-2 text-sm text-white hover:bg-amber-600/30 transition-colors flex items-center gap-2 ${
+                                                    useBookDefaultVoice ? 'bg-amber-600/40 border-l-2 border-amber-400' : ''
+                                                }`}
+                                            >
+                                                {useBookDefaultVoice && (
+                                                    <Check className="w-4 h-4 text-amber-300" />
+                                                )}
+                                                <span className={useBookDefaultVoice ? 'font-bold text-amber-100' : ''}>
+                                                    {voices.find(v => v.voice_id === bookDefaultVoiceId)?.name || 
+                                                     voices.find(v => v.voice_id === bookDefaultVoiceId)?.customName ||
+                                                     'Book Voice'}
+                                                </span>
+                                                <span className="text-amber-300/70 text-xs ml-auto">Default</span>
+                                            </button>
+                                            <div className="border-t border-white/10 my-1"></div>
+                                        </>
+                                    )}
+                                    
                                     {/* Unlocked Voices Section */}
                                     {voices.filter(v => isVoiceUnlocked(v.voice_id)).length > 0 && (
                                         <>
-                                            <div className="px-4 py-1 text-xs text-white/50 uppercase tracking-wider">Unlocked</div>
-                                            {voices.filter(v => isVoiceUnlocked(v.voice_id)).map(v => (
-                                                <button
-                                                    key={v.voice_id}
-                                                    onClick={(e) => {
-                                                        e.stopPropagation();
-                                                        setSelectedVoiceId(v.voice_id);
-                                                        setShowVoiceDropdown(false);
-                                                    }}
-                                                    className={`w-full text-left px-4 py-2 text-sm text-white hover:bg-white/10 transition-colors flex items-center gap-2 ${selectedVoiceId === v.voice_id ? 'bg-white/20' : ''
+                                            <div className="px-4 py-1 text-xs text-white/50 uppercase tracking-wider">
+                                                {bookDefaultVoiceId ? 'Other Voices' : 'Unlocked'}
+                                            </div>
+                                            {voices.filter(v => isVoiceUnlocked(v.voice_id)).map(v => {
+                                                // Skip the book default voice in this section (it's shown above)
+                                                if (bookDefaultVoiceId && v.voice_id === bookDefaultVoiceId) return null;
+                                                const isSelected = !useBookDefaultVoice && selectedVoiceId === v.voice_id;
+                                                return (
+                                                    <button
+                                                        key={v.voice_id}
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            setSelectedVoiceId(v.voice_id);
+                                                            setUseBookDefaultVoice(false); // User chose different voice
+                                                            setShowVoiceDropdown(false);
+                                                        }}
+                                                        className={`w-full text-left px-4 py-2 text-sm text-white hover:bg-white/10 transition-colors flex items-center gap-2 ${
+                                                            isSelected ? 'bg-white/20' : ''
                                                         }`}
-                                                >
-                                                    {selectedVoiceId === v.voice_id && (
-                                                        <Check className="w-4 h-4 text-[#FFD700]" />
-                                                    )}
-                                                    <span className={selectedVoiceId === v.voice_id ? 'font-bold' : ''}>
-                                                        {v.name}
-                                                    </span>
-                                                </button>
-                                            ))}
+                                                    >
+                                                        {isSelected && (
+                                                            <Check className="w-4 h-4 text-[#FFD700]" />
+                                                        )}
+                                                        <span className={isSelected ? 'font-bold' : ''}>
+                                                            {v.name}
+                                                        </span>
+                                                    </button>
+                                                );
+                                            })}
                                         </>
                                     )}
 

@@ -452,6 +452,8 @@ import BookReaderPage from './pages/BookReaderPage';
 import AudioPage from './pages/AudioPage';
 import PlaylistPlayerPage from './pages/PlaylistPlayerPage';
 import PlaylistDetailPage from './pages/PlaylistDetailPage';
+import UserPlaylistPage from './pages/UserPlaylistPage';
+import CreatePlaylistPage from './pages/CreatePlaylistPage';
 import BookSeriesDetailPage from './pages/BookSeriesDetailPage';
 import LessonsPage from './pages/LessonsPage';
 import LessonPlayerPage from './pages/LessonPlayerPage';
@@ -843,6 +845,8 @@ const App: React.FC = () => {
                   <Route path="/audio" element={<AudioPage />} />
                   <Route path="/audio/playlist/:playlistId" element={<PlaylistDetailPage />} />
                   <Route path="/audio/playlist/:playlistId/play/:itemIndex" element={<PlaylistPlayerPage />} />
+                  <Route path="/my-playlist/:id" element={<UserPlaylistPage />} />
+                  <Route path="/create-playlist" element={<CreatePlaylistPage />} />
                   <Route path="/book-series/:seriesId" element={<BookSeriesDetailPage />} />
                   <Route path="/lessons" element={<LessonsPage />} />
                   <Route path="/lesson/:lessonId" element={<LessonPlayerPage />} />

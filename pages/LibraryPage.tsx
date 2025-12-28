@@ -5,12 +5,14 @@ import BookCard from '../components/ui/BookCard';
 import Header from '../components/layout/Header';
 import SectionTitle from '../components/ui/SectionTitle';
 import { useBooks } from '../context/BooksContext';
-import { Search, ChevronDown, Music, BookOpen, Clock, Heart } from 'lucide-react';
+import { Search, ChevronDown, Music, BookOpen, Clock, Heart, ListMusic, Plus, Trash2 } from 'lucide-react';
 import { libraryService } from '../services/libraryService';
 import { favoritesService } from '../services/favoritesService';
 import { readingProgressService } from '../services/readingProgressService';
 import { playHistoryService } from '../services/playHistoryService';
 import { getApiBaseUrl } from '../services/apiService';
+import { userPlaylistService, UserPlaylist } from '../services/userPlaylistService';
+import { authService } from '../services/authService';
 
 const ageOptions = ['All Ages', '3+', '4+', '5+', '6+', '7+', '8+', '9+', '10+'];
 
@@ -32,6 +34,8 @@ const LibraryPage: React.FC = () => {
   const [showAgeDropdown, setShowAgeDropdown] = useState(false);
   const [playlists, setPlaylists] = useState<Playlist[]>([]);
   const [playlistsLoading, setPlaylistsLoading] = useState(true);
+  const [userPlaylists, setUserPlaylists] = useState<UserPlaylist[]>([]);
+  const [userPlaylistsLoading, setUserPlaylistsLoading] = useState(true);
   const ageDropdownRef = useRef<HTMLDivElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const lastScrollY = useRef(0);
@@ -73,6 +77,29 @@ const LibraryPage: React.FC = () => {
       }
     };
     fetchPlaylists();
+  }, []);
+
+  // Fetch user's custom playlists
+  useEffect(() => {
+    const fetchUserPlaylists = async () => {
+      const user = authService.getUser();
+      const userId = user?.email || user?._id;
+      if (!userId) {
+        setUserPlaylistsLoading(false);
+        return;
+      }
+      
+      try {
+        setUserPlaylistsLoading(true);
+        const data = await userPlaylistService.getPlaylists(userId);
+        setUserPlaylists(data);
+      } catch (error) {
+        console.error('Error fetching user playlists:', error);
+      } finally {
+        setUserPlaylistsLoading(false);
+      }
+    };
+    fetchUserPlaylists();
   }, []);
 
   // Close age dropdown when clicking outside
@@ -147,13 +174,30 @@ const LibraryPage: React.FC = () => {
   const filteredRecentBooks = filterBooks(recentBooks);
   const filteredRecentPlaylists = filterPlaylists(recentPlaylists);
 
+  // Filter user playlists by search
+  const filteredUserPlaylists = searchQuery 
+    ? userPlaylists.filter(p => p.name.toLowerCase().includes(searchQuery.toLowerCase()))
+    : userPlaylists;
+
   const hasNoContent = 
     filteredFavoriteBooks.length === 0 && 
     filteredFavoritePlaylists.length === 0 && 
     filteredRecentBooks.length === 0 && 
-    filteredRecentPlaylists.length === 0;
+    filteredRecentPlaylists.length === 0 &&
+    filteredUserPlaylists.length === 0;
 
-  const isLoading = loading || playlistsLoading;
+  const isLoading = loading || playlistsLoading || userPlaylistsLoading;
+
+  // Delete a user playlist
+  const handleDeleteUserPlaylist = async (playlistId: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!confirm('Delete this playlist? This cannot be undone.')) return;
+    
+    const success = await userPlaylistService.deletePlaylist(playlistId);
+    if (success) {
+      setUserPlaylists(prev => prev.filter(p => p._id !== playlistId));
+    }
+  };
 
   // Render a horizontal scrollable row of book cards
   const renderBookRow = (bookList: typeof books) => (
@@ -165,6 +209,75 @@ const LibraryPage: React.FC = () => {
               book={book} 
               onClick={(id) => navigate(`/book/${id}`, { state: { from: '/library' } })} 
             />
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+
+  // Render user playlist cards (My Playlists)
+  const renderUserPlaylistRow = () => (
+    <div className="w-screen overflow-x-auto no-scrollbar pb-4 -mx-4">
+      <div className="flex space-x-3 px-4">
+        {/* Create New Playlist Card */}
+        <div 
+          className="flex-shrink-0 w-[42vw] md:w-[30vw] lg:w-[23vw] max-w-[200px] cursor-pointer"
+          onClick={() => navigate('/create-playlist')}
+        >
+          <div className="bg-gradient-to-br from-purple-600/30 to-pink-600/30 backdrop-blur-sm rounded-2xl overflow-hidden shadow-lg border-2 border-dashed border-purple-400/50 hover:border-purple-400 hover:shadow-2xl hover:scale-105 transition-all group">
+            <div className="aspect-square flex items-center justify-center">
+              <div className="text-center">
+                <div className="w-16 h-16 mx-auto rounded-full bg-purple-500/30 flex items-center justify-center mb-2 group-hover:bg-purple-500/50 transition-colors">
+                  <Plus className="w-8 h-8 text-purple-300" />
+                </div>
+                <p className="text-purple-200 font-bold text-sm">Create New</p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* User Playlist Cards */}
+        {filteredUserPlaylists.map(playlist => (
+          <div 
+            key={playlist._id} 
+            className="flex-shrink-0 w-[42vw] md:w-[30vw] lg:w-[23vw] max-w-[200px] cursor-pointer relative group"
+            onClick={() => navigate(`/my-playlist/${playlist._id}`)}
+          >
+            <div className="bg-white/10 backdrop-blur-sm rounded-2xl overflow-hidden shadow-lg border-2 border-white/20 hover:shadow-2xl hover:scale-105 transition-all">
+              <div className="aspect-square bg-gradient-to-br from-purple-500 to-pink-600 relative overflow-hidden">
+                {playlist.coverImage ? (
+                  <img
+                    src={playlist.coverImage}
+                    alt={playlist.name}
+                    className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-300"
+                    loading="lazy"
+                  />
+                ) : (
+                  <div className="w-full h-full flex items-center justify-center">
+                    <ListMusic className="w-16 h-16 text-white/60" />
+                  </div>
+                )}
+                {/* AI Generated Badge */}
+                {playlist.aiGenerated?.isAiGenerated && (
+                  <div className="absolute top-2 left-2 bg-purple-500/80 backdrop-blur-sm px-2 py-1 rounded-full">
+                    <span className="text-white text-xs font-medium">✨ AI</span>
+                  </div>
+                )}
+                {/* Delete Button */}
+                <button
+                  onClick={(e) => handleDeleteUserPlaylist(playlist._id, e)}
+                  className="absolute top-2 right-2 bg-red-500/80 backdrop-blur-sm p-1.5 rounded-full opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-600"
+                >
+                  <Trash2 className="w-3.5 h-3.5 text-white" />
+                </button>
+              </div>
+              <div className="p-3">
+                <h3 className="text-white font-bold text-sm truncate">{playlist.name}</h3>
+                <p className="text-white/40 text-xs mt-1">
+                  {playlist.items?.length || 0} items
+                </p>
+              </div>
+            </div>
           </div>
         ))}
       </div>
@@ -315,6 +428,16 @@ const LibraryPage: React.FC = () => {
                 {renderPlaylistRow(filteredFavoritePlaylists)}
               </section>
             )}
+
+            {/* My Playlists Section - Always show to encourage creation */}
+            <section className="mb-6">
+              <SectionTitle 
+                title="My Playlists" 
+                icon="🎶"
+                color="#E040FB"
+              />
+              {renderUserPlaylistRow()}
+            </section>
 
             {/* Reading History Section */}
             {filteredRecentBooks.length > 0 && (

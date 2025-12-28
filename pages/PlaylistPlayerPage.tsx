@@ -1,10 +1,11 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { ChevronLeft, Crown, Pause, Play, SkipBack, SkipForward, Music, Heart, RotateCcw } from 'lucide-react';
+import { ChevronLeft, Crown, Pause, Play, SkipBack, SkipForward, Music, Heart, RotateCcw, ListPlus } from 'lucide-react';
 import { favoritesService } from '../services/favoritesService';
 import { libraryService } from '../services/libraryService';
 import { getApiBaseUrl } from '../services/apiService';
 import { useAudio, Playlist } from '../context/AudioContext';
+import AddToPlaylistModal from '../components/features/AddToPlaylistModal';
 
 // CSS for the pulse/heartbeat animation synced with music
 const pulseStyles = `
@@ -119,6 +120,7 @@ const PlaylistPlayerPage: React.FC = () => {
     const [playCount, setPlayCount] = useState(0);
     const [isLiked, setIsLiked] = useState(false);
     const [isSaved, setIsSaved] = useState(false);
+    const [showAddToPlaylist, setShowAddToPlaylist] = useState(false);
     const hasIncrementedPlayCountRef = useRef(false);
     const [audioLevel, setAudioLevel] = useState(0); // For dynamic pulse intensity
 
@@ -384,6 +386,15 @@ const PlaylistPlayerPage: React.FC = () => {
                             fill={isSaved ? "#5c2e0b" : "#8B4513"} 
                         />
                     </button>
+
+                    {/* Add to Playlist Button */}
+                    <button
+                        onClick={() => setShowAddToPlaylist(true)}
+                        className="w-12 h-12 rounded-full border-2 flex items-center justify-center shadow-lg transition-all active:scale-95 bg-[#f3e5ab] border-[#d4c5a0] hover:bg-[#e8d99f]"
+                        title="Add to Playlist"
+                    >
+                        <ListPlus className="text-[#8B4513]" size={24} />
+                    </button>
                 </div>
             </div>
 
@@ -549,6 +560,19 @@ const PlaylistPlayerPage: React.FC = () => {
                     </button>
                 </div>
             </div>
+
+            {/* Add to Playlist Modal */}
+            {activePlaylist && currentTrack && (
+                <AddToPlaylistModal
+                    isOpen={showAddToPlaylist}
+                    onClose={() => setShowAddToPlaylist(false)}
+                    sourcePlaylistId={activePlaylist._id}
+                    itemId={currentTrack._id || `${activePlaylist._id}_${currentTrackIndex}`}
+                    itemTitle={currentTrack.title}
+                    itemCover={currentTrack.coverImage || activePlaylist.coverImage}
+                    itemType={activePlaylist.type as 'Song' | 'Audiobook'}
+                />
+            )}
         </div>
     );
 };

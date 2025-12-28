@@ -1,7 +1,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
-import { Heart, BookOpen, Crown, PlayCircle, Headphones, Disc, Lock, Globe, Bookmark, Plus, ArrowLeft } from 'lucide-react';
+import { Heart, BookOpen, Crown, PlayCircle, Headphones, Disc, Lock, Globe, Bookmark, Plus, ArrowLeft, Share2 } from 'lucide-react';
 import { useBooks } from '../context/BooksContext';
 import { useUser } from '../context/UserContext';
 import { Book } from '../types';
@@ -414,6 +414,41 @@ const BookDetailPage: React.FC = () => {
     }
   };
 
+  // Handle share book
+  const handleShare = async () => {
+    if (!book) return;
+    
+    const shareUrl = `${window.location.origin}/#/book-details/${id}`;
+    const shareTitle = translatedTitle || book.title;
+    const shareText = `📚 Check out "${shareTitle}" on GodlyKids! ${translatedDescription || book.description || 'A wonderful book for kids!'}`;
+    
+    // Try native Web Share API first (works great on mobile)
+    if (navigator.share) {
+      try {
+        await navigator.share({
+          title: shareTitle,
+          text: shareText,
+          url: shareUrl,
+        });
+        console.log('📤 Book shared successfully via Web Share API');
+      } catch (err) {
+        // User cancelled or share failed - that's ok
+        if ((err as Error).name !== 'AbortError') {
+          console.log('📤 Share cancelled or failed:', err);
+        }
+      }
+    } else {
+      // Fallback: Copy link to clipboard
+      try {
+        await navigator.clipboard.writeText(`${shareText}\n\n${shareUrl}`);
+        alert('📋 Link copied to clipboard! Share it with your friends.');
+      } catch (err) {
+        // Final fallback: prompt user
+        prompt('Copy this link to share:', shareUrl);
+      }
+    }
+  };
+
   // Check if book has EVER been completed (permanent unlock for games)
   // Once a book is completed, games stay unlocked forever regardless of re-reading progress
   const isBookCompleted = () => {
@@ -485,6 +520,14 @@ const BookDetailPage: React.FC = () => {
             <ArrowLeft className="w-5 h-5 text-white" strokeWidth={2.5} />
           </button>
 
+          {/* Share Button */}
+          <button 
+            onClick={handleShare} 
+            className="w-10 h-10 bg-black/40 backdrop-blur-sm rounded-full flex items-center justify-center transform transition-all active:scale-95 hover:bg-black/60 border border-white/20 shadow-lg"
+            title="Share this book"
+          >
+            <Share2 className="w-5 h-5 text-white" strokeWidth={2.5} />
+          </button>
         </div>
 
         {/* Main Content Area - Swaps based on type */}

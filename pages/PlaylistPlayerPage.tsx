@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { ChevronLeft, Pause, Play, SkipBack, SkipForward, Music, Heart, RotateCcw, ListPlus, BookOpen } from 'lucide-react';
+import { ChevronLeft, Pause, Play, SkipBack, SkipForward, Music, Heart, RotateCcw, ListPlus, BookOpen, Share2 } from 'lucide-react';
 import { favoritesService } from '../services/favoritesService';
 import { getApiBaseUrl } from '../services/apiService';
 import { useAudio, Playlist } from '../context/AudioContext';
@@ -220,6 +220,45 @@ const PlaylistPlayerPage: React.FC = () => {
         setIsLiked(favoritesService.getLikes().includes(trackId));
     };
 
+    // Handle share track/episode
+    const handleShare = async () => {
+        const playlistToUse = currentPlaylist || localPlaylist;
+        if (!playlistToUse || !playlistToUse.items[currentTrackIndex]) return;
+        
+        const currentTrack = playlistToUse.items[currentTrackIndex];
+        const isAudiobook = playlistToUse.type === 'Audiobook';
+        const shareUrl = `${window.location.origin}/#/playlist/${playlistToUse._id}/${currentTrackIndex}`;
+        const shareTitle = currentTrack.title;
+        const emoji = isAudiobook ? '📖' : '🎵';
+        const shareText = `${emoji} Listen to "${shareTitle}" from ${playlistToUse.title} on GodlyKids!`;
+        
+        // Try native Web Share API first (works great on mobile)
+        if (navigator.share) {
+            try {
+                await navigator.share({
+                    title: shareTitle,
+                    text: shareText,
+                    url: shareUrl,
+                });
+                console.log('📤 Track shared successfully via Web Share API');
+            } catch (err) {
+                // User cancelled or share failed - that's ok
+                if ((err as Error).name !== 'AbortError') {
+                    console.log('📤 Share cancelled or failed:', err);
+                }
+            }
+        } else {
+            // Fallback: Copy link to clipboard
+            try {
+                await navigator.clipboard.writeText(`${shareText}\n\n${shareUrl}`);
+                alert('📋 Link copied to clipboard! Share it with your friends.');
+            } catch (err) {
+                // Final fallback: prompt user
+                prompt('Copy this link to share:', shareUrl);
+            }
+        }
+    };
+
     const [isDragging, setIsDragging] = useState(false);
 
     const seekToPosition = (clientX: number, element: HTMLDivElement) => {
@@ -365,6 +404,15 @@ const PlaylistPlayerPage: React.FC = () => {
                             className={isLiked ? 'text-white fill-white' : 'text-[#8B4513]'}
                             fill={isLiked ? 'white' : 'none'}
                         />
+                    </button>
+
+                    {/* Share Button */}
+                    <button
+                        onClick={handleShare}
+                        className="w-12 h-12 rounded-full border-2 flex items-center justify-center shadow-lg transition-all active:scale-95 bg-[#f3e5ab] border-[#d4c5a0] hover:bg-[#e8d99f]"
+                        title="Share"
+                    >
+                        <Share2 className="text-[#8B4513]" size={22} />
                     </button>
 
                     {/* Add to Playlist Button */}

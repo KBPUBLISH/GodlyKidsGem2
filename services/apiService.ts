@@ -1343,11 +1343,11 @@ export const ApiService = {
   },
 
   // Get all categories (returns full category objects with name, color, icon, etc.)
-  // Optional type parameter: 'book' or 'audio' to filter categories
+  // Optional type parameter: 'book' or 'audio' to filter categories by contentType
   // Optional explore parameter: true to get only categories that show on explore page
-  getCategories: async (type?: 'book' | 'audio', explore?: boolean): Promise<Array<{ _id: string; name: string; description?: string; color: string; icon?: string; showOnExplore?: boolean }>> => {
+  getCategories: async (type?: 'book' | 'audio', explore?: boolean): Promise<Array<{ _id: string; name: string; description?: string; color: string; icon?: string; showOnExplore?: boolean; contentType?: 'Book' | 'Audio' }>> => {
     const cacheKey = `categories_${type || 'all'}_${explore ? 'explore' : 'all'}`;
-    const cached = getCached<Array<{ _id: string; name: string; description?: string; color: string; icon?: string; showOnExplore?: boolean }>>(cacheKey);
+    const cached = getCached<Array<{ _id: string; name: string; description?: string; color: string; icon?: string; showOnExplore?: boolean; contentType?: 'Book' | 'Audio' }>>(cacheKey);
     if (cached) return cached;
 
     try {
@@ -1388,6 +1388,7 @@ export const ApiService = {
                 color: cat.color || '#6366f1',
                 icon: cat.icon,
                 showOnExplore: cat.showOnExplore || false,
+                contentType: cat.contentType || 'Book',
               }));
               setCache(cacheKey, result);
               return result;

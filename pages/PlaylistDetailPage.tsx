@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { ChevronLeft, Crown, Play, Pause, Music, Headphones, Heart, Bookmark, Hammer, Wrench, Lock, Check } from 'lucide-react';
+import { ChevronLeft, Crown, Play, Pause, Music, Headphones, Heart, Bookmark, Hammer, Wrench, Lock, Check, Share2 } from 'lucide-react';
 import { getApiBaseUrl } from '../services/apiService';
 import { favoritesService } from '../services/favoritesService';
 import { useAudio } from '../context/AudioContext';
@@ -325,6 +325,43 @@ const PlaylistDetailPage: React.FC = () => {
         }
     };
 
+    // Handle share playlist
+    const handleShare = async () => {
+        if (!playlist) return;
+        
+        const shareUrl = `${window.location.origin}/#/playlist/${playlistId}`;
+        const isAudiobook = playlist.type === 'Audiobook';
+        const emoji = isAudiobook ? '📖' : '🎵';
+        const typeLabel = isAudiobook ? 'audiobook' : 'playlist';
+        const shareText = `${emoji} Check out "${playlist.title}" ${typeLabel} on GodlyKids! ${playlist.description || ''}`;
+        
+        // Try native Web Share API first (works great on mobile)
+        if (navigator.share) {
+            try {
+                await navigator.share({
+                    title: playlist.title,
+                    text: shareText,
+                    url: shareUrl,
+                });
+                console.log('📤 Playlist shared successfully via Web Share API');
+            } catch (err) {
+                // User cancelled or share failed - that's ok
+                if ((err as Error).name !== 'AbortError') {
+                    console.log('📤 Share cancelled or failed:', err);
+                }
+            }
+        } else {
+            // Fallback: Copy link to clipboard
+            try {
+                await navigator.clipboard.writeText(`${shareText}\n\n${shareUrl}`);
+                alert('📋 Link copied to clipboard! Share it with your friends.');
+            } catch (err) {
+                // Final fallback: prompt user
+                prompt('Copy this link to share:', shareUrl);
+            }
+        }
+    };
+
     const handleItemClick = (itemIndex: number) => {
         const item = playlist?.items[itemIndex];
         
@@ -514,6 +551,16 @@ const PlaylistDetailPage: React.FC = () => {
                             >
                                 <Heart size={18} fill={isLiked ? 'white' : 'none'} />
                                 <span className="text-sm font-bold">{localLikeCount}</span>
+                            </button>
+
+                            {/* Share Button */}
+                            <button
+                                onClick={handleShare}
+                                className="flex items-center gap-2 px-4 py-2 rounded-full border-2 border-[#d4c5a0] bg-[#fdf6e3] text-[#8B4513] transition-all active:scale-95 hover:bg-[#e8d99f]"
+                                title="Share"
+                            >
+                                <Share2 size={18} />
+                                <span className="text-sm font-bold">{t('share') || 'Share'}</span>
                             </button>
 
                             {/* View Counter */}

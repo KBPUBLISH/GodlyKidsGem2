@@ -4,7 +4,7 @@ import { commentService, CommentOption, BookComment, PlaylistComment } from '../
 import { authService } from '../../services/authService';
 import { useAudio } from '../../context/AudioContext';
 
-type ContentType = 'book' | 'playlist';
+type ContentType = 'book' | 'playlist' | 'book-series';
 
 interface CommentSectionProps {
     // Content identification

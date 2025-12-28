@@ -1,7 +1,7 @@
 import React, { useMemo, useState, useEffect, useCallback, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
-import { X, Sparkles, Home, ShoppingBag, Star, Pin, PinOff } from 'lucide-react';
+import { X, Sparkles, Home, ShoppingBag, Star, Pin, PinOff, BookOpen, RefreshCw } from 'lucide-react';
 import DrawingCanvas, { DrawingCanvasRef } from './DrawingCanvas';
 import { pinnedColoringService, parseColoringPageId } from '../../services/pinnedColoringService';
 
@@ -222,19 +222,12 @@ const ColoringModal: React.FC<ColoringModalProps> = ({ isOpen, onClose, backgrou
     }, [backgroundImageUrl]);
 
     // ALL HOOKS MUST BE ABOVE THIS LINE - useCallback moved here
-    const handlePinToggle = useCallback(async () => {
+    // Pin/Update the coloring to the fridge (always captures fresh screenshot)
+    const handlePinOrUpdate = useCallback(async () => {
         if (!pageId || !parsedPage?.bookId || isPinning) return;
         
-        if (isPinnedThisPage) {
-            pinnedColoringService.unpinWithCleanup(parsedPage.bookId);
-            setPinVersion(v => v + 1); // Trigger re-check of pinned state
-            setPinToast('Removed from fridge');
-            window.setTimeout(() => setPinToast(null), 1500);
-            return;
-        }
-        
         setIsPinning(true);
-        setPinToast('📸 Taking a picture...');
+        setPinToast(isPinnedThisPage ? '📸 Updating picture...' : '📸 Taking a picture...');
         
         try {
             // Use screenshot method to capture the entire canvas with overlay
@@ -263,11 +256,11 @@ const ColoringModal: React.FC<ColoringModalProps> = ({ isOpen, onClose, backgrou
                 return;
             }
             
-            // Store the screenshot/composite image
+            // Store the screenshot/composite image (always overwrites)
             const pinned = pinnedColoringService.pinWithComposite(pageId, finalImageUrl);
             console.log('📌 Pin result:', pinned);
             setPinVersion(v => v + 1); // Trigger re-check of pinned state
-            setPinToast(pinned ? 'Pinned to book! 🎨' : 'Could not pin (storage full?)');
+            setPinToast(pinned ? (isPinnedThisPage ? 'Updated! 🎨' : 'Pinned to book! 🎨') : 'Could not pin (storage full?)');
         } catch (err) {
             console.error('📌 Error creating screenshot:', err);
             // Fallback: pin without composite
@@ -279,6 +272,15 @@ const ColoringModal: React.FC<ColoringModalProps> = ({ isOpen, onClose, backgrou
             window.setTimeout(() => setPinToast(null), 2000);
         }
     }, [pageId, parsedPage?.bookId, isPinnedThisPage, resolvedImageUrl, isPinning]);
+    
+    // Unpin from fridge
+    const handleUnpin = useCallback(() => {
+        if (!parsedPage?.bookId) return;
+        pinnedColoringService.unpinWithCleanup(parsedPage.bookId);
+        setPinVersion(v => v + 1);
+        setPinToast('Removed from fridge');
+        window.setTimeout(() => setPinToast(null), 1500);
+    }, [parsedPage?.bookId]);
 
     // Early return AFTER all hooks
     if (!isOpen) return null;
@@ -350,35 +352,65 @@ const ColoringModal: React.FC<ColoringModalProps> = ({ isOpen, onClose, backgrou
                                 You finished coloring!
                             </p>
 
-                            <div className="flex flex-col gap-4 w-full max-w-xs px-4 animate-in slide-in-from-bottom-8 duration-500 delay-500">
-                                {/* Pin to book ("fridge") */}
+                            <div className="flex flex-col gap-3 w-full max-w-xs px-4 animate-in slide-in-from-bottom-8 duration-500 delay-500">
+                                {/* Pin/Update to book fridge */}
                                 {parsedPage?.bookId && pageId && (
                                     <button
-                                        onClick={handlePinToggle}
-                                        className={`py-4 rounded-xl font-bold shadow-lg border-b-4 active:border-b-0 active:translate-y-1 transition-all flex items-center justify-center gap-2 ${
-                                            isPinnedThisPage
-                                                ? 'bg-green-600 hover:bg-green-700 border-green-800 text-white'
+                                        onClick={handlePinOrUpdate}
+                                        disabled={isPinning}
+                                        className={`py-3 rounded-xl font-bold shadow-lg border-b-4 active:border-b-0 active:translate-y-1 transition-all flex items-center justify-center gap-2 ${
+                                            isPinning 
+                                                ? 'bg-gray-400 border-gray-500 text-white cursor-wait'
                                                 : 'bg-[#FFD700] hover:bg-[#FFDE4D] border-[#B8860B] text-[#5c2e0b]'
                                         }`}
                                     >
-                                        {isPinnedThisPage ? <PinOff size={24} /> : <Pin size={24} />}
-                                        <span>{isPinnedThisPage ? 'Unpin from Book' : 'Hang on Book Fridge'}</span>
+                                        {isPinning ? (
+                                            <RefreshCw size={22} className="animate-spin" />
+                                        ) : (
+                                            <Pin size={22} />
+                                        )}
+                                        <span>{isPinnedThisPage ? 'Update on Fridge' : 'Hang on Book Fridge'}</span>
+                                    </button>
+                                )}
+
+                                {/* Unpin button - only shows if this page is pinned */}
+                                {isPinnedThisPage && (
+                                    <button
+                                        onClick={handleUnpin}
+                                        className="py-2 rounded-xl font-bold shadow-lg border-b-4 active:border-b-0 active:translate-y-1 transition-all flex items-center justify-center gap-2 bg-red-500/80 hover:bg-red-600/80 border-red-700 text-white text-sm"
+                                    >
+                                        <PinOff size={18} />
+                                        <span>Remove from Fridge</span>
+                                    </button>
+                                )}
+
+                                {/* Go Back to Book */}
+                                {parsedPage?.bookId && (
+                                    <button
+                                        onClick={() => {
+                                            onClose();
+                                            navigate(`/book-details/${parsedPage.bookId}`);
+                                        }}
+                                        className="bg-[#4CAF50] hover:bg-[#43A047] text-white py-3 rounded-xl font-bold shadow-lg border-b-4 border-[#388E3C] active:border-b-0 active:translate-y-1 transition-all flex items-center justify-center gap-2"
+                                    >
+                                        <BookOpen size={22} />
+                                        Go Back to Book
                                     </button>
                                 )}
 
                                 <button
                                     onClick={handleHome}
-                                    className="bg-[#2196F3] hover:bg-[#1E88E5] text-white py-4 rounded-xl font-bold shadow-lg border-b-4 border-[#1565C0] active:border-b-0 active:translate-y-1 transition-all flex items-center justify-center gap-2"
+                                    className="bg-[#2196F3] hover:bg-[#1E88E5] text-white py-3 rounded-xl font-bold shadow-lg border-b-4 border-[#1565C0] active:border-b-0 active:translate-y-1 transition-all flex items-center justify-center gap-2"
                                 >
-                                    <Home size={24} />
+                                    <Home size={22} />
                                     Go Home
                                 </button>
 
                                 <button
                                     onClick={handleShop}
-                                    className="bg-[#8B4513] hover:bg-[#795548] text-white py-4 rounded-xl font-bold shadow-lg border-b-4 border-[#5D4037] active:border-b-0 active:translate-y-1 transition-all flex items-center justify-center gap-2"
+                                    className="bg-[#8B4513] hover:bg-[#795548] text-white py-3 rounded-xl font-bold shadow-lg border-b-4 border-[#5D4037] active:border-b-0 active:translate-y-1 transition-all flex items-center justify-center gap-2"
                                 >
-                                    <ShoppingBag size={24} />
+                                    <ShoppingBag size={22} />
                                     Go to Shop
                                 </button>
                             </div>

@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { ChevronLeft, BookOpen, Heart, Bookmark, Lock, Check, Crown } from 'lucide-react';
+import { ChevronLeft, BookOpen, Heart, Bookmark, Lock, Check, Crown, Share2 } from 'lucide-react';
+import CommentSection from '../components/features/CommentSection';
 import { getApiBaseUrl } from '../services/apiService';
 import { favoritesService } from '../services/favoritesService';
 import { useLanguage } from '../context/LanguageContext';
@@ -268,6 +269,36 @@ const BookSeriesDetailPage: React.FC = () => {
         }
     };
 
+    const handleShare = async () => {
+        if (!series) return;
+        
+        const shareUrl = `${window.location.origin}/#/book-series/${seriesId}`;
+        const shareTitle = translatedTitle || series.title;
+        const bookCount = series.books?.length || 0;
+        const shareText = `📚 Check out the "${shareTitle}" book series on GodlyKids! ${bookCount} books to explore. ${translatedDescription || series.description || ''}`;
+        
+        if (navigator.share) {
+            try {
+                await navigator.share({
+                    title: shareTitle,
+                    text: shareText,
+                    url: shareUrl,
+                });
+            } catch (err) {
+                if ((err as Error).name !== 'AbortError') {
+                    console.log('Share cancelled or failed:', err);
+                }
+            }
+        } else {
+            try {
+                await navigator.clipboard.writeText(`${shareText}\n\n${shareUrl}`);
+                alert('📋 Link copied to clipboard! Share it with your friends.');
+            } catch (err) {
+                prompt('Copy this link to share:', shareUrl);
+            }
+        }
+    };
+
     const handleBookClick = (book: BookInSeries['book']) => {
         const bookIsLocked = book.isMembersOnly && !isSubscribed;
         if (bookIsLocked) {
@@ -335,6 +366,15 @@ const BookSeriesDetailPage: React.FC = () => {
                     className="absolute top-4 left-4 z-30 w-10 h-10 bg-white/20 backdrop-blur-md rounded-full flex items-center justify-center text-white border border-white/30"
                 >
                     <ChevronLeft size={24} />
+                </button>
+
+                {/* Share Button */}
+                <button 
+                    onClick={handleShare}
+                    className="absolute top-4 right-4 z-30 w-10 h-10 bg-white/20 backdrop-blur-md rounded-full flex items-center justify-center text-white border border-white/30 active:scale-95 transition-transform"
+                    style={{ right: series.isMembersOnly ? '4.5rem' : '1rem' }}
+                >
+                    <Share2 size={20} />
                 </button>
 
                 {/* Premium Badge */}
@@ -624,6 +664,18 @@ const BookSeriesDetailPage: React.FC = () => {
                     })}
                 </div>
             </div>
+
+            {/* Comment Section */}
+            {series && seriesId && (
+                <div className="mt-6 px-4">
+                    <CommentSection
+                        contentId={seriesId}
+                        contentType="book-series"
+                        title={translatedTitle || series.title}
+                        description={translatedDescription || series.description}
+                    />
+                </div>
+            )}
 
             {/* CSS Animations */}
             <style>{`

@@ -193,16 +193,25 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         });
 
         audio.addEventListener('ended', () => {
-            // Auto-advance to next track
-            setCurrentTrackIndex(prev => {
-                setCurrentPlaylist(playlist => {
-                    if (playlist && prev < playlist.items.length - 1) {
-                        return playlist;
-                    }
-                    setIsPlaying(false);
-                    return playlist;
-                });
-                return prev + 1;
+            // Auto-advance to next track and auto-play
+            setCurrentPlaylist(playlist => {
+                if (playlist) {
+                    setCurrentTrackIndex(prev => {
+                        const nextIndex = prev + 1;
+                        if (nextIndex < playlist.items.length) {
+                            // There's a next track - keep playing
+                            console.log('🎵 Track ended, auto-playing next track:', nextIndex + 1, '/', playlist.items.length);
+                            setIsPlaying(true); // Keep playing state true for next track
+                            return nextIndex;
+                        } else {
+                            // No more tracks - stop playing
+                            console.log('🎵 Playlist ended');
+                            setIsPlaying(false);
+                            return prev; // Stay at last track
+                        }
+                    });
+                }
+                return playlist;
             });
         });
 

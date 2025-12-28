@@ -169,6 +169,7 @@ const PlaylistForm: React.FC = () => {
             
             const response = await apiClient.post(`${endpoint}${queryParams}`, formDataUpload, {
                 headers: { 'Content-Type': 'multipart/form-data' },
+                timeout: 120000, // 2 minutes for large audio files
             });
 
             if (type === 'cover') {
@@ -182,9 +183,10 @@ const PlaylistForm: React.FC = () => {
                 newItems[itemIndex].audioUrl = response.data.url;
                 setFormData({ ...formData, items: newItems });
             }
-        } catch (error) {
+        } catch (error: any) {
             console.error('Error uploading file:', error);
-            alert('Failed to upload file');
+            const errorMessage = error.response?.data?.message || error.message || 'Unknown error';
+            alert(`Failed to upload file: ${errorMessage}`);
         } finally {
             setUploading(false);
         }

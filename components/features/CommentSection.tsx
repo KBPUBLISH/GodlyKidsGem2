@@ -1,14 +1,31 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import { MessageCircle, Loader2, Send, Sparkles } from 'lucide-react';
-import { commentService, CommentOption, BookComment } from '../../services/commentService';
+import { commentService, CommentOption, BookComment, PlaylistComment } from '../../services/commentService';
 import { authService } from '../../services/authService';
 import { useAudio } from '../../context/AudioContext';
 
+type ContentType = 'book' | 'playlist';
+
 interface CommentSectionProps {
-    bookId: string;
-    bookTitle: string;
+    // Content identification
+    contentId: string;
+    contentType: ContentType;
+    
+    // Content details for AI generation
+    title: string;
+    description?: string;
+    
+    // Playlist-specific props
+    songTitles?: string[];
+    
+    // Deprecated props (kept for backwards compatibility)
+    bookId?: string;
+    bookTitle?: string;
     bookDescription?: string;
 }
+
+// Type guard for comment types
+type Comment = BookComment | PlaylistComment;
 
 // Color mapping for block outlines and backgrounds (light theme friendly)
 const colorStyles: Record<string, { border: string; bg: string; text: string }> = {
@@ -31,9 +48,38 @@ const colorStyles: Record<string, { border: string; bg: string; text: string }> 
 // Random rotation values for scattered effect
 const rotations = [-6, -4, -2, 0, 2, 4, 6];
 
-const CommentSection: React.FC<CommentSectionProps> = ({ bookId, bookTitle, bookDescription }) => {
+// Fun kid-friendly display names (randomly assigned based on comment ID)
+const funAdjectives = [
+    'Little', 'Happy', 'Brave', 'Sunny', 'Bright', 'Joyful', 'Kind', 'Sweet',
+    'Gentle', 'Wise', 'Faithful', 'Blessed', 'Cheerful', 'Hopeful', 'Loving'
+];
+const funNouns = [
+    'Rabbit', 'Helper', 'Star', 'Angel', 'Lamb', 'Dove', 'Light', 'Heart',
+    'Blessing', 'Dreamer', 'Reader', 'Friend', 'Explorer', 'Believer', 'Wonder'
+];
+
+// Generate a consistent fun name based on a seed string (e.g., comment ID)
+const getFunDisplayName = (seed: string): string => {
+    let hash = 0;
+    for (let i = 0; i < seed.length; i++) {
+        hash = ((hash << 5) - hash) + seed.charCodeAt(i);
+        hash |= 0; // Convert to 32bit integer
+    }
+    const adjIndex = Math.abs(hash) % funAdjectives.length;
+    const nounIndex = Math.abs(hash >> 8) % funNouns.length;
+    return `${funAdjectives[adjIndex]}${funNouns[nounIndex]}`;
+};
+
+const CommentSection: React.FC<CommentSectionProps> = (props) => {
+    // Support both new and old prop patterns for backwards compatibility
+    const contentId = props.contentId || props.bookId || '';
+    const contentType = props.contentType || 'book';
+    const title = props.title || props.bookTitle || '';
+    const description = props.description || props.bookDescription;
+    const songTitles = props.songTitles;
+
     const [commentOptions, setCommentOptions] = useState<CommentOption[]>([]);
-    const [postedComments, setPostedComments] = useState<BookComment[]>([]);
+    const [postedComments, setPostedComments] = useState<Comment[]>([]);
     const [loading, setLoading] = useState(true);
     const [generating, setGenerating] = useState(false);
     const [posting, setPosting] = useState<string | null>(null);
@@ -47,6 +93,11 @@ const CommentSection: React.FC<CommentSectionProps> = ({ bookId, bookTitle, book
     const userId = user?.email || user?.id || user?._id || 'anonymous';
     const userName = user?.name || user?.firstName || user?.username || 'Anonymous';
 
+    // Config based on content type
+    const isPlaylist = contentType === 'playlist';
+    const headerText = isPlaylist ? 'Leave a Comment!' : 'Leave a Comment!';
+    const othersText = isPlaylist ? 'What listeners are saying' : 'What others are saying';
+
     // Generate random positions and rotations for blocks
     const blockStyles = useMemo(() => {
         return commentOptions.map((_, index) => ({
@@ -57,36 +108,52 @@ const CommentSection: React.FC<CommentSectionProps> = ({ bookId, bookTitle, book
 
     // Load comments and options on mount
     useEffect(() => {
-        loadData();
-    }, [bookId]);
+        if (contentId) {
+            loadData();
+        }
+    }, [contentId, contentType]);
 
     const loadData = async () => {
         setLoading(true);
         try {
-            // Fetch posted comments
-            const comments = await commentService.getBookComments(bookId);
+            // Fetch posted comments based on content type
+            let comments: Comment[];
+            if (isPlaylist) {
+                comments = await commentService.getPlaylistComments(contentId);
+            } else {
+                comments = await commentService.getBookComments(contentId);
+            }
             setPostedComments(comments);
 
-            // Try to get cached comment options first
-            const cached = await commentService.getCachedCommentOptions(bookId);
-            
-            if (cached && cached.length > 0) {
-                setCommentOptions(cached);
-            } else {
-                // Generate new options with AI
-                setGenerating(true);
-                const options = await commentService.generateCommentOptions(bookTitle, bookDescription);
-                setCommentOptions(options);
+            // For books, try to get cached comment options first
+            // For playlists, we always generate fresh options (no caching currently)
+            if (!isPlaylist) {
+                const cached = await commentService.getCachedCommentOptions(contentId);
                 
-                // Cache for future use
-                if (options.length > 0) {
-                    await commentService.cacheCommentOptions(bookId, options);
+                if (cached && cached.length > 0) {
+                    setCommentOptions(cached);
+                } else {
+                    // Generate new options with AI
+                    setGenerating(true);
+                    const options = await commentService.generateCommentOptions(title, description);
+                    setCommentOptions(options);
+                    
+                    // Cache for future use
+                    if (options.length > 0) {
+                        await commentService.cacheCommentOptions(contentId, options);
+                    }
+                    setGenerating(false);
                 }
+            } else {
+                // Generate playlist comment options
+                setGenerating(true);
+                const options = await commentService.generatePlaylistCommentOptions(title, description, songTitles);
+                setCommentOptions(options);
                 setGenerating(false);
             }
         } catch (error) {
             console.error('Error loading comment data:', error);
-            setCommentOptions(commentService.getFallbackComments());
+            setCommentOptions(isPlaylist ? commentService.getFallbackPlaylistComments() : commentService.getFallbackComments());
         } finally {
             setLoading(false);
         }
@@ -100,19 +167,32 @@ const CommentSection: React.FC<CommentSectionProps> = ({ bookId, bookTitle, book
         
         setPosting(option.text);
         
-        const newComment = await commentService.postComment(
-            bookId,
-            userId,
-            userName,
-            option.text,
-            option.emoji,
-            option.color
-        );
+        // Post comment based on content type
+        let newComment: Comment | null;
+        if (isPlaylist) {
+            newComment = await commentService.postPlaylistComment(
+                contentId,
+                userId,
+                userName,
+                option.text,
+                option.emoji,
+                option.color
+            );
+        } else {
+            newComment = await commentService.postComment(
+                contentId,
+                userId,
+                userName,
+                option.text,
+                option.emoji,
+                option.color
+            );
+        }
         
         if (newComment) {
             // Play success sound when posted
             playSfxSuccess();
-            setPostedComments(prev => [newComment, ...prev]);
+            setPostedComments(prev => [newComment!, ...prev]);
             setShowSuccess(true);
             setTimeout(() => setShowSuccess(false), 2000);
         }
@@ -152,18 +232,6 @@ const CommentSection: React.FC<CommentSectionProps> = ({ bookId, bookTitle, book
 
     return (
         <div className="bg-gradient-to-b from-[#f5e6c8] to-[#ecd9b5] rounded-3xl p-5 mt-6 overflow-hidden border-2 border-[#d4b483] shadow-lg">
-            {/* Header */}
-            <div className="flex items-center gap-2 mb-4">
-                <MessageCircle className="w-5 h-5 text-[#8B4513]" />
-                <h3 className="text-[#3E1F07] font-bold text-lg font-display">Leave a Comment!</h3>
-                {generating && (
-                    <div className="flex items-center gap-1 ml-2 text-purple-600 text-xs">
-                        <Sparkles className="w-3 h-3 animate-pulse" />
-                        <span>AI generating...</span>
-                    </div>
-                )}
-            </div>
-
             {/* Success Toast */}
             {showSuccess && (
                 <div className="fixed top-20 left-1/2 -translate-x-1/2 z-50 bg-green-500 text-white px-4 py-2 rounded-full shadow-lg animate-bounce">
@@ -171,55 +239,14 @@ const CommentSection: React.FC<CommentSectionProps> = ({ bookId, bookTitle, book
                 </div>
             )}
 
-            {/* Comment Blocks - Scattered Layout */}
-            <div className="relative flex flex-wrap gap-3 justify-center py-4">
-                {commentOptions.map((option, index) => {
-                    const style = getColorStyle(option.color);
-                    const blockStyle = blockStyles[index];
-                    const isPosting = posting === option.text;
-                    
-                    return (
-                        <button
-                            key={`${option.text}-${index}`}
-                            onClick={() => handleSelectComment(option)}
-                            disabled={!!posting}
-                            className={`
-                                relative px-4 py-3 rounded-2xl border-2 
-                                ${style.border} ${style.bg}
-                                transform transition-all duration-300
-                                hover:scale-110 hover:shadow-lg hover:shadow-${option.color}-500/30
-                                active:scale-95
-                                disabled:opacity-50 disabled:cursor-not-allowed
-                                animate-in fade-in slide-in-from-bottom-2
-                            `}
-                            style={{
-                                transform: `rotate(${blockStyle.rotation}deg)`,
-                                animationDelay: `${blockStyle.delay}ms`,
-                            }}
-                        >
-                            {isPosting ? (
-                                <Loader2 className="w-5 h-5 text-white animate-spin mx-auto" />
-                            ) : (
-                                <div className="flex items-center gap-2">
-                                    <span className="text-2xl">{option.emoji}</span>
-                                    <span className={`text-sm font-medium ${style.text}`}>
-                                        {option.text}
-                                    </span>
-                                </div>
-                            )}
-                        </button>
-                    );
-                })}
-            </div>
-
-            {/* Posted Comments Section */}
+            {/* Posted Comments Section - FIRST */}
             {postedComments.length > 0 && (
-                <div className="mt-6 pt-6 border-t border-[#d4b483]">
+                <div className="mb-6">
                     <div className="flex items-center gap-2 mb-4">
                         <Send className="w-4 h-4 text-[#8B4513]" />
-                        <h4 className="text-[#5c2e0b] font-semibold text-sm">
-                            What others are saying ({postedComments.length})
-                        </h4>
+                        <h3 className="text-[#3E1F07] font-bold text-lg font-display">
+                            {othersText} ({postedComments.length})
+                        </h3>
                     </div>
                     
                     <div className="space-y-3 max-h-64 overflow-y-auto pr-2">
@@ -241,7 +268,7 @@ const CommentSection: React.FC<CommentSectionProps> = ({ bookId, bookTitle, book
                                             {comment.commentText}
                                         </p>
                                         <p className="text-[#8B4513]/60 text-xs mt-1">
-                                            {comment.userName} • {formatTimeAgo(comment.createdAt)}
+                                            {getFunDisplayName(comment._id)} • {formatTimeAgo(comment.createdAt)}
                                         </p>
                                     </div>
                                 </div>
@@ -251,12 +278,67 @@ const CommentSection: React.FC<CommentSectionProps> = ({ bookId, bookTitle, book
                 </div>
             )}
 
-            {/* Empty State */}
-            {postedComments.length === 0 && (
-                <div className="text-center py-4 text-[#8B4513]/60 text-sm">
-                    Be the first to leave a comment! 👆
+            {/* Leave a Comment Header - SECOND */}
+            <div className={`${postedComments.length > 0 ? 'pt-6 border-t border-[#d4b483]' : ''}`}>
+                <div className="flex items-center gap-2 mb-4">
+                    <MessageCircle className="w-5 h-5 text-[#8B4513]" />
+                    <h3 className="text-[#3E1F07] font-bold text-lg font-display">Leave a Comment!</h3>
+                    {generating && (
+                        <div className="flex items-center gap-1 ml-2 text-purple-600 text-xs">
+                            <Sparkles className="w-3 h-3 animate-pulse" />
+                            <span>AI generating...</span>
+                        </div>
+                    )}
                 </div>
-            )}
+
+                {/* Comment Blocks - Scattered Layout */}
+                <div className="relative flex flex-wrap gap-3 justify-center py-4">
+                    {commentOptions.map((option, index) => {
+                        const style = getColorStyle(option.color);
+                        const blockStyle = blockStyles[index];
+                        const isPosting = posting === option.text;
+                        
+                        return (
+                            <button
+                                key={`${option.text}-${index}`}
+                                onClick={() => handleSelectComment(option)}
+                                disabled={!!posting}
+                                className={`
+                                    relative px-4 py-3 rounded-2xl border-2 
+                                    ${style.border} ${style.bg}
+                                    transform transition-all duration-300
+                                    hover:scale-110 hover:shadow-lg hover:shadow-${option.color}-500/30
+                                    active:scale-95
+                                    disabled:opacity-50 disabled:cursor-not-allowed
+                                    animate-in fade-in slide-in-from-bottom-2
+                                `}
+                                style={{
+                                    transform: `rotate(${blockStyle.rotation}deg)`,
+                                    animationDelay: `${blockStyle.delay}ms`,
+                                }}
+                            >
+                                {isPosting ? (
+                                    <Loader2 className="w-5 h-5 text-white animate-spin mx-auto" />
+                                ) : (
+                                    <div className="flex items-center gap-2">
+                                        <span className="text-2xl">{option.emoji}</span>
+                                        <span className={`text-sm font-medium ${style.text}`}>
+                                            {option.text}
+                                        </span>
+                                    </div>
+                                )}
+                            </button>
+                        );
+                    })}
+                </div>
+
+                {/* Empty State - Only show if no comments exist yet */}
+                {postedComments.length === 0 && (
+                    <div className="text-center py-2 text-[#8B4513]/60 text-sm">
+                        Be the first to leave a comment! 👆
+                    </div>
+                )}
+            </div>
         </div>
     );
 };

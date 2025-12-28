@@ -17,6 +17,17 @@ export interface BookComment {
     createdAt: string;
 }
 
+export interface PlaylistComment {
+    _id: string;
+    playlistId: string;
+    userId: string;
+    userName: string;
+    commentText: string;
+    emoji: string;
+    colorTheme: string;
+    createdAt: string;
+}
+
 class CommentService {
     private baseUrl: string;
 
@@ -162,6 +173,121 @@ class CommentService {
             { text: "Some parts were tricky", emoji: "🤔", color: "amber" },
             { text: "Pretty good story!", emoji: "👍", color: "lime" },
             { text: "Made me want more!", emoji: "🌟", color: "cyan" },
+        ];
+    }
+
+    // ===============================
+    // PLAYLIST COMMENT METHODS
+    // ===============================
+
+    // Fetch all comments for a playlist
+    async getPlaylistComments(playlistId: string): Promise<PlaylistComment[]> {
+        try {
+            const response = await fetch(`${this.baseUrl}playlist-comments/${playlistId}`);
+            if (!response.ok) {
+                throw new Error('Failed to fetch playlist comments');
+            }
+            return await response.json();
+        } catch (error) {
+            console.error('Error fetching playlist comments:', error);
+            return [];
+        }
+    }
+
+    // Post a new playlist comment
+    async postPlaylistComment(
+        playlistId: string,
+        userId: string,
+        userName: string,
+        commentText: string,
+        emoji: string,
+        colorTheme: string
+    ): Promise<PlaylistComment | null> {
+        try {
+            const response = await fetch(`${this.baseUrl}playlist-comments`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    playlistId,
+                    userId,
+                    userName,
+                    commentText,
+                    emoji,
+                    colorTheme,
+                }),
+            });
+
+            if (!response.ok) {
+                throw new Error('Failed to post playlist comment');
+            }
+
+            return await response.json();
+        } catch (error) {
+            console.error('Error posting playlist comment:', error);
+            return null;
+        }
+    }
+
+    // Delete own playlist comment
+    async deletePlaylistComment(commentId: string, userId: string): Promise<boolean> {
+        try {
+            const response = await fetch(`${this.baseUrl}playlist-comments/${commentId}`, {
+                method: 'DELETE',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ userId }),
+            });
+
+            return response.ok;
+        } catch (error) {
+            console.error('Error deleting playlist comment:', error);
+            return false;
+        }
+    }
+
+    // Generate AI comment options for a playlist
+    async generatePlaylistCommentOptions(
+        playlistName: string,
+        playlistDescription?: string,
+        songTitles?: string[]
+    ): Promise<CommentOption[]> {
+        try {
+            const response = await fetch(`${this.baseUrl}ai/generate-playlist-comments`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    playlistName,
+                    playlistDescription,
+                    songTitles,
+                }),
+            });
+
+            if (!response.ok) {
+                throw new Error('Failed to generate playlist comments');
+            }
+
+            const data = await response.json();
+            return data.comments || this.getFallbackPlaylistComments();
+        } catch (error) {
+            console.error('Error generating playlist comment options:', error);
+            return this.getFallbackPlaylistComments();
+        }
+    }
+
+    // Fallback comments for playlists when AI generation fails
+    getFallbackPlaylistComments(): CommentOption[] {
+        return [
+            { text: "I love these songs!", emoji: "🎵", color: "pink" },
+            { text: "Makes me want to dance!", emoji: "💃", color: "yellow" },
+            { text: "So fun to listen to!", emoji: "🎧", color: "orange" },
+            { text: "Best playlist ever!", emoji: "⭐", color: "gold" },
+            { text: "I listen to it daily!", emoji: "🔄", color: "blue" },
+            { text: "The music is amazing!", emoji: "🎶", color: "purple" },
+            { text: "Makes me feel happy!", emoji: "😊", color: "green" },
+            { text: "Perfect for singing along!", emoji: "🎤", color: "teal" },
+            { text: "I want more songs!", emoji: "📀", color: "indigo" },
+            { text: "Some songs are tricky", emoji: "🤔", color: "amber" },
+            { text: "Pretty good music!", emoji: "👍", color: "lime" },
+            { text: "Can't stop listening!", emoji: "🎸", color: "cyan" },
         ];
     }
 }

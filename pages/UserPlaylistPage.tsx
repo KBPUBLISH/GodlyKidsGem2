@@ -3,6 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { ChevronLeft, Pause, Play, SkipBack, SkipForward, Music, Trash2, ListMusic, Edit2, X, Loader2, Camera } from 'lucide-react';
 import { userPlaylistService, UserPlaylist, PlaylistItem } from '../services/userPlaylistService';
 import { useAudio, Playlist as AudioPlaylist, AudioItem } from '../context/AudioContext';
+import CommentSection from '../components/features/CommentSection';
 
 const UserPlaylistPage: React.FC = () => {
     const { id } = useParams<{ id: string }>();
@@ -388,6 +389,17 @@ const UserPlaylistPage: React.FC = () => {
                             </div>
                         )}
                     </div>
+                    
+                    {/* Comment Section */}
+                    {playlist && playlist._id && (
+                        <CommentSection
+                            contentId={playlist._id}
+                            contentType="playlist"
+                            title={playlist.name}
+                            description={playlist.description}
+                            songTitles={playlist.items.map(item => item.title)}
+                        />
+                    )}
                 </div>
             </div>
             

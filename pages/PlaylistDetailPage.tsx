@@ -7,6 +7,7 @@ import { useAudio } from '../context/AudioContext';
 import { useLanguage } from '../context/LanguageContext';
 import { useUser } from '../context/UserContext';
 import MiniPlayer from '../components/audio/MiniPlayer';
+import CommentSection from '../components/features/CommentSection';
 
 // Predefined color palettes for fallback (warm, cool, vibrant variations)
 const FALLBACK_PALETTES = [
@@ -759,6 +760,19 @@ const PlaylistDetailPage: React.FC = () => {
                         );
                     })}
                 </div>
+                
+                {/* Comment Section for Playlist */}
+                {playlist && playlist._id && (
+                    <div className="px-4 pb-8">
+                        <CommentSection
+                            contentId={playlist._id}
+                            contentType="playlist"
+                            title={playlist.title}
+                            description={playlist.description}
+                            songTitles={playlist.items?.map((item: any) => item.title)}
+                        />
+                    </div>
+                )}
             </div>
             
             {/* Mini Player - shows when audio is playing */}

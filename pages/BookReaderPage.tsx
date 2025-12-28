@@ -3182,9 +3182,9 @@ const BookReaderPage: React.FC = () => {
                 {/* Navigation is now swipe-only - removed click zones */}
             </div>
 
-            {/* Wood Play Button with TTS Mode Toggle - Positioned above the scroll based on scroll state */}
+            {/* Wood Play Button with Auto-Play Toggle - Positioned above the scroll based on scroll state */}
             <div
-                className={`absolute left-4 z-40 transition-all duration-500 flex flex-col items-center gap-2`}
+                className={`absolute left-4 z-40 transition-all duration-500 flex items-center gap-3`}
                 style={{
                     // Position based on scroll state: hidden = bottom, mid = above mid scroll, max = above max scroll
                     bottom: scrollState === 'hidden' 
@@ -3194,33 +3194,6 @@ const BookReaderPage: React.FC = () => {
                             : `calc(${currentPage.scrollMidHeight || 30}% + ${currentPage.scrollOffsetY || 0}% + 1.5rem)` // Above mid scroll + offset
                 }}
             >
-                {/* TTS Mode Toggle Button - Above play button */}
-                <button
-                    onClick={toggleTtsMode}
-                    className={`
-                        relative px-3 py-1.5 rounded-full text-xs font-bold shadow-lg 
-                        transition-all duration-300 flex items-center gap-1.5
-                        border-2 active:scale-95
-                        ${ttsMode === 'auto' 
-                            ? 'bg-gradient-to-r from-amber-500 to-orange-500 text-white border-amber-600' 
-                            : 'bg-gradient-to-r from-blue-500 to-indigo-500 text-white border-blue-600'
-                        }
-                    `}
-                    title={ttsMode === 'auto' ? 'Auto Page Turn ON - Tap to disable' : 'Auto Page Turn OFF - Tap to enable'}
-                >
-                    {ttsMode === 'auto' ? (
-                        <>
-                            <SkipForward className="w-3.5 h-3.5" />
-                            <span>Auto</span>
-                        </>
-                    ) : (
-                        <>
-                            <FileText className="w-3.5 h-3.5" />
-                            <span>Page</span>
-                        </>
-                    )}
-                </button>
-                
                 {/* Main Play Button */}
                 <WoodButton
                     onClick={handlePlayPage}
@@ -3235,6 +3208,43 @@ const BookReaderPage: React.FC = () => {
                         )
                     }
                 />
+                
+                {/* Auto-Play Toggle Switch - Beside play button */}
+                <button
+                    onClick={toggleTtsMode}
+                    className="flex flex-col items-center gap-1"
+                    title={ttsMode === 'auto' ? 'Auto Page Turn ON - Tap to disable' : 'Auto Page Turn OFF - Tap to enable'}
+                >
+                    {/* Toggle Switch */}
+                    <div className={`
+                        relative w-12 h-6 rounded-full transition-all duration-300 shadow-inner
+                        ${ttsMode === 'auto' 
+                            ? 'bg-gradient-to-r from-green-400 to-green-500' 
+                            : 'bg-gray-400'
+                        }
+                    `}>
+                        {/* Toggle Knob */}
+                        <div className={`
+                            absolute top-0.5 w-5 h-5 rounded-full shadow-md
+                            transition-all duration-300 ease-in-out
+                            bg-white border-2
+                            ${ttsMode === 'auto' 
+                                ? 'left-6 border-green-600' 
+                                : 'left-0.5 border-gray-500'
+                            }
+                        `} />
+                    </div>
+                    {/* Label */}
+                    <span className={`
+                        text-[10px] font-bold px-2 py-0.5 rounded-full shadow-sm
+                        ${ttsMode === 'auto' 
+                            ? 'bg-green-500 text-white' 
+                            : 'bg-gray-500 text-white'
+                        }
+                    `}>
+                        {ttsMode === 'auto' ? 'AUTO' : 'OFF'}
+                    </span>
+                </button>
             </div>
 
             {/* Page Counter - Bottom Right (Clickable for page navigation) */}

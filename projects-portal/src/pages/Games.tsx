@@ -190,6 +190,7 @@ const Games: React.FC = () => {
                 },
                 isPurchasable: false,
                 goldCoinPrice: 0,
+                ageRating: 'All Ages',
             });
         } catch (error: any) {
             console.error('Error creating game:', error);
@@ -645,6 +646,7 @@ const Games: React.FC = () => {
                                         },
                                         isPurchasable: false,
                                         goldCoinPrice: 0,
+                                        ageRating: 'All Ages',
                                     });
                                 }}
                                 className="text-gray-500 hover:text-gray-700"
@@ -955,6 +957,7 @@ const Games: React.FC = () => {
                                         },
                                         isPurchasable: false,
                                         goldCoinPrice: 0,
+                                        ageRating: 'All Ages',
                                     });
                                 }}
                                 className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition"

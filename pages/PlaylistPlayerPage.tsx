@@ -1,8 +1,7 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { ChevronLeft, Crown, Pause, Play, SkipBack, SkipForward, Music, Heart, RotateCcw, ListPlus } from 'lucide-react';
+import { ChevronLeft, Pause, Play, SkipBack, SkipForward, Music, Heart, RotateCcw, ListPlus } from 'lucide-react';
 import { favoritesService } from '../services/favoritesService';
-import { libraryService } from '../services/libraryService';
 import { getApiBaseUrl } from '../services/apiService';
 import { useAudio, Playlist } from '../context/AudioContext';
 import AddToPlaylistModal from '../components/features/AddToPlaylistModal';
@@ -119,7 +118,6 @@ const PlaylistPlayerPage: React.FC = () => {
     const [localPlaylist, setLocalPlaylist] = useState<Playlist | null>(null);
     const [playCount, setPlayCount] = useState(0);
     const [isLiked, setIsLiked] = useState(false);
-    const [isSaved, setIsSaved] = useState(false);
     const [showAddToPlaylist, setShowAddToPlaylist] = useState(false);
     const hasIncrementedPlayCountRef = useRef(false);
     const [audioLevel, setAudioLevel] = useState(0); // For dynamic pulse intensity
@@ -176,7 +174,6 @@ const PlaylistPlayerPage: React.FC = () => {
                 const count = parseInt(localStorage.getItem(`playlist_track_play_count_${trackId}`) || '0', 10);
                 setPlayCount(count);
                 setIsLiked(favoritesService.getLikes().includes(trackId));
-                setIsSaved(libraryService.isInLibrary(trackId));
                 // Reset play count increment flag when track changes
                 hasIncrementedPlayCountRef.current = false;
             }
@@ -221,14 +218,6 @@ const PlaylistPlayerPage: React.FC = () => {
         const trackId = playlistToUse.items[currentTrackIndex]._id || `${playlistToUse._id}_${currentTrackIndex}`;
         favoritesService.toggleLike(trackId);
         setIsLiked(favoritesService.getLikes().includes(trackId));
-    };
-
-    const handleSave = () => {
-        const playlistToUse = currentPlaylist || localPlaylist;
-        if (!playlistToUse || !playlistToUse.items[currentTrackIndex]) return;
-        const trackId = playlistToUse.items[currentTrackIndex]._id || `${playlistToUse._id}_${currentTrackIndex}`;
-        const newSavedState = libraryService.toggleLibrary(trackId);
-        setIsSaved(newSavedState);
     };
 
     const [isDragging, setIsDragging] = useState(false);
@@ -368,22 +357,6 @@ const PlaylistPlayerPage: React.FC = () => {
                             size={24}
                             className={isLiked ? 'text-white fill-white' : 'text-[#8B4513]'}
                             fill={isLiked ? 'white' : 'none'}
-                        />
-                    </button>
-
-                    {/* Save/Bookmark Button (Crown Icon) */}
-                    <button
-                        onClick={handleSave}
-                        className={`w-12 h-12 rounded-full border-2 flex items-center justify-center shadow-lg transition-all active:scale-95 ${isSaved
-                            ? 'bg-[#FFD700] border-[#B8860B]'
-                            : 'bg-[#f3e5ab] border-[#d4c5a0]'
-                            }`}
-                        title={isSaved ? "Saved to Library" : "Save to Library"}
-                    >
-                        <Crown 
-                            className={isSaved ? "text-[#5c2e0b]" : "text-[#8B4513]"} 
-                            size={24} 
-                            fill={isSaved ? "#5c2e0b" : "#8B4513"} 
                         />
                     </button>
 

@@ -177,6 +177,81 @@ const AddToPlaylistModal: React.FC<AddToPlaylistModalProps> = ({
     if (!isOpen) return null;
     
     return (
+        <>
+        {/* Sign In Prompt Modal - Rendered first so it can overlay */}
+        {showSignInPrompt && (
+            <div className="fixed inset-0 z-[99999] flex items-center justify-center bg-black/80 backdrop-blur-sm animate-in fade-in duration-300">
+                <div className="relative w-[90%] max-w-md bg-gradient-to-br from-[#3E1F07] to-[#5c2e0b] rounded-3xl p-6 shadow-2xl animate-in zoom-in-75 duration-500 border-2 border-[#8B4513]">
+                    <button
+                        onClick={() => setShowSignInPrompt(false)}
+                        className="absolute top-4 right-4 text-white/70 hover:text-white transition-colors"
+                    >
+                        <X size={24} />
+                    </button>
+                    
+                    {/* Fun illustration */}
+                    <div className="text-center mb-6">
+                        <div className="w-24 h-24 mx-auto bg-gradient-to-br from-purple-500 to-pink-500 rounded-full flex items-center justify-center mb-4 shadow-lg">
+                            <Music className="w-12 h-12 text-white" />
+                        </div>
+                        <h2 className="text-2xl font-bold text-white font-display drop-shadow-md">
+                            🎵 Create Your Playlist!
+                        </h2>
+                        <p className="text-white/70 mt-2 text-sm">
+                            Sign up to save your playlists and access them anywhere!
+                        </p>
+                    </div>
+                    
+                    {/* Benefits */}
+                    <div className="space-y-3 mb-6">
+                        <div className="flex items-center gap-3 bg-white/10 rounded-xl p-3">
+                            <span className="text-2xl">💾</span>
+                            <p className="text-white text-sm">Save unlimited playlists</p>
+                        </div>
+                        <div className="flex items-center gap-3 bg-white/10 rounded-xl p-3">
+                            <span className="text-2xl">🎨</span>
+                            <p className="text-white text-sm">Create AI-generated covers</p>
+                        </div>
+                        <div className="flex items-center gap-3 bg-white/10 rounded-xl p-3">
+                            <span className="text-2xl">📱</span>
+                            <p className="text-white text-sm">Access on all your devices</p>
+                        </div>
+                    </div>
+                    
+                    {/* Action Buttons */}
+                    <div className="space-y-3">
+                        <button
+                            onClick={() => {
+                                onClose();
+                                navigate('/sign-in?redirect=/library');
+                            }}
+                            className="w-full py-4 rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 text-white font-bold text-lg flex items-center justify-center gap-2 shadow-lg hover:from-amber-400 hover:to-orange-400 transition-all"
+                        >
+                            <UserPlus className="w-5 h-5" />
+                            Sign Up Free
+                        </button>
+                        <button
+                            onClick={() => {
+                                onClose();
+                                navigate('/sign-in?redirect=/library');
+                            }}
+                            className="w-full py-3 rounded-xl bg-white/10 text-white font-medium flex items-center justify-center gap-2 hover:bg-white/20 transition-all"
+                        >
+                            <LogIn className="w-5 h-5" />
+                            Already have an account? Sign In
+                        </button>
+                        <button
+                            onClick={() => setShowSignInPrompt(false)}
+                            className="w-full py-2 text-white/50 hover:text-white/70 text-sm transition-colors"
+                        >
+                            Maybe later
+                        </button>
+                    </div>
+                </div>
+            </div>
+        )}
+        
+        {/* Main Add to Playlist Modal */}
         <div className="fixed inset-0 z-[9999] flex items-end sm:items-center justify-center bg-black/70 backdrop-blur-sm animate-in fade-in duration-200">
             <div className="w-full max-w-md bg-gradient-to-b from-[#2d1809] to-[#1a0f05] rounded-t-3xl sm:rounded-3xl max-h-[85vh] overflow-hidden animate-in slide-in-from-bottom duration-300">
                 {/* Header */}
@@ -406,80 +481,8 @@ const AddToPlaylistModal: React.FC<AddToPlaylistModalProps> = ({
                     )}
                 </div>
             </div>
-            
-            {/* Sign In Prompt Modal */}
-            {showSignInPrompt && (
-                <div className="fixed inset-0 z-[99999] flex items-center justify-center bg-black/80 backdrop-blur-sm animate-in fade-in duration-300">
-                    <div className="relative w-[90%] max-w-md bg-gradient-to-br from-[#3E1F07] to-[#5c2e0b] rounded-3xl p-6 shadow-2xl animate-in zoom-in-75 duration-500 border-2 border-[#8B4513]">
-                        <button
-                            onClick={() => setShowSignInPrompt(false)}
-                            className="absolute top-4 right-4 text-white/70 hover:text-white transition-colors"
-                        >
-                            <X size={24} />
-                        </button>
-                        
-                        {/* Fun illustration */}
-                        <div className="text-center mb-6">
-                            <div className="w-24 h-24 mx-auto bg-gradient-to-br from-purple-500 to-pink-500 rounded-full flex items-center justify-center mb-4 shadow-lg">
-                                <Music className="w-12 h-12 text-white" />
-                            </div>
-                            <h2 className="text-2xl font-bold text-white font-display drop-shadow-md">
-                                🎵 Create Your Playlist!
-                            </h2>
-                            <p className="text-white/70 mt-2 text-sm">
-                                Sign up to save your playlists and access them anywhere!
-                            </p>
-                        </div>
-                        
-                        {/* Benefits */}
-                        <div className="space-y-3 mb-6">
-                            <div className="flex items-center gap-3 bg-white/10 rounded-xl p-3">
-                                <span className="text-2xl">💾</span>
-                                <p className="text-white text-sm">Save unlimited playlists</p>
-                            </div>
-                            <div className="flex items-center gap-3 bg-white/10 rounded-xl p-3">
-                                <span className="text-2xl">🎨</span>
-                                <p className="text-white text-sm">Create AI-generated covers</p>
-                            </div>
-                            <div className="flex items-center gap-3 bg-white/10 rounded-xl p-3">
-                                <span className="text-2xl">📱</span>
-                                <p className="text-white text-sm">Access on all your devices</p>
-                            </div>
-                        </div>
-                        
-                        {/* Action Buttons */}
-                        <div className="space-y-3">
-                            <button
-                                onClick={() => {
-                                    onClose();
-                                    navigate('/sign-in?redirect=/library');
-                                }}
-                                className="w-full py-4 rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 text-white font-bold text-lg flex items-center justify-center gap-2 shadow-lg hover:from-amber-400 hover:to-orange-400 transition-all"
-                            >
-                                <UserPlus className="w-5 h-5" />
-                                Sign Up Free
-                            </button>
-                            <button
-                                onClick={() => {
-                                    onClose();
-                                    navigate('/sign-in?redirect=/library');
-                                }}
-                                className="w-full py-3 rounded-xl bg-white/10 text-white font-medium flex items-center justify-center gap-2 hover:bg-white/20 transition-all"
-                            >
-                                <LogIn className="w-5 h-5" />
-                                Already have an account? Sign In
-                            </button>
-                            <button
-                                onClick={() => setShowSignInPrompt(false)}
-                                className="w-full py-2 text-white/50 hover:text-white/70 text-sm transition-colors"
-                            >
-                                Maybe later
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            )}
         </div>
+        </>
     );
 };
 

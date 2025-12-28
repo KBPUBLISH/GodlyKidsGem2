@@ -1,5 +1,5 @@
 import React, { useRef, useEffect, useState, useCallback, forwardRef, useImperativeHandle } from 'react';
-import { Eraser, RotateCcw, Download, Save, ZoomIn, ZoomOut, Move, X } from 'lucide-react';
+import { Eraser, RotateCcw, Download, Save, ZoomIn, ZoomOut, Move, X, HelpCircle } from 'lucide-react';
 
 interface DrawingCanvasProps {
     prompt: string;
@@ -126,6 +126,22 @@ const DrawingCanvas = forwardRef<DrawingCanvasRef, DrawingCanvasProps>(({ prompt
     const lastPinchDistanceRef = useRef<number | null>(null);
     const lastPanPosRef = useRef<{ x: number; y: number } | null>(null);
     const zoomContainerRef = useRef<HTMLDivElement>(null);
+    
+    // Tutorial overlay state
+    const [showTutorial, setShowTutorial] = useState(false);
+    
+    // Show tutorial for first-time users
+    useEffect(() => {
+        const hasSeenTutorial = localStorage.getItem('godlykids_coloring_tutorial_seen');
+        if (!hasSeenTutorial) {
+            // Small delay so the canvas loads first
+            const timer = setTimeout(() => {
+                setShowTutorial(true);
+                localStorage.setItem('godlykids_coloring_tutorial_seen', 'true');
+            }, 500);
+            return () => clearTimeout(timer);
+        }
+    }, []);
 
     // Track if canvas has been initialized
     const [canvasReady, setCanvasReady] = useState(false);
@@ -622,46 +638,62 @@ const DrawingCanvas = forwardRef<DrawingCanvasRef, DrawingCanvasProps>(({ prompt
         if (!canvas) return;
 
         const handleTouchStart = (e: TouchEvent) => {
-            // Two fingers: pinch to zoom AND pan
-            if (zoomMode && e.touches.length === 2) {
+            // In zoom mode: disable drawing, use touches for panning/zooming only
+            if (zoomMode) {
                 e.preventDefault();
-                lastPinchDistanceRef.current = getTouchDistance(e.touches);
-                const center = getTouchCenter(e.touches);
-                lastPanPosRef.current = center;
+                
+                if (e.touches.length === 2) {
+                    // Two fingers: pinch to zoom
+                    lastPinchDistanceRef.current = getTouchDistance(e.touches);
+                    const center = getTouchCenter(e.touches);
+                    lastPanPosRef.current = center;
+                } else if (e.touches.length === 1) {
+                    // Single finger: pan (NO drawing in zoom mode)
+                    lastPanPosRef.current = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+                }
                 setIsPanning(true);
                 return;
             }
-            // Single finger: ALWAYS draw (even when zoomed)
+            
+            // Normal mode: Single finger draws
             if (e.touches.length === 1) {
                 startDrawing(e as any);
             }
         };
 
         const handleTouchMove = (e: TouchEvent) => {
-            // Two fingers: pinch zoom AND pan simultaneously
-            if (zoomMode && e.touches.length === 2) {
+            // In zoom mode: handle pan/zoom only (no drawing)
+            if (zoomMode) {
                 e.preventDefault();
                 
-                // Calculate new scale from pinch distance
-                const newDistance = getTouchDistance(e.touches);
-                if (lastPinchDistanceRef.current) {
-                    const scaleDelta = newDistance / lastPinchDistanceRef.current;
-                    setScale(prev => Math.min(4, Math.max(1, prev * scaleDelta)));
-                }
-                lastPinchDistanceRef.current = newDistance;
+                if (e.touches.length === 2) {
+                    // Two fingers: pinch zoom AND pan simultaneously
+                    const newDistance = getTouchDistance(e.touches);
+                    if (lastPinchDistanceRef.current) {
+                        const scaleDelta = newDistance / lastPinchDistanceRef.current;
+                        setScale(prev => Math.min(4, Math.max(1, prev * scaleDelta)));
+                    }
+                    lastPinchDistanceRef.current = newDistance;
 
-                // Pan while pinching (two fingers move together)
-                const center = getTouchCenter(e.touches);
-                if (lastPanPosRef.current) {
-                    const dx = center.x - lastPanPosRef.current.x;
-                    const dy = center.y - lastPanPosRef.current.y;
+                    // Pan while pinching
+                    const center = getTouchCenter(e.touches);
+                    if (lastPanPosRef.current) {
+                        const dx = center.x - lastPanPosRef.current.x;
+                        const dy = center.y - lastPanPosRef.current.y;
+                        setPanOffset(prev => ({ x: prev.x + dx, y: prev.y + dy }));
+                    }
+                    lastPanPosRef.current = center;
+                } else if (e.touches.length === 1 && lastPanPosRef.current) {
+                    // Single finger: pan only (NO drawing in zoom mode)
+                    const dx = e.touches[0].clientX - lastPanPosRef.current.x;
+                    const dy = e.touches[0].clientY - lastPanPosRef.current.y;
                     setPanOffset(prev => ({ x: prev.x + dx, y: prev.y + dy }));
+                    lastPanPosRef.current = { x: e.touches[0].clientX, y: e.touches[0].clientY };
                 }
-                lastPanPosRef.current = center;
                 return;
             }
 
-            // Single finger: ALWAYS draw (even when zoomed)
+            // Normal mode: Single finger draws
             if (e.touches.length === 1 && !isPanning) {
                 draw(e as any);
             }
@@ -672,13 +704,13 @@ const DrawingCanvas = forwardRef<DrawingCanvasRef, DrawingCanvasProps>(({ prompt
                 lastPinchDistanceRef.current = null;
                 lastPanPosRef.current = null;
                 setIsPanning(false);
-                stopDrawing();
+                if (!zoomMode) {
+                    stopDrawing();
+                }
             } else if (e.touches.length === 1) {
                 // Went from 2 fingers to 1
                 lastPinchDistanceRef.current = null;
-                if (zoomMode && scale > 1) {
-                    lastPanPosRef.current = { x: e.touches[0].clientX, y: e.touches[0].clientY };
-                }
+                lastPanPosRef.current = { x: e.touches[0].clientX, y: e.touches[0].clientY };
             }
         };
 
@@ -699,13 +731,12 @@ const DrawingCanvas = forwardRef<DrawingCanvasRef, DrawingCanvasProps>(({ prompt
         setPanOffset({ x: 0, y: 0 });
     }, []);
 
-    // Toggle zoom mode
+    // Toggle zoom mode - canvas stays at current zoom/pan position when exiting
     const toggleZoomMode = useCallback(() => {
-        if (zoomMode) {
-            resetZoom();
-        }
+        // Don't reset zoom when toggling off - keep the view as is
+        // User can draw at the zoomed position
         setZoomMode(!zoomMode);
-    }, [zoomMode, resetZoom]);
+    }, [zoomMode]);
 
 
     const clearCanvas = () => {
@@ -795,11 +826,11 @@ const DrawingCanvas = forwardRef<DrawingCanvasRef, DrawingCanvasProps>(({ prompt
                     {/* Bottom Layer: Drawing Canvas (user colors here) */}
                     <canvas
                         ref={canvasRef}
-                        className="absolute inset-0 w-full h-full touch-none cursor-crosshair"
-                        onMouseDown={startDrawing}
-                        onMouseMove={draw}
-                        onMouseUp={stopDrawing}
-                        onMouseLeave={handleMouseLeave}
+                        className={`absolute inset-0 w-full h-full touch-none ${zoomMode ? 'cursor-move' : 'cursor-crosshair'}`}
+                        onMouseDown={zoomMode ? undefined : startDrawing}
+                        onMouseMove={zoomMode ? undefined : draw}
+                        onMouseUp={zoomMode ? undefined : stopDrawing}
+                        onMouseLeave={zoomMode ? undefined : handleMouseLeave}
                     />
                     
                     {/* Top Layer: Line art overlay (in layered mode) */}
@@ -831,11 +862,9 @@ const DrawingCanvas = forwardRef<DrawingCanvasRef, DrawingCanvasProps>(({ prompt
                 {/* Zoom Mode Hint - inside container so it doesn't affect layout */}
                 {zoomMode && (
                     <div className="absolute bottom-2 left-1/2 -translate-x-1/2 flex items-center justify-center gap-2 text-xs text-white bg-black/70 rounded-full py-1.5 px-3 z-30 pointer-events-none whitespace-nowrap">
-                        <ZoomIn size={14} />
+                        <Move size={14} />
                         <span>
-                            {scale > 1 
-                                ? "1 finger = draw • 2 fingers = zoom/pan" 
-                                : "Pinch to zoom in"}
+                            Move with finger • Pinch to zoom • Tap 🔍 to draw
                         </span>
                     </div>
                 )}
@@ -905,6 +934,15 @@ const DrawingCanvas = forwardRef<DrawingCanvasRef, DrawingCanvasProps>(({ prompt
 
                 {/* Tool Buttons */}
                 <div className="flex items-center gap-1.5">
+                    {/* Help/Tutorial */}
+                    <button
+                        onClick={() => setShowTutorial(true)}
+                        className="p-2 rounded-lg bg-white/15 text-white hover:bg-white/25 transition-all"
+                        title="Help"
+                    >
+                        <HelpCircle className="w-5 h-5" />
+                    </button>
+                    
                     {/* Zoom Toggle */}
                     <button
                         onClick={toggleZoomMode}
@@ -912,7 +950,7 @@ const DrawingCanvas = forwardRef<DrawingCanvasRef, DrawingCanvasProps>(({ prompt
                             ? 'bg-[#4CAF50] text-white shadow-lg'
                             : 'bg-white/15 text-white hover:bg-white/25'
                             }`}
-                        title={zoomMode ? "Exit Zoom Mode (pinch to zoom)" : "Enable Zoom Mode (pinch to zoom)"}
+                        title={zoomMode ? "Exit Zoom Mode - Start Drawing" : "Enable Zoom Mode - Move Canvas"}
                     >
                         {zoomMode ? <ZoomOut className="w-5 h-5" /> : <ZoomIn className="w-5 h-5" />}
                     </button>
@@ -969,6 +1007,121 @@ const DrawingCanvas = forwardRef<DrawingCanvasRef, DrawingCanvasProps>(({ prompt
                 <div className="mt-3 bg-green-500/20 backdrop-blur-sm border-2 border-green-400 rounded-xl p-3 text-center animate-in fade-in zoom-in duration-300">
                     <p className="text-white font-bold text-lg mb-1">🌟 Amazing Artwork!</p>
                     <p className="text-white/80 text-sm">You did a wonderful job!</p>
+                </div>
+            )}
+            
+            {/* Tutorial Overlay Modal */}
+            {showTutorial && (
+                <div 
+                    className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4 animate-in fade-in duration-200"
+                    onClick={() => setShowTutorial(false)}
+                >
+                    <div 
+                        className="bg-gradient-to-b from-[#3E1F07] to-[#5c2e0b] rounded-2xl p-5 max-w-sm w-full max-h-[85vh] overflow-y-auto shadow-2xl border-2 border-[#8D6E63]"
+                        onClick={(e) => e.stopPropagation()}
+                    >
+                        {/* Header */}
+                        <div className="flex items-center justify-between mb-4">
+                            <h2 className="text-white font-bold text-xl flex items-center gap-2">
+                                🎨 How to Color
+                            </h2>
+                            <button 
+                                onClick={() => setShowTutorial(false)}
+                                className="p-1 rounded-full bg-white/20 hover:bg-white/30 transition-colors"
+                            >
+                                <X className="w-5 h-5 text-white" />
+                            </button>
+                        </div>
+                        
+                        {/* Tutorial Items */}
+                        <div className="space-y-4">
+                            {/* Crayons */}
+                            <div className="bg-white/10 rounded-xl p-3 flex items-start gap-3">
+                                <div className="text-3xl">🖍️</div>
+                                <div>
+                                    <h3 className="text-[#FFD700] font-bold text-sm">Pick a Crayon</h3>
+                                    <p className="text-white/80 text-xs">Tap any crayon to choose a color. The selected crayon pops up!</p>
+                                </div>
+                            </div>
+                            
+                            {/* Zoom */}
+                            <div className="bg-white/10 rounded-xl p-3 flex items-start gap-3">
+                                <div className="bg-white/20 p-2 rounded-lg">
+                                    <ZoomIn className="w-6 h-6 text-white" />
+                                </div>
+                                <div>
+                                    <h3 className="text-[#FFD700] font-bold text-sm">Zoom Mode</h3>
+                                    <p className="text-white/80 text-xs">
+                                        <span className="text-green-400 font-semibold">ON:</span> Use 1 finger to move around, 2 fingers to pinch-zoom. <span className="italic">Drawing is paused!</span>
+                                    </p>
+                                    <p className="text-white/80 text-xs mt-1">
+                                        <span className="text-yellow-400 font-semibold">OFF:</span> Draw at your zoomed position. Canvas stays where you placed it.
+                                    </p>
+                                </div>
+                            </div>
+                            
+                            {/* Eraser */}
+                            <div className="bg-white/10 rounded-xl p-3 flex items-start gap-3">
+                                <div className="bg-white/20 p-2 rounded-lg">
+                                    <Eraser className="w-6 h-6 text-white" />
+                                </div>
+                                <div>
+                                    <h3 className="text-[#FFD700] font-bold text-sm">Eraser</h3>
+                                    <p className="text-white/80 text-xs">Remove colors you don't want. Turns yellow when active.</p>
+                                </div>
+                            </div>
+                            
+                            {/* Start Over */}
+                            <div className="bg-white/10 rounded-xl p-3 flex items-start gap-3">
+                                <div className="bg-white/20 p-2 rounded-lg">
+                                    <RotateCcw className="w-6 h-6 text-white" />
+                                </div>
+                                <div>
+                                    <h3 className="text-[#FFD700] font-bold text-sm">Start Over</h3>
+                                    <p className="text-white/80 text-xs">Clear everything and begin fresh with a blank page.</p>
+                                </div>
+                            </div>
+                            
+                            {/* Download */}
+                            <div className="bg-white/10 rounded-xl p-3 flex items-start gap-3">
+                                <div className="bg-white/20 p-2 rounded-lg">
+                                    <Download className="w-6 h-6 text-white" />
+                                </div>
+                                <div>
+                                    <h3 className="text-[#FFD700] font-bold text-sm">Save Your Art</h3>
+                                    <p className="text-white/80 text-xs">Download your masterpiece to your device!</p>
+                                </div>
+                            </div>
+                            
+                            {/* Size Slider */}
+                            <div className="bg-white/10 rounded-xl p-3 flex items-start gap-3">
+                                <div className="text-3xl">📏</div>
+                                <div>
+                                    <h3 className="text-[#FFD700] font-bold text-sm">Brush Size</h3>
+                                    <p className="text-white/80 text-xs">Slide left for thin lines, right for thick strokes.</p>
+                                </div>
+                            </div>
+                            
+                            {/* Auto-save */}
+                            <div className="bg-white/10 rounded-xl p-3 flex items-start gap-3">
+                                <div className="bg-white/20 p-2 rounded-lg">
+                                    <Save className="w-6 h-6 text-white" />
+                                </div>
+                                <div>
+                                    <h3 className="text-[#FFD700] font-bold text-sm">Auto-Save</h3>
+                                    <p className="text-white/80 text-xs">Your progress saves automatically! Come back anytime to continue.</p>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        {/* Got it button */}
+                        <button
+                            onClick={() => setShowTutorial(false)}
+                            className="mt-5 w-full bg-gradient-to-r from-[#FFD700] to-[#FFA500] text-black py-3 rounded-xl font-bold hover:shadow-lg transition-all active:scale-95"
+                        >
+                            Got it! Let's Color! 🎨
+                        </button>
+                    </div>
                 </div>
             )}
         </div>

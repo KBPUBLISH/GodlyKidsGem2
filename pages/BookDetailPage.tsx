@@ -283,7 +283,9 @@ const BookDetailPage: React.FC = () => {
         if (rewardVoiceId) {
           try {
             const API_BASE = (import.meta as any).env?.VITE_API_BASE_URL || 'https://backendgk2-0.onrender.com';
-            const voicesResponse = await fetch(`${API_BASE}/api/voices`);
+            // Remove trailing /api if present, then add /api/voices
+            const baseUrl = API_BASE.replace(/\/api\/?$/, '');
+            const voicesResponse = await fetch(`${baseUrl}/api/voices`);
             if (voicesResponse.ok) {
               const allVoices = await voicesResponse.json();
               console.log('🎁 Looking for voice:', rewardVoiceId, 'in', allVoices.length, 'voices');

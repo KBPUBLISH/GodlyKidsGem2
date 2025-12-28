@@ -10,22 +10,22 @@ interface CommentSectionProps {
     bookDescription?: string;
 }
 
-// Color mapping for block outlines and backgrounds
+// Color mapping for block outlines and backgrounds (light theme friendly)
 const colorStyles: Record<string, { border: string; bg: string; text: string }> = {
-    pink: { border: 'border-pink-400', bg: 'bg-pink-500/20', text: 'text-pink-300' },
-    yellow: { border: 'border-yellow-400', bg: 'bg-yellow-500/20', text: 'text-yellow-300' },
-    orange: { border: 'border-orange-400', bg: 'bg-orange-500/20', text: 'text-orange-300' },
-    gold: { border: 'border-amber-400', bg: 'bg-amber-500/20', text: 'text-amber-300' },
-    blue: { border: 'border-blue-400', bg: 'bg-blue-500/20', text: 'text-blue-300' },
-    purple: { border: 'border-purple-400', bg: 'bg-purple-500/20', text: 'text-purple-300' },
-    green: { border: 'border-green-400', bg: 'bg-green-500/20', text: 'text-green-300' },
-    teal: { border: 'border-teal-400', bg: 'bg-teal-500/20', text: 'text-teal-300' },
-    indigo: { border: 'border-indigo-400', bg: 'bg-indigo-500/20', text: 'text-indigo-300' },
-    amber: { border: 'border-amber-400', bg: 'bg-amber-500/20', text: 'text-amber-300' },
-    lime: { border: 'border-lime-400', bg: 'bg-lime-500/20', text: 'text-lime-300' },
-    rose: { border: 'border-rose-400', bg: 'bg-rose-500/20', text: 'text-rose-300' },
-    cyan: { border: 'border-cyan-400', bg: 'bg-cyan-500/20', text: 'text-cyan-300' },
-    emerald: { border: 'border-emerald-400', bg: 'bg-emerald-500/20', text: 'text-emerald-300' },
+    pink: { border: 'border-pink-500', bg: 'bg-pink-100', text: 'text-pink-700' },
+    yellow: { border: 'border-yellow-500', bg: 'bg-yellow-100', text: 'text-yellow-700' },
+    orange: { border: 'border-orange-500', bg: 'bg-orange-100', text: 'text-orange-700' },
+    gold: { border: 'border-amber-500', bg: 'bg-amber-100', text: 'text-amber-700' },
+    blue: { border: 'border-blue-500', bg: 'bg-blue-100', text: 'text-blue-700' },
+    purple: { border: 'border-purple-500', bg: 'bg-purple-100', text: 'text-purple-700' },
+    green: { border: 'border-green-500', bg: 'bg-green-100', text: 'text-green-700' },
+    teal: { border: 'border-teal-500', bg: 'bg-teal-100', text: 'text-teal-700' },
+    indigo: { border: 'border-indigo-500', bg: 'bg-indigo-100', text: 'text-indigo-700' },
+    amber: { border: 'border-amber-500', bg: 'bg-amber-100', text: 'text-amber-700' },
+    lime: { border: 'border-lime-500', bg: 'bg-lime-100', text: 'text-lime-700' },
+    rose: { border: 'border-rose-500', bg: 'bg-rose-100', text: 'text-rose-700' },
+    cyan: { border: 'border-cyan-500', bg: 'bg-cyan-100', text: 'text-cyan-700' },
+    emerald: { border: 'border-emerald-500', bg: 'bg-emerald-100', text: 'text-emerald-700' },
 };
 
 // Random rotation values for scattered effect
@@ -141,23 +141,23 @@ const CommentSection: React.FC<CommentSectionProps> = ({ bookId, bookTitle, book
 
     if (loading) {
         return (
-            <div className="bg-white/5 rounded-3xl p-6 mt-6">
+            <div className="bg-gradient-to-b from-[#f5e6c8] to-[#ecd9b5] rounded-3xl p-6 mt-6 border-2 border-[#d4b483]">
                 <div className="flex items-center justify-center gap-3 py-8">
-                    <Loader2 className="w-6 h-6 text-amber-400 animate-spin" />
-                    <span className="text-white/60">Loading comments...</span>
+                    <Loader2 className="w-6 h-6 text-[#8B4513] animate-spin" />
+                    <span className="text-[#5c2e0b]">Loading comments...</span>
                 </div>
             </div>
         );
     }
 
     return (
-        <div className="bg-gradient-to-b from-white/5 to-white/10 rounded-3xl p-5 mt-6 overflow-hidden">
+        <div className="bg-gradient-to-b from-[#f5e6c8] to-[#ecd9b5] rounded-3xl p-5 mt-6 overflow-hidden border-2 border-[#d4b483] shadow-lg">
             {/* Header */}
             <div className="flex items-center gap-2 mb-4">
-                <MessageCircle className="w-5 h-5 text-amber-400" />
-                <h3 className="text-white font-bold text-lg">Leave a Comment!</h3>
+                <MessageCircle className="w-5 h-5 text-[#8B4513]" />
+                <h3 className="text-[#3E1F07] font-bold text-lg font-display">Leave a Comment!</h3>
                 {generating && (
-                    <div className="flex items-center gap-1 ml-2 text-purple-300 text-xs">
+                    <div className="flex items-center gap-1 ml-2 text-purple-600 text-xs">
                         <Sparkles className="w-3 h-3 animate-pulse" />
                         <span>AI generating...</span>
                     </div>
@@ -214,10 +214,10 @@ const CommentSection: React.FC<CommentSectionProps> = ({ bookId, bookTitle, book
 
             {/* Posted Comments Section */}
             {postedComments.length > 0 && (
-                <div className="mt-6 pt-6 border-t border-white/10">
+                <div className="mt-6 pt-6 border-t border-[#d4b483]">
                     <div className="flex items-center gap-2 mb-4">
-                        <Send className="w-4 h-4 text-white/60" />
-                        <h4 className="text-white/80 font-semibold text-sm">
+                        <Send className="w-4 h-4 text-[#8B4513]" />
+                        <h4 className="text-[#5c2e0b] font-semibold text-sm">
                             What others are saying ({postedComments.length})
                         </h4>
                     </div>
@@ -231,16 +231,16 @@ const CommentSection: React.FC<CommentSectionProps> = ({ bookId, bookTitle, book
                                     key={comment._id}
                                     className={`
                                         flex items-start gap-3 p-3 rounded-xl
-                                        ${style.bg} border ${style.border}
+                                        ${style.bg} border-2 ${style.border}
                                         animate-in fade-in slide-in-from-left-2
                                     `}
                                 >
                                     <span className="text-2xl flex-shrink-0">{comment.emoji}</span>
                                     <div className="flex-1 min-w-0">
-                                        <p className="text-white font-medium text-sm">
+                                        <p className={`font-medium text-sm ${style.text}`}>
                                             {comment.commentText}
                                         </p>
-                                        <p className="text-white/50 text-xs mt-1">
+                                        <p className="text-[#8B4513]/60 text-xs mt-1">
                                             {comment.userName} • {formatTimeAgo(comment.createdAt)}
                                         </p>
                                     </div>
@@ -253,7 +253,7 @@ const CommentSection: React.FC<CommentSectionProps> = ({ bookId, bookTitle, book
 
             {/* Empty State */}
             {postedComments.length === 0 && (
-                <div className="text-center py-4 text-white/40 text-sm">
+                <div className="text-center py-4 text-[#8B4513]/60 text-sm">
                     Be the first to leave a comment! 👆
                 </div>
             )}

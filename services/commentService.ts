@@ -27,7 +27,7 @@ class CommentService {
     // Fetch all comments for a book
     async getBookComments(bookId: string): Promise<BookComment[]> {
         try {
-            const response = await fetch(`${this.baseUrl}/book-comments/${bookId}`);
+            const response = await fetch(`${this.baseUrl}book-comments/${bookId}`);
             if (!response.ok) {
                 throw new Error('Failed to fetch comments');
             }
@@ -48,7 +48,7 @@ class CommentService {
         colorTheme: string
     ): Promise<BookComment | null> {
         try {
-            const response = await fetch(`${this.baseUrl}/book-comments`, {
+            const response = await fetch(`${this.baseUrl}book-comments`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -75,7 +75,7 @@ class CommentService {
     // Delete own comment
     async deleteComment(commentId: string, userId: string): Promise<boolean> {
         try {
-            const response = await fetch(`${this.baseUrl}/book-comments/${commentId}`, {
+            const response = await fetch(`${this.baseUrl}book-comments/${commentId}`, {
                 method: 'DELETE',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ userId }),
@@ -91,7 +91,7 @@ class CommentService {
     // Get cached AI-generated comment options for a book
     async getCachedCommentOptions(bookId: string): Promise<CommentOption[] | null> {
         try {
-            const response = await fetch(`${this.baseUrl}/book-comments/${bookId}/generated`);
+            const response = await fetch(`${this.baseUrl}book-comments/${bookId}/generated`);
             if (!response.ok) {
                 throw new Error('Failed to fetch cached comments');
             }
@@ -109,7 +109,7 @@ class CommentService {
         bookContent?: string
     ): Promise<CommentOption[]> {
         try {
-            const response = await fetch(`${this.baseUrl}/ai/generate-book-comments`, {
+            const response = await fetch(`${this.baseUrl}ai/generate-book-comments`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -134,7 +134,7 @@ class CommentService {
     // Cache generated comments for a book
     async cacheCommentOptions(bookId: string, comments: CommentOption[]): Promise<boolean> {
         try {
-            const response = await fetch(`${this.baseUrl}/book-comments/${bookId}/generated`, {
+            const response = await fetch(`${this.baseUrl}book-comments/${bookId}/generated`, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ comments }),

@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeft, Upload, Plus, Trash2, GripVertical, Music, Save, X, Lock, Unlock } from 'lucide-react';
+import { ArrowLeft, Upload, Plus, Trash2, GripVertical, Music, Save, X, Lock, Unlock, Star } from 'lucide-react';
 import apiClient from '../services/apiClient';
 import ContentAnalytics from '../components/ContentAnalytics';
 
@@ -14,6 +14,8 @@ interface AudioItem {
     duration?: number;
     order: number;
     isMembersOnly?: boolean; // Whether this specific song/episode requires membership
+    isFeatured?: boolean; // Whether this episode is featured on the app home page
+    featuredOrder?: number; // Order in featured section
 }
 
 interface Category {
@@ -203,6 +205,8 @@ const PlaylistForm: React.FC = () => {
                     audioUrl: '',
                     order: formData.items.length,
                     isMembersOnly: false, // Default to free for new items
+                    isFeatured: false, // Default to not featured
+                    featuredOrder: 0,
                 },
             ],
         });
@@ -594,6 +598,35 @@ const PlaylistForm: React.FC = () => {
                                                         }`} />
                                                     </div>
                                                 </div>
+                                            </div>
+                                            
+                                            {/* Featured Toggle */}
+                                            <div className="md:col-span-2">
+                                                <div 
+                                                    onClick={() => updateItem(index, 'isFeatured', !item.isFeatured)}
+                                                    className={`w-full rounded-lg border text-sm px-3 py-2 transition cursor-pointer flex items-center justify-between ${
+                                                        item.isFeatured 
+                                                            ? 'bg-yellow-50 border-yellow-400 text-yellow-800' 
+                                                            : 'bg-gray-50 border-gray-300 text-gray-600'
+                                                    }`}
+                                                >
+                                                    <span className="font-medium flex items-center gap-2">
+                                                        <Star className={`w-4 h-4 ${item.isFeatured ? 'fill-yellow-500' : ''}`} />
+                                                        {item.isFeatured ? '⭐ Featured Episode' : 'Not Featured'}
+                                                    </span>
+                                                    <div className={`w-10 h-5 rounded-full relative transition-colors ${
+                                                        item.isFeatured ? 'bg-yellow-400' : 'bg-gray-300'
+                                                    }`}>
+                                                        <div className={`absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform ${
+                                                            item.isFeatured ? 'translate-x-5' : 'translate-x-0.5'
+                                                        }`} />
+                                                    </div>
+                                                </div>
+                                                {item.isFeatured && (
+                                                    <p className="text-xs text-yellow-600 mt-1">
+                                                        This episode will appear in the Featured Episodes section on the app home page
+                                                    </p>
+                                                )}
                                             </div>
                                         </div>
                                         <button

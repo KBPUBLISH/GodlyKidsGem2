@@ -5,7 +5,7 @@ import Header from '../components/layout/Header';
 import SectionTitle from '../components/ui/SectionTitle';
 import { useBooks } from '../context/BooksContext';
 import { useUser } from '../context/UserContext';
-import { Search, Music, ChevronDown, Lock, Crown } from 'lucide-react';
+import { Search, Music, ChevronDown, Lock, Crown, BookOpen } from 'lucide-react';
 import { getApiBaseUrl, ApiService } from '../services/apiService';
 import StormySeaError from '../components/ui/StormySeaError';
 
@@ -396,7 +396,11 @@ const ListenPage: React.FC = () => {
                             />
                           ) : (
                             <div className="w-full h-full flex items-center justify-center">
-                              <Music className="w-24 h-24 text-white opacity-50" />
+                              {playlist.type === 'Audiobook' ? (
+                                <BookOpen className="w-24 h-24 text-white opacity-50" />
+                              ) : (
+                                <Music className="w-24 h-24 text-white opacity-50" />
+                              )}
                             </div>
                           )}
                           
@@ -417,6 +421,15 @@ const ListenPage: React.FC = () => {
                             </div>
                           )}
                           
+                          {/* Type Badge - Song vs Audiobook */}
+                          <div className={`absolute top-2 left-2 px-2 py-0.5 rounded-full text-[10px] font-bold text-white z-20 ${
+                            playlist.type === 'Audiobook' 
+                              ? 'bg-amber-600/90' 
+                              : 'bg-purple-600/90'
+                          }`}>
+                            {playlist.type === 'Audiobook' ? '📖 Audiobook' : '🎵 Music'}
+                          </div>
+                          
                           {/* Gradient overlay at bottom */}
                           <div className="absolute inset-x-0 bottom-0 h-1/3 bg-gradient-to-t from-black/70 to-transparent"></div>
 
@@ -425,9 +438,13 @@ const ListenPage: React.FC = () => {
                             {playlist.level || (playlist.minAge ? `${playlist.minAge}+` : 'All')}
                           </div>
 
-                          {/* Type Icon */}
-                          <div className="absolute bottom-2 right-2 bg-white/90 text-blue-900 p-1.5 rounded-full shadow-md">
-                            <Music size={16} />
+                          {/* Type Icon - Different for Song vs Audiobook */}
+                          <div className={`absolute bottom-2 right-2 p-1.5 rounded-full shadow-md ${
+                            playlist.type === 'Audiobook' 
+                              ? 'bg-amber-100 text-amber-800' 
+                              : 'bg-white/90 text-blue-900'
+                          }`}>
+                            {playlist.type === 'Audiobook' ? <BookOpen size={16} /> : <Music size={16} />}
                           </div>
                         </div>
                         

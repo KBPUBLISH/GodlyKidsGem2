@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { ChevronLeft, Pause, Play, SkipBack, SkipForward, Music, Heart, RotateCcw, ListPlus } from 'lucide-react';
+import { ChevronLeft, Pause, Play, SkipBack, SkipForward, Music, Heart, RotateCcw, ListPlus, BookOpen } from 'lucide-react';
 import { favoritesService } from '../services/favoritesService';
 import { getApiBaseUrl } from '../services/apiService';
 import { useAudio, Playlist } from '../context/AudioContext';
@@ -283,10 +283,17 @@ const PlaylistPlayerPage: React.FC = () => {
     const activePlaylist = currentPlaylist || localPlaylist;
 
     if (!activePlaylist || activePlaylist.items.length === 0) {
+        const isAudiobook = activePlaylist?.type === 'Audiobook';
         return (
             <div className="flex flex-col items-center justify-center h-full p-6 bg-[#fdf6e3]">
-                <Music className="w-16 h-16 text-[#8B4513] mb-4 opacity-50" />
-                <p className="text-[#5c2e0b] text-lg font-bold">Playlist not found or empty</p>
+                {isAudiobook ? (
+                    <BookOpen className="w-16 h-16 text-[#8B4513] mb-4 opacity-50" />
+                ) : (
+                    <Music className="w-16 h-16 text-[#8B4513] mb-4 opacity-50" />
+                )}
+                <p className="text-[#5c2e0b] text-lg font-bold">
+                    {isAudiobook ? 'Audiobook not found or empty' : 'Playlist not found or empty'}
+                </p>
                 <button
                     onClick={() => navigate('/audio')}
                     className="mt-4 px-6 py-2 bg-[#8B4513] text-white rounded-lg hover:bg-[#5e2c04]"
@@ -397,7 +404,11 @@ const PlaylistPlayerPage: React.FC = () => {
                             />
                         ) : (
                             <div className="w-full h-full bg-gradient-to-br from-[#8B4513] to-[#5c2e0b] flex items-center justify-center">
-                                <Music className="w-24 h-24 text-[#f3e5ab] opacity-50" />
+                                {activePlaylist.type === 'Audiobook' ? (
+                                    <BookOpen className="w-24 h-24 text-[#f3e5ab] opacity-50" />
+                                ) : (
+                                    <Music className="w-24 h-24 text-[#f3e5ab] opacity-50" />
+                                )}
                             </div>
                         )}
 

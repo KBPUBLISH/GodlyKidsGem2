@@ -398,6 +398,7 @@ const UserPlaylistPage: React.FC = () => {
                             title={playlist.name}
                             description={playlist.description}
                             songTitles={playlist.items.map(item => item.title)}
+                            playlistType="Song"
                         />
                     )}
                 </div>

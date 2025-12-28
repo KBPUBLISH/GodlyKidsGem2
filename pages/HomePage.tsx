@@ -167,6 +167,10 @@ const HomePage: React.FC = () => {
   const [featuredContent, setFeaturedContent] = useState<any[]>(() => getCached('featured'));
   const [featuredLoading, setFeaturedLoading] = useState(() => getCached('featured').length === 0);
   
+  // Featured episodes state - individual playlist items marked as featured
+  const [featuredEpisodes, setFeaturedEpisodes] = useState<any[]>(() => getCached('featuredEpisodes'));
+  const [featuredEpisodesLoading, setFeaturedEpisodesLoading] = useState(() => getCached('featuredEpisodes').length === 0);
+  
   // Recently Read/Played state
   const [recentlyReadBooks, setRecentlyReadBooks] = useState<any[]>([]);
   const [recentlyPlayedPlaylists, setRecentlyPlayedPlaylists] = useState<any[]>([]);
@@ -352,6 +356,7 @@ const HomePage: React.FC = () => {
     fetchExploreCategories();
     fetchPlaylists();
     fetchFeaturedContent();
+    fetchFeaturedEpisodes();
     fetchTopRatedContent();
     fetchDynamicGames();
     fetchBookSeries();
@@ -559,6 +564,21 @@ const HomePage: React.FC = () => {
       console.error('❌ Error fetching featured content:', error);
     } finally {
       setFeaturedLoading(false);
+    }
+  };
+
+  // Fetch featured episodes (individual playlist items)
+  const fetchFeaturedEpisodes = async () => {
+    try {
+      setFeaturedEpisodesLoading(true);
+      const data = await ApiService.getFeaturedEpisodes();
+      console.log('🎵 Featured episodes loaded:', data.length, 'items');
+      setFeaturedEpisodes(data);
+      cacheData('featuredEpisodes', data);
+    } catch (error) {
+      console.error('❌ Error fetching featured episodes:', error);
+    } finally {
+      setFeaturedEpisodesLoading(false);
     }
   };
 
@@ -1115,6 +1135,63 @@ const HomePage: React.FC = () => {
               }} 
             />
           </>
+        )}
+
+        {/* Featured Episodes Section */}
+        {!featuredEpisodesLoading && featuredEpisodes.length > 0 && (
+          <section className="mt-6">
+            <SectionTitle 
+              title="Featured Episodes" 
+              icon="🎵"
+              color="#9C27B0"
+            />
+            <div className="w-screen overflow-x-auto no-scrollbar pb-2 -mx-4 snap-x snap-mandatory">
+              <div className="flex space-x-3 px-4">
+                {featuredEpisodes.map((episode: any) => (
+                  <div
+                    key={episode._id}
+                    onClick={() => navigate(`/audio/playlist/${episode.playlist._id}/${episode.itemIndex}`)}
+                    className="relative flex-shrink-0 w-36 snap-center cursor-pointer group"
+                  >
+                    {/* Cover Image */}
+                    <div className="relative aspect-square rounded-2xl overflow-hidden shadow-lg border-2 border-white/20 group-hover:border-purple-400/50 transition-all">
+                      <img
+                        src={episode.coverImage || episode.playlist.coverImage}
+                        alt={episode.title}
+                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                        onError={(e) => {
+                          (e.target as HTMLImageElement).src = 'https://via.placeholder.com/150x150/9C27B0/FFFFFF?text=🎵';
+                        }}
+                      />
+                      {/* Play overlay */}
+                      <div className="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                        <Play className="w-10 h-10 text-white fill-white" />
+                      </div>
+                      {/* Type badge */}
+                      <div className="absolute top-2 left-2 px-2 py-0.5 bg-purple-600/90 rounded-full text-[10px] font-bold text-white">
+                        {episode.playlist.type === 'Audiobook' ? '📖 Episode' : '🎵 Song'}
+                      </div>
+                      {/* Premium badge */}
+                      {episode.isMembersOnly && (
+                        <div className="absolute top-2 right-2 px-1.5 py-0.5 bg-amber-500/90 rounded-full text-[10px] font-bold text-white flex items-center gap-0.5">
+                          <Lock className="w-2.5 h-2.5" />
+                        </div>
+                      )}
+                    </div>
+                    {/* Title */}
+                    <div className="mt-2 px-1">
+                      <h3 className="text-sm font-bold text-white truncate">
+                        {episode.title}
+                      </h3>
+                      <p className="text-xs text-white/60 truncate">
+                        {episode.playlist.title}
+                      </p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </section>
         )}
 
         {/* Daily Tasks & IQ Games Section - Vertical 9:16 Sliding Cards */}

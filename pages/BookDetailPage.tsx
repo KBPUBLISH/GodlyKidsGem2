@@ -807,66 +807,93 @@ const BookDetailPage: React.FC = () => {
                 </div>
               )}
 
-              {/* Book-Specific Games */}
-              {bookGames.length > 0 && (
-                <div className="w-full max-w-sm space-y-3">
-                  {bookGames.map((game, index) => {
-                    const isUnlocked = isBookCompleted();
-                    return (
+              {/* Book-Specific Games with Progress */}
+              {bookGames.length > 0 && (() => {
+                const isUnlocked = isBookCompleted();
+                const pagesRead = savedPageIndex !== null ? Math.min(savedPageIndex + 1, totalPages) : 0;
+                const progressPercent = totalPages > 0 ? Math.round((pagesRead / totalPages) * 100) : 0;
+                
+                return (
+                  <div className="w-full max-w-sm space-y-3">
+                    {bookGames.map((game, index) => (
                       <div
                         key={index}
-                        className={`w-full bg-[#3E1F07] rounded-2xl p-3 pr-4 flex items-center gap-4 shadow-[0_6px_0_rgba(0,0,0,0.3)] border-2 border-[#5c2e0b] relative overflow-hidden ${!isUnlocked ? 'opacity-75' : ''
-                          }`}
+                        className={`w-full bg-[#3E1F07] rounded-2xl overflow-hidden shadow-[0_6px_0_rgba(0,0,0,0.3)] border-2 ${
+                          isUnlocked ? 'border-green-500/50' : 'border-amber-500/50'
+                        }`}
                       >
-                        <div className="absolute inset-0 opacity-40 bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-[#70380d] to-transparent"></div>
+                        {/* Progress bar at top when locked */}
+                        {!isUnlocked && (
+                          <div className="w-full h-1.5 bg-black/30">
+                            <div 
+                              className="h-full bg-gradient-to-r from-amber-400 to-amber-500 transition-all duration-300"
+                              style={{ width: `${progressPercent}%` }}
+                            />
+                          </div>
+                        )}
+                        
+                        <div className="p-3 pr-4 flex items-center gap-4 relative">
+                          <div className="absolute inset-0 opacity-40 bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-[#70380d] to-transparent"></div>
 
-                        <div className="w-20 h-14 bg-[#87CEEB] rounded-lg overflow-hidden relative shrink-0 border-2 border-white/10 shadow-inner z-10">
-                          {game.coverImage ? (
-                            <img src={game.coverImage} className="w-full h-full object-cover" alt={game.title} />
-                          ) : (
-                            <div className="w-full h-full bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center">
-                              <Globe className="w-8 h-8 text-white" />
-                            </div>
-                          )}
-                          {!isUnlocked && (
-                            <div className="absolute inset-0 bg-black/60 flex items-center justify-center">
-                              <Lock className="w-6 h-6 text-white" />
-                            </div>
-                          )}
-                        </div>
-                        <div className="flex-1 z-10 flex justify-between items-center">
-                          <div className="flex-1 min-w-0 mr-2">
-                            <h3 className="text-white font-display font-bold tracking-wide text-sm drop-shadow-md truncate">
-                              {game.title}
-                            </h3>
+                          <div className="w-20 h-14 bg-[#87CEEB] rounded-lg overflow-hidden relative shrink-0 border-2 border-white/10 shadow-inner z-10">
+                            {game.coverImage ? (
+                              <img src={game.coverImage} className="w-full h-full object-cover" alt={game.title} />
+                            ) : (
+                              <div className="w-full h-full bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center">
+                                <Globe className="w-8 h-8 text-white" />
+                              </div>
+                            )}
                             {!isUnlocked && (
-                              <p className="text-xs text-white/70 mt-0.5">{t('completeBookToUnlock') || 'Complete book to unlock'}</p>
+                              <div className="absolute inset-0 bg-black/60 flex items-center justify-center">
+                                <Lock className="w-6 h-6 text-amber-400" />
+                              </div>
                             )}
                           </div>
-                          <button
-                            onClick={() => {
-                              if (isUnlocked) {
-                                // Track game open analytics
-                                analyticsService.gameOpen(game._id || `book_game_${index}`, game.title, id);
-                                setSelectedGame({ title: game.title, url: game.url });
-                              } else {
-                                alert('Please complete reading this book to unlock this game!');
-                              }
-                            }}
-                            disabled={!isUnlocked}
-                            className={`${isUnlocked
-                              ? 'bg-[#6da34d] hover:bg-[#7db85b] cursor-pointer'
-                              : 'bg-gray-600 cursor-not-allowed opacity-50'
-                              } text-white text-sm font-bold py-1.5 px-5 rounded-full shadow-[0_3px_0_#3d5c2b] active:translate-y-[3px] active:shadow-none transition-all border border-[#ffffff20] shrink-0`}
-                          >
-                            {isUnlocked ? t('play') : t('locked')}
-                          </button>
+                          <div className="flex-1 z-10">
+                            <div className="flex justify-between items-start">
+                              <div className="flex-1 min-w-0 mr-2">
+                                <h3 className="text-white font-display font-bold tracking-wide text-sm drop-shadow-md truncate">
+                                  {game.title}
+                                </h3>
+                                {!isUnlocked ? (
+                                  <div className="mt-1">
+                                    <p className="text-xs text-amber-300/90 font-medium">
+                                      📖 {pagesRead}/{totalPages} pages read ({progressPercent}%)
+                                    </p>
+                                    <p className="text-[10px] text-white/60 mt-0.5">
+                                      Complete the book to unlock!
+                                    </p>
+                                  </div>
+                                ) : (
+                                  <p className="text-xs text-green-400 mt-0.5 flex items-center gap-1">
+                                    ✓ Unlocked
+                                  </p>
+                                )}
+                              </div>
+                              <button
+                                onClick={() => {
+                                  if (isUnlocked) {
+                                    analyticsService.gameOpen(game._id || `book_game_${index}`, game.title, id);
+                                    setSelectedGame({ title: game.title, url: game.url });
+                                  } else {
+                                    navigate(`/read/${id}`);
+                                  }
+                                }}
+                                className={`${isUnlocked
+                                  ? 'bg-[#6da34d] hover:bg-[#7db85b]'
+                                  : 'bg-amber-600 hover:bg-amber-500'
+                                  } text-white text-sm font-bold py-1.5 px-4 rounded-full shadow-[0_3px_0_rgba(0,0,0,0.3)] active:translate-y-[3px] active:shadow-none transition-all border border-[#ffffff20] shrink-0`}
+                              >
+                                {isUnlocked ? t('play') || 'Play' : 'Read'}
+                              </button>
+                            </div>
+                          </div>
                         </div>
                       </div>
-                    );
-                  })}
-                </div>
-              )}
+                    ))}
+                  </div>
+                );
+              })()}
 
               {/* Stats Row (Read) */}
               <div className="w-full max-w-sm bg-[#2d1809]/80 backdrop-blur-sm rounded-xl py-2 px-4 flex justify-between items-center text-[#e2cba5] font-bold shadow-inner border border-[#ffffff10] relative z-10">

@@ -17,6 +17,7 @@ interface CommentSectionProps {
     
     // Playlist-specific props
     songTitles?: string[];
+    playlistType?: 'Song' | 'Audiobook'; // Differentiates music vs audiobook/sermon content
     
     // Deprecated props (kept for backwards compatibility)
     bookId?: string;
@@ -77,6 +78,7 @@ const CommentSection: React.FC<CommentSectionProps> = (props) => {
     const title = props.title || props.bookTitle || '';
     const description = props.description || props.bookDescription;
     const songTitles = props.songTitles;
+    const playlistType = props.playlistType;
 
     const [commentOptions, setCommentOptions] = useState<CommentOption[]>([]);
     const [postedComments, setPostedComments] = useState<Comment[]>([]);
@@ -147,7 +149,7 @@ const CommentSection: React.FC<CommentSectionProps> = (props) => {
             } else {
                 // Generate playlist comment options
                 setGenerating(true);
-                const options = await commentService.generatePlaylistCommentOptions(title, description, songTitles);
+                const options = await commentService.generatePlaylistCommentOptions(title, description, songTitles, playlistType);
                 setCommentOptions(options);
                 setGenerating(false);
             }

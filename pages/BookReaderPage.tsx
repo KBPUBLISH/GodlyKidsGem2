@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
-import { ChevronLeft, ChevronRight, X, Play, Pause, Volume2, Mic, Check, Music, Home, Heart, Star, RotateCcw, Lock, Sparkles, HelpCircle, Share2, Copy, Smartphone, Grid3X3, Loader2, Globe, BookOpen } from 'lucide-react';
+import { ChevronLeft, ChevronRight, X, Play, Pause, Volume2, Mic, Check, Music, Home, Heart, Star, RotateCcw, Lock, Sparkles, HelpCircle, Share2, Copy, Smartphone, Grid3X3, Loader2, Globe, BookOpen, SkipForward, FileText } from 'lucide-react';
 import { ApiService } from '../services/apiService';
 import { voiceCloningService, ClonedVoice } from '../services/voiceCloningService';
 import { translationService, SUPPORTED_LANGUAGES } from '../services/translationService';
@@ -190,6 +190,11 @@ const BookReaderPage: React.FC = () => {
     const isAutoPlayingRef = useRef(false); // Prevent multiple simultaneous auto-play calls
     const alignmentWarningShownRef = useRef(false); // Prevent alignment warning spam
     const hasAutoPlayedOnStartRef = useRef(false); // Track if we've auto-played on book start
+    
+    // TTS Playback Mode: 'auto' = auto page turn, 'page' = current page only
+    const [ttsMode, setTtsMode] = useState<'auto' | 'page'>('auto');
+    const ttsModeRef = useRef<'auto' | 'page'>('auto');
+    const [showTtsModeMenu, setShowTtsModeMenu] = useState(false);
     const [isPageTurning, setIsPageTurning] = useState(false);
     const [flipState, setFlipState] = useState<{ direction: 'next' | 'prev', isFlipping: boolean } | null>(null);
     const touchStartX = useRef<number>(0);
@@ -1469,9 +1474,10 @@ const BookReaderPage: React.FC = () => {
             return;
         }
 
-        // Enable auto-play mode and start playing
-        setAutoPlayMode(true);
-        autoPlayModeRef.current = true;
+        // Enable auto-play mode only if TTS mode is 'auto'
+        const shouldAutoPlay = ttsMode === 'auto';
+        setAutoPlayMode(shouldAutoPlay);
+        autoPlayModeRef.current = shouldAutoPlay;
 
         // Play the first text box on the page (use translated text if available)
         // Note: textBoxes is nested under content in the database schema
@@ -1480,9 +1486,29 @@ const BookReaderPage: React.FC = () => {
         if (pageTextBoxes && pageTextBoxes.length > 0) {
             const translatedTextBoxes = getTranslatedTextBoxes(currentPage);
             const firstBoxText = translatedTextBoxes[0]?.text || pageTextBoxes[0].text;
-            handlePlayText(firstBoxText, 0, e, true); // Pass autoPlay flag
+            handlePlayText(firstBoxText, 0, e, shouldAutoPlay); // Pass autoPlay flag based on mode
         } else {
             console.warn('⚠️ No text boxes found on current page');
+        }
+    };
+    
+    // Toggle TTS mode
+    const toggleTtsMode = (e: React.MouseEvent) => {
+        e.stopPropagation();
+        const newMode = ttsMode === 'auto' ? 'page' : 'auto';
+        setTtsMode(newMode);
+        ttsModeRef.current = newMode;
+        setShowTtsModeMenu(false);
+        
+        // If currently playing and switching modes, update autoPlayMode accordingly
+        if (playing) {
+            if (newMode === 'page') {
+                setAutoPlayMode(false);
+                autoPlayModeRef.current = false;
+            } else {
+                setAutoPlayMode(true);
+                autoPlayModeRef.current = true;
+            }
         }
     };
 
@@ -1646,9 +1672,10 @@ const BookReaderPage: React.FC = () => {
         
         console.log('▶️ Auto-playing TTS on book start (intro video finished)');
         
-        // Enable auto-play mode so page turns automatically after TTS finishes
-        setAutoPlayMode(true);
-        autoPlayModeRef.current = true;
+        // Enable auto-play mode based on ttsMode setting
+        const shouldAutoPlay = ttsModeRef.current === 'auto';
+        setAutoPlayMode(shouldAutoPlay);
+        autoPlayModeRef.current = shouldAutoPlay;
         
         // Longer delay to ensure intro video transition is complete
         // and the first page is fully rendered
@@ -1659,7 +1686,7 @@ const BookReaderPage: React.FC = () => {
             
             // Create synthetic event and trigger playback
             const syntheticEvent = { stopPropagation: () => {} } as React.MouseEvent;
-            handlePlayText(firstBoxText, 0, syntheticEvent, true);
+            handlePlayText(firstBoxText, 0, syntheticEvent, shouldAutoPlay);
         }, 1500); // 1.5s delay to let intro video fade out and page fully settle
         
     }, [loading, introVideoChecked, showIntroVideo, currentPageIndex, effectiveVoiceId, pages, translatedContent.size]);
@@ -3155,9 +3182,9 @@ const BookReaderPage: React.FC = () => {
                 {/* Navigation is now swipe-only - removed click zones */}
             </div>
 
-            {/* Wood Play Button - Positioned above the scroll based on scroll state */}
+            {/* Wood Play Button with TTS Mode Toggle - Positioned above the scroll based on scroll state */}
             <div
-                className={`absolute left-4 z-40 transition-all duration-500`}
+                className={`absolute left-4 z-40 transition-all duration-500 flex flex-col items-center gap-2`}
                 style={{
                     // Position based on scroll state: hidden = bottom, mid = above mid scroll, max = above max scroll
                     bottom: scrollState === 'hidden' 
@@ -3167,6 +3194,34 @@ const BookReaderPage: React.FC = () => {
                             : `calc(${currentPage.scrollMidHeight || 30}% + ${currentPage.scrollOffsetY || 0}% + 1.5rem)` // Above mid scroll + offset
                 }}
             >
+                {/* TTS Mode Toggle Button - Above play button */}
+                <button
+                    onClick={toggleTtsMode}
+                    className={`
+                        relative px-3 py-1.5 rounded-full text-xs font-bold shadow-lg 
+                        transition-all duration-300 flex items-center gap-1.5
+                        border-2 active:scale-95
+                        ${ttsMode === 'auto' 
+                            ? 'bg-gradient-to-r from-amber-500 to-orange-500 text-white border-amber-600' 
+                            : 'bg-gradient-to-r from-blue-500 to-indigo-500 text-white border-blue-600'
+                        }
+                    `}
+                    title={ttsMode === 'auto' ? 'Auto Page Turn ON - Tap to disable' : 'Auto Page Turn OFF - Tap to enable'}
+                >
+                    {ttsMode === 'auto' ? (
+                        <>
+                            <SkipForward className="w-3.5 h-3.5" />
+                            <span>Auto</span>
+                        </>
+                    ) : (
+                        <>
+                            <FileText className="w-3.5 h-3.5" />
+                            <span>Page</span>
+                        </>
+                    )}
+                </button>
+                
+                {/* Main Play Button */}
                 <WoodButton
                     onClick={handlePlayPage}
                     className="p-3"

@@ -248,7 +248,8 @@ class CommentService {
     async generatePlaylistCommentOptions(
         playlistName: string,
         playlistDescription?: string,
-        songTitles?: string[]
+        songTitles?: string[],
+        playlistType?: 'Song' | 'Audiobook'
     ): Promise<CommentOption[]> {
         try {
             const response = await fetch(`${this.baseUrl}ai/generate-playlist-comments`, {
@@ -258,6 +259,7 @@ class CommentService {
                     playlistName,
                     playlistDescription,
                     songTitles,
+                    playlistType: playlistType || 'Song', // Default to Song if not specified
                 }),
             });
 
@@ -266,14 +268,16 @@ class CommentService {
             }
 
             const data = await response.json();
-            return data.comments || this.getFallbackPlaylistComments();
+            const isAudiobook = playlistType === 'Audiobook';
+            return data.comments || (isAudiobook ? this.getFallbackAudiobookComments() : this.getFallbackPlaylistComments());
         } catch (error) {
             console.error('Error generating playlist comment options:', error);
-            return this.getFallbackPlaylistComments();
+            const isAudiobook = playlistType === 'Audiobook';
+            return isAudiobook ? this.getFallbackAudiobookComments() : this.getFallbackPlaylistComments();
         }
     }
 
-    // Fallback comments for playlists when AI generation fails
+    // Fallback comments for MUSIC playlists when AI generation fails
     getFallbackPlaylistComments(): CommentOption[] {
         return [
             { text: "I love these songs!", emoji: "🎵", color: "pink" },
@@ -288,6 +292,24 @@ class CommentService {
             { text: "Some songs are tricky", emoji: "🤔", color: "amber" },
             { text: "Pretty good music!", emoji: "👍", color: "lime" },
             { text: "Can't stop listening!", emoji: "🎸", color: "cyan" },
+        ];
+    }
+
+    // Fallback comments for AUDIOBOOK/SERMON playlists when AI generation fails
+    getFallbackAudiobookComments(): CommentOption[] {
+        return [
+            { text: "I love this story!", emoji: "📚", color: "pink" },
+            { text: "Such a great lesson!", emoji: "💡", color: "yellow" },
+            { text: "I learned something new!", emoji: "✨", color: "orange" },
+            { text: "Best stories ever!", emoji: "⭐", color: "gold" },
+            { text: "I listen every night!", emoji: "🌙", color: "blue" },
+            { text: "The characters are fun!", emoji: "😊", color: "purple" },
+            { text: "Makes me think!", emoji: "🤔", color: "green" },
+            { text: "I want more episodes!", emoji: "📖", color: "teal" },
+            { text: "So inspiring!", emoji: "🙏", color: "indigo" },
+            { text: "Some parts are long", emoji: "⏰", color: "amber" },
+            { text: "Really good stories!", emoji: "👍", color: "lime" },
+            { text: "Love listening to this!", emoji: "❤️", color: "cyan" },
         ];
     }
 }

@@ -1,5 +1,5 @@
 import { API_BASE_URL, MOCK_BOOKS } from '../constants';
-import { Book } from '../types';
+import { Book, FeaturedEpisode } from '../types';
 import { authService } from './authService';
 import { DespiaService } from './despiaService';
 
@@ -500,6 +500,32 @@ export const ApiService = {
       return combined;
     } catch (error) {
       console.warn("Failed to fetch featured content:", error);
+      return [];
+    }
+  },
+
+  // Get featured episodes (individual playlist items marked as featured)
+  getFeaturedEpisodes: async (): Promise<FeaturedEpisode[]> => {
+    const cacheKey = 'featured_episodes';
+    const cached = getCached<FeaturedEpisode[]>(cacheKey);
+    if (cached) return cached;
+
+    try {
+      const baseUrl = getApiBaseUrl();
+      const response = await fetchWithTimeout(`${baseUrl}playlists/featured-episodes`, {
+        method: 'GET',
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        const result = Array.isArray(data) ? data : [];
+        setCache(cacheKey, result);
+        console.log(`🎵 Featured episodes loaded: ${result.length} items`);
+        return result;
+      }
+      return [];
+    } catch (error) {
+      console.warn("Failed to fetch featured episodes:", error);
       return [];
     }
   },

@@ -1,14 +1,62 @@
 
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import BookCard from '../components/ui/BookCard';
 import Header from '../components/layout/Header';
 import SectionTitle from '../components/ui/SectionTitle';
 import { useBooks } from '../context/BooksContext';
 import { ApiService } from '../services/apiService';
-import { Search, ChevronDown } from 'lucide-react';
+import { Search, ChevronDown, BookOpen } from 'lucide-react';
 
 const ageOptions = ['All Ages', '3+', '4+', '5+', '6+', '7+', '8+', '9+', '10+'];
+
+// Series card component
+const SeriesCard: React.FC<{ series: any; onClick: () => void }> = ({ series, onClick }) => (
+  <div 
+    onClick={onClick}
+    className="cursor-pointer group"
+  >
+    <div className="bg-white/10 backdrop-blur-sm rounded-2xl overflow-hidden shadow-lg border-2 border-purple-400/30 hover:border-purple-400/60 hover:shadow-2xl hover:scale-105 transition-all">
+      <div className="aspect-[3/4] bg-gradient-to-br from-purple-500 to-indigo-600 relative overflow-hidden">
+        {series.coverImage ? (
+          <img 
+            src={series.coverImage} 
+            alt={series.title} 
+            className="w-full h-full object-cover"
+            loading="lazy"
+          />
+        ) : (
+          <div className="w-full h-full flex items-center justify-center">
+            <span className="text-6xl">📚</span>
+          </div>
+        )}
+        {/* Series badge */}
+        <div className="absolute top-2 left-2 bg-purple-600/90 backdrop-blur-sm text-white text-[10px] font-bold px-2 py-1 rounded-md flex items-center gap-1">
+          <BookOpen className="w-3 h-3" />
+          Series
+        </div>
+        {/* Books count badge */}
+        <div className="absolute bottom-2 right-2 bg-black/60 backdrop-blur-sm text-white text-xs font-bold px-2 py-1 rounded-md">
+          {series.books?.length || 0} books
+        </div>
+        {/* Premium badge */}
+        {series.isMembersOnly && (
+          <div className="absolute top-2 right-2 bg-gradient-to-r from-[#FFD700] to-[#FFA500] text-[#5c2e0b] text-[10px] font-bold px-2 py-1 rounded-full">
+            👑
+          </div>
+        )}
+      </div>
+      <div className="p-3">
+        <h3 className="text-white text-sm font-bold mb-0.5 truncate font-display">
+          {series.title}
+        </h3>
+        {series.author && (
+          <p className="text-white/70 text-xs truncate">{series.author}</p>
+        )}
+      </div>
+    </div>
+  </div>
+);
 
 const ReadPage: React.FC = () => {
   const navigate = useNavigate();
@@ -20,6 +68,7 @@ const ReadPage: React.FC = () => {
   const [selectedCategory, setSelectedCategory] = useState<string>('All');
   const [categories, setCategories] = useState<string[]>(['All']);
   const [showCategoryDropdown, setShowCategoryDropdown] = useState(false);
+  const [bookSeries, setBookSeries] = useState<any[]>([]);
   const categoryDropdownRef = useRef<HTMLDivElement>(null);
   const ageDropdownRef = useRef<HTMLDivElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -43,7 +92,7 @@ const ReadPage: React.FC = () => {
     lastScrollY.current = currentScrollY;
   };
 
-  // Fetch categories on mount (book type only)
+  // Fetch categories and book series on mount
   useEffect(() => {
     const fetchCategories = async () => {
       try {
@@ -57,8 +106,34 @@ const ReadPage: React.FC = () => {
         setCategories(uniqueCategories);
       }
     };
+    
+    const fetchBookSeries = async () => {
+      try {
+        const series = await ApiService.getBookSeries();
+        setBookSeries(series);
+        console.log('📚 Book series loaded:', series.length);
+      } catch (error) {
+        console.error('Error fetching book series:', error);
+      }
+    };
+    
     fetchCategories();
+    fetchBookSeries();
   }, [books]);
+
+  // Create a set of book IDs that belong to a series
+  const booksInSeries = useMemo(() => {
+    const bookIds = new Set<string>();
+    bookSeries.forEach(series => {
+      series.books?.forEach((bookRef: any) => {
+        const bookId = bookRef.book?._id || bookRef.book || bookRef._id;
+        if (bookId) {
+          bookIds.add(bookId.toString());
+        }
+      });
+    });
+    return bookIds;
+  }, [bookSeries]);
 
   // Close dropdowns when clicking outside
   useEffect(() => {
@@ -79,8 +154,14 @@ const ReadPage: React.FC = () => {
     }
   }, [showCategoryDropdown, showAgeDropdown]);
 
-  // Filter for reading books (not strictly audio only)
-  const readingBooks = books.filter(b => !b.isAudio);
+  // Filter for reading books (not strictly audio only) and exclude books that are part of a series
+  const readingBooks = books.filter(b => {
+    if (b.isAudio) return false;
+    // Exclude books that are part of a series
+    const bookId = b.id || (b as any)._id;
+    if (booksInSeries.has(bookId)) return false;
+    return true;
+  });
 
   // Filter by category (supports both single category and categories array)
   const categoryFilteredBooks = selectedCategory === 'All'
@@ -91,6 +172,16 @@ const ReadPage: React.FC = () => {
           ? (b as any).categories 
           : (b.category ? [b.category] : []);
         return bookCategories.includes(selectedCategory);
+      });
+
+  // Filter series by category
+  const categoryFilteredSeries = selectedCategory === 'All'
+    ? bookSeries
+    : bookSeries.filter(s => {
+        const seriesCategories = s.categories && Array.isArray(s.categories) 
+          ? s.categories 
+          : (s.category ? [s.category] : []);
+        return seriesCategories.includes(selectedCategory);
       });
 
   // Filter by age
@@ -109,11 +200,50 @@ const ReadPage: React.FC = () => {
         return true;
       });
 
+  // Filter series by age
+  const ageFilteredSeries = selectedAge === 'All Ages'
+    ? categoryFilteredSeries
+    : categoryFilteredSeries.filter(s => {
+        const seriesAge = s.level || s.minAge?.toString() || '';
+        if (selectedAge === '3+') return seriesAge.includes('3');
+        if (selectedAge === '4+') return seriesAge.includes('4');
+        if (selectedAge === '5+') return seriesAge.includes('5');
+        if (selectedAge === '6+') return seriesAge.includes('6');
+        if (selectedAge === '7+') return seriesAge.includes('7');
+        if (selectedAge === '8+') return seriesAge.includes('8');
+        if (selectedAge === '9+') return seriesAge.includes('9');
+        if (selectedAge === '10+') return seriesAge.includes('10');
+        return true;
+      });
+
   // Apply Search Filter
   const filteredBooks = ageFilteredBooks.filter(b => 
     b.title.toLowerCase().includes(searchQuery.toLowerCase()) || 
     (b.author && b.author.toLowerCase().includes(searchQuery.toLowerCase()))
   );
+
+  // Apply search to series
+  const filteredSeries = ageFilteredSeries.filter(s =>
+    s.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    (s.author && s.author.toLowerCase().includes(searchQuery.toLowerCase()))
+  );
+
+  // Combine books and series for display
+  const displayItems = useMemo(() => {
+    const items: Array<{ type: 'book' | 'series'; data: any }> = [];
+    
+    // Add series first (they're collections, so show them prominently)
+    filteredSeries.forEach(series => {
+      items.push({ type: 'series', data: series });
+    });
+    
+    // Add standalone books
+    filteredBooks.forEach(book => {
+      items.push({ type: 'book', data: book });
+    });
+    
+    return items;
+  }, [filteredBooks, filteredSeries]);
 
   return (
     <div 
@@ -234,18 +364,26 @@ const ReadPage: React.FC = () => {
            <div className="text-white font-display text-center mt-10">Loading library...</div>
         ) : (
           <>
-            {filteredBooks.length === 0 ? (
+            {displayItems.length === 0 ? (
                 <div className="text-white/80 font-display text-center mt-10 p-6 bg-black/20 rounded-xl backdrop-blur-sm">
                     {searchQuery ? `No stories found matching "${searchQuery}"` : `No books found in ${selectedCategory}`}
                 </div>
             ) : (
                 <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 max-w-6xl mx-auto">
-                    {filteredBooks.map(book => (
-                    <BookCard 
-                        key={book.id} 
-                        book={book} 
-                        onClick={(id) => navigate(`/book/${id}`, { state: { from: '/read' } })} 
-                    />
+                    {displayItems.map((item, index) => (
+                      item.type === 'series' ? (
+                        <SeriesCard
+                          key={`series-${item.data._id}`}
+                          series={item.data}
+                          onClick={() => navigate(`/book-series/${item.data._id}`)}
+                        />
+                      ) : (
+                        <BookCard 
+                          key={item.data.id || `book-${index}`} 
+                          book={item.data} 
+                          onClick={(id) => navigate(`/book/${id}`, { state: { from: '/read' } })} 
+                        />
+                      )
                     ))}
                 </div>
             )}

@@ -373,10 +373,17 @@ const PlaylistDetailPage: React.FC = () => {
     }
 
     if (!playlist || playlist.items.length === 0) {
+        const isAudiobook = playlist?.type === 'Audiobook';
         return (
             <div className="flex flex-col items-center justify-center h-full p-6 bg-[#fdf6e3]">
-                <Music className="w-16 h-16 text-[#8B4513] mb-4 opacity-50" />
-                <p className="text-[#5c2e0b] text-lg font-display mb-4">Playlist not found or empty</p>
+                {isAudiobook ? (
+                    <Headphones className="w-16 h-16 text-[#8B4513] mb-4 opacity-50" />
+                ) : (
+                    <Music className="w-16 h-16 text-[#8B4513] mb-4 opacity-50" />
+                )}
+                <p className="text-[#5c2e0b] text-lg font-display mb-4">
+                    {isAudiobook ? 'Audiobook not found or empty' : 'Playlist not found or empty'}
+                </p>
                 <button
                     onClick={() => navigate('/listen')}
                     className="px-6 py-2 bg-[#8B4513] text-white rounded-lg hover:bg-[#6B3410] transition-colors"
@@ -763,13 +770,14 @@ const PlaylistDetailPage: React.FC = () => {
                 
                 {/* Comment Section for Playlist */}
                 {playlist && playlist._id && (
-                    <div className="px-4 pb-8">
+                    <div className="relative z-20 mx-4 mb-8 mt-4">
                         <CommentSection
                             contentId={playlist._id}
                             contentType="playlist"
                             title={playlist.title}
                             description={playlist.description}
                             songTitles={playlist.items?.map((item: any) => item.title)}
+                            playlistType={playlist.type as 'Song' | 'Audiobook'}
                         />
                     </div>
                 )}

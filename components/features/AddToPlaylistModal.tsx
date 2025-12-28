@@ -87,40 +87,67 @@ const AddToPlaylistModal: React.FC<AddToPlaylistModalProps> = ({
     };
     
     const handleCreatePlaylist = async () => {
-        if (!newPlaylistName.trim()) return;
+        console.log('🎵 Create playlist clicked', { newPlaylistName, sourcePlaylistId, itemId });
+        
+        if (!newPlaylistName.trim()) {
+            console.log('⚠️ No playlist name provided');
+            alert('Please enter a playlist name');
+            return;
+        }
         
         const userId = getUserId();
-        if (!userId) return;
+        console.log('👤 User ID:', userId);
+        
+        if (!userId) {
+            console.log('⚠️ No user ID - not logged in');
+            alert('Please sign in to create playlists');
+            return;
+        }
         
         setCreating(true);
-        const playlist = await userPlaylistService.createPlaylist(
-            userId,
-            newPlaylistName.trim(),
-            undefined,
-            generatedCover || itemCover // Use AI cover or item cover as default
-        );
+        console.log('📝 Creating playlist...');
         
-        if (playlist) {
-            // If AI cover was generated, update the playlist with AI metadata
-            if (generatedCover && showAiCover) {
-                await userPlaylistService.updatePlaylist(playlist._id, {
-                    aiGenerated: {
-                        isAiGenerated: true,
-                        prompt: coverPrompt,
-                        style: selectedStyle,
-                        generatedAt: new Date().toISOString(),
-                    },
-                });
+        try {
+            const playlist = await userPlaylistService.createPlaylist(
+                userId,
+                newPlaylistName.trim(),
+                undefined,
+                generatedCover || itemCover // Use AI cover or item cover as default
+            );
+            
+            console.log('📋 Playlist created:', playlist);
+            
+            if (playlist) {
+                // If AI cover was generated, update the playlist with AI metadata
+                if (generatedCover && showAiCover) {
+                    await userPlaylistService.updatePlaylist(playlist._id, {
+                        aiGenerated: {
+                            isAiGenerated: true,
+                            prompt: coverPrompt,
+                            style: selectedStyle,
+                            generatedAt: new Date().toISOString(),
+                        },
+                    });
+                }
+                
+                // Auto-add the current item to the new playlist
+                console.log('➕ Adding item to playlist...');
+                const result = await userPlaylistService.addItem(playlist._id, sourcePlaylistId, itemId);
+                console.log('✅ Item add result:', result);
+                
+                setSuccess(playlist._id);
+                setTimeout(() => {
+                    onClose();
+                }, 1000);
+            } else {
+                console.log('❌ Failed to create playlist');
+                alert('Failed to create playlist. Please try again.');
             }
-            
-            // Auto-add the current item to the new playlist
-            await userPlaylistService.addItem(playlist._id, sourcePlaylistId, itemId);
-            
-            setSuccess(playlist._id);
-            setTimeout(() => {
-                onClose();
-            }, 1000);
+        } catch (error) {
+            console.error('❌ Error creating playlist:', error);
+            alert('Error creating playlist. Please try again.');
         }
+        
         setCreating(false);
     };
     

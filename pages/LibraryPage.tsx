@@ -231,18 +231,18 @@ const LibraryPage: React.FC = () => {
 
         {/* User Playlist Cards */}
         {filteredUserPlaylists.map(playlist => (
-          <div 
+          <button 
             key={playlist._id} 
-            className="flex-shrink-0 w-[42vw] md:w-[30vw] lg:w-[23vw] max-w-[200px] cursor-pointer relative group"
+            className="flex-shrink-0 w-[42vw] md:w-[30vw] lg:w-[23vw] max-w-[200px] text-left relative group"
             onClick={() => navigate(`/my-playlist/${playlist._id}`)}
           >
-            <div className="bg-white/10 backdrop-blur-sm rounded-2xl overflow-hidden shadow-lg border-2 border-white/20 hover:shadow-2xl hover:scale-105 transition-all">
+            <div className="bg-white/10 backdrop-blur-sm rounded-2xl overflow-hidden shadow-lg border-2 border-white/20 active:scale-95 transition-transform">
               <div className="aspect-square bg-gradient-to-br from-purple-500 to-pink-600 relative overflow-hidden">
                 {playlist.coverImage ? (
                   <img
                     src={playlist.coverImage}
                     alt={playlist.name}
-                    className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-300"
+                    className="w-full h-full object-cover"
                     loading="lazy"
                   />
                 ) : (
@@ -256,13 +256,6 @@ const LibraryPage: React.FC = () => {
                     <span className="text-white text-xs font-medium">✨ AI</span>
                   </div>
                 )}
-                {/* Delete Button */}
-                <button
-                  onClick={(e) => handleDeleteUserPlaylist(playlist._id, e)}
-                  className="absolute top-2 right-2 bg-red-500/80 backdrop-blur-sm p-1.5 rounded-full opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-600"
-                >
-                  <Trash2 className="w-3.5 h-3.5 text-white" />
-                </button>
               </div>
               <div className="p-3">
                 <h3 className="text-white font-bold text-sm truncate">{playlist.name}</h3>
@@ -271,7 +264,7 @@ const LibraryPage: React.FC = () => {
                 </p>
               </div>
             </div>
-          </div>
+          </button>
         ))}
       </div>
     </div>

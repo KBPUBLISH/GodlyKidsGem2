@@ -2,6 +2,7 @@ import React, { useEffect, useState, useMemo } from 'react';
 import { MessageCircle, Loader2, Send, Sparkles } from 'lucide-react';
 import { commentService, CommentOption, BookComment } from '../../services/commentService';
 import { authService } from '../../services/authService';
+import { useAudio } from '../../context/AudioContext';
 
 interface CommentSectionProps {
     bookId: string;
@@ -37,9 +38,14 @@ const CommentSection: React.FC<CommentSectionProps> = ({ bookId, bookTitle, book
     const [generating, setGenerating] = useState(false);
     const [posting, setPosting] = useState<string | null>(null);
     const [showSuccess, setShowSuccess] = useState(false);
+    
+    // Audio for sound effects
+    const { playClick, playSuccess: playSfxSuccess } = useAudio();
 
-    const userId = authService.getCurrentUserId() || 'anonymous';
-    const userName = authService.getCurrentUserName() || 'Anonymous';
+    // Get user info from authService
+    const user = authService.getUser();
+    const userId = user?.email || user?.id || user?._id || 'anonymous';
+    const userName = user?.name || user?.firstName || user?.username || 'Anonymous';
 
     // Generate random positions and rotations for blocks
     const blockStyles = useMemo(() => {
@@ -89,6 +95,9 @@ const CommentSection: React.FC<CommentSectionProps> = ({ bookId, bookTitle, book
     const handleSelectComment = async (option: CommentOption) => {
         if (posting) return;
         
+        // Play click sound when selecting
+        playClick();
+        
         setPosting(option.text);
         
         const newComment = await commentService.postComment(
@@ -101,6 +110,8 @@ const CommentSection: React.FC<CommentSectionProps> = ({ bookId, bookTitle, book
         );
         
         if (newComment) {
+            // Play success sound when posted
+            playSfxSuccess();
             setPostedComments(prev => [newComment, ...prev]);
             setShowSuccess(true);
             setTimeout(() => setShowSuccess(false), 2000);

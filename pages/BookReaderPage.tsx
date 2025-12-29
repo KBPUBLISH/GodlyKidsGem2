@@ -506,9 +506,9 @@ const BookReaderPage: React.FC = () => {
                     // Track book read for Report Card
                     activityTrackingService.trackBookRead(bookId, book.title);
                     
-                    // Record play event for real-time trending
+                    // Record play event for real-time trending (with total pages for engagement tracking)
                     import('../services/playEventService').then(({ playEventService }) => {
-                        playEventService.recordBookPlay(bookId);
+                        playEventService.recordBookPlay(bookId, undefined, data.length);
                     }).catch(() => {});
                     
                     // Increment book opened counter for review prompt
@@ -1096,6 +1096,11 @@ const BookReaderPage: React.FC = () => {
                 const totalPages = pages.length;
                 const currentPage = currentPageIndexRef.current + 1;
                 analyticsService.bookReadProgress(bookId, pagesViewed, totalPages, currentPage, bookTitle);
+                
+                // End play event session for trending engagement tracking
+                import('../services/playEventService').then(({ playEventService }) => {
+                    playEventService.endBookSession(bookId);
+                }).catch(() => {});
             }
         };
     }, [bookId, pages.length, bookTitle]);
@@ -1224,6 +1229,10 @@ const BookReaderPage: React.FC = () => {
                 // Track page read for Report Card
                 if (bookId) {
                     activityTrackingService.trackPageRead(bookId, nextIndex);
+                    // Update engagement for trending (pages viewed)
+                    import('../services/playEventService').then(({ playEventService }) => {
+                        playEventService.updateBookEngagement(bookId, nextIndex + 1, pages.length);
+                    }).catch(() => {});
                 }
                 // Use the determined scroll state
                 setScrollState(scrollStateToUse);

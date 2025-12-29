@@ -157,6 +157,9 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     // Track listening time - store last tracked time to calculate deltas
     const lastListeningTimeRef = useRef<number>(0);
     const listeningTimeAccumulatorRef = useRef<number>(0);
+    // Track engagement update intervals (update every 30 seconds)
+    const lastEngagementUpdateRef = useRef<number>(0);
+    const ENGAGEMENT_UPDATE_INTERVAL = 30; // seconds
 
     // Create audio element once on mount
     useEffect(() => {
@@ -186,6 +189,31 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
                 }
             }
             lastListeningTimeRef.current = now;
+            
+            // Update engagement for trending algorithm (every 30 seconds)
+            if (!isNaN(audio.currentTime) && !isNaN(audio.duration) && audio.duration > 0) {
+                const shouldUpdate = audio.currentTime - lastEngagementUpdateRef.current >= ENGAGEMENT_UPDATE_INTERVAL;
+                if (shouldUpdate) {
+                    lastEngagementUpdateRef.current = audio.currentTime;
+                    // Send engagement update to backend
+                    setCurrentPlaylist(playlist => {
+                        if (playlist) {
+                            setCurrentTrackIndex(idx => {
+                                import('../services/playEventService').then(({ playEventService }) => {
+                                    playEventService.updateEpisodeEngagement(
+                                        playlist._id,
+                                        idx,
+                                        audio.currentTime,
+                                        audio.duration
+                                    );
+                                }).catch(() => {});
+                                return idx;
+                            });
+                        }
+                        return playlist;
+                    });
+                }
+            }
         });
 
         audio.addEventListener('loadedmetadata', () => {
@@ -193,21 +221,37 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         });
 
         audio.addEventListener('ended', () => {
-            // Auto-advance to next track and auto-play
+            // Send final engagement update for completed track (100%)
             setCurrentPlaylist(playlist => {
                 if (playlist) {
                     setCurrentTrackIndex(prev => {
+                        // Send final engagement for the track that just ended
+                        if (audio.duration > 0) {
+                            import('../services/playEventService').then(({ playEventService }) => {
+                                playEventService.updateEpisodeEngagement(
+                                    playlist._id,
+                                    prev,
+                                    audio.duration, // Full duration since track completed
+                                    audio.duration
+                                );
+                            }).catch(() => {});
+                        }
+                        
                         const nextIndex = prev + 1;
                         if (nextIndex < playlist.items.length) {
                             // There's a next track - keep playing
                             console.log('🎵 Track ended, auto-playing next track:', nextIndex + 1, '/', playlist.items.length);
                             setIsPlaying(true); // Keep playing state true for next track
                             
+                            // Reset engagement tracking for new track
+                            lastEngagementUpdateRef.current = 0;
+                            
                             // Record play event for the next track (real-time trending)
                             const track = playlist.items[nextIndex];
                             const trackId = (track as any)?._id;
+                            const trackDuration = track?.duration || 0;
                             import('../services/playEventService').then(({ playEventService }) => {
-                                playEventService.recordEpisodePlay(playlist._id, nextIndex, trackId);
+                                playEventService.recordEpisodePlay(playlist._id, nextIndex, trackId, undefined, trackDuration);
                             }).catch(() => {});
                             
                             return nextIndex;
@@ -440,11 +484,15 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         setCurrentPlaylist(playlist);
         setCurrentTrackIndex(startIndex);
         setIsPlaying(true);
+        
+        // Reset engagement tracking for new track
+        lastEngagementUpdateRef.current = 0;
 
         // Track analytics
         const playlistId = playlist._id;
         const track = playlist.items[startIndex];
         const trackId = (track as any)?._id;
+        const trackDuration = track?.duration || 0; // Get track duration in seconds
 
         if (playlistId) {
             playHistoryService.recordPlay(playlistId, trackId);
@@ -459,9 +507,9 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
                 ApiService.incrementPlaylistPlayCount(playlistId);
             }
             
-            // Record play event for real-time trending
+            // Record play event for real-time trending (with total duration for engagement tracking)
             import('../services/playEventService').then(({ playEventService }) => {
-                playEventService.recordEpisodePlay(playlistId, startIndex, trackId);
+                playEventService.recordEpisodePlay(playlistId, startIndex, trackId, undefined, trackDuration);
             }).catch(() => {});
         }
     }, []);

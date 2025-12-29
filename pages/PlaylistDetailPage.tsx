@@ -215,9 +215,15 @@ const PlaylistDetailPage: React.FC = () => {
         if (playlist && playlistId) {
             // Import and use personal play count service
             import('../services/playCountService').then(({ playCountService }) => {
-                // Get personal play count for this playlist
-                const personalCount = playCountService.getPlayCount(playlistId);
-                setPlayCount(personalCount);
+                // Get total plays across all episodes in this playlist
+                const episodeIds = playlist.items
+                    ?.map(item => item._id)
+                    .filter((id): id is string => !!id) || [];
+                
+                // Sum up plays from all episodes + any direct playlist plays
+                const episodePlays = playCountService.getPlaylistTotalPlays(episodeIds);
+                const playlistPlays = playCountService.getPlayCount(playlistId);
+                setPlayCount(episodePlays + playlistPlays);
             });
         }
     }, [playlist, playlistId]);

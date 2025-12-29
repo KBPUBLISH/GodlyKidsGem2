@@ -62,6 +62,7 @@ interface BookPageRendererProps {
     onPlayText?: (text: string, index: number, e: React.MouseEvent) => void;
     highlightedWordIndex?: number;
     wordAlignment?: { words: Array<{ word: string; start: number; end: number }> } | null;
+    onVideoTransition?: () => void; // Called when video sequences transition to keep audio active
 }
 
 export const BookPageRenderer: React.FC<BookPageRendererProps> = ({
@@ -71,7 +72,8 @@ export const BookPageRenderer: React.FC<BookPageRendererProps> = ({
     onScrollStateChange,
     onPlayText,
     highlightedWordIndex,
-    wordAlignment
+    wordAlignment,
+    onVideoTransition
 }) => {
     // DEBUG: Log scroll URL on every render
     console.log('📜 BookPageRenderer - scrollUrl:', page.scrollUrl, '| scrollState:', scrollState, '| pageId:', page.id);
@@ -286,6 +288,10 @@ export const BookPageRenderer: React.FC<BookPageRendererProps> = ({
         if (sortedVideoSequence.length > 0) {
             const nextIndex = (currentVideoIndex + 1) % sortedVideoSequence.length;
             console.log(`🎬 Video ${currentVideoIndex + 1} ended, switching to video ${nextIndex + 1} of ${sortedVideoSequence.length}`);
+            
+            // Notify parent to keep AudioContext active during transition
+            // This prevents TTS from pausing when videos switch
+            onVideoTransition?.();
             
             // Switch to the other buffer (which should be preloaded)
             const newActiveBuffer = activeBuffer === 'A' ? 'B' : 'A';

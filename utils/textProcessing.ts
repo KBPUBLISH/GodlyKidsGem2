@@ -9,12 +9,13 @@
 // - With special chars: [excitedly], [whispers softly]
 const EMOTIONAL_CUE_REGEX = /\[[^\]]+\]/g;
 
-// Regex to match @CharacterName tags at the start of text
+// Regex to match @CharacterName tags ANYWHERE in text (global)
 // Format: @CharacterName followed by space (the name is alphanumeric only)
-const CHARACTER_TAG_REGEX = /^@\w+\s+/;
+const CHARACTER_TAG_REGEX = /@\w+\s+/g;
 
-// Regex to match @CharacterName "quoted text" pattern - extracts just the quoted text
-const CHARACTER_QUOTED_REGEX = /^@\w+\s+"([^"]+)"(.*)$/s;
+// Regex to match @CharacterName "quoted text" pattern ANYWHERE - extracts just the quoted text
+// This is used globally to replace all instances
+const CHARACTER_QUOTED_REGEX = /@\w+\s+"([^"]+)"/g;
 
 /**
  * Process text with emotional cues for TTS
@@ -29,16 +30,11 @@ export function processTextWithEmotionalCues(text: string): {
   const emotions: Array<{ emotion: string; position: number }> = [];
   let position = 0;
   
-  // First handle @CharacterName tag
-  let textWithoutCharTag = text;
-  const quotedMatch = text.match(CHARACTER_QUOTED_REGEX);
-  if (quotedMatch) {
-    // Extract just the quoted text (without quotes)
-    textWithoutCharTag = quotedMatch[1] + (quotedMatch[2] || '');
-  } else {
-    // Fallback: just remove @CharacterName prefix
-    textWithoutCharTag = text.replace(CHARACTER_TAG_REGEX, '');
-  }
+  // First handle @CharacterName tags (can appear anywhere in text)
+  // Step 1: Replace @CharacterName "quoted text" with just the quoted text (no quotes)
+  let textWithoutCharTag = text.replace(/@\w+\s+"([^"]+)"/g, '$1');
+  // Step 2: Remove any remaining @CharacterName tags (without quotes)
+  textWithoutCharTag = textWithoutCharTag.replace(/@\w+\s+/g, '');
   
   // Find all emotional cues
   let match;
@@ -61,21 +57,16 @@ export function processTextWithEmotionalCues(text: string): {
  * Remove emotional cues and @CharacterName tags from text
  * Returns clean text without any [bracketed content] markers or @CharacterName prefixes
  * For @CharacterName "quoted text" format, extracts just the quoted text (without quotes)
+ * Handles @CharacterName appearing ANYWHERE in text (not just at start)
  */
 export function removeEmotionalCues(text: string): string {
-  let cleanText = text;
+  // Step 1: Replace @CharacterName "quoted text" with just the quoted text (no quotes)
+  // This handles patterns like: 'Hello. @Moses "Let my people go!" The end.'
+  let cleanText = text.replace(/@\w+\s+"([^"]+)"/g, '$1');
   
-  // Check for @CharacterName "quoted text" pattern first
-  const quotedMatch = text.match(CHARACTER_QUOTED_REGEX);
-  if (quotedMatch) {
-    // Extract just the quoted text (group 1) plus any text after (group 2)
-    const quotedText = quotedMatch[1];
-    const afterText = quotedMatch[2] || '';
-    cleanText = quotedText + afterText;
-  } else {
-    // Fallback: just remove @CharacterName prefix
-    cleanText = text.replace(CHARACTER_TAG_REGEX, '');
-  }
+  // Step 2: Remove any remaining @CharacterName tags (without quotes)
+  // This handles patterns like: '@Moses said hello'
+  cleanText = cleanText.replace(/@\w+\s+/g, '');
   
   return cleanText
     .replace(EMOTIONAL_CUE_REGEX, '') // Remove [bracketed content]

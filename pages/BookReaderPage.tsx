@@ -177,48 +177,60 @@ const BookReaderPage: React.FC = () => {
      * 2. No tag -> Use narrator voice (defaultNarratorVoiceId or user's selected voice)
      */
     const getVoiceForText = (text: string): { voiceId: string; cleanText: string; characterName?: string } => {
-        // Check for @Character tag at the start of text
+        // Check for @Character tag ANYWHERE in text (not just at start)
         // Format: @CharacterName "dialogue text" - only reads the quoted part
-        const match = text.match(/^@(\w+)\s+"([^"]+)"(.*)$/s);
+        // This handles cases like: 'Hello. @Moses "Let my people go!" The end.'
+        const match = text.match(/@(\w+)\s+"([^"]+)"/);
         
         if (match) {
-            const [, charName, quotedText, afterQuote] = match;
+            const [fullMatch, charName, quotedText] = match;
             // Find character in characterVoices array (case-insensitive)
             const character = characterVoices.find(c => 
                 c.characterName.toLowerCase() === charName.toLowerCase()
             );
             
+            // Clean text: replace @CharacterName "quoted" with just the quoted text, remove other @tags
+            const cleanText = text
+                .replace(/@\w+\s+"([^"]+)"/g, '$1') // Replace @Name "text" with just text
+                .replace(/@\w+\s+/g, '') // Remove any remaining @Name tags
+                .replace(/\s+/g, ' ')
+                .trim();
+            
             if (character && character.voiceId) {
-                // Only speak the text inside the quotes (without the quotes)
                 console.log(`🎭 Character voice: @${charName} -> "${quotedText}" (voice: ${character.voiceId})`);
                 return { 
                     voiceId: character.voiceId, 
-                    cleanText: quotedText.trim(),
+                    cleanText,
                     characterName: character.characterName
                 };
             }
             // Character not found in mappings, use narrator voice
             console.warn(`⚠️ Character @${charName} not found in voice mappings, using narrator voice`);
-            // Still extract just the quoted text
             return {
                 voiceId: effectiveNarratorVoiceId,
-                cleanText: quotedText.trim()
+                cleanText
             };
         }
         
-        // Check for @Character without quotes (fallback - reads everything after)
-        const fallbackMatch = text.match(/^@(\w+)\s+(.*)$/s);
+        // Check for @Character without quotes (fallback - reads everything after the tag)
+        const fallbackMatch = text.match(/@(\w+)\s+/);
         if (fallbackMatch) {
-            const [, charName, remainingText] = fallbackMatch;
+            const [, charName] = fallbackMatch;
             const character = characterVoices.find(c => 
                 c.characterName.toLowerCase() === charName.toLowerCase()
             );
+            
+            // Clean text: remove @CharacterName tags
+            const cleanText = text
+                .replace(/@\w+\s+/g, '')
+                .replace(/\s+/g, ' ')
+                .trim();
             
             if (character && character.voiceId) {
                 console.log(`🎭 Character voice (no quotes): @${charName} -> ${character.voiceId}`);
                 return { 
                     voiceId: character.voiceId, 
-                    cleanText: remainingText.trim(),
+                    cleanText,
                     characterName: character.characterName
                 };
             }
@@ -3117,6 +3129,20 @@ const BookReaderPage: React.FC = () => {
                             onPlayText={handlePlayText}
                             highlightedWordIndex={currentWordIndex}
                             wordAlignment={wordAlignment}
+                            onVideoTransition={() => {
+                                // Keep AudioContext active during video transitions
+                                // This prevents TTS from pausing when videos switch
+                                if (audioContextRef.current && audioContextRef.current.state === 'suspended') {
+                                    audioContextRef.current.resume().catch(() => {});
+                                }
+                                if (bookMusicCtxRef.current && bookMusicCtxRef.current.state === 'suspended') {
+                                    bookMusicCtxRef.current.resume().catch(() => {});
+                                }
+                                // Also ensure any playing TTS audio continues
+                                if (currentAudioRef.current && currentAudioRef.current.paused && playing) {
+                                    currentAudioRef.current.play().catch(() => {});
+                                }
+                            }}
                         />
                     </div>
 

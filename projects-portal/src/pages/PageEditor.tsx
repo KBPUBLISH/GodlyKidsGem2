@@ -104,6 +104,10 @@ const PageEditor: React.FC = () => {
     
     // Character voices for @ autocomplete
     const [characterVoices, setCharacterVoices] = useState<Array<{ characterName: string; voiceId: string; color?: string }>>([]);
+    
+    // TTS Cache clearing
+    const [clearingCache, setClearingCache] = useState(false);
+    const [cacheCleared, setCacheCleared] = useState(false);
     const [showCharacterSuggestions, setShowCharacterSuggestions] = useState(false);
     const [characterFilter, setCharacterFilter] = useState('');
     const [cursorPosition, setCursorPosition] = useState(0);
@@ -649,6 +653,34 @@ const PageEditor: React.FC = () => {
         handleLeftResize(e);
         handleRightResize(e);
         handleCanvasResize(e);
+    };
+
+    // Clear TTS cache for this book - forces regeneration of all audio
+    const handleClearTTSCache = async () => {
+        if (!bookId) return;
+        
+        setClearingCache(true);
+        setCacheCleared(false);
+        
+        try {
+            const response = await apiClient.delete('/api/tts/clear-cache', {
+                data: { bookId }
+            });
+            
+            if (response.data.success) {
+                setCacheCleared(true);
+                console.log(`✅ Cleared ${response.data.deletedCount} TTS cache entries for book`);
+                // Auto-hide success message after 3 seconds
+                setTimeout(() => setCacheCleared(false), 3000);
+            } else {
+                alert('Failed to clear cache: ' + (response.data.message || 'Unknown error'));
+            }
+        } catch (error: any) {
+            console.error('Error clearing TTS cache:', error);
+            alert('Error clearing cache: ' + (error.response?.data?.message || error.message));
+        } finally {
+            setClearingCache(false);
+        }
     };
 
     const handleSubmit = async () => {
@@ -2021,13 +2053,32 @@ const PageEditor: React.FC = () => {
                 </div>
 
                 {/* Footer Actions */}
-                <div className="p-4 border-t border-gray-200 bg-gray-50">
+                <div className="p-4 border-t border-gray-200 bg-gray-50 space-y-2">
                     <button
                         onClick={handleSubmit}
                         disabled={loading}
                         className="w-full py-3 bg-indigo-600 text-white rounded-lg font-semibold shadow-md hover:bg-indigo-700 transition flex items-center justify-center gap-2 disabled:opacity-50"
                     >
                         {loading ? 'Saving...' : <><Save className="w-5 h-5" /> {editingPageId ? 'Update Page' : 'Save Page'}</>}
+                    </button>
+                    
+                    {/* Clear TTS Cache Button */}
+                    <button
+                        onClick={handleClearTTSCache}
+                        disabled={clearingCache}
+                        className={`w-full py-2 rounded-lg font-medium transition flex items-center justify-center gap-2 text-sm
+                            ${cacheCleared 
+                                ? 'bg-green-100 text-green-700 border border-green-300' 
+                                : 'bg-gray-100 text-gray-700 hover:bg-gray-200 border border-gray-300'
+                            } disabled:opacity-50`}
+                    >
+                        {clearingCache ? (
+                            <><Loader2 className="w-4 h-4 animate-spin" /> Clearing Cache...</>
+                        ) : cacheCleared ? (
+                            <>✓ Cache Cleared!</>
+                        ) : (
+                            <><Trash2 className="w-4 h-4" /> Clear TTS Cache</>
+                        )}
                     </button>
                 </div>
             </div>

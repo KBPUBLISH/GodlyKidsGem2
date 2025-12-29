@@ -30,6 +30,7 @@ interface TextBox {
     x: number; // percentage (0-100)
     y: number; // percentage (0-100)
     width: number; // percentage (0-100)
+    height?: number; // percentage (0-100) - optional, auto if not set
     alignment: 'left' | 'center' | 'right';
     fontFamily: string;
     fontSize: number;
@@ -1909,6 +1910,40 @@ const PageEditor: React.FC = () => {
                                     </div>
                                 </div>
                                 <p className="text-xs text-gray-400">Lower Y = higher on page. Try Y: 40-45 for top of 60% scroll.</p>
+                            </div>
+                            
+                            {/* Size Controls */}
+                            <div className="space-y-2 p-2 bg-white rounded border border-gray-200">
+                                <label className="text-xs font-semibold text-gray-600">Size (%)</label>
+                                <div className="grid grid-cols-2 gap-2">
+                                    <div>
+                                        <label className="text-xs text-gray-500">Width</label>
+                                        <input
+                                            type="number"
+                                            value={Math.round(selectedBox.width || 30)}
+                                            onChange={e => updateTextBox(selectedBox.id, { width: Math.max(5, Math.min(100, Number(e.target.value))) })}
+                                            className="w-full text-sm p-1 border rounded focus:ring-2 focus:ring-indigo-300 outline-none"
+                                            min={5}
+                                            max={100}
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="text-xs text-gray-500">Height (0=auto)</label>
+                                        <input
+                                            type="number"
+                                            value={Math.round(selectedBox.height || 0)}
+                                            onChange={e => {
+                                                const val = Number(e.target.value);
+                                                updateTextBox(selectedBox.id, { height: val > 0 ? Math.min(100, val) : undefined });
+                                            }}
+                                            className="w-full text-sm p-1 border rounded focus:ring-2 focus:ring-indigo-300 outline-none"
+                                            min={0}
+                                            max={100}
+                                            placeholder="Auto"
+                                        />
+                                    </div>
+                                </div>
+                                <p className="text-xs text-gray-400">Height 0 = auto-size based on text content.</p>
                             </div>
 
                             {/* Font Family */}

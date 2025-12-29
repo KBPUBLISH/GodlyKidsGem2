@@ -3503,16 +3503,21 @@ const BookReaderPage: React.FC = () => {
 
             {/* Top Toolbar - Clean and Compact */}
             <div className="absolute top-0 left-0 right-0 h-14 flex items-center justify-between px-3 z-50 pointer-events-none">
-                {/* Back Button */}
+                {/* Back Button - For web view pages, go to previous page; otherwise exit to book details */}
                 <button
                     onClick={(e) => {
                         e.stopPropagation();
 
-                        // Navigate back to book detail page explicitly
-                        if (bookId) {
-                            navigate(`/book/${bookId}`);
+                        // For web view pages, go to previous page in the book
+                        if (currentPage?.isWebViewPage && currentPageIndex > 0) {
+                            handlePrev(e as unknown as React.MouseEvent);
                         } else {
-                            navigate(-1);
+                            // Navigate back to book detail page explicitly
+                            if (bookId) {
+                                navigate(`/book/${bookId}`);
+                            } else {
+                                navigate(-1);
+                            }
                         }
                     }}
                     className="pointer-events-auto bg-black/40 backdrop-blur-md text-white p-2 rounded-full hover:bg-black/60 transition"

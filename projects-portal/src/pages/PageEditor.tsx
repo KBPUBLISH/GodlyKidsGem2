@@ -40,6 +40,7 @@ interface TextBox {
 interface VideoSequenceItem {
     id: string; // Temporary ID for UI
     url?: string; // Uploaded URL
+    audioUrl?: string; // Auto-extracted audio URL for iOS audio layering
     filename: string;
     order: number;
     file?: File;
@@ -450,6 +451,7 @@ const PageEditor: React.FC = () => {
             const loadedVideos: VideoSequenceItem[] = page.videoSequence.map((v: any, idx: number) => ({
                 id: `loaded-${page._id}-${idx}`,
                 url: v.url,
+                audioUrl: v.audioUrl, // Load auto-extracted audio URL
                 filename: v.filename || `Video ${v.order}`,
                 order: v.order,
             }));
@@ -659,6 +661,9 @@ const PageEditor: React.FC = () => {
                 backgroundUrl = backgroundPreview;
             }
 
+            // Track background audio URL (auto-extracted from video for iOS audio layering)
+            let backgroundAudioUrl = '';
+            
             if (backgroundFile) {
                 const formData = new FormData();
                 formData.append('file', backgroundFile);
@@ -670,6 +675,11 @@ const PageEditor: React.FC = () => {
                     headers: { 'Content-Type': 'multipart/form-data' },
                 });
                 backgroundUrl = res.data.url;
+                // Capture auto-extracted audio from video (for iOS audio layering)
+                if (res.data.backgroundAudioUrl) {
+                    backgroundAudioUrl = res.data.backgroundAudioUrl;
+                    console.log('🎬 Auto-extracted background audio:', backgroundAudioUrl);
+                }
             }
 
             // Upload scroll - include bookId and type=scroll for proper GCS path
@@ -741,8 +751,8 @@ const PageEditor: React.FC = () => {
                 soundEffectUrl = res.data.url;
             }
 
-            // Upload video sequence files
-            const uploadedVideoSequence: { url: string; filename: string; order: number }[] = [];
+            // Upload video sequence files (with auto-extracted audio for iOS)
+            const uploadedVideoSequence: { url: string; filename: string; order: number; audioUrl?: string }[] = [];
             if (useVideoSequence && videoSequence.length > 0) {
                 for (const video of videoSequence.sort((a, b) => a.order - b.order)) {
                     if (video.file) {
@@ -759,17 +769,22 @@ const PageEditor: React.FC = () => {
                                 url: res.data.url,
                                 filename: video.filename,
                                 order: video.order,
+                                audioUrl: res.data.backgroundAudioUrl, // Auto-extracted audio for iOS layering
                             });
+                            if (res.data.backgroundAudioUrl) {
+                                console.log(`🎬 Auto-extracted audio for video ${video.order}:`, res.data.backgroundAudioUrl);
+                            }
                         } catch (uploadErr) {
                             console.error('Failed to upload video sequence item:', uploadErr);
                             alert(`Failed to upload video: ${video.filename}`);
                         }
                     } else if (video.url) {
-                        // Keep existing URL
+                        // Keep existing URL (and existing audioUrl if any)
                         uploadedVideoSequence.push({
                             url: video.url,
                             filename: video.filename,
                             order: video.order,
+                            audioUrl: (video as any).audioUrl, // Preserve existing audio URL
                         });
                     }
                 }
@@ -814,6 +829,7 @@ const PageEditor: React.FC = () => {
                 pageNumber,
                 backgroundUrl,
                 backgroundType,
+                backgroundAudioUrl, // Auto-extracted from video for iOS audio layering
                 scrollUrl,
                 scrollHeight,
                 // scrollHeight is the main/default height shown in app (what was used when positioning text)

@@ -21,6 +21,7 @@ interface VideoSequenceItem {
     url: string;
     filename?: string;
     order: number;
+    audioUrl?: string; // Auto-extracted audio for this video (iOS audio layering)
 }
 
 interface ImageSequenceItem {
@@ -41,6 +42,9 @@ interface PageData {
     scrollMaxHeight?: number; // Max scroll height % (default 60)
     scrollOffsetY?: number; // Vertical offset from bottom in percentage (default 0)
     soundEffectUrl?: string;
+    // Background audio - extracted video audio or ambient sound that loops with the page
+    // Plays as separate <audio> element so it can layer with TTS (unlike video audio on iOS)
+    backgroundAudioUrl?: string;
     // Video sequence - multiple videos that play in order
     useVideoSequence?: boolean;
     videoSequence?: VideoSequenceItem[];
@@ -98,6 +102,7 @@ export const BookPageRenderer: React.FC<BookPageRendererProps> = ({
     const textBoxRefs = useRef<{ [key: number]: HTMLDivElement | null }>({});
     const soundEffectRef = useRef<HTMLAudioElement | null>(null);
     const videoRef = useRef<HTMLVideoElement | null>(null);
+    const backgroundAudioRef = useRef<HTMLAudioElement | null>(null); // For video audio extracted as separate file
     const [bubblePopped, setBubblePopped] = useState(false);
     const [bubblePosition, setBubblePosition] = useState({ x: 75, y: 20 }); // Default position (top right area)
     
@@ -168,6 +173,64 @@ export const BookPageRenderer: React.FC<BookPageRendererProps> = ({
         setCurrentImageIndex(0);
     }, [page.id]);
     
+    // Background audio - plays extracted video audio or ambient sound as separate <audio> element
+    // This allows it to layer with TTS (unlike video audio which conflicts on iOS)
+    // Handles both single background video audio AND video sequence audio
+    useEffect(() => {
+        const audio = backgroundAudioRef.current;
+        if (!audio) return;
+        
+        // Determine which audio URL to use
+        let audioUrl: string | undefined;
+        let shouldLoop = true;
+        
+        if (page.useVideoSequence && sortedVideoSequence.length > 0) {
+            // For video sequences, play the audio from the current video in sequence
+            const currentVideo = sortedVideoSequence[currentVideoIndex];
+            audioUrl = currentVideo?.audioUrl;
+            shouldLoop = false; // Don't loop - will switch to next video's audio when video ends
+            console.log(`🔊 Video sequence audio: playing audio for video ${currentVideoIndex + 1}`, audioUrl ? 'has audio' : 'no audio');
+        } else if (page.backgroundAudioUrl) {
+            // For single background video, use the extracted audio
+            audioUrl = page.backgroundAudioUrl;
+            shouldLoop = true; // Loop for single video
+        }
+        
+        if (audioUrl) {
+            // Set up the audio
+            if (audio.src !== audioUrl) {
+                audio.src = audioUrl;
+                audio.loop = shouldLoop;
+                audio.volume = 0.7; // Slightly lower volume so TTS is clear
+                audio.load();
+            }
+            
+            // Play when ready
+            const playAudio = () => {
+                audio.play().catch(err => {
+                    console.warn('🔊 Background audio autoplay prevented:', err);
+                });
+            };
+            
+            if (audio.readyState >= 3) {
+                playAudio();
+            } else {
+                audio.addEventListener('canplaythrough', playAudio, { once: true });
+            }
+        } else {
+            // No audio for this video/page - stop any playing audio
+            audio.pause();
+            audio.src = '';
+        }
+        
+        // Cleanup - stop audio when page changes or unmounts
+        return () => {
+            if (audio) {
+                audio.pause();
+                audio.currentTime = 0;
+            }
+        };
+    }, [page.id, page.backgroundAudioUrl, page.useVideoSequence, sortedVideoSequence, currentVideoIndex]);
     
     // Swipe detection for scroll height changes
     const touchStartY = useRef<number>(0);
@@ -344,6 +407,10 @@ export const BookPageRenderer: React.FC<BookPageRendererProps> = ({
             onTouchStart={handleScrollTouchStart}
             onTouchEnd={handleScrollTouchEnd}
         >
+            {/* Hidden audio element for background audio (extracted video audio or ambient sound) */}
+            {/* This plays as separate <audio> so it can layer with TTS - unlike video audio on iOS */}
+            <audio ref={backgroundAudioRef} preload="auto" style={{ display: 'none' }} />
+            
             {/* Background Layer - warm parchment gradient as fallback instead of black */}
             {/* Fixed position prevents movement during touch/swipe gestures */}
             <div 
@@ -540,7 +607,7 @@ export const BookPageRenderer: React.FC<BookPageRendererProps> = ({
                         className="absolute inset-0 w-full h-full object-cover min-w-full min-h-full"
                         autoPlay
                         loop
-                        muted={isTTSPlaying} // MUTE video while TTS is playing to prevent iOS audio conflicts
+                        muted={isTTSPlaying || !!page.backgroundAudioUrl} // Mute if TTS playing OR if using separate background audio
                         playsInline
                         preload="auto"
                         onLoadedData={() => {

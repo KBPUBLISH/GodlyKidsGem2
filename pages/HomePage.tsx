@@ -172,6 +172,10 @@ const HomePage: React.FC = () => {
   const [trendingEpisodes, setTrendingEpisodes] = useState<any[]>(() => getCached('trendingEpisodes'));
   const [trendingEpisodesLoading, setTrendingEpisodesLoading] = useState(() => getCached('trendingEpisodes').length === 0);
   
+  // Trending books state (top 10 by read count)
+  const [trendingBooks, setTrendingBooks] = useState<any[]>(() => getCached('trendingBooks'));
+  const [trendingBooksLoading, setTrendingBooksLoading] = useState(() => getCached('trendingBooks').length === 0);
+  
   // Recently Read/Played state
   const [recentlyReadBooks, setRecentlyReadBooks] = useState<any[]>([]);
   const [recentlyPlayedPlaylists, setRecentlyPlayedPlaylists] = useState<any[]>([]);
@@ -358,6 +362,7 @@ const HomePage: React.FC = () => {
     fetchPlaylists();
     fetchFeaturedContent();
     fetchTrendingEpisodes();
+    fetchTrendingBooks();
     fetchTopRatedContent();
     fetchDynamicGames();
     fetchBookSeries();
@@ -580,6 +585,21 @@ const HomePage: React.FC = () => {
       console.error('❌ Error fetching trending episodes:', error);
     } finally {
       setTrendingEpisodesLoading(false);
+    }
+  };
+
+  // Fetch trending books (top 10 by read count)
+  const fetchTrendingBooks = async () => {
+    try {
+      setTrendingBooksLoading(true);
+      const data = await ApiService.getTrendingBooks(10);
+      console.log('📚 Trending books loaded:', data.length, 'items');
+      setTrendingBooks(data);
+      cacheData('trendingBooks', data);
+    } catch (error) {
+      console.error('❌ Error fetching trending books:', error);
+    } finally {
+      setTrendingBooksLoading(false);
     }
   };
 
@@ -1178,12 +1198,12 @@ const HomePage: React.FC = () => {
               color="#FF6B35"
             />
             <div className="w-screen overflow-x-auto no-scrollbar pb-2 -mx-4 snap-x snap-mandatory">
-              <div className="flex space-x-3 px-4">
+              <div className="flex space-x-4 px-4">
                 {trendingEpisodes.map((episode: any, index: number) => (
                   <div
                     key={episode._id}
                     onClick={() => navigate(`/audio/playlist/${episode.playlist._id}/${episode.itemIndex}`)}
-                    className="relative flex-shrink-0 w-36 snap-center cursor-pointer group"
+                    className="relative flex-shrink-0 w-44 snap-center cursor-pointer group"
                   >
                     {/* Cover Image */}
                     <div className="relative aspect-square rounded-2xl overflow-hidden shadow-lg border-2 border-white/20 group-hover:border-orange-400/50 transition-all">
@@ -1197,30 +1217,87 @@ const HomePage: React.FC = () => {
                       />
                       {/* Play overlay */}
                       <div className="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                        <Play className="w-10 h-10 text-white fill-white" />
+                        <Play className="w-12 h-12 text-white fill-white" />
                       </div>
                       {/* Ranking badge - Top left */}
-                      <div className="absolute top-2 left-2 w-7 h-7 bg-gradient-to-br from-orange-500 to-red-600 rounded-full flex items-center justify-center text-white text-sm font-black shadow-lg">
+                      <div className="absolute top-2 left-2 w-8 h-8 bg-gradient-to-br from-orange-500 to-red-600 rounded-full flex items-center justify-center text-white text-base font-black shadow-lg">
                         {index + 1}
                       </div>
-                      {/* Type badge */}
-                      <div className="absolute bottom-2 left-2 px-2 py-0.5 bg-black/60 backdrop-blur-sm rounded-full text-[10px] font-bold text-white">
-                        {episode.playlist.type === 'Audiobook' ? '📖' : '🎵'} {episode.playCount || 0} plays
+                      {/* Type badge - Bottom left */}
+                      <div className="absolute bottom-2 left-2 px-2 py-1 bg-black/60 backdrop-blur-sm rounded-full text-xs font-bold text-white">
+                        {episode.playlist.type === 'Audiobook' ? '📖 Story' : '🎵 Song'}
                       </div>
                       {/* Premium badge */}
                       {episode.isMembersOnly && (
-                        <div className="absolute top-2 right-2 px-1.5 py-0.5 bg-amber-500/90 rounded-full text-[10px] font-bold text-white flex items-center gap-0.5">
-                          <Lock className="w-2.5 h-2.5" />
+                        <div className="absolute top-2 right-2 px-2 py-1 bg-amber-500/90 rounded-full text-xs font-bold text-white flex items-center gap-0.5">
+                          <Lock className="w-3 h-3" />
                         </div>
                       )}
                     </div>
                     {/* Title */}
                     <div className="mt-2 px-1">
-                      <h3 className="text-sm font-bold text-white truncate">
+                      <h3 className="text-base font-bold text-white truncate">
                         {episode.title}
                       </h3>
-                      <p className="text-xs text-white/60 truncate">
+                      <p className="text-sm text-white/60 truncate">
                         {episode.playlist.title}
+                      </p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </section>
+        )}
+
+        {/* Top 10 Books Section - by read count */}
+        {!trendingBooksLoading && trendingBooks.length > 0 && (
+          <section className="mt-6">
+            <SectionTitle 
+              title="Top 10 Books" 
+              icon="📚"
+              color="#4CAF50"
+            />
+            <div className="w-screen overflow-x-auto no-scrollbar pb-2 -mx-4 snap-x snap-mandatory">
+              <div className="flex space-x-4 px-4">
+                {trendingBooks.map((book: any, index: number) => (
+                  <div
+                    key={book._id}
+                    onClick={() => navigate(`/book-details/${book._id}`)}
+                    className="relative flex-shrink-0 w-44 snap-center cursor-pointer group"
+                  >
+                    {/* Cover Image */}
+                    <div className="relative aspect-[3/4] rounded-2xl overflow-hidden shadow-lg border-2 border-white/20 group-hover:border-green-400/50 transition-all">
+                      <img
+                        src={book.coverUrl || book.coverImage || book.files?.coverImage}
+                        alt={book.title}
+                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                        onError={(e) => {
+                          (e.target as HTMLImageElement).src = 'https://via.placeholder.com/150x200/4CAF50/FFFFFF?text=📚';
+                        }}
+                      />
+                      {/* Play overlay */}
+                      <div className="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                        <BookOpen className="w-12 h-12 text-white" />
+                      </div>
+                      {/* Ranking badge - Top left */}
+                      <div className="absolute top-2 left-2 w-8 h-8 bg-gradient-to-br from-green-500 to-emerald-600 rounded-full flex items-center justify-center text-white text-base font-black shadow-lg">
+                        {index + 1}
+                      </div>
+                      {/* Premium badge */}
+                      {book.isMembersOnly && (
+                        <div className="absolute top-2 right-2 px-2 py-1 bg-amber-500/90 rounded-full text-xs font-bold text-white flex items-center gap-0.5">
+                          <Lock className="w-3 h-3" />
+                        </div>
+                      )}
+                    </div>
+                    {/* Title */}
+                    <div className="mt-2 px-1">
+                      <h3 className="text-base font-bold text-white truncate">
+                        {book.title}
+                      </h3>
+                      <p className="text-sm text-white/60 truncate">
+                        {book.author}
                       </p>
                     </div>
                   </div>

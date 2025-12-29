@@ -570,6 +570,32 @@ export const ApiService = {
     }
   },
 
+  // Get trending books (top books by read count)
+  getTrendingBooks: async (limit: number = 10): Promise<Book[]> => {
+    const cacheKey = `trending_books_${limit}`;
+    const cached = getCached<Book[]>(cacheKey);
+    if (cached) return cached;
+
+    try {
+      const baseUrl = getApiBaseUrl();
+      const response = await fetchWithTimeout(`${baseUrl}books/trending?limit=${limit}`, {
+        method: 'GET',
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        const result = Array.isArray(data) ? data : [];
+        setCache(cacheKey, result, 5 * 60 * 1000); // Cache for 5 minutes
+        console.log(`📚 Trending books loaded: ${result.length} items`);
+        return result;
+      }
+      return [];
+    } catch (error) {
+      console.warn("Failed to fetch trending books:", error);
+      return [];
+    }
+  },
+
   // Get top-rated books (15%+ likes/favorites to reads ratio)
   getTopRatedBooks: async (minRatio: number = 0.15): Promise<Book[]> => {
     const cacheKey = `top_rated_books_${minRatio}`;

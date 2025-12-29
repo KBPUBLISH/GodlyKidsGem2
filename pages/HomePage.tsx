@@ -361,6 +361,10 @@ const HomePage: React.FC = () => {
       setPlaylistsLoading(false);
       setFeaturedLoading(false);
       setGamesLoading(false);
+      
+      // Always fetch trending data since it's not cached (real-time updates)
+      fetchTrendingEpisodes();
+      fetchTrendingBooks();
       return;
     }
     

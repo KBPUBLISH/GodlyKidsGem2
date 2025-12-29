@@ -178,26 +178,50 @@ const BookReaderPage: React.FC = () => {
      */
     const getVoiceForText = (text: string): { voiceId: string; cleanText: string; characterName?: string } => {
         // Check for @Character tag at the start of text
-        // Format: @CharacterName "dialogue text" or @CharacterName any text
-        const match = text.match(/^@(\w+)\s+(.*)$/s);
+        // Format: @CharacterName "dialogue text" - only reads the quoted part
+        const match = text.match(/^@(\w+)\s+"([^"]+)"(.*)$/s);
         
         if (match) {
-            const [, charName, remainingText] = match;
+            const [, charName, quotedText, afterQuote] = match;
             // Find character in characterVoices array (case-insensitive)
             const character = characterVoices.find(c => 
                 c.characterName.toLowerCase() === charName.toLowerCase()
             );
             
             if (character && character.voiceId) {
-                console.log(`🎭 Character voice: @${charName} -> ${character.voiceId}`);
+                // Only speak the text inside the quotes (without the quotes)
+                console.log(`🎭 Character voice: @${charName} -> "${quotedText}" (voice: ${character.voiceId})`);
+                return { 
+                    voiceId: character.voiceId, 
+                    cleanText: quotedText.trim(),
+                    characterName: character.characterName
+                };
+            }
+            // Character not found in mappings, use narrator voice
+            console.warn(`⚠️ Character @${charName} not found in voice mappings, using narrator voice`);
+            // Still extract just the quoted text
+            return {
+                voiceId: effectiveNarratorVoiceId,
+                cleanText: quotedText.trim()
+            };
+        }
+        
+        // Check for @Character without quotes (fallback - reads everything after)
+        const fallbackMatch = text.match(/^@(\w+)\s+(.*)$/s);
+        if (fallbackMatch) {
+            const [, charName, remainingText] = fallbackMatch;
+            const character = characterVoices.find(c => 
+                c.characterName.toLowerCase() === charName.toLowerCase()
+            );
+            
+            if (character && character.voiceId) {
+                console.log(`🎭 Character voice (no quotes): @${charName} -> ${character.voiceId}`);
                 return { 
                     voiceId: character.voiceId, 
                     cleanText: remainingText.trim(),
                     characterName: character.characterName
                 };
             }
-            // Character not found in mappings, use narrator voice and keep the tag visible
-            console.warn(`⚠️ Character @${charName} not found in voice mappings, using narrator voice`);
         }
         
         // No character tag - use narrator voice

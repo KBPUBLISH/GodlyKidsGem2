@@ -13,10 +13,14 @@ const EMOTIONAL_CUE_REGEX = /\[[^\]]+\]/g;
 // Format: @CharacterName followed by space (the name is alphanumeric only)
 const CHARACTER_TAG_REGEX = /^@\w+\s+/;
 
+// Regex to match @CharacterName "quoted text" pattern - extracts just the quoted text
+const CHARACTER_QUOTED_REGEX = /^@\w+\s+"([^"]+)"(.*)$/s;
+
 /**
  * Process text with emotional cues for TTS
  * Keeps the text but can be used to adjust voice parameters
  * Also removes @CharacterName tags (voice selection is handled separately)
+ * For @CharacterName "quoted text" format, extracts just the quoted text
  */
 export function processTextWithEmotionalCues(text: string): {
   processedText: string;
@@ -25,8 +29,16 @@ export function processTextWithEmotionalCues(text: string): {
   const emotions: Array<{ emotion: string; position: number }> = [];
   let position = 0;
   
-  // First remove @CharacterName tag if present
-  const textWithoutCharTag = text.replace(CHARACTER_TAG_REGEX, '');
+  // First handle @CharacterName tag
+  let textWithoutCharTag = text;
+  const quotedMatch = text.match(CHARACTER_QUOTED_REGEX);
+  if (quotedMatch) {
+    // Extract just the quoted text (without quotes)
+    textWithoutCharTag = quotedMatch[1] + (quotedMatch[2] || '');
+  } else {
+    // Fallback: just remove @CharacterName prefix
+    textWithoutCharTag = text.replace(CHARACTER_TAG_REGEX, '');
+  }
   
   // Find all emotional cues
   let match;
@@ -48,10 +60,24 @@ export function processTextWithEmotionalCues(text: string): {
 /**
  * Remove emotional cues and @CharacterName tags from text
  * Returns clean text without any [bracketed content] markers or @CharacterName prefixes
+ * For @CharacterName "quoted text" format, extracts just the quoted text (without quotes)
  */
 export function removeEmotionalCues(text: string): string {
-  return text
-    .replace(CHARACTER_TAG_REGEX, '') // Remove @CharacterName at start
+  let cleanText = text;
+  
+  // Check for @CharacterName "quoted text" pattern first
+  const quotedMatch = text.match(CHARACTER_QUOTED_REGEX);
+  if (quotedMatch) {
+    // Extract just the quoted text (group 1) plus any text after (group 2)
+    const quotedText = quotedMatch[1];
+    const afterText = quotedMatch[2] || '';
+    cleanText = quotedText + afterText;
+  } else {
+    // Fallback: just remove @CharacterName prefix
+    cleanText = text.replace(CHARACTER_TAG_REGEX, '');
+  }
+  
+  return cleanText
     .replace(EMOTIONAL_CUE_REGEX, '') // Remove [bracketed content]
     .replace(/\s+/g, ' ') // Normalize multiple spaces to single
     .trim();

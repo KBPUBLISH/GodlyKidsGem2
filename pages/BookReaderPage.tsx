@@ -2706,7 +2706,10 @@ const BookReaderPage: React.FC = () => {
             
             // ============ MULTI-SEGMENT TTS ============
             // Parse text into segments for alternating narrator/character voices
+            console.log('🔍 RAW TEXT for parsing:', rawTextToSpeak);
+            console.log('🎭 Character voices available:', characterVoices?.map(c => c.characterName) || 'NONE');
             const segments = parseTextIntoSegments(rawTextToSpeak);
+            console.log('📝 Parsed segments:', segments.map(s => `"${s.text.substring(0, 30)}..." [${s.isNarrator ? 'Narrator' : s.characterName}] voice:${s.voiceId}`));
             
             // If multiple segments, use multi-segment playback
             if (segments.length > 1) {

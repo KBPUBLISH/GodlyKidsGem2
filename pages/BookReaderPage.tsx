@@ -173,74 +173,84 @@ const BookReaderPage: React.FC = () => {
     
     /**
      * Get the voice ID to use for a given text, handling @Character tags
+     * 
+     * SUPPORTED FORMATS:
+     * 1. "@Moses Let my people go!"  ← Tag INSIDE quotes (preferred) - Moses reads only the quoted text
+     * 2. @Moses "Let my people go!"  ← Tag OUTSIDE quotes - Moses reads only the quoted text
+     * 
+     * The @Character tag MUST be paired with quotes to define exactly what the character says.
+     * Text without quotes = narrator reads it.
+     * 
      * Voice Priority:
-     * 1. @Character tag -> Use character's assigned voice (FIXED, user cannot override)
+     * 1. @Character tag with quotes -> Use character's assigned voice (FIXED)
      * 2. No tag -> Use narrator voice (defaultNarratorVoiceId or user's selected voice)
      */
     const getVoiceForText = (text: string): { voiceId: string; cleanText: string; characterName?: string } => {
-        // Check for @Character tag ANYWHERE in text (not just at start)
-        // Format: @CharacterName "dialogue text" - only reads the quoted part
-        // This handles cases like: 'Hello. @Moses "Let my people go!" The end.'
-        const match = text.match(/@(\w+)\s+"([^"]+)"/);
+        // Pattern 1: Tag INSIDE quotes - "@Moses Let my people go!"
+        // This is the PREFERRED format - cleaner and more intuitive
+        const insideQuotesMatch = text.match(/"@(\w+)\s+([^"]+)"/);
         
-        if (match) {
-            const [fullMatch, charName, quotedText] = match;
-            // Find character in characterVoices array (case-insensitive)
+        if (insideQuotesMatch) {
+            const [fullMatch, charName, dialogueText] = insideQuotesMatch;
             const character = characterVoices.find(c => 
                 c.characterName.toLowerCase() === charName.toLowerCase()
             );
             
-            // Clean text: replace @CharacterName "quoted" with just the quoted text, remove other @tags
+            // Clean text: keep only the dialogue (remove tag, keep rest of text for display)
             const cleanText = text
-                .replace(/@\w+\s+"([^"]+)"/g, '$1') // Replace @Name "text" with just text
-                .replace(/@\w+\s+/g, '') // Remove any remaining @Name tags
+                .replace(/"@\w+\s+([^"]+)"/g, '"$1"') // Replace "@Name text" with just "text"
                 .replace(/\s+/g, ' ')
                 .trim();
             
             if (character && character.voiceId) {
-                console.log(`🎭 Character voice: @${charName} -> "${quotedText}" (voice: ${character.voiceId})`);
+                console.log(`🎭 Character voice (inside quotes): "@${charName} ${dialogueText}" -> voice: ${character.voiceId}`);
                 return { 
                     voiceId: character.voiceId, 
                     cleanText,
                     characterName: character.characterName
                 };
             }
-            // Character not found in mappings, use narrator voice
-            console.warn(`⚠️ Character @${charName} not found in voice mappings, using narrator voice`);
-            return {
-                voiceId: effectiveNarratorVoiceId,
-                cleanText
-            };
+            console.warn(`⚠️ Character @${charName} not found, using narrator voice`);
+            return { voiceId: effectiveNarratorVoiceId, cleanText };
         }
         
-        // Check for @Character without quotes (fallback - reads everything after the tag)
-        const fallbackMatch = text.match(/@(\w+)\s+/);
-        if (fallbackMatch) {
-            const [, charName] = fallbackMatch;
+        // Pattern 2: Tag OUTSIDE quotes - @Moses "Let my people go!"
+        const outsideQuotesMatch = text.match(/@(\w+)\s+"([^"]+)"/);
+        
+        if (outsideQuotesMatch) {
+            const [fullMatch, charName, quotedText] = outsideQuotesMatch;
             const character = characterVoices.find(c => 
                 c.characterName.toLowerCase() === charName.toLowerCase()
             );
             
-            // Clean text: remove @CharacterName tags
+            // Clean text: remove @tag but keep the quoted text
             const cleanText = text
-                .replace(/@\w+\s+/g, '')
+                .replace(/@\w+\s+"([^"]+)"/g, '"$1"') // Replace @Name "text" with just "text"
                 .replace(/\s+/g, ' ')
                 .trim();
             
             if (character && character.voiceId) {
-                console.log(`🎭 Character voice (no quotes): @${charName} -> ${character.voiceId}`);
+                console.log(`🎭 Character voice (outside quotes): @${charName} "${quotedText}" -> voice: ${character.voiceId}`);
                 return { 
                     voiceId: character.voiceId, 
                     cleanText,
                     characterName: character.characterName
                 };
             }
+            console.warn(`⚠️ Character @${charName} not found, using narrator voice`);
+            return { voiceId: effectiveNarratorVoiceId, cleanText };
         }
         
-        // No character tag - use narrator voice
+        // No @Character tag with quotes - narrator reads everything
+        // NOTE: @Character without quotes is IGNORED (use quotes to define dialogue!)
+        const cleanText = text
+            .replace(/@\w+\s*/g, '') // Remove any stray @tags (they're malformed without quotes)
+            .replace(/\s+/g, ' ')
+            .trim();
+        
         return { 
             voiceId: effectiveNarratorVoiceId, 
-            cleanText: text 
+            cleanText 
         };
     };
     const [wordAlignment, setWordAlignment] = useState<{ words: Array<{ word: string; start: number; end: number }> } | null>(null);

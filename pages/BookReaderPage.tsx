@@ -2514,20 +2514,41 @@ const BookReaderPage: React.FC = () => {
                                 if (bookId) readingProgressService.saveProgress(bookId, nextPageIndex);
                                 
                                 setTimeout(() => {
+                                    console.log('🎯 Multi-segment: Checking next page', {
+                                        autoPlayMode: autoPlayModeRef.current,
+                                        currentPage: currentPageIndexRef.current,
+                                        targetPage: nextPageIndex
+                                    });
+                                    
                                     if (autoPlayModeRef.current && currentPageIndexRef.current === nextPageIndex) {
                                         const nextPage = pages[nextPageIndex];
                                         const nextPageTextBoxes = nextPage?.content?.textBoxes || nextPage?.textBoxes;
+                                        
+                                        console.log('📄 Next page:', {
+                                            exists: !!nextPage,
+                                            textBoxCount: nextPageTextBoxes?.length || 0
+                                        });
+                                        
                                         if (nextPage && nextPageTextBoxes?.length > 0) {
                                             const translatedTextBoxes = getTranslatedTextBoxes(nextPage);
                                             const firstBoxText = translatedTextBoxes[0]?.text || nextPageTextBoxes[0].text;
+                                            
+                                            console.log('▶️ Multi-segment: Playing next page TTS', { textLength: firstBoxText?.length });
                                             isAutoPlayingRef.current = false;
+                                            // Re-ensure autoPlayMode is true before calling handlePlayText
+                                            autoPlayModeRef.current = true;
                                             handlePlayText(firstBoxText, 0, { stopPropagation: () => {} } as React.MouseEvent, true);
                                         } else {
+                                            console.log('⚠️ Multi-segment: No text boxes, stopping auto-play');
                                             setAutoPlayMode(false);
                                             autoPlayModeRef.current = false;
                                             isAutoPlayingRef.current = false;
                                         }
                                     } else {
+                                        console.log('⚠️ Multi-segment: Conditions not met, stopping', {
+                                            autoPlayMode: autoPlayModeRef.current,
+                                            pageMatch: currentPageIndexRef.current === nextPageIndex
+                                        });
                                         isAutoPlayingRef.current = false;
                                     }
                                 }, 300);

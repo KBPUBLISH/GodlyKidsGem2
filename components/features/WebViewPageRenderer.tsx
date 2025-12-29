@@ -34,9 +34,6 @@ const WebViewPageRenderer: React.FC<WebViewPageRendererProps> = ({
     const [errorMessage, setErrorMessage] = useState('');
     const iframeRef = useRef<HTMLIFrameElement>(null);
     
-    // Debug logging
-    console.log('🌐 WebViewPageRenderer mounted with:', { url, title, showButton });
-    
     // Touch handling for swipe gestures
     const touchStartX = useRef<number>(0);
     const touchStartY = useRef<number>(0);
@@ -179,15 +176,15 @@ const WebViewPageRenderer: React.FC<WebViewPageRendererProps> = ({
                 title="Interactive Content"
             />
             
-            {/* Navigation Button Overlay */}
+            {/* Navigation Button - Top Right (to avoid blocking web content) */}
             {showButton && !isLoading && !hasError && (
-                <div className="absolute bottom-0 left-0 right-0 z-20 p-4 pb-safe bg-gradient-to-t from-black/80 to-transparent">
+                <div className="absolute top-3 right-3 z-20">
                     <button
                         onClick={onContinue}
-                        className="w-full py-4 bg-gradient-to-r from-amber-500 to-orange-500 text-white rounded-2xl font-bold text-lg flex items-center justify-center gap-2 shadow-lg hover:from-amber-600 hover:to-orange-600 active:scale-95 transition-all"
+                        className="px-4 py-2 bg-gradient-to-r from-amber-500 to-orange-500 text-white rounded-full font-bold text-sm flex items-center gap-1.5 shadow-lg hover:from-amber-600 hover:to-orange-600 active:scale-95 transition-all"
                     >
-                        Continue Reading
-                        <ChevronRight className="w-6 h-6" />
+                        Next
+                        <ChevronRight className="w-4 h-4" />
                     </button>
                 </div>
             )}

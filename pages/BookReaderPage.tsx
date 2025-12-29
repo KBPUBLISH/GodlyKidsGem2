@@ -3520,7 +3520,8 @@ const BookReaderPage: React.FC = () => {
                     <ChevronLeft className="w-5 h-5" />
                 </button>
 
-                {/* Right: Language Selector, Voice Selector and Music Toggle */}
+                {/* Right: Language Selector, Voice Selector and Music Toggle - Hidden for Web View pages */}
+                {!currentPage?.isWebViewPage && (
                 <div className="pointer-events-auto flex items-center gap-2">
                     {/* Language Selector */}
                     <div
@@ -3868,6 +3869,7 @@ const BookReaderPage: React.FC = () => {
                         )}
                     </div>
                 </div>
+                )}
             </div>
 
             {/* Main Reading Area */}
@@ -4067,14 +4069,6 @@ const BookReaderPage: React.FC = () => {
 
                     {/* The actual page content - always visible underneath */}
                     <div className="absolute inset-0 z-10">
-                        {/* Debug: Log web view detection */}
-                        {console.log('🌐 Page web view check:', {
-                            pageNumber: currentPage?.pageNumber,
-                            isWebViewPage: currentPage?.isWebViewPage,
-                            hasWebView: !!currentPage?.webView,
-                            webViewUrl: currentPage?.webView?.url,
-                            webViewGameId: currentPage?.webView?.gameId,
-                        })}
                         {/* Web View Page - renders iframe with external content */}
                         {currentPage?.isWebViewPage && currentPage?.webView ? (
                             <WebViewPageRenderer
@@ -4289,6 +4283,8 @@ const BookReaderPage: React.FC = () => {
             </div>
 
             {/* Wood Play Button with Auto-Play Toggle - Positioned above the scroll based on scroll state */}
+            {/* Hidden for Web View pages */}
+            {!currentPage?.isWebViewPage && (
             <div
                 className={`absolute left-4 z-40 transition-all duration-500 flex items-center gap-3`}
                 style={{
@@ -4352,6 +4348,7 @@ const BookReaderPage: React.FC = () => {
                     </span>
                 </button>
             </div>
+            )}
 
             {/* Page Counter - Bottom Right (Clickable for page navigation) */}
             <div className="absolute bottom-4 right-4 z-50">

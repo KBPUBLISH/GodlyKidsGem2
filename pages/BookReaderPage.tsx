@@ -987,13 +987,18 @@ const BookReaderPage: React.FC = () => {
                 multiSegmentAudioRef.current.pause();
                 multiSegmentAudioRef.current.onended = null;
                 multiSegmentAudioRef.current.ontimeupdate = null;
+                multiSegmentAudioRef.current.onplay = null;
+                multiSegmentAudioRef.current.onpause = null;
+                multiSegmentAudioRef.current.onerror = null;
                 multiSegmentAudioRef.current.src = '';
                 multiSegmentAudioRef.current = null;
             } catch (e) {
                 console.warn('Error stopping multi-segment audio:', e);
             }
         }
+        // Cancel any in-progress multi-segment playback
         isPlayingMultiSegmentRef.current = false;
+        multiSegmentPlaybackIdRef.current += 1; // Invalidate any in-flight segments
         // Stop book background music
         if (bookBackgroundMusicRef.current) {
             bookBackgroundMusicRef.current.pause();
@@ -1813,12 +1818,36 @@ const BookReaderPage: React.FC = () => {
     };
 
     const stopAudio = () => {
+        // Stop single-track audio
         if (currentAudio) {
             currentAudio.pause();
             currentAudio.currentTime = 0;
         }
+        
+        // Stop multi-segment TTS audio
+        if (multiSegmentAudioRef.current) {
+            try {
+                const audio = multiSegmentAudioRef.current;
+                audio.onended = null;
+                audio.ontimeupdate = null;
+                audio.onplay = null;
+                audio.onpause = null;
+                audio.onerror = null;
+                audio.pause();
+                audio.src = '';
+                multiSegmentAudioRef.current = null;
+            } catch (e) {
+                console.warn('Error stopping multi-segment audio in stopAudio:', e);
+            }
+        }
+        
+        // Cancel any in-progress multi-segment playback
+        isPlayingMultiSegmentRef.current = false;
+        multiSegmentPlaybackIdRef.current += 1; // Invalidate any in-flight segments
+        
         setPlaying(false);
         setActiveTextBoxIndex(null);
+        setCurrentWordIndex(-1); // Clear any word highlighting
         setAutoPlayMode(false);
         autoPlayModeRef.current = false;
         isAutoPlayingRef.current = false; // Reset auto-play flag
@@ -2425,11 +2454,27 @@ const BookReaderPage: React.FC = () => {
         }
 
         // If playing another text, stop it completely first
-        if (playing || isPlayingMultiSegmentRef.current) {
-            console.log('⏹️ Stopping previous playback');
-            stopAudio();
-            stopMultiSegmentAudio();
+        // Use ref for playing check to avoid stale closure issues in auto-play callbacks
+        if (playingRef.current || isPlayingMultiSegmentRef.current) {
+            console.log('⏹️ Stopping previous playback before starting new');
+            // Stop audio without resetting autoPlayMode (we're transitioning, not user-pausing)
+            if (currentAudio) {
+                currentAudio.pause();
+                currentAudio.currentTime = 0;
+            }
+            if (multiSegmentAudioRef.current) {
+                try {
+                    multiSegmentAudioRef.current.pause();
+                    multiSegmentAudioRef.current.onended = null;
+                    multiSegmentAudioRef.current.ontimeupdate = null;
+                    multiSegmentAudioRef.current.src = '';
+                    multiSegmentAudioRef.current = null;
+                } catch (e) { }
+            }
             isPlayingMultiSegmentRef.current = false;
+            multiSegmentPlaybackIdRef.current += 1;
+            setPlaying(false);
+            playingRef.current = false;
             setCurrentSegments([]);
             setCurrentSegmentIndex(0);
             currentSegmentIndexRef.current = 0;

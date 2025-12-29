@@ -2386,6 +2386,15 @@ const BookReaderPage: React.FC = () => {
                 audio.onpause = () => setPlaying(false);
 
                 setCurrentAudio(audio);
+                
+                // IMPORTANT: Set auto-play mode BEFORE playing if isAutoPlay is true
+                // This ensures the onended handler will continue auto-playing
+                if (isAutoPlay) {
+                    setAutoPlayMode(true);
+                    autoPlayModeRef.current = true;
+                    console.log('▶️ Auto-play mode enabled for new audio');
+                }
+                
                 audio.play();
             } else {
                 console.error('No audio URL returned');

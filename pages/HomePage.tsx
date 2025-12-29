@@ -1202,17 +1202,17 @@ const HomePage: React.FC = () => {
                 {trendingEpisodes.map((episode: any, index: number) => (
                   <div
                     key={episode._id}
-                    onClick={() => navigate(`/audio/playlist/${episode.playlist._id}/${episode.itemIndex}`)}
+                    onClick={() => navigate(`/audio/playlist/${episode.playlist._id}/play/${episode.itemIndex}`)}
                     className="relative flex-shrink-0 w-44 snap-center cursor-pointer group"
                   >
-                    {/* Cover Image */}
-                    <div className="relative aspect-square rounded-2xl overflow-hidden shadow-lg border-2 border-white/20 group-hover:border-orange-400/50 transition-all">
+                    {/* Cover Image - Same 3:4 aspect ratio as books */}
+                    <div className="relative aspect-[3/4] rounded-2xl overflow-hidden shadow-lg border-2 border-white/20 group-hover:border-orange-400/50 transition-all">
                       <img
                         src={episode.coverImage || episode.playlist.coverImage}
                         alt={episode.title}
                         className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                         onError={(e) => {
-                          (e.target as HTMLImageElement).src = 'https://via.placeholder.com/150x150/FF6B35/FFFFFF?text=🎵';
+                          (e.target as HTMLImageElement).src = 'https://via.placeholder.com/150x200/FF6B35/FFFFFF?text=🎵';
                         }}
                       />
                       {/* Play overlay */}
@@ -1222,10 +1222,6 @@ const HomePage: React.FC = () => {
                       {/* Ranking badge - Top left */}
                       <div className="absolute top-2 left-2 w-8 h-8 bg-gradient-to-br from-orange-500 to-red-600 rounded-full flex items-center justify-center text-white text-base font-black shadow-lg">
                         {index + 1}
-                      </div>
-                      {/* Type badge - Bottom left */}
-                      <div className="absolute bottom-2 left-2 px-2 py-1 bg-black/60 backdrop-blur-sm rounded-full text-xs font-bold text-white">
-                        {episode.playlist.type === 'Audiobook' ? '📖 Story' : '🎵 Song'}
                       </div>
                       {/* Premium badge */}
                       {episode.isMembersOnly && (
@@ -1263,7 +1259,7 @@ const HomePage: React.FC = () => {
                 {trendingBooks.map((book: any, index: number) => (
                   <div
                     key={book._id}
-                    onClick={() => navigate(`/book-details/${book._id}`)}
+                    onClick={() => navigate(`/book/${book._id}`)}
                     className="relative flex-shrink-0 w-44 snap-center cursor-pointer group"
                   >
                     {/* Cover Image */}

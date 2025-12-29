@@ -296,6 +296,13 @@ const BookReaderPage: React.FC = () => {
     const parseTextIntoSegments = (text: string): TextSegment[] => {
         const segments: TextSegment[] = [];
         
+        // Normalize quotes first - convert curly quotes to straight quotes
+        const normalizedText = text
+            .replace(/[""]/g, '"')  // Convert curly double quotes to straight
+            .replace(/['']/g, "'"); // Convert curly single quotes to straight
+        
+        console.log('🔄 Normalized text:', normalizedText.substring(0, 100) + '...');
+        
         // Combined regex to match both formats:
         // 1. @Character "dialogue" - tag outside quotes
         // 2. "@Character dialogue" - tag inside quotes
@@ -306,7 +313,7 @@ const BookReaderPage: React.FC = () => {
         let cleanTextIndex = 0; // Track position in cleaned text for highlighting
         
         // First pass: build cleaned text to calculate indices
-        const cleanedText = text
+        const cleanedText = normalizedText
             .replace(/@(\w+)\s*"([^"]+)"/g, '"$2"')  // @Name "text" -> "text"
             .replace(/"@(\w+)\s+([^"]+)"/g, '"$2"') // "@Name text" -> "text"
             .replace(/\s+/g, ' ')
@@ -315,9 +322,9 @@ const BookReaderPage: React.FC = () => {
         // Reset regex
         characterPattern.lastIndex = 0;
         
-        while ((match = characterPattern.exec(text)) !== null) {
+        while ((match = characterPattern.exec(normalizedText)) !== null) {
             // Get narrator text before this character dialogue
-            const narratorText = text.slice(lastIndex, match.index).trim();
+            const narratorText = normalizedText.slice(lastIndex, match.index).trim();
             
             if (narratorText) {
                 // Calculate position in cleaned text
@@ -370,7 +377,7 @@ const BookReaderPage: React.FC = () => {
         }
         
         // Get any remaining narrator text after the last character dialogue
-        const remainingText = text.slice(lastIndex).trim();
+        const remainingText = normalizedText.slice(lastIndex).trim();
         if (remainingText) {
             const cleanRemainingText = remainingText
                 .replace(/@\w+\s*/g, '') // Remove stray @tags

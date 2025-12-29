@@ -99,6 +99,13 @@ const PageEditor: React.FC = () => {
     const [existingPages, setExistingPages] = useState<any[]>([]);
     const [loadingPages, setLoadingPages] = useState(true);
     const [editingPageId, setEditingPageId] = useState<string | null>(null);
+    
+    // Character voices for @ autocomplete
+    const [characterVoices, setCharacterVoices] = useState<Array<{ characterName: string; voiceId: string; color?: string }>>([]);
+    const [showCharacterSuggestions, setShowCharacterSuggestions] = useState(false);
+    const [characterFilter, setCharacterFilter] = useState('');
+    const [cursorPosition, setCursorPosition] = useState(0);
+    const textareaRef = useRef<HTMLTextAreaElement>(null);
 
     // Template for reusing scroll and text boxes
     const [pageTemplate, setPageTemplate] = useState<{
@@ -117,6 +124,23 @@ const PageEditor: React.FC = () => {
     const [isResizingLeft, setIsResizingLeft] = useState(false);
     const [isResizingRight, setIsResizingRight] = useState(false);
     const [isResizingCanvas, setIsResizingCanvas] = useState(false);
+
+    // Fetch book data to get character voices
+    useEffect(() => {
+        const fetchBookData = async () => {
+            if (!bookId) return;
+            try {
+                const res = await apiClient.get(`/api/books/${bookId}`);
+                if (res.data.characterVoices && Array.isArray(res.data.characterVoices)) {
+                    console.log('🎭 Loaded character voices:', res.data.characterVoices);
+                    setCharacterVoices(res.data.characterVoices);
+                }
+            } catch (err) {
+                console.error('Failed to fetch book data for character voices:', err);
+            }
+        };
+        fetchBookData();
+    }, [bookId]);
 
     // Fetch existing pages for this book
     useEffect(() => {
@@ -225,6 +249,60 @@ const PageEditor: React.FC = () => {
             setEnhancingText(false);
         }
     };
+
+    // Handle text change in textarea with @ detection
+    const handleTextChange = (boxId: string, newText: string) => {
+        updateTextBox(boxId, { text: newText });
+        
+        // Check for @ character to show suggestions
+        const textarea = textareaRef.current;
+        if (textarea) {
+            const cursorPos = textarea.selectionStart;
+            setCursorPosition(cursorPos);
+            
+            // Find if cursor is after an @ symbol
+            const textBeforeCursor = newText.substring(0, cursorPos);
+            const lastAtIndex = textBeforeCursor.lastIndexOf('@');
+            
+            if (lastAtIndex !== -1) {
+                // Check if there's a space or newline between @ and cursor (if so, hide suggestions)
+                const textAfterAt = textBeforeCursor.substring(lastAtIndex + 1);
+                if (!textAfterAt.includes(' ') && !textAfterAt.includes('\n')) {
+                    setCharacterFilter(textAfterAt.toLowerCase());
+                    setShowCharacterSuggestions(true);
+                    return;
+                }
+            }
+            setShowCharacterSuggestions(false);
+            setCharacterFilter('');
+        }
+    };
+
+    // Insert character name at cursor position
+    const insertCharacterName = (boxId: string, characterName: string) => {
+        const box = textBoxes.find(b => b.id === boxId);
+        if (!box) return;
+        
+        const text = box.text;
+        const textBeforeCursor = text.substring(0, cursorPosition);
+        const lastAtIndex = textBeforeCursor.lastIndexOf('@');
+        
+        if (lastAtIndex !== -1) {
+            // Replace everything from @ to cursor with the character name
+            const before = text.substring(0, lastAtIndex);
+            const after = text.substring(cursorPosition);
+            const newText = `${before}@${characterName} ${after}`;
+            updateTextBox(boxId, { text: newText });
+        }
+        
+        setShowCharacterSuggestions(false);
+        setCharacterFilter('');
+    };
+
+    // Filter character voices based on input
+    const filteredCharacters = characterVoices.filter(cv => 
+        cv.characterName.toLowerCase().includes(characterFilter)
+    );
 
     // Enhance text with sound effect prompts
     const [enhancingSfx, setEnhancingSfx] = useState(false);
@@ -1685,12 +1763,62 @@ const PageEditor: React.FC = () => {
                                     <Trash2 className="w-4 h-4" />
                                 </button>
                             </div>
-                            <textarea
-                                value={selectedBox.text}
-                                onChange={e => updateTextBox(selectedBox.id, { text: e.target.value })}
-                                className="w-full text-sm p-2 border rounded focus:ring-2 focus:ring-indigo-300 outline-none"
-                                rows={3}
-                            />
+                            <div className="relative">
+                                <textarea
+                                    ref={textareaRef}
+                                    value={selectedBox.text}
+                                    onChange={e => handleTextChange(selectedBox.id, e.target.value)}
+                                    onKeyDown={e => {
+                                        // Handle arrow keys and enter for suggestion selection
+                                        if (showCharacterSuggestions && filteredCharacters.length > 0) {
+                                            if (e.key === 'Escape') {
+                                                setShowCharacterSuggestions(false);
+                                            } else if (e.key === 'Enter' || e.key === 'Tab') {
+                                                e.preventDefault();
+                                                insertCharacterName(selectedBox.id, filteredCharacters[0].characterName);
+                                            }
+                                        }
+                                    }}
+                                    onBlur={() => {
+                                        // Delay hiding to allow click on suggestion
+                                        setTimeout(() => setShowCharacterSuggestions(false), 200);
+                                    }}
+                                    className="w-full text-sm p-2 border rounded focus:ring-2 focus:ring-indigo-300 outline-none"
+                                    rows={3}
+                                    placeholder={characterVoices.length > 0 ? 'Type @ to insert character voice...' : 'Enter text...'}
+                                />
+                                
+                                {/* Character voice autocomplete dropdown */}
+                                {showCharacterSuggestions && filteredCharacters.length > 0 && (
+                                    <div className="absolute z-50 mt-1 w-full bg-white border border-indigo-300 rounded-lg shadow-lg max-h-40 overflow-y-auto">
+                                        <div className="px-2 py-1 bg-indigo-50 text-xs text-indigo-600 font-medium border-b">
+                                            🎭 Character Voices
+                                        </div>
+                                        {filteredCharacters.map((char, idx) => (
+                                            <button
+                                                key={char.characterName}
+                                                onClick={() => insertCharacterName(selectedBox.id, char.characterName)}
+                                                className={`w-full text-left px-3 py-2 text-sm hover:bg-indigo-50 flex items-center gap-2 ${idx === 0 ? 'bg-indigo-50' : ''}`}
+                                            >
+                                                <span 
+                                                    className="w-2 h-2 rounded-full"
+                                                    style={{ backgroundColor: char.color || '#6366f1' }}
+                                                />
+                                                <span className="font-medium">@{char.characterName}</span>
+                                            </button>
+                                        ))}
+                                    </div>
+                                )}
+                                
+                                {/* No character voices hint */}
+                                {showCharacterSuggestions && filteredCharacters.length === 0 && characterVoices.length === 0 && (
+                                    <div className="absolute z-50 mt-1 w-full bg-white border border-orange-200 rounded-lg shadow-lg p-3">
+                                        <p className="text-xs text-orange-600">
+                                            💡 No character voices configured. Go to Book Settings → Character Voices to add characters.
+                                        </p>
+                                    </div>
+                                )}
+                            </div>
                             
                             {/* Enhance Buttons */}
                             <div className="flex gap-2">

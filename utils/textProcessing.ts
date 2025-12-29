@@ -9,9 +9,14 @@
 // - With special chars: [excitedly], [whispers softly]
 const EMOTIONAL_CUE_REGEX = /\[[^\]]+\]/g;
 
+// Regex to match @CharacterName tags at the start of text
+// Format: @CharacterName followed by space (the name is alphanumeric only)
+const CHARACTER_TAG_REGEX = /^@\w+\s+/;
+
 /**
  * Process text with emotional cues for TTS
  * Keeps the text but can be used to adjust voice parameters
+ * Also removes @CharacterName tags (voice selection is handled separately)
  */
 export function processTextWithEmotionalCues(text: string): {
   processedText: string;
@@ -20,10 +25,13 @@ export function processTextWithEmotionalCues(text: string): {
   const emotions: Array<{ emotion: string; position: number }> = [];
   let position = 0;
   
+  // First remove @CharacterName tag if present
+  const textWithoutCharTag = text.replace(CHARACTER_TAG_REGEX, '');
+  
   // Find all emotional cues
   let match;
   const regex = /\[[^\]]+\]/g; // Use fresh regex instance
-  while ((match = regex.exec(text)) !== null) {
+  while ((match = regex.exec(textWithoutCharTag)) !== null) {
     emotions.push({
       emotion: match[0].replace(/[\[\]]/g, '').toLowerCase(),
       position: match.index - position,
@@ -32,17 +40,18 @@ export function processTextWithEmotionalCues(text: string): {
   }
   
   // Remove emotional cues from text for clean TTS
-  const processedText = text.replace(EMOTIONAL_CUE_REGEX, '').replace(/\s+/g, ' ').trim();
+  const processedText = textWithoutCharTag.replace(EMOTIONAL_CUE_REGEX, '').replace(/\s+/g, ' ').trim();
   
   return { processedText, emotions };
 }
 
 /**
- * Remove emotional cues from text
- * Returns clean text without any [bracketed content] markers
+ * Remove emotional cues and @CharacterName tags from text
+ * Returns clean text without any [bracketed content] markers or @CharacterName prefixes
  */
 export function removeEmotionalCues(text: string): string {
   return text
+    .replace(CHARACTER_TAG_REGEX, '') // Remove @CharacterName at start
     .replace(EMOTIONAL_CUE_REGEX, '') // Remove [bracketed content]
     .replace(/\s+/g, ' ') // Normalize multiple spaces to single
     .trim();

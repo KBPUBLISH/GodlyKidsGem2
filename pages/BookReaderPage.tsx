@@ -2395,7 +2395,32 @@ const BookReaderPage: React.FC = () => {
                     console.log('▶️ Auto-play mode enabled for new audio');
                 }
                 
-                audio.play();
+                // Wait for audio to be ready before playing
+                // This prevents the first playback from sounding garbled/cut off
+                const playWhenReady = () => {
+                    audio.play().catch(err => {
+                        console.warn('Audio play failed:', err);
+                    });
+                };
+                
+                // If audio is already ready (cached), play immediately
+                if (audio.readyState >= 3) { // HAVE_FUTURE_DATA or HAVE_ENOUGH_DATA
+                    console.log('🎵 Audio already ready, playing immediately');
+                    playWhenReady();
+                } else {
+                    // Wait for enough data to play smoothly
+                    console.log('🎵 Waiting for audio to load...');
+                    audio.addEventListener('canplaythrough', playWhenReady, { once: true });
+                    // Fallback: if canplaythrough doesn't fire within 3s, try playing anyway
+                    setTimeout(() => {
+                        if (audio.readyState < 3 && !audio.paused) return; // Already playing
+                        if (audio.paused && audio.currentTime === 0) {
+                            console.log('🎵 Fallback: playing after timeout');
+                            playWhenReady();
+                        }
+                    }, 3000);
+                    audio.load(); // Ensure loading starts
+                }
             } else {
                 console.error('No audio URL returned');
                 alert('Failed to generate audio. Please check the API key.');

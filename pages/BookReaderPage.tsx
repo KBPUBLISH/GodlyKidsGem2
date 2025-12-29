@@ -122,7 +122,7 @@ const BookReaderPage: React.FC = () => {
     const [pages, setPages] = useState<Page[]>([]);
     const [currentPageIndex, setCurrentPageIndex] = useState(0);
     const [loading, setLoading] = useState(true);
-    const [scrollState, setScrollState] = useState<ScrollState>('mid'); // Default to mid (30%)
+    const [scrollState, setScrollState] = useState<ScrollState>('max'); // Default to max (60%) - matches portal editing view
     const [bookTitle, setBookTitle] = useState<string>('Book');
     const [bookOrientation, setBookOrientation] = useState<'portrait' | 'landscape'>('portrait');
     
@@ -133,7 +133,7 @@ const BookReaderPage: React.FC = () => {
     const introVideoRef = useRef<HTMLVideoElement>(null);
 
     // Keep ref in sync with state
-    const scrollStateRef = useRef<ScrollState>('mid');
+    const scrollStateRef = useRef<ScrollState>('max');
     useEffect(() => {
         scrollStateRef.current = scrollState;
     }, [scrollState]);
@@ -2840,15 +2840,17 @@ const BookReaderPage: React.FC = () => {
                         >
                             <Volume2 className="w-4 h-4 text-white" />
                             <span className="text-white text-xs max-w-[100px] truncate">
-                                {/* Show "Default" when using book's narrator, otherwise show user's selected voice */}
-                                {bookDefaultVoiceId && useBookDefaultVoice 
-                                    ? 'Default'
-                                    : (voices.find(v => v.voice_id === selectedVoiceId)?.name || 
-                                       voices.find(v => v.voice_id === selectedVoiceId)?.customName ||
-                                       clonedVoices.find(v => v.voice_id === selectedVoiceId)?.name ||
-                                       'Voice')}
+                                {/* Show narrator voice name when book has one, otherwise show user's selected voice */}
+                                {defaultNarratorVoiceId
+                                    ? (voices.find(v => v.voice_id === defaultNarratorVoiceId)?.name || 'Narrator')
+                                    : bookDefaultVoiceId && useBookDefaultVoice 
+                                        ? 'Default'
+                                        : (voices.find(v => v.voice_id === selectedVoiceId)?.name || 
+                                           voices.find(v => v.voice_id === selectedVoiceId)?.customName ||
+                                           clonedVoices.find(v => v.voice_id === selectedVoiceId)?.name ||
+                                           'Voice')}
                             </span>
-                            {bookDefaultVoiceId && useBookDefaultVoice && <span className="text-amber-300 text-[10px]">📖</span>}
+                            {(defaultNarratorVoiceId || (bookDefaultVoiceId && useBookDefaultVoice)) && <span className="text-amber-300 text-[10px]">📖</span>}
                         </button>
 
                         {/* Dropdown Menu */}

@@ -34,12 +34,29 @@ const BooksAnalytics: React.FC = () => {
         fetchBooksAnalytics();
     }, []);
 
+    // Fetch all pages of books (handles pagination)
+    const fetchAllBooks = async (): Promise<BookAnalytics[]> => {
+        const pageSize = 100;
+        let page = 1;
+        let results: BookAnalytics[] = [];
+
+        while (true) {
+            const res = await apiClient.get(`/api/books?status=all&page=${page}&limit=${pageSize}`);
+            const payload = res.data;
+            const pageItems: BookAnalytics[] = Array.isArray(payload) ? payload : (payload.data || []);
+            results = results.concat(pageItems);
+
+            const hasMore = Array.isArray(payload) ? false : Boolean(payload.pagination?.hasMore);
+            if (!hasMore) break;
+            page += 1;
+        }
+        return results;
+    };
+
     const fetchBooksAnalytics = async () => {
         try {
-            // Fetch all books with analytics data
-            const response = await apiClient.get('/api/books?status=all');
-            // Handle both old format (array) and new format ({ data: [], pagination: {} })
-            const booksData = Array.isArray(response.data) ? response.data : (response.data?.data || []);
+            const booksData = await fetchAllBooks();
+            console.log(`📊 Analytics: Loaded ${booksData.length} books (all pages)`);
             setBooks(booksData);
         } catch (error) {
             console.error('Error fetching books analytics:', error);

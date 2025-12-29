@@ -92,11 +92,24 @@ const BookSeriesForm: React.FC = () => {
 
     const fetchAvailableBooks = async () => {
         try {
-            const response = await apiClient.get('/api/books?status=all');
-            const booksData = Array.isArray(response.data) 
-                ? response.data 
-                : (response.data.data || response.data.books || []);
-            setAvailableBooks(booksData);
+            // Fetch all pages of books (handles pagination)
+            const pageSize = 100;
+            let page = 1;
+            let results: Book[] = [];
+
+            while (true) {
+                const res = await apiClient.get(`/api/books?status=all&page=${page}&limit=${pageSize}`);
+                const payload = res.data;
+                const pageItems: Book[] = Array.isArray(payload) ? payload : (payload.data || payload.books || []);
+                results = results.concat(pageItems);
+
+                const hasMore = Array.isArray(payload) ? false : Boolean(payload.pagination?.hasMore);
+                if (!hasMore) break;
+                page += 1;
+            }
+
+            console.log(`📚 Series form: Loaded ${results.length} books (all pages)`);
+            setAvailableBooks(results);
         } catch (error) {
             console.error('Error fetching books:', error);
         }

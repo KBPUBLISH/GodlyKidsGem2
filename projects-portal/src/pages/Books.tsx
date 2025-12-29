@@ -20,14 +20,36 @@ const Books: React.FC = () => {
     const [deletingBookId, setDeletingBookId] = useState<string | null>(null);
     const [activeTab, setActiveTab] = useState<TabView>('list');
 
+    // Fetch all pages of books (handles pagination)
+    const fetchAllBooks = async (): Promise<Book[]> => {
+        const pageSize = 100; // backend cap is 100
+        let page = 1;
+        let results: Book[] = [];
+
+        while (true) {
+            const res = await apiClient.get(`/api/books?status=all&page=${page}&limit=${pageSize}`);
+            const payload = res.data;
+
+            // Support both paginated { data, pagination } and direct arrays
+            const pageItems: Book[] = Array.isArray(payload) ? payload : (payload.data || payload.books || []);
+            results = results.concat(pageItems);
+
+            const hasMore = Array.isArray(payload)
+                ? false
+                : Boolean(payload.pagination?.hasMore);
+
+            if (!hasMore) break;
+            page += 1;
+        }
+
+        return results;
+    };
+
     useEffect(() => {
         const fetchBooks = async () => {
             try {
-                const response = await apiClient.get('/api/books?status=all');
-                // Handle paginated response { data: [...], pagination: {...} } or direct array
-                const booksData = Array.isArray(response.data) 
-                    ? response.data 
-                    : (response.data.data || response.data.books || []);
+                const booksData = await fetchAllBooks();
+                console.log(`📚 Loaded ${booksData.length} books (all pages)`);
                 setBooks(booksData);
             } catch (error) {
                 console.error('Error fetching books:', error);

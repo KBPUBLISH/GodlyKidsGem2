@@ -63,6 +63,7 @@ interface BookPageRendererProps {
     highlightedWordIndex?: number;
     wordAlignment?: { words: Array<{ word: string; start: number; end: number }> } | null;
     onVideoTransition?: () => void; // Called when video loops/plays to resume TTS if suspended
+    isTTSPlaying?: boolean; // When true, mute video to prevent audio conflicts on iOS
 }
 
 export const BookPageRenderer: React.FC<BookPageRendererProps> = ({
@@ -73,7 +74,8 @@ export const BookPageRenderer: React.FC<BookPageRendererProps> = ({
     onPlayText,
     highlightedWordIndex,
     wordAlignment,
-    onVideoTransition
+    onVideoTransition,
+    isTTSPlaying = false
 }) => {
     // DEBUG: Log scroll URL on every render
     console.log('📜 BookPageRenderer - scrollUrl:', page.scrollUrl, '| scrollState:', scrollState, '| pageId:', page.id);
@@ -538,24 +540,14 @@ export const BookPageRenderer: React.FC<BookPageRendererProps> = ({
                         className="absolute inset-0 w-full h-full object-cover min-w-full min-h-full"
                         autoPlay
                         loop
+                        muted={isTTSPlaying} // MUTE video while TTS is playing to prevent iOS audio conflicts
                         playsInline
                         preload="auto"
                         onLoadedData={() => {
-                            // Set video volume
+                            // Set video volume (only matters when not muted)
                             if (videoRef.current) {
                                 videoRef.current.volume = 1.0;
                             }
-                        }}
-                        onSeeked={() => {
-                            // Video looped (seeked back to start) - resume TTS if it got paused
-                            if (videoRef.current && videoRef.current.currentTime < 0.5) {
-                                console.log('🎬 Video looped - triggering audio resume');
-                                onVideoTransition?.();
-                            }
-                        }}
-                        onPlay={() => {
-                            // Video started/resumed - ensure TTS continues
-                            onVideoTransition?.();
                         }}
                         style={{
                             objectFit: 'cover',

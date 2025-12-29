@@ -810,54 +810,6 @@ const BookReaderPage: React.FC = () => {
         playingRef.current = playing;
     }, [playing]);
     
-    // Auto-resume TTS if it gets unexpectedly paused (e.g., by video loop on iOS)
-    // This polls frequently to catch any suspension and recover quickly
-    useEffect(() => {
-        let resumeAttempts = 0;
-        
-        const checkAndResumeTTS = async () => {
-            if (playingRef.current && currentAudioRef.current && currentAudioRef.current.paused) {
-                resumeAttempts++;
-                console.log(`🔄 Auto-resume attempt ${resumeAttempts}: TTS paused unexpectedly`);
-                
-                // First, ensure AudioContext is running (iOS requirement)
-                if (audioContextRef.current && audioContextRef.current.state === 'suspended') {
-                    try {
-                        await audioContextRef.current.resume();
-                        console.log('🔄 AudioContext resumed');
-                    } catch (e) {
-                        console.warn('Failed to resume AudioContext:', e);
-                    }
-                }
-                
-                // Try to play the audio
-                try {
-                    await currentAudioRef.current.play();
-                    console.log('🔄 TTS resumed successfully');
-                    resumeAttempts = 0; // Reset counter on success
-                } catch (err: any) {
-                    console.warn('Failed to auto-resume TTS:', err?.message || err);
-                    
-                    // If we've tried many times and it keeps failing, the audio might be corrupted
-                    // Try seeking back slightly to "kick" it
-                    if (resumeAttempts > 3 && currentAudioRef.current.currentTime > 0.1) {
-                        console.log('🔄 Trying seek trick to recover audio');
-                        currentAudioRef.current.currentTime = Math.max(0, currentAudioRef.current.currentTime - 0.1);
-                        currentAudioRef.current.play().catch(() => {});
-                    }
-                }
-            } else if (!currentAudioRef.current?.paused) {
-                // Audio is playing, reset counter
-                resumeAttempts = 0;
-            }
-        };
-        
-        // Only start polling if we're playing - check every 200ms for faster recovery
-        if (playing) {
-            const interval = setInterval(checkAndResumeTTS, 200);
-            return () => clearInterval(interval);
-        }
-    }, [playing]);
 
     // Effect: Stop TTS audio when component unmounts OR when navigating away
     useEffect(() => {
@@ -3254,39 +3206,7 @@ const BookReaderPage: React.FC = () => {
                             onPlayText={handlePlayText}
                             highlightedWordIndex={currentWordIndex}
                             wordAlignment={wordAlignment}
-                            onVideoTransition={async () => {
-                                // Keep AudioContext active during video transitions/loops
-                                // This prevents TTS from pausing when videos switch or loop (iOS fix)
-                                console.log('🎬 Video transition detected - resuming audio');
-                                
-                                // Resume AudioContexts first (iOS requirement)
-                                if (audioContextRef.current && audioContextRef.current.state === 'suspended') {
-                                    try {
-                                        await audioContextRef.current.resume();
-                                        console.log('🎬 AudioContext resumed');
-                                    } catch (e) {}
-                                }
-                                if (bookMusicCtxRef.current && bookMusicCtxRef.current.state === 'suspended') {
-                                    try {
-                                        await bookMusicCtxRef.current.resume();
-                                    } catch (e) {}
-                                }
-                                
-                                // Resume TTS immediately if it should be playing
-                                if (currentAudioRef.current && playingRef.current) {
-                                    // Small delay to let iOS settle after video event
-                                    setTimeout(async () => {
-                                        if (currentAudioRef.current && currentAudioRef.current.paused && playingRef.current) {
-                                            console.log('🎬 Resuming paused TTS after video transition');
-                                            try {
-                                                await currentAudioRef.current.play();
-                                            } catch (err) {
-                                                console.warn('🎬 Failed to resume TTS:', err);
-                                            }
-                                        }
-                                    }, 50);
-                                }
-                            }}
+                            isTTSPlaying={playing}
                         />
                     </div>
 

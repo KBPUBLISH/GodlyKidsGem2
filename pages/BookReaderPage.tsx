@@ -407,11 +407,14 @@ const BookReaderPage: React.FC = () => {
             });
         }
         
-        console.log(`📝 Parsed ${segments.length} segment(s):`, segments.map(s => 
-            `"${s.text.substring(0, 30)}${s.text.length > 30 ? '...' : ''}" [${s.isNarrator ? 'Narrator' : s.characterName}]`
+        // Filter out any empty segments
+        const validSegments = segments.filter(s => s.text && s.text.trim().length > 0);
+        
+        console.log(`📝 Parsed ${validSegments.length} valid segment(s) (${segments.length - validSegments.length} empty filtered):`, validSegments.map(s => 
+            `"${s.text.substring(0, 30)}${s.text.length > 30 ? '...' : ''}" [${s.isNarrator ? 'Narrator' : s.characterName}] voice:${s.voiceId || 'NONE'}`
         ));
         
-        return segments;
+        return validSegments;
     };
     
     /**
@@ -2214,6 +2217,27 @@ const BookReaderPage: React.FC = () => {
         const wordOffset = calculateWordOffset(allSegments, segmentIdx);
         
         try {
+            // Validate segment has text and voice
+            if (!segment.text || !segment.text.trim()) {
+                console.warn(`⏭️ Skipping empty segment ${segmentIdx + 1}`);
+                const nextSegmentIdx = segmentIdx + 1;
+                if (nextSegmentIdx < allSegments.length) {
+                    playSegment(allSegments[nextSegmentIdx], nextSegmentIdx, allSegments, textBoxIndex, isAutoPlay, currentLang, playbackId);
+                } else {
+                    // All segments done, trigger completion
+                    console.log(`✅ All segments complete (last was empty)`);
+                    isPlayingMultiSegmentRef.current = false;
+                    setPlaying(false);
+                    playingRef.current = false;
+                }
+                return;
+            }
+            
+            if (!segment.voiceId) {
+                console.warn(`⚠️ Segment ${segmentIdx + 1} has no voiceId, using narrator voice`);
+                segment.voiceId = effectiveNarratorVoiceId;
+            }
+            
             // Stop any previous audio BEFORE generating new one
             if (multiSegmentAudioRef.current) {
                 const oldAudio = multiSegmentAudioRef.current;
@@ -2228,6 +2252,16 @@ const BookReaderPage: React.FC = () => {
             const ttsText = currentLang !== 'en' 
                 ? removeEmotionalCues(segment.text) 
                 : processed.processedText;
+            
+            // Skip if processed text is empty
+            if (!ttsText || !ttsText.trim()) {
+                console.warn(`⏭️ Skipping segment ${segmentIdx + 1} - empty after processing`);
+                const nextSegmentIdx = segmentIdx + 1;
+                if (nextSegmentIdx < allSegments.length) {
+                    playSegment(allSegments[nextSegmentIdx], nextSegmentIdx, allSegments, textBoxIndex, isAutoPlay, currentLang, playbackId);
+                }
+                return;
+            }
             
             console.log(`🎭 [${playbackId}] Segment ${segmentIdx + 1}/${allSegments.length}: "${ttsText.substring(0, 30)}..." [${segment.isNarrator ? 'Narrator' : segment.characterName}] voice: ${segment.voiceId} wordOffset: ${wordOffset}`);
             
@@ -2250,6 +2284,62 @@ const BookReaderPage: React.FC = () => {
                 const nextSegmentIdx = segmentIdx + 1;
                 if (nextSegmentIdx < allSegments.length) {
                     playSegment(allSegments[nextSegmentIdx], nextSegmentIdx, allSegments, textBoxIndex, isAutoPlay, currentLang, playbackId);
+                } else {
+                    // This was the last segment - trigger completion flow
+                    console.log(`✅ All segments complete (last failed, triggering auto-play check)`);
+                    isPlayingMultiSegmentRef.current = false;
+                    multiSegmentAudioRef.current = null;
+                    setCurrentSegments([]);
+                    setCurrentSegmentIndex(0);
+                    currentSegmentIndexRef.current = 0;
+                    
+                    setTimeout(() => {
+                        setPlaying(false);
+                        playingRef.current = false;
+                        setActiveTextBoxIndex(null);
+                        
+                        // Auto-play to next page
+                        const currentPageIdx = currentPageIndexRef.current;
+                        if (autoPlayModeRef.current && !isAutoPlayingRef.current && currentPageIdx < pages.length - 1) {
+                            isAutoPlayingRef.current = true;
+                            const nextPageIndex = currentPageIdx + 1;
+                            console.log('🔄 Auto-play after failed segment: Moving to page', nextPageIndex + 1);
+                            
+                            setIsPageTurning(true);
+                            setFlipState({ direction: 'next', isFlipping: true });
+                            playPageTurnSound();
+                            
+                            setTimeout(() => {
+                                setCurrentPageIndex(nextPageIndex);
+                                currentPageIndexRef.current = nextPageIndex;
+                            }, 400);
+                            
+                            setTimeout(() => {
+                                setIsPageTurning(false);
+                                setFlipState(null);
+                                if (bookId) readingProgressService.saveProgress(bookId, nextPageIndex);
+                                
+                                setTimeout(() => {
+                                    if (autoPlayModeRef.current && currentPageIndexRef.current === nextPageIndex) {
+                                        const nextPage = pages[nextPageIndex];
+                                        const nextPageTextBoxes = nextPage?.content?.textBoxes || nextPage?.textBoxes;
+                                        if (nextPage && nextPageTextBoxes?.length > 0) {
+                                            const translatedTextBoxes = getTranslatedTextBoxes(nextPage);
+                                            const firstBoxText = translatedTextBoxes[0]?.text || nextPageTextBoxes[0].text;
+                                            isAutoPlayingRef.current = false;
+                                            handlePlayText(firstBoxText, 0, { stopPropagation: () => {} } as React.MouseEvent, true);
+                                        } else {
+                                            setAutoPlayMode(false);
+                                            autoPlayModeRef.current = false;
+                                            isAutoPlayingRef.current = false;
+                                        }
+                                    } else {
+                                        isAutoPlayingRef.current = false;
+                                    }
+                                }, 300);
+                            }, 800);
+                        }
+                    }, 200);
                 }
                 return;
             }

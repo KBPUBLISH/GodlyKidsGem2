@@ -298,10 +298,22 @@ const BookReaderPage: React.FC = () => {
         
         // Normalize quotes first - convert curly quotes to straight quotes
         const normalizedText = text
-            .replace(/[""]/g, '"')  // Convert curly double quotes to straight
-            .replace(/['']/g, "'"); // Convert curly single quotes to straight
+            .replace(/[""„«»]/g, '"')  // Convert all types of double quotes to straight
+            .replace(/[''‚‹›]/g, "'"); // Convert all types of single quotes to straight
         
         console.log('🔄 Normalized text:', normalizedText.substring(0, 100) + '...');
+        
+        // Debug: Check if regex can find patterns
+        const testMatch = normalizedText.match(/@(\w+)\s*"([^"]+)"/);
+        console.log('🧪 Test regex match:', testMatch ? `Found: @${testMatch[1]} "${testMatch[2].substring(0, 20)}..."` : 'NO MATCH');
+        
+        // Debug: Show character codes around first @
+        const atIndex = normalizedText.indexOf('@');
+        if (atIndex >= 0) {
+            const snippet = normalizedText.substring(atIndex, atIndex + 30);
+            const charCodes = [...snippet].map(c => c.charCodeAt(0)).join(',');
+            console.log('🔬 Char codes after @:', snippet, '→', charCodes);
+        }
         
         // Combined regex to match both formats:
         // 1. @Character "dialogue" - tag outside quotes

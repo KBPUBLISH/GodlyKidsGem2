@@ -546,12 +546,8 @@ export const ApiService = {
   },
 
   // Get trending episodes (top 10 by play count over a time period)
+  // No caching - always fetch fresh data for real-time trending
   getTrendingEpisodes: async (limit: number = 10): Promise<FeaturedEpisode[]> => {
-    const cacheKey = `trending_episodes_${limit}`;
-    const cached = getCached<FeaturedEpisode[]>(cacheKey);
-    // Only use cache if it has at least 2 items (prevents stale single-item cache on mobile)
-    if (cached && cached.length >= 2) return cached;
-
     try {
       const baseUrl = getApiBaseUrl();
       const response = await fetchWithTimeout(`${baseUrl}playlists/trending-episodes?limit=${limit}`, {
@@ -561,7 +557,6 @@ export const ApiService = {
       if (response.ok) {
         const data = await response.json();
         const result = Array.isArray(data) ? data : [];
-        setCache(cacheKey, result, 5 * 60 * 1000); // Cache for 5 minutes
         console.log(`📈 Trending episodes loaded: ${result.length} items`);
         return result;
       }
@@ -573,12 +568,8 @@ export const ApiService = {
   },
 
   // Get trending books (top books by read count)
+  // No caching - always fetch fresh data for real-time trending
   getTrendingBooks: async (limit: number = 10): Promise<Book[]> => {
-    const cacheKey = `trending_books_${limit}`;
-    const cached = getCached<Book[]>(cacheKey);
-    // Only use cache if it has at least 2 items (prevents stale single-item cache on mobile)
-    if (cached && cached.length >= 2) return cached;
-
     try {
       const baseUrl = getApiBaseUrl();
       const response = await fetchWithTimeout(`${baseUrl}books/trending?limit=${limit}`, {
@@ -588,7 +579,6 @@ export const ApiService = {
       if (response.ok) {
         const data = await response.json();
         const result = Array.isArray(data) ? data : [];
-        setCache(cacheKey, result, 5 * 60 * 1000); // Cache for 5 minutes
         console.log(`📚 Trending books loaded: ${result.length} items`);
         return result;
       }

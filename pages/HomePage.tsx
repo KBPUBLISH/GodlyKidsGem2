@@ -178,14 +178,13 @@ const HomePage: React.FC = () => {
   const [featuredContent, setFeaturedContent] = useState<any[]>(() => getCached('featured'));
   const [featuredLoading, setFeaturedLoading] = useState(() => getCached('featured').length === 0);
   
-  // Featured episodes state - individual playlist items marked as featured
-  // Trending episodes state (top 10 by play count)
-  const [trendingEpisodes, setTrendingEpisodes] = useState<any[]>(() => getCached('trendingEpisodes'));
-  const [trendingEpisodesLoading, setTrendingEpisodesLoading] = useState(() => getCached('trendingEpisodes').length === 0);
+  // Trending episodes state (top 10 by play count) - always fresh, no cache
+  const [trendingEpisodes, setTrendingEpisodes] = useState<any[]>([]);
+  const [trendingEpisodesLoading, setTrendingEpisodesLoading] = useState(true);
   
-  // Trending books state (top 10 by read count)
-  const [trendingBooks, setTrendingBooks] = useState<any[]>(() => getCached('trendingBooks'));
-  const [trendingBooksLoading, setTrendingBooksLoading] = useState(() => getCached('trendingBooks').length === 0);
+  // Trending books state (top 10 by read count) - always fresh, no cache
+  const [trendingBooks, setTrendingBooks] = useState<any[]>([]);
+  const [trendingBooksLoading, setTrendingBooksLoading] = useState(true);
   
   // Recently Read/Played state
   const [recentlyReadBooks, setRecentlyReadBooks] = useState<any[]>([]);
@@ -461,11 +460,11 @@ const HomePage: React.FC = () => {
     }
   };
 
-  // Handle app resume from background (iOS/mobile) - refetch data if cache looks stale
+  // Handle app resume from background (iOS/mobile) - refetch data
   useEffect(() => {
     const handleVisibilityChange = () => {
       if (document.visibilityState === 'visible') {
-        console.log('📱 App became visible again - checking caches');
+        console.log('📱 App became visible again - refreshing data');
         
         // Check lessons cache
         const cachedLessons = getCached('lessons');
@@ -474,18 +473,10 @@ const HomePage: React.FC = () => {
           fetchLessons();
         }
         
-        // Check trending caches - refetch if they look incomplete
-        const cachedTrendingEpisodes = getCached('trendingEpisodes');
-        if (!cachedTrendingEpisodes || cachedTrendingEpisodes.length < 2) {
-          console.log('📱 Trending episodes cache incomplete, refetching...');
-          fetchTrendingEpisodes();
-        }
-        
-        const cachedTrendingBooks = getCached('trendingBooks');
-        if (!cachedTrendingBooks || cachedTrendingBooks.length < 2) {
-          console.log('📱 Trending books cache incomplete, refetching...');
-          fetchTrendingBooks();
-        }
+        // Always refresh trending data on app resume for real-time updates
+        console.log('📱 Refreshing trending data...');
+        fetchTrendingEpisodes();
+        fetchTrendingBooks();
       }
     };
     
@@ -606,7 +597,7 @@ const HomePage: React.FC = () => {
       const data = await ApiService.getTrendingEpisodes(10);
       console.log('📈 Trending episodes loaded:', data.length, 'items');
       setTrendingEpisodes(data);
-      cacheData('trendingEpisodes', data);
+      // No caching - always fetch fresh for real-time trending
     } catch (error) {
       console.error('❌ Error fetching trending episodes:', error);
     } finally {
@@ -621,7 +612,7 @@ const HomePage: React.FC = () => {
       const data = await ApiService.getTrendingBooks(10);
       console.log('📚 Trending books loaded:', data.length, 'items');
       setTrendingBooks(data);
-      cacheData('trendingBooks', data);
+      // No caching - always fetch fresh for real-time trending
     } catch (error) {
       console.error('❌ Error fetching trending books:', error);
     } finally {

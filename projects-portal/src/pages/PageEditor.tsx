@@ -449,14 +449,13 @@ const PageEditor: React.FC = () => {
         }
 
         // Load text boxes with IDs for editing
-        // IMPORTANT: Check content.textBoxes FIRST (where data actually lives), 
-        // then fall back to root textBoxes only if content.textBoxes is empty/missing
+        // IMPORTANT: Prefer root textBoxes (where we save to), fall back to content.textBoxes
         console.log('📝 page.textBoxes:', page.textBoxes);
         console.log('📝 page.content?.textBoxes:', page.content?.textBoxes);
-        const contentTextBoxes = page.content?.textBoxes || [];
         const rootTextBoxes = page.textBoxes || [];
-        // Prefer content.textBoxes if it has data, otherwise use root textBoxes
-        const textBoxesData = contentTextBoxes.length > 0 ? contentTextBoxes : rootTextBoxes;
+        const contentTextBoxes = page.content?.textBoxes || [];
+        // Prefer root textBoxes if it has data (where we save), otherwise fall back to content.textBoxes
+        const textBoxesData = rootTextBoxes.length > 0 ? rootTextBoxes : contentTextBoxes;
         console.log('📝 Final textBoxesData:', textBoxesData);
         
         if (Array.isArray(textBoxesData) && textBoxesData.length > 0) {

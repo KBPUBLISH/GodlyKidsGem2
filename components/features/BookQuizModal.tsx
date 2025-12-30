@@ -74,28 +74,32 @@ const BookQuizModal: React.FC<BookQuizModalProps> = ({
         setLoading(true);
         setLoadingMessage('Preparing your quiz...');
         setError(null);
+        
+        // Calculate the current attempt number (attemptCount is 0-based, so add 1 for next attempt)
+        const currentAttemptNumber = attemptCount + 1;
+        
         try {
-            console.log(`📝 Loading quiz for book ${bookId}, age ${kidAge}...`);
+            console.log(`📝 Loading quiz for book ${bookId}, age ${kidAge}, attempt ${currentAttemptNumber}...`);
             
-            // First try to get existing quiz for this age group
-            let quizData = await ApiService.getBookQuiz(bookId, getUserId(), kidAge);
+            // First try to get existing quiz for this age group and attempt
+            let quizData = await ApiService.getBookQuiz(bookId, getUserId(), kidAge, currentAttemptNumber);
             console.log('📝 getBookQuiz response:', quizData);
             
             // If full quiz exists, use it
             if (quizData && quizData.quiz && quizData.quiz.questions && quizData.quiz.questions.length >= 6) {
                 setQuestions(quizData.quiz.questions);
                 setAgeGroup(quizData.quiz.ageGroup || getAgeGroupLabel(kidAge));
-                console.log(`✅ Quiz loaded with ${quizData.quiz.questions.length} questions`);
+                console.log(`✅ Quiz loaded with ${quizData.quiz.questions.length} questions (attempt ${currentAttemptNumber})`);
                 setLoading(false);
                 return;
             }
             
             // No full quiz exists - use progressive loading
-            console.log(`⚡ Using progressive loading for age ${kidAge}...`);
-            setLoadingMessage('Creating your first question...');
+            console.log(`⚡ Using progressive loading for age ${kidAge}, attempt ${currentAttemptNumber}...`);
+            setLoadingMessage(currentAttemptNumber === 2 ? 'Creating new questions for your second try...' : 'Creating your first question...');
             
             // Generate first question quickly
-            const firstResult = await ApiService.generateFirstQuestion(bookId, kidAge);
+            const firstResult = await ApiService.generateFirstQuestion(bookId, kidAge, currentAttemptNumber);
             console.log('⚡ First question result:', firstResult);
             
             if (firstResult && firstResult.firstQuestion) {
@@ -107,7 +111,7 @@ const BookQuizModal: React.FC<BookQuizModalProps> = ({
                 // If this was from cache, we already have all questions
                 if (firstResult.cached && firstResult.totalQuestions >= 6) {
                     // Fetch the full quiz
-                    const fullQuiz = await ApiService.getBookQuiz(bookId, getUserId(), kidAge);
+                    const fullQuiz = await ApiService.getBookQuiz(bookId, getUserId(), kidAge, currentAttemptNumber);
                     if (fullQuiz?.quiz?.questions) {
                         setQuestions(fullQuiz.quiz.questions);
                     }
@@ -122,12 +126,13 @@ const BookQuizModal: React.FC<BookQuizModalProps> = ({
                     const remainingResult = await ApiService.generateRemainingQuestions(
                         bookId, 
                         kidAge, 
-                        firstResult.firstQuestion
+                        firstResult.firstQuestion,
+                        currentAttemptNumber
                     );
                     
                     if (remainingResult && remainingResult.questions) {
                         setQuestions(remainingResult.questions);
-                        console.log(`✅ All ${remainingResult.questions.length} questions loaded`);
+                        console.log(`✅ All ${remainingResult.questions.length} questions loaded (attempt ${currentAttemptNumber})`);
                     }
                     setLoadingRemainingQuestions(false);
                 }
@@ -135,7 +140,7 @@ const BookQuizModal: React.FC<BookQuizModalProps> = ({
                 // Fallback to full generation
                 console.log('⚠️ First question failed, falling back to full generation...');
                 setLoadingMessage('Generating all questions...');
-                const generated = await ApiService.generateBookQuiz(bookId, kidAge);
+                const generated = await ApiService.generateBookQuiz(bookId, kidAge, currentAttemptNumber);
                 if (generated && generated.quiz && generated.quiz.questions) {
                     setQuestions(generated.quiz.questions);
                     setAgeGroup(generated.quiz.ageGroup || getAgeGroupLabel(kidAge));
@@ -181,12 +186,16 @@ const BookQuizModal: React.FC<BookQuizModalProps> = ({
         }
 
         setSubmitting(true);
+        
+        // Calculate the current attempt number
+        const currentAttemptNumber = attemptCount + 1;
+        
         try {
             const answersArray = Array.from({ length: questions.length }, (_, i) => 
                 selectedAnswers.get(i) ?? -1
             );
 
-            const result = await ApiService.submitBookQuiz(bookId, getUserId(), answersArray, kidAge);
+            const result = await ApiService.submitBookQuiz(bookId, getUserId(), answersArray, kidAge, currentAttemptNumber);
             
             if (result) {
                 setResults(result);

@@ -1794,19 +1794,19 @@ export const ApiService = {
   // === BOOK QUIZ API ===
 
   // Generate a quiz for a book using AI (age-appropriate)
-  generateBookQuiz: async (bookId: string, age?: number): Promise<any | null> => {
+  generateBookQuiz: async (bookId: string, age?: number, attemptNumber?: number): Promise<any | null> => {
     try {
       const baseUrl = getApiBaseUrl();
       const response = await fetchWithTimeout(`${baseUrl}quiz/generate`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ bookId, age: age || 6 }),
+        body: JSON.stringify({ bookId, age: age || 6, attemptNumber: attemptNumber || 1 }),
         timeout: 60000, // 60 seconds - OpenAI quiz generation can take a while
       });
 
       if (response.ok) {
         const data = await response.json();
-        console.log(`📝 Quiz generated for book ${bookId} (age ${age || 6}):`, data.cached ? 'from cache' : 'newly generated');
+        console.log(`📝 Quiz generated for book ${bookId} (age ${age || 6}, attempt ${attemptNumber || 1}):`, data.cached ? 'from cache' : 'newly generated');
         return data;
       }
       return null;
@@ -1817,20 +1817,20 @@ export const ApiService = {
   },
 
   // Generate just the first question quickly (for progressive loading)
-  generateFirstQuestion: async (bookId: string, age?: number): Promise<any | null> => {
+  generateFirstQuestion: async (bookId: string, age?: number, attemptNumber?: number): Promise<any | null> => {
     try {
       const baseUrl = getApiBaseUrl();
-      console.log(`⚡ Generating first question for book ${bookId}...`);
+      console.log(`⚡ Generating first question for book ${bookId}, attempt ${attemptNumber || 1}...`);
       const response = await fetchWithTimeout(`${baseUrl}quiz/generate-first`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ bookId, age: age || 6 }),
+        body: JSON.stringify({ bookId, age: age || 6, attemptNumber: attemptNumber || 1 }),
         timeout: 15000, // 15 seconds for just one question
       });
 
       if (response.ok) {
         const data = await response.json();
-        console.log(`⚡ First question ready:`, data.cached ? 'from cache' : 'newly generated');
+        console.log(`⚡ First question ready (attempt ${attemptNumber || 1}):`, data.cached ? 'from cache' : 'newly generated');
         return data;
       }
       return null;
@@ -1841,20 +1841,20 @@ export const ApiService = {
   },
 
   // Generate remaining questions in background
-  generateRemainingQuestions: async (bookId: string, age?: number, firstQuestion?: any): Promise<any | null> => {
+  generateRemainingQuestions: async (bookId: string, age?: number, firstQuestion?: any, attemptNumber?: number): Promise<any | null> => {
     try {
       const baseUrl = getApiBaseUrl();
-      console.log(`📝 Generating remaining questions for book ${bookId}...`);
+      console.log(`📝 Generating remaining questions for book ${bookId}, attempt ${attemptNumber || 1}...`);
       const response = await fetchWithTimeout(`${baseUrl}quiz/generate-remaining`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ bookId, age: age || 6, firstQuestion }),
+        body: JSON.stringify({ bookId, age: age || 6, firstQuestion, attemptNumber: attemptNumber || 1 }),
         timeout: 60000, // 60 seconds for remaining questions
       });
 
       if (response.ok) {
         const data = await response.json();
-        console.log(`📝 All questions ready:`, data.questions?.length || 0, 'questions');
+        console.log(`📝 All questions ready (attempt ${attemptNumber || 1}):`, data.questions?.length || 0, 'questions');
         return data;
       }
       return null;
@@ -1865,12 +1865,13 @@ export const ApiService = {
   },
 
   // Get quiz for a book (age-appropriate)
-  getBookQuiz: async (bookId: string, userId?: string, age?: number): Promise<any | null> => {
+  getBookQuiz: async (bookId: string, userId?: string, age?: number, attemptNumber?: number): Promise<any | null> => {
     try {
       const baseUrl = getApiBaseUrl();
       const params = new URLSearchParams();
       if (userId) params.append('userId', userId);
       if (age) params.append('age', age.toString());
+      if (attemptNumber) params.append('attemptNumber', attemptNumber.toString());
       const queryString = params.toString() ? `?${params.toString()}` : '';
       
       const response = await fetchWithTimeout(`${baseUrl}quiz/${bookId}${queryString}`, {
@@ -1889,18 +1890,18 @@ export const ApiService = {
   },
 
   // Submit quiz answers (with age for validation)
-  submitBookQuiz: async (bookId: string, userId: string, answers: number[], age?: number): Promise<any | null> => {
+  submitBookQuiz: async (bookId: string, userId: string, answers: number[], age?: number, attemptNumber?: number): Promise<any | null> => {
     try {
       const baseUrl = getApiBaseUrl();
       const response = await fetchWithTimeout(`${baseUrl}quiz/${bookId}/submit`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId, answers, age: age || 6 }),
+        body: JSON.stringify({ userId, answers, age: age || 6, attemptNumber: attemptNumber || 1 }),
       });
 
       if (response.ok) {
         const data = await response.json();
-        console.log(`📊 Quiz submitted: ${data.score}/${data.totalQuestions} correct, ${data.coinsEarned} coins earned`);
+        console.log(`📊 Quiz submitted (attempt ${attemptNumber || 1}): ${data.score}/${data.totalQuestions} correct, ${data.coinsEarned} coins earned`);
         return data;
       }
       return null;

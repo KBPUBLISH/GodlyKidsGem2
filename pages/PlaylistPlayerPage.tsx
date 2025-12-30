@@ -415,10 +415,11 @@ const PlaylistPlayerPage: React.FC = () => {
                 </button>
 
                 <div className="flex items-center gap-3">
-                    {/* Play Count */}
+                    {/* Play Count - Personal plays tracked locally */}
                     <div className="bg-[#f3e5ab] rounded-full px-3 py-1.5 border-2 border-[#d4c5a0] flex items-center gap-2 shadow-sm">
                         <Play size={16} className="text-[#8B4513]" fill="#8B4513" />
                         <span className="text-[#8B4513] text-sm font-bold">{playCount}</span>
+                        <span className="text-[#8B4513]/70 text-xs font-medium">My Plays</span>
                     </div>
 
                     {/* Like Button */}

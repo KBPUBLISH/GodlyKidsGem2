@@ -1116,11 +1116,27 @@ const BookReaderPage: React.FC = () => {
     useEffect(() => {
         const stopBookAudio = () => {
             console.log('📖 Stopping book audio (app backgrounded)');
-            // Stop TTS narration
+            // Stop single-segment TTS narration
             if (currentAudioRef.current) {
                 currentAudioRef.current.pause();
             }
+            
+            // Stop multi-segment TTS narration (character voices)
+            if (multiSegmentAudioRef.current) {
+                try {
+                    multiSegmentAudioRef.current.pause();
+                    multiSegmentAudioRef.current.onended = null;
+                    multiSegmentAudioRef.current.ontimeupdate = null;
+                } catch (e) {
+                    console.warn('Error stopping multi-segment audio on background:', e);
+                }
+            }
+            // Invalidate any in-flight multi-segment playback
+            isPlayingMultiSegmentRef.current = false;
+            multiSegmentPlaybackIdRef.current += 1;
+            
             setPlaying(false);
+            playingRef.current = false;
             
             // Stop book background music - should NOT continue in background
             if (bookBackgroundMusicRef.current) {

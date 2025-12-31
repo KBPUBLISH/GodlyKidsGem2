@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { ArrowLeft, Play, Pause, RefreshCw, Trash2, Music, Mic2, Sparkles, Volume2, AlertCircle, Edit2, Save } from 'lucide-react';
 import axios from 'axios';
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
+const API_URL = (import.meta.env.VITE_API_BASE_URL || 'https://backendgk2-0.onrender.com') + '/api';
 
 interface Playlist {
     _id: string;

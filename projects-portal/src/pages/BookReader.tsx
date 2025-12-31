@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { apiClient, getMediaUrl } from '../services/apiClient';
 import { ChevronLeft, ChevronRight, X } from 'lucide-react';
@@ -15,6 +15,12 @@ interface TextBox {
 }
 
 interface VideoSequenceItem {
+    url: string;
+    filename?: string;
+    order: number;
+}
+
+interface ImageSequenceItem {
     url: string;
     filename?: string;
     order: number;
@@ -45,6 +51,11 @@ interface Page {
     // Video sequence support
     useVideoSequence?: boolean;
     videoSequence?: VideoSequenceItem[];
+    // Image sequence support
+    useImageSequence?: boolean;
+    imageSequence?: ImageSequenceItem[];
+    imageSequenceDuration?: number; // seconds per image (default 3)
+    imageSequenceAnimation?: string; // animation effect type
 }
 
 const BookReader: React.FC = () => {
@@ -55,6 +66,15 @@ const BookReader: React.FC = () => {
     const [loading, setLoading] = useState(true);
     const [showScroll, setShowScroll] = useState(true);
     const [viewMode, setViewMode] = useState<'fullscreen' | 'tablet-p' | 'tablet-l' | 'phone-p' | 'phone-l'>('fullscreen');
+    
+    // Image sequence state
+    const [currentImageIndex, setCurrentImageIndex] = useState(0);
+    const [imageTransition, setImageTransition] = useState<'fade-in' | 'fade-out' | 'none'>('none');
+    const imageSequenceTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+    
+    // Video sequence state
+    const [currentVideoIndex, setCurrentVideoIndex] = useState(0);
+    const videoRef = useRef<HTMLVideoElement>(null);
 
     // Device dimensions
     const deviceStyles = {
@@ -81,6 +101,63 @@ const BookReader: React.FC = () => {
     }, [bookId]);
 
     const currentPage = pages[currentPageIndex];
+    
+    // Reset image/video index when page changes
+    useEffect(() => {
+        setCurrentImageIndex(0);
+        setCurrentVideoIndex(0);
+        setImageTransition('none');
+        
+        // Clear any existing image sequence timer
+        if (imageSequenceTimerRef.current) {
+            clearInterval(imageSequenceTimerRef.current);
+            imageSequenceTimerRef.current = null;
+        }
+    }, [currentPageIndex]);
+    
+    // Image sequence cycling effect
+    useEffect(() => {
+        if (!currentPage?.useImageSequence || !currentPage?.imageSequence?.length) {
+            return;
+        }
+        
+        const sortedImages = [...currentPage.imageSequence].sort((a, b) => a.order - b.order);
+        if (sortedImages.length <= 1) return;
+        
+        const duration = (currentPage.imageSequenceDuration || 3) * 1000; // Convert to ms
+        
+        imageSequenceTimerRef.current = setInterval(() => {
+            // Fade out current image
+            setImageTransition('fade-out');
+            
+            setTimeout(() => {
+                // Change to next image
+                setCurrentImageIndex(prev => (prev + 1) % sortedImages.length);
+                setImageTransition('fade-in');
+                
+                // Reset transition state
+                setTimeout(() => {
+                    setImageTransition('none');
+                }, 500);
+            }, 500);
+        }, duration);
+        
+        return () => {
+            if (imageSequenceTimerRef.current) {
+                clearInterval(imageSequenceTimerRef.current);
+            }
+        };
+    }, [currentPage?.useImageSequence, currentPage?.imageSequence, currentPage?.imageSequenceDuration]);
+    
+    // Video sequence: handle video ended to play next
+    const handleVideoEnded = () => {
+        if (!currentPage?.useVideoSequence || !currentPage?.videoSequence?.length) return;
+        
+        const sortedVideos = [...currentPage.videoSequence].sort((a, b) => a.order - b.order);
+        if (sortedVideos.length <= 1) return;
+        
+        setCurrentVideoIndex(prev => (prev + 1) % sortedVideos.length);
+    };
 
     const handleNext = (e: React.MouseEvent) => {
         e.stopPropagation();
@@ -176,8 +253,38 @@ const BookReader: React.FC = () => {
                         </button>
                     </div>
                 </div>
-                <div className="text-gray-400 text-sm">
-                    Page {currentPageIndex + 1} / {pages.length}
+                <div className="flex items-center gap-4">
+                    {/* Background type indicator */}
+                    {currentPage && (
+                        <div className="flex items-center gap-2">
+                            {currentPage.useImageSequence && currentPage.imageSequence?.length ? (
+                                <span className="bg-purple-600/80 text-white text-xs px-2 py-1 rounded-full flex items-center gap-1">
+                                    <span className="w-2 h-2 bg-white rounded-full animate-pulse" />
+                                    Image Sequence ({currentPage.imageSequence.length})
+                                </span>
+                            ) : currentPage.useVideoSequence && currentPage.videoSequence?.length ? (
+                                <span className="bg-red-600/80 text-white text-xs px-2 py-1 rounded-full flex items-center gap-1">
+                                    <span className="w-2 h-2 bg-white rounded-full animate-pulse" />
+                                    Video Sequence ({currentPage.videoSequence.length})
+                                </span>
+                            ) : (currentPage.backgroundType === 'video' || currentPage.files?.background?.type === 'video') ? (
+                                <span className="bg-orange-600/80 text-white text-xs px-2 py-1 rounded-full">
+                                    Video
+                                </span>
+                            ) : (currentPage.backgroundUrl || currentPage.files?.background?.url) ? (
+                                <span className="bg-blue-600/80 text-white text-xs px-2 py-1 rounded-full">
+                                    Image
+                                </span>
+                            ) : (
+                                <span className="bg-gray-600/80 text-white text-xs px-2 py-1 rounded-full">
+                                    No Background
+                                </span>
+                            )}
+                        </div>
+                    )}
+                    <div className="text-gray-400 text-sm">
+                        Page {currentPageIndex + 1} / {pages.length}
+                    </div>
                 </div>
             </div>
 
@@ -209,19 +316,77 @@ const BookReader: React.FC = () => {
                     {/* Background Layer */}
                     <div className="absolute inset-0 flex items-center justify-center">
                         {(() => {
-                            // Check for video sequence first
+                            // Check for image sequence first
+                            if (currentPage.useImageSequence && currentPage.imageSequence && currentPage.imageSequence.length > 0) {
+                                const sortedImages = [...currentPage.imageSequence].sort((a, b) => a.order - b.order);
+                                const currentImage = sortedImages[currentImageIndex] || sortedImages[0];
+                                const animation = currentPage.imageSequenceAnimation || 'fade';
+                                
+                                // Get transition class based on animation type
+                                const getTransitionClass = () => {
+                                    if (imageTransition === 'none') return 'opacity-100';
+                                    if (animation === 'fade') {
+                                        return imageTransition === 'fade-out' ? 'opacity-0' : 'opacity-100';
+                                    }
+                                    if (animation === 'zoom') {
+                                        return imageTransition === 'fade-out' 
+                                            ? 'opacity-0 scale-110' 
+                                            : 'opacity-100 scale-100';
+                                    }
+                                    if (animation === 'slide') {
+                                        return imageTransition === 'fade-out'
+                                            ? 'opacity-0 -translate-x-full'
+                                            : 'opacity-100 translate-x-0';
+                                    }
+                                    return 'opacity-100';
+                                };
+                                
+                                return (
+                                    <div className="relative w-full h-full">
+                                        <img
+                                            key={currentImage.url}
+                                            src={resolveUrl(currentImage.url)}
+                                            alt={`Page ${currentPage.pageNumber} - Image ${currentImageIndex + 1}`}
+                                            className={`w-full h-full object-cover transition-all duration-500 ${getTransitionClass()}`}
+                                            onError={(e) => {
+                                                e.currentTarget.style.display = 'none';
+                                            }}
+                                        />
+                                        {/* Image sequence indicator */}
+                                        <div className="absolute bottom-4 right-4 bg-black/50 text-white text-xs px-2 py-1 rounded-full backdrop-blur-sm">
+                                            {currentImageIndex + 1} / {sortedImages.length}
+                                        </div>
+                                    </div>
+                                );
+                            }
+                            
+                            // Check for video sequence
                             if (currentPage.useVideoSequence && currentPage.videoSequence && currentPage.videoSequence.length > 0) {
                                 const sortedVideos = [...currentPage.videoSequence].sort((a, b) => a.order - b.order);
-                                const firstVideo = sortedVideos[0];
+                                const currentVideo = sortedVideos[currentVideoIndex] || sortedVideos[0];
+                                const shouldLoop = sortedVideos.length === 1;
+                                
                                 return (
-                                    <video
-                                        src={resolveUrl(firstVideo.url)}
-                                        className="w-full h-full object-cover"
-                                        autoPlay
-                                        loop
-                                        muted
-                                        playsInline
-                                    />
+                                    <div className="relative w-full h-full">
+                                        <video
+                                            ref={videoRef}
+                                            key={currentVideo.url}
+                                            src={resolveUrl(currentVideo.url)}
+                                            className="w-full h-full object-cover"
+                                            autoPlay
+                                            loop={shouldLoop}
+                                            muted
+                                            playsInline
+                                            onEnded={handleVideoEnded}
+                                        />
+                                        {/* Video sequence indicator */}
+                                        {sortedVideos.length > 1 && (
+                                            <div className="absolute bottom-4 right-4 bg-black/50 text-white text-xs px-2 py-1 rounded-full backdrop-blur-sm flex items-center gap-1">
+                                                <span className="w-2 h-2 bg-red-500 rounded-full animate-pulse" />
+                                                {currentVideoIndex + 1} / {sortedVideos.length}
+                                            </div>
+                                        )}
+                                    </div>
                                 );
                             }
                             
@@ -238,7 +403,7 @@ const BookReader: React.FC = () => {
                                 );
                             }
                             
-                            // Video background
+                            // Video background (single video, loops)
                             if (bgType === 'video') {
                                 return (
                                     <video

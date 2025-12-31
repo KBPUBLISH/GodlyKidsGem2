@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { Radio as RadioIcon, Users, Music, Settings, Play, Pause, Mic2, RefreshCw, AlertCircle, CheckCircle, Clock, ListMusic } from 'lucide-react';
 import axios from 'axios';
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
+const API_URL = (import.meta.env.VITE_API_BASE_URL || 'https://backendgk2-0.onrender.com') + '/api';
 
 interface RadioStats {
     stationName: string;

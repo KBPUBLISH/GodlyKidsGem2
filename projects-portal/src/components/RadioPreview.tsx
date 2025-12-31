@@ -255,6 +255,80 @@ const RadioPreview: React.FC = () => {
         });
         
         setQueue(queueItems);
+        
+        // Pre-generate host breaks in the background
+        preGenerateHostBreaks(queueItems);
+    };
+
+    // Pre-generate host break TTS audio for smoother playback
+    const preGenerateHostBreaks = async (queueItems: QueueItem[]) => {
+        const hostBreakItems = queueItems
+            .map((item, index) => ({ item, index }))
+            .filter(({ item }) => item.type === 'host_break' && item.pendingHostBreak && !item.hostBreak);
+        
+        // Generate host breaks sequentially to avoid overwhelming the API
+        for (const { item, index } of hostBreakItems) {
+            if (!item.pendingHostBreak) continue;
+            
+            try {
+                console.log(`📻 Pre-generating host break ${index}: ${item.pendingHostBreak.contentType}`);
+                
+                const hostBreakData = await generateHostBreakSilent(
+                    item.pendingHostBreak.nextSong,
+                    item.pendingHostBreak.previousSong,
+                    item.pendingHostBreak.contentType || 'song',
+                    item.pendingHostBreak.contentDescription
+                );
+                
+                if (hostBreakData) {
+                    // Update the queue with the generated host break
+                    setQueue(prevQueue => {
+                        const newQueue = [...prevQueue];
+                        if (newQueue[index] && newQueue[index].type === 'host_break') {
+                            newQueue[index] = { 
+                                ...newQueue[index], 
+                                hostBreak: hostBreakData, 
+                                pendingHostBreak: undefined 
+                            };
+                        }
+                        return newQueue;
+                    });
+                    console.log(`✅ Pre-generated host break ${index}`);
+                }
+            } catch (err) {
+                console.error(`Failed to pre-generate host break ${index}:`, err);
+            }
+        }
+    };
+
+    // Silent version that doesn't update the main loading state
+    const generateHostBreakSilent = async (
+        nextSong: RadioTrack, 
+        previousSong?: RadioTrack,
+        contentType: string = 'song',
+        contentDescription?: string
+    ): Promise<HostBreakData | undefined> => {
+        try {
+            const targetDuration = contentType === 'station_intro' ? 25 :
+                                   contentType === 'story_intro' ? 20 : 
+                                   contentType === 'story_outro' ? 18 : 15;
+            
+            const response = await axios.post(`${API_URL}/radio/host-break/generate`, {
+                nextSongTitle: nextSong.title,
+                nextSongArtist: nextSong.artist,
+                previousSongTitle: previousSong?.title,
+                previousSongArtist: previousSong?.artist,
+                targetDuration,
+                contentType,
+                contentDescription,
+                contentCategory: nextSong.category
+            });
+            
+            return response.data.hostBreak;
+        } catch (err) {
+            console.error('Failed to generate host break:', err);
+            return undefined;
+        }
     };
 
     const getCurrentItem = () => queue[currentIndex];
@@ -916,17 +990,31 @@ const RadioPreview: React.FC = () => {
                             <div className="flex-1 min-w-0">
                                 {item.type === 'host_break' ? (
                                     <>
-                                        <p className="text-yellow-300 text-sm font-medium">
-                                            {item.pendingHostBreak?.contentType === 'station_intro' && '📻 Station Intro'}
+                                        <p className="text-yellow-300 text-sm font-medium flex items-center gap-2">
+                                            {/* Show content type label */}
+                                            {(item.pendingHostBreak?.contentType || item.hostBreak) === 'station_intro' || item.pendingHostBreak?.contentType === 'station_intro' ? '📻 Station Intro' : null}
                                             {item.pendingHostBreak?.contentType === 'story_intro' && '📚 Story Time!'}
                                             {item.pendingHostBreak?.contentType === 'story_outro' && '📖 Story Reflection'}
                                             {item.pendingHostBreak?.contentType === 'devotional' && '🙏 Devotional Time'}
-                                            {(!item.pendingHostBreak?.contentType || item.pendingHostBreak?.contentType === 'song') && '🎙️ Host Break'}
+                                            {(!item.pendingHostBreak?.contentType || item.pendingHostBreak?.contentType === 'song') && !item.hostBreak && '🎙️ Host Break'}
+                                            {item.hostBreak && !item.pendingHostBreak && '🎙️ Host Break'}
+                                            
+                                            {/* Ready/Loading indicator */}
+                                            {item.hostBreak ? (
+                                                <span className="text-green-400 text-xs">✓ Ready</span>
+                                            ) : (
+                                                <span className="text-yellow-400/60 text-xs flex items-center gap-1">
+                                                    <Loader2 className="w-3 h-3 animate-spin" />
+                                                    Loading...
+                                                </span>
+                                            )}
                                         </p>
                                         <p className="text-white/50 text-xs truncate">
-                                            {item.pendingHostBreak?.contentType === 'story_outro' 
-                                                ? `Reflecting on: ${item.pendingHostBreak?.nextSong.title}`
-                                                : `Introducing: ${item.pendingHostBreak?.nextSong.title || item.hostBreak?.script?.substring(0, 30)}`
+                                            {item.hostBreak?.script 
+                                                ? `"${item.hostBreak.script.substring(0, 50)}..."`
+                                                : item.pendingHostBreak?.contentType === 'story_outro' 
+                                                    ? `Reflecting on: ${item.pendingHostBreak?.nextSong.title}`
+                                                    : `Introducing: ${item.pendingHostBreak?.nextSong.title}`
                                             }
                                         </p>
                                     </>

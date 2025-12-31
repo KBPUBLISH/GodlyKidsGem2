@@ -27,6 +27,7 @@ import AnalyticsDashboard from './pages/AnalyticsDashboard';
 import OnboardingAnalytics from './pages/OnboardingAnalytics';
 import Radio from './pages/Radio';
 import RadioHosts from './pages/RadioHosts';
+import RadioLibrary from './pages/RadioLibrary';
 import RadioShowBuilder from './pages/RadioShowBuilder';
 import RadioPreviewPage from './pages/RadioPreviewPage';
 
@@ -71,6 +72,7 @@ function App() {
             <Route path="onboarding-analytics" element={<OnboardingAnalytics />} />
             <Route path="radio" element={<Radio />} />
             <Route path="radio/hosts" element={<RadioHosts />} />
+            <Route path="radio/library" element={<RadioLibrary />} />
             <Route path="radio/show-builder" element={<RadioShowBuilder />} />
             <Route path="radio/preview" element={<RadioPreviewPage />} />
           </Route>

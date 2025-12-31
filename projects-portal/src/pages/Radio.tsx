@@ -253,6 +253,21 @@ const Radio: React.FC = () => {
                 </Link>
 
                 <Link
+                    to="/radio/library"
+                    className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 hover:shadow-md transition-shadow group"
+                >
+                    <div className="flex items-center gap-4">
+                        <div className="p-3 bg-orange-100 rounded-xl group-hover:bg-orange-200 transition-colors">
+                            <ListMusic className="w-8 h-8 text-orange-600" />
+                        </div>
+                        <div>
+                            <h3 className="text-lg font-bold text-gray-800">Music Library</h3>
+                            <p className="text-sm text-gray-500">Manage individual songs for your station</p>
+                        </div>
+                    </div>
+                </Link>
+
+                <Link
                     to="/radio/preview"
                     className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 hover:shadow-md transition-shadow group"
                 >

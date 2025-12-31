@@ -5,7 +5,7 @@ import axios from 'axios';
 const API_URL = (import.meta.env.VITE_API_BASE_URL || 'https://backendgk2-0.onrender.com') + '/api';
 
 // Crossfade settings
-const CROSSFADE_DURATION = 3000; // 3 seconds crossfade
+const CROSSFADE_DURATION = 5000; // 5 seconds crossfade
 const CROSSFADE_CHECK_INTERVAL = 100; // Check every 100ms
 
 interface RadioTrack {
@@ -169,11 +169,17 @@ const RadioPreview: React.FC = () => {
         const hostBreakFrequency = station?.hostBreakFrequency || 3;
         
         // Helper to determine if a track is a story/audiobook
-        const isStoryContent = (track: RadioTrack) => 
-            track.category === 'story' || track.category === 'kids';
+        // Check category OR title keywords for better auto-detection
+        const storyKeywords = ['story', 'audiobook', 'episode', 'chapter', 'tale', 'adventure', 'book'];
+        const isStoryContent = (track: RadioTrack) => {
+            if (track.category === 'story' || track.category === 'kids') return true;
+            // Also check title for story keywords
+            const titleLower = track.title.toLowerCase();
+            return storyKeywords.some(keyword => titleLower.includes(keyword));
+        };
         
         const isDevotional = (track: RadioTrack) => 
-            track.category === 'devotional';
+            track.category === 'devotional' || track.title.toLowerCase().includes('devotion');
         
         uniqueQueue.slice(0, 15).forEach((track, index) => {
             const previousTrack = index > 0 ? uniqueQueue[index - 1] : undefined;
@@ -476,6 +482,10 @@ const RadioPreview: React.FC = () => {
                 const totalDuration = currentAudioRef.current.duration;
                 setProgress(currentTime);
                 
+                // Use refs to avoid stale closure values
+                const idx = currentIndexRef.current;
+                const q = queueRef.current;
+                
                 // Check if we should start crossfade (for songs only)
                 if (
                     enableCrossfadeCheck &&
@@ -484,10 +494,10 @@ const RadioPreview: React.FC = () => {
                     !isCrossfading &&
                     totalDuration > 0 &&
                     totalDuration - currentTime <= CROSSFADE_DURATION / 1000 &&
-                    currentIndex + 1 < queue.length
+                    idx + 1 < q.length
                 ) {
                     // Check if next item is a song (crossfade) or host break (fade out only)
-                    startCrossfade(currentIndex + 1);
+                    startCrossfade(idx + 1);
                 }
             }
         }, CROSSFADE_CHECK_INTERVAL);

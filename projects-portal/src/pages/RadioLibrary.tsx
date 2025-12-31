@@ -70,12 +70,26 @@ const RadioLibrary: React.FC = () => {
     const [filterEnabled, setFilterEnabled] = useState<string>('');
     const [searchQuery, setSearchQuery] = useState('');
     
-    // Modal state
+    // Modal state - Bulk add from playlist
     const [showAddModal, setShowAddModal] = useState(false);
     const [selectedPlaylist, setSelectedPlaylist] = useState<string>('');
     const [bulkCategory, setBulkCategory] = useState('general');
     const [bulkRotation, setBulkRotation] = useState('medium');
     const [addingBulk, setAddingBulk] = useState(false);
+    
+    // Modal state - Single track add
+    const [showSingleAddModal, setShowSingleAddModal] = useState(false);
+    const [singleTrack, setSingleTrack] = useState({
+        title: '',
+        artist: '',
+        audioUrl: '',
+        coverImage: '',
+        duration: 0,
+        category: 'general',
+        rotation: 'medium',
+        description: ''
+    });
+    const [addingSingle, setAddingSingle] = useState(false);
     
     // Audio preview
     const [playingTrack, setPlayingTrack] = useState<string | null>(null);
@@ -170,6 +184,47 @@ const RadioLibrary: React.FC = () => {
         }
     };
 
+    const handleSingleAdd = async () => {
+        if (!singleTrack.title || !singleTrack.audioUrl) {
+            setError('Title and Audio URL are required');
+            return;
+        }
+        
+        try {
+            setAddingSingle(true);
+            await axios.post(`${API_URL}/radio/library`, {
+                title: singleTrack.title,
+                artist: singleTrack.artist,
+                audioUrl: singleTrack.audioUrl,
+                coverImage: singleTrack.coverImage,
+                duration: singleTrack.duration || undefined,
+                category: singleTrack.category,
+                rotation: singleTrack.rotation,
+                description: singleTrack.description,
+                enabled: true
+            });
+            
+            // Reset form
+            setSingleTrack({
+                title: '',
+                artist: '',
+                audioUrl: '',
+                coverImage: '',
+                duration: 0,
+                category: 'general',
+                rotation: 'medium',
+                description: ''
+            });
+            setShowSingleAddModal(false);
+            await fetchData();
+        } catch (err: any) {
+            console.error('Error adding track:', err);
+            setError(err.response?.data?.message || 'Failed to add track');
+        } finally {
+            setAddingSingle(false);
+        }
+    };
+
     const handlePlayPreview = (track: RadioTrack) => {
         if (audio) {
             audio.pause();
@@ -236,13 +291,22 @@ const RadioLibrary: React.FC = () => {
                         <p className="text-gray-600">Manage individual songs for your radio station</p>
                     </div>
                 </div>
-                <button
-                    onClick={() => setShowAddModal(true)}
-                    className="bg-indigo-600 text-white px-4 py-2 rounded-lg hover:bg-indigo-700 flex items-center gap-2"
-                >
-                    <FolderPlus className="w-5 h-5" />
-                    Add from Playlist
-                </button>
+                <div className="flex gap-2">
+                    <button
+                        onClick={() => setShowSingleAddModal(true)}
+                        className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 flex items-center gap-2"
+                    >
+                        <Plus className="w-5 h-5" />
+                        Add Song
+                    </button>
+                    <button
+                        onClick={() => setShowAddModal(true)}
+                        className="bg-indigo-600 text-white px-4 py-2 rounded-lg hover:bg-indigo-700 flex items-center gap-2"
+                    >
+                        <FolderPlus className="w-5 h-5" />
+                        Add from Playlist
+                    </button>
+                </div>
             </div>
 
             {error && (
@@ -534,6 +598,153 @@ const RadioLibrary: React.FC = () => {
                                     <>
                                         <Plus className="w-4 h-4" />
                                         Add Tracks
+                                    </>
+                                )}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Single Track Add Modal */}
+            {showSingleAddModal && (
+                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+                    <div className="bg-white rounded-xl p-6 w-full max-w-lg max-h-[90vh] overflow-y-auto">
+                        <h2 className="text-xl font-bold mb-4">Add Individual Song</h2>
+                        
+                        <div className="space-y-4">
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">
+                                    Title <span className="text-red-500">*</span>
+                                </label>
+                                <input
+                                    type="text"
+                                    value={singleTrack.title}
+                                    onChange={(e) => setSingleTrack({ ...singleTrack, title: e.target.value })}
+                                    placeholder="Song title"
+                                    className="w-full border rounded-lg px-3 py-2"
+                                />
+                            </div>
+
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">
+                                    Artist
+                                </label>
+                                <input
+                                    type="text"
+                                    value={singleTrack.artist}
+                                    onChange={(e) => setSingleTrack({ ...singleTrack, artist: e.target.value })}
+                                    placeholder="Artist name"
+                                    className="w-full border rounded-lg px-3 py-2"
+                                />
+                            </div>
+
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">
+                                    Audio URL <span className="text-red-500">*</span>
+                                </label>
+                                <input
+                                    type="url"
+                                    value={singleTrack.audioUrl}
+                                    onChange={(e) => setSingleTrack({ ...singleTrack, audioUrl: e.target.value })}
+                                    placeholder="https://storage.example.com/audio.mp3"
+                                    className="w-full border rounded-lg px-3 py-2"
+                                />
+                            </div>
+
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">
+                                    Cover Image URL
+                                </label>
+                                <input
+                                    type="url"
+                                    value={singleTrack.coverImage}
+                                    onChange={(e) => setSingleTrack({ ...singleTrack, coverImage: e.target.value })}
+                                    placeholder="https://storage.example.com/cover.jpg"
+                                    className="w-full border rounded-lg px-3 py-2"
+                                />
+                            </div>
+
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">
+                                    Duration (seconds)
+                                </label>
+                                <input
+                                    type="number"
+                                    value={singleTrack.duration || ''}
+                                    onChange={(e) => setSingleTrack({ ...singleTrack, duration: parseInt(e.target.value) || 0 })}
+                                    placeholder="180"
+                                    className="w-full border rounded-lg px-3 py-2"
+                                />
+                            </div>
+
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">
+                                    Description
+                                </label>
+                                <textarea
+                                    value={singleTrack.description}
+                                    onChange={(e) => setSingleTrack({ ...singleTrack, description: e.target.value })}
+                                    placeholder="Brief description (used for context-aware hosting)"
+                                    rows={2}
+                                    className="w-full border rounded-lg px-3 py-2"
+                                />
+                            </div>
+
+                            <div className="grid grid-cols-2 gap-4">
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                                        Category
+                                    </label>
+                                    <select
+                                        value={singleTrack.category}
+                                        onChange={(e) => setSingleTrack({ ...singleTrack, category: e.target.value })}
+                                        className="w-full border rounded-lg px-3 py-2"
+                                    >
+                                        {CATEGORIES.map(cat => (
+                                            <option key={cat.value} value={cat.value}>{cat.label}</option>
+                                        ))}
+                                    </select>
+                                </div>
+                                
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                                        Rotation
+                                    </label>
+                                    <select
+                                        value={singleTrack.rotation}
+                                        onChange={(e) => setSingleTrack({ ...singleTrack, rotation: e.target.value })}
+                                        className="w-full border rounded-lg px-3 py-2"
+                                    >
+                                        {ROTATIONS.map(rot => (
+                                            <option key={rot.value} value={rot.value}>{rot.label}</option>
+                                        ))}
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div className="flex justify-end gap-3 mt-6">
+                            <button
+                                onClick={() => setShowSingleAddModal(false)}
+                                className="px-4 py-2 text-gray-600 hover:text-gray-800"
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                onClick={handleSingleAdd}
+                                disabled={!singleTrack.title || !singleTrack.audioUrl || addingSingle}
+                                className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 disabled:opacity-50 flex items-center gap-2"
+                            >
+                                {addingSingle ? (
+                                    <>
+                                        <RefreshCw className="w-4 h-4 animate-spin" />
+                                        Adding...
+                                    </>
+                                ) : (
+                                    <>
+                                        <Music className="w-4 h-4" />
+                                        Add Song
                                     </>
                                 )}
                             </button>

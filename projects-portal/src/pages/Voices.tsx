@@ -11,6 +11,7 @@ interface Voice {
     previewUrl?: string;
     characterImage?: string;
     enabled: boolean;
+    showInApp: boolean;
     description?: string;
     ageGroup?: string;
     language?: string;
@@ -77,6 +78,18 @@ const Voices: React.FC = () => {
             await fetchVoices();
         } catch (error: any) {
             console.error('Error toggling voice:', error);
+            alert(error.response?.data?.message || 'Failed to update voice');
+        }
+    };
+
+    const handleToggleShowInApp = async (voice: Voice) => {
+        try {
+            await apiClient.put(`/api/voices/${voice.voiceId}`, {
+                showInApp: !voice.showInApp
+            });
+            await fetchVoices();
+        } catch (error: any) {
+            console.error('Error toggling showInApp:', error);
             alert(error.response?.data?.message || 'Failed to update voice');
         }
     };
@@ -229,6 +242,7 @@ const Voices: React.FC = () => {
     };
 
     const enabledCount = voices.filter(v => v.enabled).length;
+    const showInAppCount = voices.filter(v => v.showInApp).length;
     const disabledCount = voices.filter(v => !v.enabled).length;
 
     if (loading) {
@@ -269,7 +283,7 @@ const Voices: React.FC = () => {
             </div>
 
             {/* Stats */}
-            <div className="grid grid-cols-3 gap-4 mb-6">
+            <div className="grid grid-cols-4 gap-4 mb-6">
                 <div className="bg-white p-4 rounded-lg shadow">
                     <div className="text-sm text-gray-600">Total Voices</div>
                     <div className="text-2xl font-bold text-gray-800">{voices.length}</div>
@@ -277,6 +291,10 @@ const Voices: React.FC = () => {
                 <div className="bg-green-50 p-4 rounded-lg shadow">
                     <div className="text-sm text-green-600">Enabled</div>
                     <div className="text-2xl font-bold text-green-700">{enabledCount}</div>
+                </div>
+                <div className="bg-blue-50 p-4 rounded-lg shadow">
+                    <div className="text-sm text-blue-600">Visible in Shop</div>
+                    <div className="text-2xl font-bold text-blue-700">{showInAppCount}</div>
                 </div>
                 <div className="bg-gray-50 p-4 rounded-lg shadow">
                     <div className="text-sm text-gray-600">Disabled</div>
@@ -318,13 +336,20 @@ const Voices: React.FC = () => {
                                     </div>
                                 )}
                                 
-                                {/* Status Badge */}
-                                <div className={`absolute top-2 left-2 px-2 py-1 rounded-full text-xs font-bold ${
-                                    voice.enabled 
-                                        ? 'bg-green-500 text-white' 
-                                        : 'bg-gray-500 text-white'
-                                }`}>
-                                    {voice.enabled ? 'Enabled' : 'Disabled'}
+                                {/* Status Badges */}
+                                <div className="absolute top-2 left-2 flex flex-col gap-1">
+                                    <div className={`px-2 py-0.5 rounded-full text-xs font-bold ${
+                                        voice.enabled 
+                                            ? 'bg-green-500 text-white' 
+                                            : 'bg-gray-500 text-white'
+                                    }`}>
+                                        {voice.enabled ? 'Enabled' : 'Disabled'}
+                                    </div>
+                                    {voice.showInApp && (
+                                        <div className="px-2 py-0.5 rounded-full text-xs font-bold bg-blue-500 text-white">
+                                            In Shop
+                                        </div>
+                                    )}
                                 </div>
                             </div>
 
@@ -417,36 +442,47 @@ const Voices: React.FC = () => {
                                             </button>
                                         </div>
 
-                                        {/* Actions */}
-                                        <div className="flex items-center gap-2">
-                                            <button
-                                                onClick={() => handlePlayPreview(voice)}
-                                                className={`flex-1 flex items-center justify-center gap-1 px-3 py-2 rounded-lg transition text-sm ${
-                                                    playingPreview === voice.voiceId
-                                                        ? 'bg-indigo-600 text-white'
-                                                        : 'bg-indigo-50 text-indigo-600 hover:bg-indigo-100'
-                                                }`}
-                                            >
-                                                {playingPreview === voice.voiceId ? (
-                                                    <>
-                                                        <Pause className="w-4 h-4" />
-                                                        Playing...
-                                                    </>
-                                                ) : (
-                                                    <>
-                                                        <Play className="w-4 h-4" />
-                                                        Preview
-                                                    </>
-                                                )}
-                                            </button>
+                                        {/* Preview Button */}
+                                        <button
+                                            onClick={() => handlePlayPreview(voice)}
+                                            className={`w-full flex items-center justify-center gap-1 px-3 py-2 rounded-lg transition text-sm mb-3 ${
+                                                playingPreview === voice.voiceId
+                                                    ? 'bg-indigo-600 text-white'
+                                                    : 'bg-indigo-50 text-indigo-600 hover:bg-indigo-100'
+                                            }`}
+                                        >
+                                            {playingPreview === voice.voiceId ? (
+                                                <>
+                                                    <Pause className="w-4 h-4" />
+                                                    Playing...
+                                                </>
+                                            ) : (
+                                                <>
+                                                    <Play className="w-4 h-4" />
+                                                    Preview Voice
+                                                </>
+                                            )}
+                                        </button>
+
+                                        {/* Toggle Controls */}
+                                        <div className="flex items-center justify-between gap-2 pt-2 border-t border-gray-100">
                                             <label className="flex items-center gap-2 cursor-pointer">
                                                 <input
                                                     type="checkbox"
                                                     checked={voice.enabled}
                                                     onChange={() => handleToggleEnabled(voice)}
-                                                    className="w-5 h-5 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500 cursor-pointer"
+                                                    className="w-4 h-4 text-green-600 border-gray-300 rounded focus:ring-green-500 cursor-pointer"
                                                 />
-                                                <span className="text-sm text-gray-700">In App</span>
+                                                <span className="text-xs text-gray-600">Enable</span>
+                                            </label>
+                                            <label className="flex items-center gap-2 cursor-pointer">
+                                                <input
+                                                    type="checkbox"
+                                                    checked={voice.showInApp}
+                                                    onChange={() => handleToggleShowInApp(voice)}
+                                                    className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 cursor-pointer"
+                                                />
+                                                <span className="text-xs text-gray-600">Show in Shop</span>
                                             </label>
                                         </div>
                                     </>

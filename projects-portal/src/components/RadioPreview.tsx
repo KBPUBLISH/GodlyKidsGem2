@@ -177,15 +177,6 @@ const RadioPreview: React.FC = () => {
         const availableHosts = hostsToUse.length > 0 ? hostsToUse : hosts;
         const shouldIncludeHostBreaks = hostBreaksEnabled && availableHosts.length > 0;
         
-        // Helper to determine if a track is a story/audiobook
-        // Only check category - don't auto-detect from title to avoid false positives
-        const isStoryContent = (track: RadioTrack) => {
-            return track.category === 'story';
-        };
-        
-        const isDevotional = (track: RadioTrack) => 
-            track.category === 'devotional' || track.title.toLowerCase().includes('devotion');
-        
         // Add station intro at the very beginning
         if (shouldIncludeHostBreaks && uniqueQueue.length > 0) {
             queueItems.push({
@@ -199,48 +190,10 @@ const RadioPreview: React.FC = () => {
         
         uniqueQueue.slice(0, 15).forEach((track, index) => {
             const previousTrack = index > 0 ? uniqueQueue[index - 1] : undefined;
-            const isStory = isStoryContent(track);
-            const wasStory = previousTrack && isStoryContent(previousTrack);
             
             if (shouldIncludeHostBreaks) {
-                // Add story outro after a story ends (before next non-story)
-                if (wasStory && !isStory && previousTrack) {
-                    queueItems.push({
-                        type: 'host_break',
-                        pendingHostBreak: {
-                            nextSong: previousTrack, // Reference the story that just ended
-                            contentType: 'story_outro',
-                            contentDescription: previousTrack.description, // Use description for context
-                        }
-                    });
-                }
-                
-                // Add story intro before a story
-                if (isStory) {
-                    queueItems.push({
-                        type: 'host_break',
-                        pendingHostBreak: {
-                            nextSong: track,
-                            previousSong: previousTrack,
-                            contentType: 'story_intro',
-                            contentDescription: track.description, // Use description for story teaser
-                        }
-                    });
-                }
-                // Add devotional intro
-                else if (isDevotional(track)) {
-                    queueItems.push({
-                        type: 'host_break',
-                        pendingHostBreak: {
-                            nextSong: track,
-                            previousSong: previousTrack,
-                            contentType: 'devotional',
-                            contentDescription: track.description,
-                        }
-                    });
-                }
-                // Regular host break every N songs (only for regular songs)
-                else if (index > 0 && index % hostBreakFrequency === 0) {
+                // Regular host break every N songs
+                if (index > 0 && index % hostBreakFrequency === 0) {
                     queueItems.push({
                         type: 'host_break',
                         pendingHostBreak: {

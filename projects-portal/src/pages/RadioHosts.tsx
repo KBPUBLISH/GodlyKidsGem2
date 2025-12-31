@@ -25,6 +25,7 @@ interface RadioHost {
     };
     samplePhrases: string[];
     avatarUrl?: string;
+    gender: 'male' | 'female';
     enabled: boolean;
     order: number;
 }
@@ -46,6 +47,7 @@ const RadioHosts: React.FC = () => {
     const [formVoiceName, setFormVoiceName] = useState('en-US-Studio-O');
     const [formPitch, setFormPitch] = useState(0);
     const [formSpeakingRate, setFormSpeakingRate] = useState(1.0);
+    const [formGender, setFormGender] = useState<'male' | 'female'>('male');
     const [formEnabled, setFormEnabled] = useState(true);
     
     // Audio preview
@@ -85,6 +87,7 @@ const RadioHosts: React.FC = () => {
         setFormVoiceName('en-US-Chirp3-HD-Enceladus');
         setFormPitch(0);
         setFormSpeakingRate(1.0);
+        setFormGender('male');
         setFormEnabled(true);
         setShowModal(true);
     };
@@ -96,6 +99,7 @@ const RadioHosts: React.FC = () => {
         setFormVoiceName(host.googleVoice?.name || 'en-US-Studio-O');
         setFormPitch(host.googleVoice?.pitch || 0);
         setFormSpeakingRate(host.googleVoice?.speakingRate || 1.0);
+        setFormGender(host.gender || 'male');
         setFormEnabled(host.enabled);
         setShowModal(true);
     };
@@ -123,6 +127,7 @@ const RadioHosts: React.FC = () => {
                     pitch: formPitch,
                     speakingRate: formSpeakingRate,
                 },
+                gender: formGender,
                 enabled: formEnabled,
             };
 
@@ -401,10 +406,44 @@ const RadioHosts: React.FC = () => {
                                 </p>
                             </div>
 
+                            {/* Gender Selection - for Gemini TTS */}
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-2">
+                                    Host Gender (for AI Voice)
+                                </label>
+                                <div className="flex gap-4">
+                                    <label className="flex items-center gap-2 cursor-pointer">
+                                        <input
+                                            type="radio"
+                                            name="gender"
+                                            value="male"
+                                            checked={formGender === 'male'}
+                                            onChange={() => setFormGender('male')}
+                                            className="w-4 h-4 text-indigo-600"
+                                        />
+                                        <span className="text-gray-700">Male</span>
+                                    </label>
+                                    <label className="flex items-center gap-2 cursor-pointer">
+                                        <input
+                                            type="radio"
+                                            name="gender"
+                                            value="female"
+                                            checked={formGender === 'female'}
+                                            onChange={() => setFormGender('female')}
+                                            className="w-4 h-4 text-indigo-600"
+                                        />
+                                        <span className="text-gray-700">Female</span>
+                                    </label>
+                                </div>
+                                <p className="text-xs text-gray-500 mt-1">
+                                    This determines the Gemini TTS voice used for host breaks
+                                </p>
+                            </div>
+
                             {/* Voice Selection */}
                             <div>
                                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                                    Voice
+                                    Preview Voice (Google TTS)
                                 </label>
                                 <select
                                     value={formVoiceName}
@@ -417,6 +456,9 @@ const RadioHosts: React.FC = () => {
                                         </option>
                                     ))}
                                 </select>
+                                <p className="text-xs text-gray-500 mt-1">
+                                    Used for voice preview (fallback TTS)
+                                </p>
                             </div>
 
                             {/* Voice Adjustments */}

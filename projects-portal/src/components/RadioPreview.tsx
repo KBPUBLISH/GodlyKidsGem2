@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { Play, Pause, SkipForward, SkipBack, Volume2, VolumeX, Radio, Music, Shuffle, RefreshCw, Mic2, Loader2 } from 'lucide-react';
+import { Play, Pause, SkipForward, SkipBack, Volume2, VolumeX, Radio, Music, Shuffle, RefreshCw, Mic2, Loader2, BookOpen } from 'lucide-react';
 import axios from 'axios';
 
 const API_URL = (import.meta.env.VITE_API_BASE_URL || 'https://backendgk2-0.onrender.com') + '/api';
@@ -17,6 +17,7 @@ interface RadioTrack {
     duration?: number;
     category: string;
     rotation: string;
+    description?: string; // For context-aware hosting
 }
 
 interface RadioHost {
@@ -42,6 +43,8 @@ interface QueueItem {
     pendingHostBreak?: {
         nextSong: RadioTrack;
         previousSong?: RadioTrack;
+        contentType?: 'song' | 'story_intro' | 'story_outro' | 'devotional';
+        contentDescription?: string;
     };
 }
 
@@ -76,6 +79,19 @@ const RadioPreview: React.FC = () => {
     const progressInterval = useRef<ReturnType<typeof setInterval> | null>(null);
     const crossfadeInterval = useRef<ReturnType<typeof setInterval> | null>(null);
     const crossfadeStarted = useRef(false);
+    
+    // Ref to track current index (avoids stale closure issues)
+    const currentIndexRef = useRef(currentIndex);
+    const queueRef = useRef(queue);
+    
+    // Keep refs in sync with state
+    useEffect(() => {
+        currentIndexRef.current = currentIndex;
+    }, [currentIndex]);
+    
+    useEffect(() => {
+        queueRef.current = queue;
+    }, [queue]);
 
     useEffect(() => {
         fetchData();
@@ -152,18 +168,69 @@ const RadioPreview: React.FC = () => {
         const queueItems: QueueItem[] = [];
         const hostBreakFrequency = station?.hostBreakFrequency || 3;
         
+        // Helper to determine if a track is a story/audiobook
+        const isStoryContent = (track: RadioTrack) => 
+            track.category === 'story' || track.category === 'kids';
+        
+        const isDevotional = (track: RadioTrack) => 
+            track.category === 'devotional';
+        
         uniqueQueue.slice(0, 15).forEach((track, index) => {
-            if (includeHostBreaks && hostBreaksEnabled && hosts.length > 0 && index > 0 && index % hostBreakFrequency === 0) {
-                const previousTrack = uniqueQueue[index - 1];
-                queueItems.push({
-                    type: 'host_break',
-                    pendingHostBreak: {
-                        nextSong: track,
-                        previousSong: previousTrack
-                    }
-                });
+            const previousTrack = index > 0 ? uniqueQueue[index - 1] : undefined;
+            const isStory = isStoryContent(track);
+            const wasStory = previousTrack && isStoryContent(previousTrack);
+            
+            if (includeHostBreaks && hostBreaksEnabled && hosts.length > 0) {
+                // Add story outro after a story ends (before next non-story)
+                if (wasStory && !isStory && previousTrack) {
+                    queueItems.push({
+                        type: 'host_break',
+                        pendingHostBreak: {
+                            nextSong: previousTrack, // Reference the story that just ended
+                            contentType: 'story_outro',
+                            contentDescription: previousTrack.description, // Use description for context
+                        }
+                    });
+                }
+                
+                // Add story intro before a story
+                if (isStory) {
+                    queueItems.push({
+                        type: 'host_break',
+                        pendingHostBreak: {
+                            nextSong: track,
+                            previousSong: previousTrack,
+                            contentType: 'story_intro',
+                            contentDescription: track.description, // Use description for story teaser
+                        }
+                    });
+                }
+                // Add devotional intro
+                else if (isDevotional(track)) {
+                    queueItems.push({
+                        type: 'host_break',
+                        pendingHostBreak: {
+                            nextSong: track,
+                            previousSong: previousTrack,
+                            contentType: 'devotional',
+                            contentDescription: track.description,
+                        }
+                    });
+                }
+                // Regular host break every N songs (only for regular songs)
+                else if (index > 0 && index % hostBreakFrequency === 0) {
+                    queueItems.push({
+                        type: 'host_break',
+                        pendingHostBreak: {
+                            nextSong: track,
+                            previousSong: previousTrack,
+                            contentType: 'song',
+                        }
+                    });
+                }
             }
             
+            // Add the actual track
             queueItems.push({
                 type: 'song',
                 track
@@ -175,15 +242,28 @@ const RadioPreview: React.FC = () => {
 
     const getCurrentItem = () => queue[currentIndex];
 
-    const generateHostBreak = async (nextSong: RadioTrack, previousSong?: RadioTrack): Promise<HostBreakData | null> => {
+    const generateHostBreak = async (
+        nextSong: RadioTrack, 
+        previousSong?: RadioTrack,
+        contentType: string = 'song',
+        contentDescription?: string
+    ): Promise<HostBreakData | null> => {
         try {
             setGeneratingHostBreak(true);
+            
+            // Adjust duration based on content type
+            const targetDuration = contentType === 'story_intro' ? 20 : 
+                                   contentType === 'story_outro' ? 18 : 15;
+            
             const response = await axios.post(`${API_URL}/radio/host-break/generate`, {
                 nextSongTitle: nextSong.title,
                 nextSongArtist: nextSong.artist,
                 previousSongTitle: previousSong?.title,
                 previousSongArtist: previousSong?.artist,
-                targetDuration: 15
+                targetDuration,
+                contentType,
+                contentDescription,
+                contentCategory: nextSong.category
             });
             
             return response.data.hostBreak;
@@ -274,11 +354,13 @@ const RadioPreview: React.FC = () => {
                 // Crossfade complete - swap audio refs
                 if (currentAudioRef.current) {
                     currentAudioRef.current.pause();
+                    currentAudioRef.current.onended = null; // Remove old handler
                 }
                 currentAudioRef.current = nextAudio;
                 nextAudioRef.current = null;
                 
                 setCurrentIndex(nextIndex);
+                currentIndexRef.current = nextIndex;
                 setDuration(nextAudio.duration || 0);
                 crossfadeStarted.current = false;
                 setIsCrossfading(false);
@@ -295,11 +377,12 @@ const RadioPreview: React.FC = () => {
     }, [queue, volume, isMuted, fadeAudio, isCrossfading]);
 
     const playItem = async (index: number) => {
-        const item = queue[index];
+        const item = queueRef.current[index];
         if (!item) return;
 
         crossfadeStarted.current = false;
         setCurrentIndex(index);
+        currentIndexRef.current = index;
 
         // Handle host break
         if (item.type === 'host_break') {
@@ -308,7 +391,9 @@ const RadioPreview: React.FC = () => {
             if (!hostBreakData && item.pendingHostBreak) {
                 hostBreakData = await generateHostBreak(
                     item.pendingHostBreak.nextSong,
-                    item.pendingHostBreak.previousSong
+                    item.pendingHostBreak.previousSong,
+                    item.pendingHostBreak.contentType || 'song',
+                    item.pendingHostBreak.contentDescription
                 );
                 
                 if (hostBreakData) {
@@ -426,18 +511,23 @@ const RadioPreview: React.FC = () => {
         }
     };
 
-    const handleNext = () => {
+    const handleNext = useCallback(() => {
         crossfadeStarted.current = false;
-        if (currentIndex + 1 < queue.length) {
-            playItem(currentIndex + 1);
+        const idx = currentIndexRef.current;
+        const q = queueRef.current;
+        
+        if (idx + 1 < q.length) {
+            playItem(idx + 1);
         } else {
+            // End of queue - rebuild and restart
             buildQueue(tracks, hosts.length > 0);
             setCurrentIndex(0);
+            currentIndexRef.current = 0;
             if (isPlaying) {
                 setTimeout(() => playItem(0), 100);
             }
         }
-    };
+    }, [tracks, hosts.length, isPlaying]);
 
     const handlePrev = () => {
         crossfadeStarted.current = false;
@@ -609,8 +699,27 @@ const RadioPreview: React.FC = () => {
                         <div className="mb-1 flex items-center justify-center md:justify-start gap-2">
                             {isHostBreak ? (
                                 <>
-                                    <Mic2 className="w-4 h-4 text-yellow-400" />
-                                    <span className="text-xs text-yellow-300 uppercase tracking-wider">Host Break</span>
+                                    {currentItem?.pendingHostBreak?.contentType === 'story_intro' ? (
+                                        <>
+                                            <BookOpen className="w-4 h-4 text-purple-400" />
+                                            <span className="text-xs text-purple-300 uppercase tracking-wider">Story Time!</span>
+                                        </>
+                                    ) : currentItem?.pendingHostBreak?.contentType === 'story_outro' ? (
+                                        <>
+                                            <BookOpen className="w-4 h-4 text-green-400" />
+                                            <span className="text-xs text-green-300 uppercase tracking-wider">Story Reflection</span>
+                                        </>
+                                    ) : currentItem?.pendingHostBreak?.contentType === 'devotional' ? (
+                                        <>
+                                            <Mic2 className="w-4 h-4 text-blue-400" />
+                                            <span className="text-xs text-blue-300 uppercase tracking-wider">Devotional</span>
+                                        </>
+                                    ) : (
+                                        <>
+                                            <Mic2 className="w-4 h-4 text-yellow-400" />
+                                            <span className="text-xs text-yellow-300 uppercase tracking-wider">Host Break</span>
+                                        </>
+                                    )}
                                 </>
                             ) : (
                                 <>
@@ -780,9 +889,17 @@ const RadioPreview: React.FC = () => {
                             <div className="flex-1 min-w-0">
                                 {item.type === 'host_break' ? (
                                     <>
-                                        <p className="text-yellow-300 text-sm font-medium">🎙️ Host Break</p>
+                                        <p className="text-yellow-300 text-sm font-medium">
+                                            {item.pendingHostBreak?.contentType === 'story_intro' && '📚 Story Time!'}
+                                            {item.pendingHostBreak?.contentType === 'story_outro' && '📖 Story Reflection'}
+                                            {item.pendingHostBreak?.contentType === 'devotional' && '🙏 Devotional Time'}
+                                            {(!item.pendingHostBreak?.contentType || item.pendingHostBreak?.contentType === 'song') && '🎙️ Host Break'}
+                                        </p>
                                         <p className="text-white/50 text-xs truncate">
-                                            Introducing: {item.pendingHostBreak?.nextSong.title || item.hostBreak?.script?.substring(0, 30)}
+                                            {item.pendingHostBreak?.contentType === 'story_outro' 
+                                                ? `Reflecting on: ${item.pendingHostBreak?.nextSong.title}`
+                                                : `Introducing: ${item.pendingHostBreak?.nextSong.title || item.hostBreak?.script?.substring(0, 30)}`
+                                            }
                                         </p>
                                     </>
                                 ) : (

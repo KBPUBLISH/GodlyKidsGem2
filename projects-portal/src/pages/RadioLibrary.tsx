@@ -18,6 +18,7 @@ interface RadioTrack {
     playCount: number;
     sourcePlaylistId?: string;
     createdAt: string;
+    description?: string; // For context-aware hosting
 }
 
 interface Playlist {
@@ -343,6 +344,7 @@ const RadioLibrary: React.FC = () => {
                                 <th className="text-left p-4 font-medium text-gray-600">Track</th>
                                 <th className="text-left p-4 font-medium text-gray-600">Category</th>
                                 <th className="text-left p-4 font-medium text-gray-600">Rotation</th>
+                                <th className="text-left p-4 font-medium text-gray-600 w-48">Description</th>
                                 <th className="text-left p-4 font-medium text-gray-600">Duration</th>
                                 <th className="text-center p-4 font-medium text-gray-600">Enabled</th>
                                 <th className="text-right p-4 font-medium text-gray-600">Actions</th>
@@ -403,6 +405,20 @@ const RadioLibrary: React.FC = () => {
                                                 <option key={rot.value} value={rot.value}>{rot.label}</option>
                                             ))}
                                         </select>
+                                    </td>
+                                    <td className="p-4">
+                                        <input
+                                            type="text"
+                                            defaultValue={track.description || ''}
+                                            placeholder="Add description..."
+                                            onBlur={(e) => {
+                                                if (e.target.value !== (track.description || '')) {
+                                                    handleUpdateTrack(track._id, 'description', e.target.value);
+                                                }
+                                            }}
+                                            className="text-sm border rounded px-2 py-1 w-full text-gray-600 placeholder-gray-400 focus:ring-2 focus:ring-indigo-500"
+                                            title={track.description || 'Add a description for context-aware hosting'}
+                                        />
                                     </td>
                                     <td className="p-4 text-gray-600">
                                         {formatDuration(track.duration)}

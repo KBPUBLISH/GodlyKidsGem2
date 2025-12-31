@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Play, Pause, SkipForward, SkipBack, Volume2, VolumeX, Radio, Music, Shuffle, RefreshCw } from 'lucide-react';
+import { Play, Pause, SkipForward, SkipBack, Volume2, VolumeX, Radio, Music, Shuffle, RefreshCw, Mic2, Loader2 } from 'lucide-react';
 import axios from 'axios';
 
 const API_URL = (import.meta.env.VITE_API_BASE_URL || 'https://backendgk2-0.onrender.com') + '/api';
@@ -22,17 +22,31 @@ interface RadioHost {
     personality: string;
 }
 
+interface HostBreakData {
+    hostId: string;
+    hostName: string;
+    hostAvatar?: string;
+    script: string;
+    audioUrl: string;
+    duration: number;
+}
+
 interface QueueItem {
     type: 'song' | 'host_break';
     track?: RadioTrack;
-    host?: RadioHost;
-    message?: string;
+    hostBreak?: HostBreakData;
+    // For pending host breaks that need to be generated
+    pendingHostBreak?: {
+        nextSong: RadioTrack;
+        previousSong?: RadioTrack;
+    };
 }
 
 interface RadioStation {
     name: string;
     tagline: string;
     coverImageUrl?: string;
+    hostBreakFrequency?: number;
 }
 
 const RadioPreview: React.FC = () => {
@@ -48,6 +62,8 @@ const RadioPreview: React.FC = () => {
     const [isMuted, setIsMuted] = useState(false);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
+    const [generatingHostBreak, setGeneratingHostBreak] = useState(false);
+    const [hostBreaksEnabled, setHostBreaksEnabled] = useState(true);
     
     const audioRef = useRef<HTMLAudioElement | null>(null);
     const progressInterval = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -77,24 +93,26 @@ const RadioPreview: React.FC = () => {
             
             setStation(stationRes.data);
             setTracks(libraryRes.data.tracks || []);
-            setHosts(hostsRes.data || []);
+            const enabledHosts = (hostsRes.data || []).filter((h: RadioHost) => h);
+            setHosts(enabledHosts);
             
             // Build initial queue
             const libraryTracks = libraryRes.data.tracks || [];
             
             if (libraryTracks.length > 0) {
-                buildQueue(libraryTracks);
+                buildQueue(libraryTracks, enabledHosts.length > 0);
             }
-        } catch (err: any) {
+        } catch (err: unknown) {
             console.error('Error fetching data:', err);
-            setError(err.response?.data?.message || 'Failed to load radio data');
+            const errorMessage = err instanceof Error ? err.message : 'Failed to load radio data';
+            setError(errorMessage);
         } finally {
             setLoading(false);
         }
     };
 
-    // Build a shuffled queue with songs, weighted by rotation
-    const buildQueue = (libraryTracks: RadioTrack[]) => {
+    // Build a shuffled queue with songs and host breaks
+    const buildQueue = (libraryTracks: RadioTrack[], includeHostBreaks: boolean = true) => {
         // Weight tracks by rotation
         const weightedTracks: RadioTrack[] = [];
         libraryTracks.forEach(track => {
@@ -115,32 +133,106 @@ const RadioPreview: React.FC = () => {
             }
         });
         
-        // Build queue items (just songs for now - host breaks can be added later)
-        const queueItems: QueueItem[] = uniqueQueue.slice(0, 20).map(track => ({
-            type: 'song' as const,
-            track
-        }));
+        // Build queue items with host breaks every 2-3 songs
+        const queueItems: QueueItem[] = [];
+        const hostBreakFrequency = station?.hostBreakFrequency || 3;
+        
+        uniqueQueue.slice(0, 15).forEach((track, index) => {
+            // Add host break before this song (except for the first song)
+            if (includeHostBreaks && hostBreaksEnabled && hosts.length > 0 && index > 0 && index % hostBreakFrequency === 0) {
+                const previousTrack = uniqueQueue[index - 1];
+                queueItems.push({
+                    type: 'host_break',
+                    pendingHostBreak: {
+                        nextSong: track,
+                        previousSong: previousTrack
+                    }
+                });
+            }
+            
+            // Add the song
+            queueItems.push({
+                type: 'song',
+                track
+            });
+        });
         
         setQueue(queueItems);
     };
 
     const getCurrentItem = () => queue[currentIndex];
 
+    // Generate host break audio on-the-fly
+    const generateHostBreak = async (nextSong: RadioTrack, previousSong?: RadioTrack): Promise<HostBreakData | null> => {
+        try {
+            setGeneratingHostBreak(true);
+            const response = await axios.post(`${API_URL}/radio/host-break/generate`, {
+                nextSongTitle: nextSong.title,
+                nextSongArtist: nextSong.artist,
+                previousSongTitle: previousSong?.title,
+                previousSongArtist: previousSong?.artist,
+                targetDuration: 15
+            });
+            
+            return response.data.hostBreak;
+        } catch (err) {
+            console.error('Failed to generate host break:', err);
+            return null;
+        } finally {
+            setGeneratingHostBreak(false);
+        }
+    };
+
     const playItem = async (index: number) => {
         const item = queue[index];
-        if (!item || item.type !== 'song' || !item.track) return;
-
-        const url = item.track.audioUrl;
-        if (!url) {
-            // Skip to next if no audio
-            if (index + 1 < queue.length) {
-                playItem(index + 1);
-            }
-            return;
-        }
+        if (!item) return;
 
         setCurrentIndex(index);
 
+        // Handle host break
+        if (item.type === 'host_break') {
+            let hostBreakData = item.hostBreak;
+            
+            // Generate if pending
+            if (!hostBreakData && item.pendingHostBreak) {
+                hostBreakData = await generateHostBreak(
+                    item.pendingHostBreak.nextSong,
+                    item.pendingHostBreak.previousSong
+                );
+                
+                if (hostBreakData) {
+                    // Update queue with generated data
+                    const newQueue = [...queue];
+                    newQueue[index] = { ...item, hostBreak: hostBreakData, pendingHostBreak: undefined };
+                    setQueue(newQueue);
+                } else {
+                    // Skip host break if generation failed
+                    handleNext();
+                    return;
+                }
+            }
+
+            if (!hostBreakData?.audioUrl) {
+                handleNext();
+                return;
+            }
+
+            await playAudio(hostBreakData.audioUrl);
+            return;
+        }
+
+        // Handle song
+        if (item.type === 'song' && item.track) {
+            const url = item.track.audioUrl;
+            if (!url) {
+                handleNext();
+                return;
+            }
+            await playAudio(url);
+        }
+    };
+
+    const playAudio = async (url: string) => {
         if (audioRef.current) {
             audioRef.current.pause();
         }
@@ -206,7 +298,7 @@ const RadioPreview: React.FC = () => {
             playItem(currentIndex + 1);
         } else {
             // Loop back or rebuild queue
-            buildQueue(tracks);
+            buildQueue(tracks, hosts.length > 0);
             setCurrentIndex(0);
             if (isPlaying) {
                 setTimeout(() => playItem(0), 100);
@@ -250,7 +342,19 @@ const RadioPreview: React.FC = () => {
         setIsPlaying(false);
         setCurrentIndex(0);
         setProgress(0);
-        buildQueue(tracks);
+        buildQueue(tracks, hosts.length > 0);
+    };
+
+    const toggleHostBreaks = () => {
+        setHostBreaksEnabled(!hostBreaksEnabled);
+        // Rebuild queue with new setting
+        if (audioRef.current) {
+            audioRef.current.pause();
+        }
+        setIsPlaying(false);
+        setCurrentIndex(0);
+        setProgress(0);
+        buildQueue(tracks, !hostBreaksEnabled && hosts.length > 0);
     };
 
     const formatTime = (seconds: number) => {
@@ -260,6 +364,7 @@ const RadioPreview: React.FC = () => {
     };
 
     const currentItem = getCurrentItem();
+    const isHostBreak = currentItem?.type === 'host_break';
 
     if (loading) {
         return (
@@ -318,10 +423,31 @@ const RadioPreview: React.FC = () => {
 
             {/* Now Playing */}
             <div className="p-8">
+                {generatingHostBreak && (
+                    <div className="absolute inset-0 bg-black/50 flex items-center justify-center z-10 rounded-2xl">
+                        <div className="text-center text-white">
+                            <Loader2 className="w-8 h-8 animate-spin mx-auto mb-2" />
+                            <p className="text-sm">Generating host break...</p>
+                        </div>
+                    </div>
+                )}
+                
                 <div className="flex flex-col md:flex-row items-center gap-6">
-                    {/* Album Art */}
-                    <div className="w-48 h-48 rounded-xl overflow-hidden shadow-2xl bg-black/30 flex-shrink-0">
-                        {currentItem?.track?.coverImage ? (
+                    {/* Album Art / Host Avatar */}
+                    <div className={`w-48 h-48 rounded-xl overflow-hidden shadow-2xl flex-shrink-0 ${isHostBreak ? 'bg-gradient-to-br from-yellow-500 to-orange-600' : 'bg-black/30'}`}>
+                        {isHostBreak ? (
+                            <div className="w-full h-full flex items-center justify-center">
+                                {currentItem?.hostBreak?.hostAvatar ? (
+                                    <img
+                                        src={currentItem.hostBreak.hostAvatar}
+                                        alt={currentItem.hostBreak.hostName}
+                                        className="w-full h-full object-cover"
+                                    />
+                                ) : (
+                                    <Mic2 className="w-20 h-20 text-white" />
+                                )}
+                            </div>
+                        ) : currentItem?.track?.coverImage ? (
                             <img
                                 src={currentItem.track.coverImage}
                                 alt={currentItem.track.title}
@@ -334,22 +460,45 @@ const RadioPreview: React.FC = () => {
                         )}
                     </div>
 
-                    {/* Track Info */}
+                    {/* Track/Host Info */}
                     <div className="flex-1 text-center md:text-left">
                         <div className="mb-1 flex items-center justify-center md:justify-start gap-2">
-                            <Music className="w-4 h-4 text-pink-400" />
-                            <span className="text-xs text-pink-300 uppercase tracking-wider">Now Playing</span>
+                            {isHostBreak ? (
+                                <>
+                                    <Mic2 className="w-4 h-4 text-yellow-400" />
+                                    <span className="text-xs text-yellow-300 uppercase tracking-wider">Host Break</span>
+                                </>
+                            ) : (
+                                <>
+                                    <Music className="w-4 h-4 text-pink-400" />
+                                    <span className="text-xs text-pink-300 uppercase tracking-wider">Now Playing</span>
+                                </>
+                            )}
                         </div>
-                        <h3 className="text-2xl font-bold text-white mb-1">
-                            {currentItem?.track?.title || 'Select a track to play'}
-                        </h3>
-                        <p className="text-white/70">
-                            {currentItem?.track?.artist || 'Unknown Artist'}
-                        </p>
-                        {currentItem?.track?.category && (
-                            <span className="inline-block mt-2 px-2 py-0.5 bg-white/10 rounded text-xs text-white/60">
-                                {currentItem.track.category}
-                            </span>
+                        
+                        {isHostBreak ? (
+                            <>
+                                <h3 className="text-2xl font-bold text-white mb-1">
+                                    {currentItem?.hostBreak?.hostName || 'Host'}
+                                </h3>
+                                <p className="text-white/70 text-sm italic">
+                                    "{currentItem?.hostBreak?.script?.substring(0, 100)}..."
+                                </p>
+                            </>
+                        ) : (
+                            <>
+                                <h3 className="text-2xl font-bold text-white mb-1">
+                                    {currentItem?.track?.title || 'Select a track to play'}
+                                </h3>
+                                <p className="text-white/70">
+                                    {currentItem?.track?.artist || 'Unknown Artist'}
+                                </p>
+                                {currentItem?.track?.category && (
+                                    <span className="inline-block mt-2 px-2 py-0.5 bg-white/10 rounded text-xs text-white/60">
+                                        {currentItem.track.category}
+                                    </span>
+                                )}
+                            </>
                         )}
                     </div>
                 </div>
@@ -390,7 +539,8 @@ const RadioPreview: React.FC = () => {
 
                     <button
                         onClick={handlePlayPause}
-                        className="p-4 bg-white text-indigo-900 rounded-full hover:scale-105 transition shadow-lg"
+                        disabled={generatingHostBreak}
+                        className="p-4 bg-white text-indigo-900 rounded-full hover:scale-105 transition shadow-lg disabled:opacity-50"
                     >
                         {isPlaying ? (
                             <Pause className="w-8 h-8" />
@@ -415,18 +565,34 @@ const RadioPreview: React.FC = () => {
                     </button>
                 </div>
 
-                {/* Volume */}
-                <div className="flex items-center justify-center gap-2 mt-4">
-                    <Volume2 className="w-4 h-4 text-white/50" />
-                    <input
-                        type="range"
-                        min="0"
-                        max="1"
-                        step="0.1"
-                        value={volume}
-                        onChange={handleVolumeChange}
-                        className="w-24 h-1 bg-white/20 rounded-full appearance-none cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-3 [&::-webkit-slider-thumb]:h-3 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-white"
-                    />
+                {/* Volume & Host Breaks Toggle */}
+                <div className="flex items-center justify-center gap-6 mt-4">
+                    <div className="flex items-center gap-2">
+                        <Volume2 className="w-4 h-4 text-white/50" />
+                        <input
+                            type="range"
+                            min="0"
+                            max="1"
+                            step="0.1"
+                            value={volume}
+                            onChange={handleVolumeChange}
+                            className="w-24 h-1 bg-white/20 rounded-full appearance-none cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-3 [&::-webkit-slider-thumb]:h-3 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-white"
+                        />
+                    </div>
+                    
+                    {hosts.length > 0 && (
+                        <button
+                            onClick={toggleHostBreaks}
+                            className={`flex items-center gap-2 px-3 py-1 rounded-full text-xs transition ${
+                                hostBreaksEnabled 
+                                    ? 'bg-yellow-500/20 text-yellow-300 border border-yellow-500/30' 
+                                    : 'bg-white/10 text-white/50 border border-white/10'
+                            }`}
+                        >
+                            <Mic2 className="w-3 h-3" />
+                            Host Breaks {hostBreaksEnabled ? 'ON' : 'OFF'}
+                        </button>
+                    )}
                 </div>
             </div>
 
@@ -436,20 +602,35 @@ const RadioPreview: React.FC = () => {
                 <div className="space-y-2 max-h-48 overflow-y-auto">
                     {queue.slice(currentIndex + 1, currentIndex + 6).map((item, idx) => (
                         <div
-                            key={`${item.track?._id}-${idx}`}
+                            key={`queue-${currentIndex + 1 + idx}`}
                             className="flex items-center gap-3 p-2 rounded-lg hover:bg-white/5 cursor-pointer"
                             onClick={() => playItem(currentIndex + 1 + idx)}
                         >
-                            <div className="w-10 h-10 rounded bg-white/10 flex items-center justify-center flex-shrink-0 overflow-hidden">
-                                {item.track?.coverImage ? (
+                            <div className={`w-10 h-10 rounded flex items-center justify-center flex-shrink-0 overflow-hidden ${
+                                item.type === 'host_break' ? 'bg-yellow-500/30' : 'bg-white/10'
+                            }`}>
+                                {item.type === 'host_break' ? (
+                                    <Mic2 className="w-5 h-5 text-yellow-400" />
+                                ) : item.track?.coverImage ? (
                                     <img src={item.track.coverImage} alt="" className="w-full h-full object-cover" />
                                 ) : (
                                     <Music className="w-5 h-5 text-white/30" />
                                 )}
                             </div>
                             <div className="flex-1 min-w-0">
-                                <p className="text-white text-sm font-medium truncate">{item.track?.title}</p>
-                                <p className="text-white/50 text-xs truncate">{item.track?.artist}</p>
+                                {item.type === 'host_break' ? (
+                                    <>
+                                        <p className="text-yellow-300 text-sm font-medium">🎙️ Host Break</p>
+                                        <p className="text-white/50 text-xs truncate">
+                                            Introducing: {item.pendingHostBreak?.nextSong.title || item.hostBreak?.script?.substring(0, 30)}
+                                        </p>
+                                    </>
+                                ) : (
+                                    <>
+                                        <p className="text-white text-sm font-medium truncate">{item.track?.title}</p>
+                                        <p className="text-white/50 text-xs truncate">{item.track?.artist}</p>
+                                    </>
+                                )}
                             </div>
                         </div>
                     ))}
@@ -461,11 +642,11 @@ const RadioPreview: React.FC = () => {
 
             {/* Stats */}
             <div className="border-t border-white/10 p-4 flex items-center justify-center gap-6 text-xs text-white/40">
-                <span>{tracks.length} songs in library</span>
+                <span>{tracks.length} songs</span>
                 <span>•</span>
                 <span>{hosts.length} hosts</span>
                 <span>•</span>
-                <span>{queue.length} in queue</span>
+                <span>{queue.filter(q => q.type === 'host_break').length} host breaks</span>
             </div>
         </div>
     );

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Play, Pause, SkipForward, SkipBack, Volume2, VolumeX, Radio, Mic2, Music, Shuffle, RefreshCw } from 'lucide-react';
+import { Play, Pause, SkipForward, SkipBack, Volume2, VolumeX, Radio, Music, Shuffle, RefreshCw } from 'lucide-react';
 import axios from 'axios';
 
 const API_URL = (import.meta.env.VITE_API_BASE_URL || 'https://backendgk2-0.onrender.com') + '/api';
@@ -84,7 +84,7 @@ const RadioPreview: React.FC = () => {
             const radioHosts = hostsRes.data || [];
             
             if (libraryTracks.length > 0) {
-                buildQueue(libraryTracks, radioHosts);
+                buildQueue(libraryTracks);
             }
         } catch (err: any) {
             console.error('Error fetching data:', err);
@@ -95,7 +95,7 @@ const RadioPreview: React.FC = () => {
     };
 
     // Build a shuffled queue with songs, weighted by rotation
-    const buildQueue = (libraryTracks: RadioTrack[], radioHosts: RadioHost[]) => {
+    const buildQueue = (libraryTracks: RadioTrack[]) => {
         // Weight tracks by rotation
         const weightedTracks: RadioTrack[] = [];
         libraryTracks.forEach(track => {
@@ -207,7 +207,7 @@ const RadioPreview: React.FC = () => {
             playItem(currentIndex + 1);
         } else {
             // Loop back or rebuild queue
-            buildQueue(tracks, hosts);
+            buildQueue(tracks);
             setCurrentIndex(0);
             if (isPlaying) {
                 setTimeout(() => playItem(0), 100);
@@ -251,7 +251,7 @@ const RadioPreview: React.FC = () => {
         setIsPlaying(false);
         setCurrentIndex(0);
         setProgress(0);
-        buildQueue(tracks, hosts);
+        buildQueue(tracks);
     };
 
     const formatTime = (seconds: number) => {

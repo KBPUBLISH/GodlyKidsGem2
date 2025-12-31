@@ -43,7 +43,7 @@ interface QueueItem {
     pendingHostBreak?: {
         nextSong: RadioTrack;
         previousSong?: RadioTrack;
-        contentType?: 'song' | 'story_intro' | 'story_outro' | 'devotional';
+        contentType?: 'song' | 'story_intro' | 'story_outro' | 'devotional' | 'station_intro';
         contentDescription?: string;
     };
 }
@@ -181,6 +181,17 @@ const RadioPreview: React.FC = () => {
         const isDevotional = (track: RadioTrack) => 
             track.category === 'devotional' || track.title.toLowerCase().includes('devotion');
         
+        // Add station intro at the very beginning
+        if (includeHostBreaks && hostBreaksEnabled && hosts.length > 0 && uniqueQueue.length > 0) {
+            queueItems.push({
+                type: 'host_break',
+                pendingHostBreak: {
+                    nextSong: uniqueQueue[0],
+                    contentType: 'station_intro',
+                }
+            });
+        }
+        
         uniqueQueue.slice(0, 15).forEach((track, index) => {
             const previousTrack = index > 0 ? uniqueQueue[index - 1] : undefined;
             const isStory = isStoryContent(track);
@@ -258,7 +269,8 @@ const RadioPreview: React.FC = () => {
             setGeneratingHostBreak(true);
             
             // Adjust duration based on content type
-            const targetDuration = contentType === 'story_intro' ? 20 : 
+            const targetDuration = contentType === 'station_intro' ? 25 :
+                                   contentType === 'story_intro' ? 20 : 
                                    contentType === 'story_outro' ? 18 : 15;
             
             const response = await axios.post(`${API_URL}/radio/host-break/generate`, {
@@ -709,7 +721,12 @@ const RadioPreview: React.FC = () => {
                         <div className="mb-1 flex items-center justify-center md:justify-start gap-2">
                             {isHostBreak ? (
                                 <>
-                                    {currentItem?.pendingHostBreak?.contentType === 'story_intro' ? (
+                                    {currentItem?.pendingHostBreak?.contentType === 'station_intro' ? (
+                                        <>
+                                            <Radio className="w-4 h-4 text-pink-400" />
+                                            <span className="text-xs text-pink-300 uppercase tracking-wider">Welcome to Praise Station!</span>
+                                        </>
+                                    ) : currentItem?.pendingHostBreak?.contentType === 'story_intro' ? (
                                         <>
                                             <BookOpen className="w-4 h-4 text-purple-400" />
                                             <span className="text-xs text-purple-300 uppercase tracking-wider">Story Time!</span>
@@ -900,6 +917,7 @@ const RadioPreview: React.FC = () => {
                                 {item.type === 'host_break' ? (
                                     <>
                                         <p className="text-yellow-300 text-sm font-medium">
+                                            {item.pendingHostBreak?.contentType === 'station_intro' && '📻 Station Intro'}
                                             {item.pendingHostBreak?.contentType === 'story_intro' && '📚 Story Time!'}
                                             {item.pendingHostBreak?.contentType === 'story_outro' && '📖 Story Reflection'}
                                             {item.pendingHostBreak?.contentType === 'devotional' && '🙏 Devotional Time'}

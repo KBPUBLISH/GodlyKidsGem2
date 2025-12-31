@@ -136,7 +136,7 @@ const RadioPreview: React.FC = () => {
             const libraryTracks = libraryRes.data.tracks || [];
             
             if (libraryTracks.length > 0) {
-                buildQueue(libraryTracks, enabledHosts.length > 0);
+                buildQueue(libraryTracks, enabledHosts);
             }
         } catch (err: unknown) {
             console.error('Error fetching data:', err);
@@ -147,7 +147,7 @@ const RadioPreview: React.FC = () => {
         }
     };
 
-    const buildQueue = (libraryTracks: RadioTrack[], includeHostBreaks: boolean = true) => {
+    const buildQueue = (libraryTracks: RadioTrack[], hostsToUse: RadioHost[] = []) => {
         const weightedTracks: RadioTrack[] = [];
         libraryTracks.forEach(track => {
             const weight = track.rotation === 'high' ? 3 : track.rotation === 'medium' ? 2 : 1;
@@ -168,6 +168,10 @@ const RadioPreview: React.FC = () => {
         const queueItems: QueueItem[] = [];
         const hostBreakFrequency = station?.hostBreakFrequency || 3;
         
+        // Use passed hosts array OR fall back to state (for rebuilds)
+        const availableHosts = hostsToUse.length > 0 ? hostsToUse : hosts;
+        const shouldIncludeHostBreaks = hostBreaksEnabled && availableHosts.length > 0;
+        
         // Helper to determine if a track is a story/audiobook
         // Check category OR title keywords for better auto-detection
         const storyKeywords = ['story', 'audiobook', 'episode', 'chapter', 'tale', 'adventure', 'book'];
@@ -182,7 +186,7 @@ const RadioPreview: React.FC = () => {
             track.category === 'devotional' || track.title.toLowerCase().includes('devotion');
         
         // Add station intro at the very beginning
-        if (includeHostBreaks && hostBreaksEnabled && hosts.length > 0 && uniqueQueue.length > 0) {
+        if (shouldIncludeHostBreaks && uniqueQueue.length > 0) {
             queueItems.push({
                 type: 'host_break',
                 pendingHostBreak: {
@@ -197,7 +201,7 @@ const RadioPreview: React.FC = () => {
             const isStory = isStoryContent(track);
             const wasStory = previousTrack && isStoryContent(previousTrack);
             
-            if (includeHostBreaks && hostBreaksEnabled && hosts.length > 0) {
+            if (shouldIncludeHostBreaks) {
                 // Add story outro after a story ends (before next non-story)
                 if (wasStory && !isStory && previousTrack) {
                     queueItems.push({
@@ -616,7 +620,7 @@ const RadioPreview: React.FC = () => {
             playItem(idx + 1);
         } else {
             // End of queue - rebuild and restart
-            buildQueue(tracks, hosts.length > 0);
+            buildQueue(tracks, hosts);
             setCurrentIndex(0);
             currentIndexRef.current = 0;
             if (isPlaying) {
@@ -661,7 +665,7 @@ const RadioPreview: React.FC = () => {
         setCurrentIndex(0);
         setProgress(0);
         crossfadeStarted.current = false;
-        buildQueue(tracks, hosts.length > 0);
+        buildQueue(tracks, hosts);
     };
 
     const toggleHostBreaks = () => {
@@ -670,7 +674,7 @@ const RadioPreview: React.FC = () => {
         setIsPlaying(false);
         setCurrentIndex(0);
         setProgress(0);
-        buildQueue(tracks, !hostBreaksEnabled && hosts.length > 0);
+        buildQueue(tracks, hosts);
     };
 
     const toggleCrossfade = () => {

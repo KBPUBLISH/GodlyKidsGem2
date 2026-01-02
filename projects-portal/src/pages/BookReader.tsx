@@ -469,8 +469,14 @@ const BookReader: React.FC = () => {
                                                 transform: 'translate(0, 0)',
                                                 textAlign: box.alignment,
                                                 color: box.color || '#4a3b2a',
-                                                fontFamily: box.fontFamily || 'Comic Sans MS',
-                                                fontSize: `${box.fontSize || 24}px`,
+                                                // Match app: use Patrick Hand (Google Font) with fallbacks
+                                                fontFamily: box.fontFamily === 'Comic Sans MS' 
+                                                    ? "'Patrick Hand', 'Comic Sans MS', 'Bubblegum Sans', cursive" 
+                                                    : (box.fontFamily || "'Patrick Hand', 'Comic Sans MS', cursive"),
+                                                // Match app: scale up 20% when using Patrick Hand (renders smaller than Comic Sans)
+                                                fontSize: (box.fontFamily === 'Comic Sans MS' || !box.fontFamily)
+                                                    ? `${Math.round((box.fontSize || 24) * 1.2)}px`
+                                                    : `${box.fontSize || 24}px`,
                                                 // Calculate max height based on the effective top position
                                                 maxHeight: scrollUrl
                                                     ? `calc(100% - max(${box.y}%, ${scrollTopVal}) - 40px)`

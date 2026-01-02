@@ -798,10 +798,14 @@ export const BookPageRenderer: React.FC<BookPageRendererProps> = ({
                                 color: box.color || '#4a3b2a',
                                 // Use Google Font with fallbacks for iOS compatibility
                                 // Comic Sans MS may not be available on iOS
+                                // Patrick Hand renders ~20% smaller than Comic Sans, so scale up
                                 fontFamily: box.fontFamily === 'Comic Sans MS' 
                                     ? "'Patrick Hand', 'Comic Sans MS', 'Bubblegum Sans', cursive" 
                                     : (box.fontFamily || "'Patrick Hand', 'Comic Sans MS', cursive"),
-                                fontSize: `${box.fontSize || 24}px`,
+                                // Increase font size by 20% when using Patrick Hand fallback (it renders smaller)
+                                fontSize: (box.fontFamily === 'Comic Sans MS' || !box.fontFamily)
+                                    ? `${Math.round((box.fontSize || 24) * 1.2)}px`
+                                    : `${box.fontSize || 24}px`,
                                 maxHeight: textMaxHeightStyle,
                                 overflowY: 'auto',
                                 textShadow: '1px 1px 2px rgba(255,255,255,0.8)',

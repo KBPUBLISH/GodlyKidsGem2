@@ -81,21 +81,6 @@ export const BookPageRenderer: React.FC<BookPageRendererProps> = ({
     onVideoTransition,
     isTTSPlaying = false
 }) => {
-    // DEBUG: Log scroll URL on every render
-    console.log('📜 BookPageRenderer - scrollUrl:', page.scrollUrl, '| scrollState:', scrollState, '| pageId:', page.id);
-    
-    // DEBUG: Log highlighting props when they change
-    useEffect(() => {
-        if (activeTextBoxIndex !== null || highlightedWordIndex !== undefined) {
-            console.log('🎯 HIGHLIGHT DEBUG:', {
-                activeTextBoxIndex,
-                highlightedWordIndex,
-                hasWordAlignment: !!wordAlignment,
-                wordCount: wordAlignment?.words?.length || 0
-            });
-        }
-    }, [activeTextBoxIndex, highlightedWordIndex, wordAlignment]);
-    
     // For backward compatibility
     const showScroll = scrollState !== 'hidden';
     // Refs for text box containers to enable scrolling
@@ -145,24 +130,14 @@ export const BookPageRenderer: React.FC<BookPageRendererProps> = ({
         }
         
         const duration = (page.imageSequenceDuration || 3) * 1000; // Convert to ms
-        console.log('🖼️ Image sequence timer setup:', {
-            duration: duration / 1000 + 's',
-            imageCount: sortedImageSequence.length,
-            pageImageSequenceDuration: page.imageSequenceDuration,
-        });
         
         // Set up the cycling timer
         imageSequenceTimerRef.current = setInterval(() => {
-            setCurrentImageIndex(prev => {
-                const nextIndex = (prev + 1) % sortedImageSequence.length;
-                console.log('🖼️ Image sequence transition:', prev, '->', nextIndex);
-                return nextIndex;
-            });
+            setCurrentImageIndex(prev => (prev + 1) % sortedImageSequence.length);
         }, duration);
         
         return () => {
             if (imageSequenceTimerRef.current) {
-                console.log('🖼️ Image sequence timer cleared');
                 clearInterval(imageSequenceTimerRef.current);
             }
         };

@@ -1545,20 +1545,7 @@ const BookReaderPage: React.FC = () => {
         // Extract scroll URL from all possible locations
         const extractedScrollUrl = page.scrollUrl || page.files?.scroll?.url || '';
         
-        // Debug: log what we're getting from the API
-        console.log('📄 mapPage - Page #' + page.pageNumber + ':', {
-            scrollUrl_root: page.scrollUrl,
-            scrollUrl_files: page.files?.scroll?.url,
-            scrollUrl_FINAL: extractedScrollUrl,
-            hasVideoSequence: page.useVideoSequence,
-            videoSequenceCount: page.videoSequence?.length || 0,
-            hasImageSequence: page.useImageSequence,
-            imageSequenceCount: page.imageSequence?.length || 0,
-            imageSequenceDuration: page.imageSequenceDuration,
-            imageSequenceAnimation: page.imageSequenceAnimation,
-        });
-        
-        const mapped = {
+        return {
             ...page,
             id: page._id,
             // Extract URLs from files object if not at root level
@@ -1566,10 +1553,6 @@ const BookReaderPage: React.FC = () => {
             scrollUrl: extractedScrollUrl,
             backgroundUrl: page.backgroundUrl || page.files?.background?.url,
         };
-        
-        console.log('📄 mapPage OUTPUT - scrollUrl:', mapped.scrollUrl);
-        
-        return mapped;
     };
 
     const currentPage = mapPage(pages[currentPageIndex]);

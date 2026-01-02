@@ -250,7 +250,7 @@ const PageEditor: React.FC = () => {
             y: 50, // 50% of canvas height
             width: 30, // 30% of canvas width
             alignment: 'center',
-            fontFamily: 'Comic Sans MS',
+            fontFamily: 'Patrick Hand', // Google Font - works on all platforms including iOS
             fontSize: 24,
             color: '#4a3b2a'
         };

@@ -744,6 +744,10 @@ export const BookPageRenderer: React.FC<BookPageRendererProps> = ({
                 className="absolute inset-0 pointer-events-none z-20"
             >
                 {page.textBoxes?.map((box, idx) => {
+                    // Validate box has required position properties
+                    const boxX = typeof box.x === 'number' ? box.x : 0;
+                    const boxY = typeof box.y === 'number' ? box.y : 0;
+                    
                     // Portal shows 60% scroll height when editing - that's where text was positioned
                     // The "design" scroll height is the MAX height (what portal shows)
                     const designScrollHeight = page.scrollMaxHeight || 60; // Portal shows max height when editing
@@ -770,12 +774,12 @@ export const BookPageRenderer: React.FC<BookPageRendererProps> = ({
                         // textTop = max(box.y%, scrollTopPosition)
                         // This ensures text is never above the scroll, but respects box.y if it's lower
                         const scrollTopCalc = `calc(100% - ${currentScrollHeightNum}% - ${scrollOffset}% + 12px)`;
-                        textTopStyle = `max(${box.y}%, ${scrollTopCalc})`;
+                        textTopStyle = `max(${boxY}%, ${scrollTopCalc})`;
                         textMaxHeightStyle = `calc(${currentScrollHeightNum}% - 60px)`;
                     } else {
                         // No scroll - use absolute position
-                        textTopStyle = `${box.y}%`;
-                        textMaxHeightStyle = `calc(100% - ${box.y}% - 60px)`;
+                        textTopStyle = `${boxY}%`;
+                        textMaxHeightStyle = `calc(100% - ${boxY}% - 60px)`;
                     }
 
                     return (
@@ -787,12 +791,16 @@ export const BookPageRenderer: React.FC<BookPageRendererProps> = ({
                             style={{
                                 // Add safe area padding for landscape mode (notch/Dynamic Island)
                                 // Use calc to ensure minimum 3% from edge + safe area
-                                left: `calc(max(${box.x}%, 3%) + env(safe-area-inset-left, 0px))`,
+                                left: `calc(max(${boxX}%, 3%) + env(safe-area-inset-left, 0px))`,
                                 top: textTopStyle,
-                                width: `min(${box.width || 30}%, calc(100% - max(${box.x}%, 3%) - 3% - env(safe-area-inset-left, 0px) - env(safe-area-inset-right, 0px)))`,
+                                width: `min(${box.width || 30}%, calc(100% - max(${boxX}%, 3%) - 3% - env(safe-area-inset-left, 0px) - env(safe-area-inset-right, 0px)))`,
                                 textAlign: box.alignment || 'left',
                                 color: box.color || '#4a3b2a',
-                                fontFamily: box.fontFamily || 'Comic Sans MS',
+                                // Use Google Font with fallbacks for iOS compatibility
+                                // Comic Sans MS may not be available on iOS
+                                fontFamily: box.fontFamily === 'Comic Sans MS' 
+                                    ? "'Patrick Hand', 'Comic Sans MS', 'Bubblegum Sans', cursive" 
+                                    : (box.fontFamily || "'Patrick Hand', 'Comic Sans MS', cursive"),
                                 fontSize: `${box.fontSize || 24}px`,
                                 maxHeight: textMaxHeightStyle,
                                 overflowY: 'auto',

@@ -207,6 +207,10 @@ const BookReaderPage: React.FC = () => {
     // Otherwise use user's selected voice
     const effectiveVoiceId = (bookDefaultVoiceId && useBookDefaultVoice) ? bookDefaultVoiceId : selectedVoiceId;
     
+    // Sequential text box playback - track which text boxes to play on current page
+    const pendingTextBoxesRef = useRef<Array<{ text: string; index: number }>>([]);
+    const isSequentialPlaybackRef = useRef(false); // True when playing all text boxes in sequence
+    
     /**
      * Get the voice ID to use for a given text, handling @Character tags
      * 
@@ -1997,6 +2001,10 @@ const BookReaderPage: React.FC = () => {
         isPlayingMultiSegmentRef.current = false;
         multiSegmentPlaybackIdRef.current += 1; // Invalidate any in-flight segments
         
+        // Clear sequential text box playback queue
+        pendingTextBoxesRef.current = [];
+        isSequentialPlaybackRef.current = false;
+        
         setPlaying(false);
         playingRef.current = false;
         setActiveTextBoxIndex(null);
@@ -2015,6 +2023,9 @@ const BookReaderPage: React.FC = () => {
         if (playing) {
             stopAudio();
             setAutoPlayMode(false);
+            // Clear sequential playback queue
+            pendingTextBoxesRef.current = [];
+            isSequentialPlaybackRef.current = false;
             return;
         }
 
@@ -2024,17 +2035,60 @@ const BookReaderPage: React.FC = () => {
         setAutoPlayMode(shouldAutoPlay);
         autoPlayModeRef.current = shouldAutoPlay;
 
-        // Play the first text box on the page (use translated text if available)
+        // Play ALL text boxes on the page sequentially
         // Note: textBoxes is nested under content in the database schema
         const contentBoxes = currentPage.content?.textBoxes;
         const pageTextBoxes = (contentBoxes && contentBoxes.length > 0) ? contentBoxes : currentPage.textBoxes;
         if (pageTextBoxes && pageTextBoxes.length > 0) {
             const translatedTextBoxes = getTranslatedTextBoxes(currentPage);
+            
+            // Set up sequential playback queue for all text boxes AFTER the first one
+            if (translatedTextBoxes.length > 1) {
+                console.log(`📚 Setting up sequential playback for ${translatedTextBoxes.length} text boxes`);
+                isSequentialPlaybackRef.current = true;
+                // Queue text boxes 1, 2, 3... (starting from index 1, skip 0 since we play it immediately)
+                pendingTextBoxesRef.current = translatedTextBoxes.slice(1).map((tb, i) => ({
+                    text: tb.text,
+                    index: i + 1 // Actual index in the textBoxes array
+                }));
+            } else {
+                pendingTextBoxesRef.current = [];
+                isSequentialPlaybackRef.current = false;
+            }
+            
+            // Play the first text box
             const firstBoxText = translatedTextBoxes[0]?.text || pageTextBoxes[0].text;
-            handlePlayText(firstBoxText, 0, e, shouldAutoPlay); // Pass autoPlay flag based on mode
+            handlePlayText(firstBoxText, 0, e, shouldAutoPlay);
         } else {
             console.warn('⚠️ No text boxes found on current page');
         }
+    };
+    
+    // Play the next pending text box in the sequential queue
+    // Returns true if there was a next text box to play, false if queue is empty
+    const playNextPendingTextBox = (): boolean => {
+        if (!isSequentialPlaybackRef.current || pendingTextBoxesRef.current.length === 0) {
+            console.log('📭 No more pending text boxes');
+            isSequentialPlaybackRef.current = false;
+            return false;
+        }
+        
+        // Get the next text box from the queue
+        const nextTextBox = pendingTextBoxesRef.current.shift();
+        if (!nextTextBox) {
+            isSequentialPlaybackRef.current = false;
+            return false;
+        }
+        
+        console.log(`📖 Playing next text box ${nextTextBox.index + 1}, ${pendingTextBoxesRef.current.length} remaining in queue`);
+        
+        // Small delay before playing next text box for natural pacing
+        setTimeout(() => {
+            const syntheticEvent = { stopPropagation: () => {} } as React.MouseEvent;
+            handlePlayText(nextTextBox.text, nextTextBox.index, syntheticEvent, autoPlayModeRef.current);
+        }, 500); // 0.5 second pause between text boxes
+        
+        return true;
     };
     
     // Toggle TTS mode
@@ -2591,6 +2645,12 @@ const BookReaderPage: React.FC = () => {
                         playingRef.current = false;
                         setActiveTextBoxIndex(null);
                         
+                        // FIRST: Check if there are more text boxes on this page to play
+                        if (playNextPendingTextBox()) {
+                            console.log('📖 Multi-segment: Playing next text box on same page');
+                            return; // Don't go to next page yet
+                        }
+                        
                         // Auto-play to next page (2 second delay for user to process content)
                         const currentPageIdx = currentPageIndexRef.current;
                         console.log('🔍 Auto-play check:', {
@@ -2646,7 +2706,21 @@ const BookReaderPage: React.FC = () => {
                                         });
                                         
                                         if (nextPage && nextPageTextBoxes?.length > 0) {
+                                            // Use translated text if available - set up sequential queue
                                             const translatedTextBoxes = getTranslatedTextBoxes(nextPage);
+                                            
+                                            // Set up sequential playback for all text boxes after the first
+                                            if (translatedTextBoxes.length > 1) {
+                                                isSequentialPlaybackRef.current = true;
+                                                pendingTextBoxesRef.current = translatedTextBoxes.slice(1).map((tb, i) => ({
+                                                    text: tb.text,
+                                                    index: i + 1
+                                                }));
+                                            } else {
+                                                pendingTextBoxesRef.current = [];
+                                                isSequentialPlaybackRef.current = false;
+                                            }
+                                            
                                             const firstBoxText = translatedTextBoxes[0]?.text || nextPageTextBoxes[0].text;
                                             
                                             console.log('▶️ Multi-segment: Playing next page TTS', { textLength: firstBoxText?.length });
@@ -3160,9 +3234,16 @@ const BookReaderPage: React.FC = () => {
                         setTimeout(() => {
                             setCurrentWordIndex(-1);
                             setPlaying(false);
+                            playingRef.current = false;
                             setActiveTextBoxIndex(null);
                             setWordAlignment(null);
                             wordAlignmentRef.current = null;
+
+                            // FIRST: Check if there are more text boxes on this page to play
+                            if (playNextPendingTextBox()) {
+                                console.log('📖 Playing next text box on same page');
+                                return; // Don't go to next page yet
+                            }
 
                             // Auto-play: Move to next page if enabled
                             // Use refs to get latest values (closure-safe)
@@ -3202,8 +3283,21 @@ const BookReaderPage: React.FC = () => {
                                             const nextContentBoxes = nextPage?.content?.textBoxes;
                                             const nextPageTextBoxes = (nextContentBoxes && nextContentBoxes.length > 0) ? nextContentBoxes : nextPage?.textBoxes;
                                             if (nextPage && nextPageTextBoxes && nextPageTextBoxes.length > 0) {
-                                                // Use translated text if available
+                                                // Use translated text if available - set up sequential queue
                                                 const translatedTextBoxes = getTranslatedTextBoxes(nextPage);
+                                                
+                                                // Set up sequential playback for all text boxes after the first
+                                                if (translatedTextBoxes.length > 1) {
+                                                    isSequentialPlaybackRef.current = true;
+                                                    pendingTextBoxesRef.current = translatedTextBoxes.slice(1).map((tb, i) => ({
+                                                        text: tb.text,
+                                                        index: i + 1
+                                                    }));
+                                                } else {
+                                                    pendingTextBoxesRef.current = [];
+                                                    isSequentialPlaybackRef.current = false;
+                                                }
+                                                
                                                 const firstBoxText = translatedTextBoxes[0]?.text || nextPageTextBoxes[0].text;
                                                 console.log('▶️ Auto-play: Starting next page audio');
                                                 isAutoPlayingRef.current = false; // Reset flag before calling
@@ -3244,10 +3338,17 @@ const BookReaderPage: React.FC = () => {
                         // No word alignment - still add 2 second delay before auto page turn
                         setTimeout(() => {
                             setPlaying(false);
+                            playingRef.current = false;
                             setActiveTextBoxIndex(null);
                             setCurrentWordIndex(-1);
                             setWordAlignment(null);
                             wordAlignmentRef.current = null;
+
+                            // FIRST: Check if there are more text boxes on this page to play
+                            if (playNextPendingTextBox()) {
+                                console.log('📖 Playing next text box on same page (no alignment)');
+                                return; // Don't go to next page yet
+                            }
 
                             // Auto-play: Move to next page if enabled
                             // Use refs to get latest values (closure-safe)
@@ -3290,8 +3391,21 @@ const BookReaderPage: React.FC = () => {
                                                 ? contentTextBoxes 
                                                 : rootTextBoxes;
                                             if (nextPage && nextPageTextBoxes && nextPageTextBoxes.length > 0) {
-                                                // Use translated text if available
+                                                // Use translated text if available - set up sequential queue
                                                 const translatedTextBoxes = getTranslatedTextBoxes(nextPage);
+                                                
+                                                // Set up sequential playback for all text boxes after the first
+                                                if (translatedTextBoxes.length > 1) {
+                                                    isSequentialPlaybackRef.current = true;
+                                                    pendingTextBoxesRef.current = translatedTextBoxes.slice(1).map((tb, i) => ({
+                                                        text: tb.text,
+                                                        index: i + 1
+                                                    }));
+                                                } else {
+                                                    pendingTextBoxesRef.current = [];
+                                                    isSequentialPlaybackRef.current = false;
+                                                }
+                                                
                                                 const firstBoxText = translatedTextBoxes[0]?.text || nextPageTextBoxes[0].text;
                                                 console.log('▶️ Auto-play: Starting next page audio');
                                                 isAutoPlayingRef.current = false; // Reset flag before calling

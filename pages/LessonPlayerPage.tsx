@@ -1696,6 +1696,7 @@ const LessonPlayerPage: React.FC = () => {
                                     <div className="flex-1 flex flex-col min-h-0">
                                         <DrawingCanvas
                                             prompt={lesson.activity.content || lesson.activity.reflectionPrompt || 'Draw something that represents what you learned today!'}
+                                            enableTutorial={false} // Tutorial should only show in book coloring modal
                                             onComplete={() => {
                                                 setActivityCompleted(true);
                                                 setShowDrawingComplete(true); // Show completion popup

@@ -9,6 +9,8 @@ interface DrawingCanvasProps {
     layeredMode?: boolean;
     // Unique key for saving/loading progress (e.g., "book-123-page-5")
     saveKey?: string;
+    // If true, show the tutorial overlay for first-time users (default: true)
+    enableTutorial?: boolean;
 }
 
 // Exposed methods via ref
@@ -67,7 +69,7 @@ const CrayonIcon: React.FC<{ color: string; isSelected: boolean; onClick: () => 
     </button>
 );
 
-const DrawingCanvas = forwardRef<DrawingCanvasRef, DrawingCanvasProps>(({ prompt, backgroundImageUrl, onComplete, layeredMode = true, saveKey }, ref) => {
+const DrawingCanvas = forwardRef<DrawingCanvasRef, DrawingCanvasProps>(({ prompt, backgroundImageUrl, onComplete, layeredMode = true, saveKey, enableTutorial = true }, ref) => {
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const overlayRef = useRef<HTMLImageElement>(null);
     const containerRef = useRef<HTMLDivElement>(null);
@@ -130,8 +132,10 @@ const DrawingCanvas = forwardRef<DrawingCanvasRef, DrawingCanvasProps>(({ prompt
     // Tutorial overlay state
     const [showTutorial, setShowTutorial] = useState(false);
     
-    // Show tutorial for first-time users
+    // Show tutorial for first-time users (only if enableTutorial is true)
     useEffect(() => {
+        if (!enableTutorial) return; // Skip tutorial in lessons
+        
         const hasSeenTutorial = localStorage.getItem('godlykids_coloring_tutorial_seen');
         if (!hasSeenTutorial) {
             // Small delay so the canvas loads first
@@ -141,7 +145,7 @@ const DrawingCanvas = forwardRef<DrawingCanvasRef, DrawingCanvasProps>(({ prompt
             }, 500);
             return () => clearTimeout(timer);
         }
-    }, []);
+    }, [enableTutorial]);
 
     // Track if canvas has been initialized
     const [canvasReady, setCanvasReady] = useState(false);

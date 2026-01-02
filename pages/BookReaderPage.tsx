@@ -3966,6 +3966,8 @@ const BookReaderPage: React.FC = () => {
                                                             setSelectedVoiceId(v.voice_id);
                                                             setUseBookDefaultVoice(false); // User chose different voice
                                                             setShowVoiceDropdown(false);
+                                                            // Save as default for future books
+                                                            localStorage.setItem('godlykids_default_voice', v.voice_id);
                                                         }}
                                                         className={`w-full text-left px-4 py-2 text-sm text-white hover:bg-white/10 transition-colors flex items-center gap-2 ${
                                                             isSelected ? 'bg-white/20' : ''
@@ -3993,6 +3995,8 @@ const BookReaderPage: React.FC = () => {
                                                         e.stopPropagation();
                                                         setSelectedVoiceId(v.voice_id);
                                                         setShowVoiceDropdown(false);
+                                                        // Save as default for future books
+                                                        localStorage.setItem('godlykids_default_voice', v.voice_id);
                                                     }}
                                                     className={`w-full text-left px-4 py-2 text-sm text-white hover:bg-white/10 transition-colors flex items-center gap-2 ${selectedVoiceId === v.voice_id ? 'bg-white/20' : ''
                                                         }`}

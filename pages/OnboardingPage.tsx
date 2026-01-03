@@ -1197,9 +1197,9 @@ const OnboardingPage: React.FC = () => {
              </div>
 
              {/* Avatar Picker - Wood Container */}
-             <div className="bg-[#CD853F] rounded-2xl p-5 mb-6 border-2 border-[#8B4513] shadow-lg relative overflow-hidden">
-                {/* Wood grain */}
-                <div className="absolute inset-0 opacity-10" style={{backgroundImage: 'repeating-linear-gradient(90deg, transparent, transparent 20px, #3E1F07 20px, #3E1F07 22px)'}}></div>
+             <div className="bg-[#CD853F] rounded-2xl p-5 mb-6 border-2 border-[#8B4513] shadow-lg relative">
+                {/* Wood grain - use clip-path instead of overflow-hidden to not crop children */}
+                <div className="absolute inset-0 opacity-10 rounded-2xl" style={{backgroundImage: 'repeating-linear-gradient(90deg, transparent, transparent 20px, #3E1F07 20px, #3E1F07 22px)', clipPath: 'inset(0 round 1rem)'}}></div>
                 
                 <div className="relative flex flex-col items-center">
                   <div className="w-28 h-28 rounded-full border-4 border-[#8B4513] shadow-lg bg-[#f3e5ab] mb-4 relative overflow-hidden flex items-center justify-center">
@@ -1210,13 +1210,14 @@ const OnboardingPage: React.FC = () => {
                   
                   <p className="text-[#5c2e0b] text-xs font-bold mb-3">Tap to change avatar</p>
                   
-                  <div className="w-full overflow-x-auto no-scrollbar pb-2">
-                    <div className="flex gap-2 justify-center min-w-min px-2">
+                  {/* Extra padding to prevent clipping of scaled items */}
+                  <div className="w-full overflow-x-auto no-scrollbar py-3 -my-1">
+                    <div className="flex gap-3 justify-center min-w-min px-4">
                       {FUNNY_HEADS.map((head) => (
                         <button
                           key={head}
                           onClick={() => setPAvatar(head)}
-                          className={`w-11 h-11 rounded-full overflow-hidden border-2 transition-all flex-shrink-0 p-1 bg-[#f3e5ab] flex items-center justify-center ${pAvatar === head ? 'border-[#FFD700] scale-110 ring-2 ring-[#FFD700]/50' : 'border-[#8B4513]/50 opacity-70 hover:opacity-100'}`}
+                          className={`w-12 h-12 rounded-full overflow-hidden border-2 transition-all flex-shrink-0 p-1 bg-[#f3e5ab] flex items-center justify-center ${pAvatar === head ? 'border-[#FFD700] scale-110 ring-2 ring-[#FFD700]/50' : 'border-[#8B4513]/50 opacity-70 hover:opacity-100'}`}
                         >
                             {renderAvatarAsset(head)}
                         </button>

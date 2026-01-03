@@ -456,7 +456,7 @@ export const BookPageRenderer: React.FC<BookPageRendererProps> = ({
                             className="absolute inset-0 w-full h-full object-cover min-w-full min-h-full transition-opacity duration-300"
                             autoPlay={activeBuffer === 'A'}
                             loop={sortedVideoSequence.length === 1} // Loop only if single video in sequence
-                            muted={isTTSPlaying} // Mute when TTS is playing
+                            muted // Always muted - use separate sound effects MP3 instead
                             playsInline
                             preload="auto"
                             onEnded={activeBuffer === 'A' ? handleVideoEnded : undefined}
@@ -491,7 +491,7 @@ export const BookPageRenderer: React.FC<BookPageRendererProps> = ({
                             className="absolute inset-0 w-full h-full object-cover min-w-full min-h-full transition-opacity duration-300"
                             autoPlay={activeBuffer === 'B'}
                             loop={sortedVideoSequence.length === 1} // Loop only if single video in sequence
-                            muted={isTTSPlaying} // Mute when TTS is playing
+                            muted // Always muted - use separate sound effects MP3 instead
                             playsInline
                             preload="auto"
                             onEnded={activeBuffer === 'B' ? handleVideoEnded : undefined}
@@ -646,14 +646,11 @@ export const BookPageRenderer: React.FC<BookPageRendererProps> = ({
                         className="absolute inset-0 w-full h-full object-cover min-w-full min-h-full"
                         autoPlay
                         loop
-                        muted={isTTSPlaying || !!page.backgroundAudioUrl} // Mute if TTS playing OR if using separate background audio
+                        muted // Always muted - use separate sound effects MP3 instead
                         playsInline
                         preload="auto"
                         onLoadedData={() => {
-                            // Set video volume (only matters when not muted)
-                            // Do NOT set muted here - let React control it via prop
                             if (videoRef.current) {
-                                videoRef.current.volume = 1.0;
                                 // Ensure video is playing
                                 if (videoRef.current.paused) {
                                     videoRef.current.play().catch(err => {

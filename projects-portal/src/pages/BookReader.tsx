@@ -498,7 +498,7 @@ const BookReader: React.FC = () => {
                                                         : '0 0 8px rgba(255,255,255,0.9), 0 0 16px rgba(255,255,255,0.7), 1px 1px 4px rgba(255,255,255,0.8)',
                                             }}
                                         >
-                                            {box.text}
+                                            <span style={{ whiteSpace: 'pre-wrap' }}>{box.text}</span>
                                         </div>
                                     );
                                 })}

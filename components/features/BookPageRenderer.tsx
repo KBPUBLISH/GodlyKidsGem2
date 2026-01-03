@@ -831,7 +831,7 @@ export const BookPageRenderer: React.FC<BookPageRendererProps> = ({
                                     : 'hover:scale-102 cursor-pointer'
                                 }
                             `}>
-                                <p className="leading-relaxed relative drop-shadow-[0_1px_2px_rgba(255,255,255,0.9)]">
+                                <p className="leading-relaxed relative drop-shadow-[0_1px_2px_rgba(255,255,255,0.9)]" style={{ whiteSpace: 'pre-wrap' }}>
                                     {(() => {
                                         // Always use the cleaned text from the original
                                         const cleanedText = removeEmotionalCues(box.text);
@@ -859,7 +859,7 @@ export const BookPageRenderer: React.FC<BookPageRendererProps> = ({
                                             });
                                         }
                                         
-                                        // Standard rendering - just show text
+                                        // Standard rendering - preserve line breaks
                                         return cleanedText;
                                     })()}
                                 </p>

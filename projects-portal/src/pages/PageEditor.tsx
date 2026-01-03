@@ -2694,7 +2694,7 @@ const PageEditor: React.FC = () => {
                                 </div>
                             )}
 
-                            {box.text}
+                            <span style={{ whiteSpace: 'pre-wrap' }}>{box.text}</span>
                         </div>
                         );
                     })}

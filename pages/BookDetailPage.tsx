@@ -421,42 +421,16 @@ const BookDetailPage: React.FC = () => {
     // Use shareable link that bypasses onboarding and shows book preview
     const shareUrl = `https://app.godlykids.com/#/share/book/${id}`;
     const shareTitle = translatedTitle || book.title;
-    const shareText = `📚 Check out "${shareTitle}" on GodlyKids!\n\n${translatedDescription || book.description || 'A wonderful book for kids!'}`;
+    const shareText = `📚 Check out "${shareTitle}" on GodlyKids!\n\n${translatedDescription || book.description || 'A wonderful book for kids!'}`.trim();
     
-    // Try native Web Share API first (works great on mobile)
+    // Use Web Share API - URL only (clean share without image attachments)
     if (navigator.share) {
       try {
-        let shareData: ShareData = {
-          title: `📚 ${shareTitle} - GodlyKids`,
+        await navigator.share({
+          title: `${shareTitle} - GodlyKids`,
           text: shareText,
           url: shareUrl,
-        };
-        
-        // Try to include cover image if browser supports file sharing
-        if (book.coverUrl && navigator.canShare) {
-          try {
-            console.log('📷 Attempting to fetch cover image for sharing...');
-            const response = await fetch(book.coverUrl);
-            const blob = await response.blob();
-            const fileName = `${shareTitle.replace(/[^a-z0-9]/gi, '_')}.jpg`;
-            const file = new File([blob], fileName, { type: blob.type || 'image/jpeg' });
-            
-            // Check if we can share with files
-            const testShare = { files: [file] };
-            if (navigator.canShare(testShare)) {
-              shareData = {
-                title: `📚 ${shareTitle} - GodlyKids`,
-                text: `${shareText}\n\n🔗 ${shareUrl}`,
-                files: [file],
-              };
-              console.log('✅ Sharing with cover image');
-            }
-          } catch (imgErr) {
-            console.log('📷 Could not include image in share:', imgErr);
-          }
-        }
-        
-        await navigator.share(shareData);
+        });
         console.log('📤 Book shared successfully');
       } catch (err) {
         // User cancelled or share failed - that's ok

@@ -340,43 +340,16 @@ const PlaylistDetailPage: React.FC = () => {
         const isAudiobook = playlist.type === 'Audiobook';
         const emoji = isAudiobook ? '📖' : '🎵';
         const typeLabel = isAudiobook ? 'audiobook' : 'playlist';
-        const shareText = `${emoji} Check out "${playlist.title}" ${typeLabel} on GodlyKids!\n\n${playlist.description || ''}`;
+        const shareText = `${emoji} Check out "${playlist.title}" ${typeLabel} on GodlyKids!\n\n${playlist.description || ''}`.trim();
         
-        // Try to share with image (Web Share API Level 2)
+        // Use Web Share API - URL only (no image to avoid confusing share sheet)
         if (navigator.share) {
             try {
-                // Try to fetch cover image and share as file
-                let shareData: ShareData = {
-                    title: `${emoji} ${playlist.title} - GodlyKids`,
+                await navigator.share({
+                    title: `${playlist.title} - GodlyKids`,
                     text: shareText,
                     url: shareUrl,
-                };
-                
-                // Try to include cover image if browser supports file sharing
-                if (playlist.coverImage && navigator.canShare) {
-                    try {
-                        console.log('📷 Attempting to fetch cover image for sharing...');
-                        const response = await fetch(playlist.coverImage);
-                        const blob = await response.blob();
-                        const fileName = `${playlist.title.replace(/[^a-z0-9]/gi, '_')}.jpg`;
-                        const file = new File([blob], fileName, { type: blob.type || 'image/jpeg' });
-                        
-                        // Check if we can share with files
-                        const testShare = { files: [file] };
-                        if (navigator.canShare(testShare)) {
-                            shareData = {
-                                title: `${emoji} ${playlist.title} - GodlyKids`,
-                                text: `${shareText}\n\n🔗 ${shareUrl}`,
-                                files: [file],
-                            };
-                            console.log('✅ Sharing with cover image');
-                        }
-                    } catch (imgErr) {
-                        console.log('📷 Could not include image in share:', imgErr);
-                    }
-                }
-                
-                await navigator.share(shareData);
+                });
                 console.log('📤 Playlist shared successfully');
             } catch (err) {
                 // User cancelled or share failed

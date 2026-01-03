@@ -767,18 +767,14 @@ export const BookPageRenderer: React.FC<BookPageRendererProps> = ({
                     let textMaxHeightStyle: string;
                     
                     if (page.scrollUrl) {
-                        // Use the SAME formula as the portal:
-                        // scrollTopPosition = calc(100% - scrollHeight% - scrollOffsetY% + 12px)
-                        // textTop = max(box.y%, scrollTopPosition)
-                        // This ensures text is never above the scroll, but respects box.y if it's lower
-                        const scrollTopCalc = `calc(100% - ${currentScrollHeightNum}% - ${scrollOffset}% + 12px)`;
+                        // Match portal: max(box.y%, scrollTopPosition)
+                        const scrollTopCalc = `calc(100% - ${currentScrollHeightNum}% - ${scrollOffset}%)`;
                         textTopStyle = `max(${boxY}%, ${scrollTopCalc})`;
-                        textMaxHeightStyle = `calc(${currentScrollHeightNum}% - 60px)`;
+                        textMaxHeightStyle = `calc(100% - max(${boxY}%, ${scrollTopCalc}) - 40px)`;
                     } else {
-                        // No scroll - use absolute position
-                        // Give text box plenty of height to scroll, stopping 100px from bottom for play button
+                        // No scroll - match portal exactly
                         textTopStyle = `${boxY}%`;
-                        textMaxHeightStyle = `calc(100% - ${boxY}% - 100px)`;
+                        textMaxHeightStyle = `calc(100% - ${boxY}% - 40px)`;
                     }
 
                     const showBg = box.showBackground === true;
@@ -788,7 +784,7 @@ export const BookPageRenderer: React.FC<BookPageRendererProps> = ({
                             key={idx}
                             ref={(el) => { textBoxRefs.current[idx] = el; }}
                             data-scroll-container="true"
-                            className="absolute pointer-events-auto overflow-y-auto group"
+                            className="absolute pointer-events-auto overflow-y-auto p-2 group"
                             style={{
                                 // Add safe area padding for landscape mode (notch/Dynamic Island)
                                 // Use calc to ensure minimum 3% from edge + safe area
@@ -819,7 +815,7 @@ export const BookPageRenderer: React.FC<BookPageRendererProps> = ({
                                 // Show background box if user explicitly enabled it
                                 backgroundColor: showBg ? (box.backgroundColor || 'rgba(255,255,255,0.85)') : 'transparent',
                                 borderRadius: showBg ? '12px' : '0',
-                                padding: showBg ? '10px 14px' : '0',
+                                padding: showBg ? '12px 16px' : '8px',
                             }}
                             onClick={(e) => {
                                 e.stopPropagation(); // Prevent scroll toggle when tapping text

@@ -106,8 +106,8 @@ const GameWebView: React.FC<GameWebViewProps> = ({ url, title, onClose }) => {
         className="flex-1 w-full border-0"
         onLoad={handleLoad}
         onError={handleError}
-        allow="fullscreen; autoplay; encrypted-media; picture-in-picture"
-        sandbox="allow-same-origin allow-scripts allow-forms allow-popups allow-modals allow-top-navigation"
+        allow="fullscreen; autoplay; encrypted-media; picture-in-picture; speaker; microphone"
+        sandbox="allow-same-origin allow-scripts allow-forms allow-popups allow-modals allow-top-navigation allow-presentation"
         title={title}
       />
     </div>

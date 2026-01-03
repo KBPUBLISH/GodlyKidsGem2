@@ -725,23 +725,46 @@ const BookReaderPage: React.FC = () => {
         }
     }, []);
     
-    // Resume AudioContext on first user interaction (required by browsers)
+    // Resume AudioContext AND unlock iOS audio session on first user interaction
+    // iOS requires playing HTML5 audio to "unlock" the audio session for Web Audio API
     useEffect(() => {
-        const resumeContext = () => {
+        const unlockAudioSession = () => {
+            // Step 1: Resume AudioContext
             if (audioContextRef.current && audioContextRef.current.state === 'suspended') {
                 audioContextRef.current.resume().then(() => {
                     console.log('🔊 AudioContext resumed after user interaction');
                 }).catch(() => {});
             }
+            
+            // Step 2: Play a brief silent HTML5 audio to unlock iOS audio session
+            // This allows Web Audio API sounds to play even when ringer is off
+            try {
+                const silentAudio = new Audio();
+                // Create a tiny silent audio data URL (smallest valid MP3)
+                silentAudio.src = 'data:audio/mp3;base64,SUQzBAAAAAAAI1RTU0UAAAAPAAADTGF2ZjU4Ljc2LjEwMAAAAAAAAAAAAAAA/+M4wAAAAAAAAAAAAEluZm8AAAAPAAAAAgAAAbAAqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq//////////////////////////////////////////////////////////////////8AAAAATGF2YzU4LjEzAAAAAAAAAAAAAAAAJAAAAAAAAAAAAbD/////////////////////////////////////////////////////////////////';
+                silentAudio.volume = 0.01; // Very low but not zero
+                silentAudio.play().then(() => {
+                    console.log('🔊 iOS audio session unlocked via HTML5 Audio');
+                    // Stop immediately after playing
+                    setTimeout(() => {
+                        silentAudio.pause();
+                        silentAudio.src = '';
+                    }, 100);
+                }).catch((err) => {
+                    console.log('🔊 Audio unlock skipped (expected on non-iOS):', err.name);
+                });
+            } catch (e) {
+                console.log('🔊 Audio unlock not available:', e);
+            }
         };
         
         // Listen for any user interaction
-        document.addEventListener('touchstart', resumeContext, { once: true });
-        document.addEventListener('click', resumeContext, { once: true });
+        document.addEventListener('touchstart', unlockAudioSession, { once: true });
+        document.addEventListener('click', unlockAudioSession, { once: true });
         
         return () => {
-            document.removeEventListener('touchstart', resumeContext);
-            document.removeEventListener('click', resumeContext);
+            document.removeEventListener('touchstart', unlockAudioSession);
+            document.removeEventListener('click', unlockAudioSession);
         };
     }, []);
 

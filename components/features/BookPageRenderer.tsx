@@ -737,13 +737,13 @@ export const BookPageRenderer: React.FC<BookPageRendererProps> = ({
             )}
 
             {/* Text Boxes Layer - Below swipe zone */}
-            {/* Reduced height when no scroll to account for play button area at bottom */}
+            {/* Text boxes layer - z-50 to appear above play button (z-40) */}
             <div
-                className="absolute left-0 right-0 top-0 pointer-events-none z-20"
+                className="absolute left-0 right-0 top-0 pointer-events-none z-50"
                 style={{
-                    // When no scroll overlay, reduce height to leave space for play button (~100px)
+                    // When no scroll overlay, reduce height to leave space for play button (~120px)
                     // This ensures text boxes positioned at bottom % don't go behind the UI
-                    height: !page.scrollUrl ? 'calc(100% - 100px)' : '100%',
+                    height: !page.scrollUrl ? 'calc(100% - 120px)' : '100%',
                 }}
             >
                 {page.textBoxes?.map((box, idx) => {

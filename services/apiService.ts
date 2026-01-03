@@ -1061,10 +1061,16 @@ export const ApiService = {
   getBookById: async (id: string): Promise<Book | null> => {
     try {
       const baseUrl = getApiBaseUrl();
-      console.log(`🔍 Fetching book by ID: ${baseUrl}books/${id}`);
+      // Add cache-busting timestamp to ensure fresh data
+      const cacheBuster = `?_t=${Date.now()}`;
+      console.log(`🔍 Fetching book by ID: ${baseUrl}books/${id}${cacheBuster}`);
 
-      const response = await fetchWithTimeout(`${baseUrl}books/${id}`, {
+      const response = await fetchWithTimeout(`${baseUrl}books/${id}${cacheBuster}`, {
         method: 'GET',
+        headers: {
+          'Cache-Control': 'no-cache, no-store, must-revalidate',
+          'Pragma': 'no-cache',
+        },
       });
 
       if (response.ok) {
@@ -1171,17 +1177,27 @@ export const ApiService = {
   },
 
   // Get pages for a book
-  getBookPages: async (bookId: string): Promise<any[]> => {
+  getBookPages: async (bookId: string, forceRefresh: boolean = false): Promise<any[]> => {
     const cacheKey = `book_pages_${bookId}`;
-    const cached = getCached<any[]>(cacheKey);
-    if (cached) return cached;
+    
+    // Skip cache if forceRefresh is true
+    if (!forceRefresh) {
+      const cached = getCached<any[]>(cacheKey);
+      if (cached) return cached;
+    }
 
     try {
       const baseUrl = getApiBaseUrl();
-      console.log(`🔍 Fetching pages for book ID: ${bookId}`);
+      // Add cache-busting timestamp
+      const cacheBuster = `?_t=${Date.now()}`;
+      console.log(`🔍 Fetching pages for book ID: ${bookId}${forceRefresh ? ' (force refresh)' : ''}`);
 
-      const response = await fetchWithTimeout(`${baseUrl}pages/book/${bookId}`, {
+      const response = await fetchWithTimeout(`${baseUrl}pages/book/${bookId}${cacheBuster}`, {
         method: 'GET',
+        headers: {
+          'Cache-Control': 'no-cache, no-store, must-revalidate',
+          'Pragma': 'no-cache',
+        },
       });
 
       if (response.ok) {

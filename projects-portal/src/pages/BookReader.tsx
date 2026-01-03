@@ -12,6 +12,8 @@ interface TextBox {
     fontFamily?: string;
     fontSize?: number;
     color?: string;
+    showBackground?: boolean;
+    backgroundColor?: string;
 }
 
 interface VideoSequenceItem {

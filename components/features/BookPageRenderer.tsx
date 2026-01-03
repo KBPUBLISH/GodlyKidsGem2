@@ -820,7 +820,8 @@ export const BookPageRenderer: React.FC<BookPageRendererProps> = ({
                                 // Show background if enabled
                                 backgroundColor: box.showBackground ? (box.backgroundColor || 'rgba(255,255,255,0.85)') : 'transparent',
                                 borderRadius: box.showBackground ? '12px' : '0',
-                                padding: box.showBackground ? '12px 16px' : '8px',
+                                // Only add padding when background is shown - otherwise text positions exactly where specified
+                                padding: box.showBackground ? '12px 16px' : '0',
                             }}
                             onClick={(e) => {
                                 e.stopPropagation(); // Prevent scroll toggle when tapping text
@@ -828,7 +829,7 @@ export const BookPageRenderer: React.FC<BookPageRendererProps> = ({
                             }}
                         >
                             <div className={`
-                                relative p-3 rounded-xl transition-all duration-300
+                                relative rounded-xl transition-all duration-300
                                 ${isActive
                                     ? 'shadow-[0_0_15px_rgba(255,215,0,0.4)] scale-105'
                                     : 'hover:scale-102 cursor-pointer'

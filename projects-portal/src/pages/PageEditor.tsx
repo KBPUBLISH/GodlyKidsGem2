@@ -21,6 +21,8 @@ import {
     Plus,
     ChevronUp,
     ChevronDown,
+    ChevronLeft,
+    ChevronRight,
     Film,
     Globe,
     Gamepad2
@@ -1775,6 +1777,43 @@ const PageEditor: React.FC = () => {
                                     max="50"
                                     value={scrollOffsetY}
                                     onChange={(e) => setScrollOffsetY(parseInt(e.target.value))}
+                                    className="w-full"
+                                />
+                            </div>
+                        )}
+                        
+                        {/* Scroll Horizontal Position Control (Left/Right) */}
+                        {scrollPreview && (
+                            <div className="space-y-2">
+                                <label className="block text-xs text-gray-500">Horizontal Position</label>
+                                <div className="flex items-center gap-2">
+                                    <button
+                                        type="button"
+                                        onClick={() => setScrollOffsetX(prev => Math.max(-50, prev - 5))}
+                                        className="p-2 bg-gray-100 rounded hover:bg-gray-200 transition"
+                                        title="Move scroll left"
+                                    >
+                                        <ChevronLeft className="w-4 h-4" />
+                                    </button>
+                                    <div className="flex-1 text-center">
+                                        <span className="text-sm font-medium text-gray-700">{scrollOffsetX}%</span>
+                                        <p className="text-xs text-gray-400">{scrollOffsetX === 0 ? 'centered' : scrollOffsetX > 0 ? 'right of center' : 'left of center'}</p>
+                                    </div>
+                                    <button
+                                        type="button"
+                                        onClick={() => setScrollOffsetX(prev => Math.min(50, prev + 5))}
+                                        className="p-2 bg-gray-100 rounded hover:bg-gray-200 transition"
+                                        title="Move scroll right"
+                                    >
+                                        <ChevronRight className="w-4 h-4" />
+                                    </button>
+                                </div>
+                                <input
+                                    type="range"
+                                    min="-50"
+                                    max="50"
+                                    value={scrollOffsetX}
+                                    onChange={(e) => setScrollOffsetX(parseInt(e.target.value))}
                                     className="w-full"
                                 />
                             </div>

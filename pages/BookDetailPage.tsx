@@ -418,8 +418,8 @@ const BookDetailPage: React.FC = () => {
   const handleShare = async () => {
     if (!book) return;
     
-    // Use shareable link that bypasses onboarding and shows book preview
-    const shareUrl = `https://app.godlykids.com/#/share/book/${id}`;
+    // Share link goes directly to the book page in the web app
+    const shareUrl = `https://app.godlykids.com/#/book/${id}`;
     const shareTitle = translatedTitle || book.title;
     const shareText = `📚 Check out "${shareTitle}" on GodlyKids!\n\n${translatedDescription || book.description || 'A wonderful book for kids!'}`.trim();
     

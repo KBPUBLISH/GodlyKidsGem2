@@ -335,8 +335,8 @@ const PlaylistDetailPage: React.FC = () => {
     const handleShare = async () => {
         if (!playlist) return;
         
-        // Use shareable link that bypasses onboarding and shows playlist preview
-        const shareUrl = `https://app.godlykids.com/#/share/playlist/${playlistId}`;
+        // Share link goes directly to the playlist page in the web app
+        const shareUrl = `https://app.godlykids.com/#/audio/playlist/${playlistId}`;
         const isAudiobook = playlist.type === 'Audiobook';
         const emoji = isAudiobook ? '📖' : '🎵';
         const typeLabel = isAudiobook ? 'audiobook' : 'playlist';

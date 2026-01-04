@@ -173,6 +173,12 @@ class CommentService {
             { text: "Some parts were tricky", emoji: "🤔", color: "amber" },
             { text: "Pretty good story!", emoji: "👍", color: "lime" },
             { text: "Made me want more!", emoji: "🌟", color: "cyan" },
+            { text: "Super funny!", emoji: "😂", color: "yellow" },
+            { text: "This made me laugh!", emoji: "🤣", color: "orange" },
+            { text: "My Favorite!", emoji: "💖", color: "rose" },
+            { text: "10/10 Recommend!", emoji: "🏆", color: "gold" },
+            { text: "9/10 Recommend!", emoji: "🥇", color: "amber" },
+            { text: "8/10 Recommend!", emoji: "🥈", color: "slate" },
         ];
     }
 
@@ -292,6 +298,12 @@ class CommentService {
             { text: "Some songs are tricky", emoji: "🤔", color: "amber" },
             { text: "Pretty good music!", emoji: "👍", color: "lime" },
             { text: "Can't stop listening!", emoji: "🎸", color: "cyan" },
+            { text: "Super funny!", emoji: "😂", color: "yellow" },
+            { text: "This made me laugh!", emoji: "🤣", color: "orange" },
+            { text: "My Favorite!", emoji: "💖", color: "rose" },
+            { text: "10/10 Recommend!", emoji: "🏆", color: "gold" },
+            { text: "9/10 Recommend!", emoji: "🥇", color: "amber" },
+            { text: "8/10 Recommend!", emoji: "🥈", color: "slate" },
         ];
     }
 
@@ -310,6 +322,12 @@ class CommentService {
             { text: "Some parts are long", emoji: "⏰", color: "amber" },
             { text: "Really good stories!", emoji: "👍", color: "lime" },
             { text: "Love listening to this!", emoji: "❤️", color: "cyan" },
+            { text: "Super funny!", emoji: "😂", color: "yellow" },
+            { text: "This made me laugh!", emoji: "🤣", color: "orange" },
+            { text: "My Favorite!", emoji: "💖", color: "rose" },
+            { text: "10/10 Recommend!", emoji: "🏆", color: "gold" },
+            { text: "9/10 Recommend!", emoji: "🥇", color: "amber" },
+            { text: "8/10 Recommend!", emoji: "🥈", color: "slate" },
         ];
     }
 }

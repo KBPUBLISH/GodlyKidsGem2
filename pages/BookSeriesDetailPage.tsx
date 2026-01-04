@@ -276,41 +276,16 @@ const BookSeriesDetailPage: React.FC = () => {
         const shareUrl = `https://app.godlykids.com/#/book-series/${seriesId}`;
         const shareTitle = translatedTitle || series.title;
         const bookCount = series.books?.length || 0;
-        const shareText = `📚 Check out the "${shareTitle}" book series on GodlyKids!\n\n${bookCount} books to explore. ${translatedDescription || series.description || ''}`;
+        const shareText = `📚 Check out the "${shareTitle}" book series on GodlyKids! ${bookCount} books to explore.`;
         
         if (navigator.share) {
             try {
-                let shareData: ShareData = {
+                // Simple share with just title, text, and URL - no files to avoid corruption issues
+                await navigator.share({
                     title: `📚 ${shareTitle} - GodlyKids`,
                     text: shareText,
                     url: shareUrl,
-                };
-                
-                // Try to include cover image if browser supports file sharing
-                if (series.coverImage && navigator.canShare) {
-                    try {
-                        console.log('📷 Attempting to fetch cover image for sharing...');
-                        const response = await fetch(series.coverImage);
-                        const blob = await response.blob();
-                        const fileName = `${shareTitle.replace(/[^a-z0-9]/gi, '_')}.jpg`;
-                        const file = new File([blob], fileName, { type: blob.type || 'image/jpeg' });
-                        
-                        // Check if we can share with files
-                        const testShare = { files: [file] };
-                        if (navigator.canShare(testShare)) {
-                            shareData = {
-                                title: `📚 ${shareTitle} - GodlyKids`,
-                                text: `${shareText}\n\n🔗 ${shareUrl}`,
-                                files: [file],
-                            };
-                            console.log('✅ Sharing with cover image');
-                        }
-                    } catch (imgErr) {
-                        console.log('📷 Could not include image in share:', imgErr);
-                    }
-                }
-                
-                await navigator.share(shareData);
+                });
                 console.log('📤 Book series shared successfully');
             } catch (err) {
                 if ((err as Error).name !== 'AbortError') {

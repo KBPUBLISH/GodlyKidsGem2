@@ -565,7 +565,7 @@ const PaywallStep: React.FC<{
       <div className="text-center">
         <button 
           onClick={onSkip}
-          className="text-xs underline decoration-dotted transition-colors text-white/60 hover:text-white/90"
+          className="text-base px-6 py-3 rounded-full bg-white/10 border border-white/30 underline decoration-dotted transition-all text-white/80 hover:text-white hover:bg-white/20 font-medium"
         >
           Continue with limited access →
         </button>

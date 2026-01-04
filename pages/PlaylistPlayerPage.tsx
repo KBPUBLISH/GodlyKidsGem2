@@ -227,8 +227,8 @@ const PlaylistPlayerPage: React.FC = () => {
         
         const currentTrack = playlistToUse.items[currentTrackIndex];
         const isAudiobook = playlistToUse.type === 'Audiobook';
-        // Use app.godlykids.com for consistent deep linking - share specific track
-        const shareUrl = `https://app.godlykids.com/#/share/playlist/${playlistToUse._id}/${currentTrackIndex}`;
+        // Use app.godlykids.com - direct link to player page with specific track
+        const shareUrl = `https://app.godlykids.com/#/audio/playlist/${playlistToUse._id}/play/${currentTrackIndex}`;
         const shareTitle = currentTrack.title;
         const emoji = isAudiobook ? '📖' : '🎵';
         const shareText = `${emoji} Listen to "${shareTitle}" from ${playlistToUse.title} on GodlyKids!`;

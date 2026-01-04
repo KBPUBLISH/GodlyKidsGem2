@@ -13,7 +13,7 @@ import ChallengeGameModal from '../components/features/ChallengeGameModal';
 import PrayerGameModal from '../components/features/PrayerGameModal';
 import ReviewPromptModal, { shouldShowReviewPrompt } from '../components/features/ReviewPromptModal';
 import EmailSignupModal from '../components/features/EmailSignupModal';
-import { Key, Brain, Heart, Video, Lock, Check, Play, CheckCircle, Clock, Coins, BookOpen } from 'lucide-react';
+import { Key, Brain, Heart, Video, Lock, Check, Play, CheckCircle, Clock, Coins, BookOpen, Sparkles } from 'lucide-react';
 import { ApiService } from '../services/apiService';
 import { 
   isCompleted, 
@@ -843,6 +843,113 @@ const HomePage: React.FC = () => {
             </p>
           </div>
         )}
+
+        {/* ✨ Verse of the Day - Featured Section */}
+        {(() => {
+          // Filter Daily Verse lessons and apply auto-rotate logic
+          const dailyVerseLessons = lessons.filter((l: any) => l.type === 'Daily Verse' && !isLocked(l));
+          
+          if (dailyVerseLessons.length === 0) return null;
+          
+          // Sort by _id for consistent ordering
+          const sortedVerses = [...dailyVerseLessons].sort((a: any, b: any) => 
+            (a._id || '').localeCompare(b._id || '')
+          );
+          
+          // Get day of year for rotation
+          const now = new Date();
+          const start = new Date(now.getFullYear(), 0, 0);
+          const diff = now.getTime() - start.getTime();
+          const dayOfYear = Math.floor(diff / (1000 * 60 * 60 * 24));
+          const todayIndex = dayOfYear % sortedVerses.length;
+          
+          // Get today's verse, prefer unwatched
+          let todaysVerse = sortedVerses[todayIndex];
+          if (todaysVerse && isCompleted(todaysVerse._id)) {
+            const unwatched = sortedVerses.find((v: any) => !isCompleted(v._id));
+            if (unwatched) todaysVerse = unwatched;
+          }
+          
+          if (!todaysVerse) return null;
+          
+          const verseCompleted = isCompleted(todaysVerse._id);
+          
+          return (
+            <section className="mb-4">
+              {/* Header */}
+              <div className="flex items-center gap-2 mb-3">
+                <Sparkles className="w-6 h-6 text-[#FFD700]" />
+                <h2 className="text-xl font-bold text-[#FFD700] font-display">Verse of the Day</h2>
+                <div className="flex items-center gap-1 ml-auto bg-[#FFD700]/20 rounded-full px-3 py-1">
+                  <Coins className="w-4 h-4 text-[#FFD700]" />
+                  <span className="text-[#FFD700] text-sm font-bold">+50</span>
+                </div>
+              </div>
+              
+              {/* Large Featured Card */}
+              <div
+                className="relative w-full aspect-video rounded-2xl overflow-hidden cursor-pointer transform hover:scale-[1.02] transition-all duration-300 shadow-lg shadow-[#FFD700]/20 border-2 border-[#FFD700]/30"
+                onClick={() => navigate(`/lesson/${todaysVerse._id}`)}
+              >
+                {/* Background Image */}
+                {todaysVerse.video?.thumbnail ? (
+                  <img
+                    src={todaysVerse.video.thumbnail}
+                    alt={todaysVerse.title}
+                    className="w-full h-full object-cover"
+                  />
+                ) : (
+                  <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-amber-600 via-yellow-500 to-orange-500">
+                    <Sparkles className="w-24 h-24 text-white/30" />
+                  </div>
+                )}
+                
+                {/* Golden Gradient Overlay */}
+                <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-amber-500/20" />
+                
+                {/* Completed Overlay */}
+                {verseCompleted && (
+                  <div className="absolute inset-0 bg-green-500/30 flex items-center justify-center">
+                    <div className="bg-green-500 rounded-full p-4">
+                      <Check className="w-12 h-12 text-white" />
+                    </div>
+                  </div>
+                )}
+                
+                {/* Play Button */}
+                {!verseCompleted && (
+                  <div className="absolute inset-0 flex items-center justify-center">
+                    <div className="bg-[#FFD700] rounded-full p-5 shadow-lg shadow-black/30 transform hover:scale-110 transition-transform">
+                      <Play className="w-10 h-10 text-[#5c2e0b] fill-[#5c2e0b]" />
+                    </div>
+                  </div>
+                )}
+                
+                {/* Title & Badge */}
+                <div className="absolute bottom-0 left-0 right-0 p-4">
+                  <div className="flex items-center gap-2 mb-2">
+                    <div className="bg-[#FFD700] rounded-full px-3 py-1">
+                      <span className="text-[#5c2e0b] text-xs font-bold">✨ TODAY'S VERSE</span>
+                    </div>
+                  </div>
+                  <h3 className="text-white text-xl font-bold mb-1 drop-shadow-lg font-display">
+                    {todaysVerse.title}
+                  </h3>
+                  {todaysVerse.description && (
+                    <p className="text-white/80 text-sm line-clamp-2">
+                      {todaysVerse.description}
+                    </p>
+                  )}
+                </div>
+                
+                {/* Sparkle decoration */}
+                <div className="absolute top-4 right-4">
+                  <Sparkles className="w-8 h-8 text-[#FFD700] animate-pulse" />
+                </div>
+              </div>
+            </section>
+          );
+        })()}
 
         {/* Weekly Progress Tracker + Daily Lessons Section */}
         <section className="pb-2">

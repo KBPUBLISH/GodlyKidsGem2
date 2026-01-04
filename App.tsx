@@ -841,9 +841,13 @@ const App: React.FC = () => {
                   <Route path="/" element={<LandingPage />} />
                   {/* Public shareable links - no authentication required */}
                   <Route path="/share/playlist/:playlistId" element={<SharePlaylistPage />} />
+                  <Route path="/share/playlist/:playlistId/:trackIndex" element={<SharePlaylistPage />} /> {/* Share specific track */}
                   <Route path="/share/book/:bookId" element={<ShareBookPage />} />
                   <Route path="/s/p/:playlistId" element={<SharePlaylistPage />} /> {/* Short URL */}
+                  <Route path="/s/p/:playlistId/:trackIndex" element={<SharePlaylistPage />} /> {/* Short URL with track */}
                   <Route path="/s/b/:bookId" element={<ShareBookPage />} /> {/* Short URL */}
+                  <Route path="/playlist/:playlistId/:trackIndex" element={<SharePlaylistPage />} /> {/* Legacy share URL format */}
+                  <Route path="/playlist/:playlistId" element={<SharePlaylistPage />} /> {/* Legacy share URL format */}
                   <Route path="/signin" element={<SignInPage />} />
                   <Route path="/sign-in" element={<SignInPage />} />
                   <Route path="/reset-password" element={<ResetPasswordPage />} />

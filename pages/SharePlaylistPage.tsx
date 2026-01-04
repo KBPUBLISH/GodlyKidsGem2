@@ -23,8 +23,11 @@ interface Playlist {
 }
 
 const SharePlaylistPage: React.FC = () => {
-    const { playlistId: rawPlaylistId } = useParams<{ playlistId: string }>();
+    const { playlistId: rawPlaylistId, trackIndex: rawTrackIndex } = useParams<{ playlistId: string; trackIndex?: string }>();
     const navigate = useNavigate();
+    
+    // Parse track index if provided (for sharing specific songs/episodes)
+    const trackIndex = rawTrackIndex ? parseInt(rawTrackIndex, 10) : null;
     
     // Clean the playlist ID - remove any URL-encoded text that might be appended
     // Some platforms append share text to the URL (e.g., "id%20some%20text")
@@ -46,6 +49,11 @@ const SharePlaylistPage: React.FC = () => {
     const [error, setError] = useState<string | null>(null);
     const [playingIndex, setPlayingIndex] = useState<number | null>(null);
     const [audioRef, setAudioRef] = useState<HTMLAudioElement | null>(null);
+    
+    // Get the featured track if sharing a specific item
+    const featuredTrack = playlist?.items && trackIndex !== null && trackIndex >= 0 && trackIndex < playlist.items.length
+        ? playlist.items[trackIndex]
+        : null;
 
     useEffect(() => {
         const fetchPlaylist = async () => {
@@ -117,8 +125,11 @@ const SharePlaylistPage: React.FC = () => {
     };
 
     const handleOpenInApp = () => {
-        // Try to open in app via deep link
-        window.location.href = `godlykids://playlist/${playlistId}`;
+        // Try to open in app via deep link (include track index if sharing specific track)
+        const deepLink = trackIndex !== null 
+            ? `godlykids://playlist/${playlistId}/${trackIndex}`
+            : `godlykids://playlist/${playlistId}`;
+        window.location.href = deepLink;
         
         // Fallback to app store after delay
         setTimeout(() => {
@@ -152,6 +163,11 @@ const SharePlaylistPage: React.FC = () => {
         );
     }
 
+    // Use featured track's cover if sharing specific track, otherwise playlist cover
+    const displayCover = featuredTrack?.imageUrl || playlist.imageUrl;
+    const displayTitle = featuredTrack ? featuredTrack.title : playlist.title;
+    const displaySubtitle = featuredTrack ? `from "${playlist.title}"` : playlist.description;
+
     return (
         <div className="min-h-screen bg-gradient-to-b from-[#1a0a2e] via-[#2d1b4e] to-[#1a0a2e]">
             {/* Header with Cover */}
@@ -159,16 +175,16 @@ const SharePlaylistPage: React.FC = () => {
                 {/* Background blur */}
                 <div 
                     className="absolute inset-0 bg-cover bg-center blur-2xl opacity-30"
-                    style={{ backgroundImage: `url(${playlist.imageUrl})` }}
+                    style={{ backgroundImage: `url(${displayCover})` }}
                 />
                 
                 <div className="relative pt-12 pb-8 px-6">
                     {/* Cover Art */}
                     <div className="w-48 h-48 mx-auto rounded-2xl shadow-2xl overflow-hidden mb-6 border-4 border-white/10">
-                        {playlist.imageUrl ? (
+                        {displayCover ? (
                             <img 
-                                src={playlist.imageUrl} 
-                                alt={playlist.title}
+                                src={displayCover} 
+                                alt={displayTitle}
                                 className="w-full h-full object-cover"
                             />
                         ) : (
@@ -180,9 +196,14 @@ const SharePlaylistPage: React.FC = () => {
 
                     {/* Title & Info */}
                     <div className="text-center">
-                        <h1 className="text-2xl font-bold text-white mb-2">{playlist.title}</h1>
-                        {playlist.description && (
-                            <p className="text-gray-300 text-sm mb-3 line-clamp-2">{playlist.description}</p>
+                        {featuredTrack && (
+                            <span className="inline-block bg-[#FFD700] text-[#1a0a2e] text-xs font-bold px-3 py-1 rounded-full mb-3">
+                                🎵 SHARED TRACK
+                            </span>
+                        )}
+                        <h1 className="text-2xl font-bold text-white mb-2">{displayTitle}</h1>
+                        {displaySubtitle && (
+                            <p className="text-gray-300 text-sm mb-3 line-clamp-2">{displaySubtitle}</p>
                         )}
                         <div className="flex items-center justify-center gap-4 text-gray-400 text-sm">
                             <span className="flex items-center gap-1">
@@ -227,12 +248,17 @@ const SharePlaylistPage: React.FC = () => {
                 </h2>
                 
                 <div className="space-y-2">
-                    {playlist.items?.map((item, index) => (
+                    {playlist.items?.map((item, index) => {
+                        const isFeatured = trackIndex === index;
+                        const isPlaying = playingIndex === index;
+                        return (
                         <div 
                             key={item._id}
                             className={`flex items-center gap-3 p-3 rounded-xl transition-all ${
-                                playingIndex === index 
+                                isPlaying 
                                     ? 'bg-[#FFD700]/20 border border-[#FFD700]/30' 
+                                    : isFeatured
+                                    ? 'bg-[#FFD700]/10 border border-[#FFD700]/20 ring-2 ring-[#FFD700]/30'
                                     : 'bg-white/5 hover:bg-white/10'
                             }`}
                         >
@@ -265,8 +291,16 @@ const SharePlaylistPage: React.FC = () => {
                                 <Clock className="w-3 h-3" />
                                 {formatDuration(item.duration)}
                             </div>
+                            
+                            {/* Featured badge */}
+                            {isFeatured && (
+                                <span className="bg-[#FFD700] text-[#1a0a2e] text-[10px] font-bold px-2 py-0.5 rounded-full">
+                                    SHARED
+                                </span>
+                            )}
                         </div>
-                    ))}
+                    );
+                    })}
                 </div>
 
                 {/* Preview Notice */}

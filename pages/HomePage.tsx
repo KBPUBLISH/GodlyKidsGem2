@@ -941,9 +941,9 @@ const HomePage: React.FC = () => {
                 </div>
               </div>
               
-              {/* Large Featured Card */}
+              {/* Large Featured Card - constrained for web */}
               <div
-                className="relative w-full aspect-video rounded-2xl overflow-hidden cursor-pointer transform hover:scale-[1.02] transition-all duration-300 shadow-lg shadow-[#FFD700]/20 border-2 border-[#FFD700]/30"
+                className="relative w-full max-w-md mx-auto sm:max-w-lg md:max-w-xl aspect-video rounded-2xl overflow-hidden cursor-pointer transform hover:scale-[1.02] transition-all duration-300 shadow-lg shadow-[#FFD700]/20 border-2 border-[#FFD700]/30"
                 onClick={() => navigate(`/lesson/${todaysVerse._id}`)}
               >
                 {/* Background Image */}

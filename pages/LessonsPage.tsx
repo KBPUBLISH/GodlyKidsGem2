@@ -181,9 +181,9 @@ const LessonsPage: React.FC = () => {
                             </div>
                         </div>
                         
-                        {/* Large Featured Card */}
+                        {/* Large Featured Card - constrained for web */}
                         <div
-                            className="relative w-full aspect-video rounded-2xl overflow-hidden cursor-pointer transform hover:scale-[1.02] transition-all duration-300 shadow-lg shadow-[#FFD700]/20"
+                            className="relative w-full max-w-2xl mx-auto aspect-video rounded-2xl overflow-hidden cursor-pointer transform hover:scale-[1.02] transition-all duration-300 shadow-lg shadow-[#FFD700]/20"
                             onClick={() => handleLessonClick(todaysDailyVerse)}
                         >
                             {/* Background Image */}

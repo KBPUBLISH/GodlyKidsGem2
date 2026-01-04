@@ -100,6 +100,26 @@ const HomePage: React.FC = () => {
     localStorage.removeItem('strength_game_engaged');
     localStorage.removeItem('prayer_game_engaged');
   }, []);
+
+  // Fix scroll lock: Reset body overflow when page mounts (in case modal left it stuck)
+  useEffect(() => {
+    // Reset any stuck overflow on mount
+    document.body.style.overflow = '';
+    document.documentElement.style.overflow = '';
+    
+    // Also reset when page becomes visible (e.g., returning from another tab)
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        document.body.style.overflow = '';
+        document.documentElement.style.overflow = '';
+      }
+    };
+    
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, []);
   
   // Game purchase state - tracks purchased games to update UI without reload
   const [purchasedGamesState, setPurchasedGamesState] = useState<string[]>(() => {
@@ -792,6 +812,11 @@ const HomePage: React.FC = () => {
       ref={scrollRef}
       onScroll={handleScroll}
       className="flex flex-col h-full overflow-y-auto no-scrollbar relative"
+      style={{ 
+        WebkitOverflowScrolling: 'touch', 
+        overscrollBehavior: 'contain',
+        touchAction: 'pan-y'
+      }}
     >
       <Header isVisible={isHeaderVisible} />
 
@@ -985,7 +1010,9 @@ const HomePage: React.FC = () => {
             />
             {(() => {
               // In kid profile we already loaded the selected day's planner lessons into `lessons`.
-              const dayLessons = currentProfileId ? lessons : getLessonsForDay(lessons, selectedDayIndex);
+              // Exclude Daily Verse lessons - they have their own featured section
+              const allLessons = currentProfileId ? lessons : getLessonsForDay(lessons, selectedDayIndex);
+              const dayLessons = allLessons.filter((l: any) => l.type !== 'Daily Verse');
               const completedCount = dayLessons.filter((l: any) => isCompleted(l._id || l.id)).length;
               return dayLessons.length > 0 ? (
                 <span className="text-white/60 text-xs font-semibold">
@@ -1025,7 +1052,8 @@ const HomePage: React.FC = () => {
             <div className="text-white/70 text-center py-8 px-4">Loading lessons...</div>
           ) : (() => {
             // In kid profile we already loaded the selected day's planner lessons into `lessons`.
-            const dayLessons = lessons;
+            // Exclude Daily Verse lessons - they have their own featured section
+            const dayLessons = lessons.filter((l: any) => l.type !== 'Daily Verse');
             const isFutureDay = selectedDayIndex > todayIndex && todayIndex !== -1;
 
             if (dayLessons.length === 0) {

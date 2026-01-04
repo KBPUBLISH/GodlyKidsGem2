@@ -68,6 +68,16 @@ const FAITH_COMMENTS: CommentOption[] = [
     { text: "God's love is forever!", emoji: "💖", color: "indigo" },
 ];
 
+// Universal fun/recommendation comments (always available)
+const UNIVERSAL_COMMENTS: CommentOption[] = [
+    { text: "Super funny!", emoji: "😂", color: "yellow" },
+    { text: "This made me laugh!", emoji: "🤣", color: "orange" },
+    { text: "My Favorite!", emoji: "💖", color: "rose" },
+    { text: "10/10 Recommend!", emoji: "🏆", color: "gold" },
+    { text: "9/10 Recommend!", emoji: "🥇", color: "amber" },
+    { text: "8/10 Recommend!", emoji: "🥈", color: "slate" },
+];
+
 // Fun kid-friendly display names (randomly assigned based on comment ID)
 const funAdjectives = [
     'Little', 'Happy', 'Brave', 'Sunny', 'Bright', 'Joyful', 'Kind', 'Sweet',
@@ -120,10 +130,19 @@ const CommentSection: React.FC<CommentSectionProps> = (props) => {
     const [showSuccess, setShowSuccess] = useState(false);
     const [showMoreComments, setShowMoreComments] = useState(false);
     
-    // Combine AI-generated comments with faith-based bonus comments
+    // Combine AI-generated comments with faith-based and universal bonus comments
     const allCommentOptions = useMemo(() => {
         // Combine and deduplicate (in case AI generates similar ones)
         const combined = [...commentOptions];
+        
+        // Add Universal comments first (high priority)
+        UNIVERSAL_COMMENTS.forEach(uc => {
+            if (!combined.some(c => c.text.toLowerCase() === uc.text.toLowerCase())) {
+                combined.push(uc);
+            }
+        });
+        
+        // Add Faith comments
         FAITH_COMMENTS.forEach(fc => {
             if (!combined.some(c => c.text.toLowerCase() === fc.text.toLowerCase())) {
                 combined.push(fc);

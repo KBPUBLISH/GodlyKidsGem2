@@ -94,7 +94,7 @@ router.post('/', async (req, res) => {
             });
         }
 
-        const { gameId, name, enabled, description, settings, rewards, url, coverImage, gameType, showInDailyTasks, isPurchasable, goldCoinPrice } = req.body;
+        const { gameId, name, enabled, description, settings, rewards, url, coverImage, gameType, showInDailyTasks, isPurchasable, goldCoinPrice, ageRating } = req.body;
 
         if (!gameId || !name) {
             return res.status(400).json({ message: 'gameId and name are required' });
@@ -114,6 +114,7 @@ router.post('/', async (req, res) => {
             existingGame.showInDailyTasks = showInDailyTasks !== undefined ? showInDailyTasks : existingGame.showInDailyTasks;
             existingGame.isPurchasable = isPurchasable !== undefined ? isPurchasable : existingGame.isPurchasable;
             existingGame.goldCoinPrice = goldCoinPrice !== undefined ? goldCoinPrice : existingGame.goldCoinPrice;
+            existingGame.ageRating = ageRating !== undefined ? ageRating : existingGame.ageRating;
             if (settings) existingGame.settings = { ...existingGame.settings, ...settings };
             if (rewards) existingGame.rewards = { ...existingGame.rewards, ...rewards };
             
@@ -132,6 +133,7 @@ router.post('/', async (req, res) => {
                 showInDailyTasks: showInDailyTasks !== undefined ? showInDailyTasks : true,
                 isPurchasable: isPurchasable || false,
                 goldCoinPrice: goldCoinPrice || 0,
+                ageRating: ageRating || 'All Ages',
                 settings: settings || {},
                 rewards: rewards || {
                     threeStars: 50,
@@ -180,6 +182,7 @@ router.put('/:gameId', async (req, res) => {
         if (req.body.showInDailyTasks !== undefined) game.showInDailyTasks = req.body.showInDailyTasks;
         if (req.body.isPurchasable !== undefined) game.isPurchasable = req.body.isPurchasable;
         if (req.body.goldCoinPrice !== undefined) game.goldCoinPrice = req.body.goldCoinPrice;
+        if (req.body.ageRating !== undefined) game.ageRating = req.body.ageRating;
         if (req.body.settings) {
             game.settings = { ...game.settings, ...req.body.settings };
         }

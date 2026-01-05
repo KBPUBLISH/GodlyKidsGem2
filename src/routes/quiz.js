@@ -99,6 +99,121 @@ const extractJson = (text) => {
     throw new Error('Could not parse JSON from AI response');
 };
 
+// Fallback questions to use when AI service is unavailable or quota exceeded
+const FALLBACK_QUESTIONS = [
+    {
+        question: "Did you enjoy reading this story?",
+        options: [
+            { text: "Yes, I loved it!", isCorrect: true },
+            { text: "It was okay", isCorrect: false },
+            { text: "Not really", isCorrect: false },
+            { text: "I want to read it again", isCorrect: true }
+        ]
+    },
+    {
+        question: "What was the best part of the story?",
+        options: [
+            { text: "The beginning", isCorrect: false },
+            { text: "The middle", isCorrect: false },
+            { text: "The ending", isCorrect: true },
+            { text: "All of it!", isCorrect: true }
+        ]
+    },
+    {
+        question: "Who was the most important character?",
+        options: [
+            { text: "The main character", isCorrect: true },
+            { text: "The villain", isCorrect: false },
+            { text: "A random person", isCorrect: false },
+            { text: "Nobody", isCorrect: false }
+        ]
+    },
+    {
+        question: "What lesson did this story teach?",
+        options: [
+            { text: "To be kind and good", isCorrect: true },
+            { text: "To be mean", isCorrect: false },
+            { text: "Nothing at all", isCorrect: false },
+            { text: "To run away", isCorrect: false }
+        ]
+    },
+    {
+        question: "How did the story make you feel?",
+        options: [
+            { text: "Happy", isCorrect: true },
+            { text: "Sad", isCorrect: false },
+            { text: "Angry", isCorrect: false },
+            { text: "Scared", isCorrect: false }
+        ]
+    },
+    {
+        question: "Would you recommend this story to a friend?",
+        options: [
+            { text: "Yes, definitely!", isCorrect: true },
+            { text: "Maybe", isCorrect: false },
+            { text: "No way", isCorrect: false },
+            { text: "Only if they like reading", isCorrect: true }
+        ]
+    }
+];
+
+const getFallbackQuestions = () => JSON.parse(JSON.stringify(FALLBACK_QUESTIONS));
+
+// Helper to call Gemini API
+const callGemini = async (systemPrompt, userPrompt, apiKey) => {
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
+    
+    try {
+        const response = await axios.post(url, {
+            contents: [{
+                role: "user",
+                parts: [{ text: `${systemPrompt}\n\n${userPrompt}` }]
+            }],
+            generationConfig: {
+                temperature: 0.7,
+                maxOutputTokens: 2000,
+                responseMimeType: "application/json"
+            }
+        });
+        
+        if (response.data.candidates && response.data.candidates.length > 0) {
+            return response.data.candidates[0].content.parts[0].text;
+        }
+        throw new Error('No candidates returned from Gemini');
+    } catch (error) {
+        console.error('Gemini API Details:', error.response?.data);
+        throw new Error(`Gemini API Error: ${error.response?.data?.error?.message || error.message}`);
+    }
+};
+
+// Helper to save quiz and response
+const saveAndReturnQuiz = async (res, bookId, existingQuiz, userAge, ageGroup, currentAttempt, questions, bookTitle) => {
+    // Create or update the quiz
+    if (!existingQuiz) {
+        existingQuiz = new BookQuiz({
+            bookId,
+            ageGroupedQuestions: [],
+            attempts: []
+        });
+    }
+    
+    // Add questions for this age group and attempt
+    existingQuiz.setQuestionsForAge(userAge, questions, currentAttempt);
+    await existingQuiz.save();
+
+    console.log(`✅ Quiz saved for book: ${bookTitle}, age group: ${ageGroup}, attempt ${currentAttempt}`);
+
+    return res.json({
+        quiz: {
+            ...existingQuiz.toObject(),
+            questions, // Return the questions for this age group and attempt
+            ageGroup,
+            attemptNumber: currentAttempt
+        },
+        cached: false
+    });
+};
+
 // POST /api/quiz/generate - Generate a quiz for a book using AI
 router.post('/generate', async (req, res) => {
     try {
@@ -175,91 +290,111 @@ router.post('/generate', async (req, res) => {
         console.log('📖 Generating quiz for book:', book.title, 'Age group:', ageGroup);
         console.log('📝 Story content length:', storyContent.length, 'characters');
 
-        // Use OpenAI to generate quiz questions
+        // AI Generation Strategy: OpenAI -> Gemini -> Fallback
+        const geminiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY;
         const openaiKey = process.env.OPENAI_API_KEY;
-        if (!openaiKey) {
-            return res.status(500).json({ message: 'OpenAI API key not configured' });
-        }
+        
+        let questions = [];
+        let useFallback = false;
+        let aiSuccess = false;
 
         const agePrompt = getAgeAppropriatePrompt(userAge, ageGroup);
-        
-        // For attempt 2, instruct AI to create completely different questions
         const attemptInstruction = currentAttempt === 2 
-            ? `\n\nIMPORTANT: This is a SECOND ATTEMPT quiz. Create COMPLETELY DIFFERENT questions from typical first-attempt questions. Focus on:
-- Different story details and moments
-- Different character perspectives
-- Different aspects of the plot
-- Questions about the ending and lessons learned
-- More creative and thoughtful questions
-Do NOT repeat common or obvious questions about the story.`
+            ? `\n\nIMPORTANT: This is a SECOND ATTEMPT quiz. Create COMPLETELY DIFFERENT questions from typical first-attempt questions.`
             : '';
 
-        const response = await axios.post(
-            'https://api.openai.com/v1/chat/completions',
-            {
-                model: 'gpt-4o-mini',
-                messages: [
+        const systemPrompt = `${agePrompt}
+        
+        Create exactly 6 multiple-choice questions based on the story content provided.${attemptInstruction}
+        
+        General Rules:
+        1. Create exactly 6 multiple-choice questions
+        2. Each question should have exactly 4 options (A, B, C, D)
+        3. Only ONE option should be correct per question
+        4. Questions should test comprehension, not trick the child
+        5. Questions should cover different parts of the story
+        6. Include questions about characters, events, and feelings
+        7. Make the quiz fun and encouraging
+        
+        Return your response as a valid JSON array with this exact structure:
+        [
+          {
+            "question": "What did the main character do first?",
+            "options": [
+              { "text": "Went to school", "isCorrect": false },
+              { "text": "Ate breakfast", "isCorrect": true },
+              { "text": "Played outside", "isCorrect": false },
+              { "text": "Read a book", "isCorrect": false }
+            ]
+          }
+        ]
+        
+        Return ONLY the JSON array, no explanations or markdown.`;
+
+        const userPrompt = `Create a 6-question quiz for a ${userAge}-year-old child about this story titled "${book.title}":\n\n${storyContent.substring(0, 4000)}`;
+
+        // 1. Try OpenAI (Primary)
+        if (openaiKey && !aiSuccess) {
+            try {
+                console.log('🤖 Attempting generation with OpenAI...');
+                const response = await axios.post(
+                    'https://api.openai.com/v1/chat/completions',
                     {
-                        role: 'system',
-                        content: `${agePrompt}
-
-Create exactly 6 multiple-choice questions based on the story content provided.${attemptInstruction}
-
-General Rules:
-1. Create exactly 6 multiple-choice questions
-2. Each question should have exactly 4 options (A, B, C, D)
-3. Only ONE option should be correct per question
-4. Questions should test comprehension, not trick the child
-5. Questions should cover different parts of the story
-6. Include questions about characters, events, and feelings
-7. Make the quiz fun and encouraging
-
-Return your response as a valid JSON array with this exact structure:
-[
-  {
-    "question": "What did the main character do first?",
-    "options": [
-      { "text": "Went to school", "isCorrect": false },
-      { "text": "Ate breakfast", "isCorrect": true },
-      { "text": "Played outside", "isCorrect": false },
-      { "text": "Read a book", "isCorrect": false }
-    ]
-  }
-]
-
-Return ONLY the JSON array, no explanations or markdown.`
+                        model: 'gpt-4o-mini',
+                        messages: [
+                            { role: 'system', content: systemPrompt },
+                            { role: 'user', content: userPrompt }
+                        ],
+                        temperature: 0.7,
+                        max_tokens: 2000
                     },
                     {
-                        role: 'user',
-                        content: `Create a 6-question quiz for a ${userAge}-year-old child about this story titled "${book.title}":\n\n${storyContent.substring(0, 4000)}`
+                        headers: {
+                            'Authorization': `Bearer ${openaiKey}`,
+                            'Content-Type': 'application/json'
+                        }
                     }
-                ],
-                temperature: 0.7,
-                max_tokens: 2000
-            },
-            {
-                headers: {
-                    'Authorization': `Bearer ${openaiKey}`,
-                    'Content-Type': 'application/json'
+                );
+        
+                const content = response.data.choices[0].message.content.trim();
+                console.log('🤖 OpenAI Response length:', content.length);
+                questions = extractJson(content);
+                if (Array.isArray(questions) && questions.length > 0) {
+                    aiSuccess = true;
+                    console.log('✅ OpenAI generation successful');
                 }
+            } catch (apiError) {
+                console.error('❌ OpenAI generation failed:', apiError.response?.data?.error?.message || apiError.message);
             }
-        );
-
-        let questions;
-        try {
-            const content = response.data.choices[0].message.content.trim();
-            console.log('🤖 Raw AI Response length:', content.length);
-            questions = extractJson(content);
-        } catch (parseError) {
-            console.error('Failed to parse AI response:', parseError);
-            console.error('Raw content:', response.data.choices[0].message.content);
-            return res.status(500).json({ message: 'Failed to parse quiz questions from AI' });
         }
 
-        // Validate questions structure
+        // 2. Try Gemini (Fallback)
+        if (geminiKey && !aiSuccess) {
+            try {
+                console.log('🤖 Attempting generation with Gemini (fallback)...');
+                const content = await callGemini(systemPrompt, userPrompt, geminiKey);
+                console.log('🤖 Gemini Response length:', content.length);
+                questions = extractJson(content);
+                if (Array.isArray(questions) && questions.length > 0) {
+                    aiSuccess = true;
+                    console.log('✅ Gemini generation successful');
+                }
+            } catch (error) {
+                console.error('❌ Gemini generation failed:', error.message);
+            }
+        }
+
+        // 3. Static Fallback
+        if (!aiSuccess) {
+            console.log('⚠️ All AI providers failed or keys missing, using fallback questions');
+            useFallback = true;
+            questions = getFallbackQuestions();
+        }
+
+        // Validate final questions structure
         if (!Array.isArray(questions) || questions.length === 0) {
-            console.error('Invalid questions array (empty or not array):', questions);
-            return res.status(500).json({ message: 'AI generated invalid quiz format' });
+            console.error('Invalid questions array after all attempts, forcing fallback');
+            questions = getFallbackQuestions();
         }
         
         // Ensure exactly 6 questions (pad or slice if needed)
@@ -276,30 +411,8 @@ Return ONLY the JSON array, no explanations or markdown.`
             })) : []
         }));
 
-        // Create or update the quiz
-        if (!existingQuiz) {
-            existingQuiz = new BookQuiz({
-                bookId,
-                ageGroupedQuestions: [],
-                attempts: []
-            });
-        }
-        
-        // Add questions for this age group and attempt
-        existingQuiz.setQuestionsForAge(userAge, questions, currentAttempt);
-        await existingQuiz.save();
-
-        console.log(`✅ Quiz generated successfully for book: ${book.title}, age group: ${ageGroup}, attempt ${currentAttempt}`);
-
-        res.json({
-            quiz: {
-                ...existingQuiz.toObject(),
-                questions, // Return the questions for this age group and attempt
-                ageGroup,
-                attemptNumber: currentAttempt
-            },
-            cached: false
-        });
+        // Save and return
+        return saveAndReturnQuiz(res, bookId, existingQuiz, userAge, ageGroup, currentAttempt, questions, book.title);
 
     } catch (error) {
         console.error('Quiz Generation Error:', error.response?.data || error.message);
@@ -364,29 +477,18 @@ router.post('/generate-first', async (req, res) => {
             return res.status(400).json({ message: 'No story content found' });
         }
 
-        const openaiKey = process.env.OPENAI_API_KEY;
-        if (!openaiKey) {
-            return res.status(500).json({ message: 'OpenAI API key not configured' });
-        }
-
         // Generate just ONE question quickly
         console.log(`⚡ Quick-generating first question for book: ${book.title}, attempt ${currentAttempt}`);
         
+        const openaiKey = process.env.OPENAI_API_KEY;
+        const geminiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY;
+        
         const agePrompt = getAgeAppropriatePrompt(userAge, ageGroup);
-        
-        // For attempt 2, instruct AI to create a different type of question
         const attemptInstruction = currentAttempt === 2 
-            ? `\n\nIMPORTANT: This is a SECOND ATTEMPT quiz. Create a DIFFERENT warm-up question than typical. Focus on a unique detail or moment from the story that isn't commonly asked about.`
+            ? `\n\nIMPORTANT: This is a SECOND ATTEMPT quiz. Create a DIFFERENT warm-up question than typical.`
             : '';
-        
-        const response = await axios.post(
-            'https://api.openai.com/v1/chat/completions',
-            {
-                model: 'gpt-4o-mini',
-                messages: [
-                    {
-                        role: 'system',
-                        content: `${agePrompt}
+
+        const systemPrompt = `${agePrompt}
 
 Create exactly 1 multiple-choice question based on the story. This should be an easy warm-up question about the beginning of the story.${attemptInstruction}
 
@@ -405,36 +507,71 @@ Return ONLY a JSON object (not array):
     { "text": "Option C", "isCorrect": false },
     { "text": "Option D", "isCorrect": false }
   ]
-}`
+}`;
+
+        const userPrompt = `Create 1 warm-up question for a ${userAge}-year-old about: "${book.title}"\n\nStory: ${storyContent.substring(0, 2000)}`;
+
+        let firstQuestion = null;
+        let aiSuccess = false;
+
+        // 1. Try OpenAI (Primary)
+        if (openaiKey && !aiSuccess) {
+            try {
+                console.log('🤖 Attempting first question with OpenAI...');
+                const response = await axios.post(
+                    'https://api.openai.com/v1/chat/completions',
+                    {
+                        model: 'gpt-4o-mini',
+                        messages: [
+                            { role: 'system', content: systemPrompt },
+                            { role: 'user', content: userPrompt }
+                        ],
+                        temperature: 0.7,
+                        max_tokens: 500
                     },
                     {
-                        role: 'user',
-                        content: `Create 1 warm-up question for a ${userAge}-year-old about: "${book.title}"\n\nStory: ${storyContent.substring(0, 2000)}`
+                        headers: {
+                            'Authorization': `Bearer ${openaiKey}`,
+                            'Content-Type': 'application/json'
+                        }
                     }
-                ],
-                temperature: 0.7,
-                max_tokens: 500
-            },
-            {
-                headers: {
-                    'Authorization': `Bearer ${openaiKey}`,
-                    'Content-Type': 'application/json'
-                }
-            }
-        );
+                );
 
-        let firstQuestion;
-        try {
-            const content = response.data.choices[0].message.content.trim();
-            console.log('🤖 Raw AI Response (first question) length:', content.length);
-            firstQuestion = extractJson(content);
-        } catch (parseError) {
-            console.error('Failed to parse first question:', parseError);
-            console.error('Raw content:', response.data.choices[0].message.content);
-            return res.status(500).json({ message: 'Failed to parse question' });
+                const content = response.data.choices[0].message.content.trim();
+                console.log('🤖 OpenAI Response (first question) length:', content.length);
+                firstQuestion = extractJson(content);
+                if (firstQuestion && firstQuestion.question) {
+                    aiSuccess = true;
+                    console.log('✅ OpenAI first question successful');
+                }
+            } catch (apiError) {
+                console.error('❌ OpenAI first question failed:', apiError.response?.data?.error?.message || apiError.message);
+            }
         }
 
-        console.log(`✅ First question generated for: ${book.title}, attempt ${currentAttempt}`);
+        // 2. Try Gemini (Fallback)
+        if (geminiKey && !aiSuccess) {
+            try {
+                console.log('🤖 Attempting first question with Gemini (fallback)...');
+                const content = await callGemini(systemPrompt, userPrompt, geminiKey);
+                console.log('🤖 Gemini Response (first question) length:', content.length);
+                firstQuestion = extractJson(content);
+                if (firstQuestion && firstQuestion.question) {
+                    aiSuccess = true;
+                    console.log('✅ Gemini first question successful');
+                }
+            } catch (error) {
+                console.error('❌ Gemini first question failed:', error.message);
+            }
+        }
+
+        // 3. Static Fallback
+        if (!aiSuccess) {
+            console.log('⚠️ All AI providers failed, using fallback first question');
+            firstQuestion = getFallbackQuestions()[0];
+        }
+
+        console.log(`✅ First question ready for: ${book.title}, attempt ${currentAttempt}`);
 
         res.json({
             firstQuestion,
@@ -506,35 +643,18 @@ router.post('/generate-remaining', async (req, res) => {
             }
         });
 
-        const openaiKey = process.env.OPENAI_API_KEY;
-        if (!openaiKey) {
-            return res.status(500).json({ message: 'OpenAI API key not configured' });
-        }
-
         // Generate remaining 5 questions
         console.log(`📝 Generating remaining questions for: ${book.title}, attempt ${currentAttempt}`);
         
+        const openaiKey = process.env.OPENAI_API_KEY;
+        const geminiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY;
+        
         const agePrompt = getAgeAppropriatePrompt(userAge, ageGroup);
-        
-        // For attempt 2, instruct AI to create completely different questions
         const attemptInstruction = currentAttempt === 2 
-            ? `\n\nIMPORTANT: This is a SECOND ATTEMPT quiz. Create COMPLETELY DIFFERENT questions from typical first-attempt questions. Focus on:
-- Different story details and moments
-- Different character perspectives  
-- Different aspects of the plot
-- Questions about the ending and lessons learned
-- More creative and thoughtful questions
-Do NOT repeat common or obvious questions about the story.`
+            ? `\n\nIMPORTANT: This is a SECOND ATTEMPT quiz. Create COMPLETELY DIFFERENT questions.`
             : '';
-        
-        const response = await axios.post(
-            'https://api.openai.com/v1/chat/completions',
-            {
-                model: 'gpt-4o-mini',
-                messages: [
-                    {
-                        role: 'system',
-                        content: `${agePrompt}
+
+        const systemPrompt = `${agePrompt}
 
 Create exactly 5 more multiple-choice questions. The first question was already asked: "${firstQuestion?.question || 'a warm-up question'}"${attemptInstruction}
 
@@ -549,40 +669,76 @@ Return ONLY a JSON array:
 [
   { "question": "...", "options": [{ "text": "...", "isCorrect": false }, ...] },
   ...
-]`
+]`;
+
+        const userPrompt = `Create 5 more questions for a ${userAge}-year-old about: "${book.title}"\n\nStory: ${storyContent.substring(0, 4000)}`;
+
+        let remainingQuestions = [];
+        let aiSuccess = false;
+
+        // 1. Try OpenAI (Primary)
+        if (openaiKey && !aiSuccess) {
+            try {
+                console.log('🤖 Attempting remaining questions with OpenAI...');
+                const response = await axios.post(
+                    'https://api.openai.com/v1/chat/completions',
+                    {
+                        model: 'gpt-4o-mini',
+                        messages: [
+                            { role: 'system', content: systemPrompt },
+                            { role: 'user', content: userPrompt }
+                        ],
+                        temperature: 0.7,
+                        max_tokens: 2000
                     },
                     {
-                        role: 'user',
-                        content: `Create 5 more questions for a ${userAge}-year-old about: "${book.title}"\n\nStory: ${storyContent.substring(0, 4000)}`
+                        headers: {
+                            'Authorization': `Bearer ${openaiKey}`,
+                            'Content-Type': 'application/json'
+                        }
                     }
-                ],
-                temperature: 0.7,
-                max_tokens: 2000
-            },
-            {
-                headers: {
-                    'Authorization': `Bearer ${openaiKey}`,
-                    'Content-Type': 'application/json'
-                }
-            }
-        );
+                );
 
-        let remainingQuestions;
-        try {
-            const content = response.data.choices[0].message.content.trim();
-            console.log('📝 Raw OpenAI response for remaining questions:', content.substring(0, 200));
-            remainingQuestions = extractJson(content);
-            console.log(`📝 Parsed ${remainingQuestions?.length} remaining questions`);
-        } catch (parseError) {
-            console.error('Failed to parse remaining questions:', parseError);
-            console.error('Raw content was:', response.data.choices[0]?.message?.content?.substring(0, 500));
-            return res.status(500).json({ message: 'Failed to parse questions', parseError: parseError.message });
+                const content = response.data.choices[0].message.content.trim();
+                console.log('📝 OpenAI response for remaining questions length:', content.length);
+                remainingQuestions = extractJson(content);
+                if (Array.isArray(remainingQuestions) && remainingQuestions.length > 0) {
+                    aiSuccess = true;
+                    console.log(`✅ OpenAI remaining questions successful: ${remainingQuestions.length} questions`);
+                }
+            } catch (apiError) {
+                console.error('❌ OpenAI remaining questions failed:', apiError.response?.data?.error?.message || apiError.message);
+            }
+        }
+
+        // 2. Try Gemini (Fallback)
+        if (geminiKey && !aiSuccess) {
+            try {
+                console.log('🤖 Attempting remaining questions with Gemini (fallback)...');
+                const content = await callGemini(systemPrompt, userPrompt, geminiKey);
+                console.log('📝 Gemini response for remaining questions length:', content.length);
+                remainingQuestions = extractJson(content);
+                if (Array.isArray(remainingQuestions) && remainingQuestions.length > 0) {
+                    aiSuccess = true;
+                    console.log(`✅ Gemini remaining questions successful: ${remainingQuestions.length} questions`);
+                }
+            } catch (error) {
+                console.error('❌ Gemini remaining questions failed:', error.message);
+            }
+        }
+
+        // 3. Static Fallback
+        if (!aiSuccess) {
+            console.log('⚠️ All AI providers failed, using fallback remaining questions');
+            const fallback = getFallbackQuestions();
+            remainingQuestions = fallback.slice(1); // Skip first question (already generated)
         }
 
         // Validate remaining questions
         if (!Array.isArray(remainingQuestions)) {
             console.error('Remaining questions is not an array:', typeof remainingQuestions);
-            return res.status(500).json({ message: 'Invalid response format - expected array' });
+            const fallback = getFallbackQuestions();
+            remainingQuestions = fallback.slice(1);
         }
 
         // Combine first question with remaining

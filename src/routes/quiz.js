@@ -49,31 +49,52 @@ Rules for this age group:
 const extractJson = (text) => {
     if (!text) return null;
     
-    // 1. Try parsing directly
+    let content = text.trim();
+    
+    // 1. Try parsing directly first
     try {
-        return JSON.parse(text);
+        return JSON.parse(content);
     } catch (e) {}
 
-    // 2. Try removing markdown code blocks
-    try {
-        const cleanMarkdown = text.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
-        return JSON.parse(cleanMarkdown);
-    } catch (e) {}
+    // 2. Try removing markdown code blocks (```json ... ```)
+    const markdownMatch = content.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
+    if (markdownMatch) {
+        try {
+            return JSON.parse(markdownMatch[1]);
+        } catch (e) {}
+        content = markdownMatch[1]; // Use inner content for next attempts
+    }
 
-    // 3. Try finding the JSON array or object
-    try {
-        const firstBracket = text.indexOf('[');
-        const lastBracket = text.lastIndexOf(']');
-        if (firstBracket !== -1 && lastBracket > firstBracket) {
-            return JSON.parse(text.substring(firstBracket, lastBracket + 1));
-        }
+    // 3. Find the first JSON object or array structure
+    const firstBracket = content.indexOf('[');
+    const firstBrace = content.indexOf('{');
+    
+    let startIndex = -1;
+    // Determine which starts first
+    if (firstBracket !== -1 && (firstBrace === -1 || firstBracket < firstBrace)) {
+        startIndex = firstBracket;
+    } else if (firstBrace !== -1) {
+        startIndex = firstBrace;
+    }
+    
+    if (startIndex !== -1) {
+        const isArray = content[startIndex] === '[';
+        const lastIndex = content.lastIndexOf(isArray ? ']' : '}');
         
-        const firstBrace = text.indexOf('{');
-        const lastBrace = text.lastIndexOf('}');
-        if (firstBrace !== -1 && lastBrace > firstBrace) {
-            return JSON.parse(text.substring(firstBrace, lastBrace + 1));
+        if (lastIndex > startIndex) {
+            const potentialJson = content.substring(startIndex, lastIndex + 1);
+            try {
+                return JSON.parse(potentialJson);
+            } catch (e) {
+                // 4. Try basic cleanup (trailing commas)
+                try {
+                    // Regex to remove trailing commas before closing braces/brackets
+                    const cleanJson = potentialJson.replace(/,\s*([\]}])/g, '$1');
+                    return JSON.parse(cleanJson);
+                } catch (e2) {}
+            }
         }
-    } catch (e) {}
+    }
 
     throw new Error('Could not parse JSON from AI response');
 };

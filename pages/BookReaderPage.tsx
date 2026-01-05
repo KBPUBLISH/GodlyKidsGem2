@@ -198,14 +198,19 @@ const BookReaderPage: React.FC = () => {
     const [voiceSettingsLoaded, setVoiceSettingsLoaded] = useState(false); // Track when voice settings have been checked
     
     // Get the effective voice ID to use for TTS (for narrator - non-character text)
-    // Priority: 1. Book's narrator voice, 2. User's selected voice
-    const effectiveNarratorVoiceId = defaultNarratorVoiceId || 
-        ((bookDefaultVoiceId && useBookDefaultVoice) ? bookDefaultVoiceId : selectedVoiceId);
+    // Priority:
+    // 1. If user EXPLICITLY selected a voice (!useBookDefaultVoice), use it.
+    // 2. If book has a specific NARRATOR voice, use it.
+    // 3. If book has a generic DEFAULT voice, use it.
+    // 4. Fallback to user's selected/default voice.
+    const effectiveNarratorVoiceId = !useBookDefaultVoice 
+        ? selectedVoiceId 
+        : (defaultNarratorVoiceId || bookDefaultVoiceId || selectedVoiceId);
     
     // Legacy: Get the effective voice ID to use for TTS
     // If book has default and user hasn't overridden, use book's default
     // Otherwise use user's selected voice
-    const effectiveVoiceId = (bookDefaultVoiceId && useBookDefaultVoice) ? bookDefaultVoiceId : selectedVoiceId;
+    const effectiveVoiceId = effectiveNarratorVoiceId;
     
     // Sequential text box playback - track which text boxes to play on current page
     const pendingTextBoxesRef = useRef<Array<{ text: string; index: number }>>([]);

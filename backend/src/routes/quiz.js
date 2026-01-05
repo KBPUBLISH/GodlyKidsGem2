@@ -45,6 +45,39 @@ Rules for this age group:
     }
 };
 
+// Helper to robustly extract JSON from AI response
+const extractJson = (text) => {
+    if (!text) return null;
+    
+    // 1. Try parsing directly
+    try {
+        return JSON.parse(text);
+    } catch (e) {}
+
+    // 2. Try removing markdown code blocks
+    try {
+        const cleanMarkdown = text.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+        return JSON.parse(cleanMarkdown);
+    } catch (e) {}
+
+    // 3. Try finding the JSON array or object
+    try {
+        const firstBracket = text.indexOf('[');
+        const lastBracket = text.lastIndexOf(']');
+        if (firstBracket !== -1 && lastBracket > firstBracket) {
+            return JSON.parse(text.substring(firstBracket, lastBracket + 1));
+        }
+        
+        const firstBrace = text.indexOf('{');
+        const lastBrace = text.lastIndexOf('}');
+        if (firstBrace !== -1 && lastBrace > firstBrace) {
+            return JSON.parse(text.substring(firstBrace, lastBrace + 1));
+        }
+    } catch (e) {}
+
+    throw new Error('Could not parse JSON from AI response');
+};
+
 // POST /api/quiz/generate - Generate a quiz for a book using AI
 router.post('/generate', async (req, res) => {
     try {
@@ -194,19 +227,33 @@ Return ONLY the JSON array, no explanations or markdown.`
         let questions;
         try {
             const content = response.data.choices[0].message.content.trim();
-            // Remove markdown code blocks if present
-            const jsonContent = content.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
-            questions = JSON.parse(jsonContent);
+            console.log('🤖 Raw AI Response length:', content.length);
+            questions = extractJson(content);
         } catch (parseError) {
             console.error('Failed to parse AI response:', parseError);
+            console.error('Raw content:', response.data.choices[0].message.content);
             return res.status(500).json({ message: 'Failed to parse quiz questions from AI' });
         }
 
         // Validate questions structure
-        if (!Array.isArray(questions) || questions.length !== 6) {
-            console.error('Invalid questions array:', questions);
+        if (!Array.isArray(questions) || questions.length === 0) {
+            console.error('Invalid questions array (empty or not array):', questions);
             return res.status(500).json({ message: 'AI generated invalid quiz format' });
         }
+        
+        // Ensure exactly 6 questions (pad or slice if needed)
+        if (questions.length > 6) {
+            questions = questions.slice(0, 6);
+        }
+        
+        // Normalize structure
+        questions = questions.map(q => ({
+            question: q.question,
+            options: Array.isArray(q.options) ? q.options.map(o => ({
+                text: o.text || o.answer || '', // Handle varied AI output
+                isCorrect: !!o.isCorrect
+            })) : []
+        }));
 
         // Create or update the quiz
         if (!existingQuiz) {
@@ -358,10 +405,11 @@ Return ONLY a JSON object (not array):
         let firstQuestion;
         try {
             const content = response.data.choices[0].message.content.trim();
-            const jsonContent = content.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
-            firstQuestion = JSON.parse(jsonContent);
+            console.log('🤖 Raw AI Response (first question) length:', content.length);
+            firstQuestion = extractJson(content);
         } catch (parseError) {
             console.error('Failed to parse first question:', parseError);
+            console.error('Raw content:', response.data.choices[0].message.content);
             return res.status(500).json({ message: 'Failed to parse question' });
         }
 
@@ -502,9 +550,8 @@ Return ONLY a JSON array:
         try {
             const content = response.data.choices[0].message.content.trim();
             console.log('📝 Raw OpenAI response for remaining questions:', content.substring(0, 200));
-            const jsonContent = content.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
-            remainingQuestions = JSON.parse(jsonContent);
-            console.log(`📝 Parsed ${remainingQuestions.length} remaining questions`);
+            remainingQuestions = extractJson(content);
+            console.log(`📝 Parsed ${remainingQuestions?.length} remaining questions`);
         } catch (parseError) {
             console.error('Failed to parse remaining questions:', parseError);
             console.error('Raw content was:', response.data.choices[0]?.message?.content?.substring(0, 500));

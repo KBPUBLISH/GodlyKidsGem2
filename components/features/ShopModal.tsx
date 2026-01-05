@@ -222,7 +222,12 @@ const ShopModal: React.FC<ShopModalProps> = ({ isOpen, onClose, initialTab }) =>
                     return;
                 }
 
-                const visibleVoices = filterVisibleVoices(voices);
+                // Filter voices that should be shown in the shop (backend flag)
+                const shopVoices = voices.filter((v: any) => v.showInApp !== false);
+                
+                // Then apply user's local hidden preferences
+                const visibleVoices = filterVisibleVoices(shopVoices);
+                
                 // Calculate 30% threshold for coin-purchasable voices (free tier)
                 const totalVoices = visibleVoices.length;
                 const freeTierCount = Math.ceil(totalVoices * 0.3); // 30% available to free users

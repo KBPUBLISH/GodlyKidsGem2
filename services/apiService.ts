@@ -1263,7 +1263,8 @@ export const ApiService = {
           name: v.customName || v.name, // Use customName if available, otherwise use name
           preview_url: v.previewUrl,
           category: v.category,
-          characterImage: v.characterImage // Include character image
+          characterImage: v.characterImage, // Include character image
+          showInApp: v.showInApp !== false // Default to true if not specified
         }));
         
         if (mappedVoices.length === 0) {

@@ -1644,7 +1644,7 @@ const HomePage: React.FC = () => {
                       {/* Age Rating Badge - Always show */}
                       {game.ageRating && (
                         <div className="absolute top-2 left-2 bg-blue-500/90 backdrop-blur-sm text-white text-xs font-bold px-2 py-1 rounded-full z-20 shadow-lg">
-                          {game.ageRating === 'All Ages' ? 'Ages 3+' : game.ageRating}
+                          {game.ageRating === 'All Ages' ? 'All Ages' : (game.ageRating.includes('Ages') ? game.ageRating : `Ages ${game.ageRating}`)}
                         </div>
                       )}
                       

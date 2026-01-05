@@ -131,10 +131,51 @@ const Voices: React.FC = () => {
             return;
         }
 
-        try {
-            const sampleText = `Hello! This is ${voice.customName || voice.name}, a ${voice.category} voice. I can help bring stories to life for children.`;
+        setPlayingPreview(voice.voiceId);
+
+        // Function to setup and play audio
+        const playAudio = async (url: string) => {
+            const audio = new Audio(url);
             
-            setPlayingPreview(voice.voiceId);
+            audio.onended = () => {
+                setPlayingPreview(null);
+                setPreviewAudio(null);
+            };
+            
+            audio.onerror = (e) => {
+                console.error('Audio playback error:', e);
+                if (audio.error && audio.error.code !== 0) {
+                    setPlayingPreview(null);
+                    setPreviewAudio(null);
+                    alert(`Failed to play preview: ${audio.error.message || 'Unknown error'}`);
+                }
+            };
+            
+            setPreviewAudio(audio);
+            
+            try {
+                await audio.play();
+            } catch (playError: any) {
+                console.error('Play error:', playError);
+                setPlayingPreview(null);
+                setPreviewAudio(null);
+                if (playError.name !== 'NotAllowedError') {
+                    alert(`Failed to play preview: ${playError.message || 'Unknown error'}`);
+                }
+            }
+        };
+
+        // 1. Try using the static preview URL if available
+        if (voice.previewUrl) {
+            console.log('Using static preview URL for voice:', voice.name);
+            await playAudio(voice.previewUrl);
+            return;
+        }
+
+        // 2. Fallback to generating TTS
+        try {
+            console.log('Generating TTS preview for voice:', voice.name);
+            const sampleText = `Hello! This is ${voice.customName || voice.name}, a ${voice.category} voice. I can help bring stories to life for children.`;
             
             const response = await apiClient.post('/api/tts/generate', {
                 text: sampleText,
@@ -142,34 +183,7 @@ const Voices: React.FC = () => {
             });
 
             if (response.data && response.data.audioUrl) {
-                const audio = new Audio(response.data.audioUrl);
-                
-                audio.onended = () => {
-                    setPlayingPreview(null);
-                    setPreviewAudio(null);
-                };
-                
-                audio.onerror = (e) => {
-                    console.error('Audio playback error:', e);
-                    if (audio.error && audio.error.code !== 0) {
-                        setPlayingPreview(null);
-                        setPreviewAudio(null);
-                        alert(`Failed to play preview: ${audio.error.message || 'Unknown error'}`);
-                    }
-                };
-                
-                setPreviewAudio(audio);
-                
-                try {
-                    await audio.play();
-                } catch (playError: any) {
-                    console.error('Play error:', playError);
-                    setPlayingPreview(null);
-                    setPreviewAudio(null);
-                    if (playError.name !== 'NotAllowedError') {
-                        alert(`Failed to play preview: ${playError.message || 'Unknown error'}`);
-                    }
-                }
+                await playAudio(response.data.audioUrl);
             } else {
                 setPlayingPreview(null);
                 alert('No audio URL returned from server');

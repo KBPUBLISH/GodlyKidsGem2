@@ -558,49 +558,49 @@ const PlaylistDetailPage: React.FC = () => {
                             {playlist.items.length} {playlist.type === 'Song' ? t('songs') : t('episodes')}
                         </p>
 
-                        {/* Action Buttons */}
-                        <div className="flex items-center justify-center gap-3 mt-4">
+                        {/* Action Buttons - responsive sizing for mobile */}
+                        <div className="flex items-center justify-center gap-1.5 sm:gap-3 mt-4 flex-wrap">
                             {/* Save Button */}
                             <button
                                 onClick={handleSave}
-                                className={`flex items-center gap-2 px-4 py-2 rounded-full border-2 transition-all active:scale-95 ${isInLibrary
+                                className={`flex items-center gap-1 sm:gap-2 px-2 sm:px-4 py-1.5 sm:py-2 rounded-full border-2 transition-all active:scale-95 ${isInLibrary
                                     ? 'bg-[#FFD700] border-[#B8860B] text-[#5c2e0b]'
                                     : 'bg-[#fdf6e3] border-[#d4c5a0] text-[#8B4513]'
                                     }`}
                             >
-                                <Bookmark size={18} fill={isInLibrary ? '#5c2e0b' : 'none'} />
-                                <span className="text-sm font-bold">{isInLibrary ? t('saved') : t('save')}</span>
+                                <Bookmark className="w-4 h-4 sm:w-[18px] sm:h-[18px]" fill={isInLibrary ? '#5c2e0b' : 'none'} />
+                                <span className="text-xs sm:text-sm font-bold">{isInLibrary ? t('saved') : t('save')}</span>
                             </button>
 
                             {/* Like Button */}
                             <button
                                 onClick={handleLike}
-                                className={`flex items-center gap-2 px-4 py-2 rounded-full border-2 transition-all active:scale-95 ${isLiked
+                                className={`flex items-center gap-1 sm:gap-2 px-2 sm:px-4 py-1.5 sm:py-2 rounded-full border-2 transition-all active:scale-95 ${isLiked
                                     ? 'bg-[#ff6b6b] border-[#c92a2a] text-white'
                                     : 'bg-[#fdf6e3] border-[#d4c5a0] text-[#8B4513]'
                                     }`}
                             >
-                                <Heart size={18} fill={isLiked ? 'white' : 'none'} />
-                                <span className="text-sm font-bold">{localLikeCount}</span>
+                                <Heart className="w-4 h-4 sm:w-[18px] sm:h-[18px]" fill={isLiked ? 'white' : 'none'} />
+                                <span className="text-xs sm:text-sm font-bold">{localLikeCount}</span>
                             </button>
 
                             {/* Share Button */}
                             <button
                                 onClick={handleShare}
-                                className="flex items-center gap-2 px-4 py-2 rounded-full border-2 border-[#d4c5a0] bg-[#fdf6e3] text-[#8B4513] transition-all active:scale-95 hover:bg-[#e8d99f]"
+                                className="flex items-center gap-1 sm:gap-2 px-2 sm:px-4 py-1.5 sm:py-2 rounded-full border-2 border-[#d4c5a0] bg-[#fdf6e3] text-[#8B4513] transition-all active:scale-95 hover:bg-[#e8d99f]"
                                 title="Share"
                             >
-                                <Share2 size={18} />
-                                <span className="text-sm font-bold">{t('share') || 'Share'}</span>
+                                <Share2 className="w-4 h-4 sm:w-[18px] sm:h-[18px]" />
+                                <span className="text-xs sm:text-sm font-bold">{t('share') || 'Share'}</span>
                             </button>
 
                             {/* View Counter */}
                             <button 
                                 onClick={(e) => e.stopPropagation()}
-                                className="flex items-center gap-2 px-4 py-2 rounded-full border-2 border-[#d4c5a0] bg-[#fdf6e3] text-[#8B4513] cursor-default"
+                                className="flex items-center gap-1 sm:gap-2 px-2 sm:px-4 py-1.5 sm:py-2 rounded-full border-2 border-[#d4c5a0] bg-[#fdf6e3] text-[#8B4513] cursor-default"
                             >
-                                <Headphones size={18} />
-                                <span className="text-sm font-bold">{t('myListens')}: {playCount}</span>
+                                <Headphones className="w-4 h-4 sm:w-[18px] sm:h-[18px]" />
+                                <span className="text-xs sm:text-sm font-bold whitespace-nowrap">{playCount}</span>
                             </button>
                         </div>
                     </div>

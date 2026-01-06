@@ -3,6 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { ChevronLeft, Pause, Play, SkipBack, SkipForward, Music, Heart, RotateCcw, ListPlus, BookOpen, Share2 } from 'lucide-react';
 import { favoritesService } from '../services/favoritesService';
 import { getApiBaseUrl } from '../services/apiService';
+import { playCountService } from '../services/playCountService';
 import { useAudio, Playlist } from '../context/AudioContext';
 import AddToPlaylistModal from '../components/features/AddToPlaylistModal';
 
@@ -171,7 +172,8 @@ const PlaylistPlayerPage: React.FC = () => {
             const track = playlistToUse.items[currentTrackIndex];
             if (track) {
                 const trackId = track._id || `${playlistToUse._id}_${currentTrackIndex}`;
-                const count = parseInt(localStorage.getItem(`playlist_track_play_count_${trackId}`) || '0', 10);
+                // Use playCountService for consistent tracking
+                const count = playCountService.getPlayCount(trackId);
                 setPlayCount(count);
                 setIsLiked(favoritesService.getLikes().includes(trackId));
                 // Reset play count increment flag when track changes
@@ -200,9 +202,9 @@ const PlaylistPlayerPage: React.FC = () => {
         
         // If starting to play (was paused, now playing), increment play count
         if (!isPlaying) {
-            const currentCount = parseInt(localStorage.getItem(`playlist_track_play_count_${trackId}`) || '0', 10);
-            const newCount = currentCount + 1;
-            localStorage.setItem(`playlist_track_play_count_${trackId}`, newCount.toString());
+            // Use playCountService for consistent tracking with PlaylistDetailPage
+            playCountService.incrementPlayCount(trackId, 'episode');
+            const newCount = playCountService.getPlayCount(trackId);
             setPlayCount(newCount);
             // Reset the auto-increment flag so it can increment again on next play
             hasIncrementedPlayCountRef.current = false;

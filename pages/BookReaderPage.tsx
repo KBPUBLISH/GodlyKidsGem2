@@ -1399,15 +1399,30 @@ const BookReaderPage: React.FC = () => {
         // Fetch voices (only enabled voices from portal, filtered by unlock status)
         const fetchVoices = async () => {
             const voiceList = await ApiService.getVoices();
-            if (voiceList.length > 0) {
+            
+            // Get default voice from localStorage (set during onboarding)
+            const defaultVoiceId = localStorage.getItem('godlykids_default_voice');
+            
+            // Ensure user's onboarding voice is always in the list
+            let finalVoiceList = [...voiceList];
+            if (defaultVoiceId && !voiceList.some((v: any) => v.voice_id === defaultVoiceId)) {
+                // User's default voice not in list - add a placeholder so it appears in dropdown
+                // This can happen if voice was later hidden in portal
+                console.log(`📢 Adding user's onboarding voice ${defaultVoiceId} to dropdown (not in API response)`);
+                finalVoiceList.unshift({
+                    voice_id: defaultVoiceId,
+                    name: 'My Voice', // Placeholder name
+                    category: 'Selected',
+                    isOnboardingVoice: true // Mark so we know it's the user's choice
+                });
+            }
+            
+            if (finalVoiceList.length > 0) {
                 // Store all voices for display (locked/unlocked)
-                setVoices(voiceList);
-
-                // Get default voice from localStorage (set during onboarding)
-                const defaultVoiceId = localStorage.getItem('godlykids_default_voice');
+                setVoices(finalVoiceList);
 
                 // Find an unlocked voice to use as default
-                const unlockedVoices = voiceList.filter((v: any) => isVoiceUnlocked(v.voice_id));
+                const unlockedVoices = finalVoiceList.filter((v: any) => isVoiceUnlocked(v.voice_id));
 
                 if (defaultVoiceId && isVoiceUnlocked(defaultVoiceId)) {
                     // Use the default voice if it's unlocked
@@ -1415,11 +1430,11 @@ const BookReaderPage: React.FC = () => {
                 } else if (unlockedVoices.length > 0) {
                     // Use first unlocked voice
                     setSelectedVoiceId(unlockedVoices[0].voice_id);
-                } else if (voiceList.length > 0) {
+                } else if (finalVoiceList.length > 0) {
                     // Fallback: use first voice (will show as locked in UI)
-                    setSelectedVoiceId(voiceList[0].voice_id);
+                    setSelectedVoiceId(finalVoiceList[0].voice_id);
                 }
-                console.log(`✅ Loaded ${voiceList.length} voice(s), ${unlockedVoices.length} unlocked`);
+                console.log(`✅ Loaded ${finalVoiceList.length} voice(s), ${unlockedVoices.length} unlocked`);
             } else {
                 console.warn('⚠️ No voices enabled in portal. Please enable voices in the portal first.');
                 setVoices([]);

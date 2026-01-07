@@ -189,8 +189,9 @@ const BookReaderPage: React.FC = () => {
     const [bookRewardVoiceId, setBookRewardVoiceId] = useState<string | null>(null);
     const [showVoiceUnlockModal, setShowVoiceUnlockModal] = useState(false);
     const [unlockedVoice, setUnlockedVoice] = useState<{ name: string; characterImage?: string } | null>(null);
-    // Track if user has overridden the book's default voice
-    const [useBookDefaultVoice, setUseBookDefaultVoice] = useState(true);
+    // Track if user wants to use book's default voice (false = use user's selected voice)
+    // Default to false so user's selected narrator voice is used unless they explicitly choose book's voice
+    const [useBookDefaultVoice, setUseBookDefaultVoice] = useState(false);
     
     // Multi-character voice system
     const [defaultNarratorVoiceId, setDefaultNarratorVoiceId] = useState<string | null>(null);
@@ -3981,17 +3982,20 @@ const BookReaderPage: React.FC = () => {
                         >
                             <Volume2 className="w-4 h-4 text-white" />
                             <span className="text-white text-xs max-w-[100px] truncate">
-                                {/* Show narrator voice name when book has one, otherwise show user's selected voice */}
-                                {defaultNarratorVoiceId
-                                    ? (voices.find(v => v.voice_id === defaultNarratorVoiceId)?.name || 'Narrator')
-                                    : bookDefaultVoiceId && useBookDefaultVoice 
-                                        ? 'Default'
-                                        : (voices.find(v => v.voice_id === selectedVoiceId)?.name || 
-                                           voices.find(v => v.voice_id === selectedVoiceId)?.customName ||
-                                           clonedVoices.find(v => v.voice_id === selectedVoiceId)?.name ||
-                                           'Voice')}
+                                {/* Show the EFFECTIVE voice - respect user's override */}
+                                {!useBookDefaultVoice
+                                    ? (voices.find(v => v.voice_id === selectedVoiceId)?.name || 
+                                       voices.find(v => v.voice_id === selectedVoiceId)?.customName ||
+                                       clonedVoices.find(v => v.voice_id === selectedVoiceId)?.name ||
+                                       'Voice')
+                                    : defaultNarratorVoiceId
+                                        ? (voices.find(v => v.voice_id === defaultNarratorVoiceId)?.name || 'Narrator')
+                                        : bookDefaultVoiceId
+                                            ? (voices.find(v => v.voice_id === bookDefaultVoiceId)?.name || 'Book Voice')
+                                            : (voices.find(v => v.voice_id === selectedVoiceId)?.name || 'Voice')}
                             </span>
-                            {(defaultNarratorVoiceId || (bookDefaultVoiceId && useBookDefaultVoice)) && <span className="text-amber-300 text-[10px]">📖</span>}
+                            {/* Only show book icon when actually using book's voice */}
+                            {useBookDefaultVoice && (defaultNarratorVoiceId || bookDefaultVoiceId) && <span className="text-amber-300 text-[10px]">📖</span>}
                         </button>
 
                         {/* Dropdown Menu */}

@@ -1569,8 +1569,25 @@ const BookReaderPage: React.FC = () => {
         }
     }, [selectedLanguage, currentPageIndex, pages]);
 
-    // Clear audio cache when voice changes so new voice is used
+    // Track if this is the first render for voice change effect
+    const isFirstVoiceRenderRef = useRef(true);
+    const prevVoiceIdRef = useRef(effectiveNarratorVoiceId);
+    
+    // Clear audio cache when voice changes (but NOT on initial mount)
     useEffect(() => {
+        // Skip the first render - we don't want to clear cache on initial mount
+        if (isFirstVoiceRenderRef.current) {
+            isFirstVoiceRenderRef.current = false;
+            prevVoiceIdRef.current = effectiveNarratorVoiceId;
+            return;
+        }
+        
+        // Only clear if voice actually changed
+        if (prevVoiceIdRef.current === effectiveNarratorVoiceId) {
+            return;
+        }
+        prevVoiceIdRef.current = effectiveNarratorVoiceId;
+        
         // Stop any currently playing audio when voice changes
         if (currentAudio) {
             currentAudio.pause();
@@ -3018,6 +3035,25 @@ const BookReaderPage: React.FC = () => {
             // Include language AND voice in cache key for multilingual + character voice support
             const cacheKey = `${actualPageIndex}-${index}-${voiceForText}${currentLang !== 'en' ? `-${currentLang}` : ''}`;
             let result = audioPreloadCacheRef.current.get(cacheKey);
+            
+            // If preloading is in progress for this key, wait for it instead of making duplicate request
+            if (!result && preloadingInProgressRef.current.has(cacheKey)) {
+                console.log(`⏳ Waiting for preload to complete for page ${actualPageIndex + 1}, text box ${index + 1}...`);
+                // Wait up to 10 seconds for preloading to complete
+                for (let i = 0; i < 100; i++) {
+                    await new Promise(resolve => setTimeout(resolve, 100));
+                    result = audioPreloadCacheRef.current.get(cacheKey);
+                    if (result) {
+                        console.log(`✅ Preload completed, using cached audio`);
+                        break;
+                    }
+                    if (!preloadingInProgressRef.current.has(cacheKey)) {
+                        // Preloading finished but no result (error case)
+                        console.log(`⚠️ Preload finished but no audio in cache`);
+                        break;
+                    }
+                }
+            }
             
             if (result) {
                 console.log(`🎵 Using preloaded audio for page ${actualPageIndex + 1}, text box ${index + 1} (lang: ${currentLang})${characterName ? ` [${characterName}]` : ''}`);

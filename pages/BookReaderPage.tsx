@@ -1564,6 +1564,20 @@ const BookReaderPage: React.FC = () => {
         }
     }, [selectedLanguage, currentPageIndex, pages]);
 
+    // Clear audio cache when voice changes so new voice is used
+    useEffect(() => {
+        // Stop any currently playing audio when voice changes
+        if (currentAudio) {
+            currentAudio.pause();
+            currentAudio.src = '';
+            setCurrentAudio(null);
+        }
+        // Clear cached audio so it regenerates with new voice
+        audioPreloadCacheRef.current.clear();
+        preloadingInProgressRef.current.clear();
+        console.log(`🎤 Voice changed to ${effectiveNarratorVoiceId}, cleared audio cache`);
+    }, [effectiveNarratorVoiceId]);
+
     // Cleanup audio on unmount
     useEffect(() => {
         return () => {

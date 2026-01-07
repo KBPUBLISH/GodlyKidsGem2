@@ -757,7 +757,10 @@ const OnboardingPage: React.FC = () => {
       setLoadingVoices(true);
       ApiService.getVoices()
         .then(voices => {
-          const visibleVoices = filterVisibleVoices(voices);
+          // Filter out voices marked as not showing in app (from portal settings)
+          const shopVoices = voices.filter((v: any) => v.showInApp !== false);
+          // Also apply user's local hidden voices filter
+          const visibleVoices = filterVisibleVoices(shopVoices);
           setAvailableVoices(visibleVoices);
           // Auto-select first voice if available
           if (visibleVoices.length > 0 && !selectedVoiceId) {

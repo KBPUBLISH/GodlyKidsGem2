@@ -182,7 +182,11 @@ const BookReaderPage: React.FC = () => {
     const [showLoadingPopup, setShowLoadingPopup] = useState(false); // Dismissible loading popup
     const [voices, setVoices] = useState<any[]>([]);
     const [clonedVoices, setClonedVoices] = useState<ClonedVoice[]>([]);
-    const [selectedVoiceId, setSelectedVoiceId] = useState<string>('21m00Tcm4TlvDq8ikWAM'); // Default Rachel
+    // Load user's voice preference immediately from localStorage (sync) to avoid race condition
+    const [selectedVoiceId, setSelectedVoiceId] = useState<string>(() => {
+        const savedVoice = localStorage.getItem('godlykids_default_voice');
+        return savedVoice || '21m00Tcm4TlvDq8ikWAM'; // Fallback to Rachel if no saved preference
+    });
     
     // Book-specific voice settings (from portal)
     const [bookDefaultVoiceId, setBookDefaultVoiceId] = useState<string | null>(null);

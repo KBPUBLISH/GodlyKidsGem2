@@ -125,6 +125,12 @@ export default ReviewPromptModal;
 
 // Helper function to check if we should show the review prompt
 export const shouldShowReviewPrompt = (): boolean => {
+  // Don't show review prompt on web - only show in native apps
+  // Web users can't leave app store reviews
+  if (!Capacitor.isNativePlatform()) {
+    return false;
+  }
+  
   // Check if already prompted
   const alreadyPrompted = localStorage.getItem('godlykids_review_prompted');
   if (alreadyPrompted === 'true') {

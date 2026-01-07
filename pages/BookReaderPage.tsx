@@ -189,9 +189,9 @@ const BookReaderPage: React.FC = () => {
     const [bookRewardVoiceId, setBookRewardVoiceId] = useState<string | null>(null);
     const [showVoiceUnlockModal, setShowVoiceUnlockModal] = useState(false);
     const [unlockedVoice, setUnlockedVoice] = useState<{ name: string; characterImage?: string } | null>(null);
-    // Track if user wants to use book's default voice (false = use user's selected voice)
-    // Default to false so user's selected narrator voice is used unless they explicitly choose book's voice
-    const [useBookDefaultVoice, setUseBookDefaultVoice] = useState(false);
+    // Track if user wants to use book's default voice
+    // Default to true: if book has a default narrator, use it; if not, falls back to user's selected voice
+    const [useBookDefaultVoice, setUseBookDefaultVoice] = useState(true);
     
     // Multi-character voice system
     const [defaultNarratorVoiceId, setDefaultNarratorVoiceId] = useState<string | null>(null);

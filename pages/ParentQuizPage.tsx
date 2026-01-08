@@ -769,36 +769,73 @@ const ParentQuizPage: React.FC = () => {
         );
 
       case 'paywall':
+        const handleSubscribeClick = () => {
+          // Store quiz data for tracking/personalization
+          localStorage.setItem('godlykids_quiz_completed', 'true');
+          localStorage.setItem('godlykids_quiz_profile', parentProfile.styleName || '');
+          localStorage.setItem('godlykids_quiz_feature', parentProfile.feature || '');
+          if (emailInput) {
+            localStorage.setItem('godlykids_quiz_email', emailInput);
+          }
+          // Navigate to the actual Stripe paywall
+          navigate('/paywall');
+        };
+
         return (
           <ScreenWrapper>
             <div className="px-6 py-8">
+              {/* Personalized Header */}
+              <div className="text-center mb-6">
+                <p className="text-stone-500 text-sm mb-2">Based on your parenting style:</p>
+                <h2 className="text-xl font-bold text-stone-800">
+                  Unlock <span className="text-amber-600">{parentProfile.feature || 'All Features'}</span>
+                </h2>
+                <p className="text-stone-600 text-sm mt-2">
+                  Perfect for {parentProfile.styleName ? `a ${parentProfile.styleName}` : 'your family'}
+                </p>
+              </div>
+
               {/* Offer Card */}
               <div className="bg-gradient-to-br from-amber-50 to-orange-50 rounded-3xl p-6 border-2 border-amber-200 mb-6 text-center">
                 <p className="text-amber-700 text-sm font-semibold uppercase tracking-wide mb-2">
                   ✨ Founding Family Plan ✨
                 </p>
-                <p className="text-4xl font-bold text-stone-800 mb-1">
-                  60% Off
-                </p>
                 <div className="bg-white/80 rounded-xl p-4 my-4">
-                  <p className="text-3xl font-bold text-amber-600">
-                    $4.99<span className="text-lg text-stone-500 font-normal">/month</span>
-                  </p>
-                  <p className="text-stone-400 text-sm line-through">$12.99/month</p>
+                  <p className="text-sm text-stone-500 mb-1">7-day free trial, then</p>
+                  <div className="flex items-center justify-center gap-3">
+                    <div>
+                      <p className="text-2xl font-bold text-amber-600">$69/yr</p>
+                      <p className="text-xs text-stone-400">~$5.75/month</p>
+                    </div>
+                    <span className="text-stone-300">or</span>
+                    <div>
+                      <p className="text-2xl font-bold text-stone-700">$9.99/mo</p>
+                      <p className="text-xs text-stone-400">cancel anytime</p>
+                    </div>
+                  </div>
                 </div>
-                <p className="text-stone-500 text-sm">Cancel anytime</p>
+                <p className="text-stone-500 text-sm">Cancel anytime • No commitment</p>
               </div>
 
-              <PrimaryButton onClick={() => goToScreen('confirmation')}>
-                Begin My Child's Faith Journey
-              </PrimaryButton>
+              <button
+                onClick={handleSubscribeClick}
+                className="w-full py-4 bg-gradient-to-r from-amber-500 to-amber-600 text-white font-semibold text-lg rounded-2xl shadow-lg shadow-amber-500/25 hover:shadow-amber-500/40 transition-all duration-300 active:scale-[0.98] flex items-center justify-center gap-2 mb-4"
+              >
+                🎓 Start 7-Day Free Trial
+                <ChevronRight className="w-5 h-5" />
+              </button>
+
+              <p className="text-center text-stone-400 text-xs mb-6">
+                You won't be charged during your free trial
+              </p>
 
               {/* FAQ Accordion */}
-              <div className="mt-8 space-y-2">
+              <div className="space-y-2">
                 {[
                   { q: 'Is this biblically grounded?', a: 'Yes. All content is rooted in Scripture and Christian values, created by believers who love Jesus.' },
                   { q: 'Is it safe for my child?', a: 'Absolutely. No ads, no external links, no inappropriate content. Just faith-filled stories and activities.' },
-                  { q: 'Can I cancel anytime?', a: 'Yes — no contracts, no commitments. Cancel with one tap whenever you want.' }
+                  { q: 'Can I cancel anytime?', a: 'Yes — no contracts, no commitments. Cancel with one tap whenever you want.' },
+                  { q: 'What ages is this for?', a: 'Designed for kids ages 3-12, with content tailored for different developmental stages.' }
                 ].map((faq, i) => (
                   <div key={i} className="bg-white rounded-xl border border-stone-100 overflow-hidden">
                     <button
@@ -816,6 +853,14 @@ const ParentQuizPage: React.FC = () => {
                   </div>
                 ))}
               </div>
+
+              {/* Skip option */}
+              <button
+                onClick={() => navigate('/home')}
+                className="w-full mt-6 text-stone-400 text-sm underline"
+              >
+                Maybe later — explore free content
+              </button>
             </div>
           </ScreenWrapper>
         );

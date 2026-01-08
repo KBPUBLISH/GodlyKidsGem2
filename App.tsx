@@ -697,6 +697,16 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const isWelcome = location.pathname === '/welcome';
   const isCreatePlaylist = location.pathname === '/create-playlist';
   const isMyPlaylist = location.pathname.startsWith('/my-playlist/');
+  const isParentQuiz = location.pathname === '/parentquiz';
+  const isSharePage = location.pathname.startsWith('/share/') || location.pathname.startsWith('/s/') || (location.pathname.startsWith('/playlist/') && !location.pathname.startsWith('/playlist-detail'));
+
+  // Standalone pages that don't need the app chrome (background, navigation, etc.)
+  const isStandalonePage = isParentQuiz || isSharePage;
+
+  // For standalone pages, render just the children without app styling
+  if (isStandalonePage) {
+    return <>{children}</>;
+  }
 
   return (
     <div className="relative h-screen w-full overflow-hidden text-white flex flex-col">

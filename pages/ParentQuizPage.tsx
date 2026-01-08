@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Heart, ChevronRight, ChevronDown, Loader2, Sparkles } from 'lucide-react';
 
@@ -56,10 +56,16 @@ const ParentQuizPage: React.FC = () => {
   const [isAnimating, setIsAnimating] = useState(false);
   const [processingText, setProcessingText] = useState(0);
   const [emailInput, setEmailInput] = useState('');
-  const [parentProfile, setParentProfile] = useState({ title: '', description: '' });
+  const [parentProfile, setParentProfile] = useState({ 
+    title: '', 
+    description: '', 
+    styleName: '',
+    feature: '', 
+    featureDescription: '',
+    featureEmoji: ''
+  });
   const [aiResponse, setAiResponse] = useState('');
   const [expandedFaq, setExpandedFaq] = useState<number | null>(null);
-  const emailInputRef = useRef<HTMLInputElement>(null);
 
   const processingTexts = [
     'Reflecting on your responses...',
@@ -88,22 +94,38 @@ const ParentQuizPage: React.FC = () => {
     if (heartCenteredCount >= 10) {
       return {
         title: "You're a Faithful, Heart-Aware Parent",
-        description: "Your answers show a deep desire to guide your child with love, patience, and faith — even when it feels hard. You care about more than behavior. You care about the heart."
+        styleName: "Faithful, Heart-Aware Parent",
+        description: "Your answers show a deep desire to guide your child with love, patience, and faith — even when it feels hard. You care about more than behavior. You care about the heart.",
+        feature: "Read-Along Bible Stories with Character Voices",
+        featureDescription: "Stories that speak directly to the heart — with gentle narration and characters your child will love. Perfect for the parent who values deep, meaningful connection.",
+        featureEmoji: "📖"
       };
     } else if (heartCenteredCount >= 7) {
       return {
         title: "You're a Growing, Intentional Parent",
-        description: "Your responses reveal someone who genuinely wants to connect heart-to-heart with their child. You're building something beautiful — trust, grace, and faith woven into everyday moments."
+        styleName: "Growing, Intentional Parent",
+        description: "Your responses reveal someone who genuinely wants to connect heart-to-heart with their child. You're building something beautiful — trust, grace, and faith woven into everyday moments.",
+        feature: "Daily Faith Lessons & Devotionals",
+        featureDescription: "Short, structured lessons that fit naturally into your routine. Designed for parents building faith intentionally, one small moment at a time.",
+        featureEmoji: "✨"
       };
     } else if (heartCenteredCount >= 4) {
       return {
         title: "You're a Caring, Committed Parent",
-        description: "Parenting is hard, and your answers show you're in the thick of it. You care deeply, even when it feels overwhelming. That care is the foundation for something wonderful."
+        styleName: "Caring, Committed Parent",
+        description: "Parenting is hard, and your answers show you're in the thick of it. You care deeply, even when it feels overwhelming. That care is the foundation for something wonderful.",
+        feature: "Peaceful Audiobooks & Worship Music",
+        featureDescription: "Calm, soothing content for those chaotic moments. Let your child listen to Scripture-based stories while you catch your breath — without guilt.",
+        featureEmoji: "🎧"
       };
     } else {
       return {
         title: "You're a Seeking, Honest Parent",
-        description: "Your willingness to reflect honestly is already a sign of strength. Every parent faces struggles — what matters is that you're here, seeking to grow alongside your child."
+        styleName: "Seeking, Honest Parent",
+        description: "Your willingness to reflect honestly is already a sign of strength. Every parent faces struggles — what matters is that you're here, seeking to grow alongside your child.",
+        feature: "Gentle, Encouraging Story Collection",
+        featureDescription: "Stories about grace, second chances, and God's unconditional love. Content that meets your family exactly where you are — no pressure, just hope.",
+        featureEmoji: "💛"
       };
     }
   };
@@ -604,9 +626,27 @@ const ParentQuizPage: React.FC = () => {
               <h2 className="text-2xl font-bold text-stone-800 mb-4">
                 {parentProfile.title || "You're a Faithful, Heart-Aware Parent"}
               </h2>
-              <p className="text-stone-600 leading-relaxed mb-8">
+              <p className="text-stone-600 leading-relaxed mb-6">
                 {parentProfile.description || "Your answers show a deep desire to guide your child with love, patience, and faith — even when it feels hard."}
               </p>
+              
+              {/* Feature Recommendation - The Key Tie-in */}
+              <div className="bg-gradient-to-br from-amber-50 to-orange-50 rounded-2xl p-5 mb-8 border border-amber-200 text-left">
+                <div className="flex items-start gap-3 mb-3">
+                  <span className="text-3xl">{parentProfile.featureEmoji || '📖'}</span>
+                  <div>
+                    <p className="text-stone-500 text-sm mb-1">Perfect for you:</p>
+                    <p className="text-amber-800 font-bold text-lg">{parentProfile.feature || 'Read-Along Bible Stories'}</p>
+                  </div>
+                </div>
+                <p className="text-stone-700 text-sm leading-relaxed mb-4">
+                  Because you are a <span className="font-semibold text-amber-700">{parentProfile.styleName || 'Heart-Aware Parent'}</span>, your child would especially love the <span className="font-semibold">{parentProfile.feature || 'Read-Along Bible Stories'}</span> in Godly Kids.
+                </p>
+                <p className="text-stone-600 text-sm italic">
+                  It matches exactly how you already lead your family.
+                </p>
+              </div>
+              
               <PrimaryButton onClick={() => goToScreen('ai-response')}>
                 See Your Full Reflection
               </PrimaryButton>
@@ -640,42 +680,47 @@ const ParentQuizPage: React.FC = () => {
 
       case 'email':
         return (
-          <ScreenWrapper>
-            <div className="px-6 py-8">
-              <h2 className="text-xl font-semibold text-stone-800 mb-3 text-center">
-                Would you like resources that support heart-centered parenting?
-              </h2>
-              <p className="text-stone-600 text-center mb-6">
-                Enter your email to receive your personalized plan.
-              </p>
-              <input
-                ref={emailInputRef}
-                type="email"
-                placeholder="Email address"
-                value={emailInput}
-                onChange={(e) => setEmailInput(e.target.value)}
-                className="w-full px-5 py-4 rounded-2xl border-2 border-stone-200 focus:border-amber-500 focus:ring-0 outline-none text-lg mb-3 transition-colors bg-white text-stone-800"
-                autoComplete="email"
-                id="parent-quiz-email"
-                name="email"
-              />
-              <p className="text-stone-400 text-xs text-center mb-6">
-                No spam. Unsubscribe anytime.
-              </p>
-              <PrimaryButton 
-                onClick={() => goToScreen('value-preview')}
-                disabled={!emailInput || !emailInput.includes('@')}
-              >
-                Continue
-              </PrimaryButton>
-              <button
-                onClick={() => goToScreen('value-preview')}
-                className="w-full mt-4 text-stone-500 text-sm underline"
-              >
-                Skip for now
-              </button>
-            </div>
-          </ScreenWrapper>
+          <div className="px-6 py-8">
+            <h2 className="text-xl font-semibold text-stone-800 mb-3 text-center">
+              Would you like resources that support heart-centered parenting?
+            </h2>
+            <p className="text-stone-600 text-center mb-6">
+              Enter your email to receive your personalized plan.
+            </p>
+            <input
+              type="email"
+              placeholder="Email address"
+              value={emailInput}
+              onChange={(e) => setEmailInput(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && emailInput.includes('@')) {
+                  goToScreen('value-preview');
+                }
+              }}
+              className="w-full px-5 py-4 rounded-2xl border-2 border-stone-200 focus:border-amber-500 focus:ring-0 outline-none text-lg mb-3 transition-colors bg-white text-stone-800"
+              autoComplete="off"
+              autoCorrect="off"
+              autoCapitalize="off"
+              spellCheck="false"
+            />
+            <p className="text-stone-400 text-xs text-center mb-6">
+              No spam. Unsubscribe anytime.
+            </p>
+            <button
+              onClick={() => goToScreen('value-preview')}
+              disabled={!emailInput || !emailInput.includes('@')}
+              className="w-full py-4 bg-gradient-to-r from-amber-500 to-amber-600 text-white font-semibold text-lg rounded-2xl shadow-lg shadow-amber-500/25 hover:shadow-amber-500/40 transition-all duration-300 active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+            >
+              Continue
+              <ChevronRight className="w-5 h-5" />
+            </button>
+            <button
+              onClick={() => goToScreen('value-preview')}
+              className="w-full mt-4 text-stone-500 text-sm underline"
+            >
+              Skip for now
+            </button>
+          </div>
         );
 
       case 'value-preview':

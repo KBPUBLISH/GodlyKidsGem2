@@ -1,47 +1,146 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Heart, Shield, BookOpen, Music, Sparkles, Check, ChevronRight, Loader2 } from 'lucide-react';
+import { Heart, ChevronRight, ChevronDown, Loader2, Sparkles } from 'lucide-react';
 
-// Quiz screen types
+// Quiz screen types - 26 screens in 5 sections
 type Screen = 
-  | 'hero' | 'age' | 'trust' | 'pain' | 'affirmation' 
-  | 'values' | 'values-reinforcement' | 'screentime' | 'empathy'
-  | 'learning' | 'personalization' | 'faith-approach' | 'mission'
-  | 'product-intro' | 'social-proof' | 'transformation' | 'email'
-  | 'processing' | 'offer-intro' | 'pricing' | 'faq' | 'confirmation' | 'deeplink';
+  // Section 1: Entry & Safety
+  | 'hero' | 'expectation' | 'child-age'
+  // Section 2: Quiz Experience  
+  | 'q-purpose' | 'q-grace' | 'q-rules' | 'q-faith' | 'q-identity'
+  | 'midpoint' 
+  | 'q-growth' | 'q-character' | 'q-deeper' | 'q-authority' | 'q-change' | 'q-god' | 'q-hope' | 'q-heart'
+  // Section 3: Results
+  | 'processing' | 'result' | 'ai-response'
+  // Section 4: Email & Offer
+  | 'email' | 'value-preview' | 'offer-intro' | 'paywall' | 'confirmation'
+  // Section 5: App Handoff
+  | 'deeplink';
 
-interface QuizData {
+interface QuizAnswers {
   childAge: string;
-  painLevel: string;
-  values: string[];
-  screenTimeFeeling: string;
-  learningStyle: string;
-  faithApproach: string;
-  email: string;
+  purpose: string;
+  grace: string;
+  rules: string;
+  faith: string;
+  identity: string;
+  growth: string;
+  character: string;
+  deeper: string;
+  authority: string;
+  change: string;
+  god: string;
+  hope: string;
+  heart: string;
 }
 
 const ParentQuizPage: React.FC = () => {
   const navigate = useNavigate();
   const [currentScreen, setCurrentScreen] = useState<Screen>('hero');
-  const [quizData, setQuizData] = useState<QuizData>({
+  const [answers, setAnswers] = useState<QuizAnswers>({
     childAge: '',
-    painLevel: '',
-    values: [],
-    screenTimeFeeling: '',
-    learningStyle: '',
-    faithApproach: '',
-    email: ''
+    purpose: '',
+    grace: '',
+    rules: '',
+    faith: '',
+    identity: '',
+    growth: '',
+    character: '',
+    deeper: '',
+    authority: '',
+    change: '',
+    god: '',
+    hope: '',
+    heart: ''
   });
   const [isAnimating, setIsAnimating] = useState(false);
   const [processingText, setProcessingText] = useState(0);
-  const [emailInput, setEmailInput] = useState(''); // Separate state to prevent focus loss
+  const [emailInput, setEmailInput] = useState('');
+  const [parentProfile, setParentProfile] = useState({ title: '', description: '' });
+  const [aiResponse, setAiResponse] = useState('');
+  const [expandedFaq, setExpandedFaq] = useState<number | null>(null);
   const emailInputRef = useRef<HTMLInputElement>(null);
 
   const processingTexts = [
-    'Selecting age-appropriate stories...',
-    'Aligning faith themes...',
-    'Preparing a safe, joyful experience...'
+    'Reflecting on your responses...',
+    'Identifying your parenting strengths...',
+    'Preparing encouragement for your journey...'
   ];
+
+  // Calculate parent profile based on answers
+  const calculateProfile = () => {
+    const heartCenteredCount = [
+      answers.purpose === 'honored',
+      answers.grace === 'understand',
+      answers.rules === 'guiding',
+      answers.faith === 'loves',
+      answers.identity === 'becoming',
+      answers.growth === 'gradual',
+      answers.character === 'heart',
+      answers.deeper === 'deeper',
+      answers.authority === 'gentle',
+      answers.change === 'relationship',
+      answers.god === 'pray',
+      answers.hope === 'very-hopeful',
+      answers.heart === 'peace'
+    ].filter(Boolean).length;
+
+    if (heartCenteredCount >= 10) {
+      return {
+        title: "You're a Faithful, Heart-Aware Parent",
+        description: "Your answers show a deep desire to guide your child with love, patience, and faith — even when it feels hard. You care about more than behavior. You care about the heart."
+      };
+    } else if (heartCenteredCount >= 7) {
+      return {
+        title: "You're a Growing, Intentional Parent",
+        description: "Your responses reveal someone who genuinely wants to connect heart-to-heart with their child. You're building something beautiful — trust, grace, and faith woven into everyday moments."
+      };
+    } else if (heartCenteredCount >= 4) {
+      return {
+        title: "You're a Caring, Committed Parent",
+        description: "Parenting is hard, and your answers show you're in the thick of it. You care deeply, even when it feels overwhelming. That care is the foundation for something wonderful."
+      };
+    } else {
+      return {
+        title: "You're a Seeking, Honest Parent",
+        description: "Your willingness to reflect honestly is already a sign of strength. Every parent faces struggles — what matters is that you're here, seeking to grow alongside your child."
+      };
+    }
+  };
+
+  // Generate AI response based on answers
+  const generateAiResponse = () => {
+    const profile = calculateProfile();
+    setParentProfile(profile);
+    
+    // Generate personalized paragraphs based on answers
+    let response = '';
+    
+    // Affirmation
+    response += `The fact that you took time to reflect on your parenting shows something beautiful about your heart. In a world that rushes past quiet moments, you chose to pause and consider what really matters.\n\n`;
+    
+    // Reflection based on grace answer
+    if (answers.grace === 'understand' || answers.grace === 'correct') {
+      response += `Your instinct toward understanding when your child makes mistakes reflects God's own patience with us. Children learn best in an atmosphere of grace — where failure is a teacher, not a verdict.\n\n`;
+    } else {
+      response += `It's natural to feel frustrated when things go wrong. What matters is that you keep showing up, keep trying, keep loving. Your child sees that persistence, even if they can't name it yet.\n\n`;
+    }
+    
+    // Gentle reframe based on hope answer
+    if (answers.hope === 'very-hopeful' || answers.hope === 'mostly-hopeful') {
+      response += `Your hopefulness is a gift to your child. Hope isn't naive — it's the confident expectation that God is working even when we can't see it. Hold onto that.\n\n`;
+    } else {
+      response += `If hope feels hard right now, that's okay. Seasons of uncertainty don't define your parenting — they refine it. The fact that you want more for your child proves something good is already growing.\n\n`;
+    }
+    
+    // Hope paragraph
+    response += `Remember: you're not just raising a child. You're shaping a soul that will impact generations. The small moments — the bedtime prayers, the patient corrections, the quiet cuddles — they all matter more than you know.\n\n`;
+    
+    // Soft transition
+    response += `Many parents find that shared stories and gentle faith moments help these values grow naturally in their children's hearts.`;
+    
+    setAiResponse(response);
+  };
 
   // Processing screen animation and submit quiz
   useEffect(() => {
@@ -50,31 +149,14 @@ const ParentQuizPage: React.FC = () => {
         setProcessingText(prev => (prev + 1) % processingTexts.length);
       }, 1500);
       
-      // Submit quiz data to backend
-      const submitQuiz = async () => {
-        try {
-          const response = await fetch('https://backendgk2-0.onrender.com/api/parent-quiz/submit', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              email: emailInput,
-              quizData: {
-                ...quizData,
-                email: emailInput
-              }
-            })
-          });
-          const data = await response.json();
-          console.log('📧 Quiz submitted:', data);
-        } catch (error) {
-          console.error('Failed to submit quiz:', error);
-        }
-      };
-      submitQuiz();
+      // Calculate profile
+      setTimeout(() => {
+        generateAiResponse();
+      }, 2000);
       
       // Auto-advance after 4.5 seconds
       const timeout = setTimeout(() => {
-        goToScreen('offer-intro');
+        goToScreen('result');
       }, 4500);
       
       return () => {
@@ -82,35 +164,54 @@ const ParentQuizPage: React.FC = () => {
         clearTimeout(timeout);
       };
     }
-  }, [currentScreen, emailInput, quizData]);
+  }, [currentScreen]);
+
+  // Submit email
+  useEffect(() => {
+    if (currentScreen === 'value-preview' && emailInput) {
+      const submitQuiz = async () => {
+        try {
+          await fetch('https://backendgk2-0.onrender.com/api/parent-quiz/submit', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              email: emailInput,
+              quizData: {
+                ...answers,
+                email: emailInput,
+                profile: parentProfile.title
+              }
+            })
+          });
+          console.log('📧 Quiz submitted');
+        } catch (error) {
+          console.error('Failed to submit quiz:', error);
+        }
+      };
+      submitQuiz();
+    }
+  }, [currentScreen]);
 
   const goToScreen = (screen: Screen) => {
     setIsAnimating(true);
     setTimeout(() => {
       setCurrentScreen(screen);
       setIsAnimating(false);
+      window.scrollTo(0, 0);
     }, 300);
   };
 
   const screenOrder: Screen[] = [
-    'hero', 'age', 'trust', 'pain', 'affirmation', 
-    'values', 'values-reinforcement', 'screentime', 'empathy',
-    'learning', 'personalization', 'faith-approach', 'mission',
-    'product-intro', 'social-proof', 'transformation', 'email',
-    'processing', 'offer-intro', 'pricing', 'faq', 'confirmation', 'deeplink'
+    'hero', 'expectation', 'child-age',
+    'q-purpose', 'q-grace', 'q-rules', 'q-faith', 'q-identity',
+    'midpoint',
+    'q-growth', 'q-character', 'q-deeper', 'q-authority', 'q-change', 'q-god', 'q-hope', 'q-heart',
+    'processing', 'result', 'ai-response',
+    'email', 'value-preview', 'offer-intro', 'paywall', 'confirmation', 'deeplink'
   ];
 
   const currentIndex = screenOrder.indexOf(currentScreen);
   const progress = ((currentIndex) / (screenOrder.length - 1)) * 100;
-
-  const handleValueToggle = (value: string) => {
-    setQuizData(prev => ({
-      ...prev,
-      values: prev.values.includes(value) 
-        ? prev.values.filter(v => v !== value)
-        : [...prev.values, value]
-    }));
-  };
 
   // Common button component
   const PrimaryButton: React.FC<{ onClick: () => void; children: React.ReactNode; disabled?: boolean }> = 
@@ -118,7 +219,7 @@ const ParentQuizPage: React.FC = () => {
     <button
       onClick={onClick}
       disabled={disabled}
-      className="w-full py-4 bg-gradient-to-r from-amber-500 to-amber-600 text-white font-bold text-lg rounded-2xl shadow-lg shadow-amber-500/30 hover:shadow-amber-500/50 transition-all duration-300 active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+      className="w-full py-4 bg-gradient-to-r from-amber-500 to-amber-600 text-white font-semibold text-lg rounded-2xl shadow-lg shadow-amber-500/25 hover:shadow-amber-500/40 transition-all duration-300 active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
     >
       {children}
       <ChevronRight className="w-5 h-5" />
@@ -130,24 +231,16 @@ const ParentQuizPage: React.FC = () => {
     selected: boolean; 
     onClick: () => void; 
     children: React.ReactNode;
-    multiSelect?: boolean;
-  }> = ({ selected, onClick, children, multiSelect }) => (
+  }> = ({ selected, onClick, children }) => (
     <button
       onClick={onClick}
-      className={`w-full py-4 px-6 rounded-2xl border-2 transition-all duration-200 text-left font-medium ${
+      className={`w-full py-4 px-5 rounded-2xl border-2 transition-all duration-200 text-left ${
         selected 
-          ? 'border-amber-500 bg-amber-50 text-amber-900' 
+          ? 'border-amber-500 bg-amber-50 text-amber-900 shadow-sm' 
           : 'border-stone-200 bg-white text-stone-700 hover:border-amber-300 hover:bg-amber-50/50'
       }`}
     >
-      <div className="flex items-center gap-3">
-        <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center transition-all ${
-          selected ? 'border-amber-500 bg-amber-500' : 'border-stone-300'
-        }`}>
-          {selected && <Check className="w-4 h-4 text-white" />}
-        </div>
-        <span>{children}</span>
-      </div>
+      {children}
     </button>
   );
 
@@ -158,10 +251,43 @@ const ParentQuizPage: React.FC = () => {
     </div>
   );
 
+  // Quiz question component
+  const QuizQuestion: React.FC<{
+    question: string;
+    options: { value: string; label: string }[];
+    answerKey: keyof QuizAnswers;
+    nextScreen: Screen;
+  }> = ({ question, options, answerKey, nextScreen }) => (
+    <ScreenWrapper>
+      <div className="px-6 py-8">
+        <h2 className="text-xl font-semibold text-stone-800 mb-6 leading-relaxed">
+          {question}
+        </h2>
+        <div className="space-y-3">
+          {options.map(opt => (
+            <OptionButton
+              key={opt.value}
+              selected={answers[answerKey] === opt.value}
+              onClick={() => {
+                setAnswers(prev => ({ ...prev, [answerKey]: opt.value }));
+                setTimeout(() => goToScreen(nextScreen), 400);
+              }}
+            >
+              {opt.label}
+            </OptionButton>
+          ))}
+        </div>
+      </div>
+    </ScreenWrapper>
+  );
+
   // Render current screen
   const renderScreen = () => {
     switch (currentScreen) {
-      // SCREEN 1 — HERO
+      // ==========================================
+      // SECTION 1: ENTRY & SAFETY
+      // ==========================================
+      
       case 'hero':
         return (
           <ScreenWrapper>
@@ -169,343 +295,395 @@ const ParentQuizPage: React.FC = () => {
               <div className="w-20 h-20 mx-auto mb-8 rounded-full bg-gradient-to-br from-amber-100 to-amber-200 flex items-center justify-center">
                 <Heart className="w-10 h-10 text-amber-600" fill="#d97706" />
               </div>
-              <h1 className="text-3xl font-bold text-stone-800 mb-4 leading-tight">
-                Help Your Child Grow in Faith, Kindness, and Confidence
+              <h1 className="text-2xl font-bold text-stone-800 mb-4 leading-tight">
+                How Does Your Parenting Style Compare to Heart-Centered Parenting?
               </h1>
-              <p className="text-stone-600 text-lg mb-10">
-                Discover how Christian parents are turning screen time into faith-forming moments.
+              <p className="text-stone-600 text-lg mb-10 leading-relaxed">
+                A short reflection to help you guide your child's heart — not just behavior.
               </p>
-              <PrimaryButton onClick={() => goToScreen('age')}>
+              <PrimaryButton onClick={() => goToScreen('expectation')}>
                 Start the 2-Minute Parent Quiz
               </PrimaryButton>
             </div>
           </ScreenWrapper>
         );
 
-      // SCREEN 2 — AGE
-      case 'age':
+      case 'expectation':
         return (
           <ScreenWrapper>
-            <div className="px-6 py-8">
-              <h2 className="text-2xl font-bold text-stone-800 mb-6 text-center">
-                How old is your child?
-              </h2>
-              <div className="space-y-3 mb-8">
-                {['3–4', '5–6', '7–9', '10–12'].map(age => (
-                  <OptionButton
-                    key={age}
-                    selected={quizData.childAge === age}
-                    onClick={() => {
-                      setQuizData(prev => ({ ...prev, childAge: age }));
-                      setTimeout(() => goToScreen('trust'), 300);
-                    }}
-                  >
-                    {age} years old
-                  </OptionButton>
-                ))}
+            <div className="px-6 py-12 text-center">
+              <div className="bg-amber-50 rounded-3xl p-8 mb-8 border border-amber-100">
+                <p className="text-stone-700 text-lg leading-relaxed mb-4">
+                  <span className="font-semibold">This isn't a test.</span><br />
+                  There are no right or wrong answers.
+                </p>
+                <p className="text-stone-600 leading-relaxed">
+                  Parenting is a journey, and this reflection is meant to <span className="text-amber-700 font-medium">encourage</span> — not judge.
+                </p>
               </div>
-            </div>
-          </ScreenWrapper>
-        );
-
-      // SCREEN 3 — TRUST
-      case 'trust':
-        return (
-          <ScreenWrapper>
-            <div className="px-6 py-8">
-              <div className="w-16 h-16 mx-auto mb-6 rounded-full bg-gradient-to-br from-blue-100 to-blue-200 flex items-center justify-center">
-                <Shield className="w-8 h-8 text-blue-600" />
-              </div>
-              <h2 className="text-2xl font-bold text-stone-800 mb-4 text-center">
-                Trusted by Christian Families
-              </h2>
-              <p className="text-stone-600 text-center mb-6">
-                Godly Kids is created by Christian storytellers and educators who care deeply about children's hearts.
-              </p>
-              <div className="bg-stone-50 rounded-2xl p-5 mb-8 space-y-3">
-                {[
-                  '✝️ Faith-centered content',
-                  '🚫 No ads or junk media',
-                  '👨‍👩‍👧 Designed for families who love Jesus'
-                ].map((item, i) => (
-                  <p key={i} className="text-stone-700 text-sm">{item}</p>
-                ))}
-              </div>
-              <PrimaryButton onClick={() => goToScreen('pain')}>
+              <PrimaryButton onClick={() => goToScreen('child-age')}>
                 Continue
               </PrimaryButton>
             </div>
           </ScreenWrapper>
         );
 
-      // SCREEN 4 — PAIN
-      case 'pain':
+      case 'child-age':
+        return (
+          <QuizQuestion
+            question="How old is your child?"
+            options={[
+              { value: '3-4', label: '3–4 years old' },
+              { value: '5-6', label: '5–6 years old' },
+              { value: '7-9', label: '7–9 years old' },
+              { value: '10-12', label: '10–12 years old' }
+            ]}
+            answerKey="childAge"
+            nextScreen="q-purpose"
+          />
+        );
+
+      // ==========================================
+      // SECTION 2: QUIZ EXPERIENCE
+      // ==========================================
+
+      case 'q-purpose':
+        return (
+          <QuizQuestion
+            question="When you think about parenting, what feels most true right now?"
+            options={[
+              { value: 'honored', label: 'I feel honored by the responsibility' },
+              { value: 'overwhelmed', label: "I feel overwhelmed but committed" },
+              { value: 'unsure', label: "I feel unsure if I'm doing it right" },
+              { value: 'surviving', label: "I'm mostly just getting through each day" }
+            ]}
+            answerKey="purpose"
+            nextScreen="q-grace"
+          />
+        );
+
+      case 'q-grace':
+        return (
+          <QuizQuestion
+            question="When your child messes up, what's your first instinct?"
+            options={[
+              { value: 'understand', label: 'Help them understand and try again' },
+              { value: 'correct', label: 'Correct them and move on' },
+              { value: 'frustrated', label: 'Feel frustrated before calming down' },
+              { value: 'worry', label: 'Worry about what this says about me' }
+            ]}
+            answerKey="grace"
+            nextScreen="q-rules"
+          />
+        );
+
+      case 'q-rules':
+        return (
+          <QuizQuestion
+            question="Rules in our home are mostly about…"
+            options={[
+              { value: 'guiding', label: 'Guiding and protecting' },
+              { value: 'order', label: 'Keeping order' },
+              { value: 'chaos', label: 'Avoiding chaos' },
+              { value: 'behavior', label: 'Making sure my child behaves well' }
+            ]}
+            answerKey="rules"
+            nextScreen="q-faith"
+          />
+        );
+
+      case 'q-faith':
+        return (
+          <QuizQuestion
+            question="What do you most want your child to understand about God?"
+            options={[
+              { value: 'loves', label: 'That He loves them deeply' },
+              { value: 'forgives', label: 'That He forgives and restores' },
+              { value: 'daily', label: 'That faith is lived daily' },
+              { value: 'right', label: 'That they should do the right thing' }
+            ]}
+            answerKey="faith"
+            nextScreen="q-identity"
+          />
+        );
+
+      case 'q-identity':
+        return (
+          <QuizQuestion
+            question="When your child succeeds, you're most focused on…"
+            options={[
+              { value: 'becoming', label: 'Who they are becoming' },
+              { value: 'effort', label: 'Their effort' },
+              { value: 'results', label: 'Their results' },
+              { value: 'others', label: 'What others will think' }
+            ]}
+            answerKey="identity"
+            nextScreen="midpoint"
+          />
+        );
+
+      case 'midpoint':
         return (
           <ScreenWrapper>
-            <div className="px-6 py-8">
-              <h2 className="text-2xl font-bold text-stone-800 mb-6 text-center">
-                Do you ever worry about what content is shaping your child's heart?
+            <div className="px-6 py-12 text-center">
+              <div className="text-5xl mb-6">💛</div>
+              <h2 className="text-2xl font-bold text-stone-800 mb-4">
+                You're doing great.
               </h2>
-              <div className="space-y-3 mb-8">
-                {['Yes, often', 'Sometimes', 'Not really'].map(option => (
-                  <OptionButton
-                    key={option}
-                    selected={quizData.painLevel === option}
-                    onClick={() => {
-                      setQuizData(prev => ({ ...prev, painLevel: option }));
-                      setTimeout(() => goToScreen('affirmation'), 300);
-                    }}
-                  >
-                    {option}
-                  </OptionButton>
+              <p className="text-stone-600 mb-3 leading-relaxed">
+                Many thoughtful parents pause to reflect like this.
+              </p>
+              <p className="text-amber-700 font-medium mb-8">
+                Keep going — your responses help shape a meaningful result.
+              </p>
+              <PrimaryButton onClick={() => goToScreen('q-growth')}>
+                Continue
+              </PrimaryButton>
+            </div>
+          </ScreenWrapper>
+        );
+
+      case 'q-growth':
+        return (
+          <QuizQuestion
+            question="How do you feel about your child's spiritual growth?"
+            options={[
+              { value: 'gradual', label: "I trust it's a gradual journey" },
+              { value: 'enough', label: "I hope we're doing enough" },
+              { value: 'pressure', label: 'I feel pressure to see results' },
+              { value: 'behind', label: "I worry we're falling behind" }
+            ]}
+            answerKey="growth"
+            nextScreen="q-character"
+          />
+        );
+
+      case 'q-character':
+        return (
+          <QuizQuestion
+            question="Which matters more in daily life?"
+            options={[
+              { value: 'heart', label: 'Shaping the heart' },
+              { value: 'responsibility', label: 'Teaching responsibility' },
+              { value: 'behavior', label: 'Correct behavior' },
+              { value: 'conflict', label: 'Avoiding conflict' }
+            ]}
+            answerKey="character"
+            nextScreen="q-deeper"
+          />
+        );
+
+      case 'q-deeper':
+        return (
+          <QuizQuestion
+            question="When your child resists guidance, you tend to think…"
+            options={[
+              { value: 'deeper', label: "There's something deeper going on" },
+              { value: 'testing', label: "They're testing boundaries" },
+              { value: 'firmer', label: 'They need firmer rules' },
+              { value: 'failing', label: "I'm failing as a parent" }
+            ]}
+            answerKey="deeper"
+            nextScreen="q-authority"
+          />
+        );
+
+      case 'q-authority':
+        return (
+          <QuizQuestion
+            question="Your parenting style feels closest to…"
+            options={[
+              { value: 'gentle', label: 'Gentle and guiding' },
+              { value: 'structured', label: 'Clear and structured' },
+              { value: 'reactive', label: 'Reactive but caring' },
+              { value: 'inconsistent', label: 'Inconsistent but loving' }
+            ]}
+            answerKey="authority"
+            nextScreen="q-change"
+          />
+        );
+
+      case 'q-change':
+        return (
+          <QuizQuestion
+            question="Real change in my child usually comes from…"
+            options={[
+              { value: 'relationship', label: 'Relationship and trust' },
+              { value: 'routines', label: 'Consistent routines' },
+              { value: 'consequences', label: 'Consequences' },
+              { value: 'time', label: 'Time and maturity' }
+            ]}
+            answerKey="change"
+            nextScreen="q-god"
+          />
+        );
+
+      case 'q-god':
+        return (
+          <QuizQuestion
+            question="When parenting feels hard, you mostly…"
+            options={[
+              { value: 'pray', label: 'Pray and seek perspective' },
+              { value: 'handle', label: 'Try to handle it myself' },
+              { value: 'advice', label: 'Look for advice online' },
+              { value: 'stuck', label: 'Feel stuck' }
+            ]}
+            answerKey="god"
+            nextScreen="q-hope"
+          />
+        );
+
+      case 'q-hope':
+        return (
+          <QuizQuestion
+            question="Right now, how hopeful do you feel about your child's growth?"
+            options={[
+              { value: 'very-hopeful', label: 'Very hopeful' },
+              { value: 'mostly-hopeful', label: 'Mostly hopeful' },
+              { value: 'uncertain', label: 'Uncertain' },
+              { value: 'discouraged', label: 'Discouraged' }
+            ]}
+            answerKey="hope"
+            nextScreen="q-heart"
+          />
+        );
+
+      case 'q-heart':
+        return (
+          <QuizQuestion
+            question="Parenting often reveals that I value…"
+            options={[
+              { value: 'peace', label: 'Peace and connection' },
+              { value: 'control', label: 'Control and order' },
+              { value: 'approval', label: 'Approval from others' },
+              { value: 'avoiding', label: 'Avoiding mistakes' }
+            ]}
+            answerKey="heart"
+            nextScreen="processing"
+          />
+        );
+
+      // ==========================================
+      // SECTION 3: RESULTS & EMOTIONAL PAYOFF
+      // ==========================================
+
+      case 'processing':
+        return (
+          <ScreenWrapper>
+            <div className="px-6 py-16 text-center">
+              <div className="w-20 h-20 mx-auto mb-8 rounded-full bg-gradient-to-br from-amber-100 to-amber-200 flex items-center justify-center">
+                <Loader2 className="w-10 h-10 text-amber-600 animate-spin" />
+              </div>
+              <h2 className="text-xl font-semibold text-stone-800 mb-4">
+                {processingTexts[processingText]}
+              </h2>
+              <div className="flex justify-center gap-2 mt-8">
+                {[0, 1, 2].map(i => (
+                  <div 
+                    key={i} 
+                    className={`w-2 h-2 rounded-full transition-all duration-300 ${
+                      i === processingText ? 'bg-amber-500 scale-125' : 'bg-stone-300'
+                    }`} 
+                  />
                 ))}
               </div>
             </div>
           </ScreenWrapper>
         );
 
-      // SCREEN 5 — AFFIRMATION
-      case 'affirmation':
+      case 'result':
         return (
           <ScreenWrapper>
             <div className="px-6 py-8 text-center">
-              <div className="text-5xl mb-6">❤️</div>
+              <div className="w-20 h-20 mx-auto mb-6 rounded-full bg-gradient-to-br from-amber-400 to-amber-500 flex items-center justify-center">
+                <Sparkles className="w-10 h-10 text-white" />
+              </div>
+              <p className="text-amber-600 text-sm font-semibold uppercase tracking-wide mb-3">
+                Your Result
+              </p>
               <h2 className="text-2xl font-bold text-stone-800 mb-4">
-                You're Not Alone
+                {parentProfile.title || "You're a Faithful, Heart-Aware Parent"}
               </h2>
-              <p className="text-stone-600 mb-3">
-                Many parents want their children to grow strong in faith — not just entertained.
+              <p className="text-stone-600 leading-relaxed mb-8">
+                {parentProfile.description || "Your answers show a deep desire to guide your child with love, patience, and faith — even when it feels hard."}
               </p>
-              <p className="text-amber-700 font-medium mb-8">
-                Your desire to guide your child's heart truly matters.
-              </p>
-              <PrimaryButton onClick={() => goToScreen('values')}>
+              <PrimaryButton onClick={() => goToScreen('ai-response')}>
+                See Your Full Reflection
+              </PrimaryButton>
+            </div>
+          </ScreenWrapper>
+        );
+
+      case 'ai-response':
+        return (
+          <ScreenWrapper>
+            <div className="px-6 py-8">
+              <div className="bg-gradient-to-br from-amber-50 to-orange-50 rounded-3xl p-6 border border-amber-100 mb-8">
+                <h3 className="text-lg font-semibold text-stone-800 mb-4 flex items-center gap-2">
+                  <Heart className="w-5 h-5 text-amber-600" fill="#d97706" />
+                  A Word for Your Journey
+                </h3>
+                <div className="text-stone-700 leading-relaxed whitespace-pre-line text-[15px]">
+                  {aiResponse}
+                </div>
+              </div>
+              <PrimaryButton onClick={() => goToScreen('email')}>
                 Continue
               </PrimaryButton>
             </div>
           </ScreenWrapper>
         );
 
-      // SCREEN 6 — VALUES
-      case 'values':
+      // ==========================================
+      // SECTION 4: EMAIL & OFFER
+      // ==========================================
+
+      case 'email':
         return (
           <ScreenWrapper>
             <div className="px-6 py-8">
-              <h2 className="text-2xl font-bold text-stone-800 mb-2 text-center">
-                What matters most to you for your child?
+              <h2 className="text-xl font-semibold text-stone-800 mb-3 text-center">
+                Would you like resources that support heart-centered parenting?
               </h2>
-              <p className="text-stone-500 text-center mb-6 text-sm">Select all that apply</p>
-              <div className="space-y-3 mb-8">
-                {[
-                  'Growing closer to God',
-                  'Learning kindness and empathy',
-                  'Building confidence',
-                  'Developing good character',
-                  'Understanding right from wrong'
-                ].map(value => (
-                  <OptionButton
-                    key={value}
-                    selected={quizData.values.includes(value)}
-                    onClick={() => handleValueToggle(value)}
-                    multiSelect
-                  >
-                    {value}
-                  </OptionButton>
-                ))}
-              </div>
+              <p className="text-stone-600 text-center mb-6">
+                Enter your email to receive your personalized plan.
+              </p>
+              <input
+                ref={emailInputRef}
+                type="email"
+                placeholder="Email address"
+                value={emailInput}
+                onChange={(e) => setEmailInput(e.target.value)}
+                className="w-full px-5 py-4 rounded-2xl border-2 border-stone-200 focus:border-amber-500 focus:ring-0 outline-none text-lg mb-3 transition-colors bg-white text-stone-800"
+                autoComplete="email"
+                id="parent-quiz-email"
+                name="email"
+              />
+              <p className="text-stone-400 text-xs text-center mb-6">
+                No spam. Unsubscribe anytime.
+              </p>
               <PrimaryButton 
-                onClick={() => goToScreen('values-reinforcement')}
-                disabled={quizData.values.length === 0}
+                onClick={() => goToScreen('value-preview')}
+                disabled={!emailInput || !emailInput.includes('@')}
               >
                 Continue
               </PrimaryButton>
+              <button
+                onClick={() => goToScreen('value-preview')}
+                className="w-full mt-4 text-stone-500 text-sm underline"
+              >
+                Skip for now
+              </button>
             </div>
           </ScreenWrapper>
         );
 
-      // SCREEN 7 — VALUES REINFORCEMENT
-      case 'values-reinforcement':
-        return (
-          <ScreenWrapper>
-            <div className="px-6 py-8 text-center">
-              <div className="text-5xl mb-6">✨</div>
-              <h2 className="text-2xl font-bold text-stone-800 mb-4">
-                Beautiful Goals
-              </h2>
-              <p className="text-stone-600 mb-8">
-                These are the seeds that shape a child's future — spiritually, emotionally, and socially.
-              </p>
-              <PrimaryButton onClick={() => goToScreen('screentime')}>
-                Continue
-              </PrimaryButton>
-            </div>
-          </ScreenWrapper>
-        );
-
-      // SCREEN 8 — SCREEN TIME
-      case 'screentime':
+      case 'value-preview':
         return (
           <ScreenWrapper>
             <div className="px-6 py-8">
-              <h2 className="text-2xl font-bold text-stone-800 mb-6 text-center">
-                How do you feel about your child's current screen time?
-              </h2>
-              <div className="space-y-3 mb-8">
-                {[
-                  "I'm concerned",
-                  "I try to limit it, but it's hard",
-                  "I wish there were better options",
-                  "I feel okay about it"
-                ].map(option => (
-                  <OptionButton
-                    key={option}
-                    selected={quizData.screenTimeFeeling === option}
-                    onClick={() => {
-                      setQuizData(prev => ({ ...prev, screenTimeFeeling: option }));
-                      setTimeout(() => goToScreen('empathy'), 300);
-                    }}
-                  >
-                    {option}
-                  </OptionButton>
-                ))}
-              </div>
-            </div>
-          </ScreenWrapper>
-        );
-
-      // SCREEN 9 — EMPATHY
-      case 'empathy':
-        return (
-          <ScreenWrapper>
-            <div className="px-6 py-8 text-center">
-              <h2 className="text-2xl font-bold text-stone-800 mb-4">
-                That Makes Sense
-              </h2>
-              <p className="text-stone-600 mb-3">
-                Modern parents are doing their best in a noisy digital world.
-              </p>
-              <p className="text-amber-700 font-medium mb-8">
-                The challenge isn't screens — it's finding ones you can trust.
-              </p>
-              <PrimaryButton onClick={() => goToScreen('learning')}>
-                Continue
-              </PrimaryButton>
-            </div>
-          </ScreenWrapper>
-        );
-
-      // SCREEN 10 — LEARNING STYLE
-      case 'learning':
-        return (
-          <ScreenWrapper>
-            <div className="px-6 py-8">
-              <h2 className="text-2xl font-bold text-stone-800 mb-6 text-center">
-                How does your child learn best?
-              </h2>
-              <div className="space-y-3 mb-8">
-                {[
-                  'Through stories',
-                  'Through listening',
-                  'Through pictures and visuals',
-                  'A mix of everything'
-                ].map(option => (
-                  <OptionButton
-                    key={option}
-                    selected={quizData.learningStyle === option}
-                    onClick={() => {
-                      setQuizData(prev => ({ ...prev, learningStyle: option }));
-                      setTimeout(() => goToScreen('personalization'), 300);
-                    }}
-                  >
-                    {option}
-                  </OptionButton>
-                ))}
-              </div>
-            </div>
-          </ScreenWrapper>
-        );
-
-      // SCREEN 11 — PERSONALIZATION
-      case 'personalization':
-        return (
-          <ScreenWrapper>
-            <div className="px-6 py-8 text-center">
-              <div className="w-16 h-16 mx-auto mb-6 rounded-full bg-gradient-to-br from-purple-100 to-purple-200 flex items-center justify-center">
-                <Sparkles className="w-8 h-8 text-purple-600" />
-              </div>
-              <h2 className="text-2xl font-bold text-stone-800 mb-4">
-                Great — This Helps Us Personalize Things
-              </h2>
-              <p className="text-stone-600 mb-3">
-                Every child is different.
-              </p>
-              <p className="text-stone-600 mb-8">
-                The best lessons meet them where they are.
-              </p>
-              <PrimaryButton onClick={() => goToScreen('faith-approach')}>
-                Continue
-              </PrimaryButton>
-            </div>
-          </ScreenWrapper>
-        );
-
-      // SCREEN 12 — FAITH APPROACH
-      case 'faith-approach':
-        return (
-          <ScreenWrapper>
-            <div className="px-6 py-8">
-              <h2 className="text-2xl font-bold text-stone-800 mb-6 text-center">
-                How do you want faith to feel for your child?
-              </h2>
-              <div className="space-y-3 mb-8">
-                {[
-                  'Joyful and loving',
-                  'Gentle and encouraging',
-                  'Meaningful and real',
-                  'All of the above'
-                ].map(option => (
-                  <OptionButton
-                    key={option}
-                    selected={quizData.faithApproach === option}
-                    onClick={() => {
-                      setQuizData(prev => ({ ...prev, faithApproach: option }));
-                      setTimeout(() => goToScreen('mission'), 300);
-                    }}
-                  >
-                    {option}
-                  </OptionButton>
-                ))}
-              </div>
-            </div>
-          </ScreenWrapper>
-        );
-
-      // SCREEN 13 — MISSION
-      case 'mission':
-        return (
-          <ScreenWrapper>
-            <div className="px-6 py-8 text-center">
-              <div className="text-5xl mb-6">🙏</div>
-              <h2 className="text-2xl font-bold text-stone-800 mb-4">
-                We Believe the Same
-              </h2>
-              <p className="text-stone-600 mb-8">
-                Faith grows best when children experience God's love — not pressure or fear.
-              </p>
-              <PrimaryButton onClick={() => goToScreen('product-intro')}>
-                Continue
-              </PrimaryButton>
-            </div>
-          </ScreenWrapper>
-        );
-
-      // SCREEN 14 — PRODUCT INTRO
-      case 'product-intro':
-        return (
-          <ScreenWrapper>
-            <div className="px-6 py-8">
-              <h2 className="text-2xl font-bold text-stone-800 mb-6 text-center">
-                Here's How Godly Kids Helps
+              <h2 className="text-xl font-semibold text-stone-800 mb-6 text-center">
+                How Godly Kids Helps
               </h2>
               <div className="space-y-4 mb-8">
                 {[
@@ -520,132 +698,17 @@ const ParentQuizPage: React.FC = () => {
                   </div>
                 ))}
               </div>
-              <PrimaryButton onClick={() => goToScreen('social-proof')}>
+              <PrimaryButton onClick={() => goToScreen('offer-intro')}>
                 Continue
               </PrimaryButton>
             </div>
           </ScreenWrapper>
         );
 
-      // SCREEN 15 — SOCIAL PROOF
-      case 'social-proof':
-        return (
-          <ScreenWrapper>
-            <div className="px-6 py-8 text-center">
-              <div className="text-5xl mb-6">👨‍👩‍👧‍👦</div>
-              <h2 className="text-2xl font-bold text-stone-800 mb-4">
-                Families Are Loving This
-              </h2>
-              <p className="text-stone-600 mb-8">
-                Thousands of Christian parents are choosing Godly Kids to support their children's faith journey.
-              </p>
-              <div className="flex justify-center gap-1 mb-8">
-                {[1,2,3,4,5].map(i => (
-                  <span key={i} className="text-2xl">⭐</span>
-                ))}
-              </div>
-              <PrimaryButton onClick={() => goToScreen('transformation')}>
-                Continue
-              </PrimaryButton>
-            </div>
-          </ScreenWrapper>
-        );
-
-      // SCREEN 16 — TRANSFORMATION
-      case 'transformation':
-        return (
-          <ScreenWrapper>
-            <div className="px-6 py-8">
-              <h2 className="text-2xl font-bold text-stone-800 mb-6 text-center">
-                Imagine This…
-              </h2>
-              <div className="grid grid-cols-2 gap-4 mb-8">
-                <div className="bg-stone-100 rounded-2xl p-4">
-                  <p className="text-stone-500 text-xs uppercase tracking-wide mb-3">Before</p>
-                  <div className="space-y-2 text-sm text-stone-600">
-                    <p>😟 Random shows</p>
-                    <p>👀 Constant supervision</p>
-                    <p>❓ Mixed messages</p>
-                  </div>
-                </div>
-                <div className="bg-gradient-to-br from-amber-50 to-amber-100 rounded-2xl p-4 border-2 border-amber-200">
-                  <p className="text-amber-700 text-xs uppercase tracking-wide mb-3">After</p>
-                  <div className="space-y-2 text-sm text-amber-900">
-                    <p>📚 Purposeful stories</p>
-                    <p>✝️ Faith-based values</p>
-                    <p>😌 Peace of mind</p>
-                  </div>
-                </div>
-              </div>
-              <PrimaryButton onClick={() => goToScreen('email')}>
-                Continue
-              </PrimaryButton>
-            </div>
-          </ScreenWrapper>
-        );
-
-      // SCREEN 17 — EMAIL
-      case 'email':
-        return (
-          <ScreenWrapper>
-            <div className="px-6 py-8">
-              <h2 className="text-2xl font-bold text-stone-800 mb-2 text-center">
-                Your Child's Faith Journey Is Ready
-              </h2>
-              <p className="text-stone-600 text-center mb-6">
-                Enter your email to receive your personalized plan and access Godly Kids.
-              </p>
-              <input
-                ref={emailInputRef}
-                type="email"
-                placeholder="Email address"
-                value={emailInput}
-                onChange={(e) => setEmailInput(e.target.value)}
-                onBlur={() => setQuizData(prev => ({ ...prev, email: emailInput }))}
-                className="w-full px-5 py-4 rounded-2xl border-2 border-stone-200 focus:border-amber-500 focus:ring-0 outline-none text-lg mb-4 transition-colors bg-white text-stone-800"
-                autoComplete="email"
-                id="parent-quiz-email"
-                name="email"
-              />
-              <p className="text-stone-400 text-xs text-center mb-6">
-                We respect your inbox. No spam. Unsubscribe anytime.
-              </p>
-              <PrimaryButton 
-                onClick={() => {
-                  setQuizData(prev => ({ ...prev, email: emailInput }));
-                  goToScreen('processing');
-                }}
-                disabled={!emailInput || !emailInput.includes('@')}
-              >
-                Continue
-              </PrimaryButton>
-            </div>
-          </ScreenWrapper>
-        );
-
-      // SCREEN 18 — PROCESSING
-      case 'processing':
-        return (
-          <ScreenWrapper>
-            <div className="px-6 py-16 text-center">
-              <div className="w-20 h-20 mx-auto mb-8 rounded-full bg-gradient-to-br from-amber-100 to-amber-200 flex items-center justify-center">
-                <Loader2 className="w-10 h-10 text-amber-600 animate-spin" />
-              </div>
-              <h2 className="text-2xl font-bold text-stone-800 mb-4">
-                Creating Your Child's Experience…
-              </h2>
-              <p className="text-stone-600 animate-pulse">
-                {processingTexts[processingText]}
-              </p>
-            </div>
-          </ScreenWrapper>
-        );
-
-      // SCREEN 19 — OFFER INTRO
       case 'offer-intro':
         return (
           <ScreenWrapper>
-            <div className="px-6 py-8 text-center">
+            <div className="px-6 py-12 text-center">
               <div className="text-5xl mb-6">🎁</div>
               <h2 className="text-2xl font-bold text-stone-800 mb-4">
                 A Special Invitation for Your Family
@@ -653,29 +716,26 @@ const ParentQuizPage: React.FC = () => {
               <p className="text-amber-700 font-semibold text-lg mb-8">
                 Founding Families Receive a Limited-Time Discount
               </p>
-              <PrimaryButton onClick={() => goToScreen('pricing')}>
+              <PrimaryButton onClick={() => goToScreen('paywall')}>
                 See My Offer
               </PrimaryButton>
             </div>
           </ScreenWrapper>
         );
 
-      // SCREEN 20 — PRICING
-      case 'pricing':
+      case 'paywall':
         return (
           <ScreenWrapper>
-            <div className="px-6 py-8 text-center">
-              <div className="bg-gradient-to-br from-amber-50 to-amber-100 rounded-3xl p-6 border-2 border-amber-300 mb-6">
+            <div className="px-6 py-8">
+              {/* Offer Card */}
+              <div className="bg-gradient-to-br from-amber-50 to-orange-50 rounded-3xl p-6 border-2 border-amber-200 mb-6 text-center">
                 <p className="text-amber-700 text-sm font-semibold uppercase tracking-wide mb-2">
                   ✨ Founding Family Plan ✨
                 </p>
                 <p className="text-4xl font-bold text-stone-800 mb-1">
                   60% Off
                 </p>
-                <p className="text-stone-600 mb-4">
-                  Limited time offer
-                </p>
-                <div className="bg-white/80 rounded-xl p-4 mb-4">
+                <div className="bg-white/80 rounded-xl p-4 my-4">
                   <p className="text-3xl font-bold text-amber-600">
                     $4.99<span className="text-lg text-stone-500 font-normal">/month</span>
                   </p>
@@ -683,69 +743,62 @@ const ParentQuizPage: React.FC = () => {
                 </div>
                 <p className="text-stone-500 text-sm">Cancel anytime</p>
               </div>
-              <PrimaryButton onClick={() => goToScreen('faq')}>
-                Start My Child's Faith Journey
-              </PrimaryButton>
-              <button 
-                onClick={() => goToScreen('faq')}
-                className="mt-4 text-stone-500 text-sm underline"
-              >
-                Have questions? See FAQ
-              </button>
-            </div>
-          </ScreenWrapper>
-        );
 
-      // SCREEN 21 — FAQ
-      case 'faq':
-        return (
-          <ScreenWrapper>
-            <div className="px-6 py-8">
-              <h2 className="text-2xl font-bold text-stone-800 mb-6 text-center">
-                Frequently Asked Questions
-              </h2>
-              <div className="space-y-4 mb-8">
+              <PrimaryButton onClick={() => goToScreen('confirmation')}>
+                Begin My Child's Faith Journey
+              </PrimaryButton>
+
+              {/* FAQ Accordion */}
+              <div className="mt-8 space-y-2">
                 {[
-                  { q: 'Is this biblically sound?', a: 'Yes. Content is rooted in Christian values and Scripture.' },
-                  { q: 'Can I cancel anytime?', a: 'Yes — no contracts.' },
-                  { q: 'Is this safe for my child?', a: 'No ads, no external links, no junk content.' },
-                  { q: 'What ages is this for?', a: 'Designed for kids ages 3–12.' }
+                  { q: 'Is this biblically grounded?', a: 'Yes. All content is rooted in Scripture and Christian values, created by believers who love Jesus.' },
+                  { q: 'Is it safe for my child?', a: 'Absolutely. No ads, no external links, no inappropriate content. Just faith-filled stories and activities.' },
+                  { q: 'Can I cancel anytime?', a: 'Yes — no contracts, no commitments. Cancel with one tap whenever you want.' }
                 ].map((faq, i) => (
-                  <div key={i} className="bg-white rounded-xl p-4 shadow-sm border border-stone-100">
-                    <p className="font-semibold text-stone-800 mb-2">{faq.q}</p>
-                    <p className="text-stone-600 text-sm">{faq.a}</p>
+                  <div key={i} className="bg-white rounded-xl border border-stone-100 overflow-hidden">
+                    <button
+                      onClick={() => setExpandedFaq(expandedFaq === i ? null : i)}
+                      className="w-full px-4 py-3 flex items-center justify-between text-left"
+                    >
+                      <span className="text-stone-700 font-medium text-sm">{faq.q}</span>
+                      <ChevronDown className={`w-4 h-4 text-stone-400 transition-transform ${expandedFaq === i ? 'rotate-180' : ''}`} />
+                    </button>
+                    {expandedFaq === i && (
+                      <div className="px-4 pb-3">
+                        <p className="text-stone-600 text-sm">{faq.a}</p>
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>
-              <PrimaryButton onClick={() => goToScreen('confirmation')}>
-                Start My Free Trial
-              </PrimaryButton>
             </div>
           </ScreenWrapper>
         );
 
-      // SCREEN 22 — CONFIRMATION
       case 'confirmation':
         return (
           <ScreenWrapper>
-            <div className="px-6 py-8 text-center">
-              <div className="w-20 h-20 mx-auto mb-6 rounded-full bg-gradient-to-br from-green-100 to-green-200 flex items-center justify-center">
-                <Heart className="w-10 h-10 text-green-600" fill="#16a34a" />
+            <div className="px-6 py-12 text-center">
+              <div className="w-20 h-20 mx-auto mb-6 rounded-full bg-gradient-to-br from-green-400 to-green-500 flex items-center justify-center">
+                <Heart className="w-10 h-10 text-white" fill="white" />
               </div>
               <h2 className="text-2xl font-bold text-stone-800 mb-4">
-                You're Doing Something Beautiful
+                You're investing in something that truly matters.
               </h2>
-              <p className="text-stone-600 mb-8">
-                Thank you for investing in your child's heart and faith.
+              <p className="text-stone-600 mb-8 leading-relaxed">
+                Thank you for choosing to guide your child's heart with intention and love.
               </p>
               <PrimaryButton onClick={() => goToScreen('deeplink')}>
-                Continue to App
+                Open Godly Kids App
               </PrimaryButton>
             </div>
           </ScreenWrapper>
         );
 
-      // SCREEN 23 — DEEP LINK
+      // ==========================================
+      // SECTION 5: APP HANDOFF
+      // ==========================================
+
       case 'deeplink':
         return (
           <ScreenWrapper>
@@ -754,13 +807,12 @@ const ParentQuizPage: React.FC = () => {
                 <Sparkles className="w-10 h-10 text-white" />
               </div>
               <h2 className="text-2xl font-bold text-stone-800 mb-4">
-                Opening Godly Kids…
+                Your Child's Faith Journey Begins Now
               </h2>
               <p className="text-stone-600 mb-8">
-                Your child's faith journey begins now!
+                Download the app to get started!
               </p>
               
-              {/* App Store Links */}
               <div className="space-y-3 mb-6">
                 <a
                   href="https://apps.apple.com/us/app/godly-kids-kid-bible-stories/id6737245412"
@@ -796,7 +848,7 @@ const ParentQuizPage: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-stone-50 to-amber-50">
+    <div className="min-h-screen bg-gradient-to-b from-stone-50 to-amber-50/30">
       {/* Progress Bar */}
       {currentScreen !== 'hero' && currentScreen !== 'deeplink' && (
         <div className="fixed top-0 left-0 right-0 h-1 bg-stone-200 z-50">
@@ -808,12 +860,12 @@ const ParentQuizPage: React.FC = () => {
       )}
 
       {/* Content */}
-      <div className="max-w-md mx-auto min-h-screen flex flex-col justify-center">
+      <div className="max-w-md mx-auto min-h-screen flex flex-col justify-center py-8">
         {renderScreen()}
       </div>
 
-      {/* Godly Kids Branding */}
-      <div className="fixed bottom-4 left-0 right-0 text-center">
+      {/* Branding */}
+      <div className="fixed bottom-4 left-0 right-0 text-center pointer-events-none">
         <p className="text-stone-400 text-xs">
           Godly Kids • Faith for Little Hearts
         </p>
@@ -823,4 +875,3 @@ const ParentQuizPage: React.FC = () => {
 };
 
 export default ParentQuizPage;
-

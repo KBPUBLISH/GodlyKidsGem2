@@ -96,17 +96,17 @@ const ParentQuizPage: React.FC = () => {
         title: "You're a Faithful, Heart-Aware Parent",
         styleName: "Faithful, Heart-Aware Parent",
         description: "Your answers show a deep desire to guide your child with love, patience, and faith — even when it feels hard. You care about more than behavior. You care about the heart.",
-        feature: "Read-Along Bible Stories with Character Voices",
-        featureDescription: "Stories that speak directly to the heart — with gentle narration and characters your child will love. Perfect for the parent who values deep, meaningful connection.",
-        featureEmoji: "📖"
+        feature: "The Lost Letters Series",
+        featureDescription: "Biblical adventure audiobooks that teach faith and history through exciting fiction. Perfect for heart-to-heart moments — your child learns God's truth while being completely captivated by the story.",
+        featureEmoji: "📜"
       };
     } else if (heartCenteredCount >= 7) {
       return {
         title: "You're a Growing, Intentional Parent",
         styleName: "Growing, Intentional Parent",
         description: "Your responses reveal someone who genuinely wants to connect heart-to-heart with their child. You're building something beautiful — trust, grace, and faith woven into everyday moments.",
-        feature: "Daily Faith Lessons & Devotionals",
-        featureDescription: "Short, structured lessons that fit naturally into your routine. Designed for parents building faith intentionally, one small moment at a time.",
+        feature: "Daily Devotional Videos & Activities",
+        featureDescription: "Fun, kid-friendly devotionals that fit your routine. Short videos + hands-on activities that make faith feel natural and joyful — exactly how intentional parents build daily habits.",
         featureEmoji: "✨"
       };
     } else if (heartCenteredCount >= 4) {
@@ -114,18 +114,18 @@ const ParentQuizPage: React.FC = () => {
         title: "You're a Caring, Committed Parent",
         styleName: "Caring, Committed Parent",
         description: "Parenting is hard, and your answers show you're in the thick of it. You care deeply, even when it feels overwhelming. That care is the foundation for something wonderful.",
-        feature: "Peaceful Audiobooks & Worship Music",
-        featureDescription: "Calm, soothing content for those chaotic moments. Let your child listen to Scripture-based stories while you catch your breath — without guilt.",
-        featureEmoji: "🎧"
+        feature: "Squirrely Sermons & Praise Station",
+        featureDescription: "A lovable squirrel pastor and gentle worship music designed for little ones. Perfect for chaotic moments — press play and let your child absorb God's love while you catch your breath.",
+        featureEmoji: "🐿️"
       };
     } else {
       return {
         title: "You're a Seeking, Honest Parent",
         styleName: "Seeking, Honest Parent",
         description: "Your willingness to reflect honestly is already a sign of strength. Every parent faces struggles — what matters is that you're here, seeking to grow alongside your child.",
-        feature: "Gentle, Encouraging Story Collection",
-        featureDescription: "Stories about grace, second chances, and God's unconditional love. Content that meets your family exactly where you are — no pressure, just hope.",
-        featureEmoji: "💛"
+        feature: "Christian Level 1 & Brain Body Podcast",
+        featureDescription: "Relatable stories about faith journeys (like Pilgrim's Progress with a Minecraft twist!) plus a podcast teaching kids how to thrive. Content that meets your family where you are — with hope, not pressure.",
+        featureEmoji: "🎮"
       };
     }
   };
@@ -727,22 +727,60 @@ const ParentQuizPage: React.FC = () => {
         return (
           <ScreenWrapper>
             <div className="px-6 py-8">
-              <h2 className="text-xl font-semibold text-stone-800 mb-6 text-center">
-                How Godly Kids Helps
+              <h2 className="text-xl font-semibold text-stone-800 mb-2 text-center">
+                What's Inside Godly Kids
               </h2>
-              <div className="space-y-4 mb-8">
-                {[
-                  { icon: '📖', text: 'Faith-filled animated stories' },
-                  { icon: '💛', text: 'Gentle Christian lessons' },
-                  { icon: '🎧', text: 'Audiobooks for quiet moments' },
-                  { icon: '✅', text: 'Screen time you can trust' }
-                ].map((item, i) => (
-                  <div key={i} className="flex items-center gap-4 bg-white rounded-xl p-4 shadow-sm border border-stone-100">
-                    <span className="text-2xl">{item.icon}</span>
-                    <span className="text-stone-700 font-medium">{item.text}</span>
+              <p className="text-stone-500 text-sm text-center mb-6">
+                Everything your child needs to grow in faith
+              </p>
+              
+              <div className="space-y-3 mb-8">
+                {/* Stories */}
+                <div className="bg-gradient-to-r from-amber-50 to-orange-50 rounded-xl p-4 border border-amber-100">
+                  <div className="flex items-center gap-3 mb-2">
+                    <span className="text-2xl">📖</span>
+                    <span className="text-stone-800 font-bold">Animated Stories</span>
                   </div>
-                ))}
+                  <p className="text-stone-600 text-sm pl-10">Teaching truth, God's love, and faith through captivating narratives</p>
+                </div>
+
+                {/* Audiobooks */}
+                <div className="bg-gradient-to-r from-purple-50 to-pink-50 rounded-xl p-4 border border-purple-100">
+                  <div className="flex items-center gap-3 mb-2">
+                    <span className="text-2xl">🎧</span>
+                    <span className="text-stone-800 font-bold">Audiobooks & Podcasts</span>
+                  </div>
+                  <p className="text-stone-600 text-sm pl-10">Squirrely Sermons, The Lost Letters, Christian Level 1, Brain & Body Podcast</p>
+                </div>
+
+                {/* Music */}
+                <div className="bg-gradient-to-r from-blue-50 to-cyan-50 rounded-xl p-4 border border-blue-100">
+                  <div className="flex items-center gap-3 mb-2">
+                    <span className="text-2xl">🎵</span>
+                    <span className="text-stone-800 font-bold">Worship & Fun Music</span>
+                  </div>
+                  <p className="text-stone-600 text-sm pl-10">Praise Station for littles, Samson the Musical, Jesus Got Da Funk for dancing!</p>
+                </div>
+
+                {/* Games */}
+                <div className="bg-gradient-to-r from-green-50 to-emerald-50 rounded-xl p-4 border border-green-100">
+                  <div className="flex items-center gap-3 mb-2">
+                    <span className="text-2xl">🎮</span>
+                    <span className="text-stone-800 font-bold">Faith-Building Games</span>
+                  </div>
+                  <p className="text-stone-600 text-sm pl-10">Scripture memory, problem solving, and IQ puzzles</p>
+                </div>
+
+                {/* Devotionals */}
+                <div className="bg-gradient-to-r from-rose-50 to-red-50 rounded-xl p-4 border border-rose-100">
+                  <div className="flex items-center gap-3 mb-2">
+                    <span className="text-2xl">✨</span>
+                    <span className="text-stone-800 font-bold">Daily Devotionals</span>
+                  </div>
+                  <p className="text-stone-600 text-sm pl-10">Fun, kid-friendly videos + activities for daily faith habits</p>
+                </div>
               </div>
+
               <PrimaryButton onClick={() => goToScreen('offer-intro')}>
                 Continue
               </PrimaryButton>

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Heart, Shield, BookOpen, Music, Sparkles, Check, ChevronRight, Loader2 } from 'lucide-react';
 
@@ -34,6 +34,8 @@ const ParentQuizPage: React.FC = () => {
   });
   const [isAnimating, setIsAnimating] = useState(false);
   const [processingText, setProcessingText] = useState(0);
+  const [emailInput, setEmailInput] = useState(''); // Separate state to prevent focus loss
+  const emailInputRef = useRef<HTMLInputElement>(null);
 
   const processingTexts = [
     'Selecting age-appropriate stories...',
@@ -572,18 +574,26 @@ const ParentQuizPage: React.FC = () => {
                 Enter your email to receive your personalized plan and access Godly Kids.
               </p>
               <input
+                ref={emailInputRef}
                 type="email"
                 placeholder="Email address"
-                value={quizData.email}
-                onChange={(e) => setQuizData(prev => ({ ...prev, email: e.target.value }))}
-                className="w-full px-5 py-4 rounded-2xl border-2 border-stone-200 focus:border-amber-500 focus:ring-0 outline-none text-lg mb-4 transition-colors"
+                value={emailInput}
+                onChange={(e) => setEmailInput(e.target.value)}
+                onBlur={() => setQuizData(prev => ({ ...prev, email: emailInput }))}
+                className="w-full px-5 py-4 rounded-2xl border-2 border-stone-200 focus:border-amber-500 focus:ring-0 outline-none text-lg mb-4 transition-colors bg-white text-stone-800"
+                autoComplete="email"
+                id="parent-quiz-email"
+                name="email"
               />
               <p className="text-stone-400 text-xs text-center mb-6">
                 We respect your inbox. No spam. Unsubscribe anytime.
               </p>
               <PrimaryButton 
-                onClick={() => goToScreen('processing')}
-                disabled={!quizData.email || !quizData.email.includes('@')}
+                onClick={() => {
+                  setQuizData(prev => ({ ...prev, email: emailInput }));
+                  goToScreen('processing');
+                }}
+                disabled={!emailInput || !emailInput.includes('@')}
               >
                 Continue
               </PrimaryButton>

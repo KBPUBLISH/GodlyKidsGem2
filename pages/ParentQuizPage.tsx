@@ -43,12 +43,34 @@ const ParentQuizPage: React.FC = () => {
     'Preparing a safe, joyful experience...'
   ];
 
-  // Processing screen animation
+  // Processing screen animation and submit quiz
   useEffect(() => {
     if (currentScreen === 'processing') {
       const interval = setInterval(() => {
         setProcessingText(prev => (prev + 1) % processingTexts.length);
       }, 1500);
+      
+      // Submit quiz data to backend
+      const submitQuiz = async () => {
+        try {
+          const response = await fetch('https://backendgk2-0.onrender.com/api/parent-quiz/submit', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              email: emailInput,
+              quizData: {
+                ...quizData,
+                email: emailInput
+              }
+            })
+          });
+          const data = await response.json();
+          console.log('📧 Quiz submitted:', data);
+        } catch (error) {
+          console.error('Failed to submit quiz:', error);
+        }
+      };
+      submitQuiz();
       
       // Auto-advance after 4.5 seconds
       const timeout = setTimeout(() => {
@@ -60,7 +82,7 @@ const ParentQuizPage: React.FC = () => {
         clearTimeout(timeout);
       };
     }
-  }, [currentScreen]);
+  }, [currentScreen, emailInput, quizData]);
 
   const goToScreen = (screen: Screen) => {
     setIsAnimating(true);

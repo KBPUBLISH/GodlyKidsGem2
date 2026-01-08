@@ -463,6 +463,7 @@ import NewUserWelcomePage, { shouldShowWelcome } from './pages/NewUserWelcomePag
 import PaymentSuccessPage from './pages/PaymentSuccessPage';
 import SharePlaylistPage from './pages/SharePlaylistPage';
 import ShareBookPage from './pages/ShareBookPage';
+import ParentQuizPage from './pages/ParentQuizPage';
 
 // Home page wrapper - shows welcome screen for new users who completed onboarding
 const HomePageWithWelcomeCheck: React.FC = () => {
@@ -839,6 +840,8 @@ const App: React.FC = () => {
               <Layout>
                 <Routes>
                   <Route path="/" element={<LandingPage />} />
+                  {/* Parent Quiz Funnel - web-to-app conversion */}
+                  <Route path="/parentquiz" element={<ParentQuizPage />} />
                   {/* Public shareable links - no authentication required */}
                   <Route path="/share/playlist/:playlistId" element={<SharePlaylistPage />} />
                   <Route path="/share/playlist/:playlistId/:trackIndex" element={<SharePlaylistPage />} /> {/* Share specific track */}

@@ -998,6 +998,18 @@ const ParentQuizPage: React.FC = () => {
           Godly Kids • Faith for Little Hearts
         </p>
       </div>
+
+      {/* Continue to Devotional Button - Bottom Right */}
+      <button
+        onClick={() => navigate('/home')}
+        className="fixed bottom-6 right-6 flex items-center gap-2 px-5 py-3 bg-gradient-to-r from-amber-100 to-amber-200 border-2 border-amber-400 rounded-full shadow-lg hover:shadow-xl transition-all active:scale-95 z-50"
+      >
+        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#92400e" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1 0-5H20"/>
+        </svg>
+        <span className="text-amber-900 font-bold text-sm">Continue to Devotional</span>
+        <ChevronRight className="w-4 h-4 text-amber-700" />
+      </button>
     </div>
   );
 };

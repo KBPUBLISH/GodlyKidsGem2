@@ -1250,12 +1250,6 @@ const LessonPlayerPage: React.FC = () => {
                         </div>
                     )}
 
-                    {/* Screen indicators at bottom - show other tabs */}
-                    <div className="absolute bottom-4 left-0 right-0 flex justify-center gap-2 z-20">
-                        <div className={`h-1 rounded-full transition-all ${currentScreen === 'video' ? 'w-8 bg-[#FFD700]' : 'w-1 bg-white/50'}`} />
-                        <div className={`h-1 rounded-full transition-all ${currentScreen === 'devotional' ? 'w-8 bg-[#FFD700]' : 'w-1 bg-white/50'}`} />
-                        <div className={`h-1 rounded-full transition-all ${currentScreen === 'activity' ? 'w-8 bg-[#FFD700]' : 'w-1 bg-white/50'}`} />
-                    </div>
                 </div>
                 </div>
             ) : (

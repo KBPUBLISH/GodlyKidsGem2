@@ -1,14 +1,16 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, Play, Lock, Check, Calendar, Book, FlaskConical, Calculator, Hourglass, Languages, Palette, Cpu, Video, Sparkles, Coins } from 'lucide-react';
 import { ApiService } from '../services/apiService';
 import { isCompleted, isLocked } from '../services/lessonService';
+import { useUser } from '../context/UserContext';
 
 interface Lesson {
     _id: string;
     title: string;
     description?: string;
     type?: string;
+    ageGroup?: '4-6' | '6-8' | '8-10' | '10-12' | 'all';
     video: {
         url: string;
         thumbnail?: string;
@@ -18,6 +20,30 @@ interface Lesson {
     scheduledDate?: string;
     coinReward?: number;
 }
+
+// Helper function to check if a kid's age matches a lesson's age group
+const isAgeAppropriate = (kidAge: number | undefined, ageGroup: string | undefined): boolean => {
+    if (!ageGroup || ageGroup === 'all') return true;
+    if (!kidAge) return true; // If no age set, show all lessons
+    
+    const ageRanges: Record<string, [number, number]> = {
+        '4-6': [4, 6],
+        '6-8': [6, 8],
+        '8-10': [8, 10],
+        '10-12': [10, 12],
+    };
+    
+    const range = ageRanges[ageGroup];
+    if (!range) return true;
+    
+    return kidAge >= range[0] && kidAge <= range[1];
+};
+
+// Get age group label for display
+const getAgeGroupLabel = (ageGroup: string | undefined): string => {
+    if (!ageGroup || ageGroup === 'all') return '';
+    return `Ages ${ageGroup}`;
+};
 
 const getLessonIcon = (type: string) => {
     switch (type) {
@@ -37,9 +63,17 @@ const getLessonIcon = (type: string) => {
 
 const LessonsPage: React.FC = () => {
     const navigate = useNavigate();
+    const { kids, currentProfileId } = useUser();
     const [lessons, setLessons] = useState<Lesson[]>([]);
     const [loading, setLoading] = useState(true);
     const [weekLessons, setWeekLessons] = useState<Map<string, Lesson>>(new Map());
+
+    // Get current kid's age for filtering
+    const currentKidAge = useMemo(() => {
+        if (!currentProfileId) return undefined; // Parent viewing - show all
+        const currentKid = kids.find(k => k.id === currentProfileId);
+        return currentKid?.age;
+    }, [currentProfileId, kids]);
 
     useEffect(() => {
         fetchLessons();
@@ -157,8 +191,23 @@ const LessonsPage: React.FC = () => {
     
     const todaysDailyVerse = getTodaysDailyVerse();
 
-    // Filter out Daily Verse from regular lessons
-    const regularLessons = lessons.filter(l => l.type !== 'Daily Verse');
+    // Filter out Daily Verse from regular lessons and sort by age appropriateness
+    const regularLessons = useMemo(() => {
+        const filtered = lessons.filter(l => l.type !== 'Daily Verse');
+        
+        // Sort lessons: age-appropriate first, then others
+        return [...filtered].sort((a, b) => {
+            const aAppropriate = isAgeAppropriate(currentKidAge, a.ageGroup);
+            const bAppropriate = isAgeAppropriate(currentKidAge, b.ageGroup);
+            
+            // Age-appropriate lessons come first
+            if (aAppropriate && !bAppropriate) return -1;
+            if (!aAppropriate && bAppropriate) return 1;
+            
+            // Within same category, maintain original order (by schedule or creation)
+            return 0;
+        });
+    }, [lessons, currentKidAge]);
 
     return (
         <div className="h-full overflow-y-auto pb-32">
@@ -308,6 +357,17 @@ const LessonsPage: React.FC = () => {
                                                 {getLessonIcon(lesson.type || 'Bible')}
                                             </div>
 
+                                            {/* Age Badge (if not 'all') */}
+                                            {lesson.ageGroup && lesson.ageGroup !== 'all' && (
+                                                <div className={`absolute top-10 left-2 px-1.5 py-0.5 rounded text-[10px] font-bold ${
+                                                    isAgeAppropriate(currentKidAge, lesson.ageGroup)
+                                                        ? 'bg-green-500/90 text-white'
+                                                        : 'bg-gray-500/90 text-white/80'
+                                                }`}>
+                                                    {lesson.ageGroup}
+                                                </div>
+                                            )}
+
                                             {/* Status Icons */}
                                             <div className="absolute top-2 right-2">
                                                 {status === 'locked' ? (
@@ -387,6 +447,17 @@ const LessonsPage: React.FC = () => {
                                                 <div className="absolute top-2 left-2 bg-black/40 backdrop-blur-sm rounded-full p-1.5">
                                                     {getLessonIcon(lesson.video?.type || 'Bible')}
                                                 </div>
+
+                                                {/* Age Badge (if not 'all') */}
+                                                {lesson.ageGroup && lesson.ageGroup !== 'all' && (
+                                                    <div className={`absolute top-10 left-2 px-1.5 py-0.5 rounded text-[10px] font-bold ${
+                                                        isAgeAppropriate(currentKidAge, lesson.ageGroup)
+                                                            ? 'bg-green-500/90 text-white'
+                                                            : 'bg-gray-500/90 text-white/80'
+                                                    }`}>
+                                                        {lesson.ageGroup}
+                                                    </div>
+                                                )}
 
                                                 <div className="absolute top-2 right-2">
                                                     {status === 'completed' ? (

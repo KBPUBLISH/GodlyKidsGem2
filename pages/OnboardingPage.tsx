@@ -390,6 +390,28 @@ const PaywallStep: React.FC<{
       {/* ==================== STEP 2: OPTIONAL SUBSCRIPTION ==================== */}
       <div className={`transition-all duration-300 ${accountCreated ? 'opacity-100' : 'opacity-50 pointer-events-none'}`}>
         
+        {/* Demo Expired - Welcome Back Message */}
+        {isDemoExpired && (
+          <div className="bg-gradient-to-br from-[#4CAF50]/20 to-[#2E7D32]/20 rounded-2xl p-4 mb-4 border-2 border-[#4CAF50]/50">
+            <div className="flex items-center gap-3">
+              <div className="w-12 h-12 bg-[#4CAF50]/20 rounded-full flex items-center justify-center flex-shrink-0">
+                <Check className="w-6 h-6 text-[#4CAF50]" />
+              </div>
+              <div>
+                <p className="text-white font-bold text-sm mb-1">
+                  ✨ Your progress is saved!
+                </p>
+                <p className="text-[#eecaa0] text-xs">
+                  {kidsCount > 0 
+                    ? `Your ${kidsCount} kid profile${kidsCount > 1 ? 's' : ''} and all settings are ready. Subscribe to continue!`
+                    : 'Your settings are saved. Subscribe to unlock full access!'
+                  }
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Hero Badge */}
         <div className="text-center mb-4">
           <div className="inline-block bg-gradient-to-r from-[#FFD700] to-[#FFA500] px-5 py-2 rounded-full animate-pulse shadow-lg">
@@ -398,7 +420,7 @@ const PaywallStep: React.FC<{
         </div>
 
         {/* Personalized Kids Message - Show if they added multiple kids */}
-        {kidsCount > 1 && (
+        {kidsCount > 1 && !isDemoExpired && (
           <div className="bg-gradient-to-br from-[#3E1F07] to-[#5c2e0b] rounded-2xl p-4 mb-4 border-2 border-[#FFD700]/40 relative overflow-hidden">
             <div className="absolute top-0 right-0 bg-[#FF6B6B] text-white text-[10px] font-bold px-2 py-1 rounded-bl-lg">
               ACTION REQUIRED

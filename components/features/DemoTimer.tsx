@@ -186,6 +186,7 @@ const DemoTimer: React.FC = () => {
       setShowWelcomeModal(false);
       setIsMinimizing(false);
       setTutorialComplete(true);
+      sessionStorage.setItem('godlykids_demo_tutorial_complete', 'true');
     }, 600);
   };
 
@@ -196,12 +197,14 @@ const DemoTimer: React.FC = () => {
       // Tutorial complete
       setCurrentTutorialStep(-1);
       setTutorialComplete(true);
+      sessionStorage.setItem('godlykids_demo_tutorial_complete', 'true');
     }
   };
 
   const handleSkipAllTutorial = () => {
     setCurrentTutorialStep(-1);
     setTutorialComplete(true);
+    sessionStorage.setItem('godlykids_demo_tutorial_complete', 'true');
   };
 
   // Don't show on onboarding page or landing
@@ -224,17 +227,42 @@ const DemoTimer: React.FC = () => {
     return 'from-[#7c4dff] to-[#536dfe]';
   };
 
-  // Get tutorial highlight position
-  const getTutorialPosition = (position: string) => {
+  // Get tutorial highlight style (using inline styles for precise positioning)
+  // Header buttons are: Coins (rightmost-3rd) | Report (rightmost-2nd) | Shop (rightmost)
+  // Accounting for safe area inset on iPhone (env safe-area-inset-top)
+  const getHighlightStyle = (position: string): React.CSSProperties => {
+    // Base top position: safe-area + header padding (~52px on iPhone with notch, ~36px without)
+    // Using a value that works for most devices
+    const baseTop = 'calc(env(safe-area-inset-top, 0px) + 28px)';
+    
     switch (position) {
       case 'coins':
-        return 'top-20 right-28'; // Near gold coins
+        // Gold coins button - 3rd from right
+        return { top: baseTop, right: '106px' };
       case 'report':
-        return 'top-20 right-16'; // Near report card
+        // Report card button - 2nd from right  
+        return { top: baseTop, right: '58px' };
       case 'shop':
-        return 'top-20 right-4'; // Near shop
+        // Shop button - rightmost
+        return { top: baseTop, right: '12px' };
       default:
-        return 'top-20 right-4';
+        return { top: baseTop, right: '12px' };
+    }
+  };
+
+  // Get tooltip position
+  const getTooltipStyle = (position: string): React.CSSProperties => {
+    const baseTop = 'calc(env(safe-area-inset-top, 0px) + 90px)';
+    
+    switch (position) {
+      case 'coins':
+        return { top: baseTop, right: '16px', left: '16px' };
+      case 'report':
+        return { top: baseTop, right: '16px', left: '16px' };
+      case 'shop':
+        return { top: baseTop, right: '16px', left: '16px' };
+      default:
+        return { top: baseTop, right: '16px', left: '16px' };
     }
   };
 
@@ -254,21 +282,21 @@ const DemoTimer: React.FC = () => {
           
           {/* Highlight ring around the target element */}
           <div 
-            className={`absolute ${getTutorialPosition(step.position)} w-14 h-14 -translate-x-1/2 pointer-events-none`}
+            className="absolute w-12 h-12 pointer-events-none"
+            style={getHighlightStyle(step.position)}
           >
             {/* Pulsing ring */}
-            <div className="absolute inset-0 rounded-full border-4 border-[#FFD700] animate-ping opacity-50" />
-            <div className="absolute inset-0 rounded-full border-4 border-[#FFD700] animate-pulse" />
+            <div className="absolute inset-[-4px] rounded-xl border-4 border-[#FFD700] animate-ping opacity-50" />
+            <div className="absolute inset-[-4px] rounded-xl border-4 border-[#FFD700] animate-pulse" />
+            {/* Clear hole in overlay */}
+            <div className="absolute inset-0 bg-transparent rounded-lg" />
           </div>
         </div>
         
         {/* Tutorial tooltip card */}
         <div 
-          className={`fixed ${
-            step.position === 'coins' ? 'top-36 right-20' : 
-            step.position === 'report' ? 'top-36 right-8' : 
-            'top-36 right-4'
-          } z-[201] w-72 animate-in slide-in-from-top-4 duration-300`}
+          className="fixed z-[201] max-w-sm animate-in slide-in-from-top-4 duration-300"
+          style={getTooltipStyle(step.position)}
         >
           <div className="bg-white rounded-2xl shadow-2xl border-2 border-[#FFD700] overflow-hidden">
             {/* Header */}
@@ -432,17 +460,20 @@ const DemoTimer: React.FC = () => {
       {/* Tutorial highlights */}
       {currentTutorialStep >= 0 && renderTutorialHighlight()}
       
-      {/* Floating timer badge (shown after welcome modal) */}
-      {isVisible && !showWelcomeModal && (
+      {/* Floating timer badge - always visible during demo (in header area) */}
+      {isVisible && !showWelcomeModal && currentTutorialStep < 0 && (
         <button
           onClick={handleSubscribeClick}
-          className={`fixed top-16 left-16 z-[100] bg-gradient-to-r ${getTimerColor()} text-white px-4 py-2 rounded-full shadow-lg flex items-center gap-2 transition-all hover:scale-105 active:scale-95 ${
-            !tutorialComplete && currentTutorialStep < 0 ? 'animate-in slide-in-from-top-8 duration-500' : ''
-          }`}
+          className={`fixed z-[100] bg-gradient-to-r ${getTimerColor()} text-white px-3 py-1.5 rounded-full shadow-lg flex items-center gap-2 transition-all hover:scale-105 active:scale-95 border-2 border-white/30`}
+          style={{
+            top: 'calc(env(safe-area-inset-top, 0px) + 56px)',
+            left: '50%',
+            transform: 'translateX(-50%)',
+          }}
         >
           <Clock className="w-4 h-4" />
           <span className="font-bold text-sm">
-            Demo: {formatTime(timeLeft || 0)}
+            {formatTime(timeLeft || 0)}
           </span>
           {timeLeft && timeLeft <= 60 && (
             <span className="animate-pulse">⚡</span>

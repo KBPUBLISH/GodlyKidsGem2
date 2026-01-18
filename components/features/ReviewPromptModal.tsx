@@ -135,6 +135,21 @@ export const shouldShowReviewPrompt = (): boolean => {
     return false;
   }
   
+  // Don't show during demo mode
+  const demoActive = localStorage.getItem('godlykids_demo_active');
+  if (demoActive === 'true') {
+    console.log('🌟 Review prompt: Not showing (demo mode active)');
+    return false;
+  }
+  
+  // Don't show if demo tutorial is still in progress
+  const demoWelcomeShown = sessionStorage.getItem('godlykids_demo_welcome_shown');
+  const demoTutorialComplete = sessionStorage.getItem('godlykids_demo_tutorial_complete');
+  if (demoWelcomeShown === 'true' && demoTutorialComplete !== 'true') {
+    console.log('🌟 Review prompt: Not showing (demo tutorial in progress)');
+    return false;
+  }
+  
   // Check if already prompted
   const alreadyPrompted = localStorage.getItem('godlykids_review_prompted');
   if (alreadyPrompted === 'true') {

@@ -249,6 +249,66 @@ export const DespiaService = {
       console.error('Failed to request review:', error);
     }
   },
+
+  /**
+   * Schedule Daily Verse Notification at 9am user local time
+   * https://npm.despia.com/default-guide/native-features/local-push
+   */
+  scheduleDailyVerseNotification: (): void => {
+    if (!isDespia()) {
+      console.log('📱 Daily verse notification: Not in native app, skipping');
+      return;
+    }
+
+    try {
+      // Calculate seconds until next 9am
+      const now = new Date();
+      const next9am = new Date();
+      next9am.setHours(9, 0, 0, 0);
+      
+      // If it's already past 9am today, schedule for tomorrow
+      if (now.getTime() >= next9am.getTime()) {
+        next9am.setDate(next9am.getDate() + 1);
+      }
+      
+      const secondsUntil9am = Math.floor((next9am.getTime() - now.getTime()) / 1000);
+      
+      const title = "Today's Daily Verse 🙏";
+      const message = "Start your day with God's Word! Watch today's verse devotional.";
+      const url = "https://godlykids.com/lessons"; // Deep link to lessons page
+      
+      console.log(`📱 Scheduling Daily Verse notification for ${next9am.toLocaleString()} (${secondsUntil9am} seconds)`);
+      
+      despia(`sendlocalpushmsg://push.send?s=${secondsUntil9am}=msg!${encodeURIComponent(message)}&!#${encodeURIComponent(title)}&!#${encodeURIComponent(url)}`);
+      
+      // Store that we've scheduled for today to avoid duplicates
+      const today = new Date().toDateString();
+      localStorage.setItem('gk_daily_verse_notif_scheduled', today);
+      
+      console.log('✅ Daily Verse notification scheduled successfully');
+    } catch (error) {
+      console.error('Failed to schedule daily verse notification:', error);
+    }
+  },
+
+  /**
+   * Check if we need to reschedule the daily notification
+   * Call this on app load
+   */
+  ensureDailyVerseNotificationScheduled: (): void => {
+    if (!isDespia()) return;
+    
+    const today = new Date().toDateString();
+    const lastScheduled = localStorage.getItem('gk_daily_verse_notif_scheduled');
+    
+    // Schedule if we haven't scheduled today
+    if (lastScheduled !== today) {
+      console.log('📱 Scheduling daily verse notification (new day or first time)');
+      DespiaService.scheduleDailyVerseNotification();
+    } else {
+      console.log('📱 Daily verse notification already scheduled for today');
+    }
+  },
 };
 
 export default DespiaService;

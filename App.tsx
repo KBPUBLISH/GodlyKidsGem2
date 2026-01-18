@@ -785,6 +785,18 @@ const App: React.FC = () => {
     }
   }, [isDespia]);
 
+  // Schedule daily 9am notification for Daily Verse (DeSpia only)
+  useEffect(() => {
+    if (!isDespia) return;
+    
+    // Small delay to let app initialize first
+    const timer = setTimeout(() => {
+      DespiaService.ensureDailyVerseNotificationScheduled();
+    }, 3000);
+    
+    return () => clearTimeout(timer);
+  }, [isDespia]);
+
   // Initialize OneSignal notifications (skip in DeSpia)
   useEffect(() => {
     if (isDespia) {

@@ -8,12 +8,14 @@ import { useSubscription } from '../context/SubscriptionContext';
 import { AVATAR_ASSETS } from '../components/avatar/AvatarAssets';
 import ParentGateModal from '../components/features/ParentGateModal';
 import WebViewModal from '../components/features/WebViewModal';
+import EmailBonusModal from '../components/modals/EmailBonusModal';
 // Voice cloning removed - not offering this feature anymore
 import { ApiService } from '../services/apiService';
 import { filterVisibleVoices } from '../services/voiceManagementService';
 import { cleanVoiceDescription, cleanVoiceCategory } from '../utils/voiceUtils';
 import { facebookPixelService } from '../services/facebookPixelService';
 import { activityTrackingService } from '../services/activityTrackingService';
+import { Capacitor } from '@capacitor/core';
 
 // Use Funny Heads instead of generic human seeds
 const FUNNY_HEADS = [
@@ -600,7 +602,7 @@ const PaywallStep: React.FC<{
 
 const OnboardingPage: React.FC = () => {
   const navigate = useNavigate();
-  const { setParentName, setEquippedAvatar, addKid, kids, removeKid, subscribe, resetUser, unlockVoice, parentName, equippedAvatar, equippedFrame } = useUser();
+  const { setParentName, setEquippedAvatar, addKid, kids, removeKid, subscribe, resetUser, unlockVoice, parentName, equippedAvatar, equippedFrame, addCoins } = useUser();
   const { playClick, playSuccess } = useAudio();
   const { purchase, isLoading: isSubscriptionLoading, isPremium } = useSubscription();
   
@@ -637,6 +639,8 @@ const OnboardingPage: React.FC = () => {
   const [selectedPlan, setSelectedPlan] = useState<'annual' | 'monthly'>('annual');
   const [showParentGate, setShowParentGate] = useState(false);
   
+  // Email Bonus Modal State (for mobile users who skip)
+  const [showEmailBonusModal, setShowEmailBonusModal] = useState(false);
 
   // IMPORTANT:
   // Do NOT wipe existing kid profiles on every onboarding visit.
@@ -996,6 +1000,81 @@ const OnboardingPage: React.FC = () => {
     }
   };
 
+  // Complete onboarding for free users (skip subscription)
+  const completeOnboardingWithoutSubscription = (awardedEmailBonus: boolean) => {
+    // Track skip event
+    activityTrackingService.trackOnboardingEvent('skip_clicked', { 
+      kidsCount: kids.length,
+      emailBonusAwarded: awardedEmailBonus 
+    });
+    activityTrackingService.trackOnboardingEvent('onboarding_complete');
+    activityTrackingService.resetOnboardingSession();
+    
+    // User skipped without subscribing - limit to 1 kid account
+    let finalKids = [...kids]; // Copy kids array
+    if (kids.length > 1) {
+      // Remove all kids except the first one from context
+      const kidsToRemove = kids.slice(1);
+      kidsToRemove.forEach(kid => {
+        removeKid(kid.id);
+      });
+      finalKids = [kids[0]]; // Only keep first kid
+      console.log('🆓 Free account: Limited to 1 kid profile');
+    }
+    
+    // Mark as free user (not premium)
+    localStorage.setItem('godlykids_premium', 'false');
+    
+    // Calculate coins: base 500 + 200 if email bonus
+    const baseCoins = 500;
+    const bonusCoins = awardedEmailBonus ? 200 : 0;
+    const totalCoins = baseCoins + bonusCoins;
+    
+    // IMPORTANT: Force save user data to localStorage before navigation
+    const existingData = localStorage.getItem('godly_kids_data_v6');
+    const currentData = existingData ? JSON.parse(existingData) : {};
+    const dataToSave = {
+      ...currentData,
+      parentName: parentName || pName || currentData.parentName,
+      kids: finalKids,
+      equippedAvatar: equippedAvatar || pAvatar || currentData.equippedAvatar,
+      equippedFrame: equippedFrame || currentData.equippedFrame || 'border-[#8B4513]',
+      isSubscribed: false,
+      coins: totalCoins,
+      ownedItems: currentData.ownedItems ?? ['f1', 'anim1']
+    };
+    localStorage.setItem('godly_kids_data_v6', JSON.stringify(dataToSave));
+    console.log('💾 Force saved user data before navigation:', { 
+      parentName: dataToSave.parentName, 
+      kidsCount: dataToSave.kids?.length,
+      coins: totalCoins,
+      emailBonusAwarded: awardedEmailBonus
+    });
+    
+    // Award coins if email bonus was given
+    if (awardedEmailBonus) {
+      addCoins(200, 'Email signup bonus', 'other');
+      console.log('🎁 Awarded 200 bonus coins for email signup!');
+    }
+    
+    // Small delay to ensure localStorage is written
+    setTimeout(() => {
+      navigate('/home');
+    }, 100);
+  };
+
+  // Handle email bonus modal submit
+  const handleEmailBonusSubmit = (email: string, optIn: boolean) => {
+    console.log('📧 Email bonus submitted:', email, 'Opt-in:', optIn);
+    setShowEmailBonusModal(false);
+    completeOnboardingWithoutSubscription(true); // Award bonus
+  };
+
+  // Handle email bonus modal skip
+  const handleEmailBonusSkip = () => {
+    setShowEmailBonusModal(false);
+    completeOnboardingWithoutSubscription(false); // No bonus
+  };
 
   const handleGateSuccess = async () => {
     setShowParentGate(false);
@@ -1476,52 +1555,17 @@ const OnboardingPage: React.FC = () => {
               onCreateAccount={handleCreateAccount}
               onSubscribe={handleSubscribeClick}
               onSkip={() => {
-                // Track skip event
-                activityTrackingService.trackOnboardingEvent('skip_clicked', { kidsCount: kids.length });
-                activityTrackingService.trackOnboardingEvent('onboarding_complete');
-                activityTrackingService.resetOnboardingSession();
+                // Check if on mobile (iOS/Android) to show email bonus modal
+                const isMobile = Capacitor.isNativePlatform() || 
+                  /iphone|ipad|ipod|android/i.test(navigator.userAgent.toLowerCase());
                 
-                // User skipped without subscribing - limit to 1 kid account
-                let finalKids = [...kids]; // Copy kids array
-                if (kids.length > 1) {
-                  // Remove all kids except the first one from context
-                  const kidsToRemove = kids.slice(1);
-                  kidsToRemove.forEach(kid => {
-                    removeKid(kid.id);
-                  });
-                  finalKids = [kids[0]]; // Only keep first kid
-                  console.log('🆓 Free account: Limited to 1 kid profile');
+                if (isMobile) {
+                  // Show email bonus modal for mobile users
+                  setShowEmailBonusModal(true);
+                } else {
+                  // Web users go directly (no popup)
+                  completeOnboardingWithoutSubscription(false);
                 }
-                
-                // Mark as free user (not premium)
-                localStorage.setItem('godlykids_premium', 'false');
-                
-                // IMPORTANT: Force save user data to localStorage before navigation
-                // This ensures the data persists even if the useEffect doesn't fire in time
-                // Use the current state values from UserContext, not localStorage
-                const existingData = localStorage.getItem('godly_kids_data_v6');
-                const currentData = existingData ? JSON.parse(existingData) : {};
-                const dataToSave = {
-                  ...currentData,
-                  parentName: parentName || pName || currentData.parentName, // Use context, fallback to local state, then existing
-                  kids: finalKids,
-                  equippedAvatar: equippedAvatar || pAvatar || currentData.equippedAvatar,
-                  equippedFrame: equippedFrame || currentData.equippedFrame || 'border-[#8B4513]',
-                  isSubscribed: false,
-                  coins: currentData.coins ?? 500,
-                  ownedItems: currentData.ownedItems ?? ['f1', 'anim1']
-                };
-                localStorage.setItem('godly_kids_data_v6', JSON.stringify(dataToSave));
-                console.log('💾 Force saved user data before navigation:', { 
-                  parentName: dataToSave.parentName, 
-                  kidsCount: dataToSave.kids?.length,
-                  kidNames: dataToSave.kids?.map((k: any) => k.name)
-                });
-                
-                // Small delay to ensure localStorage is written
-                setTimeout(() => {
-                  navigate('/home');
-                }, 100);
               }}
               onRestore={handleRestorePurchases}
               isPurchasing={isPurchasing}
@@ -1581,6 +1625,16 @@ const OnboardingPage: React.FC = () => {
             </div>
           </div>
         )}
+
+        {/* Email Bonus Modal - Shows when mobile users skip without subscribing */}
+        <EmailBonusModal
+          isOpen={showEmailBonusModal}
+          onClose={handleEmailBonusSkip}
+          onSubmit={handleEmailBonusSubmit}
+          onSkip={handleEmailBonusSkip}
+          parentName={parentName || pName}
+          kidsCount={kids.length}
+        />
 
       </div>
     </div>

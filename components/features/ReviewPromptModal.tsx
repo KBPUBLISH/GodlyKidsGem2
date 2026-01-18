@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Heart } from 'lucide-react';
 import { Capacitor } from '@capacitor/core';
+import { DespiaService } from '../../services/despiaService';
 
 interface ReviewPromptModalProps {
   isOpen: boolean;
@@ -17,32 +18,30 @@ const ReviewPromptModal: React.FC<ReviewPromptModalProps> = ({ isOpen, onReviewS
     try {
       console.log('🌟 Review button clicked');
       
-      // Try DeSpia's rateapp:// URL scheme FIRST (recommended by DeSpia)
-      if ((window as any).despia !== undefined) {
-        console.log('🌟 Using DeSpia rateapp:// URL scheme');
-        (window as any).despia = 'rateapp://';
-        console.log('🌟 DeSpia rateapp request sent!');
-      } else {
-        // Fallback for Capacitor or web
-        console.log('🌟 DeSpia not available, trying Capacitor...');
-        
-        if (Capacitor.isNativePlatform()) {
-          try {
-            const { RateApp } = await import('capacitor-rate-app');
-            console.log('🌟 RateApp plugin loaded, requesting review...');
-            await RateApp.requestReview();
-            console.log('🌟 Native review request sent!');
-          } catch (e) {
-            console.log('🌟 RateApp plugin not available:', e);
-            // Try webkit as last resort
-            if ((window as any).webkit?.messageHandlers?.requestReview) {
-              (window as any).webkit.messageHandlers.requestReview.postMessage({});
-              console.log('🌟 Webkit review request sent');
-            }
+      // Check if we're in DeSpia native app
+      if (DespiaService.isNative()) {
+        // DeSpia native app - use the proper despia() function
+        console.log('🌟 DeSpia native detected, requesting review...');
+        DespiaService.requestReview();
+        console.log('🌟 DeSpia review request sent!');
+      } else if (Capacitor.isNativePlatform()) {
+        // Capacitor native app (non-DeSpia)
+        try {
+          const { RateApp } = await import('capacitor-rate-app');
+          console.log('🌟 RateApp plugin loaded, requesting review...');
+          await RateApp.requestReview();
+          console.log('🌟 Native review request sent!');
+        } catch (e) {
+          console.log('🌟 RateApp plugin not available:', e);
+          // Try webkit as last resort for iOS
+          if ((window as any).webkit?.messageHandlers?.requestReview) {
+            (window as any).webkit.messageHandlers.requestReview.postMessage({});
+            console.log('🌟 Webkit review request sent');
           }
-        } else {
-          console.log('🌟 Review requested (web mode - no native API)');
         }
+      } else {
+        // Web - can't show native review dialog
+        console.log('🌟 Web mode - no native review API available');
       }
       
       // Mark review as submitted in localStorage
@@ -125,9 +124,14 @@ export default ReviewPromptModal;
 
 // Helper function to check if we should show the review prompt
 export const shouldShowReviewPrompt = (): boolean => {
+  // Check if we're in a native app (DeSpia or Capacitor)
+  const isDespiaNative = DespiaService.isNative();
+  const isCapacitorNative = Capacitor.isNativePlatform();
+  
   // Don't show review prompt on web - only show in native apps
   // Web users can't leave app store reviews
-  if (!Capacitor.isNativePlatform()) {
+  if (!isDespiaNative && !isCapacitorNative) {
+    console.log('🌟 Review prompt: Not showing (web mode)');
     return false;
   }
   
@@ -139,12 +143,14 @@ export const shouldShowReviewPrompt = (): boolean => {
     if (lastPromptDate) {
       const daysSincePrompt = (Date.now() - new Date(lastPromptDate).getTime()) / (1000 * 60 * 60 * 24);
       if (daysSincePrompt < 30) {
+        console.log('🌟 Review prompt: Not showing (prompted within 30 days)');
         return false; // Don't show again within 30 days
       }
     }
   }
   
   // Show immediately when user enters home page (no activity requirement)
+  console.log('🌟 Review prompt: Ready to show!', { isDespiaNative, isCapacitorNative });
   return true;
 };
 

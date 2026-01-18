@@ -3,6 +3,7 @@ const router = express.Router();
 const AppUser = require('../models/AppUser');
 const User = require('../models/User');
 const OnboardingEvent = require('../models/OnboardingEvent');
+const EmailSubscriber = require('../models/EmailSubscriber');
 
 /**
  * GET /api/analytics/users
@@ -57,11 +58,24 @@ router.get('/users', async (req, res) => {
             .sort({ createdAt: -1 })
             .lean();
 
+        // Get email subscribers (bonus signups)
+        const emailSubscribers = await EmailSubscriber.find({})
+            .select('email deviceId bonusAwarded bonusAmount optInUpdates parentName createdAt')
+            .sort({ createdAt: -1 })
+            .lean();
+
         // Create a map of AppUser data by email for quick lookup
         const appUserMap = new Map();
         appUsers.forEach(u => {
             if (u.email) appUserMap.set(u.email.toLowerCase(), u);
             if (u.deviceId) appUserMap.set(u.deviceId, u);
+        });
+
+        // Create a map of email subscribers by deviceId and parentName for lookup
+        const subscriberMap = new Map();
+        emailSubscribers.forEach(s => {
+            if (s.deviceId) subscriberMap.set(s.deviceId, s);
+            if (s.parentName) subscriberMap.set(s.parentName.toLowerCase(), s);
         });
 
         // Merge: Start with auth users, enrich with app data
@@ -72,12 +86,18 @@ router.get('/users', async (req, res) => {
         authUsers.forEach(authUser => {
             const email = authUser.email?.toLowerCase();
             const appData = email ? appUserMap.get(email) : null;
+            const deviceId = authUser.deviceId || appData?.deviceId;
+            const parentName = appData?.parentName;
+            
+            // Look up subscriber data by deviceId or parentName
+            const subscriberData = (deviceId && subscriberMap.get(deviceId)) || 
+                                   (parentName && subscriberMap.get(parentName.toLowerCase()));
             
             mergedUsers.push({
                 _id: authUser._id,
                 email: authUser.email,
                 username: authUser.username,
-                deviceId: authUser.deviceId || appData?.deviceId,
+                deviceId: deviceId,
                 coins: appData?.coins || 0,
                 kidProfiles: appData?.kidProfiles || [],
                 stats: appData?.stats || {},
@@ -86,10 +106,14 @@ router.get('/users', async (req, res) => {
                 referralCode: appData?.referralCode,
                 referralCount: appData?.referralCount || 0,
                 notificationEmail: appData?.notificationEmail,
-                parentName: appData?.parentName,
+                parentName: parentName,
                 createdAt: authUser.createdAt,
                 lastActiveAt: appData?.lastActiveAt || authUser.updatedAt,
                 source: 'auth', // Track where this user came from
+                // Email subscriber bonus fields
+                subscriberEmail: subscriberData?.email || null,
+                emailBonusAwarded: subscriberData?.bonusAwarded || false,
+                emailOptIn: subscriberData?.optInUpdates || false,
             });
             
             if (email) processedEmails.add(email);
@@ -100,10 +124,17 @@ router.get('/users', async (req, res) => {
             const email = appUser.email?.toLowerCase();
             if (email && processedEmails.has(email)) return; // Already added via auth
             
+            const deviceId = appUser.deviceId;
+            const parentName = appUser.parentName;
+            
+            // Look up subscriber data by deviceId or parentName
+            const subscriberData = (deviceId && subscriberMap.get(deviceId)) || 
+                                   (parentName && subscriberMap.get(parentName.toLowerCase()));
+            
             mergedUsers.push({
                 _id: appUser._id,
                 email: appUser.email,
-                deviceId: appUser.deviceId,
+                deviceId: deviceId,
                 coins: appUser.coins || 0,
                 kidProfiles: appUser.kidProfiles || [],
                 stats: appUser.stats || {},
@@ -112,10 +143,14 @@ router.get('/users', async (req, res) => {
                 referralCode: appUser.referralCode,
                 referralCount: appUser.referralCount || 0,
                 notificationEmail: appUser.notificationEmail,
-                parentName: appUser.parentName,
+                parentName: parentName,
                 createdAt: appUser.createdAt,
                 lastActiveAt: appUser.lastActiveAt,
                 source: 'app', // Anonymous or app-only user
+                // Email subscriber bonus fields
+                subscriberEmail: subscriberData?.email || null,
+                emailBonusAwarded: subscriberData?.bonusAwarded || false,
+                emailOptIn: subscriberData?.optInUpdates || false,
             });
         });
 
@@ -255,6 +290,10 @@ router.get('/users', async (req, res) => {
             referralCount: user.referralCount || 0,
             notificationEmail: user.notificationEmail || null,
             parentName: user.parentName || null,
+            // Email subscriber bonus fields
+            subscriberEmail: user.subscriberEmail || null,
+            emailBonusAwarded: user.emailBonusAwarded || false,
+            emailOptIn: user.emailOptIn || false,
             // Dates - formatted as ISO strings for consistent sorting
             createdAt: formatDate(user.createdAt),
             lastActiveAt: formatDate(user.lastActiveAt),

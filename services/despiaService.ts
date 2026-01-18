@@ -232,6 +232,23 @@ export const DespiaService = {
       console.error('Failed to restore purchases:', error);
     }
   },
+
+  /**
+   * Request App Store / Play Store Review
+   * https://npm.despia.com/default-guide/native-features/rate-app
+   */
+  requestReview: (): void => {
+    if (!isDespia()) {
+      console.warn('Rate app only works in the native app');
+      return;
+    }
+    try {
+      console.log('🌟 DeSpia: Requesting native review dialog');
+      despia('rateapp://');
+    } catch (error) {
+      console.error('Failed to request review:', error);
+    }
+  },
 };
 
 export default DespiaService;

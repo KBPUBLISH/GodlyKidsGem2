@@ -30,6 +30,7 @@ import RadioHosts from './pages/RadioHosts';
 import RadioLibrary from './pages/RadioLibrary';
 import RadioShowBuilder from './pages/RadioShowBuilder';
 import RadioPreviewPage from './pages/RadioPreviewPage';
+import EmailSubscribers from './pages/EmailSubscribers';
 
 function App() {
   return (
@@ -75,6 +76,7 @@ function App() {
             <Route path="radio/library" element={<RadioLibrary />} />
             <Route path="radio/show-builder" element={<RadioShowBuilder />} />
             <Route path="radio/preview" element={<RadioPreviewPage />} />
+            <Route path="email-subscribers" element={<EmailSubscribers />} />
           </Route>
         </Routes>
       </Router>

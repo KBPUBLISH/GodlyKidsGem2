@@ -109,6 +109,7 @@ app.use('/api/play-events', require('./routes/playEvents'));
 app.use('/api/google-tts', ttsLimiter, require('./routes/googleTts'));
 app.use('/api/radio', require('./routes/radio'));
 app.use('/api/parent-quiz', require('./routes/parentQuiz'));
+app.use('/api/email-subscribers', require('./routes/emailSubscribers'));
 
 // ===========================================
 // HEALTH & STATUS ENDPOINTS

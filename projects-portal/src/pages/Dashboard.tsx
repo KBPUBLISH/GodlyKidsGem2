@@ -3,7 +3,7 @@ import {
     Users, UserPlus, Coins, Baby, Calendar, TrendingUp, 
     Activity, Smartphone, Globe, Monitor, RefreshCw,
     ChevronDown, ChevronUp, Search, ArrowUpRight, ArrowDownRight,
-    BookOpen, Clock, Headphones, Music, Gamepad2, FileText
+    BookOpen, Clock, Headphones, Music, Gamepad2, FileText, Mail, Gift
 } from 'lucide-react';
 
 interface UserData {
@@ -29,6 +29,10 @@ interface UserData {
     referralCount: number;
     createdAt: string;
     lastActiveAt?: string;
+    // Email subscriber fields (from bonus signup)
+    subscriberEmail?: string;
+    emailBonusAwarded?: boolean;
+    emailOptIn?: boolean;
 }
 
 type TimeRange = '1d' | '1w' | '1m' | '3m' | 'all';
@@ -596,6 +600,7 @@ const Dashboard: React.FC = () => {
                         <thead className="bg-gray-50 text-gray-600">
                             <tr>
                                 <th className="px-4 py-3 text-left font-medium">User</th>
+                                <th className="px-4 py-3 text-left font-medium">Email</th>
                                 <th className="px-4 py-3 text-center font-medium">Kids</th>
                                 <th className="px-4 py-3 text-center font-medium">Coins</th>
                                 <th className="px-4 py-3 text-center font-medium">Sessions</th>
@@ -626,6 +631,21 @@ const Dashboard: React.FC = () => {
                                                 </div>
                                             </div>
                                         </td>
+                                        <td className="px-4 py-3">
+                                            {user.subscriberEmail ? (
+                                                <div className="flex items-center gap-1.5">
+                                                    <Mail className="w-3.5 h-3.5 text-indigo-500" />
+                                                    <span className="text-sm text-gray-700">{user.subscriberEmail}</span>
+                                                    {user.emailBonusAwarded && (
+                                                        <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs bg-yellow-100 text-yellow-700" title="Bonus Awarded">
+                                                            🪙
+                                                        </span>
+                                                    )}
+                                                </div>
+                                            ) : (
+                                                <span className="text-gray-400 text-sm">-</span>
+                                            )}
+                                        </td>
                                         <td className="px-4 py-3 text-center">
                                             <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-pink-100 text-pink-600 text-xs font-bold">
                                                 {user.kidCount}
@@ -652,7 +672,7 @@ const Dashboard: React.FC = () => {
                                     </tr>
                                     {expandedUserId === user.id && (
                                         <tr className="bg-indigo-50">
-                                            <td colSpan={8} className="px-6 py-4">
+                                            <td colSpan={9} className="px-6 py-4">
                                                 <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
                                                     <div>
                                                         <p className="text-xs text-gray-500 mb-1">Kid Profiles</p>

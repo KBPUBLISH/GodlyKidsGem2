@@ -3,7 +3,7 @@ import {
     Users, UserPlus, Coins, Baby, Calendar, TrendingUp, 
     Activity, Smartphone, Globe, Monitor, RefreshCw,
     ChevronDown, ChevronUp, Search, ArrowUpRight, ArrowDownRight,
-    BookOpen, Clock, Headphones, Music, Gamepad2, FileText, Mail, Gift
+    BookOpen, Clock, Headphones, Music, Gamepad2, FileText, Mail
 } from 'lucide-react';
 
 interface UserData {

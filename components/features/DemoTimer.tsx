@@ -1,19 +1,71 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { Clock, Crown } from 'lucide-react';
+import { Clock, Crown, Sparkles, ShoppingBag, Coins, FileText, X, ChevronRight } from 'lucide-react';
 
 /**
  * DemoTimer Component
  * 
  * Shows a visible countdown timer during the 5-minute demo period.
+ * Includes animated welcome modal and feature tutorial highlights.
  * When timer expires, redirects user back to onboarding paywall.
  */
+
+// Tutorial steps data
+const TUTORIAL_STEPS = [
+  {
+    id: 'coins',
+    title: '💰 Your Gold Coins',
+    description: 'Earn gold by completing quizzes, devotions, and books! Spend them in the shop.',
+    position: 'coins', // Reference to element position
+    icon: Coins,
+  },
+  {
+    id: 'report',
+    title: '📊 Report Card',
+    description: 'Track your child\'s progress! See completed activities, streaks, and achievements.',
+    position: 'report',
+    icon: FileText,
+  },
+  {
+    id: 'shop',
+    title: '🛍️ The Shop',
+    description: 'Customize your avatar with new body parts, unlock voices, and discover more!',
+    position: 'shop',
+    icon: ShoppingBag,
+  },
+];
+
 const DemoTimer: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const [timeLeft, setTimeLeft] = useState<number | null>(null);
   const [isVisible, setIsVisible] = useState(false);
   const [isExpired, setIsExpired] = useState(false);
+  
+  // Welcome modal and tutorial state
+  const [showWelcomeModal, setShowWelcomeModal] = useState(false);
+  const [isMinimizing, setIsMinimizing] = useState(false);
+  const [currentTutorialStep, setCurrentTutorialStep] = useState(-1); // -1 = not started, 0-2 = steps
+  const [tutorialComplete, setTutorialComplete] = useState(false);
+
+  useEffect(() => {
+    // Check if this is a fresh demo start
+    const checkDemoStart = () => {
+      const demoActive = localStorage.getItem('godlykids_demo_active');
+      const welcomeShown = sessionStorage.getItem('godlykids_demo_welcome_shown');
+      const isPremium = localStorage.getItem('godlykids_premium') === 'true';
+      
+      // Show welcome modal if demo just started and we haven't shown it this session
+      if (demoActive === 'true' && !welcomeShown && !isPremium && location.pathname === '/home') {
+        setShowWelcomeModal(true);
+        sessionStorage.setItem('godlykids_demo_welcome_shown', 'true');
+      }
+    };
+    
+    // Check after a short delay to let the page render
+    const timeout = setTimeout(checkDemoStart, 500);
+    return () => clearTimeout(timeout);
+  }, [location.pathname]);
 
   useEffect(() => {
     // Check if demo mode is active
@@ -32,7 +84,6 @@ const DemoTimer: React.FC = () => {
       const remaining = demoEndTime - Date.now();
       
       if (remaining <= 0) {
-        // Demo expired
         handleDemoExpired();
       } else {
         setTimeLeft(Math.ceil(remaining / 1000));
@@ -67,7 +118,6 @@ const DemoTimer: React.FC = () => {
   }, []);
 
   const handleDemoExpired = () => {
-    // Mark demo as used
     localStorage.setItem('godlykids_demo_used', 'true');
     localStorage.removeItem('godlykids_demo_active');
     localStorage.removeItem('godlykids_demo_end_time');
@@ -75,27 +125,56 @@ const DemoTimer: React.FC = () => {
     setIsExpired(true);
     setIsVisible(true);
     
-    // Redirect after showing expired message
     setTimeout(() => {
-      // Navigate to onboarding with demo_expired flag
       navigate('/onboarding?demo_expired=1');
     }, 2000);
   };
 
   const handleSubscribeClick = () => {
-    // Clear demo and go to paywall
     localStorage.setItem('godlykids_demo_used', 'true');
     localStorage.removeItem('godlykids_demo_active');
     localStorage.removeItem('godlykids_demo_end_time');
     navigate('/onboarding?demo_expired=1');
   };
 
-  // Don't show on onboarding page
+  const handleStartTutorial = () => {
+    setIsMinimizing(true);
+    // Wait for minimize animation, then start tutorial
+    setTimeout(() => {
+      setShowWelcomeModal(false);
+      setIsMinimizing(false);
+      setCurrentTutorialStep(0);
+    }, 600);
+  };
+
+  const handleSkipTutorial = () => {
+    setIsMinimizing(true);
+    setTimeout(() => {
+      setShowWelcomeModal(false);
+      setIsMinimizing(false);
+      setTutorialComplete(true);
+    }, 600);
+  };
+
+  const handleNextTutorialStep = () => {
+    if (currentTutorialStep < TUTORIAL_STEPS.length - 1) {
+      setCurrentTutorialStep(prev => prev + 1);
+    } else {
+      // Tutorial complete
+      setCurrentTutorialStep(-1);
+      setTutorialComplete(true);
+    }
+  };
+
+  const handleSkipAllTutorial = () => {
+    setCurrentTutorialStep(-1);
+    setTutorialComplete(true);
+  };
+
+  // Don't show on onboarding page or landing
   if (location.pathname === '/onboarding' || location.pathname === '/') {
     return null;
   }
-
-  if (!isVisible) return null;
 
   // Format time as M:SS
   const formatTime = (seconds: number): string => {
@@ -107,13 +186,114 @@ const DemoTimer: React.FC = () => {
   // Determine urgency color
   const getTimerColor = () => {
     if (isExpired) return 'from-red-500 to-red-600';
-    if (timeLeft && timeLeft <= 60) return 'from-red-500 to-orange-500'; // Last minute - red
-    if (timeLeft && timeLeft <= 120) return 'from-orange-500 to-yellow-500'; // 2 minutes - orange
-    return 'from-[#7c4dff] to-[#536dfe]'; // Normal - purple
+    if (timeLeft && timeLeft <= 60) return 'from-red-500 to-orange-500';
+    if (timeLeft && timeLeft <= 120) return 'from-orange-500 to-yellow-500';
+    return 'from-[#7c4dff] to-[#536dfe]';
+  };
+
+  // Get tutorial highlight position
+  const getTutorialPosition = (position: string) => {
+    switch (position) {
+      case 'coins':
+        return 'top-20 right-28'; // Near gold coins
+      case 'report':
+        return 'top-20 right-16'; // Near report card
+      case 'shop':
+        return 'top-20 right-4'; // Near shop
+      default:
+        return 'top-20 right-4';
+    }
+  };
+
+  // Tutorial highlight overlay
+  const renderTutorialHighlight = () => {
+    if (currentTutorialStep < 0 || currentTutorialStep >= TUTORIAL_STEPS.length) return null;
+    
+    const step = TUTORIAL_STEPS[currentTutorialStep];
+    const Icon = step.icon;
+    
+    return (
+      <>
+        {/* Dark overlay with hole */}
+        <div className="fixed inset-0 z-[200] pointer-events-auto">
+          {/* Semi-transparent overlay */}
+          <div className="absolute inset-0 bg-black/60" onClick={handleSkipAllTutorial} />
+          
+          {/* Highlight ring around the target element */}
+          <div 
+            className={`absolute ${getTutorialPosition(step.position)} w-14 h-14 -translate-x-1/2 pointer-events-none`}
+          >
+            {/* Pulsing ring */}
+            <div className="absolute inset-0 rounded-full border-4 border-[#FFD700] animate-ping opacity-50" />
+            <div className="absolute inset-0 rounded-full border-4 border-[#FFD700] animate-pulse" />
+          </div>
+        </div>
+        
+        {/* Tutorial tooltip card */}
+        <div 
+          className={`fixed ${
+            step.position === 'coins' ? 'top-36 right-20' : 
+            step.position === 'report' ? 'top-36 right-8' : 
+            'top-36 right-4'
+          } z-[201] w-72 animate-in slide-in-from-top-4 duration-300`}
+        >
+          <div className="bg-white rounded-2xl shadow-2xl border-2 border-[#FFD700] overflow-hidden">
+            {/* Header */}
+            <div className="bg-gradient-to-r from-[#FFD700] to-[#FFA500] px-4 py-3 flex items-center gap-3">
+              <div className="w-10 h-10 bg-white/20 rounded-full flex items-center justify-center">
+                <Icon className="w-5 h-5 text-white" />
+              </div>
+              <div className="flex-1">
+                <h3 className="text-[#3E1F07] font-bold text-lg">{step.title}</h3>
+              </div>
+              <button 
+                onClick={handleSkipAllTutorial}
+                className="text-[#3E1F07]/50 hover:text-[#3E1F07]"
+              >
+                <X size={20} />
+              </button>
+            </div>
+            
+            {/* Content */}
+            <div className="p-4">
+              <p className="text-gray-600 text-sm mb-4">{step.description}</p>
+              
+              {/* Progress dots */}
+              <div className="flex items-center justify-between">
+                <div className="flex gap-1.5">
+                  {TUTORIAL_STEPS.map((_, idx) => (
+                    <div 
+                      key={idx}
+                      className={`w-2 h-2 rounded-full transition-colors ${
+                        idx === currentTutorialStep ? 'bg-[#FFD700]' : 
+                        idx < currentTutorialStep ? 'bg-[#FFD700]/50' : 'bg-gray-200'
+                      }`}
+                    />
+                  ))}
+                </div>
+                
+                <button
+                  onClick={handleNextTutorialStep}
+                  className="bg-gradient-to-r from-[#FFD700] to-[#FFA500] text-[#3E1F07] font-bold px-4 py-2 rounded-xl flex items-center gap-1 hover:opacity-90 transition-opacity"
+                >
+                  {currentTutorialStep < TUTORIAL_STEPS.length - 1 ? (
+                    <>Next <ChevronRight size={18} /></>
+                  ) : (
+                    <>Got it! <Sparkles size={18} /></>
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
+          
+          {/* Arrow pointing up */}
+          <div className="absolute -top-2 right-8 w-4 h-4 bg-[#FFD700] rotate-45 border-l-2 border-t-2 border-[#FFD700]" />
+        </div>
+      </>
+    );
   };
 
   if (isExpired) {
-    // Full screen expired overlay
     return (
       <div className="fixed inset-0 z-[9999] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
         <div className="bg-white rounded-3xl p-8 max-w-sm w-full text-center shadow-2xl animate-in zoom-in-95 duration-300">
@@ -141,20 +321,102 @@ const DemoTimer: React.FC = () => {
     );
   }
 
-  // Floating timer badge
   return (
-    <button
-      onClick={handleSubscribeClick}
-      className={`fixed top-4 right-4 z-[100] bg-gradient-to-r ${getTimerColor()} text-white px-4 py-2 rounded-full shadow-lg flex items-center gap-2 transition-all hover:scale-105 active:scale-95`}
-    >
-      <Clock className="w-4 h-4" />
-      <span className="font-bold text-sm">
-        Demo: {formatTime(timeLeft || 0)}
-      </span>
-      {timeLeft && timeLeft <= 60 && (
-        <span className="animate-pulse">⚡</span>
+    <>
+      {/* Welcome Modal with minimize animation */}
+      {showWelcomeModal && (
+        <div className="fixed inset-0 z-[300] bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
+          <div 
+            className={`bg-white rounded-3xl overflow-hidden shadow-2xl max-w-sm w-full transition-all duration-500 ${
+              isMinimizing 
+                ? 'scale-0 opacity-0 translate-x-[calc(50vw-3rem)] -translate-y-[calc(50vh-4rem)]' 
+                : 'scale-100 opacity-100 animate-in zoom-in-95'
+            }`}
+          >
+            {/* Animated Header */}
+            <div className="bg-gradient-to-br from-[#7c4dff] via-[#536dfe] to-[#448aff] p-6 text-center relative overflow-hidden">
+              {/* Floating sparkles */}
+              <div className="absolute top-2 left-4 animate-bounce" style={{ animationDelay: '0ms' }}>✨</div>
+              <div className="absolute top-4 right-6 animate-bounce" style={{ animationDelay: '200ms' }}>⭐</div>
+              <div className="absolute bottom-2 left-8 animate-bounce" style={{ animationDelay: '400ms' }}>🌟</div>
+              <div className="absolute bottom-4 right-4 animate-bounce" style={{ animationDelay: '100ms' }}>✨</div>
+              
+              {/* Timer icon with pulse */}
+              <div className="w-20 h-20 mx-auto mb-3 rounded-full bg-white/20 flex items-center justify-center relative">
+                <div className="absolute inset-0 rounded-full bg-white/10 animate-ping" />
+                <Clock className="w-10 h-10 text-white relative z-10" />
+              </div>
+              
+              <h2 className="text-white font-bold text-2xl mb-1">
+                🎉 Demo Mode Active!
+              </h2>
+              <p className="text-white/80 text-sm">
+                You have <span className="font-bold text-[#FFD700]">5 minutes</span> to explore
+              </p>
+            </div>
+            
+            {/* Content */}
+            <div className="p-6">
+              <p className="text-gray-600 text-center mb-6">
+                Let's take a quick tour of the app's best features!
+              </p>
+              
+              {/* Feature preview */}
+              <div className="space-y-3 mb-6">
+                {TUTORIAL_STEPS.map((step, idx) => (
+                  <div key={step.id} className="flex items-center gap-3 bg-gray-50 rounded-xl p-3">
+                    <div className="w-10 h-10 bg-gradient-to-br from-[#FFD700] to-[#FFA500] rounded-full flex items-center justify-center flex-shrink-0">
+                      <step.icon className="w-5 h-5 text-white" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <h4 className="text-gray-800 font-semibold text-sm">{step.title}</h4>
+                    </div>
+                    <span className="text-gray-400 text-xs">{idx + 1}/3</span>
+                  </div>
+                ))}
+              </div>
+              
+              {/* Buttons */}
+              <button
+                onClick={handleStartTutorial}
+                className="w-full bg-gradient-to-r from-[#7c4dff] to-[#536dfe] text-white font-bold py-4 rounded-2xl shadow-lg flex items-center justify-center gap-2 mb-3 hover:opacity-90 transition-opacity"
+              >
+                <Sparkles className="w-5 h-5" />
+                Start Quick Tour
+              </button>
+              
+              <button
+                onClick={handleSkipTutorial}
+                className="w-full text-gray-500 font-medium py-2 hover:text-gray-700 transition-colors"
+              >
+                Skip tour, start exploring →
+              </button>
+            </div>
+          </div>
+        </div>
       )}
-    </button>
+      
+      {/* Tutorial highlights */}
+      {currentTutorialStep >= 0 && renderTutorialHighlight()}
+      
+      {/* Floating timer badge (shown after welcome modal) */}
+      {isVisible && !showWelcomeModal && (
+        <button
+          onClick={handleSubscribeClick}
+          className={`fixed top-16 left-16 z-[100] bg-gradient-to-r ${getTimerColor()} text-white px-4 py-2 rounded-full shadow-lg flex items-center gap-2 transition-all hover:scale-105 active:scale-95 ${
+            !tutorialComplete && currentTutorialStep < 0 ? 'animate-in slide-in-from-top-8 duration-500' : ''
+          }`}
+        >
+          <Clock className="w-4 h-4" />
+          <span className="font-bold text-sm">
+            Demo: {formatTime(timeLeft || 0)}
+          </span>
+          {timeLeft && timeLeft <= 60 && (
+            <span className="animate-pulse">⚡</span>
+          )}
+        </button>
+      )}
+    </>
   );
 };
 

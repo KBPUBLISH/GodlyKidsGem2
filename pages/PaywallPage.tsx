@@ -44,10 +44,55 @@ const PaywallPage: React.FC = () => {
   // Account required modal state
   const [showAccountRequired, setShowAccountRequired] = useState(false);
   
+  // Social proof notification state
+  const [showSocialProof, setShowSocialProof] = useState(false);
+  const [socialProofData, setSocialProofData] = useState({ name: '', location: '', time: '' });
+  
+  // Social proof data - random names and locations for validation
+  const SOCIAL_PROOF_DATA = [
+    { name: 'Sarah M.', location: 'Texas', time: '2 min ago' },
+    { name: 'Michael R.', location: 'California', time: '5 min ago' },
+    { name: 'Emily T.', location: 'Florida', time: '8 min ago' },
+    { name: 'David K.', location: 'New York', time: '12 min ago' },
+    { name: 'Jessica L.', location: 'Ohio', time: '15 min ago' },
+    { name: 'Christopher B.', location: 'Georgia', time: '18 min ago' },
+    { name: 'Amanda W.', location: 'North Carolina', time: '22 min ago' },
+    { name: 'Matthew H.', location: 'Pennsylvania', time: '25 min ago' },
+    { name: 'Ashley D.', location: 'Arizona', time: '28 min ago' },
+    { name: 'Joshua P.', location: 'Michigan', time: '32 min ago' },
+  ];
+  
   // Facebook Pixel - Track paywall view (parent-gated area)
   useEffect(() => {
     facebookPixelService.init();
     facebookPixelService.trackPaywallView();
+  }, []);
+  
+  // Show social proof notifications periodically
+  useEffect(() => {
+    let timeoutId: NodeJS.Timeout;
+    let intervalId: NodeJS.Timeout;
+    
+    // Start showing after 3 seconds
+    timeoutId = setTimeout(() => {
+      const randomIndex = Math.floor(Math.random() * SOCIAL_PROOF_DATA.length);
+      setSocialProofData(SOCIAL_PROOF_DATA[randomIndex]);
+      setShowSocialProof(true);
+      
+      setTimeout(() => setShowSocialProof(false), 4000);
+      
+      intervalId = setInterval(() => {
+        const newIndex = Math.floor(Math.random() * SOCIAL_PROOF_DATA.length);
+        setSocialProofData(SOCIAL_PROOF_DATA[newIndex]);
+        setShowSocialProof(true);
+        setTimeout(() => setShowSocialProof(false), 4000);
+      }, 12000 + Math.random() * 6000);
+    }, 3000);
+    
+    return () => {
+      clearTimeout(timeoutId);
+      clearInterval(intervalId);
+    };
   }, []);
 
   // If user already has premium, redirect to home
@@ -410,16 +455,19 @@ const PaywallPage: React.FC = () => {
                 <button 
                     onClick={handleSubscribeClick}
                     disabled={isPurchasing || isRestoring || isLoading}
-                    className="w-full bg-gradient-to-b from-[#7c4dff] to-[#651fff] hover:from-[#9575cd] hover:to-[#7c4dff] text-white font-display font-bold text-lg py-4 rounded-2xl shadow-[0_4px_0_#4527a0,0_8px_15px_rgba(0,0,0,0.2)] active:translate-y-[4px] active:shadow-[0_0_0_#4527a0] transition-all mb-3 border-t border-[#b388ff] relative overflow-hidden group disabled:opacity-70 disabled:cursor-not-allowed"
+                    className="w-full bg-gradient-to-b from-[#7c4dff] to-[#651fff] hover:from-[#9575cd] hover:to-[#7c4dff] text-white font-display font-bold text-lg py-5 rounded-2xl shadow-[0_4px_0_#4527a0,0_8px_15px_rgba(0,0,0,0.2)] active:translate-y-[4px] active:shadow-[0_0_0_#4527a0] transition-all mb-3 border-t border-[#b388ff] relative overflow-hidden group disabled:opacity-70 disabled:cursor-not-allowed"
                 >
-                    <span className="relative z-10 flex items-center justify-center gap-2">
+                    <span className="relative z-10 flex flex-col items-center justify-center">
                         {isPurchasing ? (
-                          <>
+                          <span className="flex items-center gap-2">
                             <Loader2 className="w-5 h-5 animate-spin" />
                             Processing...
-                          </>
+                          </span>
                         ) : (
-                          '🎓 Start Learning Free'
+                          <>
+                            <span className="text-lg font-bold">🎁 START 14-DAY FREE TRIAL</span>
+                            <span className="text-xs opacity-80 font-normal">Cancel anytime • No charge until trial ends</span>
+                          </>
                         )}
                     </span>
                     {/* Shine effect */}
@@ -606,6 +654,32 @@ const PaywallPage: React.FC = () => {
             </div>
           </div>
         )}
+        
+        {/* Social Proof Notification */}
+        <div 
+          className={`fixed bottom-24 left-4 right-4 z-50 transition-all duration-500 ${
+            showSocialProof 
+              ? 'opacity-100 translate-y-0' 
+              : 'opacity-0 translate-y-4 pointer-events-none'
+          }`}
+        >
+          <div className="bg-white/95 backdrop-blur-sm rounded-2xl shadow-xl border border-[#7c4dff]/20 p-3 flex items-center gap-3 max-w-sm mx-auto">
+            <div className="w-10 h-10 rounded-full bg-gradient-to-br from-[#7c4dff] to-[#536dfe] flex items-center justify-center flex-shrink-0">
+              <span className="text-lg">👨‍👩‍👧</span>
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-[#1a237e] font-semibold text-sm truncate">
+                {socialProofData.name} from {socialProofData.location}
+              </p>
+              <p className="text-gray-500 text-xs">
+                Just subscribed! • {socialProofData.time}
+              </p>
+            </div>
+            <div className="text-green-500 flex-shrink-0">
+              <Check size={20} />
+            </div>
+          </div>
+        </div>
     </div>
   );
 };

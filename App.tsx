@@ -497,6 +497,7 @@ import NotificationService from './services/notificationService';
 import { activityTrackingService } from './services/activityTrackingService';
 import { DespiaService } from './services/despiaService';
 import { authService } from './services/authService';
+import DemoTimer from './components/features/DemoTimer';
 
 // --- ASSETS & HELPERS ---
 
@@ -858,6 +859,7 @@ const App: React.FC = () => {
           <SubscriptionProvider>
             <BooksProvider>
               <HashRouter>
+              <DemoTimer />
               <ReferralPromptWrapper>
               <Layout>
                 <Routes>

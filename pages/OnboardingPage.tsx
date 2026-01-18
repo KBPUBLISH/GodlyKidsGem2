@@ -69,10 +69,61 @@ const PaywallStep: React.FC<{
   isRestoring?: boolean;
   error?: string | null;
   kidsCount?: number; // Number of kids added during onboarding
-}> = ({ selectedPlan, setSelectedPlan, onSubscribe, onSkip, onRestore, onCreateAccount, isPurchasing = false, isRestoring = false, error = null, kidsCount = 0 }) => {
+  isDemoExpired?: boolean; // If true, hide demo/skip option (user already used their demo)
+}> = ({ selectedPlan, setSelectedPlan, onSubscribe, onSkip, onRestore, onCreateAccount, isPurchasing = false, isRestoring = false, error = null, kidsCount = 0, isDemoExpired = false }) => {
   const [showIncluded, setShowIncluded] = useState(true); // Open by default so users see features
   const carouselRef = useRef<HTMLDivElement>(null);
   const [currentBenefit, setCurrentBenefit] = useState(0);
+  
+  // Social proof notification state
+  const [showSocialProof, setShowSocialProof] = useState(false);
+  const [socialProofData, setSocialProofData] = useState({ name: '', location: '', time: '' });
+  
+  // Social proof data - random names and locations for validation
+  const SOCIAL_PROOF_DATA = [
+    { name: 'Sarah M.', location: 'Texas', time: '2 min ago' },
+    { name: 'Michael R.', location: 'California', time: '5 min ago' },
+    { name: 'Emily T.', location: 'Florida', time: '8 min ago' },
+    { name: 'David K.', location: 'New York', time: '12 min ago' },
+    { name: 'Jessica L.', location: 'Ohio', time: '15 min ago' },
+    { name: 'Christopher B.', location: 'Georgia', time: '18 min ago' },
+    { name: 'Amanda W.', location: 'North Carolina', time: '22 min ago' },
+    { name: 'Matthew H.', location: 'Pennsylvania', time: '25 min ago' },
+    { name: 'Ashley D.', location: 'Arizona', time: '28 min ago' },
+    { name: 'Joshua P.', location: 'Michigan', time: '32 min ago' },
+    { name: 'Rachel S.', location: 'Virginia', time: '35 min ago' },
+    { name: 'Andrew C.', location: 'Washington', time: '38 min ago' },
+  ];
+  
+  // Show social proof notifications periodically
+  useEffect(() => {
+    let timeoutId: NodeJS.Timeout;
+    let intervalId: NodeJS.Timeout;
+    
+    // Start showing after 3 seconds
+    timeoutId = setTimeout(() => {
+      // Show first notification
+      const randomIndex = Math.floor(Math.random() * SOCIAL_PROOF_DATA.length);
+      setSocialProofData(SOCIAL_PROOF_DATA[randomIndex]);
+      setShowSocialProof(true);
+      
+      // Hide after 4 seconds
+      setTimeout(() => setShowSocialProof(false), 4000);
+      
+      // Then show every 12-18 seconds
+      intervalId = setInterval(() => {
+        const newIndex = Math.floor(Math.random() * SOCIAL_PROOF_DATA.length);
+        setSocialProofData(SOCIAL_PROOF_DATA[newIndex]);
+        setShowSocialProof(true);
+        setTimeout(() => setShowSocialProof(false), 4000);
+      }, 12000 + Math.random() * 6000);
+    }, 3000);
+    
+    return () => {
+      clearTimeout(timeoutId);
+      clearInterval(intervalId);
+    };
+  }, []);
   
   // Account creation state - SEPARATE from subscription
   const [showAccountForm, setShowAccountForm] = useState(true); // Show by default
@@ -502,7 +553,7 @@ const PaywallStep: React.FC<{
             variant="gold"
             onClick={() => onSubscribe(email, password)}
             disabled={isPurchasing || !accountCreated}
-            className="py-4 text-lg shadow-xl mb-2 border-b-4 border-[#B8860B] disabled:opacity-50"
+            className="py-5 text-lg shadow-xl mb-2 border-b-4 border-[#B8860B] disabled:opacity-50"
           >
             {isPurchasing ? (
               <span className="flex items-center justify-center gap-2">
@@ -510,13 +561,12 @@ const PaywallStep: React.FC<{
                 Complete payment in Apple...
               </span>
             ) : (
-              '🎁 START FREE TRIAL'
+              <span className="flex flex-col items-center">
+                <span className="text-lg font-bold">🎁 START 14-DAY FREE TRIAL</span>
+                <span className="text-xs opacity-80 font-normal">Cancel anytime • No charge until trial ends</span>
+              </span>
             )}
           </WoodButton>
-          
-          <p className="text-[#5c2e0b] text-[10px] text-center opacity-70">
-            No charge until trial ends
-          </p>
         </div>
 
         {/* Benefits Carousel */}
@@ -563,19 +613,26 @@ const PaywallStep: React.FC<{
         </div>
       </div>
 
-      {/* Skip Link - HIDDEN (Hard Paywall) but keeping logic for future use */}
+      {/* Demo / Skip Option */}
       <div className="text-center">
-        {/* Skip button hidden - uncomment to re-enable limited access option
-        <button 
-          onClick={onSkip}
-          className="text-base px-6 py-3 rounded-full bg-white/10 border border-white/30 underline decoration-dotted transition-all text-white/80 hover:text-white hover:bg-white/20 font-medium"
-        >
-          Continue with limited access →
-        </button>
-        */}
+        {/* Show demo option only if user hasn't used their demo yet */}
+        {!isDemoExpired && (
+          <button 
+            onClick={onSkip}
+            className="text-sm px-5 py-2.5 rounded-full bg-white/10 border border-white/20 transition-all text-white/70 hover:text-white hover:bg-white/20 font-medium mb-3"
+          >
+            ⏱️ Try 5-Minute Free Demo
+          </button>
+        )}
+        
+        {isDemoExpired && (
+          <p className="text-[#FFD700]/80 text-xs mb-3 font-medium">
+            ⏱️ Demo time expired • Subscribe to continue
+          </p>
+        )}
         
         {/* Restore Purchases Link */}
-        <div className="mt-3">
+        <div>
           <button
             onClick={() => onRestore(email, password)}
             disabled={isRestoring || !accountCreated}
@@ -598,6 +655,32 @@ const PaywallStep: React.FC<{
         title={termsModalTitle}
         hideExternalLink={true}
       />
+      
+      {/* Social Proof Notification */}
+      <div 
+        className={`fixed bottom-20 left-4 right-4 z-50 transition-all duration-500 ${
+          showSocialProof 
+            ? 'opacity-100 translate-y-0' 
+            : 'opacity-0 translate-y-4 pointer-events-none'
+        }`}
+      >
+        <div className="bg-white/95 backdrop-blur-sm rounded-2xl shadow-xl border border-[#FFD700]/30 p-3 flex items-center gap-3 max-w-sm mx-auto">
+          <div className="w-10 h-10 rounded-full bg-gradient-to-br from-[#FFD700] to-[#FFA500] flex items-center justify-center flex-shrink-0">
+            <span className="text-lg">👨‍👩‍👧</span>
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="text-[#3E1F07] font-semibold text-sm truncate">
+              {socialProofData.name} from {socialProofData.location}
+            </p>
+            <p className="text-[#8B4513] text-xs">
+              Just subscribed! • {socialProofData.time}
+            </p>
+          </div>
+          <div className="text-green-500 flex-shrink-0">
+            <Check size={20} />
+          </div>
+        </div>
+      </div>
     </div>
   );
 };
@@ -640,6 +723,27 @@ const OnboardingPage: React.FC = () => {
   // Step 4 State (Paywall)
   const [selectedPlan, setSelectedPlan] = useState<'annual' | 'monthly'>('annual');
   const [showParentGate, setShowParentGate] = useState(false);
+  
+  // Demo mode state - track if user has used their 5-minute demo
+  const [isDemoExpired, setIsDemoExpired] = useState(() => {
+    // Check if demo was already used OR if returning from expired demo
+    const demoUsed = localStorage.getItem('godlykids_demo_used');
+    const urlParams = new URLSearchParams(window.location.search);
+    const demoExpiredParam = urlParams.get('demo_expired') === '1';
+    return demoUsed === 'true' || demoExpiredParam;
+  });
+  
+  // Check for demo_expired parameter and jump to step 4 (paywall)
+  useEffect(() => {
+    const urlParams = new URLSearchParams(window.location.search);
+    if (urlParams.get('demo_expired') === '1') {
+      console.log('⏱️ Demo expired - jumping to paywall');
+      setIsDemoExpired(true);
+      setStep(4); // Jump directly to paywall
+      // Clean up URL
+      window.history.replaceState({}, '', window.location.pathname);
+    }
+  }, []);
   
   // Email Bonus Modal State (for mobile users who skip) - Hidden but keeping logic
   const [showEmailBonusModal, setShowEmailBonusModal] = useState(false);
@@ -1549,7 +1653,7 @@ const OnboardingPage: React.FC = () => {
           </div>
         )}
 
-        {/* --- STEP 4: PAYWALL / VALUE PROPOSITION (Hard Paywall - Skip button hidden) --- */}
+        {/* --- STEP 4: PAYWALL / VALUE PROPOSITION (Demo mode available) --- */}
         {step === 4 && (
             <PaywallStep 
               selectedPlan={selectedPlan}
@@ -1557,29 +1661,26 @@ const OnboardingPage: React.FC = () => {
               onCreateAccount={handleCreateAccount}
               onSubscribe={handleSubscribeClick}
               onSkip={() => {
-                // Check if on mobile (iOS/Android/DeSpia) to show email bonus modal
-                const ua = navigator.userAgent.toLowerCase();
-                const isNativeApp = Capacitor.isNativePlatform() || ua.includes('despia');
-                const isMobileDevice = /iphone|ipad|ipod|android/i.test(ua);
-                const isMobile = isNativeApp || isMobileDevice;
+                // Start 5-minute demo mode
+                console.log('⏱️ Starting 5-minute demo mode');
                 
-                console.log('📧 Email bonus check:', { isNativeApp, isMobileDevice, isMobile, ua: ua.substring(0, 100) });
+                // Save demo start time
+                const demoEndTime = Date.now() + (5 * 60 * 1000); // 5 minutes from now
+                localStorage.setItem('godlykids_demo_end_time', demoEndTime.toString());
+                localStorage.setItem('godlykids_demo_active', 'true');
                 
-                if (isMobile) {
-                  // Show email bonus modal for mobile users
-                  console.log('📧 Showing email bonus modal');
-                  setShowEmailBonusModal(true);
-                } else {
-                  // Web users go directly (no popup)
-                  console.log('📧 Skipping email bonus (web user)');
-                  completeOnboardingWithoutSubscription(false);
-                }
+                // Track demo started
+                activityTrackingService.trackOnboardingEvent('demo_started', { duration: '5min' });
+                
+                // Complete onboarding without subscription (enters demo mode)
+                completeOnboardingWithoutSubscription(false);
               }}
               onRestore={handleRestorePurchases}
               isPurchasing={isPurchasing}
               isRestoring={isRestoring}
               error={purchaseError}
               kidsCount={kids.length}
+              isDemoExpired={isDemoExpired}
             />
         )}
 

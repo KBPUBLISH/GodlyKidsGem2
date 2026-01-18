@@ -342,7 +342,7 @@ const PaywallStep: React.FC<{
         {/* Hero Badge */}
         <div className="text-center mb-4">
           <div className="inline-block bg-gradient-to-r from-[#FFD700] to-[#FFA500] px-5 py-2 rounded-full animate-pulse shadow-lg">
-            <span className="text-[#3E1F07] font-extrabold text-base">🎁 7-DAY FREE TRIAL</span>
+            <span className="text-[#3E1F07] font-extrabold text-base">🎁 14-DAY FREE TRIAL</span>
           </div>
         </div>
 
@@ -443,10 +443,10 @@ const PaywallStep: React.FC<{
                   </div>
                   <div className="text-left">
                     <span className="font-display font-bold text-sm text-[#3E1F07]">Annual</span>
-                    <span className="text-[10px] text-[#4CAF50] font-semibold block">Save 42% • $1.33/week</span>
+                    <span className="text-[10px] text-[#4CAF50] font-semibold block">Save 44% • $0.77/week</span>
                   </div>
                 </div>
-                <span className="font-display font-extrabold text-xl text-[#3E1F07]">$69<span className="text-xs font-normal">/yr</span></span>
+                <span className="font-display font-extrabold text-xl text-[#3E1F07]">$39.99<span className="text-xs font-normal">/yr</span></span>
               </div>
             </div>
 
@@ -469,7 +469,7 @@ const PaywallStep: React.FC<{
                     <span className="text-[10px] text-[#8B4513] block">Flexible billing</span>
                   </div>
                 </div>
-                <span className="font-display font-extrabold text-xl text-[#3E1F07]">$9.99<span className="text-xs font-normal">/mo</span></span>
+                <span className="font-display font-extrabold text-xl text-[#3E1F07]">$5.99<span className="text-xs font-normal">/mo</span></span>
               </div>
             </div>
           </div>
@@ -563,14 +563,16 @@ const PaywallStep: React.FC<{
         </div>
       </div>
 
-      {/* Skip Link - Always visible (Apple Kids App Guideline: Must allow access without account) */}
+      {/* Skip Link - HIDDEN (Hard Paywall) but keeping logic for future use */}
       <div className="text-center">
+        {/* Skip button hidden - uncomment to re-enable limited access option
         <button 
           onClick={onSkip}
           className="text-base px-6 py-3 rounded-full bg-white/10 border border-white/30 underline decoration-dotted transition-all text-white/80 hover:text-white hover:bg-white/20 font-medium"
         >
           Continue with limited access →
         </button>
+        */}
         
         {/* Restore Purchases Link */}
         <div className="mt-3">
@@ -639,7 +641,7 @@ const OnboardingPage: React.FC = () => {
   const [selectedPlan, setSelectedPlan] = useState<'annual' | 'monthly'>('annual');
   const [showParentGate, setShowParentGate] = useState(false);
   
-  // Email Bonus Modal State (for mobile users who skip)
+  // Email Bonus Modal State (for mobile users who skip) - Hidden but keeping logic
   const [showEmailBonusModal, setShowEmailBonusModal] = useState(false);
 
   // IMPORTANT:
@@ -1000,7 +1002,7 @@ const OnboardingPage: React.FC = () => {
     }
   };
 
-  // Complete onboarding for free users (skip subscription)
+  // Complete onboarding for free users (skip subscription) - Hidden but keeping logic
   const completeOnboardingWithoutSubscription = (awardedEmailBonus: boolean) => {
     // Track skip event
     activityTrackingService.trackOnboardingEvent('skip_clicked', { 
@@ -1063,14 +1065,14 @@ const OnboardingPage: React.FC = () => {
     }, 100);
   };
 
-  // Handle email bonus modal submit
+  // Handle email bonus modal submit - Hidden but keeping logic
   const handleEmailBonusSubmit = (email: string, optIn: boolean) => {
     console.log('📧 Email bonus submitted:', email, 'Opt-in:', optIn);
     setShowEmailBonusModal(false);
     completeOnboardingWithoutSubscription(true); // Award bonus
   };
 
-  // Handle email bonus modal skip
+  // Handle email bonus modal skip - Hidden but keeping logic
   const handleEmailBonusSkip = () => {
     setShowEmailBonusModal(false);
     completeOnboardingWithoutSubscription(false); // No bonus
@@ -1547,7 +1549,7 @@ const OnboardingPage: React.FC = () => {
           </div>
         )}
 
-        {/* --- STEP 4: PAYWALL / VALUE PROPOSITION --- */}
+        {/* --- STEP 4: PAYWALL / VALUE PROPOSITION (Hard Paywall - Skip button hidden) --- */}
         {step === 4 && (
             <PaywallStep 
               selectedPlan={selectedPlan}
@@ -1632,7 +1634,7 @@ const OnboardingPage: React.FC = () => {
           </div>
         )}
 
-        {/* Email Bonus Modal - Shows when mobile users skip without subscribing */}
+        {/* Email Bonus Modal - Shows when mobile users skip without subscribing (hidden but keeping logic) */}
         <EmailBonusModal
           isOpen={showEmailBonusModal}
           onClose={handleEmailBonusSkip}

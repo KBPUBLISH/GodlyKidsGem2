@@ -339,17 +339,17 @@ const PaywallPage: React.FC = () => {
                             <div className="flex flex-col text-left">
                                 <span className={`font-display font-bold text-lg ${selectedPlan === 'annual' ? 'text-[#1a237e]' : 'text-gray-600'}`}>Annual Plan</span>
                                 <span className="text-xs text-[#7c4dff] font-semibold bg-[#ede7f6] px-2 py-0.5 rounded-md w-fit">
-                                  Save 42% • $1.33/week
+                                  Save 44% • $0.77/week
                                 </span>
                             </div>
                             <div className="flex flex-col items-end">
                                  <div className="flex items-center gap-1">
                                     <span className="font-display font-extrabold text-2xl text-[#1a237e]">
-                                      $69
+                                      $39.99
                                     </span>
                                     <span className="text-xs text-gray-500 font-bold">/yr</span>
                                  </div>
-                                 <span className="text-xs text-gray-400 line-through">$119.88</span>
+                                 <span className="text-xs text-gray-400 line-through">$71.88</span>
                             </div>
                         </div>
                         
@@ -374,7 +374,7 @@ const PaywallPage: React.FC = () => {
                         {selectedPlan === 'monthly' && (
                             <div className="bg-[#ede7f6] py-1 text-center shadow-sm absolute top-0 left-0 right-0 z-10">
                                 <span className="text-[#7c4dff] text-[10px] font-extrabold uppercase tracking-widest">
-                                    3-DAY FREE TRIAL INCLUDED
+                                    14-DAY FREE TRIAL INCLUDED
                                 </span>
                             </div>
                         )}
@@ -388,7 +388,7 @@ const PaywallPage: React.FC = () => {
                             <div className="flex flex-col items-end">
                                 <div className="flex items-center gap-1">
                                      <span className="font-display font-extrabold text-2xl text-[#1a237e]">
-                                       $9.99
+                                       $5.99
                                      </span>
                                      <span className="text-xs text-gray-500 font-bold">/mo</span>
                                 </div>
@@ -479,7 +479,7 @@ const PaywallPage: React.FC = () => {
             </div>
 
             <p className="text-white/40 text-[10px] font-medium mt-6 text-center px-6 max-w-xs">
-                Free trial for 7 days, then subscription automatically renews unless cancelled at least 24-hours before the trial ends. Cancel anytime in App Store or Google Play.
+                Free trial for 14 days, then subscription automatically renews unless cancelled at least 24-hours before the trial ends. Cancel anytime in App Store or Google Play.
             </p>
 
             {/* Debug info for development */}

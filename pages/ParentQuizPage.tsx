@@ -839,15 +839,15 @@ const ParentQuizPage: React.FC = () => {
                   ✨ Founding Family Plan ✨
                 </p>
                 <div className="bg-white/80 rounded-xl p-4 my-4">
-                  <p className="text-sm text-stone-500 mb-1">7-day free trial, then</p>
+                  <p className="text-sm text-stone-500 mb-1">14-day free trial, then</p>
                   <div className="flex items-center justify-center gap-3">
                     <div>
-                      <p className="text-2xl font-bold text-amber-600">$69/yr</p>
-                      <p className="text-xs text-stone-400">~$5.75/month</p>
+                      <p className="text-2xl font-bold text-amber-600">$39.99/yr</p>
+                      <p className="text-xs text-stone-400">~$3.33/month</p>
                     </div>
                     <span className="text-stone-300">or</span>
                     <div>
-                      <p className="text-2xl font-bold text-stone-700">$9.99/mo</p>
+                      <p className="text-2xl font-bold text-stone-700">$5.99/mo</p>
                       <p className="text-xs text-stone-400">cancel anytime</p>
                     </div>
                   </div>

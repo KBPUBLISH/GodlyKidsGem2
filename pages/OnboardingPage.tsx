@@ -1555,15 +1555,21 @@ const OnboardingPage: React.FC = () => {
               onCreateAccount={handleCreateAccount}
               onSubscribe={handleSubscribeClick}
               onSkip={() => {
-                // Check if on mobile (iOS/Android) to show email bonus modal
-                const isMobile = Capacitor.isNativePlatform() || 
-                  /iphone|ipad|ipod|android/i.test(navigator.userAgent.toLowerCase());
+                // Check if on mobile (iOS/Android/DeSpia) to show email bonus modal
+                const ua = navigator.userAgent.toLowerCase();
+                const isNativeApp = Capacitor.isNativePlatform() || ua.includes('despia');
+                const isMobileDevice = /iphone|ipad|ipod|android/i.test(ua);
+                const isMobile = isNativeApp || isMobileDevice;
+                
+                console.log('📧 Email bonus check:', { isNativeApp, isMobileDevice, isMobile, ua: ua.substring(0, 100) });
                 
                 if (isMobile) {
                   // Show email bonus modal for mobile users
+                  console.log('📧 Showing email bonus modal');
                   setShowEmailBonusModal(true);
                 } else {
                   // Web users go directly (no popup)
+                  console.log('📧 Skipping email bonus (web user)');
                   completeOnboardingWithoutSubscription(false);
                 }
               }}

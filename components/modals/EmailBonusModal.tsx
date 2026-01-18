@@ -29,13 +29,22 @@ const EmailBonusModal: React.FC<EmailBonusModalProps> = ({
   const [error, setError] = useState<string | null>(null);
   const [showSuccess, setShowSuccess] = useState(false);
 
-  // Detect platform
+  // Detect platform (including DeSpia native app)
   const getPlatform = (): 'ios' | 'android' | 'web' => {
     if (Capacitor.isNativePlatform()) {
       return Capacitor.getPlatform() as 'ios' | 'android';
     }
-    // Check user agent for mobile web
+    // Check user agent for DeSpia native app or mobile web
     const ua = navigator.userAgent.toLowerCase();
+    const isDespia = ua.includes('despia');
+    
+    if (isDespia) {
+      // DeSpia app - detect iOS or Android from user agent
+      if (/iphone|ipad|ipod/.test(ua)) return 'ios';
+      if (/android/.test(ua)) return 'android';
+      return 'ios'; // Default DeSpia to iOS if can't detect
+    }
+    
     if (/iphone|ipad|ipod/.test(ua)) return 'ios';
     if (/android/.test(ua)) return 'android';
     return 'web';

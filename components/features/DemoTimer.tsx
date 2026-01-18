@@ -49,14 +49,30 @@ const DemoTimer: React.FC = () => {
   const [tutorialComplete, setTutorialComplete] = useState(false);
 
   useEffect(() => {
-    // Check if this is a fresh demo start
+    // Check if this is a fresh demo start and user has completed initial welcome flow
     const checkDemoStart = () => {
       const demoActive = localStorage.getItem('godlykids_demo_active');
-      const welcomeShown = sessionStorage.getItem('godlykids_demo_welcome_shown');
+      const demoWelcomeShown = sessionStorage.getItem('godlykids_demo_welcome_shown');
       const isPremium = localStorage.getItem('godlykids_premium') === 'true';
       
-      // Show welcome modal if demo just started and we haven't shown it this session
-      if (demoActive === 'true' && !welcomeShown && !isPremium && location.pathname === '/home') {
+      // Check if user has completed the initial welcome/book selection flow
+      const welcomeSeenBefore = localStorage.getItem('godlykids_welcome_seen') === 'true';
+      
+      // Track if user has visited content (book/playlist/lesson) during this demo
+      const hasVisitedContent = sessionStorage.getItem('godlykids_demo_visited_content') === 'true';
+      
+      // Show welcome modal only if:
+      // 1. Demo is active
+      // 2. We haven't shown demo welcome this session
+      // 3. Not premium
+      // 4. On home page
+      // 5. User has seen the initial welcome page AND has visited content (returned from book)
+      if (demoActive === 'true' && 
+          !demoWelcomeShown && 
+          !isPremium && 
+          location.pathname === '/home' &&
+          welcomeSeenBefore &&
+          hasVisitedContent) {
         setShowWelcomeModal(true);
         sessionStorage.setItem('godlykids_demo_welcome_shown', 'true');
       }
@@ -65,6 +81,23 @@ const DemoTimer: React.FC = () => {
     // Check after a short delay to let the page render
     const timeout = setTimeout(checkDemoStart, 500);
     return () => clearTimeout(timeout);
+  }, [location.pathname]);
+  
+  // Track when user visits content pages (books, playlists, lessons)
+  useEffect(() => {
+    const demoActive = localStorage.getItem('godlykids_demo_active');
+    if (demoActive === 'true') {
+      // Check if current path is a content page
+      const isContentPage = 
+        location.pathname.startsWith('/book/') ||
+        location.pathname.startsWith('/read/') ||
+        location.pathname.startsWith('/audio/playlist/') ||
+        location.pathname.startsWith('/lesson/');
+      
+      if (isContentPage) {
+        sessionStorage.setItem('godlykids_demo_visited_content', 'true');
+      }
+    }
   }, [location.pathname]);
 
   useEffect(() => {

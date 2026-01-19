@@ -110,6 +110,7 @@ app.use('/api/google-tts', ttsLimiter, require('./routes/googleTts'));
 app.use('/api/radio', require('./routes/radio'));
 app.use('/api/parent-quiz', require('./routes/parentQuiz'));
 app.use('/api/email-subscribers', require('./routes/emailSubscribers'));
+app.use('/api/meta', require('./routes/metaConversions'));
 
 // ===========================================
 // HEALTH & STATUS ENDPOINTS

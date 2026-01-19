@@ -1209,19 +1209,16 @@ const LessonPlayerPage: React.FC = () => {
                         </div>
                     )}
 
-                    {/* Continue Button - Shows on last episode (always visible so user can skip ahead) */}
+                    {/* Continue Button - Shows on last episode (top right, compact) */}
                     {(!hasEpisodes || currentEpisodeIndex === totalEpisodes - 1) && (
-                        <div className="absolute bottom-32 left-0 right-0 flex justify-center z-50 animate-in fade-in slide-in-from-bottom-4 duration-500">
+                        <div className="absolute top-4 right-4 z-50 animate-in fade-in slide-in-from-right-4 duration-500">
                             <button
                                 onClick={() => setCurrentScreen('devotional')}
-                                className="flex items-center gap-3 bg-[#8B4513] hover:bg-[#A0522D] text-white px-8 py-4 rounded-full font-bold font-display text-lg shadow-2xl border-4 border-[#FFD700] transition-all transform hover:scale-105 active:scale-95"
-                                style={{
-                                    boxShadow: '0 0 20px rgba(255, 215, 0, 0.4), 0 8px 32px rgba(0, 0, 0, 0.5)'
-                                }}
+                                className="flex items-center gap-2 bg-[#8B4513]/90 hover:bg-[#A0522D] text-white px-4 py-2 rounded-full font-bold text-sm shadow-lg border-2 border-[#FFD700] transition-all transform hover:scale-105 active:scale-95 backdrop-blur-sm"
                             >
-                                <Book className="w-6 h-6" />
-                                Continue to Devotional
-                                <ChevronRight className="w-6 h-6" />
+                                <Book className="w-4 h-4" />
+                                <span className="hidden sm:inline">Continue to</span> Devotional
+                                <ChevronRight className="w-4 h-4" />
                             </button>
                         </div>
                     )}

@@ -4,10 +4,10 @@
  * IMPORTANT: This tracking is ONLY used in parent-gated areas (paywall, settings, sign-in)
  * to comply with Apple's Kids Category guidelines. Children never interact with this code.
  * 
- * Pixel ID: 1170306968418254
+ * Pixel ID: 1698300257760918 (GodlyKids Pixel)
  */
 
-const PIXEL_ID = '1170306968418254';
+const PIXEL_ID = '1698300257760918';
 
 // Track if pixel is initialized
 let isInitialized = false;

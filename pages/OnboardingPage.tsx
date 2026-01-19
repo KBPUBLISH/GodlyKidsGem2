@@ -15,6 +15,7 @@ import { filterVisibleVoices } from '../services/voiceManagementService';
 import { cleanVoiceDescription, cleanVoiceCategory } from '../utils/voiceUtils';
 import { facebookPixelService } from '../services/facebookPixelService';
 import { activityTrackingService } from '../services/activityTrackingService';
+import { metaAttributionService } from '../services/metaAttributionService';
 import { Capacitor } from '@capacitor/core';
 
 // Use Funny Heads instead of generic human seeds
@@ -1259,6 +1260,14 @@ const OnboardingPage: React.FC = () => {
         const purchasePrice = selectedPlan === 'annual' ? 49.99 : 9.99;
         facebookPixelService.trackPurchase(selectedPlan, purchasePrice);
         facebookPixelService.trackSubscribe(selectedPlan, purchasePrice);
+        
+        // Meta Conversions API - Server-side purchase tracking for ROAS
+        metaAttributionService.trackPurchase({
+          email: userEmail || localStorage.getItem('godlykids_user_email') || undefined,
+          value: purchasePrice,
+          currency: 'USD',
+          plan: selectedPlan,
+        });
         
         // NOW navigate to home - payment is confirmed
         navigate('/home');

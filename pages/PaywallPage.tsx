@@ -8,6 +8,7 @@ import ParentGateModal from '../components/features/ParentGateModal';
 import { authService } from '../services/authService';
 import { getApiBaseUrl } from '../services/apiService';
 import { facebookPixelService } from '../services/facebookPixelService';
+import { metaAttributionService } from '../services/metaAttributionService';
 
 // Check if user has a real account (not just device ID)
 const hasAccount = (): boolean => {
@@ -133,6 +134,15 @@ const PaywallPage: React.FC = () => {
         // Facebook Pixel - Track successful purchase
         facebookPixelService.trackPurchase(selectedPlan, price);
         facebookPixelService.trackSubscribe(selectedPlan, price);
+        
+        // Meta Conversions API - Server-side purchase tracking for ROAS
+        const userEmail = localStorage.getItem('godlykids_user_email') || authService.getUser()?.email;
+        metaAttributionService.trackPurchase({
+          email: userEmail || undefined,
+          value: price,
+          currency: 'USD',
+          plan: selectedPlan,
+        });
         
         // Update local state
         subscribe();

@@ -497,6 +497,7 @@ import NotificationService from './services/notificationService';
 import { activityTrackingService } from './services/activityTrackingService';
 import { DespiaService } from './services/despiaService';
 import { authService } from './services/authService';
+import { metaAttributionService } from './services/metaAttributionService';
 import DemoTimer from './components/features/DemoTimer';
 
 // --- ASSETS & HELPERS ---
@@ -844,6 +845,11 @@ const App: React.FC = () => {
       activityTrackingService.stopBackendSync();
     };
   }, [isDespia]);
+
+  // Initialize Meta Attribution tracking for app install campaigns
+  useEffect(() => {
+    metaAttributionService.initialize();
+  }, []);
 
   // iOS Audio Session Unlock - REMOVED
   // After investigation, iOS silent mode cannot be overridden from web code.

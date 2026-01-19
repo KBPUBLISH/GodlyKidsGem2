@@ -13,7 +13,7 @@ const crypto = require('crypto');
  * - META_ACCESS_TOKEN: Conversions API access token from Meta Events Manager
  */
 
-const PIXEL_ID = process.env.META_PIXEL_ID || '1698300257760918';
+const PIXEL_ID = process.env.META_PIXEL_ID || '1372889104031125';
 const ACCESS_TOKEN = process.env.META_ACCESS_TOKEN;
 const API_VERSION = 'v18.0';
 const META_API_URL = `https://graph.facebook.com/${API_VERSION}/${PIXEL_ID}/events`;
@@ -288,7 +288,7 @@ router.get('/test', async (req, res) => {
   const testEvent = {
     event_name: 'TestEvent',
     event_time: Math.floor(Date.now() / 1000),
-    action_source: 'website',
+    action_source: 'app',
     user_data: {
       client_ip_address: req.ip,
       client_user_agent: req.headers['user-agent'],

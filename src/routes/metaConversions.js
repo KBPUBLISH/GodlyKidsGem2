@@ -13,10 +13,11 @@ const crypto = require('crypto');
  * - META_ACCESS_TOKEN: Conversions API access token from Meta Events Manager
  */
 
-const PIXEL_ID = process.env.META_PIXEL_ID || '713940524967938';
+// Dataset ID for Conversions API (Godly Kids dataset)
+const DATASET_ID = process.env.META_DATASET_ID || '1372889104031125';
 const ACCESS_TOKEN = process.env.META_ACCESS_TOKEN;
 const API_VERSION = 'v18.0';
-const META_API_URL = `https://graph.facebook.com/${API_VERSION}/${PIXEL_ID}/events`;
+const META_API_URL = `https://graph.facebook.com/${API_VERSION}/${DATASET_ID}/events`;
 
 // Hash function for user data (Meta requires SHA256 hashing)
 const hashData = (data) => {
@@ -280,7 +281,7 @@ router.get('/test', async (req, res) => {
     return res.json({
       configured: false,
       message: 'META_ACCESS_TOKEN environment variable not set',
-      pixelId: PIXEL_ID,
+      datasetId: DATASET_ID,
     });
   }
 
@@ -299,7 +300,7 @@ router.get('/test', async (req, res) => {
   
   res.json({
     configured: true,
-    pixelId: PIXEL_ID,
+    datasetId: DATASET_ID,
     testResult: result,
   });
 });

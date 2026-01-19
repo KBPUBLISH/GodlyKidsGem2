@@ -143,8 +143,9 @@ const DemoTimer: React.FC = () => {
     const interval = setInterval(() => {
       const demoEndTimeStr = localStorage.getItem('godlykids_demo_end_time');
       const demoActive = localStorage.getItem('godlykids_demo_active');
+      const isPremium = localStorage.getItem('godlykids_premium') === 'true';
       
-      if (demoActive !== 'true' || !demoEndTimeStr) {
+      if (isPremium || demoActive !== 'true' || !demoEndTimeStr) {
         setIsVisible(false);
         return;
       }
@@ -156,6 +157,7 @@ const DemoTimer: React.FC = () => {
         handleDemoExpired();
       } else {
         setTimeLeft(Math.ceil(remaining / 1000));
+        setIsVisible(true); // Ensure visibility is set every tick
       }
     }, 1000);
 
@@ -486,20 +488,20 @@ const DemoTimer: React.FC = () => {
       {/* Tutorial highlights */}
       {currentTutorialStep >= 0 && renderTutorialHighlight()}
       
-      {/* Floating timer badge - always visible during demo (in header area) */}
+      {/* Floating timer badge - always visible during demo (below header) */}
       {isVisible && !showWelcomeModal && !showPaywallModal && currentTutorialStep < 0 && (
         <button
           onClick={handleTimerClick}
-          className={`fixed z-[100] bg-gradient-to-r ${getTimerColor()} text-white px-3 py-1.5 rounded-full shadow-lg flex items-center gap-2 transition-all hover:scale-105 active:scale-95 border-2 border-white/30`}
+          className={`fixed z-[9998] bg-gradient-to-r ${getTimerColor()} text-white px-5 py-2.5 rounded-full shadow-2xl flex items-center gap-2 transition-all hover:scale-105 active:scale-95 border-2 border-white/50`}
           style={{
-            top: 'calc(env(safe-area-inset-top, 0px) + 56px)',
+            top: '70px',
             left: '50%',
             transform: 'translateX(-50%)',
           }}
         >
-          <Clock className="w-4 h-4" />
-          <span className="font-bold text-sm">
-            {formatTime(timeLeft || 0)}
+          <Clock className="w-5 h-5" />
+          <span className="font-bold text-base">
+            ⏱️ {formatTime(timeLeft || 0)}
           </span>
           {timeLeft && timeLeft <= 60 && (
             <span className="animate-pulse">⚡</span>

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { Clock, Crown, Sparkles, ShoppingBag, Coins, FileText, X, ChevronRight } from 'lucide-react';
+import { Clock, Crown, Sparkles, ShoppingBag, Coins, FileText, X, ChevronRight, Check, BookOpen, Music, Mic, Users } from 'lucide-react';
 
 /**
  * DemoTimer Component
@@ -9,6 +9,15 @@ import { Clock, Crown, Sparkles, ShoppingBag, Coins, FileText, X, ChevronRight }
  * Includes animated welcome modal and feature tutorial highlights.
  * When timer expires, redirects user back to onboarding paywall.
  */
+
+// What's included in subscription
+const SUBSCRIPTION_FEATURES = [
+  { icon: BookOpen, label: 'Bible Story Library', desc: 'Animated lessons & devotionals' },
+  { icon: Music, label: 'Audio Learning Center', desc: 'Scripture songs & audiobooks' },
+  { icon: Sparkles, label: 'Interactive Quizzes', desc: 'Test comprehension & earn rewards' },
+  { icon: Mic, label: 'Read-Along Narration', desc: 'Multiple voices to choose from' },
+  { icon: Users, label: 'Family Profiles (Up to 5)', desc: 'Each child gets their own progress' },
+];
 
 // Tutorial steps data
 const TUTORIAL_STEPS = [
@@ -47,6 +56,9 @@ const DemoTimer: React.FC = () => {
   const [isMinimizing, setIsMinimizing] = useState(false);
   const [currentTutorialStep, setCurrentTutorialStep] = useState(-1); // -1 = not started, 0-2 = steps
   const [tutorialComplete, setTutorialComplete] = useState(false);
+  
+  // Paywall modal state (shown when clicking timer)
+  const [showPaywallModal, setShowPaywallModal] = useState(false);
 
   useEffect(() => {
     // Check if this is a fresh demo start and user has completed initial welcome flow
@@ -169,6 +181,18 @@ const DemoTimer: React.FC = () => {
     localStorage.removeItem('godlykids_demo_active');
     localStorage.removeItem('godlykids_demo_end_time');
     // Redirect to onboarding step 1
+    navigate('/onboarding');
+  };
+
+  const handleTimerClick = () => {
+    setShowPaywallModal(true);
+  };
+
+  const handleStartTrial = () => {
+    setShowPaywallModal(false);
+    localStorage.setItem('godlykids_demo_used', 'true');
+    localStorage.removeItem('godlykids_demo_active');
+    localStorage.removeItem('godlykids_demo_end_time');
     navigate('/onboarding');
   };
 
@@ -463,9 +487,9 @@ const DemoTimer: React.FC = () => {
       {currentTutorialStep >= 0 && renderTutorialHighlight()}
       
       {/* Floating timer badge - always visible during demo (in header area) */}
-      {isVisible && !showWelcomeModal && currentTutorialStep < 0 && (
+      {isVisible && !showWelcomeModal && !showPaywallModal && currentTutorialStep < 0 && (
         <button
-          onClick={handleSubscribeClick}
+          onClick={handleTimerClick}
           className={`fixed z-[100] bg-gradient-to-r ${getTimerColor()} text-white px-3 py-1.5 rounded-full shadow-lg flex items-center gap-2 transition-all hover:scale-105 active:scale-95 border-2 border-white/30`}
           style={{
             top: 'calc(env(safe-area-inset-top, 0px) + 56px)',
@@ -481,6 +505,120 @@ const DemoTimer: React.FC = () => {
             <span className="animate-pulse">⚡</span>
           )}
         </button>
+      )}
+
+      {/* Paywall Modal - shown when clicking timer */}
+      {showPaywallModal && (
+        <div className="fixed inset-0 z-[9999] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl max-w-sm w-full shadow-2xl animate-in zoom-in-95 duration-300 overflow-hidden max-h-[90vh] overflow-y-auto">
+            {/* Header */}
+            <div className="bg-gradient-to-br from-[#7c4dff] via-[#536dfe] to-[#448aff] p-6 text-center relative">
+              {/* Close button */}
+              <button 
+                onClick={() => setShowPaywallModal(false)}
+                className="absolute top-4 right-4 w-8 h-8 bg-white/20 rounded-full flex items-center justify-center text-white hover:bg-white/30 transition-colors"
+              >
+                <X size={18} />
+              </button>
+              
+              {/* Floating sparkles */}
+              <div className="absolute top-2 left-4 animate-bounce text-lg" style={{ animationDelay: '0ms' }}>✨</div>
+              <div className="absolute top-4 right-14 animate-bounce text-lg" style={{ animationDelay: '200ms' }}>⭐</div>
+              
+              {/* Timer display */}
+              <div className="w-20 h-20 mx-auto mb-3 rounded-full bg-white/20 flex items-center justify-center relative">
+                <div className="absolute inset-0 rounded-full bg-white/10 animate-ping" />
+                <div className="relative z-10 text-center">
+                  <Clock className="w-6 h-6 text-white mx-auto mb-1" />
+                  <span className="text-white font-bold text-lg">{formatTime(timeLeft || 0)}</span>
+                </div>
+              </div>
+              
+              <h2 className="text-white font-bold text-2xl mb-1">
+                Demo Time Remaining
+              </h2>
+              <p className="text-white/80 text-sm">
+                Unlock <span className="font-bold text-[#FFD700]">unlimited access</span> today!
+              </p>
+            </div>
+            
+            {/* Content */}
+            <div className="p-5">
+              {/* Free Trial Badge */}
+              <div className="text-center mb-4">
+                <div className="inline-block bg-gradient-to-r from-[#FFD700] to-[#FFA500] px-4 py-1.5 rounded-full shadow-md">
+                  <span className="text-[#3E1F07] font-extrabold text-sm">🎁 14-DAY FREE TRIAL</span>
+                </div>
+              </div>
+              
+              {/* What's Included */}
+              <div className="mb-5">
+                <h3 className="text-gray-800 font-bold text-sm mb-3 flex items-center gap-2">
+                  <Crown className="w-4 h-4 text-[#FFD700]" />
+                  What's Included
+                </h3>
+                <div className="space-y-2">
+                  {SUBSCRIPTION_FEATURES.map((feature, idx) => (
+                    <div key={idx} className="flex items-center gap-3 bg-gray-50 rounded-lg px-3 py-2">
+                      <div className="w-8 h-8 rounded-full bg-gradient-to-br from-[#FFD700]/20 to-[#FFA500]/20 flex items-center justify-center flex-shrink-0">
+                        <feature.icon className="w-4 h-4 text-[#8B4513]" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-gray-800 text-sm font-semibold">{feature.label}</p>
+                        <p className="text-gray-500 text-[10px]">{feature.desc}</p>
+                      </div>
+                      <Check className="w-4 h-4 text-green-500 flex-shrink-0" />
+                    </div>
+                  ))}
+                </div>
+              </div>
+              
+              {/* Pricing Preview */}
+              <div className="bg-gradient-to-br from-[#fff8e1] to-[#ffecb3] rounded-xl p-4 mb-5 border border-[#FFD700]/30">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-[#5c2e0b] font-bold">Annual Plan</span>
+                  <div className="text-right">
+                    <span className="text-[#3E1F07] font-extrabold text-xl">$39.99</span>
+                    <span className="text-[#5c2e0b] text-xs">/year</span>
+                  </div>
+                </div>
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-green-600 font-semibold">Save 44%</span>
+                  <span className="text-[#5c2e0b]">Only $0.77/week</span>
+                </div>
+              </div>
+              
+              {/* CTA Button */}
+              <button
+                onClick={handleStartTrial}
+                className="w-full bg-gradient-to-r from-[#FFD700] to-[#FFA500] text-[#3E1F07] font-bold py-4 px-6 rounded-2xl shadow-lg flex flex-col items-center justify-center gap-1 hover:opacity-90 transition-opacity border-b-4 border-[#B8860B] active:border-b-2 active:translate-y-[2px]"
+              >
+                <span className="text-lg flex items-center gap-2">
+                  <Crown className="w-5 h-5" />
+                  Create Account & Start Free Trial
+                </span>
+                <span className="text-xs font-normal opacity-80">No charge for 14 days • Cancel anytime</span>
+              </button>
+              
+              {/* Continue Demo Link */}
+              <button
+                onClick={() => setShowPaywallModal(false)}
+                className="w-full text-gray-500 font-medium py-3 mt-2 hover:text-gray-700 transition-colors text-sm"
+              >
+                Continue exploring demo →
+              </button>
+              
+              {/* Trust badges */}
+              <div className="flex items-center justify-center gap-4 mt-3 text-gray-400 text-[10px]">
+                <span>🔒 Secure</span>
+                <span>•</span>
+                <span>100% Ad-free</span>
+                <span>•</span>
+                <span>Cancel anytime</span>
+              </div>
+            </div>
+          </div>
+        </div>
       )}
     </>
   );

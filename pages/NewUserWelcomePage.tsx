@@ -150,10 +150,19 @@ const NewUserWelcomePage: React.FC = () => {
     localStorage.setItem('godlykids_welcome_seen', 'true');
   };
 
+  // Start the 5-minute demo timer
+  const startDemoTimer = () => {
+    const demoEndTime = Date.now() + (5 * 60 * 1000); // 5 minutes from now
+    localStorage.setItem('godlykids_demo_end_time', demoEndTime.toString());
+    localStorage.setItem('godlykids_demo_active', 'true');
+    console.log('⏱️ Demo timer started (5 minutes) from welcome page');
+  };
+
   // Direct navigation - no extra tap needed
   const handleItemClick = (item: ContentItem) => {
     playClick();
     markWelcomeSeen();
+    startDemoTimer(); // Start demo timer when user selects content
     
     // Navigate directly based on content type
     switch (item.type) {
@@ -174,6 +183,7 @@ const NewUserWelcomePage: React.FC = () => {
   const handleSkip = () => {
     playClick();
     markWelcomeSeen();
+    startDemoTimer(); // Start demo timer even when skipping
     navigate('/home');
   };
 

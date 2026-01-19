@@ -158,8 +158,9 @@ const DemoTimer: React.FC = () => {
     setIsExpired(true);
     setIsVisible(true);
     
+    // Redirect to onboarding step 1 (not paywall)
     setTimeout(() => {
-      navigate('/onboarding?demo_expired=1');
+      navigate('/onboarding');
     }, 2000);
   };
 
@@ -167,7 +168,8 @@ const DemoTimer: React.FC = () => {
     localStorage.setItem('godlykids_demo_used', 'true');
     localStorage.removeItem('godlykids_demo_active');
     localStorage.removeItem('godlykids_demo_end_time');
-    navigate('/onboarding?demo_expired=1');
+    // Redirect to onboarding step 1
+    navigate('/onboarding');
   };
 
   const handleStartTutorial = () => {
@@ -207,8 +209,8 @@ const DemoTimer: React.FC = () => {
     sessionStorage.setItem('godlykids_demo_tutorial_complete', 'true');
   };
 
-  // Don't show on onboarding page or landing
-  if (location.pathname === '/onboarding' || location.pathname === '/') {
+  // Don't show on onboarding page, landing, or welcome page
+  if (location.pathname === '/onboarding' || location.pathname === '/' || location.pathname === '/welcome') {
     return null;
   }
 

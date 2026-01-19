@@ -748,24 +748,10 @@ const OnboardingPage: React.FC = () => {
   
   // Demo mode state - track if user has used their 5-minute demo
   const [isDemoExpired, setIsDemoExpired] = useState(() => {
-    // Check if demo was already used OR if returning from expired demo
+    // Check if demo was already used
     const demoUsed = localStorage.getItem('godlykids_demo_used');
-    const urlParams = new URLSearchParams(window.location.search);
-    const demoExpiredParam = urlParams.get('demo_expired') === '1';
-    return demoUsed === 'true' || demoExpiredParam;
+    return demoUsed === 'true';
   });
-  
-  // Check for demo_expired parameter and jump to step 4 (paywall)
-  useEffect(() => {
-    const urlParams = new URLSearchParams(window.location.search);
-    if (urlParams.get('demo_expired') === '1') {
-      console.log('⏱️ Demo expired - jumping to paywall');
-      setIsDemoExpired(true);
-      setStep(4); // Jump directly to paywall
-      // Clean up URL
-      window.history.replaceState({}, '', window.location.pathname);
-    }
-  }, []);
   
   // Email Bonus Modal State (for mobile users who skip) - Hidden but keeping logic
   const [showEmailBonusModal, setShowEmailBonusModal] = useState(false);

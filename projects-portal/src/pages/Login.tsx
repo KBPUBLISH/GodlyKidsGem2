@@ -16,18 +16,19 @@ const Login: React.FC = () => {
     setError('');
     setIsLoading(true);
 
-    // Simulate a brief loading state
-    await new Promise(resolve => setTimeout(resolve, 500));
-
-    const success = login(email, password);
-    
-    if (success) {
-      navigate('/');
-    } else {
-      setError('Invalid email or password');
+    try {
+      const result = await login(email, password);
+      
+      if (result.success) {
+        navigate('/');
+      } else {
+        setError(result.error || 'Invalid email or password');
+      }
+    } catch (err) {
+      setError('An unexpected error occurred');
+    } finally {
+      setIsLoading(false);
     }
-    
-    setIsLoading(false);
   };
 
   return (

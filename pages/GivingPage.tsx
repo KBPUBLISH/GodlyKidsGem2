@@ -4,6 +4,7 @@ import { Heart, Coins, Users, Target, X, Gift, ArrowRight, Camera, MapPin, Thumb
 import { useUser } from '../context/UserContext';
 import { useLanguage } from '../context/LanguageContext';
 import Header from '../components/layout/Header';
+import { useTutorial } from '../context/TutorialContext';
 
 // API Base URL
 const API_BASE = (import.meta as any).env?.VITE_API_BASE_URL?.replace(/\/api\/?$/, '') 
@@ -96,6 +97,7 @@ const GivingPage: React.FC = () => {
     const navigate = useNavigate();
     const { coins, spendCoins, deviceId, currentProfileId, kids } = useUser();
     const { t } = useLanguage();
+    const { isTutorialActive, isStepActive, nextStep } = useTutorial();
     
     // Use actual deviceId or fallback to anonymous ID
     const effectiveDeviceId = deviceId || getAnonymousDeviceId();
@@ -438,7 +440,7 @@ const GivingPage: React.FC = () => {
                     </div>
                 ) : (
                     <div className="grid grid-cols-2 gap-3">
-                        {campaigns.map((campaign) => (
+                        {campaigns.map((campaign, index) => (
                             <div 
                                 key={campaign._id}
                                 onClick={() => openCampaignDetail(campaign)}
@@ -480,9 +482,17 @@ const GivingPage: React.FC = () => {
                                         </div>
                                     </div>
 
-                                    {/* Give Button */}
+                                    {/* Give Button - First one gets tutorial ID */}
                                     <button
-                                        onClick={(e) => openDonationModal(campaign, e)}
+                                        id={index === 0 ? 'give-button-0' : undefined}
+                                        data-tutorial={index === 0 ? 'give-button-0' : undefined}
+                                        onClick={(e) => {
+                                            openDonationModal(campaign, e);
+                                            // Advance tutorial when clicking the highlighted give button
+                                            if (index === 0 && isTutorialActive && isStepActive('donation_practice')) {
+                                                nextStep();
+                                            }
+                                        }}
                                         className="w-full py-2 bg-gradient-to-r from-pink-500 to-purple-500 text-white font-bold text-sm rounded-xl flex items-center justify-center gap-1 active:scale-95"
                                     >
                                         <Heart className="w-4 h-4" />

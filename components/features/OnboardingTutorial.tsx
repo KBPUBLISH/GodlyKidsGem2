@@ -304,18 +304,13 @@ const OnboardingTutorial: React.FC = () => {
       case 'donation_practice':
         return (
           <TutorialSpotlight
-            title="Donate 10 Coins"
-            description=""
+            targetElement="give-button-0"
+            title={config.title}
+            description="Tap the Give button to donate coins and help people in need!"
             isVisible={true}
-            popupPosition="center"
-            customContent={
-              <DonationPracticeContent
-                donatedAmount={donatedCoins}
-                onDonate={handleDonate}
-                onComplete={nextStep}
-              />
-            }
-            requiresElementClick={false}
+            fingerPosition="top"
+            popupPosition="top"
+            requiresElementClick={true}
           />
         );
 

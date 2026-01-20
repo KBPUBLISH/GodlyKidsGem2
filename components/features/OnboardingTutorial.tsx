@@ -77,6 +77,39 @@ const SwipeHintContent: React.FC<{ message: string }> = ({ message }) => (
   </div>
 );
 
+// Book controls intro - shows key reader controls
+const BookControlsIntroContent: React.FC = () => (
+  <div className="text-center">
+    <h3 className="text-[#FFD700] font-display font-bold text-lg mb-3">
+      📖 Reader Controls
+    </h3>
+    <div className="space-y-3 text-left">
+      <div className="flex items-center gap-3 bg-white/10 rounded-lg p-2">
+        <span className="text-2xl">▶️</span>
+        <div>
+          <p className="text-white font-semibold text-sm">Play Button</p>
+          <p className="text-white/70 text-xs">Tap to hear the story read aloud</p>
+        </div>
+      </div>
+      <div className="flex items-center gap-3 bg-white/10 rounded-lg p-2">
+        <span className="text-2xl">🌐</span>
+        <div>
+          <p className="text-white font-semibold text-sm">Language</p>
+          <p className="text-white/70 text-xs">Change the reading language</p>
+        </div>
+      </div>
+      <div className="flex items-center gap-3 bg-white/10 rounded-lg p-2">
+        <span className="text-2xl">📏</span>
+        <div>
+          <p className="text-white font-semibold text-sm">Tap Page</p>
+          <p className="text-white/70 text-xs">Adjust text position on screen</p>
+        </div>
+      </div>
+    </div>
+    <p className="text-white/60 text-xs mt-3">Starting in a moment...</p>
+  </div>
+);
+
 const OnboardingTutorial: React.FC = () => {
   const location = useLocation();
   const navigate = useNavigate();
@@ -139,7 +172,7 @@ const OnboardingTutorial: React.FC = () => {
   const isOnGivePage = currentPath === '/give';
 
   // Book-related steps should only show on book reader
-  const bookSteps: TutorialStep[] = ['book_swipe_intro', 'book_swipe_1', 'book_swipe_2', 'book_swipe_3', 'book_end_quiz', 'quiz_in_progress'];
+  const bookSteps: TutorialStep[] = ['book_controls_intro', 'book_swipe_intro', 'book_swipe_1', 'book_swipe_2', 'book_swipe_3', 'book_end_quiz', 'quiz_in_progress'];
   if (bookSteps.includes(currentStep) && !isOnBookReader) {
     return null; // Don't show book tutorial steps on wrong page
   }
@@ -180,7 +213,21 @@ const OnboardingTutorial: React.FC = () => {
           />
         );
 
-      // STEP 2-5: Book swipe hints (shown in book reader)
+      // STEP 2: Quick controls intro in book reader
+      case 'book_controls_intro':
+        return (
+          <TutorialSpotlight
+            title=""
+            description=""
+            isVisible={true}
+            popupPosition="center"
+            requiresElementClick={false}
+            hideOverlay={true}
+            customContent={<BookControlsIntroContent />}
+          />
+        );
+
+      // STEP 3-6: Book swipe hints (shown in book reader)
       case 'book_swipe_intro':
       case 'book_swipe_1':
       case 'book_swipe_2':

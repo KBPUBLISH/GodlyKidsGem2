@@ -5,6 +5,7 @@ import React, { createContext, useContext, useState, useCallback, useEffect } fr
 export type TutorialStep = 
   | 'idle'
   | 'welcome_book_tap'    // On welcome page, finger points to a book
+  | 'book_controls_intro' // Quick overview of reader controls
   | 'book_swipe_intro'    // In book reader, show swipe gesture hint
   | 'book_swipe_1'        // First page turn
   | 'book_swipe_2'        // Second page turn  
@@ -37,6 +38,12 @@ export const TUTORIAL_STEP_CONFIG: Record<TutorialStep, {
     title: 'Tap to Start!',
     description: 'Choose any story to begin your adventure!',
     requiresClick: false,
+  },
+  book_controls_intro: {
+    title: 'Quick Tips!',
+    description: 'Here are some helpful controls for reading.',
+    requiresClick: false,
+    autoAdvanceDelay: 4000, // Show for 4 seconds then advance
   },
   book_swipe_intro: {
     title: 'Swipe to Read',
@@ -134,23 +141,24 @@ export const TUTORIAL_STEP_CONFIG: Record<TutorialStep, {
 // FLOW: Welcome book → Swipe 3 pages → Quiz → Coins → Report Card → Shop → Giving
 const STEP_ORDER: TutorialStep[] = [
   'welcome_book_tap',     // 1. On welcome page, tap a book
-  'book_swipe_intro',     // 2. In reader, show swipe hint
-  'book_swipe_1',         // 3. First page turn
-  'book_swipe_2',         // 4. Second page turn
-  'book_swipe_3',         // 5. Third page turn - auto advances
-  'book_end_quiz',        // 6. End modal, quiz highlighted
-  'quiz_in_progress',     // 7. Taking the quiz
-  'coins_highlight',      // 8. Show coins earned
-  'coins_popup_open',     // 9. Coin history modal
-  'report_card_highlight',// 10. Highlight report card
-  'report_card_open',     // 11. Report card modal
-  'shop_highlight',       // 12. Highlight shop
-  'shop_open',            // 13. Shop modal
-  'navigate_to_give',     // 14. Navigate wheel to give
-  'give_popup',           // 15. Give section intro
-  'donation_practice',    // 16. Practice donating
-  'review_prompt',        // 17. Ask for review
-  'paywall',              // 18. Show subscription
+  'book_controls_intro',  // 2. Quick controls overview
+  'book_swipe_intro',     // 3. In reader, show swipe hint
+  'book_swipe_1',         // 4. First page turn
+  'book_swipe_2',         // 5. Second page turn
+  'book_swipe_3',         // 6. Third page turn - auto advances
+  'book_end_quiz',        // 7. End modal, quiz highlighted
+  'quiz_in_progress',     // 8. Taking the quiz
+  'coins_highlight',      // 9. Show coins earned
+  'coins_popup_open',     // 10. Coin history modal
+  'report_card_highlight',// 11. Highlight report card
+  'report_card_open',     // 12. Report card modal
+  'shop_highlight',       // 13. Highlight shop
+  'shop_open',            // 14. Shop modal
+  'navigate_to_give',     // 15. Navigate wheel to give
+  'give_popup',           // 16. Give section intro
+  'donation_practice',    // 17. Practice donating
+  'review_prompt',        // 18. Ask for review
+  'paywall',              // 19. Show subscription
   'complete',
 ];
 

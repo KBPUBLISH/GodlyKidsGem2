@@ -187,6 +187,24 @@ const BookReaderPage: React.FC = () => {
         }
     }, [isTutorialActive, currentStep, pages.length, onBookEndModalOpen]);
 
+    // Tutorial: Prevent browser back button from skipping tutorial
+    useEffect(() => {
+        if (!isTutorialActive) return;
+        
+        // Push a state to history so we can intercept the back button
+        window.history.pushState({ tutorialActive: true }, '');
+        
+        const handlePopState = (e: PopStateEvent) => {
+            if (isTutorialActive) {
+                // Prevent going back, push state again
+                window.history.pushState({ tutorialActive: true }, '');
+            }
+        };
+        
+        window.addEventListener('popstate', handlePopState);
+        return () => window.removeEventListener('popstate', handlePopState);
+    }, [isTutorialActive]);
+
     // TTS State
     const [playing, setPlaying] = useState(false);
     const playingRef = useRef(false); // Ref to track playing state for closures
@@ -3853,7 +3871,8 @@ const BookReaderPage: React.FC = () => {
 
             {/* Top Toolbar - Clean and Compact */}
             <div className="absolute top-0 left-0 right-0 h-14 flex items-center justify-between px-3 z-50 pointer-events-none">
-                {/* Back Button - For web view pages, go to previous page; otherwise exit to book details */}
+                {/* Back Button - Hidden during tutorial to prevent skipping */}
+                {!isTutorialActive && (
                 <button
                     onClick={(e) => {
                         e.stopPropagation();
@@ -3874,6 +3893,7 @@ const BookReaderPage: React.FC = () => {
                 >
                     <ChevronLeft className="w-5 h-5" />
                 </button>
+                )}
 
                 {/* Right: Language Selector, Voice Selector and Music Toggle - Hidden for Web View pages */}
                 {!currentPage?.isWebViewPage && (

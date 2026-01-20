@@ -40,6 +40,13 @@ const TutorialSpotlight: React.FC<TutorialSpotlightProps> = ({
   useEffect(() => {
     if (!isVisible) {
       setTargetRect(null);
+      setIsAnimating(false);
+      return;
+    }
+
+    // If no target element is specified, just show the popup (for swipe hints, etc.)
+    if (!targetElement && !targetRef?.current) {
+      setIsAnimating(true);
       return;
     }
 

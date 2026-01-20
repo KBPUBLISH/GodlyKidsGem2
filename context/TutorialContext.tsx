@@ -130,7 +130,7 @@ export const TUTORIAL_STEP_CONFIG: Record<TutorialStep, {
   give_button_highlight: {
     title: 'Practice Giving!',
     description: 'Tap the Give button to donate coins and help people in need!',
-    targetElement: 'give-button-0',
+    targetElement: 'modal-give-button',
     requiresClick: true,
   },
   donation_complete: {

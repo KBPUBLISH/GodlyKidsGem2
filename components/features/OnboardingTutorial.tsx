@@ -441,7 +441,7 @@ const OnboardingTutorial: React.FC = () => {
       case 'give_button_highlight':
         return (
           <TutorialSpotlight
-            targetElement="give-button-0"
+            targetElement="modal-give-button"
             title={config.title}
             description={config.description}
             isVisible={true}

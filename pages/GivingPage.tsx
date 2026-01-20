@@ -748,8 +748,14 @@ const GivingPage: React.FC = () => {
                         {/* Fixed Bottom Button */}
                         <div className="p-4 bg-white border-t border-gray-100">
                             <button
+                                id="modal-give-button"
+                                data-tutorial="modal-give-button"
                                 onClick={() => {
                                     const campaign = viewingCampaign;
+                                    // Advance tutorial when clicking give button in modal
+                                    if (isTutorialActive && isStepActive('give_button_highlight')) {
+                                        nextStep();
+                                    }
                                     setViewingCampaign(null);
                                     setTimeout(() => openDonationModal(campaign), 100);
                                 }}

@@ -165,12 +165,12 @@ const NewUserWelcomePage: React.FC = () => {
     playClick();
     markWelcomeSeen();
     
-    // If in tutorial and this is the first book being clicked
-    if (isTutorialActive && isStepActive('welcome_book_tap') && index === 0 && item.type === 'book') {
+    // If in tutorial and user clicks ANY book - go directly to reader
+    if (isTutorialActive && isStepActive('welcome_book_tap') && item.type === 'book') {
       // Advance tutorial to book swipe step
       nextStep();
-      // Navigate to book with tutorial flag
-      navigate(`/book/${item._id}`, { state: { fromTutorial: true } });
+      // Navigate directly to book READER (not detail page) with tutorial flag
+      navigate(`/read/${item._id}`, { state: { fromTutorial: true } });
       return;
     }
     
@@ -358,8 +358,8 @@ const NewUserWelcomePage: React.FC = () => {
           {items.slice(0, config.maxItems).map((item, index) => (
             <button
               key={item._id}
-              id={index === 0 ? 'welcome-book-0' : undefined}
-              data-tutorial={index === 0 ? 'welcome-book-0' : undefined}
+              id={`welcome-book-${index}`}
+              data-tutorial={`welcome-book-${index}`}
               onClick={() => handleItemClick(item, index)}
               className="relative rounded-xl overflow-hidden shadow-xl transition-all duration-300 transform ring-1 ring-white/10 hover:ring-[#E8B923]/50 hover:scale-[1.02] active:scale-[0.95]"
               style={{

@@ -35,9 +35,8 @@ export const TUTORIAL_STEP_CONFIG: Record<TutorialStep, {
   idle: { title: '', description: '' },
   welcome_book_tap: {
     title: 'Tap to Start!',
-    description: 'Choose a story to begin your adventure!',
-    targetElement: 'welcome-book-0',
-    requiresClick: true,
+    description: 'Choose any story to begin your adventure!',
+    requiresClick: false,
   },
   book_swipe_intro: {
     title: 'Swipe to Read',

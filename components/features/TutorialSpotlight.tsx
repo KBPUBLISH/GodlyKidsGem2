@@ -211,8 +211,8 @@ const TutorialSpotlight: React.FC<TutorialSpotlightProps> = ({
         </svg>
       )}
 
-      {/* Glowing border around spotlight hole */}
-      {holeStyle && (
+      {/* Glowing border around spotlight hole - only show if valid position */}
+      {holeStyle && holeStyle.width > 0 && holeStyle.height > 0 && targetElement && (
         <div
           className="absolute pointer-events-none animate-pulse"
           style={{

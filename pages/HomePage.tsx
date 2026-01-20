@@ -285,23 +285,24 @@ const HomePage: React.FC = () => {
   }, []);
 
   // Show email signup popup for web users after 30 seconds
-  useEffect(() => {
-    // Skip in DeSpia native app
-    const isDespia = /despia/i.test(navigator.userAgent);
-    if (isDespia) return;
+  // DISABLED: Pausing email popup during tutorial development
+  // useEffect(() => {
+  //   // Skip in DeSpia native app
+  //   const isDespia = /despia/i.test(navigator.userAgent);
+  //   if (isDespia) return;
 
-    // Skip if already submitted or dismissed this session
-    const hasSubmitted = localStorage.getItem('gk_email_signup_submitted');
-    const hasDismissed = sessionStorage.getItem('gk_email_signup_dismissed');
-    if (hasSubmitted || hasDismissed) return;
+  //   // Skip if already submitted or dismissed this session
+  //   const hasSubmitted = localStorage.getItem('gk_email_signup_submitted');
+  //   const hasDismissed = sessionStorage.getItem('gk_email_signup_dismissed');
+  //   if (hasSubmitted || hasDismissed) return;
 
-    // Show after 30 seconds in the app
-    const timer = setTimeout(() => {
-      setShowEmailSignup(true);
-    }, 30000);
+  //   // Show after 30 seconds in the app
+  //   const timer = setTimeout(() => {
+  //     setShowEmailSignup(true);
+  //   }, 30000);
 
-    return () => clearTimeout(timer);
-  }, []);
+  //   return () => clearTimeout(timer);
+  // }, []);
 
   // Safeguard: If no books are loaded and we're not loading, try to refresh
   useEffect(() => {

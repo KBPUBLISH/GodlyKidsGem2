@@ -130,17 +130,17 @@ const OnboardingTutorial: React.FC = () => {
   // Render appropriate spotlight based on current step
   const renderSpotlight = () => {
     switch (currentStep) {
-      // STEP 1: On welcome page, highlight first book
+      // STEP 1: On welcome page, let user choose any book
       case 'welcome_book_tap':
         return (
           <TutorialSpotlight
-            targetElement="welcome-book-0"
             title={config.title}
             description={config.description}
             isVisible={true}
-            fingerPosition="top"
-            popupPosition="bottom"
-            requiresElementClick={true}
+            popupPosition="bottom-screen"
+            requiresElementClick={false}
+            hideOverlay={true}
+            compactPopup={true}
           />
         );
 
@@ -183,7 +183,8 @@ const OnboardingTutorial: React.FC = () => {
             description={config.description}
             isVisible={true}
             fingerPosition="top"
-            popupPosition="top"
+            popupPosition="bottom-screen"
+            compactPopup={true}
             requiresElementClick={true}
           />
         );

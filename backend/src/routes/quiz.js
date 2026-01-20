@@ -838,15 +838,37 @@ Return ONLY a JSON array:
     }
 });
 
+// DELETE /api/quiz/:bookId/clear - Clear cached quiz to force regeneration
+router.delete('/:bookId/clear', async (req, res) => {
+    try {
+        const { bookId } = req.params;
+        
+        const result = await BookQuiz.deleteOne({ bookId });
+        
+        if (result.deletedCount > 0) {
+            console.log(`🗑️ Cleared cached quiz for book ${bookId}`);
+            return res.json({ message: 'Quiz cache cleared', bookId });
+        } else {
+            return res.status(404).json({ message: 'No cached quiz found for this book' });
+        }
+    } catch (error) {
+        console.error('Clear Quiz Cache Error:', error.message);
+        res.status(500).json({ message: 'Failed to clear quiz cache', error: error.message });
+    }
+});
+
 // GET /api/quiz/:bookId - Get quiz for a book
 router.get('/:bookId', async (req, res) => {
     try {
         const { bookId } = req.params;
         const { userId, age, attemptNumber } = req.query;
 
+        console.log(`📚 Quiz GET request for book ${bookId}, age ${age || 6}, attempt ${attemptNumber || 1}`);
+
         const quiz = await BookQuiz.findOne({ bookId });
         
         if (!quiz) {
+            console.log(`❌ No cached quiz found for book ${bookId}`);
             return res.status(404).json({ message: 'Quiz not found for this book' });
         }
 
@@ -858,12 +880,20 @@ router.get('/:bookId', async (req, res) => {
         const questions = quiz.getQuestionsForAge(userAge, currentAttempt);
         
         if (!questions || questions.length === 0) {
+            console.log(`❌ No questions for age group ${ageGroup}, attempt ${currentAttempt}`);
             return res.status(404).json({ 
                 message: 'Quiz not found for this age group and attempt',
                 needsGeneration: true,
                 ageGroup,
                 attemptNumber: currentAttempt
             });
+        }
+
+        console.log(`✅ Returning CACHED quiz for book ${bookId}: ${questions.length} questions (age: ${ageGroup}, attempt: ${currentAttempt})`);
+        
+        // Log first question to help debug if it's AI-generated or fallback
+        if (questions[0]) {
+            console.log(`📝 First cached question: "${questions[0].question?.substring(0, 50)}..."`);
         }
 
         // Get user's attempt count

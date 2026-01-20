@@ -1922,6 +1922,24 @@ export const ApiService = {
     }
   },
 
+  clearQuizCache: async (bookId: string): Promise<boolean> => {
+    try {
+      const baseUrl = getApiBaseUrl();
+      const response = await fetchWithTimeout(`${baseUrl}quiz/${bookId}/clear`, {
+        method: 'DELETE',
+      });
+
+      if (response.ok) {
+        console.log(`🗑️ Quiz cache cleared for book ${bookId}`);
+        return true;
+      }
+      return false;
+    } catch (error) {
+      console.error('❌ Failed to clear quiz cache:', error);
+      return false;
+    }
+  },
+
   // Get user's quiz attempts for a book
   getBookQuizAttempts: async (bookId: string, userId: string): Promise<any | null> => {
     try {

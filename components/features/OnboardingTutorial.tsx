@@ -243,7 +243,7 @@ const OnboardingTutorial: React.FC = () => {
   
   // Listen page steps
   const listenSteps: TutorialStep[] = ['audiobook_highlight'];
-  if (listenSteps.includes(currentStep) && pathname !== '/listen') {
+  if (listenSteps.includes(currentStep) && currentPath !== '/listen') {
     return null;
   }
 

@@ -100,117 +100,118 @@ const extractJson = (text) => {
 };
 
 // Fallback questions to use when AI service is unavailable or quota exceeded
+// These are theological/faith-based generic questions
 const FALLBACK_QUESTIONS_ATTEMPT1 = [
     {
-        question: "Did you enjoy reading this story?",
+        question: "What does this story teach us about God's love?",
         options: [
-            { text: "Yes, I loved it!", isCorrect: true },
-            { text: "It was okay", isCorrect: false },
-            { text: "Not really", isCorrect: false },
-            { text: "I want to read it again", isCorrect: true }
+            { text: "God loves us no matter what", isCorrect: true },
+            { text: "God only loves perfect people", isCorrect: false },
+            { text: "God doesn't care about us", isCorrect: false },
+            { text: "We have to earn God's love", isCorrect: false }
         ]
     },
     {
-        question: "What was the best part of the story?",
+        question: "Which fruit of the Spirit did the main character show?",
         options: [
-            { text: "The beginning", isCorrect: false },
-            { text: "The middle", isCorrect: false },
-            { text: "The ending", isCorrect: true },
-            { text: "All of it!", isCorrect: true }
+            { text: "Love and kindness", isCorrect: true },
+            { text: "Anger and meanness", isCorrect: false },
+            { text: "Selfishness", isCorrect: false },
+            { text: "None at all", isCorrect: false }
         ]
     },
     {
-        question: "Who was the most important character?",
+        question: "What is the right thing to do when we face problems?",
         options: [
-            { text: "The main character", isCorrect: true },
-            { text: "The villain", isCorrect: false },
-            { text: "A random person", isCorrect: false },
-            { text: "Nobody", isCorrect: false }
+            { text: "Pray and trust God", isCorrect: true },
+            { text: "Give up and run away", isCorrect: false },
+            { text: "Be angry at everyone", isCorrect: false },
+            { text: "Pretend nothing happened", isCorrect: false }
         ]
     },
     {
-        question: "What lesson did this story teach?",
+        question: "How can we follow Jesus's example from this story?",
         options: [
-            { text: "To be kind and good", isCorrect: true },
-            { text: "To be mean", isCorrect: false },
-            { text: "Nothing at all", isCorrect: false },
-            { text: "To run away", isCorrect: false }
+            { text: "By being kind and helpful to others", isCorrect: true },
+            { text: "By only thinking about ourselves", isCorrect: false },
+            { text: "By being mean to people we don't like", isCorrect: false },
+            { text: "By ignoring people who need help", isCorrect: false }
         ]
     },
     {
-        question: "How did the story make you feel?",
+        question: "What does the Bible teach us about treating others?",
         options: [
-            { text: "Happy", isCorrect: true },
-            { text: "Sad", isCorrect: false },
-            { text: "Angry", isCorrect: false },
-            { text: "Scared", isCorrect: false }
+            { text: "Love your neighbor as yourself", isCorrect: true },
+            { text: "Only be nice to your friends", isCorrect: false },
+            { text: "It's okay to be mean sometimes", isCorrect: false },
+            { text: "Don't help anyone", isCorrect: false }
         ]
     },
     {
-        question: "Would you recommend this story to a friend?",
+        question: "What good choice did the character make in this story?",
         options: [
-            { text: "Yes, definitely!", isCorrect: true },
-            { text: "Maybe", isCorrect: false },
-            { text: "No way", isCorrect: false },
-            { text: "Only if they like reading", isCorrect: true }
+            { text: "Following God's way and being good", isCorrect: true },
+            { text: "Being selfish", isCorrect: false },
+            { text: "Ignoring what's right", isCorrect: false },
+            { text: "Giving up easily", isCorrect: false }
         ]
     }
 ];
 
-// Different fallback questions for attempt 2
+// Different fallback questions for attempt 2 - also theological
 const FALLBACK_QUESTIONS_ATTEMPT2 = [
     {
-        question: "What did you learn from this story?",
+        question: "What virtue from the Bible did this story show?",
         options: [
-            { text: "To always be helpful", isCorrect: true },
-            { text: "To stay home", isCorrect: false },
-            { text: "Nothing new", isCorrect: false },
-            { text: "To trust God", isCorrect: true }
+            { text: "Faith and trust in God", isCorrect: true },
+            { text: "Being mean to others", isCorrect: false },
+            { text: "Giving up when things are hard", isCorrect: false },
+            { text: "Only caring about yourself", isCorrect: false }
         ]
     },
     {
-        question: "What would you do differently than the main character?",
+        question: "How does God want us to treat people who are different from us?",
         options: [
-            { text: "Ask for help sooner", isCorrect: true },
-            { text: "Do the same thing", isCorrect: false },
-            { text: "Run away", isCorrect: false },
-            { text: "Give up", isCorrect: false }
+            { text: "With love and respect", isCorrect: true },
+            { text: "Ignore them", isCorrect: false },
+            { text: "Be mean to them", isCorrect: false },
+            { text: "Only talk to people like us", isCorrect: false }
         ]
     },
     {
-        question: "Which part of the story surprised you?",
+        question: "What does it mean to have courage like in this story?",
         options: [
-            { text: "The ending", isCorrect: true },
-            { text: "Nothing surprised me", isCorrect: false },
-            { text: "I wasn't paying attention", isCorrect: false },
-            { text: "When help arrived", isCorrect: true }
+            { text: "Trusting God even when we're scared", isCorrect: true },
+            { text: "Never being afraid of anything", isCorrect: false },
+            { text: "Fighting everyone", isCorrect: false },
+            { text: "Running away from problems", isCorrect: false }
         ]
     },
     {
-        question: "How could you use this story's lesson in real life?",
+        question: "Why is forgiveness important according to the Bible?",
         options: [
-            { text: "By being kind to others", isCorrect: true },
-            { text: "I can't use it", isCorrect: false },
-            { text: "By ignoring everyone", isCorrect: false },
-            { text: "By helping friends", isCorrect: true }
+            { text: "God forgives us, so we should forgive others", isCorrect: true },
+            { text: "Forgiveness is not important", isCorrect: false },
+            { text: "We should never forgive anyone", isCorrect: false },
+            { text: "Only forgive people we like", isCorrect: false }
         ]
     },
     {
-        question: "What made the main character special?",
+        question: "How can we show God's love to others?",
         options: [
-            { text: "Their bravery", isCorrect: true },
-            { text: "Nothing", isCorrect: false },
-            { text: "They were mean", isCorrect: false },
-            { text: "Their kindness", isCorrect: true }
+            { text: "By being kind, patient, and helpful", isCorrect: true },
+            { text: "By keeping God's love to ourselves", isCorrect: false },
+            { text: "By being selfish", isCorrect: false },
+            { text: "By only loving our family", isCorrect: false }
         ]
     },
     {
-        question: "Would you want to be friends with the main character?",
+        question: "What does this story teach about being a good friend?",
         options: [
-            { text: "Yes, they seem nice!", isCorrect: true },
-            { text: "No way", isCorrect: false },
-            { text: "Maybe", isCorrect: false },
-            { text: "Absolutely!", isCorrect: true }
+            { text: "Good friends are loyal, kind, and forgiving", isCorrect: true },
+            { text: "Only be friends with cool people", isCorrect: false },
+            { text: "Friends should do everything you say", isCorrect: false },
+            { text: "Friendship isn't important", isCorrect: false }
         ]
     }
 ];
@@ -367,26 +368,34 @@ router.post('/generate', async (req, res) => {
 
         const systemPrompt = `${agePrompt}
         
-        Create exactly 6 multiple-choice questions based on the story content provided below. ALL questions MUST be specifically about events, characters, and details from THIS story - do NOT create generic questions.${attemptInstruction}
+        Create exactly 6 multiple-choice questions based on the Christian children's story provided below. This is a faith-based educational app, so questions should emphasize THEOLOGICAL and BIBLICAL themes.${attemptInstruction}
+        
+        Question Types to Include (mix these):
+        1. FAITH LESSONS: "What does this story teach us about God/Jesus/faith?"
+        2. BIBLICAL VALUES: "What virtue/fruit of the Spirit did [character] show?" (love, kindness, patience, forgiveness, courage, honesty, generosity, etc.)
+        3. CHARACTER CHOICES: "What was the RIGHT thing [character] did?" or "How did [character] follow God's way?"
+        4. STORY COMPREHENSION: Basic "what happened" questions about the plot
+        5. SPIRITUAL APPLICATION: "What can we learn from [character]'s example?"
+        6. BIBLICAL CONNECTIONS: If the story references Bible stories, ask about those connections
         
         General Rules:
         1. Create exactly 6 multiple-choice questions
         2. Each question should have exactly 4 options (A, B, C, D)
         3. Only ONE option should be correct per question
-        4. Questions should test comprehension, not trick the child
-        5. Questions should cover different parts of the story
-        6. Include questions about characters, events, and feelings
-        7. Make the quiz fun and encouraging
+        4. At least 3 questions should focus on THEOLOGICAL/FAITH themes
+        5. Questions should be encouraging and help children grow in faith
+        6. Reference specific events, characters, and details from THIS story
+        7. Make it fun while teaching Biblical values!
         
         Return your response as a valid JSON array with this exact structure:
         [
           {
-            "question": "What did the main character do first?",
+            "question": "What important lesson about kindness does this story teach?",
             "options": [
-              { "text": "Went to school", "isCorrect": false },
-              { "text": "Ate breakfast", "isCorrect": true },
-              { "text": "Played outside", "isCorrect": false },
-              { "text": "Read a book", "isCorrect": false }
+              { "text": "Being kind to others makes God happy", "isCorrect": true },
+              { "text": "Kindness is not important", "isCorrect": false },
+              { "text": "Only be kind to friends", "isCorrect": false },
+              { "text": "Kindness makes you weak", "isCorrect": false }
             ]
           }
         ]
@@ -558,17 +567,17 @@ router.post('/generate-first', async (req, res) => {
 
         const systemPrompt = `${agePrompt}
 
-Create exactly 1 multiple-choice question based on the story provided below. This should be an easy warm-up question about the beginning of the story. The question MUST be specifically about events, characters, or details from THIS story - do NOT create a generic question.${attemptInstruction}
+Create exactly 1 multiple-choice question based on this Christian children's story. This should be an easy warm-up question that introduces the story's faith theme or main character. Make it encouraging and age-appropriate.${attemptInstruction}
 
 Rules:
 1. Create exactly 1 question about THIS SPECIFIC STORY
 2. 4 options (A, B, C, D), only ONE correct
-3. Make it about something from the start of the story
-4. Keep it fun and encouraging
+3. Focus on: the main character, an early story event, OR the faith theme being introduced
+4. Keep it fun, encouraging, and faith-affirming!
 
 Return ONLY a JSON object (not array):
 {
-  "question": "What happened at the beginning?",
+  "question": "Who is the main character learning about God's love?",
   "options": [
     { "text": "Option A", "isCorrect": false },
     { "text": "Option B", "isCorrect": true },
@@ -724,15 +733,22 @@ router.post('/generate-remaining', async (req, res) => {
 
         const systemPrompt = `${agePrompt}
 
-Create exactly 5 more multiple-choice questions based on the story provided below. The first question was already asked: "${firstQuestion?.question || 'a warm-up question'}"${attemptInstruction}
+Create exactly 5 more multiple-choice questions based on this Christian children's story. The first question was already asked: "${firstQuestion?.question || 'a warm-up question'}"${attemptInstruction}
+
+Question Types to Include (mix these):
+- FAITH LESSONS: "What does this story teach us about God/Jesus/faith?"
+- BIBLICAL VALUES: "What virtue did [character] show?" (love, kindness, patience, forgiveness, courage, honesty, generosity)
+- RIGHT CHOICES: "What was the godly choice [character] made?"
+- STORY EVENTS: What happened in the middle/end of the story
+- SPIRITUAL APPLICATION: "What can we learn from this story?"
 
 Rules:
-1. Create exactly 5 NEW questions about THIS SPECIFIC STORY (different from the first one)
+1. Create exactly 5 NEW questions (different from the first one)
 2. Each has 4 options (A, B, C, D), only ONE correct
-3. Cover different parts of the story (middle and end)
-4. Include variety: characters, events, feelings, lessons from THIS story
-5. Do NOT create generic questions - every question must reference specific story content
-6. Make it fun!
+3. At least 2-3 questions should focus on THEOLOGICAL themes (faith, God, Biblical values)
+4. Cover middle and end of the story
+5. Reference specific events and characters from THIS story
+6. Make it encouraging and help children grow in faith!
 
 Return ONLY a JSON array:
 [

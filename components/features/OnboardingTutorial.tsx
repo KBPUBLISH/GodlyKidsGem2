@@ -216,7 +216,7 @@ const OnboardingTutorial: React.FC = () => {
   const isOnWelcomePage = currentPath === '/welcome';
   const isOnBookReader = currentPath.startsWith('/read/');
   const isOnHomePage = currentPath === '/home';
-  const isOnGivePage = currentPath === '/give';
+  const isOnGivePage = currentPath === '/giving';
 
   // Book-related steps should only show on book reader
   const bookSteps: TutorialStep[] = ['book_controls_intro', 'book_swipe_intro', 'book_swipe_1', 'book_swipe_2', 'book_swipe_3', 'book_end_quiz', 'quiz_in_progress'];

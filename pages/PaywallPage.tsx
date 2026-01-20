@@ -282,7 +282,7 @@ const PaywallPage: React.FC = () => {
 
         {/* Close Button */}
         <button 
-          onClick={() => navigate(-1)} 
+          onClick={() => navigate('/home')} 
           className="absolute top-6 left-6 z-50 p-2 bg-white/10 hover:bg-white/20 backdrop-blur-md rounded-full text-white/80 transition-colors"
         >
             <X size={24} strokeWidth={3} />

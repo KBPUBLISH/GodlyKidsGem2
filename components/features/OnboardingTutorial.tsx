@@ -125,6 +125,12 @@ const OnboardingTutorial: React.FC = () => {
 
   if (!isTutorialActive) return null;
 
+  // Don't show tutorial overlay on settings or paywall pages
+  const currentPath = location.pathname;
+  if (currentPath === '/settings' || currentPath === '/paywall' || currentPath === '/profile-selection') {
+    return null;
+  }
+
   const config = getStepConfig();
 
   // Render appropriate spotlight based on current step

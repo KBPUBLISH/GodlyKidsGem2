@@ -78,7 +78,7 @@ const NewUserWelcomePage: React.FC = () => {
     title: 'Choose a Bedtime Story',
     subtitle: 'Pick something to start your adventure',
     skipButtonText: 'Skip for now',
-    showSkipButton: true,
+    showSkipButton: false, // Hidden during tutorial
     maxItems: 20, // No longer limiting
   });
   const [items, setItems] = useState<ContentItem[]>([]);
@@ -135,7 +135,7 @@ const NewUserWelcomePage: React.FC = () => {
             title: data.config.title || 'Choose a Bedtime Story',
             subtitle: data.config.subtitle || 'Pick something to start your adventure',
             skipButtonText: data.config.skipButtonText || 'Skip for now',
-            showSkipButton: data.config.showSkipButton !== false,
+            showSkipButton: false, // Always hidden during tutorial flow
             maxItems: data.config.maxItems || 6,
           });
         }

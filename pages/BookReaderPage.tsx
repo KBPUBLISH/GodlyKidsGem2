@@ -917,8 +917,9 @@ const BookReaderPage: React.FC = () => {
                 const book = await ApiService.getBookById(bookId);
                 
                 // Check if book is members-only and user is not subscribed
+                // Skip this check during tutorial to allow users to experience the app
                 const bookIsMembersOnly = (book as any)?.isMembersOnly === true;
-                if (bookIsMembersOnly && !isSubscribed) {
+                if (bookIsMembersOnly && !isSubscribed && !isTutorialActive) {
                     console.log('🔒 Book is members-only and user is not subscribed. Redirecting to paywall.');
                     navigate('/paywall', { state: { from: `/book/${bookId}` } });
                     return;

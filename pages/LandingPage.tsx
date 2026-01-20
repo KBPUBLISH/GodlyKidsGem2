@@ -199,7 +199,7 @@ const LandingPage: React.FC = () => {
                   </WoodButton>
 
                   <button
-                    onClick={() => navigate('/welcome')}
+                    onClick={() => navigate('/onboarding')}
                     className="w-full bg-white/10 hover:bg-white/20 backdrop-blur-sm border border-white/30 text-white font-bold py-3 px-4 rounded-xl shadow-[0_4px_0_rgba(0,0,0,0.1)] active:translate-y-[2px] active:shadow-none transition-all"
                   >
                     {t('continue')}

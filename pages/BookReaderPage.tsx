@@ -19,6 +19,7 @@ import WebViewPageRenderer from '../components/features/WebViewPageRenderer';
 import { processTextWithEmotionalCues, removeEmotionalCues } from '../utils/textProcessing';
 import { activityTrackingService } from '../services/activityTrackingService';
 import { authService } from '../services/authService';
+import { useTutorial } from '../context/TutorialContext';
 
 const API_BASE_URL = (import.meta as any).env?.VITE_API_BASE_URL || 'https://backendgk2-0.onrender.com';
 
@@ -153,6 +154,7 @@ const BookReaderPage: React.FC = () => {
     const [searchParams] = useSearchParams();
     const { setGameMode, setMusicPaused } = useAudio();
     const { isVoiceUnlocked, isSubscribed } = useUser();
+    const { isTutorialActive, isStepActive, onPageSwipe, onBookEndModalOpen, onQuizStart, onBookQuizComplete, currentStep } = useTutorial();
     const wasMusicEnabledRef = useRef<boolean>(false);
     const [pages, setPages] = useState<Page[]>([]);
     const [currentPageIndex, setCurrentPageIndex] = useState(0);
@@ -172,6 +174,18 @@ const BookReaderPage: React.FC = () => {
     useEffect(() => {
         scrollStateRef.current = scrollState;
     }, [scrollState]);
+
+    // Tutorial: Auto-jump to end page when book_end_quiz step starts
+    useEffect(() => {
+        if (isTutorialActive && currentStep === 'book_end_quiz' && pages.length > 0) {
+            // Jump to last page (The End page)
+            const lastPageIndex = pages.length - 1;
+            setCurrentPageIndex(lastPageIndex);
+            currentPageIndexRef.current = lastPageIndex;
+            // Trigger end modal open
+            onBookEndModalOpen();
+        }
+    }, [isTutorialActive, currentStep, pages.length, onBookEndModalOpen]);
 
     // TTS State
     const [playing, setPlaying] = useState(false);
@@ -1743,6 +1757,11 @@ const BookReaderPage: React.FC = () => {
             setIsPageTurning(true);
             setFlipState({ direction: 'next', isFlipping: true });
             playPageTurnSound(); // Play page turn sound effect
+
+            // Tutorial: Track page swipe for tutorial progress
+            if (isTutorialActive && (isStepActive('book_swipe_intro') || isStepActive('book_swipe_1') || isStepActive('book_swipe_2'))) {
+                onPageSwipe();
+            }
 
             // Change page content at the halfway point (when page is perpendicular - 90deg)
             setTimeout(() => {
@@ -4826,6 +4845,8 @@ const BookReaderPage: React.FC = () => {
                             <div className="flex flex-col gap-4 w-full">
                                 {/* Quiz Button - Always show but disabled if max attempts reached */}
                                 <button
+                                    id="quiz-button"
+                                    data-tutorial="quiz-button"
                                     onClick={(e) => {
                                         e.stopPropagation();
                                         if (quizAttemptCount < maxQuizAttempts) {
@@ -4833,6 +4854,10 @@ const BookReaderPage: React.FC = () => {
                                             // Track quiz start analytics
                                             if (bookId) {
                                                 analyticsService.quizStart(bookId, bookTitle);
+                                            }
+                                            // Tutorial: Track quiz start
+                                            if (isTutorialActive && isStepActive('book_end_quiz')) {
+                                                onQuizStart();
                                             }
                                         }
                                     }}
@@ -5061,6 +5086,14 @@ const BookReaderPage: React.FC = () => {
                         localStorage.setItem(`quiz_attempts_${bookId}`, String(quizAttemptCount + 1));
                         // Track quiz complete analytics
                         analyticsService.quizComplete(bookId, score, score, coinsEarned); // score is both score and totalQuestions since modal handles that
+                    }
+                    // Tutorial: Advance to coins step after quiz completion
+                    if (isTutorialActive && isStepActive('quiz_in_progress')) {
+                        // Navigate to home and show coins tutorial
+                        setTimeout(() => {
+                            onBookQuizComplete();
+                            navigate('/home');
+                        }, 1500); // Allow time for quiz results animation
                     }
                 }}
             />

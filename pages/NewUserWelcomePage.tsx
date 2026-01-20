@@ -4,6 +4,7 @@ import { Sparkles, BookOpen, Music, Video } from 'lucide-react';
 import { API_BASE_URL } from '../constants';
 import WoodButton from '../components/ui/WoodButton';
 import { useAudio } from '../context/AudioContext';
+import { useTutorial } from '../context/TutorialContext';
 
 interface ContentItem {
   _id: string;
@@ -72,6 +73,7 @@ const ShootingStar: React.FC<{ delay: number; top: number }> = ({ delay, top }) 
 const NewUserWelcomePage: React.FC = () => {
   const navigate = useNavigate();
   const { playClick } = useAudio();
+  const { isTutorialActive, isStepActive, nextStep } = useTutorial();
   const [config, setConfig] = useState<WelcomeConfig>({
     title: 'Choose a Bedtime Story',
     subtitle: 'Pick something to start your adventure',
@@ -159,12 +161,20 @@ const NewUserWelcomePage: React.FC = () => {
   };
 
   // Direct navigation - no extra tap needed
-  const handleItemClick = (item: ContentItem) => {
+  const handleItemClick = (item: ContentItem, index: number) => {
     playClick();
     markWelcomeSeen();
-    startDemoTimer(); // Start demo timer when user selects content
     
-    // Navigate directly based on content type
+    // If in tutorial and this is the first book being clicked
+    if (isTutorialActive && isStepActive('welcome_book_tap') && index === 0 && item.type === 'book') {
+      // Advance tutorial to book swipe step
+      nextStep();
+      // Navigate to book with tutorial flag
+      navigate(`/book/${item._id}`, { state: { fromTutorial: true } });
+      return;
+    }
+    
+    // Normal navigation
     switch (item.type) {
       case 'book':
         navigate(`/book/${item._id}`);
@@ -176,7 +186,7 @@ const NewUserWelcomePage: React.FC = () => {
         navigate(`/lesson/${item._id}`);
         break;
       default:
-        navigate('/home');
+        navigate('/onboarding');
     }
   };
 
@@ -184,7 +194,7 @@ const NewUserWelcomePage: React.FC = () => {
     playClick();
     markWelcomeSeen();
     startDemoTimer(); // Start demo timer even when skipping
-    navigate('/home');
+    navigate('/onboarding'); // Go to onboarding flow, which leads to tutorial
   };
 
   const getTypeIcon = (type: string) => {
@@ -234,10 +244,10 @@ const NewUserWelcomePage: React.FC = () => {
     );
   }
 
-  // If no items configured, skip to home
+  // If no items configured, skip to onboarding
   if (items.length === 0) {
     markWelcomeSeen();
-    navigate('/home');
+    navigate('/onboarding');
     return null;
   }
 
@@ -342,7 +352,9 @@ const NewUserWelcomePage: React.FC = () => {
           {items.slice(0, config.maxItems).map((item, index) => (
             <button
               key={item._id}
-              onClick={() => handleItemClick(item)}
+              id={index === 0 ? 'welcome-book-0' : undefined}
+              data-tutorial={index === 0 ? 'welcome-book-0' : undefined}
+              onClick={() => handleItemClick(item, index)}
               className="relative rounded-xl overflow-hidden shadow-xl transition-all duration-300 transform ring-1 ring-white/10 hover:ring-[#E8B923]/50 hover:scale-[1.02] active:scale-[0.95]"
               style={{
                 opacity: showContent ? 1 : 0,

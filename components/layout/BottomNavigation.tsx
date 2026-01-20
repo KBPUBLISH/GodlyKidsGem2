@@ -1,8 +1,9 @@
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useState, useRef, useCallback } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { Compass, Headphones, BookOpen, Library, Heart } from 'lucide-react';
 import { useAudio } from '../../context/AudioContext';
 import { useLanguage } from '../../context/LanguageContext';
+import { useTutorial } from '../../context/TutorialContext';
 
 // Key for storing wheel hint state
 const WHEEL_HINT_KEY = 'godlykids_wheel_hint_shown';
@@ -24,14 +25,50 @@ const BottomNavigation: React.FC = () => {
   const [activeTab, setActiveTab] = useState(() => getTabFromPath(location.pathname));
   const { playTab, currentPlaylist } = useAudio();
   const { t } = useLanguage();
+  const { isTutorialActive } = useTutorial();
   const isPlayerActive = !!currentPlaylist;
   const [isHidden, setIsHidden] = useState(false);
   
   // Wheel hint for new users
   const [showWheelHint, setShowWheelHint] = useState(false);
   
-  // Check if user has seen the wheel hint before
+  // Navigation items for wheel
+  const navItems = [
+    { id: 'explore', label: t('explore'), icon: Compass, path: '/home', index: 0 },
+    { id: 'listen', label: t('listen'), icon: Headphones, path: '/listen', index: 1 },
+    { id: 'read', label: t('read'), icon: BookOpen, path: '/read', index: 2 },
+    { id: 'library', label: t('library'), icon: Library, path: '/library', index: 3 },
+    { id: 'give', label: t('give') || 'Give', icon: Heart, path: '/giving', index: 4 },
+  ];
+  
+  // Programmatic navigation for tutorial
+  const navigateToTab = useCallback((tabId: string) => {
+    const item = navItems.find(i => i.id === tabId);
+    if (item && activeTab !== tabId) {
+      playTab();
+      setActiveTab(tabId);
+      navigate(item.path);
+    }
+  }, [activeTab, navigate, playTab, navItems]);
+  
+  // Listen for tutorial navigation events
   useEffect(() => {
+    const handleTutorialNavigate = (e: Event) => {
+      const { target } = (e as CustomEvent).detail;
+      navigateToTab(target);
+    };
+    
+    window.addEventListener('tutorial_navigate_wheel', handleTutorialNavigate);
+    return () => window.removeEventListener('tutorial_navigate_wheel', handleTutorialNavigate);
+  }, [navigateToTab]);
+  
+  // Check if user has seen the wheel hint before (skip during tutorial)
+  useEffect(() => {
+    if (isTutorialActive) {
+      setShowWheelHint(false);
+      return;
+    }
+    
     const hasSeenHint = localStorage.getItem(WHEEL_HINT_KEY);
     if (!hasSeenHint) {
       // Show hint after a short delay for new users
@@ -40,7 +77,7 @@ const BottomNavigation: React.FC = () => {
       }, 2000);
       return () => clearTimeout(timer);
     }
-  }, []);
+  }, [isTutorialActive]);
   
   // Dismiss the hint
   const dismissHint = () => {
@@ -68,14 +105,6 @@ const BottomNavigation: React.FC = () => {
 
   // Configuration for the wheel
   const ITEM_ANGLE = 45; // Degrees between items;
-
-  const navItems = [
-    { id: 'explore', label: t('explore'), icon: Compass, path: '/home', index: 0 },
-    { id: 'listen', label: t('listen'), icon: Headphones, path: '/listen', index: 1 },
-    { id: 'read', label: t('read'), icon: BookOpen, path: '/read', index: 2 },
-    { id: 'library', label: t('library'), icon: Library, path: '/library', index: 3 },
-    { id: 'give', label: t('give') || 'Give', icon: Heart, path: '/giving', index: 4 },
-  ];
 
   useEffect(() => {
     setActiveTab(getTabFromPath(location.pathname));

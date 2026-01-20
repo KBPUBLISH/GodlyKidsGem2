@@ -917,7 +917,7 @@ const OnboardingPage: React.FC = () => {
       playSuccess();
       activityTrackingService.trackOnboardingEvent('onboarding_complete');
       activityTrackingService.resetOnboardingSession();
-      navigate('/home');
+      navigate('/ready');
     } else {
       // Track paywall view
       activityTrackingService.trackOnboardingEvent('step_4_viewed', { step: 4, kidsCount: kids.length });
@@ -1075,7 +1075,7 @@ const OnboardingPage: React.FC = () => {
         playSuccess();
         localStorage.setItem('godlykids_premium', 'true');
         setSubscribedDuringOnboarding(true);
-        navigate('/home');
+        navigate('/ready');
         return;
       }
       
@@ -1095,7 +1095,7 @@ const OnboardingPage: React.FC = () => {
         playSuccess();
         localStorage.setItem('godlykids_premium', 'true');
         setSubscribedDuringOnboarding(true);
-        navigate('/home');
+        navigate('/ready');
         return;
       }
       
@@ -1174,7 +1174,7 @@ const OnboardingPage: React.FC = () => {
     
     // Small delay to ensure localStorage is written
     setTimeout(() => {
-      navigate('/home');
+      navigate('/ready');
     }, 100);
   };
 
@@ -1269,8 +1269,8 @@ const OnboardingPage: React.FC = () => {
           plan: selectedPlan,
         });
         
-        // NOW navigate to home - payment is confirmed
-        navigate('/home');
+        // NOW navigate to ready page - payment is confirmed
+        navigate('/ready');
       } else {
         // Purchase was cancelled or failed
         console.log('❌ Purchase failed or cancelled:', result.error);
@@ -1287,7 +1287,7 @@ const OnboardingPage: React.FC = () => {
             subscribe();
             setSubscribedDuringOnboarding(true);
             setIsPurchasing(false);
-            navigate('/home');
+            navigate('/ready');
             return;
           }
         }

@@ -7,6 +7,7 @@ import AvatarDetailModal from '../features/AvatarDetailModal';
 import CoinHistoryModal from '../features/CoinHistoryModal';
 import ReportCardModal from '../features/ReportCardModal';
 import { useUser } from '../../context/UserContext';
+import { useTutorial } from '../../context/TutorialContext';
 import ErrorBoundary from '../common/ErrorBoundary';
 import { AVATAR_ASSETS } from '../avatar/AvatarAssets';
 
@@ -19,10 +20,56 @@ const Header: React.FC<HeaderProps> = ({ isVisible, title = "GODLY KIDS" }) => {
   const navigate = useNavigate();
   const location = useLocation();
   const { coins, equippedAvatar, equippedFrame, equippedHat, equippedBody, equippedLeftArm, equippedRightArm, equippedLegs, isSubscribed, headOffset } = useUser();
+  const { isStepActive, nextStep, isTutorialActive } = useTutorial();
   const [isShopOpen, setIsShopOpen] = useState(false);
   const [isDetailOpen, setIsDetailOpen] = useState(false);
   const [isCoinHistoryOpen, setIsCoinHistoryOpen] = useState(false);
   const [isReportCardOpen, setIsReportCardOpen] = useState(false);
+
+  // Tutorial integration - advance steps when modals open/close
+  const handleCoinsClick = () => {
+    setIsCoinHistoryOpen(true);
+    if (isStepActive('coins_highlight')) {
+      nextStep(); // Advance to coins_popup_open
+    }
+  };
+
+  const handleCoinsClose = () => {
+    setIsCoinHistoryOpen(false);
+    if (isStepActive('coins_popup_open')) {
+      nextStep(); // Advance to report_card_highlight
+    }
+  };
+
+  const handleReportCardClick = () => {
+    setIsReportCardOpen(true);
+    if (isStepActive('report_card_highlight')) {
+      nextStep(); // Advance to report_card_open
+    }
+  };
+
+  const handleReportCardClose = () => {
+    setIsReportCardOpen(false);
+    if (isStepActive('report_card_open')) {
+      nextStep(); // Advance to shop_highlight
+    }
+  };
+
+  const handleShopClick = () => {
+    setIsShopOpen(true);
+    if (isStepActive('shop_highlight')) {
+      nextStep(); // Advance to shop_open
+    }
+  };
+
+  const handleShopClose = () => {
+    setIsShopOpen(false);
+    if (isStepActive('shop_open')) {
+      nextStep(); // Advance to navigate_to_give
+    }
+    // Dispatch event for referral prompt (existing behavior)
+    window.dispatchEvent(new CustomEvent('godlykids_shop_closed'));
+  };
 
   // Check for openShop in navigation state
   useEffect(() => {
@@ -100,7 +147,9 @@ const Header: React.FC<HeaderProps> = ({ isVisible, title = "GODLY KIDS" }) => {
             <div className="flex items-center gap-2">
               {/* Gold Coins Display */}
               <button
-                onClick={() => setIsCoinHistoryOpen(true)}
+                id="coins-button"
+                data-tutorial="coins-button"
+                onClick={handleCoinsClick}
                 className="bg-gradient-to-b from-[#FFD700] to-[#DAA520] px-2.5 py-1.5 rounded-lg border-2 border-[#B8860B] shadow-[0_3px_0_#8B6914,inset_0_1px_0_rgba(255,255,255,0.4)] active:translate-y-[2px] active:shadow-none transition-all flex items-center gap-1.5 group"
                 title="Your Gold Coins - Click to view history"
               >
@@ -120,7 +169,9 @@ const Header: React.FC<HeaderProps> = ({ isVisible, title = "GODLY KIDS" }) => {
 
               {/* Report Card Button */}
               <button
-                onClick={() => setIsReportCardOpen(true)}
+                id="report-card-button"
+                data-tutorial="report-card-button"
+                onClick={handleReportCardClick}
                 className="bg-[#2E7D32] hover:bg-[#388E3C] px-2 py-1.5 rounded-lg border-2 border-[#1B5E20] shadow-[0_4px_0_#0D3811] active:translate-y-[2px] active:shadow-none transition-all relative group flex items-center justify-center"
                 title="View Report Card"
               >
@@ -129,7 +180,9 @@ const Header: React.FC<HeaderProps> = ({ isVisible, title = "GODLY KIDS" }) => {
 
               {/* Shop Sign Button */}
               <button
-                onClick={() => setIsShopOpen(true)}
+                id="shop-button"
+                data-tutorial="shop-button"
+                onClick={handleShopClick}
                 className="bg-[#8B4513] hover:bg-[#A0522D] px-3 py-1.5 rounded-lg border-2 border-[#5c2e0b] shadow-[0_4px_0_#3e1f07] active:translate-y-[2px] active:shadow-none transition-all relative group flex items-center justify-center"
               >
                 {/* Wood Texture Overlay */}
@@ -160,16 +213,16 @@ const Header: React.FC<HeaderProps> = ({ isVisible, title = "GODLY KIDS" }) => {
 
       {isShopOpen && (
         <Suspense fallback={null}>
-          <ShopModal isOpen={isShopOpen} onClose={() => setIsShopOpen(false)} />
+          <ShopModal isOpen={isShopOpen} onClose={handleShopClose} />
         </Suspense>
       )}
       <CoinHistoryModal 
         isOpen={isCoinHistoryOpen} 
-        onClose={() => setIsCoinHistoryOpen(false)} 
-        onOpenShop={() => setIsShopOpen(true)}
+        onClose={handleCoinsClose} 
+        onOpenShop={handleShopClick}
       />
-      <AvatarDetailModal isOpen={isDetailOpen} onClose={() => setIsDetailOpen(false)} onEdit={() => setIsShopOpen(true)} />
-      <ReportCardModal isOpen={isReportCardOpen} onClose={() => setIsReportCardOpen(false)} />
+      <AvatarDetailModal isOpen={isDetailOpen} onClose={() => setIsDetailOpen(false)} onEdit={handleShopClick} />
+      <ReportCardModal isOpen={isReportCardOpen} onClose={handleReportCardClose} />
     </>
   );
 };

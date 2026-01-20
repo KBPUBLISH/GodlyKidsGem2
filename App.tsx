@@ -500,6 +500,9 @@ import { DespiaService } from './services/despiaService';
 import { authService } from './services/authService';
 import { metaAttributionService } from './services/metaAttributionService';
 import DemoTimer from './components/features/DemoTimer';
+import ReadyToJumpInPage from './pages/ReadyToJumpInPage';
+import OnboardingTutorial from './components/features/OnboardingTutorial';
+import { TutorialProvider } from './context/TutorialContext';
 
 // --- ASSETS & HELPERS ---
 
@@ -699,13 +702,14 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const isResetPassword = location.pathname === '/reset-password';
   const isBookSeries = location.pathname.startsWith('/book-series/');
   const isWelcome = location.pathname === '/welcome';
+  const isReadyToJumpIn = location.pathname === '/ready';
   const isCreatePlaylist = location.pathname === '/create-playlist';
   const isMyPlaylist = location.pathname.startsWith('/my-playlist/');
   const isParentQuiz = location.pathname === '/parentquiz';
   const isSharePage = location.pathname.startsWith('/share/') || location.pathname.startsWith('/s/') || (location.pathname.startsWith('/playlist/') && !location.pathname.startsWith('/playlist-detail'));
 
   // Standalone pages that don't need the app chrome (background, navigation, etc.)
-  const isStandalonePage = isParentQuiz || isSharePage;
+  const isStandalonePage = isParentQuiz || isSharePage || isReadyToJumpIn;
 
   // For standalone pages, render just the children without app styling
   if (isStandalonePage) {
@@ -726,7 +730,10 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
       <MiniPlayer />
 
       {/* Only show BottomNavigation on main tab pages */}
-      {!isLanding && !isSignIn && !isOnboarding && !isWelcome && !isBookDetail && !isPlayer && !isProfile && !isCreateProfile && !isEditProfile && !isPaywall && !isSettings && !isBookReader && !isAudioPage && !isLessonPage && !isGamePage && !isResetPassword && !isBookSeries && !isCreatePlaylist && !isMyPlaylist && <BottomNavigation />}
+      {!isLanding && !isSignIn && !isOnboarding && !isWelcome && !isReadyToJumpIn && !isBookDetail && !isPlayer && !isProfile && !isCreateProfile && !isEditProfile && !isPaywall && !isSettings && !isBookReader && !isAudioPage && !isLessonPage && !isGamePage && !isResetPassword && !isBookSeries && !isCreatePlaylist && !isMyPlaylist && <BottomNavigation />}
+
+      {/* Onboarding Tutorial Overlay */}
+      <OnboardingTutorial />
     </div>
   );
 };
@@ -865,9 +872,10 @@ const App: React.FC = () => {
       <AudioProvider>
         <UserProvider>
           <SubscriptionProvider>
+            <TutorialProvider>
             <BooksProvider>
               <HashRouter>
-              <DemoTimer />
+              {/* <DemoTimer /> - Disabled for now */}
               <ReferralPromptWrapper>
               <Layout>
                 <Routes>
@@ -887,6 +895,7 @@ const App: React.FC = () => {
                   <Route path="/sign-in" element={<SignInPage />} />
                   <Route path="/reset-password" element={<ResetPasswordPage />} />
                   <Route path="/onboarding" element={<OnboardingPage />} />
+                  <Route path="/ready" element={<ReadyToJumpInPage />} />
                   <Route path="/welcome" element={<NewUserWelcomePage />} />
                   <Route path="/payment-success" element={<PaymentSuccessPage />} />
                   <Route path="/home" element={<HomePageWithWelcomeCheck />} />
@@ -919,6 +928,7 @@ const App: React.FC = () => {
               </ReferralPromptWrapper>
             </HashRouter>
             </BooksProvider>
+            </TutorialProvider>
           </SubscriptionProvider>
         </UserProvider>
       </AudioProvider>

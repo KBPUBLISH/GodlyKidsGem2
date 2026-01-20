@@ -184,17 +184,18 @@ const OnboardingTutorial: React.FC = () => {
     }
   }, [location.state, startTutorial]);
 
-  // Dispatch custom events for wheel navigation
-  const triggerWheelNavigation = useCallback((target: 'give' | 'listen' | 'read') => {
-    window.dispatchEvent(new CustomEvent('tutorial_navigate_wheel', { detail: { target } }));
-  }, []);
-
-  // Handle wheel navigation steps
+  // Handle wheel navigation steps - must be before any conditional returns!
   useEffect(() => {
-    if (isStepActive('navigate_to_give')) {
-      triggerWheelNavigation('give');
+    if (currentStep === 'navigate_to_give') {
+      window.dispatchEvent(new CustomEvent('tutorial_navigate_wheel', { detail: { target: 'give' } }));
+    } else if (currentStep === 'navigate_to_explore') {
+      window.dispatchEvent(new CustomEvent('tutorial_navigate_wheel', { detail: { target: 'explore' } }));
+    } else if (currentStep === 'navigate_to_books') {
+      window.dispatchEvent(new CustomEvent('tutorial_navigate_wheel', { detail: { target: 'read' } }));
+    } else if (currentStep === 'navigate_to_audio') {
+      window.dispatchEvent(new CustomEvent('tutorial_navigate_wheel', { detail: { target: 'listen' } }));
     }
-  }, [currentStep, isStepActive, triggerWheelNavigation]);
+  }, [currentStep]);
 
   // Handle donation
   const handleDonate = (amount: number) => {
@@ -245,19 +246,6 @@ const OnboardingTutorial: React.FC = () => {
   if (listenSteps.includes(currentStep) && pathname !== '/listen') {
     return null;
   }
-
-  // Navigation steps - trigger wheel navigation
-  useEffect(() => {
-    if (currentStep === 'navigate_to_give') {
-      window.dispatchEvent(new CustomEvent('tutorial_navigate_wheel', { detail: { target: 'give' } }));
-    } else if (currentStep === 'navigate_to_explore') {
-      window.dispatchEvent(new CustomEvent('tutorial_navigate_wheel', { detail: { target: 'explore' } }));
-    } else if (currentStep === 'navigate_to_books') {
-      window.dispatchEvent(new CustomEvent('tutorial_navigate_wheel', { detail: { target: 'read' } }));
-    } else if (currentStep === 'navigate_to_audio') {
-      window.dispatchEvent(new CustomEvent('tutorial_navigate_wheel', { detail: { target: 'listen' } }));
-    }
-  }, [currentStep]);
 
   const config = getStepConfig();
 

@@ -701,4 +701,157 @@ router.post('/admin/add-coins', async (req, res) => {
     }
 });
 
+/**
+ * GET /api/analytics/content
+ * Get content analytics (books/playlists) with time range filtering
+ * Uses PlayEvent data for time-based stats
+ * 
+ * Query params:
+ *   type: 'book' | 'playlist' | 'all' (default: 'all')
+ *   timeRange: 'day' | 'week' | 'month' | 'all' (default: 'all')
+ */
+router.get('/content', async (req, res) => {
+    try {
+        const PlayEvent = require('../models/PlayEvent');
+        const Book = require('../models/Book');
+        const Playlist = require('../models/Playlist');
+        
+        const { type = 'all', timeRange = 'all' } = req.query;
+        
+        // Calculate time range start date
+        const now = new Date();
+        let startDate = null;
+        
+        switch (timeRange) {
+            case 'day':
+                startDate = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+                break;
+            case 'week':
+                startDate = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+                break;
+            case 'month':
+                startDate = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+                break;
+            case 'all':
+            default:
+                startDate = null;
+                break;
+        }
+        
+        const results = { books: [], playlists: [] };
+        
+        // Get book analytics
+        if (type === 'all' || type === 'book') {
+            const books = await Book.find({ status: { $in: ['published', 'draft'] } })
+                .select('title author coverImage status viewCount readCount likeCount favoriteCount quizStartCount quizCompletionCount coloringSessionsCount gameUnlockCount gameOpenCount averageCompletionRate')
+                .lean();
+            
+            if (startDate) {
+                // Get play events for the time range
+                const bookPlayEvents = await PlayEvent.aggregate([
+                    {
+                        $match: {
+                            contentType: 'book',
+                            playedAt: { $gte: startDate },
+                            isEngagementUpdate: { $ne: true } // Only count initial plays
+                        }
+                    },
+                    {
+                        $group: {
+                            _id: '$contentId',
+                            playCount: { $sum: 1 },
+                            avgCompletion: { $avg: '$completionPercent' }
+                        }
+                    }
+                ]);
+                
+                // Create a map of play counts
+                const playCountMap = new Map();
+                bookPlayEvents.forEach(e => {
+                    playCountMap.set(e._id.toString(), {
+                        playCount: e.playCount,
+                        avgCompletion: Math.round(e.avgCompletion || 0)
+                    });
+                });
+                
+                // Merge with book data
+                results.books = books.map(book => {
+                    const stats = playCountMap.get(book._id.toString()) || { playCount: 0, avgCompletion: 0 };
+                    return {
+                        ...book,
+                        // For time-filtered view, use play event counts
+                        viewCount: stats.playCount,
+                        readCount: stats.playCount,
+                        averageCompletionRate: stats.avgCompletion,
+                        // Keep other counts as-is (they're cumulative)
+                        likeCount: 0, // Would need separate event tracking
+                        favoriteCount: 0,
+                    };
+                });
+            } else {
+                // All time - use stored counts
+                results.books = books;
+            }
+        }
+        
+        // Get playlist analytics
+        if (type === 'all' || type === 'playlist') {
+            const playlists = await Playlist.find({ status: { $in: ['published', 'draft'] } })
+                .select('title author coverImage type status viewCount playCount likeCount favoriteCount items')
+                .lean();
+            
+            if (startDate) {
+                // Get play events for playlists and episodes
+                const playlistPlayEvents = await PlayEvent.aggregate([
+                    {
+                        $match: {
+                            contentType: { $in: ['playlist', 'episode'] },
+                            playedAt: { $gte: startDate },
+                            isEngagementUpdate: { $ne: true }
+                        }
+                    },
+                    {
+                        $group: {
+                            _id: { $ifNull: ['$playlistId', '$contentId'] },
+                            playCount: { $sum: 1 }
+                        }
+                    }
+                ]);
+                
+                const playCountMap = new Map();
+                playlistPlayEvents.forEach(e => {
+                    playCountMap.set(e._id.toString(), e.playCount);
+                });
+                
+                results.playlists = playlists.map(playlist => {
+                    const playCount = playCountMap.get(playlist._id.toString()) || 0;
+                    return {
+                        ...playlist,
+                        viewCount: playCount,
+                        playCount: playCount,
+                        itemCount: playlist.items?.length || 0,
+                        likeCount: 0,
+                        favoriteCount: 0,
+                    };
+                });
+            } else {
+                // All time - use stored counts
+                results.playlists = playlists.map(p => ({
+                    ...p,
+                    itemCount: p.items?.length || 0,
+                }));
+            }
+        }
+        
+        res.json({
+            success: true,
+            timeRange,
+            ...results
+        });
+    } catch (error) {
+        console.error('Content analytics error:', error);
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
 module.exports = router;

@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useState, useCallback, useEffect } from 'react';
 
 // Tutorial step definitions
-// FLOW: Welcome book → Swipe pages → Quiz → Coins → Report Card → Shop → Giving
+// FLOW: Welcome book → Swipe pages → Quiz → Coins → Report Card → Shop → Giving → Explore → Books → Audio → Complete
 export type TutorialStep = 
   | 'idle'
   | 'welcome_book_tap'    // On welcome page, finger points to a book
@@ -19,10 +19,17 @@ export type TutorialStep =
   | 'shop_highlight'
   | 'shop_open'
   | 'navigate_to_give'
-  | 'give_popup'
-  | 'donation_practice'
-  | 'review_prompt'
-  | 'paywall'
+  | 'campaign_highlight'  // Highlight a campaign to click
+  | 'give_button_highlight' // Highlight the Give button
+  | 'donation_complete'   // After donation is made
+  | 'navigate_to_explore' // Go back to explore/home
+  | 'devotional_highlight' // Highlight daily devotional videos
+  | 'navigate_to_books'   // Turn wheel to books page
+  | 'navigate_to_audio'   // Turn wheel to audio page
+  | 'audiobook_highlight' // Highlight an audiobook
+  | 'tutorial_complete'   // Confetti + celebration
+  | 'review_prompt'       // Ask for review
+  | 'paywall'             // Show subscription
   | 'complete';
 
 // Step metadata for UI
@@ -114,15 +121,55 @@ export const TUTORIAL_STEP_CONFIG: Record<TutorialStep, {
     description: 'Watch the wheel spin to the Give section...',
     autoAdvanceDelay: 2000,
   },
-  give_popup: {
-    title: 'Practice Generosity',
-    description: 'Your child\'s progress makes a real world impact. Let\'s practice giving!',
+  campaign_highlight: {
+    title: 'Choose a Cause',
+    description: 'Tap on a campaign to learn more and practice giving!',
+    targetElement: 'campaign-card-0',
     requiresClick: true,
   },
-  donation_practice: {
-    title: 'Donate 10 Coins',
-    description: 'Practice generosity by donating 10 coins to see how it works.',
+  give_button_highlight: {
+    title: 'Practice Giving!',
+    description: 'Tap the Give button to donate coins and help people in need!',
+    targetElement: 'give-button-0',
     requiresClick: true,
+  },
+  donation_complete: {
+    title: 'Amazing! 🎉',
+    description: 'You just practiced generosity! Your coins help real people.',
+    autoAdvanceDelay: 2500,
+  },
+  navigate_to_explore: {
+    title: 'Let\'s Explore More!',
+    description: 'Watch the wheel spin to the Explore section...',
+    autoAdvanceDelay: 2000,
+  },
+  devotional_highlight: {
+    title: 'Daily Devotionals',
+    description: 'Watch fun video lessons to grow in faith every day!',
+    targetElement: 'devotional-section',
+    requiresClick: false,
+    autoAdvanceDelay: 3000,
+  },
+  navigate_to_books: {
+    title: 'Books Section',
+    description: 'Watch the wheel spin to the Books section...',
+    autoAdvanceDelay: 2000,
+  },
+  navigate_to_audio: {
+    title: 'Audio Adventures',
+    description: 'Watch the wheel spin to the Audio section...',
+    autoAdvanceDelay: 2000,
+  },
+  audiobook_highlight: {
+    title: 'Audio Stories',
+    description: 'Tap to listen to exciting audio dramas - perfect for car rides and screen-free time!',
+    targetElement: 'audiobook-card-0',
+    requiresClick: true,
+  },
+  tutorial_complete: {
+    title: 'You Did It! 🎊',
+    description: 'You\'ve completed the tutorial! Time to start your faith adventure!',
+    autoAdvanceDelay: 3000,
   },
   review_prompt: {
     title: 'What Do You Think?',
@@ -138,7 +185,7 @@ export const TUTORIAL_STEP_CONFIG: Record<TutorialStep, {
 };
 
 // Step order for progression
-// FLOW: Welcome book → Swipe 3 pages → Quiz → Coins → Report Card → Shop → Giving
+// FLOW: Welcome book → Swipe 3 pages → Quiz → Coins → Report Card → Shop → Giving → Explore → Books → Audio → Complete
 const STEP_ORDER: TutorialStep[] = [
   'welcome_book_tap',     // 1. On welcome page, tap a book
   'book_controls_intro',  // 2. Quick controls overview
@@ -155,10 +202,17 @@ const STEP_ORDER: TutorialStep[] = [
   'shop_highlight',       // 13. Highlight shop
   'shop_open',            // 14. Shop modal
   'navigate_to_give',     // 15. Navigate wheel to give
-  'give_popup',           // 16. Give section intro
-  'donation_practice',    // 17. Practice donating
-  'review_prompt',        // 18. Ask for review
-  'paywall',              // 19. Show subscription
+  'campaign_highlight',   // 16. Highlight a campaign
+  'give_button_highlight',// 17. Highlight give button
+  'donation_complete',    // 18. Donation done celebration
+  'navigate_to_explore',  // 19. Navigate to explore/home
+  'devotional_highlight', // 20. Highlight devotionals
+  'navigate_to_books',    // 21. Navigate to books
+  'navigate_to_audio',    // 22. Navigate to audio
+  'audiobook_highlight',  // 23. Highlight audiobook
+  'tutorial_complete',    // 24. Confetti celebration
+  'review_prompt',        // 25. Ask for review
+  'paywall',              // 26. Show subscription
   'complete',
 ];
 

@@ -370,12 +370,14 @@ const ListenPage: React.FC = () => {
             {filteredPlaylists.length > 0 && (
               <div className="mb-8">
                 <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 max-w-6xl mx-auto">
-                  {filteredPlaylists.map(playlist => {
+                  {filteredPlaylists.map((playlist, index) => {
                     const isPlaylistLocked = playlist.isMembersOnly && !isSubscribed;
                     
                     return (
                       <div
                         key={playlist._id}
+                        id={index === 0 ? 'audiobook-card-0' : undefined}
+                        data-tutorial={index === 0 ? 'audiobook-card-0' : undefined}
                         onClick={() => {
                           if (isPlaylistLocked) {
                             console.log('🔒 Playlist is locked - subscription required');

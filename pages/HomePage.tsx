@@ -1001,7 +1001,7 @@ const HomePage: React.FC = () => {
         })()}
 
         {/* Weekly Progress Tracker + Daily Lessons Section */}
-        <section className="pb-2">
+        <section id="devotional-section" data-tutorial="devotional-section" className="pb-2">
           {/* Weekly Tracker - Compact Mon-Sat progress */}
           <WeeklyLessonTracker
             selectedDay={selectedDayIndex}

@@ -77,6 +77,52 @@ const SwipeHintContent: React.FC<{ message: string }> = ({ message }) => (
   </div>
 );
 
+// Tutorial complete content with confetti
+const TutorialCompleteContent: React.FC<{ onNext: () => void }> = ({ onNext }) => (
+  <div className="text-center relative">
+    {/* Confetti Animation */}
+    <div className="absolute inset-0 overflow-hidden pointer-events-none">
+      {[...Array(30)].map((_, i) => (
+        <div
+          key={i}
+          className="absolute animate-confetti"
+          style={{
+            left: `${Math.random() * 100}%`,
+            top: '-20px',
+            animationDelay: `${Math.random() * 2}s`,
+            backgroundColor: ['#FFD700', '#FF6B6B', '#4ECDC4', '#9B59B6', '#3498DB'][Math.floor(Math.random() * 5)],
+            width: '10px',
+            height: '10px',
+            borderRadius: Math.random() > 0.5 ? '50%' : '0',
+          }}
+        />
+      ))}
+    </div>
+    
+    <div className="mb-4">
+      <span className="text-6xl">🎉</span>
+    </div>
+    <h3 className="text-[#FFD700] font-display font-bold text-2xl mb-2">
+      You Did It!
+    </h3>
+    <p className="text-white/90 text-sm leading-relaxed mb-4">
+      You've completed the tutorial! You're ready to start your faith adventure.
+    </p>
+    <WoodButton variant="gold" onClick={onNext} className="w-full py-3 animate-pulse">
+      Continue →
+    </WoodButton>
+    <style>{`
+      @keyframes confetti {
+        0% { transform: translateY(0) rotate(0deg); opacity: 1; }
+        100% { transform: translateY(400px) rotate(720deg); opacity: 0; }
+      }
+      .animate-confetti {
+        animation: confetti 3s ease-out forwards;
+      }
+    `}</style>
+  </div>
+);
+
 // Book controls intro - shows key reader controls
 const BookControlsIntroContent: React.FC = () => (
   <div className="text-center">
@@ -183,16 +229,35 @@ const OnboardingTutorial: React.FC = () => {
   }
 
   // Home-based steps (coins, report card, shop) should only show on home page
-  const homeSteps: TutorialStep[] = ['coins_highlight', 'coins_popup_open', 'report_card_highlight', 'report_card_open', 'shop_highlight', 'shop_open'];
+  const homeSteps: TutorialStep[] = ['coins_highlight', 'coins_popup_open', 'report_card_highlight', 'report_card_open', 'shop_highlight', 'shop_open', 'devotional_highlight'];
   if (homeSteps.includes(currentStep) && !isOnHomePage) {
     return null;
   }
 
   // Give-related steps should only show on give page
-  const giveSteps: TutorialStep[] = ['navigate_to_give', 'give_popup', 'donation_practice'];
-  if (giveSteps.includes(currentStep) && !isOnGivePage && currentStep !== 'navigate_to_give') {
+  const giveSteps: TutorialStep[] = ['campaign_highlight', 'give_button_highlight', 'donation_complete'];
+  if (giveSteps.includes(currentStep) && !isOnGivePage) {
     return null;
   }
+  
+  // Listen page steps
+  const listenSteps: TutorialStep[] = ['audiobook_highlight'];
+  if (listenSteps.includes(currentStep) && pathname !== '/listen') {
+    return null;
+  }
+
+  // Navigation steps - trigger wheel navigation
+  useEffect(() => {
+    if (currentStep === 'navigate_to_give') {
+      window.dispatchEvent(new CustomEvent('tutorial_navigate_wheel', { detail: { target: 'give' } }));
+    } else if (currentStep === 'navigate_to_explore') {
+      window.dispatchEvent(new CustomEvent('tutorial_navigate_wheel', { detail: { target: 'explore' } }));
+    } else if (currentStep === 'navigate_to_books') {
+      window.dispatchEvent(new CustomEvent('tutorial_navigate_wheel', { detail: { target: 'read' } }));
+    } else if (currentStep === 'navigate_to_audio') {
+      window.dispatchEvent(new CustomEvent('tutorial_navigate_wheel', { detail: { target: 'listen' } }));
+    }
+  }, [currentStep]);
 
   const config = getStepConfig();
 
@@ -372,28 +437,94 @@ const OnboardingTutorial: React.FC = () => {
           />
         );
 
-      case 'give_popup':
+      case 'campaign_highlight':
+        return (
+          <TutorialSpotlight
+            targetElement="campaign-card-0"
+            title={config.title}
+            description={config.description}
+            isVisible={true}
+            fingerPosition="top"
+            popupPosition="bottom"
+            requiresElementClick={true}
+          />
+        );
+
+      case 'give_button_highlight':
+        return (
+          <TutorialSpotlight
+            targetElement="give-button-0"
+            title={config.title}
+            description={config.description}
+            isVisible={true}
+            fingerPosition="top"
+            popupPosition="top"
+            requiresElementClick={true}
+          />
+        );
+
+      case 'donation_complete':
+        return (
+          <TutorialSpotlight
+            title={config.title}
+            description={config.description}
+            isVisible={true}
+            popupPosition="center"
+            requiresElementClick={false}
+            hideOverlay={true}
+          />
+        );
+
+      case 'navigate_to_explore':
+      case 'navigate_to_books':
+      case 'navigate_to_audio':
+        return (
+          <TutorialSpotlight
+            title={config.title}
+            description={config.description}
+            isVisible={true}
+            popupPosition="center"
+            requiresElementClick={false}
+          />
+        );
+
+      case 'devotional_highlight':
+        return (
+          <TutorialSpotlight
+            targetElement="devotional-section"
+            title={config.title}
+            description={config.description}
+            isVisible={true}
+            fingerPosition="right"
+            popupPosition="bottom"
+            requiresElementClick={false}
+            hideOverlay={true}
+          />
+        );
+
+      case 'audiobook_highlight':
+        return (
+          <TutorialSpotlight
+            targetElement="audiobook-card-0"
+            title={config.title}
+            description={config.description}
+            isVisible={true}
+            fingerPosition="top"
+            popupPosition="bottom"
+            requiresElementClick={true}
+          />
+        );
+
+      case 'tutorial_complete':
         return (
           <TutorialSpotlight
             title=""
             description=""
             isVisible={true}
             popupPosition="center"
-            customContent={<GivePopupContent onNext={nextStep} />}
             requiresElementClick={false}
-          />
-        );
-
-      case 'donation_practice':
-        return (
-          <TutorialSpotlight
-            targetElement="give-button-0"
-            title={config.title}
-            description="Tap the Give button to donate coins and help people in need!"
-            isVisible={true}
-            fingerPosition="top"
-            popupPosition="top"
-            requiresElementClick={true}
+            hideOverlay={true}
+            customContent={<TutorialCompleteContent onNext={nextStep} />}
           />
         );
 

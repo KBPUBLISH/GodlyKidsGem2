@@ -443,7 +443,15 @@ const GivingPage: React.FC = () => {
                         {campaigns.map((campaign, index) => (
                             <div 
                                 key={campaign._id}
-                                onClick={() => openCampaignDetail(campaign)}
+                                id={index === 0 ? 'campaign-card-0' : undefined}
+                                data-tutorial={index === 0 ? 'campaign-card-0' : undefined}
+                                onClick={() => {
+                                    // Advance tutorial when clicking the highlighted campaign
+                                    if (index === 0 && isTutorialActive && isStepActive('campaign_highlight')) {
+                                        nextStep();
+                                    }
+                                    openCampaignDetail(campaign);
+                                }}
                                 className="bg-white/95 backdrop-blur-sm rounded-2xl shadow-lg overflow-hidden border-2 border-pink-200/50 transform transition-all hover:scale-[1.02] active:scale-[0.98] cursor-pointer"
                             >
                                 {/* Campaign Image - Responsive aspect ratio */}
@@ -489,7 +497,7 @@ const GivingPage: React.FC = () => {
                                         onClick={(e) => {
                                             openDonationModal(campaign, e);
                                             // Advance tutorial when clicking the highlighted give button
-                                            if (index === 0 && isTutorialActive && isStepActive('donation_practice')) {
+                                            if (index === 0 && isTutorialActive && isStepActive('give_button_highlight')) {
                                                 nextStep();
                                             }
                                         }}

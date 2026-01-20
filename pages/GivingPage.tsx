@@ -430,8 +430,8 @@ const GivingPage: React.FC = () => {
                     </div>
                 )}
 
-                {/* Campaigns 2x2 Grid */}
-                <div>
+                {/* Campaigns Grid - Responsive */}
+                <div className="max-w-4xl mx-auto">
                 {campaigns.length === 0 ? (
                     <div className="text-center py-12 bg-white/80 backdrop-blur-sm rounded-2xl">
                         <Heart className="w-16 h-16 text-gray-300 mx-auto mb-4" />
@@ -439,15 +439,15 @@ const GivingPage: React.FC = () => {
                         <p className="text-gray-400 text-sm">Check back soon!</p>
                     </div>
                 ) : (
-                    <div className="grid grid-cols-2 gap-3">
+                    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
                         {campaigns.map((campaign, index) => (
                             <div 
                                 key={campaign._id}
                                 onClick={() => openCampaignDetail(campaign)}
                                 className="bg-white/95 backdrop-blur-sm rounded-2xl shadow-lg overflow-hidden border-2 border-pink-200/50 transform transition-all hover:scale-[1.02] active:scale-[0.98] cursor-pointer"
                             >
-                                {/* Campaign Image */}
-                                <div className="relative aspect-square bg-gradient-to-br from-pink-50 to-purple-50">
+                                {/* Campaign Image - Responsive aspect ratio */}
+                                <div className="relative aspect-[4/3] sm:aspect-square lg:aspect-[4/3] bg-gradient-to-br from-pink-50 to-purple-50">
                                     {campaign.image ? (
                                         <img 
                                             src={campaign.image} 

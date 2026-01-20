@@ -2,12 +2,26 @@ require('dotenv').config();
 const mongoose = require('mongoose');
 const User = require('./src/models/User');
 
-// Admin credentials - CHANGE THESE!
-const ADMIN_EMAIL = 'admin@godlykids.com';
-const ADMIN_PASSWORD = 'GodlyKids2024!';
-const ADMIN_USERNAME = 'admin';
+// Get credentials from command line arguments or use defaults
+const ADMIN_EMAIL = process.argv[2] || process.env.ADMIN_EMAIL || 'admin@godlykids.com';
+const ADMIN_PASSWORD = process.argv[3] || process.env.ADMIN_PASSWORD;
+const ADMIN_USERNAME = process.argv[4] || 'admin';
 
 const createAdmin = async () => {
+    if (!ADMIN_PASSWORD) {
+        console.log('❌ Error: Password is required!');
+        console.log('');
+        console.log('Usage: node create-admin.js <email> <password> [username]');
+        console.log('');
+        console.log('Examples:');
+        console.log('  node create-admin.js admin@godlykids.com MySecurePass123');
+        console.log('  node create-admin.js admin@gk.com MyPass123 myadmin');
+        console.log('');
+        console.log('Or set environment variables:');
+        console.log('  ADMIN_EMAIL=admin@gk.com ADMIN_PASSWORD=MyPass123 node create-admin.js');
+        process.exit(1);
+    }
+
     try {
         await mongoose.connect(process.env.MONGO_URI);
         console.log('✅ MongoDB Connected');
@@ -18,7 +32,7 @@ const createAdmin = async () => {
         
         if (existingByEmail) {
             console.log('⚠️  User already exists with email:', ADMIN_EMAIL);
-            console.log('   Use these credentials to login.');
+            console.log('   Use these credentials to login, or use reset-admin-password.js to change the password.');
             process.exit(0);
         }
         
@@ -41,9 +55,9 @@ const createAdmin = async () => {
         console.log('✅ Admin user created successfully!');
         console.log('');
         console.log('📧 Email:', ADMIN_EMAIL);
-        console.log('🔑 Password:', ADMIN_PASSWORD);
+        console.log('👤 Username:', ADMIN_USERNAME);
         console.log('');
-        console.log('⚠️  Please change this password after first login!');
+        console.log('⚠️  Please keep your password secure!');
 
         process.exit(0);
     } catch (err) {

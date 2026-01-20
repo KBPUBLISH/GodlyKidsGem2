@@ -213,16 +213,17 @@ const Header: React.FC<HeaderProps> = ({ isVisible, title = "GODLY KIDS" }) => {
 
       {isShopOpen && (
         <Suspense fallback={null}>
-          <ShopModal isOpen={isShopOpen} onClose={handleShopClose} />
+          <ShopModal isOpen={isShopOpen} onClose={handleShopClose} hideCloseButton={isTutorialActive} />
         </Suspense>
       )}
       <CoinHistoryModal 
         isOpen={isCoinHistoryOpen} 
         onClose={handleCoinsClose} 
         onOpenShop={handleShopClick}
+        hideCloseButton={isTutorialActive}
       />
       <AvatarDetailModal isOpen={isDetailOpen} onClose={() => setIsDetailOpen(false)} onEdit={handleShopClick} />
-      <ReportCardModal isOpen={isReportCardOpen} onClose={handleReportCardClose} />
+      <ReportCardModal isOpen={isReportCardOpen} onClose={handleReportCardClose} hideCloseButton={isTutorialActive} />
     </>
   );
 };

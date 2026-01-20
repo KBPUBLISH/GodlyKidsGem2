@@ -9,6 +9,7 @@ import { useLanguage } from '../../context/LanguageContext';
 interface ReportCardModalProps {
   isOpen: boolean;
   onClose: () => void;
+  hideCloseButton?: boolean; // Hide X button during tutorial
 }
 
 interface WeeklyStats {
@@ -86,7 +87,7 @@ const formatDuration = (minutes: number): string => {
   return `${hours}h ${remainingMinutes}m`;
 };
 
-const ReportCardModal: React.FC<ReportCardModalProps> = ({ isOpen, onClose }) => {
+const ReportCardModal: React.FC<ReportCardModalProps> = ({ isOpen, onClose, hideCloseButton = false }) => {
   const { coins, coinTransactions, kids, currentProfileId, parentName } = useUser();
   const { t } = useLanguage();
   const [activeTab, setActiveTab] = useState<'overview' | 'activity'>('overview');
@@ -191,20 +192,22 @@ const ReportCardModal: React.FC<ReportCardModalProps> = ({ isOpen, onClose }) =>
       {/* Blurred Backdrop */}
       <div 
         className="absolute inset-0 bg-black/60 backdrop-blur-md"
-        onClick={onClose}
+        onClick={hideCloseButton ? undefined : onClose}
       />
       
       {/* Modal Content */}
       <div className="relative w-full max-w-md max-h-[90vh] bg-gradient-to-b from-[#1a2e1a] to-[#0f1f0f] rounded-3xl border-2 border-[#2E7D32]/50 shadow-2xl overflow-hidden flex flex-col">
         {/* Header */}
         <div className="relative px-6 pt-6 pb-4 border-b border-[#2E7D32]/30 bg-gradient-to-r from-[#2E7D32]/20 to-[#388E3C]/20">
-          {/* Close Button */}
-          <button
-            onClick={onClose}
-            className="absolute top-4 right-4 p-2 rounded-full bg-black/30 hover:bg-black/50 transition-colors"
-          >
-            <X className="w-5 h-5 text-white/70" />
-          </button>
+          {/* Close Button - hidden during tutorial */}
+          {!hideCloseButton && (
+            <button
+              onClick={onClose}
+              className="absolute top-4 right-4 p-2 rounded-full bg-black/30 hover:bg-black/50 transition-colors"
+            >
+              <X className="w-5 h-5 text-white/70" />
+            </button>
+          )}
           
           {/* Report Card Title */}
           <div className="text-center">

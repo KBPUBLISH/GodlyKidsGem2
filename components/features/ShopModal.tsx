@@ -16,6 +16,7 @@ interface ShopModalProps {
     isOpen: boolean;
     onClose: () => void;
     initialTab?: ShopTab;
+    hideCloseButton?: boolean; // Hide X button during tutorial
 }
 
 // --- SHOP DATA ---
@@ -170,7 +171,7 @@ const SHOP_ANIMATIONS: ShopItem[] = [
 
 type ShopTab = 'head' | 'hat' | 'body' | 'arms' | 'legs' | 'moves' | 'voices' | 'saves';
 
-const ShopModal: React.FC<ShopModalProps> = ({ isOpen, onClose, initialTab }) => {
+const ShopModal: React.FC<ShopModalProps> = ({ isOpen, onClose, initialTab, hideCloseButton = false }) => {
     const navigate = useNavigate();
     const { t } = useLanguage();
     const [activeTab, setActiveTab] = useState<ShopTab>(initialTab || 'head');
@@ -747,9 +748,11 @@ const ShopModal: React.FC<ShopModalProps> = ({ isOpen, onClose, initialTab }) =>
                         <span className="text-[#FFD700] font-bold font-display text-lg">{coins}</span>
                     </button>
 
-                    <button onClick={handleClose} className="ml-2 text-[#eecaa0] hover:text-white active:scale-95 transition-transform">
-                        <X size={24} />
-                    </button>
+                    {!hideCloseButton && (
+                        <button onClick={handleClose} className="ml-2 text-[#eecaa0] hover:text-white active:scale-95 transition-transform">
+                            <X size={24} />
+                        </button>
+                    )}
                 </div>
 
                 {/* Preview Area (Live updates) */}

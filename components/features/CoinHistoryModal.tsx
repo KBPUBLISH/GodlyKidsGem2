@@ -9,6 +9,7 @@ interface CoinHistoryModalProps {
   isOpen: boolean;
   onClose: () => void;
   onOpenShop: () => void;
+  hideCloseButton?: boolean; // Hide X button during tutorial
 }
 
 const getSourceIcon = (source: CoinTransaction['source']) => {
@@ -65,7 +66,7 @@ const formatTimeAgo = (timestamp: number): string => {
   return new Date(timestamp).toLocaleDateString();
 };
 
-const CoinHistoryModal: React.FC<CoinHistoryModalProps> = ({ isOpen, onClose, onOpenShop }) => {
+const CoinHistoryModal: React.FC<CoinHistoryModalProps> = ({ isOpen, onClose, onOpenShop, hideCloseButton = false }) => {
   const { coins, coinTransactions, referralCode, redeemCode, addCoins, kids } = useUser();
   const [copied, setCopied] = useState(false);
   const [codeInput, setCodeInput] = useState('');
@@ -234,20 +235,22 @@ const CoinHistoryModal: React.FC<CoinHistoryModalProps> = ({ isOpen, onClose, on
       {/* Blurred Backdrop */}
       <div 
         className="absolute inset-0 bg-black/60 backdrop-blur-md"
-        onClick={onClose}
+        onClick={hideCloseButton ? undefined : onClose}
       />
       
       {/* Modal Content */}
       <div className="relative w-full max-w-md max-h-[90vh] bg-gradient-to-b from-[#2a1810] to-[#1a0f08] rounded-3xl border-2 border-[#8B4513]/50 shadow-2xl overflow-hidden flex flex-col">
         {/* Header */}
         <div className="relative px-6 pt-6 pb-4 border-b border-[#8B4513]/30">
-          {/* Close Button */}
-          <button
-            onClick={onClose}
-            className="absolute top-4 right-4 p-2 rounded-full bg-black/30 hover:bg-black/50 transition-colors"
-          >
-            <X className="w-5 h-5 text-white/70" />
-          </button>
+          {/* Close Button - hidden during tutorial */}
+          {!hideCloseButton && (
+            <button
+              onClick={onClose}
+              className="absolute top-4 right-4 p-2 rounded-full bg-black/30 hover:bg-black/50 transition-colors"
+            >
+              <X className="w-5 h-5 text-white/70" />
+            </button>
+          )}
           
           {/* Coin Balance */}
           <div className="text-center">

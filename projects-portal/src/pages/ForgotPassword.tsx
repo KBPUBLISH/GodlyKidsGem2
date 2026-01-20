@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { Mail, AlertCircle, CheckCircle, ArrowLeft, Sparkles } from 'lucide-react';
 import axios from 'axios';
 
-const API_URL = import.meta.env.VITE_API_URL || 'https://godlykids-backend.onrender.com';
+const API_URL = import.meta.env.VITE_API_URL || 'https://backendgk2-0.onrender.com';
 
 const ForgotPassword: React.FC = () => {
   const [email, setEmail] = useState('');

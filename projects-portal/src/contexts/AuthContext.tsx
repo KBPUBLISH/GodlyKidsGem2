@@ -8,7 +8,7 @@ import axios from 'axios';
 
 const AUTH_KEY = 'gk_portal_auth';
 const TOKEN_KEY = 'portal_admin_token';
-const API_URL = import.meta.env.VITE_API_URL || 'https://godlykids-backend.onrender.com';
+const API_URL = import.meta.env.VITE_API_URL || 'https://backendgk2-0.onrender.com';
 
 interface AuthContextType {
   isAuthenticated: boolean;

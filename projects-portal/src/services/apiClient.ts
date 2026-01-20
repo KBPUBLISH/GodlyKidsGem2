@@ -1,7 +1,7 @@
 import axios from 'axios';
 
-// Base URL for API requests - defaults to localhost for development
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5001';
+// Base URL for API requests - defaults to production backend
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'https://backendgk2-0.onrender.com';
 
 // Create axios instance with base URL
 export const apiClient = axios.create({

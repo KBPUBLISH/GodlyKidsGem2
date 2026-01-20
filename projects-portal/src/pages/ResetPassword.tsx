@@ -3,7 +3,7 @@ import { Link, useSearchParams, useNavigate } from 'react-router-dom';
 import { Lock, AlertCircle, CheckCircle, ArrowLeft, Sparkles } from 'lucide-react';
 import axios from 'axios';
 
-const API_URL = import.meta.env.VITE_API_URL || 'https://godlykids-backend.onrender.com';
+const API_URL = import.meta.env.VITE_API_URL || 'https://backendgk2-0.onrender.com';
 
 const ResetPassword: React.FC = () => {
   const [searchParams] = useSearchParams();

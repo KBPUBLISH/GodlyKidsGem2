@@ -398,6 +398,7 @@ router.post('/generate', async (req, res) => {
         if (openaiKey && !aiSuccess) {
             try {
                 console.log('🤖 Attempting generation with OpenAI...');
+                console.log('🔑 OpenAI key prefix:', openaiKey?.substring(0, 10) + '...');
                 const response = await axios.post(
                     'https://api.openai.com/v1/chat/completions',
                     {
@@ -425,7 +426,12 @@ router.post('/generate', async (req, res) => {
                     console.log('✅ OpenAI generation successful');
                 }
             } catch (apiError) {
-                console.error('❌ OpenAI generation failed:', apiError.response?.data?.error?.message || apiError.message);
+                console.error('❌ OpenAI generation failed:', {
+                    message: apiError.message,
+                    status: apiError.response?.status,
+                    statusText: apiError.response?.statusText,
+                    data: JSON.stringify(apiError.response?.data || {}),
+                });
             }
         }
 

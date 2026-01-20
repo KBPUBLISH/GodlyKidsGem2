@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Eye, BookOpen, Heart, Bookmark, Trophy, HelpCircle, Palette, Gamepad2, ArrowUpDown, TrendingUp, TrendingDown } from 'lucide-react';
+import { Eye, BookOpen, Heart, Bookmark, Trophy, HelpCircle, Palette, Gamepad2, ArrowUpDown, TrendingUp, TrendingDown, Calendar } from 'lucide-react';
 import apiClient from '../services/apiClient';
 import { Link } from 'react-router-dom';
 
@@ -23,43 +23,38 @@ interface BookAnalytics {
 
 type SortField = 'viewCount' | 'readCount' | 'likeCount' | 'favoriteCount' | 'quizCompletionCount' | 'averageCompletionRate' | 'gameOpenCount';
 type SortDirection = 'asc' | 'desc';
+type TimeRange = 'day' | 'week' | 'month' | 'all';
 
 const BooksAnalytics: React.FC = () => {
     const [books, setBooks] = useState<BookAnalytics[]>([]);
     const [loading, setLoading] = useState(true);
     const [sortField, setSortField] = useState<SortField>('viewCount');
     const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
+    const [timeRange, setTimeRange] = useState<TimeRange>('all');
 
     useEffect(() => {
         fetchBooksAnalytics();
-    }, []);
-
-    // Fetch all pages of books (handles pagination)
-    const fetchAllBooks = async (): Promise<BookAnalytics[]> => {
-        const pageSize = 100;
-        let page = 1;
-        let results: BookAnalytics[] = [];
-
-        while (true) {
-            const res = await apiClient.get(`/api/books?status=all&page=${page}&limit=${pageSize}`);
-            const payload = res.data;
-            const pageItems: BookAnalytics[] = Array.isArray(payload) ? payload : (payload.data || []);
-            results = results.concat(pageItems);
-
-            const hasMore = Array.isArray(payload) ? false : Boolean(payload.pagination?.hasMore);
-            if (!hasMore) break;
-            page += 1;
-        }
-        return results;
-    };
+    }, [timeRange]);
 
     const fetchBooksAnalytics = async () => {
+        setLoading(true);
         try {
-            const booksData = await fetchAllBooks();
-            console.log(`📊 Analytics: Loaded ${booksData.length} books (all pages)`);
+            // Use the new content analytics endpoint with time filtering
+            const res = await apiClient.get(`/api/analytics/content?type=book&timeRange=${timeRange}`);
+            const booksData = res.data?.books || [];
+            console.log(`📊 Analytics: Loaded ${booksData.length} books (${timeRange})`);
             setBooks(booksData);
         } catch (error) {
             console.error('Error fetching books analytics:', error);
+            // Fallback to direct books endpoint
+            try {
+                const res = await apiClient.get('/api/books?status=all&limit=100');
+                const payload = res.data;
+                const booksData = Array.isArray(payload) ? payload : (payload.data || []);
+                setBooks(booksData);
+            } catch (fallbackError) {
+                console.error('Fallback also failed:', fallbackError);
+            }
         } finally {
             setLoading(false);
         }
@@ -105,8 +100,35 @@ const BooksAnalytics: React.FC = () => {
         );
     }
 
+    const TimeRangeButton: React.FC<{ range: TimeRange; label: string }> = ({ range, label }) => (
+        <button
+            onClick={() => setTimeRange(range)}
+            className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                timeRange === range 
+                    ? 'bg-indigo-600 text-white' 
+                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+            }`}
+        >
+            {label}
+        </button>
+    );
+
     return (
         <div className="space-y-6">
+            {/* Time Range Selector */}
+            <div className="bg-white rounded-xl p-4 shadow-sm border border-gray-100">
+                <div className="flex items-center gap-2 mb-3">
+                    <Calendar className="w-4 h-4 text-gray-500" />
+                    <span className="text-sm font-medium text-gray-700">Time Range:</span>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                    <TimeRangeButton range="day" label="Today" />
+                    <TimeRangeButton range="week" label="This Week" />
+                    <TimeRangeButton range="month" label="This Month" />
+                    <TimeRangeButton range="all" label="All Time" />
+                </div>
+            </div>
+
             {/* Sort Controls */}
             <div className="bg-white rounded-xl p-4 shadow-sm border border-gray-100">
                 <div className="flex items-center gap-2 mb-3">

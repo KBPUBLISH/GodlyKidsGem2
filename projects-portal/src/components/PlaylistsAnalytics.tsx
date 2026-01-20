@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Eye, Play, Heart, Bookmark, ArrowUpDown, TrendingUp, TrendingDown, Music, Headphones } from 'lucide-react';
+import { Eye, Play, Heart, Bookmark, ArrowUpDown, TrendingUp, TrendingDown, Music, Headphones, Calendar } from 'lucide-react';
 import apiClient from '../services/apiClient';
 import { Link } from 'react-router-dom';
 
@@ -19,30 +19,41 @@ interface PlaylistAnalytics {
 
 type SortField = 'viewCount' | 'playCount' | 'likeCount' | 'favoriteCount' | 'itemCount';
 type SortDirection = 'asc' | 'desc';
+type TimeRange = 'day' | 'week' | 'month' | 'all';
 
 const PlaylistsAnalytics: React.FC = () => {
     const [playlists, setPlaylists] = useState<PlaylistAnalytics[]>([]);
     const [loading, setLoading] = useState(true);
     const [sortField, setSortField] = useState<SortField>('playCount');
     const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
+    const [timeRange, setTimeRange] = useState<TimeRange>('all');
 
     useEffect(() => {
         fetchPlaylistsAnalytics();
-    }, []);
+    }, [timeRange]);
 
     const fetchPlaylistsAnalytics = async () => {
+        setLoading(true);
         try {
-            // Fetch all playlists with analytics data
-            const response = await apiClient.get('/api/playlists?status=all');
-            // Handle both old format (array) and new format ({ data: [], pagination: {} })
-            const playlistsData = Array.isArray(response.data) ? response.data : (response.data?.data || []);
-            const data = playlistsData.map((p: any) => ({
-                ...p,
-                itemCount: p.items?.length || 0,
-            }));
-            setPlaylists(data);
+            // Use the new content analytics endpoint with time filtering
+            const res = await apiClient.get(`/api/analytics/content?type=playlist&timeRange=${timeRange}`);
+            const playlistsData = res.data?.playlists || [];
+            console.log(`📊 Analytics: Loaded ${playlistsData.length} playlists (${timeRange})`);
+            setPlaylists(playlistsData);
         } catch (error) {
             console.error('Error fetching playlists analytics:', error);
+            // Fallback to direct playlists endpoint
+            try {
+                const response = await apiClient.get('/api/playlists?status=all');
+                const playlistsData = Array.isArray(response.data) ? response.data : (response.data?.data || []);
+                const data = playlistsData.map((p: any) => ({
+                    ...p,
+                    itemCount: p.items?.length || 0,
+                }));
+                setPlaylists(data);
+            } catch (fallbackError) {
+                console.error('Fallback also failed:', fallbackError);
+            }
         } finally {
             setLoading(false);
         }
@@ -88,8 +99,35 @@ const PlaylistsAnalytics: React.FC = () => {
         );
     }
 
+    const TimeRangeButton: React.FC<{ range: TimeRange; label: string }> = ({ range, label }) => (
+        <button
+            onClick={() => setTimeRange(range)}
+            className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                timeRange === range 
+                    ? 'bg-purple-600 text-white' 
+                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+            }`}
+        >
+            {label}
+        </button>
+    );
+
     return (
         <div className="space-y-6">
+            {/* Time Range Selector */}
+            <div className="bg-white rounded-xl p-4 shadow-sm border border-gray-100">
+                <div className="flex items-center gap-2 mb-3">
+                    <Calendar className="w-4 h-4 text-gray-500" />
+                    <span className="text-sm font-medium text-gray-700">Time Range:</span>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                    <TimeRangeButton range="day" label="Today" />
+                    <TimeRangeButton range="week" label="This Week" />
+                    <TimeRangeButton range="month" label="This Month" />
+                    <TimeRangeButton range="all" label="All Time" />
+                </div>
+            </div>
+
             {/* Sort Controls */}
             <div className="bg-white rounded-xl p-4 shadow-sm border border-gray-100">
                 <div className="flex items-center gap-2 mb-3">

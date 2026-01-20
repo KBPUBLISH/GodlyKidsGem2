@@ -244,10 +244,16 @@ const NewUserWelcomePage: React.FC = () => {
     );
   }
 
-  // If no items configured, skip to onboarding
+  // If no items configured, skip ahead
   if (items.length === 0) {
     markWelcomeSeen();
-    navigate('/onboarding');
+    // If tutorial is active, go to home to continue tutorial there
+    // Otherwise go to onboarding
+    if (isTutorialActive) {
+      navigate('/home');
+    } else {
+      navigate('/onboarding');
+    }
     return null;
   }
 

@@ -50,10 +50,10 @@ const ReadyToJumpInPage: React.FC = () => {
 
   const handleStart = () => {
     setIsAnimating(true);
-    // Start the tutorial and navigate to home page
+    // Start the tutorial and navigate to welcome page (book selection)
     startTutorial();
     setTimeout(() => {
-      navigate('/home');
+      navigate('/welcome');
     }, 400);
   };
 

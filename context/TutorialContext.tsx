@@ -71,8 +71,8 @@ export const TUTORIAL_STEP_CONFIG: Record<TutorialStep, {
     requiresClick: false,
   },
   coins_highlight: {
-    title: 'Your Coins! 🪙',
-    description: 'Tap here to see your coins! Earn more by reading and learning.',
+    title: 'You Earned Coins! 🎉',
+    description: 'Great job! Tap here to see your coin rewards!',
     targetElement: 'coins-button',
     requiresClick: true,
   },
@@ -132,27 +132,26 @@ export const TUTORIAL_STEP_CONFIG: Record<TutorialStep, {
 };
 
 // Step order for progression
-// FLOW: Coins → Report Card → Shop → Giving (book tutorial can be added later)
+// FLOW: Welcome book → Swipe 3 pages → Quiz → Coins → Report Card → Shop → Giving
 const STEP_ORDER: TutorialStep[] = [
-  // Book steps - can be enabled when welcome page is configured
-  // 'welcome_book_tap',     // On welcome page, tap a book
-  // 'book_swipe_intro',     // In reader, show swipe hint
-  // 'book_swipe_1',         // First page turn
-  // 'book_swipe_2',         // Second page turn
-  // 'book_swipe_3',         // Third page turn
-  // 'book_end_quiz',        // End modal, quiz highlighted
-  // 'quiz_in_progress',     // Taking the quiz
-  'coins_highlight',      // 1. Show coins
-  'coins_popup_open',     // 2. Coin history modal
-  'report_card_highlight',// 3. Highlight report card
-  'report_card_open',     // 4. Report card modal
-  'shop_highlight',       // 5. Highlight shop
-  'shop_open',            // 6. Shop modal
-  'navigate_to_give',     // 7. Navigate wheel to give
-  'give_popup',           // 8. Give section intro
-  'donation_practice',    // 9. Practice donating
-  'review_prompt',        // 10. Ask for review
-  'paywall',              // 11. Show subscription
+  'welcome_book_tap',     // 1. On welcome page, tap a book
+  'book_swipe_intro',     // 2. In reader, show swipe hint
+  'book_swipe_1',         // 3. First page turn
+  'book_swipe_2',         // 4. Second page turn
+  'book_swipe_3',         // 5. Third page turn - auto advances
+  'book_end_quiz',        // 6. End modal, quiz highlighted
+  'quiz_in_progress',     // 7. Taking the quiz
+  'coins_highlight',      // 8. Show coins earned
+  'coins_popup_open',     // 9. Coin history modal
+  'report_card_highlight',// 10. Highlight report card
+  'report_card_open',     // 11. Report card modal
+  'shop_highlight',       // 12. Highlight shop
+  'shop_open',            // 13. Shop modal
+  'navigate_to_give',     // 14. Navigate wheel to give
+  'give_popup',           // 15. Give section intro
+  'donation_practice',    // 16. Practice donating
+  'review_prompt',        // 17. Ask for review
+  'paywall',              // 18. Show subscription
   'complete',
 ];
 
@@ -201,8 +200,8 @@ export const TutorialProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
   const startTutorial = useCallback(() => {
     if (!isComplete) {
-      setCurrentStep('coins_highlight');
-      localStorage.setItem(TUTORIAL_STEP_KEY, 'coins_highlight');
+      setCurrentStep('welcome_book_tap');
+      localStorage.setItem(TUTORIAL_STEP_KEY, 'welcome_book_tap');
     }
   }, [isComplete]);
 

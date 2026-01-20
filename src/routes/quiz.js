@@ -222,7 +222,8 @@ const getFallbackQuestions = (attemptNumber = 1) => {
 
 // Helper to call Gemini API
 const callGemini = async (systemPrompt, userPrompt, apiKey) => {
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
+    // Use v1 endpoint with gemini-2.0-flash (latest stable model)
+    const url = `https://generativelanguage.googleapis.com/v1/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
     
     try {
         const response = await axios.post(url, {

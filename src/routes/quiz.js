@@ -100,7 +100,7 @@ const extractJson = (text) => {
 };
 
 // Fallback questions to use when AI service is unavailable or quota exceeded
-const FALLBACK_QUESTIONS = [
+const FALLBACK_QUESTIONS_ATTEMPT1 = [
     {
         question: "Did you enjoy reading this story?",
         options: [
@@ -157,7 +157,68 @@ const FALLBACK_QUESTIONS = [
     }
 ];
 
-const getFallbackQuestions = () => JSON.parse(JSON.stringify(FALLBACK_QUESTIONS));
+// Different fallback questions for attempt 2
+const FALLBACK_QUESTIONS_ATTEMPT2 = [
+    {
+        question: "What did you learn from this story?",
+        options: [
+            { text: "To always be helpful", isCorrect: true },
+            { text: "To stay home", isCorrect: false },
+            { text: "Nothing new", isCorrect: false },
+            { text: "To trust God", isCorrect: true }
+        ]
+    },
+    {
+        question: "What would you do differently than the main character?",
+        options: [
+            { text: "Ask for help sooner", isCorrect: true },
+            { text: "Do the same thing", isCorrect: false },
+            { text: "Run away", isCorrect: false },
+            { text: "Give up", isCorrect: false }
+        ]
+    },
+    {
+        question: "Which part of the story surprised you?",
+        options: [
+            { text: "The ending", isCorrect: true },
+            { text: "Nothing surprised me", isCorrect: false },
+            { text: "I wasn't paying attention", isCorrect: false },
+            { text: "When help arrived", isCorrect: true }
+        ]
+    },
+    {
+        question: "How could you use this story's lesson in real life?",
+        options: [
+            { text: "By being kind to others", isCorrect: true },
+            { text: "I can't use it", isCorrect: false },
+            { text: "By ignoring everyone", isCorrect: false },
+            { text: "By helping friends", isCorrect: true }
+        ]
+    },
+    {
+        question: "What made the main character special?",
+        options: [
+            { text: "Their bravery", isCorrect: true },
+            { text: "Nothing", isCorrect: false },
+            { text: "They were mean", isCorrect: false },
+            { text: "Their kindness", isCorrect: true }
+        ]
+    },
+    {
+        question: "Would you want to be friends with the main character?",
+        options: [
+            { text: "Yes, they seem nice!", isCorrect: true },
+            { text: "No way", isCorrect: false },
+            { text: "Maybe", isCorrect: false },
+            { text: "Absolutely!", isCorrect: true }
+        ]
+    }
+];
+
+const getFallbackQuestions = (attemptNumber = 1) => {
+    const questions = attemptNumber === 2 ? FALLBACK_QUESTIONS_ATTEMPT2 : FALLBACK_QUESTIONS_ATTEMPT1;
+    return JSON.parse(JSON.stringify(questions));
+};
 
 // Helper to call Gemini API
 const callGemini = async (systemPrompt, userPrompt, apiKey) => {
@@ -300,12 +361,12 @@ router.post('/generate', async (req, res) => {
 
         const agePrompt = getAgeAppropriatePrompt(userAge, ageGroup);
         const attemptInstruction = currentAttempt === 2 
-            ? `\n\nIMPORTANT: This is a SECOND ATTEMPT quiz. Create COMPLETELY DIFFERENT questions from typical first-attempt questions.`
+            ? `\n\nIMPORTANT: This is attempt #2. You MUST create 6 COMPLETELY DIFFERENT questions than a first attempt would have. Focus on different story details, different characters, different events, and different lessons. But ALL questions MUST still be based on THIS SPECIFIC STORY - do NOT create generic questions.`
             : '';
 
         const systemPrompt = `${agePrompt}
         
-        Create exactly 6 multiple-choice questions based on the story content provided.${attemptInstruction}
+        Create exactly 6 multiple-choice questions based on the story content provided below. ALL questions MUST be specifically about events, characters, and details from THIS story - do NOT create generic questions.${attemptInstruction}
         
         General Rules:
         1. Create exactly 6 multiple-choice questions
@@ -386,15 +447,15 @@ router.post('/generate', async (req, res) => {
 
         // 3. Static Fallback
         if (!aiSuccess) {
-            console.log('⚠️ All AI providers failed or keys missing, using fallback questions');
+            console.log(`⚠️ All AI providers failed or keys missing, using fallback questions for attempt ${currentAttempt}`);
             useFallback = true;
-            questions = getFallbackQuestions();
+            questions = getFallbackQuestions(currentAttempt);
         }
 
         // Validate final questions structure
         if (!Array.isArray(questions) || questions.length === 0) {
             console.error('Invalid questions array after all attempts, forcing fallback');
-            questions = getFallbackQuestions();
+            questions = getFallbackQuestions(currentAttempt);
         }
         
         // Ensure exactly 6 questions (pad or slice if needed)
@@ -485,15 +546,15 @@ router.post('/generate-first', async (req, res) => {
         
         const agePrompt = getAgeAppropriatePrompt(userAge, ageGroup);
         const attemptInstruction = currentAttempt === 2 
-            ? `\n\nIMPORTANT: This is a SECOND ATTEMPT quiz. Create a DIFFERENT warm-up question than typical.`
+            ? `\n\nIMPORTANT: This is attempt #2. Create a DIFFERENT warm-up question than attempt #1 would have - focus on a different detail or character from the story. But the question MUST still be specifically about THIS STORY.`
             : '';
 
         const systemPrompt = `${agePrompt}
 
-Create exactly 1 multiple-choice question based on the story. This should be an easy warm-up question about the beginning of the story.${attemptInstruction}
+Create exactly 1 multiple-choice question based on the story provided below. This should be an easy warm-up question about the beginning of the story. The question MUST be specifically about events, characters, or details from THIS story - do NOT create a generic question.${attemptInstruction}
 
 Rules:
-1. Create exactly 1 question
+1. Create exactly 1 question about THIS SPECIFIC STORY
 2. 4 options (A, B, C, D), only ONE correct
 3. Make it about something from the start of the story
 4. Keep it fun and encouraging
@@ -567,8 +628,8 @@ Return ONLY a JSON object (not array):
 
         // 3. Static Fallback
         if (!aiSuccess) {
-            console.log('⚠️ All AI providers failed, using fallback first question');
-            firstQuestion = getFallbackQuestions()[0];
+            console.log(`⚠️ All AI providers failed, using fallback first question for attempt ${currentAttempt}`);
+            firstQuestion = getFallbackQuestions(currentAttempt)[0];
         }
 
         console.log(`✅ First question ready for: ${book.title}, attempt ${currentAttempt}`);
@@ -651,19 +712,20 @@ router.post('/generate-remaining', async (req, res) => {
         
         const agePrompt = getAgeAppropriatePrompt(userAge, ageGroup);
         const attemptInstruction = currentAttempt === 2 
-            ? `\n\nIMPORTANT: This is a SECOND ATTEMPT quiz. Create COMPLETELY DIFFERENT questions.`
+            ? `\n\nIMPORTANT: This is attempt #2. Create 5 COMPLETELY DIFFERENT questions than attempt #1 would have - focus on different story details, different scenes, different character actions. But ALL questions MUST still be specifically about THIS STORY - do NOT create generic questions.`
             : '';
 
         const systemPrompt = `${agePrompt}
 
-Create exactly 5 more multiple-choice questions. The first question was already asked: "${firstQuestion?.question || 'a warm-up question'}"${attemptInstruction}
+Create exactly 5 more multiple-choice questions based on the story provided below. The first question was already asked: "${firstQuestion?.question || 'a warm-up question'}"${attemptInstruction}
 
 Rules:
-1. Create exactly 5 NEW questions (different from the first one)
+1. Create exactly 5 NEW questions about THIS SPECIFIC STORY (different from the first one)
 2. Each has 4 options (A, B, C, D), only ONE correct
 3. Cover different parts of the story (middle and end)
-4. Include variety: characters, events, feelings, lessons
-5. Make it fun!
+4. Include variety: characters, events, feelings, lessons from THIS story
+5. Do NOT create generic questions - every question must reference specific story content
+6. Make it fun!
 
 Return ONLY a JSON array:
 [
@@ -729,15 +791,15 @@ Return ONLY a JSON array:
 
         // 3. Static Fallback
         if (!aiSuccess) {
-            console.log('⚠️ All AI providers failed, using fallback remaining questions');
-            const fallback = getFallbackQuestions();
+            console.log(`⚠️ All AI providers failed, using fallback remaining questions for attempt ${currentAttempt}`);
+            const fallback = getFallbackQuestions(currentAttempt);
             remainingQuestions = fallback.slice(1); // Skip first question (already generated)
         }
 
         // Validate remaining questions
         if (!Array.isArray(remainingQuestions)) {
             console.error('Remaining questions is not an array:', typeof remainingQuestions);
-            const fallback = getFallbackQuestions();
+            const fallback = getFallbackQuestions(currentAttempt);
             remainingQuestions = fallback.slice(1);
         }
 

@@ -502,7 +502,7 @@ import { metaAttributionService } from './services/metaAttributionService';
 import DemoTimer from './components/features/DemoTimer';
 import ReadyToJumpInPage from './pages/ReadyToJumpInPage';
 import OnboardingTutorial from './components/features/OnboardingTutorial';
-import { TutorialProvider } from './context/TutorialContext';
+import { TutorialProvider, useTutorial } from './context/TutorialContext';
 
 // --- ASSETS & HELPERS ---
 
@@ -626,12 +626,16 @@ const PanoramaBackground: React.FC = () => {
 // Wrapper component to show referral prompt AFTER shop interaction
 const ReferralPromptWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { referralCode } = useUser();
+  const { isTutorialActive } = useTutorial();
   const [showReferralPrompt, setShowReferralPrompt] = useState(false);
   const [promptTrigger, setPromptTrigger] = useState<'first_open' | 'zero_coins' | 'manual'>('first_open');
   
   // Listen for shop close event to trigger referral prompt
   useEffect(() => {
     const handleShopClosed = () => {
+      // Skip during tutorial - don't interrupt the flow
+      if (isTutorialActive) return;
+      
       // Only show if user hasn't seen the referral prompt yet
       const hasSeenReferralPrompt = localStorage.getItem('godlykids_seen_referral_prompt');
       if (!hasSeenReferralPrompt && referralCode) {
@@ -647,7 +651,7 @@ const ReferralPromptWrapper: React.FC<{ children: React.ReactNode }> = ({ childr
     // Listen for custom event dispatched when shop modal closes
     window.addEventListener('godlykids_shop_closed', handleShopClosed);
     return () => window.removeEventListener('godlykids_shop_closed', handleShopClosed);
-  }, [referralCode]);
+  }, [referralCode, isTutorialActive]);
   
   return (
     <>

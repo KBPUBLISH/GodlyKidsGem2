@@ -20,11 +20,27 @@ const Header: React.FC<HeaderProps> = ({ isVisible, title = "GODLY KIDS" }) => {
   const navigate = useNavigate();
   const location = useLocation();
   const { coins, equippedAvatar, equippedFrame, equippedHat, equippedBody, equippedLeftArm, equippedRightArm, equippedLegs, isSubscribed, headOffset } = useUser();
-  const { isStepActive, nextStep, isTutorialActive } = useTutorial();
+  const { isStepActive, nextStep, isTutorialActive, currentStep } = useTutorial();
   const [isShopOpen, setIsShopOpen] = useState(false);
   const [isDetailOpen, setIsDetailOpen] = useState(false);
   const [isCoinHistoryOpen, setIsCoinHistoryOpen] = useState(false);
   const [isReportCardOpen, setIsReportCardOpen] = useState(false);
+
+  // Auto-close modals when tutorial step advances past the popup_open steps
+  useEffect(() => {
+    // When tutorial advances past coins_popup_open, close coins modal
+    if (currentStep === 'report_card_highlight' && isCoinHistoryOpen) {
+      setIsCoinHistoryOpen(false);
+    }
+    // When tutorial advances past report_card_open, close report card modal
+    if (currentStep === 'shop_highlight' && isReportCardOpen) {
+      setIsReportCardOpen(false);
+    }
+    // When tutorial advances past shop_open, close shop modal
+    if (currentStep === 'navigate_to_give' && isShopOpen) {
+      setIsShopOpen(false);
+    }
+  }, [currentStep, isCoinHistoryOpen, isReportCardOpen, isShopOpen]);
 
   // Tutorial integration - advance steps when modals open/close
   const handleCoinsClick = () => {

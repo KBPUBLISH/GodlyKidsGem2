@@ -464,6 +464,7 @@ import PaymentSuccessPage from './pages/PaymentSuccessPage';
 import SharePlaylistPage from './pages/SharePlaylistPage';
 import ShareBookPage from './pages/ShareBookPage';
 import ParentQuizPage from './pages/ParentQuizPage';
+import GivingPage from './pages/GivingPage';
 
 // Home page wrapper - shows welcome screen for new users who completed onboarding
 const HomePageWithWelcomeCheck: React.FC = () => {
@@ -567,6 +568,7 @@ const PanoramaBackground: React.FC = () => {
     if (path === '/listen') return 2;
     if (path === '/read') return 3;
     if (path === '/library') return 4;
+    if (path === '/giving') return 5;
     if (path === '/audio' || path.startsWith('/audio/')) return 2; // Use same as listen
     if (path === '/lessons' || path.startsWith('/lesson/')) return 1; // Use same as home/explore
     if (path.startsWith('/book/')) return 5;
@@ -902,6 +904,7 @@ const App: React.FC = () => {
                   <Route path="/book-series/:seriesId" element={<BookSeriesDetailPage />} />
                   <Route path="/lessons" element={<LessonsPage />} />
                   <Route path="/lesson/:lessonId" element={<LessonPlayerPage />} />
+                  <Route path="/giving" element={<GivingPage />} />
                   <Route path="/profile" element={<ProfileSelectionPage />} />
                   <Route path="/create-profile" element={<CreateProfilePage />} />
                   <Route path="/edit-profile" element={<EditProfilePage />} />

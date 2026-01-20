@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { Compass, Headphones, BookOpen, Library } from 'lucide-react';
+import { Compass, Headphones, BookOpen, Library, Heart } from 'lucide-react';
 import { useAudio } from '../../context/AudioContext';
 import { useLanguage } from '../../context/LanguageContext';
 
@@ -13,6 +13,7 @@ const getTabFromPath = (pathname: string): string => {
   if (pathname === '/listen') return 'listen';
   if (pathname === '/read') return 'read';
   if (pathname === '/library') return 'library';
+  if (pathname === '/giving') return 'give';
   return 'explore'; // Default to explore
 };
 
@@ -73,6 +74,7 @@ const BottomNavigation: React.FC = () => {
     { id: 'listen', label: t('listen'), icon: Headphones, path: '/listen', index: 1 },
     { id: 'read', label: t('read'), icon: BookOpen, path: '/read', index: 2 },
     { id: 'library', label: t('library'), icon: Library, path: '/library', index: 3 },
+    { id: 'give', label: t('give') || 'Give', icon: Heart, path: '/giving', index: 4 },
   ];
 
   useEffect(() => {
@@ -144,7 +146,7 @@ const BottomNavigation: React.FC = () => {
       let index = Math.round(rawIndex);
 
       if (index < 0) index = 0;
-      if (index > 3) index = 3;
+      if (index > 4) index = 4;
 
       const targetItem = navItems.find(i => i.index === index);
       if (targetItem) {

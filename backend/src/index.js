@@ -111,6 +111,9 @@ app.use('/api/radio', require('./routes/radio'));
 app.use('/api/parent-quiz', require('./routes/parentQuiz'));
 app.use('/api/email-subscribers', require('./routes/emailSubscribers'));
 app.use('/api/meta', require('./routes/metaConversions'));
+app.use('/api/campaigns', require('./routes/campaigns'));
+app.use('/api/donations', require('./routes/donations'));
+app.use('/api/campaign-updates', require('./routes/campaignUpdates'));
 
 // ===========================================
 // HEALTH & STATUS ENDPOINTS

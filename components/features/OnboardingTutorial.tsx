@@ -1,7 +1,7 @@
 import React, { useEffect, useCallback } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import TutorialSpotlight from './TutorialSpotlight';
-import { useTutorial } from '../../context/TutorialContext';
+import { useTutorial, TutorialStep } from '../../context/TutorialContext';
 import { Heart, Coins, Hand } from 'lucide-react';
 import WoodButton from '../ui/WoodButton';
 
@@ -125,9 +125,39 @@ const OnboardingTutorial: React.FC = () => {
 
   if (!isTutorialActive) return null;
 
-  // Don't show tutorial overlay on settings or paywall pages
+  // Don't show tutorial overlay on these pages - allow full interaction
   const currentPath = location.pathname;
-  if (currentPath === '/settings' || currentPath === '/paywall' || currentPath === '/profile-selection') {
+  const excludedPaths = ['/settings', '/paywall', '/profile', '/create-profile', '/edit-profile', '/onboarding', '/ready'];
+  if (excludedPaths.includes(currentPath)) {
+    return null;
+  }
+
+  // Validate tutorial step matches current page to prevent mismatched states
+  const isOnWelcomePage = currentPath === '/welcome';
+  const isOnBookReader = currentPath.startsWith('/read/');
+  const isOnHomePage = currentPath === '/home';
+  const isOnGivePage = currentPath === '/give';
+
+  // Book-related steps should only show on book reader
+  const bookSteps: TutorialStep[] = ['book_swipe_intro', 'book_swipe_1', 'book_swipe_2', 'book_swipe_3', 'book_end_quiz', 'quiz_in_progress'];
+  if (bookSteps.includes(currentStep) && !isOnBookReader) {
+    return null; // Don't show book tutorial steps on wrong page
+  }
+
+  // Welcome step should only show on welcome page
+  if (currentStep === 'welcome_book_tap' && !isOnWelcomePage) {
+    return null;
+  }
+
+  // Home-based steps (coins, report card, shop) should only show on home page
+  const homeSteps: TutorialStep[] = ['coins_highlight', 'coins_popup_open', 'report_card_highlight', 'report_card_open', 'shop_highlight', 'shop_open'];
+  if (homeSteps.includes(currentStep) && !isOnHomePage) {
+    return null;
+  }
+
+  // Give-related steps should only show on give page
+  const giveSteps: TutorialStep[] = ['navigate_to_give', 'give_popup', 'donation_practice'];
+  if (giveSteps.includes(currentStep) && !isOnGivePage && currentStep !== 'navigate_to_give') {
     return null;
   }
 

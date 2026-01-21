@@ -64,6 +64,7 @@ const PaywallStep: React.FC<{
   setSelectedPlan: (plan: 'annual' | 'monthly') => void;
   onSubscribe: (email: string, password: string) => void;
   onSkip: () => void;
+  onExploreNow: () => void; // New: For "Explore Now" after creating free account
   onRestore: (email: string, password: string) => void;
   onCreateAccount: (email: string, password: string) => Promise<boolean>;
   isPurchasing?: boolean;
@@ -71,7 +72,8 @@ const PaywallStep: React.FC<{
   error?: string | null;
   kidsCount?: number; // Number of kids added during onboarding
   isDemoExpired?: boolean; // If true, hide demo/skip option (user already used their demo)
-}> = ({ selectedPlan, setSelectedPlan, onSubscribe, onSkip, onRestore, onCreateAccount, isPurchasing = false, isRestoring = false, error = null, kidsCount = 0, isDemoExpired = false }) => {
+  isFreeAccountMode?: boolean; // If true, show "Explore Now" instead of demo option
+}> = ({ selectedPlan, setSelectedPlan, onSubscribe, onSkip, onExploreNow, onRestore, onCreateAccount, isPurchasing = false, isRestoring = false, error = null, kidsCount = 0, isDemoExpired = false, isFreeAccountMode = false }) => {
   const [showIncluded, setShowIncluded] = useState(true); // Open by default so users see features
   const carouselRef = useRef<HTMLDivElement>(null);
   const [currentBenefit, setCurrentBenefit] = useState(0);
@@ -636,10 +638,25 @@ const PaywallStep: React.FC<{
         </div>
       </div>
 
-      {/* Demo / Skip Option */}
+      {/* Explore Now / Skip Option */}
       <div className="text-center">
-        {/* Show demo option only if user hasn't used their demo yet */}
-        {!isDemoExpired && (
+        {/* Show "Explore Now" for free account mode (requires account creation first) */}
+        {isFreeAccountMode && (
+          <button 
+            onClick={onExploreNow}
+            disabled={!accountCreated}
+            className={`text-sm px-6 py-3 rounded-full font-bold mb-3 transition-all ${
+              accountCreated 
+                ? 'bg-gradient-to-r from-green-500 to-emerald-500 text-white hover:from-green-400 hover:to-emerald-400 shadow-lg'
+                : 'bg-white/10 border border-white/20 text-white/40 cursor-not-allowed'
+            }`}
+          >
+            {accountCreated ? '🚀 Explore Now' : '👆 Create account first'}
+          </button>
+        )}
+        
+        {/* Only show demo option when NOT in free account mode and demo not expired */}
+        {!isFreeAccountMode && !isDemoExpired && (
           <button 
             onClick={onSkip}
             className="text-sm px-5 py-2.5 rounded-full bg-white/10 border border-white/20 transition-all text-white/70 hover:text-white hover:bg-white/20 font-medium mb-3"
@@ -648,7 +665,7 @@ const PaywallStep: React.FC<{
           </button>
         )}
         
-        {isDemoExpired && (
+        {!isFreeAccountMode && isDemoExpired && (
           <p className="text-[#FFD700]/80 text-xs mb-3 font-medium">
             ⏱️ Demo time expired • Subscribe to continue
           </p>
@@ -715,8 +732,10 @@ const OnboardingPage: React.FC = () => {
   const { playClick, playSuccess } = useAudio();
   const { purchase, isLoading: isSubscriptionLoading, isPremium } = useSubscription();
   
-  // Check if we should skip directly to paywall step (from tutorial)
+  // Check if we should skip directly to paywall step (from tutorial - for subscription)
   const skipToPaywall = (location.state as any)?.skipToPaywall === true;
+  // Check if coming from "Create free account" button (just need to create account, then explore)
+  const createFreeAccount = (location.state as any)?.createFreeAccount === true;
   
   const [step, setStep] = useState<1 | 2 | 3 | 4>(skipToPaywall ? 4 : 1); // Steps: 1=Parent, 2=Family, 3=Voice Selection, 4=Unlock
   const [isPurchasing, setIsPurchasing] = useState(false);
@@ -1684,7 +1703,7 @@ const OnboardingPage: React.FC = () => {
           </div>
         )}
 
-        {/* --- STEP 4: PAYWALL / VALUE PROPOSITION (Demo mode available) --- */}
+        {/* --- STEP 4: PAYWALL / VALUE PROPOSITION --- */}
         {step === 4 && (
             <PaywallStep 
               selectedPlan={selectedPlan}
@@ -1692,7 +1711,7 @@ const OnboardingPage: React.FC = () => {
               onCreateAccount={handleCreateAccount}
               onSubscribe={handleSubscribeClick}
               onSkip={() => {
-                // Start 5-minute demo mode
+                // Start 5-minute demo mode (only available when NOT in free account mode)
                 console.log('⏱️ Starting 5-minute demo mode');
                 
                 // Save demo start time
@@ -1706,12 +1725,20 @@ const OnboardingPage: React.FC = () => {
                 // Complete onboarding without subscription (enters demo mode)
                 completeOnboardingWithoutSubscription(false);
               }}
+              onExploreNow={() => {
+                // User created free account and wants to explore
+                console.log('🚀 Explore Now clicked - free account created');
+                activityTrackingService.trackOnboardingEvent('free_account_explore');
+                playSuccess();
+                navigate('/home');
+              }}
               onRestore={handleRestorePurchases}
               isPurchasing={isPurchasing}
               isRestoring={isRestoring}
               error={purchaseError}
               kidsCount={kids.length}
               isDemoExpired={isDemoExpired}
+              isFreeAccountMode={createFreeAccount}
             />
         )}
 

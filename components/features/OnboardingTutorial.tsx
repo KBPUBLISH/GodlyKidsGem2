@@ -572,9 +572,6 @@ const OnboardingTutorial: React.FC = () => {
             customContent={
               <PaywallContent 
                 onSubscribe={() => {
-                  // Clear any existing timer
-                  localStorage.removeItem('godlykids_offer_timer');
-                  
                   // Check if user already has an account
                   const userEmail = localStorage.getItem('godlykids_user_email');
                   const hasAccount = !!userEmail;
@@ -588,7 +585,11 @@ const OnboardingTutorial: React.FC = () => {
                   }
                   completeTutorial();
                 }}
-                onContinue={completeTutorial}
+                onCreateAccount={() => {
+                  // Navigate to onboarding to create free account
+                  navigate('/onboarding', { state: { createFreeAccount: true } });
+                  completeTutorial();
+                }}
               />
             }
             requiresElementClick={false}
@@ -675,9 +676,9 @@ const ReviewPromptContent: React.FC<{ onNext: () => void }> = ({ onNext }) => {
 };
 
 // Paywall content for tutorial with "One time offer"
-const PaywallContent: React.FC<{ onSubscribe: () => void; onContinue: () => void }> = ({ 
+const PaywallContent: React.FC<{ onSubscribe: () => void; onCreateAccount: () => void }> = ({ 
   onSubscribe, 
-  onContinue
+  onCreateAccount
 }) => {
   return (
     <div className="text-center">
@@ -719,15 +720,10 @@ const PaywallContent: React.FC<{ onSubscribe: () => void; onContinue: () => void
         Start Free Trial
       </WoodButton>
       <button
-        onClick={() => {
-          // Start the 5-minute timer and save to localStorage
-          const expiryTime = Date.now() + 5 * 60 * 1000; // 5 minutes from now
-          localStorage.setItem('godlykids_offer_timer', expiryTime.toString());
-          onContinue();
-        }}
-        className="text-white/50 text-sm hover:text-white/70 transition-colors"
+        onClick={onCreateAccount}
+        className="text-white/70 text-sm hover:text-white transition-colors underline"
       >
-        Continue exploring
+        Create free account
       </button>
     </div>
   );

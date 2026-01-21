@@ -20,65 +20,11 @@ const Header: React.FC<HeaderProps> = ({ isVisible, title = "GODLY KIDS" }) => {
   const navigate = useNavigate();
   const location = useLocation();
   const { coins, equippedAvatar, equippedFrame, equippedHat, equippedBody, equippedLeftArm, equippedRightArm, equippedLegs, isSubscribed, headOffset } = useUser();
-  const { isStepActive, nextStep, isTutorialActive, currentStep, goToStep } = useTutorial();
+  const { isStepActive, nextStep, isTutorialActive, currentStep } = useTutorial();
   const [isShopOpen, setIsShopOpen] = useState(false);
   const [isDetailOpen, setIsDetailOpen] = useState(false);
   const [isCoinHistoryOpen, setIsCoinHistoryOpen] = useState(false);
   const [isReportCardOpen, setIsReportCardOpen] = useState(false);
-  
-  // Offer timer state
-  const [offerTimeLeft, setOfferTimeLeft] = useState<number | null>(null);
-  
-  // Check and update offer timer
-  useEffect(() => {
-    const checkTimer = () => {
-      const expiryTime = localStorage.getItem('godlykids_offer_timer');
-      if (expiryTime) {
-        const remaining = parseInt(expiryTime) - Date.now();
-        if (remaining <= 0) {
-          // Timer expired - check if user has account
-          localStorage.removeItem('godlykids_offer_timer');
-          setOfferTimeLeft(null);
-          
-          const userEmail = localStorage.getItem('godlykids_user_email');
-          const hasAccount = !!userEmail;
-          
-          if (hasAccount) {
-            // Has account - go straight to payment paywall with no close
-            navigate('/paywall', { state: { hideCloseButton: true } });
-          } else {
-            // No account - go to onboarding to create account first
-            navigate('/onboarding', { state: { skipToPaywall: true } });
-          }
-        } else {
-          setOfferTimeLeft(Math.ceil(remaining / 1000));
-        }
-      } else {
-        setOfferTimeLeft(null);
-      }
-    };
-    
-    // Check immediately
-    checkTimer();
-    
-    // Update every second
-    const interval = setInterval(checkTimer, 1000);
-    return () => clearInterval(interval);
-  }, [navigate]);
-  
-  const formatOfferTime = (seconds: number) => {
-    const mins = Math.floor(seconds / 60);
-    const secs = seconds % 60;
-    return `${mins}:${secs.toString().padStart(2, '0')}`;
-  };
-  
-  const handleOfferTimerClick = () => {
-    // Clear timer and show tutorial paywall popup
-    localStorage.removeItem('godlykids_offer_timer');
-    setOfferTimeLeft(null);
-    // Jump to the paywall step to show the popup
-    goToStep('paywall');
-  };
 
   // Auto-close modals when tutorial step advances past the popup_open steps
   useEffect(() => {
@@ -217,18 +163,6 @@ const Header: React.FC<HeaderProps> = ({ isVisible, title = "GODLY KIDS" }) => {
                 />
               </div>
             </div>
-            
-            {/* Offer Timer Badge - shows countdown next to avatar */}
-            {offerTimeLeft !== null && offerTimeLeft > 0 && (
-              <button
-                onClick={handleOfferTimerClick}
-                className="flex items-center gap-1 bg-gradient-to-r from-red-500 to-orange-500 text-white text-xs font-bold px-2 py-1 rounded-full shadow-lg animate-pulse border-2 border-white/30"
-              >
-                <span>⏰</span>
-                <span>{formatOfferTime(offerTimeLeft)}</span>
-                <span className="text-[10px]">50% OFF</span>
-              </button>
-            )}
 
             {/* Center - Empty for now */}
             <div className="flex-1"></div>

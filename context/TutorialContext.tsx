@@ -136,12 +136,12 @@ export const TUTORIAL_STEP_CONFIG: Record<TutorialStep, {
   donation_complete: {
     title: 'Amazing! 🎉',
     description: 'You just practiced generosity! Your coins help real people.',
-    autoAdvanceDelay: 2500,
+    autoAdvanceDelay: 4500, // Give user more time to appreciate the message
   },
   navigate_to_explore: {
     title: 'Let\'s Explore More!',
     description: 'Watch the wheel spin to the Explore section...',
-    autoAdvanceDelay: 2000,
+    autoAdvanceDelay: 3000, // Give time for wheel animation
   },
   devotional_highlight: {
     title: 'Daily Devotionals',
@@ -169,7 +169,7 @@ export const TUTORIAL_STEP_CONFIG: Record<TutorialStep, {
   tutorial_complete: {
     title: 'You Did It! 🎊',
     description: 'You\'ve completed the tutorial! Time to start your faith adventure!',
-    autoAdvanceDelay: 3000,
+    autoAdvanceDelay: 4000, // Give user time to enjoy the celebration
   },
   review_prompt: {
     title: 'What Do You Think?',

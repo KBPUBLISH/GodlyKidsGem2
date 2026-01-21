@@ -58,18 +58,28 @@ const DonationPracticeContent: React.FC<{
   </div>
 );
 
-// Swipe hint content - shows animated hand gesture (compact version)
+// Swipe hint content - shows animated finger with swipe gesture
 const SwipeHintContent: React.FC<{ message: string }> = ({ message }) => (
-  <div className="flex items-center gap-3 px-4 py-2 bg-black/60 backdrop-blur-md rounded-full">
-    <Hand className="w-6 h-6 text-[#FFD700] animate-swipe-left flex-shrink-0" />
-    <p className="text-white/90 text-sm whitespace-nowrap">{message}</p>
+  <div className="flex flex-col items-center gap-2 px-6 py-4 bg-black/70 backdrop-blur-md rounded-2xl">
+    <p className="text-[#FFD700] font-bold text-base">Swipe to Read</p>
+    <div className="flex items-center gap-2">
+      {/* Animated finger pointer */}
+      <span className="text-3xl animate-swipe-finger">👆</span>
+      <p className="text-white/90 text-sm">{message}</p>
+    </div>
     <style>{`
-      @keyframes swipe-left {
-        0%, 100% { transform: translateX(8px) rotate(-15deg); opacity: 0.6; }
-        50% { transform: translateX(-8px) rotate(0deg); opacity: 1; }
+      @keyframes swipe-finger {
+        0%, 100% { 
+          transform: translateX(15px) rotate(10deg); 
+          opacity: 0.7; 
+        }
+        50% { 
+          transform: translateX(-15px) rotate(-10deg); 
+          opacity: 1; 
+        }
       }
-      .animate-swipe-left {
-        animation: swipe-left 1.2s ease-in-out infinite;
+      .animate-swipe-finger {
+        animation: swipe-finger 1s ease-in-out infinite;
       }
     `}</style>
   </div>
@@ -321,7 +331,7 @@ const OnboardingTutorial: React.FC = () => {
             title={config.title}
             description={config.description}
             isVisible={true}
-            fingerPosition="top"
+            fingerPosition="bottom"
             popupPosition="bottom-screen"
             compactPopup={true}
             requiresElementClick={true}

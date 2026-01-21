@@ -93,9 +93,22 @@ const modalAnimationStyles = `
 }
 `;
 
+// Helper function to format time ago
+const formatTimeAgo = (dateString: string): string => {
+    const date = new Date(dateString);
+    const now = new Date();
+    const diffInSeconds = Math.floor((now.getTime() - date.getTime()) / 1000);
+    
+    if (diffInSeconds < 60) return 'just now';
+    if (diffInSeconds < 3600) return `${Math.floor(diffInSeconds / 60)}m ago`;
+    if (diffInSeconds < 86400) return `${Math.floor(diffInSeconds / 3600)}h ago`;
+    if (diffInSeconds < 604800) return `${Math.floor(diffInSeconds / 86400)}d ago`;
+    return date.toLocaleDateString();
+};
+
 const GivingPage: React.FC = () => {
     const navigate = useNavigate();
-    const { coins, spendCoins, deviceId, currentProfileId, kids } = useUser();
+    const { coins, spendCoins, deviceId, currentProfileId, kids, parentName } = useUser();
     const { t } = useLanguage();
     const { isTutorialActive, isStepActive, nextStep } = useTutorial();
     
@@ -145,9 +158,11 @@ const GivingPage: React.FC = () => {
         setLastScrollY(currentScrollY);
     };
 
-    // Get current kid name
+    // Get donor name based on current profile (child or parent)
     const currentKid = kids.find(k => k.id === currentProfileId);
-    const kidName = currentKid?.name || 'Friend';
+    const donorName = currentProfileId && currentKid 
+        ? currentKid.name  // Child account - use child's name
+        : parentName || 'Friend'; // Parent account - use parent's name
 
     useEffect(() => {
         fetchCampaigns();
@@ -262,7 +277,7 @@ const GivingPage: React.FC = () => {
                     campaignId: selectedCampaign._id,
                     userId: effectiveDeviceId,
                     kidProfileId: currentProfileId || 'guest',
-                    kidName: kidName,
+                    kidName: donorName, // Use actual name (child or parent)
                     amount: donationAmount,
                 }),
             });
@@ -646,7 +661,10 @@ const GivingPage: React.FC = () => {
                                                         <div className="w-8 h-8 rounded-full bg-gradient-to-br from-pink-400 to-purple-400 flex items-center justify-center text-white font-bold text-sm">
                                                             {donor.kidName.charAt(0).toUpperCase()}
                                                         </div>
-                                                        <span className="font-medium text-gray-700">{donor.kidName}</span>
+                                                        <div className="flex flex-col">
+                                                            <span className="font-medium text-gray-700">{donor.kidName}</span>
+                                                            <span className="text-xs text-gray-400">{formatTimeAgo(donor.createdAt)}</span>
+                                                        </div>
                                                     </div>
                                                     <div className="flex items-center gap-1 text-sm">
                                                         <Coins className="w-4 h-4 text-yellow-500" />

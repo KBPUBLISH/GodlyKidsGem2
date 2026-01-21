@@ -711,7 +711,7 @@ const PaywallStep: React.FC<{
 const OnboardingPage: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
-  const { setParentName, setEquippedAvatar, addKid, kids, removeKid, subscribe, resetUser, unlockVoice, parentName, equippedAvatar, equippedFrame, addCoins } = useUser();
+  const { setParentName, setEquippedAvatar, addKid, kids, removeKid, subscribe, resetUser, unlockVoice, parentName, equippedAvatar, equippedFrame, addCoins, switchProfile } = useUser();
   const { playClick, playSuccess } = useAudio();
   const { purchase, isLoading: isSubscriptionLoading, isPremium } = useSubscription();
   
@@ -803,9 +803,14 @@ const OnboardingPage: React.FC = () => {
   const handleAddKid = () => {
     if (!kidName.trim()) return;
     playSuccess();
+    
+    // Generate kid ID
+    const newKidId = Date.now().toString();
+    const isFirstKid = kids.length === 0;
+    
     // Create kid with their own fully initialized data - completely separate from parent
     addKid({
-      id: Date.now().toString(),
+      id: newKidId,
       name: kidName,
       age: kidAge ? parseInt(kidAge, 10) : undefined,
       avatarSeed: kidAvatar,
@@ -824,6 +829,15 @@ const OnboardingPage: React.FC = () => {
       legs: null,
       animation: 'anim-breathe',
     });
+    
+    // Auto-switch to the first kid profile (default to child account)
+    if (isFirstKid) {
+      setTimeout(() => {
+        switchProfile(newKidId);
+        console.log('👶 Auto-switched to first child profile:', kidName);
+      }, 100); // Small delay to ensure kid is added first
+    }
+    
     // Reset inputs for next kid
     setKidName('');
     setKidAge('');

@@ -285,7 +285,19 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const [parentName, setParentName] = useState<string>(saved?.parentName ?? 'Parent');
   const [kids, setKids] = useState<KidProfile[]>(saved?.kids ?? []);
-  const [currentProfileId, setCurrentProfileId] = useState<string | null>(saved?.currentProfileId ?? null);
+  // Default to first child profile if kids exist and no profile was previously selected
+  // This ensures the app defaults to child account after onboarding
+  const [currentProfileId, setCurrentProfileId] = useState<string | null>(() => {
+    if (saved?.currentProfileId !== undefined) {
+      return saved.currentProfileId; // Respect saved preference
+    }
+    // If kids exist but no profile was selected, default to first kid
+    if (saved?.kids && saved.kids.length > 0) {
+      console.log('👶 Defaulting to first child profile:', saved.kids[0].name);
+      return saved.kids[0].id;
+    }
+    return null; // No kids, default to parent
+  });
 
   // Default Equipment - Start with TOAST!
   const [equippedAvatar, setEquippedAvatar] = useState<string>(saved?.equippedAvatar ?? 'head-toast');

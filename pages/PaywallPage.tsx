@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { Check, X, Loader2, RefreshCw, AlertCircle, CheckCircle, Mail, UserPlus } from 'lucide-react';
 import { useUser } from '../context/UserContext';
 import { useSubscription } from '../context/SubscriptionContext';
@@ -19,7 +19,11 @@ const hasAccount = (): boolean => {
 
 const PaywallPage: React.FC = () => {
   const navigate = useNavigate();
+  const location = useLocation();
   const { subscribe } = useUser();
+  
+  // Check if close button should be hidden (from tutorial timer expiry)
+  const hideCloseButton = (location.state as any)?.hideCloseButton === true;
   const { 
     isLoading, 
     isPremium,
@@ -280,13 +284,15 @@ const PaywallPage: React.FC = () => {
           <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-64 h-64 bg-white/5 rounded-full blur-3xl"></div>
         </div>
 
-        {/* Close Button */}
-        <button 
-          onClick={() => navigate('/home')} 
-          className="absolute top-6 left-6 z-50 p-2 bg-white/10 hover:bg-white/20 backdrop-blur-md rounded-full text-white/80 transition-colors"
-        >
+        {/* Close Button - hidden when timer expires from tutorial */}
+        {!hideCloseButton && (
+          <button 
+            onClick={() => navigate('/home')} 
+            className="absolute top-6 left-6 z-50 p-2 bg-white/10 hover:bg-white/20 backdrop-blur-md rounded-full text-white/80 transition-colors"
+          >
             <X size={24} strokeWidth={3} />
-        </button>
+          </button>
+        )}
 
         <div className="flex-1 flex flex-col items-center px-6 pt-10 pb-20 min-h-[600px] relative z-10">
             

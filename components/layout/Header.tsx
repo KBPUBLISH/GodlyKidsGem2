@@ -25,6 +25,49 @@ const Header: React.FC<HeaderProps> = ({ isVisible, title = "GODLY KIDS" }) => {
   const [isDetailOpen, setIsDetailOpen] = useState(false);
   const [isCoinHistoryOpen, setIsCoinHistoryOpen] = useState(false);
   const [isReportCardOpen, setIsReportCardOpen] = useState(false);
+  
+  // Offer timer state
+  const [offerTimeLeft, setOfferTimeLeft] = useState<number | null>(null);
+  
+  // Check and update offer timer
+  useEffect(() => {
+    const checkTimer = () => {
+      const expiryTime = localStorage.getItem('godlykids_offer_timer');
+      if (expiryTime) {
+        const remaining = parseInt(expiryTime) - Date.now();
+        if (remaining <= 0) {
+          // Timer expired - navigate to paywall with no close button
+          localStorage.removeItem('godlykids_offer_timer');
+          setOfferTimeLeft(null);
+          navigate('/paywall', { state: { hideCloseButton: true } });
+        } else {
+          setOfferTimeLeft(Math.ceil(remaining / 1000));
+        }
+      } else {
+        setOfferTimeLeft(null);
+      }
+    };
+    
+    // Check immediately
+    checkTimer();
+    
+    // Update every second
+    const interval = setInterval(checkTimer, 1000);
+    return () => clearInterval(interval);
+  }, [navigate]);
+  
+  const formatOfferTime = (seconds: number) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins}:${secs.toString().padStart(2, '0')}`;
+  };
+  
+  const handleOfferTimerClick = () => {
+    // Clear timer and go to paywall
+    localStorage.removeItem('godlykids_offer_timer');
+    setOfferTimeLeft(null);
+    navigate('/paywall', { state: { fromTimer: true } });
+  };
 
   // Auto-close modals when tutorial step advances past the popup_open steps
   useEffect(() => {
@@ -157,6 +200,18 @@ const Header: React.FC<HeaderProps> = ({ isVisible, title = "GODLY KIDS" }) => {
                 />
               </div>
             </div>
+            
+            {/* Offer Timer Badge - shows countdown next to avatar */}
+            {offerTimeLeft !== null && offerTimeLeft > 0 && (
+              <button
+                onClick={handleOfferTimerClick}
+                className="flex items-center gap-1 bg-gradient-to-r from-red-500 to-orange-500 text-white text-xs font-bold px-2 py-1 rounded-full shadow-lg animate-pulse border-2 border-white/30"
+              >
+                <span>⏰</span>
+                <span>{formatOfferTime(offerTimeLeft)}</span>
+                <span className="text-[10px]">50% OFF</span>
+              </button>
+            )}
 
             {/* Center - Empty for now */}
             <div className="flex-1"></div>

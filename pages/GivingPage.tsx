@@ -315,6 +315,11 @@ const GivingPage: React.FC = () => {
                 }
                 setShowThankYou(true);
                 
+                // Advance tutorial AFTER actual donation
+                if (isTutorialActive && isStepActive('give_button_highlight')) {
+                    nextStep(); // Go to donation_complete
+                }
+                
                 // Auto-close thank you after 2.5 seconds
                 setTimeout(() => {
                     setShowThankYou(false);
@@ -496,10 +501,7 @@ const GivingPage: React.FC = () => {
                                         data-tutorial={index === 0 ? 'give-button-0' : undefined}
                                         onClick={(e) => {
                                             openDonationModal(campaign, e);
-                                            // Advance tutorial when clicking the highlighted give button
-                                            if (index === 0 && isTutorialActive && isStepActive('give_button_highlight')) {
-                                                nextStep();
-                                            }
+                                            // Don't advance tutorial here - wait for actual donation
                                         }}
                                         className="w-full py-2 bg-gradient-to-r from-pink-500 to-purple-500 text-white font-bold text-sm rounded-xl flex items-center justify-center gap-1 active:scale-95"
                                     >
@@ -752,10 +754,7 @@ const GivingPage: React.FC = () => {
                                 data-tutorial="modal-give-button"
                                 onClick={() => {
                                     const campaign = viewingCampaign;
-                                    // Advance tutorial when clicking give button in modal
-                                    if (isTutorialActive && isStepActive('give_button_highlight')) {
-                                        nextStep();
-                                    }
+                                    // Don't advance tutorial here - wait for actual donation
                                     setViewingCampaign(null);
                                     setTimeout(() => openDonationModal(campaign), 100);
                                 }}

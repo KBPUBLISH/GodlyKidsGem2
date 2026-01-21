@@ -90,7 +90,7 @@ const ReadyToJumpInPage: React.FC = () => {
           <div className="flex items-center justify-center gap-3 mb-3">
             <Users className="text-[#FFD700]" size={28} />
             <span className="text-3xl font-display font-black text-[#FFD700]">
-              2,044
+              12,244
             </span>
           </div>
           <p className="text-white font-semibold text-lg">

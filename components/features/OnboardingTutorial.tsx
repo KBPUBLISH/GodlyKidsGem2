@@ -1,4 +1,4 @@
-import React, { useEffect, useCallback } from 'react';
+import React, { useEffect, useCallback, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import TutorialSpotlight from './TutorialSpotlight';
 import { useTutorial, TutorialStep } from '../../context/TutorialContext';
@@ -443,15 +443,16 @@ const OnboardingTutorial: React.FC = () => {
         );
 
       case 'give_button_highlight':
+        // Show a prompt at the bottom - don't target specific element since modal timing varies
         return (
           <TutorialSpotlight
-            targetElement="modal-give-button"
             title={config.title}
             description={config.description}
             isVisible={true}
-            fingerPosition="top"
-            popupPosition="top"
-            requiresElementClick={true}
+            popupPosition="bottom-screen"
+            compactPopup={true}
+            requiresElementClick={false}
+            hideOverlay={true}
           />
         );
 
@@ -548,6 +549,8 @@ const OnboardingTutorial: React.FC = () => {
             customContent={
               <PaywallContent 
                 onSubscribe={() => {
+                  // Clear any existing timer
+                  localStorage.removeItem('godlykids_offer_timer');
                   navigate('/paywall', { state: { fromTutorial: true } });
                   completeTutorial();
                 }}
@@ -584,42 +587,63 @@ const ReviewPromptContent: React.FC<{ onNext: () => void }> = ({ onNext }) => (
   </div>
 );
 
-// Paywall content for tutorial
+// Paywall content for tutorial with "One time offer"
 const PaywallContent: React.FC<{ onSubscribe: () => void; onContinue: () => void }> = ({ 
   onSubscribe, 
-  onContinue 
-}) => (
-  <div className="text-center">
-    <div className="mb-4">
-      <span className="text-4xl">🎉</span>
-    </div>
-    <h3 className="text-[#FFD700] font-display font-bold text-2xl mb-2">
-      Start Your Adventure!
-    </h3>
-    <p className="text-white/90 text-sm leading-relaxed mb-2">
-      Start Free 14 Day Adventure
-    </p>
-    <div className="bg-white/10 rounded-xl p-4 mb-4">
-      <p className="text-[#FFD700] font-bold text-3xl mb-1">
-        $3.33<span className="text-lg">/mo</span>
-      </p>
-      <p className="text-white/70 text-sm">
-        with annual plan
-      </p>
-      <div className="inline-block bg-red-500 text-white text-xs font-bold px-3 py-1 rounded-full mt-2">
-        50% OFF
+  onContinue
+}) => {
+  return (
+    <div className="text-center">
+      {/* One Time Offer Badge */}
+      <div className="bg-red-500 text-white text-xs font-bold px-4 py-1 rounded-full mb-3 inline-block animate-pulse">
+        ⚡ ONE TIME OFFER ⚡
       </div>
+      
+      <div className="mb-3">
+        <span className="text-4xl">🎉</span>
+      </div>
+      <h3 className="text-[#FFD700] font-display font-bold text-2xl mb-2">
+        Start Your Adventure!
+      </h3>
+      <p className="text-white/90 text-sm leading-relaxed mb-2">
+        Start Free 14 Day Adventure
+      </p>
+      
+      <div className="bg-white/10 rounded-xl p-4 mb-3">
+        <p className="text-[#FFD700] font-bold text-3xl mb-1">
+          $3.33<span className="text-lg">/mo</span>
+        </p>
+        <p className="text-white/70 text-sm">
+          with annual plan
+        </p>
+        <div className="inline-block bg-red-500 text-white text-xs font-bold px-3 py-1 rounded-full mt-2">
+          50% OFF
+        </div>
+      </div>
+      
+      {/* 10% Proceeds Info */}
+      <div className="bg-pink-500/20 border border-pink-400/30 rounded-lg px-3 py-2 mb-4">
+        <p className="text-pink-200 text-xs flex items-center justify-center gap-1">
+          💝 <span className="font-semibold">10% of proceeds</span> goes towards our Giving Feature
+        </p>
+      </div>
+      
+      <WoodButton variant="gold" onClick={onSubscribe} className="w-full py-4 mb-3">
+        Start Free Trial
+      </WoodButton>
+      <button
+        onClick={() => {
+          // Start the 5-minute timer and save to localStorage
+          const expiryTime = Date.now() + 5 * 60 * 1000; // 5 minutes from now
+          localStorage.setItem('godlykids_offer_timer', expiryTime.toString());
+          onContinue();
+        }}
+        className="text-white/50 text-sm hover:text-white/70 transition-colors"
+      >
+        Continue exploring
+      </button>
     </div>
-    <WoodButton variant="gold" onClick={onSubscribe} className="w-full py-4 mb-3">
-      Start Free Trial
-    </WoodButton>
-    <button
-      onClick={onContinue}
-      className="text-white/50 text-sm hover:text-white/70 transition-colors"
-    >
-      Continue exploring
-    </button>
-  </div>
-);
+  );
+};
 
 export default OnboardingTutorial;

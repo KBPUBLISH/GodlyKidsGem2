@@ -29,6 +29,7 @@ export type TutorialStep =
   | 'audiobook_highlight' // Highlight an audiobook
   | 'tutorial_complete'   // Confetti + celebration
   | 'review_prompt'       // Ask for review
+  | 'explore_pause'       // Let user explore for 10 seconds
   | 'paywall'             // Show subscription
   | 'complete';
 
@@ -176,6 +177,11 @@ export const TUTORIAL_STEP_CONFIG: Record<TutorialStep, {
     description: 'We\'d love to hear your feedback!',
     requiresClick: true,
   },
+  explore_pause: {
+    title: '', // No popup shown - let user explore freely
+    description: '',
+    autoAdvanceDelay: 10000, // 10 seconds to explore before paywall
+  },
   paywall: {
     title: 'Start Your Adventure',
     description: 'Start Free 14 Day Adventure - only $3.33/mo with annual plan (50% off)',
@@ -212,7 +218,8 @@ const STEP_ORDER: TutorialStep[] = [
   'audiobook_highlight',  // 23. Highlight audiobook (user clicks → navigates away)
   'review_prompt',        // 24. Show review when returning to listen page
   'tutorial_complete',    // 25. Confetti celebration on explore page
-  'paywall',              // 26. Show subscription
+  'explore_pause',        // 26. Let user explore for 10 seconds
+  'paywall',              // 27. Show subscription
   'complete',
 ];
 

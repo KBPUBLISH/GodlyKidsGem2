@@ -548,6 +548,10 @@ const OnboardingTutorial: React.FC = () => {
           />
         );
 
+      case 'explore_pause':
+        // No popup - let user explore freely for 10 seconds
+        return null;
+
       case 'paywall':
         return (
           <TutorialSpotlight

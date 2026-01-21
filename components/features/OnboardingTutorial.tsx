@@ -460,7 +460,8 @@ const OnboardingTutorial: React.FC = () => {
             description="Tap to give your coins and help people in need!"
             isVisible={true}
             fingerPosition="top"
-            popupPosition="top"
+            popupPosition="top-screen"
+            compactPopup={true}
             requiresElementClick={true}
           />
         );

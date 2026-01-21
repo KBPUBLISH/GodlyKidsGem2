@@ -564,8 +564,18 @@ const OnboardingTutorial: React.FC = () => {
                 onSubscribe={() => {
                   // Clear any existing timer
                   localStorage.removeItem('godlykids_offer_timer');
-                  // Navigate to onboarding subscription step
-                  navigate('/onboarding', { state: { skipToPaywall: true } });
+                  
+                  // Check if user already has an account
+                  const userEmail = localStorage.getItem('godlykids_user_email');
+                  const hasAccount = !!userEmail;
+                  
+                  if (hasAccount) {
+                    // User has account - go straight to payment-only paywall
+                    navigate('/paywall', { state: { fromTutorial: true } });
+                  } else {
+                    // No account - go to onboarding to create account first
+                    navigate('/onboarding', { state: { skipToPaywall: true } });
+                  }
                   completeTutorial();
                 }}
                 onContinue={completeTutorial}

@@ -36,10 +36,20 @@ const Header: React.FC<HeaderProps> = ({ isVisible, title = "GODLY KIDS" }) => {
       if (expiryTime) {
         const remaining = parseInt(expiryTime) - Date.now();
         if (remaining <= 0) {
-          // Timer expired - navigate to paywall with no close button
+          // Timer expired - check if user has account
           localStorage.removeItem('godlykids_offer_timer');
           setOfferTimeLeft(null);
-          navigate('/paywall', { state: { hideCloseButton: true } });
+          
+          const userEmail = localStorage.getItem('godlykids_user_email');
+          const hasAccount = !!userEmail;
+          
+          if (hasAccount) {
+            // Has account - go straight to payment paywall with no close
+            navigate('/paywall', { state: { hideCloseButton: true } });
+          } else {
+            // No account - go to onboarding to create account first
+            navigate('/onboarding', { state: { skipToPaywall: true } });
+          }
         } else {
           setOfferTimeLeft(Math.ceil(remaining / 1000));
         }

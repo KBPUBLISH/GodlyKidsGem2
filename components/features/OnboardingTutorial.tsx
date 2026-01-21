@@ -497,8 +497,9 @@ const OnboardingTutorial: React.FC = () => {
             title={config.title}
             description={config.description}
             isVisible={true}
-            fingerPosition="top"
-            popupPosition="bottom"
+            fingerPosition="left"
+            popupPosition="bottom-screen"
+            compactPopup={true}
             requiresElementClick={true}
           />
         );

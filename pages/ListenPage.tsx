@@ -5,6 +5,7 @@ import Header from '../components/layout/Header';
 import SectionTitle from '../components/ui/SectionTitle';
 import { useBooks } from '../context/BooksContext';
 import { useUser } from '../context/UserContext';
+import { useTutorial } from '../context/TutorialContext';
 import { Search, Music, ChevronDown, Lock, Crown, BookOpen } from 'lucide-react';
 import { getApiBaseUrl, ApiService } from '../services/apiService';
 import StormySeaError from '../components/ui/StormySeaError';
@@ -31,6 +32,7 @@ const ListenPage: React.FC = () => {
   const navigate = useNavigate();
   const { books, loading, error: booksError, refreshBooks } = useBooks();
   const { isSubscribed } = useUser();
+  const { isTutorialActive, isStepActive, nextStep } = useTutorial();
   const [isHeaderVisible, setIsHeaderVisible] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedAge, setSelectedAge] = useState<string>('All Ages');
@@ -382,6 +384,10 @@ const ListenPage: React.FC = () => {
                           if (isPlaylistLocked) {
                             console.log('🔒 Playlist is locked - subscription required');
                             return;
+                          }
+                          // Advance tutorial when clicking highlighted audiobook
+                          if (index === 0 && isTutorialActive && isStepActive('audiobook_highlight')) {
+                            nextStep(); // Advance to tutorial_complete
                           }
                           navigate(`/audio/playlist/${playlist._id}`);
                         }}

@@ -547,8 +547,8 @@ const OnboardingTutorial: React.FC = () => {
       case 'review_prompt':
         return (
           <TutorialSpotlight
-            title={config.title}
-            description={config.description}
+            title=""
+            description=""
             isVisible={true}
             popupPosition="center"
             customContent={

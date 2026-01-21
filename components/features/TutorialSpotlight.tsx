@@ -9,7 +9,7 @@ interface TutorialSpotlightProps {
   isVisible: boolean;
   onNext?: () => void;
   fingerPosition?: 'top' | 'bottom' | 'left' | 'right';
-  popupPosition?: 'top' | 'bottom' | 'center' | 'bottom-screen'; // bottom-screen = fixed to bottom of viewport
+  popupPosition?: 'top' | 'bottom' | 'center' | 'bottom-screen' | 'top-screen'; // top/bottom-screen = fixed to viewport
   customContent?: React.ReactNode;
   requiresElementClick?: boolean; // If true, user must click the highlighted element
   compactPopup?: boolean; // If true, use smaller popup styling
@@ -144,6 +144,15 @@ const TutorialSpotlight: React.FC<TutorialSpotlightProps> = ({
 
   // Calculate popup position
   const getPopupStyle = (): React.CSSProperties => {
+    // top-screen is always at the top of viewport
+    if (popupPosition === 'top-screen') {
+      return {
+        left: '50%',
+        top: 100, // Below header
+        transform: 'translateX(-50%)',
+      };
+    }
+    
     // bottom-screen is always at the bottom of viewport
     if (popupPosition === 'bottom-screen') {
       return {

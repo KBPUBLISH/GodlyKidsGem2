@@ -471,9 +471,10 @@ const OnboardingTutorial: React.FC = () => {
             title={config.title}
             description={config.description}
             isVisible={true}
-            popupPosition="center"
+            popupPosition="top-screen"
             requiresElementClick={false}
             hideOverlay={true}
+            compactPopup={true}
           />
         );
 

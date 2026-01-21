@@ -148,7 +148,7 @@ const TutorialSpotlight: React.FC<TutorialSpotlightProps> = ({
     if (popupPosition === 'bottom-screen') {
       return {
         left: '50%',
-        bottom: 100, // Above the navigation wheel
+        bottom: 70, // Closer to the navigation wheel, less overlap with content
         transform: 'translateX(-50%)',
       };
     }

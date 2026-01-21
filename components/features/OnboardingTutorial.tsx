@@ -58,20 +58,18 @@ const DonationPracticeContent: React.FC<{
   </div>
 );
 
-// Swipe hint content - shows animated hand gesture
+// Swipe hint content - shows animated hand gesture (compact version)
 const SwipeHintContent: React.FC<{ message: string }> = ({ message }) => (
-  <div className="text-center">
-    <div className="mb-3 relative">
-      <Hand className="w-12 h-12 text-[#FFD700] mx-auto animate-swipe-left" />
-    </div>
-    <p className="text-white/90 text-sm">{message}</p>
+  <div className="flex items-center gap-3 px-4 py-2 bg-black/60 backdrop-blur-md rounded-full">
+    <Hand className="w-6 h-6 text-[#FFD700] animate-swipe-left flex-shrink-0" />
+    <p className="text-white/90 text-sm whitespace-nowrap">{message}</p>
     <style>{`
       @keyframes swipe-left {
-        0%, 100% { transform: translateX(20px) rotate(-15deg); opacity: 0.5; }
-        50% { transform: translateX(-20px) rotate(0deg); opacity: 1; }
+        0%, 100% { transform: translateX(8px) rotate(-15deg); opacity: 0.6; }
+        50% { transform: translateX(-8px) rotate(0deg); opacity: 1; }
       }
       .animate-swipe-left {
-        animation: swipe-left 1.5s ease-in-out infinite;
+        animation: swipe-left 1.2s ease-in-out infinite;
       }
     `}</style>
   </div>
@@ -241,9 +239,14 @@ const OnboardingTutorial: React.FC = () => {
     return null;
   }
   
-  // Listen page steps
-  const listenSteps: TutorialStep[] = ['audiobook_highlight'];
+  // Listen page steps (including review which shows when returning from audio detail)
+  const listenSteps: TutorialStep[] = ['audiobook_highlight', 'review_prompt'];
   if (listenSteps.includes(currentStep) && currentPath !== '/listen') {
+    return null;
+  }
+  
+  // Tutorial complete should only show on explore/home page
+  if (currentStep === 'tutorial_complete' && !isOnHomePage) {
     return null;
   }
 
@@ -432,8 +435,9 @@ const OnboardingTutorial: React.FC = () => {
             title={config.title}
             description={config.description}
             isVisible={true}
-            fingerPosition="top"
-            popupPosition="bottom"
+            fingerPosition="left"
+            popupPosition="bottom-screen"
+            compactPopup={true}
             requiresElementClick={true}
           />
         );
@@ -524,7 +528,12 @@ const OnboardingTutorial: React.FC = () => {
             description={config.description}
             isVisible={true}
             popupPosition="center"
-            customContent={<ReviewPromptContent onNext={nextStep} />}
+            customContent={
+              <ReviewPromptContent onNext={() => {
+                nextStep(); // Advance to tutorial_complete
+                navigate('/home'); // Navigate to explore page
+              }} />
+            }
             requiresElementClick={false}
           />
         );

@@ -185,7 +185,7 @@ export const TUTORIAL_STEP_CONFIG: Record<TutorialStep, {
 };
 
 // Step order for progression
-// FLOW: Welcome book → Swipe 3 pages → Quiz → Coins → Report Card → Shop → Giving → Explore → Books → Audio → Complete
+// FLOW: Welcome book → Swipe 3 pages → Quiz → Coins → Report Card → Shop → Giving → Explore → Books → Audio → Review → Complete
 const STEP_ORDER: TutorialStep[] = [
   'welcome_book_tap',     // 1. On welcome page, tap a book
   'book_controls_intro',  // 2. Quick controls overview
@@ -209,9 +209,9 @@ const STEP_ORDER: TutorialStep[] = [
   'devotional_highlight', // 20. Highlight devotionals
   'navigate_to_books',    // 21. Navigate to books
   'navigate_to_audio',    // 22. Navigate to audio
-  'audiobook_highlight',  // 23. Highlight audiobook
-  'tutorial_complete',    // 24. Confetti celebration
-  'review_prompt',        // 25. Ask for review
+  'audiobook_highlight',  // 23. Highlight audiobook (user clicks → navigates away)
+  'review_prompt',        // 24. Show review when returning to listen page
+  'tutorial_complete',    // 25. Confetti celebration on explore page
   'paywall',              // 26. Show subscription
   'complete',
 ];

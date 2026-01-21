@@ -564,7 +564,8 @@ const OnboardingTutorial: React.FC = () => {
                 onSubscribe={() => {
                   // Clear any existing timer
                   localStorage.removeItem('godlykids_offer_timer');
-                  navigate('/paywall', { state: { fromTutorial: true } });
+                  // Navigate to onboarding subscription step
+                  navigate('/onboarding', { state: { skipToPaywall: true } });
                   completeTutorial();
                 }}
                 onContinue={completeTutorial}

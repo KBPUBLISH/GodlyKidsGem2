@@ -331,6 +331,8 @@ export const TutorialProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       setCurrentStep(step);
       if (step !== 'idle') {
         localStorage.setItem(TUTORIAL_STEP_KEY, step);
+        // Also activate the tutorial if not already active
+        setIsTutorialActive(true);
       }
     }
   }, []);

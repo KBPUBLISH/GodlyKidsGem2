@@ -20,7 +20,7 @@ const Header: React.FC<HeaderProps> = ({ isVisible, title = "GODLY KIDS" }) => {
   const navigate = useNavigate();
   const location = useLocation();
   const { coins, equippedAvatar, equippedFrame, equippedHat, equippedBody, equippedLeftArm, equippedRightArm, equippedLegs, isSubscribed, headOffset } = useUser();
-  const { isStepActive, nextStep, isTutorialActive, currentStep } = useTutorial();
+  const { isStepActive, nextStep, isTutorialActive, currentStep, goToStep } = useTutorial();
   const [isShopOpen, setIsShopOpen] = useState(false);
   const [isDetailOpen, setIsDetailOpen] = useState(false);
   const [isCoinHistoryOpen, setIsCoinHistoryOpen] = useState(false);
@@ -63,10 +63,11 @@ const Header: React.FC<HeaderProps> = ({ isVisible, title = "GODLY KIDS" }) => {
   };
   
   const handleOfferTimerClick = () => {
-    // Clear timer and go to paywall
+    // Clear timer and show tutorial paywall popup
     localStorage.removeItem('godlykids_offer_timer');
     setOfferTimeLeft(null);
-    navigate('/paywall', { state: { fromTimer: true } });
+    // Jump to the paywall step to show the popup
+    goToStep('paywall');
   };
 
   // Auto-close modals when tutorial step advances past the popup_open steps

@@ -431,28 +431,27 @@ const OnboardingTutorial: React.FC = () => {
       case 'campaign_highlight':
         return (
           <TutorialSpotlight
-            targetElement="campaign-card-0"
+            targetElement="give-button-0"
             title={config.title}
             description={config.description}
             isVisible={true}
-            fingerPosition="left"
-            popupPosition="bottom-screen"
-            compactPopup={true}
+            fingerPosition="top"
+            popupPosition="top"
             requiresElementClick={true}
           />
         );
 
       case 'give_button_highlight':
-        // Show a prompt at the bottom - don't target specific element since modal timing varies
+        // Target the donate button in the donation modal
         return (
           <TutorialSpotlight
-            title={config.title}
-            description={config.description}
+            targetElement="donate-coins-button"
+            title="Tap to Donate!"
+            description="Tap to give your coins and help people in need!"
             isVisible={true}
-            popupPosition="bottom-screen"
-            compactPopup={true}
-            requiresElementClick={false}
-            hideOverlay={true}
+            fingerPosition="top"
+            popupPosition="top"
+            requiresElementClick={true}
           />
         );
 

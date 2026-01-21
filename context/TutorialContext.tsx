@@ -122,15 +122,15 @@ export const TUTORIAL_STEP_CONFIG: Record<TutorialStep, {
     autoAdvanceDelay: 2000,
   },
   campaign_highlight: {
-    title: 'Choose a Cause',
-    description: 'Tap on a campaign to learn more and practice giving!',
-    targetElement: 'campaign-card-0',
+    title: 'Practice Giving!',
+    description: 'Tap the Give button to donate coins!',
+    targetElement: 'give-button-0',
     requiresClick: true,
   },
   give_button_highlight: {
-    title: 'Practice Giving!',
-    description: 'Tap the Give button to donate coins and help people in need!',
-    targetElement: 'modal-give-button',
+    title: 'Tap to Donate!',
+    description: 'Tap to give your coins and help people in need!',
+    targetElement: 'donate-coins-button',
     requiresClick: true,
   },
   donation_complete: {

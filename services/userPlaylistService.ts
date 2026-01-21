@@ -221,7 +221,7 @@ class UserPlaylistService {
         try {
             console.log('🎨 Generating cover:', { prompt, style, playlistName });
             
-            const response = await fetch(`${this.baseUrl}/ai/playlist-cover`, {
+            const response = await fetch(`${this.baseUrl}/ai-generate/playlist-cover`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ prompt, style, playlistName, userId }),

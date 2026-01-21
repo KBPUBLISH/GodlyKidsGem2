@@ -1,8 +1,60 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ChevronLeft, Sparkles, Palette, Loader2, Music, ListMusic, X, LogIn, UserPlus } from 'lucide-react';
+import { ChevronLeft, Sparkles, Palette, Loader2, Music, ListMusic, X, LogIn, UserPlus, Shuffle, Wand2 } from 'lucide-react';
 import { userPlaylistService, ArtStyle } from '../services/userPlaylistService';
 import { authService } from '../services/authService';
+
+// Kid-friendly prompt builder options
+const PROMPT_OPTIONS = {
+    animals: [
+        { emoji: '🦁', name: 'Lion' },
+        { emoji: '🐰', name: 'Bunny' },
+        { emoji: '🐘', name: 'Elephant' },
+        { emoji: '🦋', name: 'Butterfly' },
+        { emoji: '🐻', name: 'Bear' },
+        { emoji: '🦊', name: 'Fox' },
+        { emoji: '🐶', name: 'Puppy' },
+        { emoji: '🐱', name: 'Kitten' },
+        { emoji: '🦄', name: 'Unicorn' },
+        { emoji: '🐼', name: 'Panda' },
+        { emoji: '🦉', name: 'Owl' },
+        { emoji: '🐬', name: 'Dolphin' },
+    ],
+    instruments: [
+        { emoji: '🎸', name: 'Guitar' },
+        { emoji: '🥁', name: 'Drums' },
+        { emoji: '🎹', name: 'Piano' },
+        { emoji: '🎺', name: 'Trumpet' },
+        { emoji: '🎻', name: 'Violin' },
+        { emoji: '🎤', name: 'Microphone' },
+        { emoji: '🪘', name: 'Tambourine' },
+        { emoji: '🎷', name: 'Saxophone' },
+    ],
+    scenes: [
+        { emoji: '🌲', name: 'Forest' },
+        { emoji: '🏖️', name: 'Beach' },
+        { emoji: '🌙', name: 'Night Sky' },
+        { emoji: '☁️', name: 'Clouds' },
+        { emoji: '🌈', name: 'Rainbow' },
+        { emoji: '⛰️', name: 'Mountains' },
+        { emoji: '🌸', name: 'Garden' },
+        { emoji: '🏰', name: 'Castle' },
+        { emoji: '🌊', name: 'Ocean' },
+        { emoji: '⭐', name: 'Stars' },
+    ],
+    actions: [
+        { emoji: '💃', name: 'Dancing' },
+        { emoji: '🙏', name: 'Praying' },
+        { emoji: '😊', name: 'Happy' },
+        { emoji: '🎵', name: 'Singing' },
+        { emoji: '✨', name: 'Magical' },
+        { emoji: '💖', name: 'Loving' },
+        { emoji: '🎉', name: 'Celebrating' },
+        { emoji: '😴', name: 'Sleepy' },
+        { emoji: '🤗', name: 'Hugging' },
+        { emoji: '🏃', name: 'Playing' },
+    ],
+};
 
 const CreatePlaylistPage: React.FC = () => {
     const navigate = useNavigate();
@@ -19,6 +71,50 @@ const CreatePlaylistPage: React.FC = () => {
     const [selectedStyle, setSelectedStyle] = useState('cartoon');
     const [coverPrompt, setCoverPrompt] = useState('');
     const [generatingCover, setGeneratingCover] = useState(false);
+    
+    // Kid-friendly prompt builder state
+    const [selectedAnimal, setSelectedAnimal] = useState<string | null>(null);
+    const [selectedInstrument, setSelectedInstrument] = useState<string | null>(null);
+    const [selectedScene, setSelectedScene] = useState<string | null>(null);
+    const [selectedAction, setSelectedAction] = useState<string | null>(null);
+    
+    // Build prompt from selections
+    const buildPromptFromSelections = useCallback(() => {
+        const parts: string[] = [];
+        if (selectedAnimal) parts.push(`a cute ${selectedAnimal}`);
+        if (selectedAction) parts.push(selectedAction.toLowerCase());
+        if (selectedInstrument) parts.push(`with a ${selectedInstrument.toLowerCase()}`);
+        if (selectedScene) parts.push(`in a ${selectedScene.toLowerCase()}`);
+        
+        if (parts.length === 0) return '';
+        return parts.join(' ');
+    }, [selectedAnimal, selectedInstrument, selectedScene, selectedAction]);
+    
+    // Auto-update prompt when selections change
+    useEffect(() => {
+        const newPrompt = buildPromptFromSelections();
+        if (newPrompt) {
+            setCoverPrompt(newPrompt);
+        }
+    }, [buildPromptFromSelections]);
+    
+    // Shuffle all selections randomly
+    const handleShuffle = () => {
+        const randomItem = <T,>(arr: T[]): T => arr[Math.floor(Math.random() * arr.length)];
+        setSelectedAnimal(randomItem(PROMPT_OPTIONS.animals).name);
+        setSelectedInstrument(Math.random() > 0.5 ? randomItem(PROMPT_OPTIONS.instruments).name : null);
+        setSelectedScene(randomItem(PROMPT_OPTIONS.scenes).name);
+        setSelectedAction(randomItem(PROMPT_OPTIONS.actions).name);
+    };
+    
+    // Clear all selections
+    const handleClearSelections = () => {
+        setSelectedAnimal(null);
+        setSelectedInstrument(null);
+        setSelectedScene(null);
+        setSelectedAction(null);
+        setCoverPrompt('');
+    };
     
     // Check if user is logged in on mount
     useEffect(() => {
@@ -176,23 +272,120 @@ const CreatePlaylistPage: React.FC = () => {
                     </button>
                 </div>
                 
-                {/* AI Cover Generator */}
+                {/* AI Cover Generator - Kid Friendly */}
                 {showAiCover && (
                     <div className="bg-gradient-to-br from-purple-900/40 to-pink-900/40 rounded-2xl p-4 border border-purple-500/30 space-y-4">
-                        <p className="text-purple-200 text-sm font-medium">✨ Describe your playlist cover</p>
+                        {/* Magic Header */}
+                        <div className="flex items-center justify-between">
+                            <p className="text-purple-200 text-sm font-medium flex items-center gap-2">
+                                <Wand2 className="w-4 h-4" /> Pick what you want to see!
+                            </p>
+                            <button
+                                onClick={handleShuffle}
+                                className="flex items-center gap-1 px-3 py-1.5 rounded-full bg-gradient-to-r from-yellow-500 to-orange-500 text-white text-xs font-bold hover:scale-105 transition-transform"
+                            >
+                                <Shuffle className="w-3 h-3" /> Surprise Me!
+                            </button>
+                        </div>
                         
-                        <input
-                            type="text"
-                            value={coverPrompt}
-                            onChange={(e) => setCoverPrompt(e.target.value)}
-                            placeholder="e.g., happy animals playing music in a forest"
-                            className="w-full px-4 py-3 rounded-xl bg-white/10 border border-white/20 text-white placeholder-white/40 focus:outline-none focus:border-purple-400"
-                        />
+                        {/* Animals Row */}
+                        <div>
+                            <p className="text-yellow-300 text-xs font-bold mb-2">🐾 Pick an Animal:</p>
+                            <div className="flex flex-wrap gap-2">
+                                {PROMPT_OPTIONS.animals.map(item => (
+                                    <button
+                                        key={item.name}
+                                        onClick={() => setSelectedAnimal(selectedAnimal === item.name ? null : item.name)}
+                                        className={`px-3 py-2 rounded-xl text-sm font-medium transition-all transform hover:scale-105 ${
+                                            selectedAnimal === item.name
+                                                ? 'bg-yellow-400 text-yellow-900 shadow-lg scale-105'
+                                                : 'bg-white/10 text-white hover:bg-white/20'
+                                        }`}
+                                    >
+                                        <span className="text-lg">{item.emoji}</span>
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+                        
+                        {/* Actions Row */}
+                        <div>
+                            <p className="text-pink-300 text-xs font-bold mb-2">✨ What are they doing?</p>
+                            <div className="flex flex-wrap gap-2">
+                                {PROMPT_OPTIONS.actions.map(item => (
+                                    <button
+                                        key={item.name}
+                                        onClick={() => setSelectedAction(selectedAction === item.name ? null : item.name)}
+                                        className={`px-3 py-2 rounded-xl text-sm font-medium transition-all transform hover:scale-105 ${
+                                            selectedAction === item.name
+                                                ? 'bg-pink-400 text-pink-900 shadow-lg scale-105'
+                                                : 'bg-white/10 text-white hover:bg-white/20'
+                                        }`}
+                                    >
+                                        <span className="text-lg">{item.emoji}</span>
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+                        
+                        {/* Instruments Row */}
+                        <div>
+                            <p className="text-blue-300 text-xs font-bold mb-2">🎵 With Music? (optional)</p>
+                            <div className="flex flex-wrap gap-2">
+                                {PROMPT_OPTIONS.instruments.map(item => (
+                                    <button
+                                        key={item.name}
+                                        onClick={() => setSelectedInstrument(selectedInstrument === item.name ? null : item.name)}
+                                        className={`px-3 py-2 rounded-xl text-sm font-medium transition-all transform hover:scale-105 ${
+                                            selectedInstrument === item.name
+                                                ? 'bg-blue-400 text-blue-900 shadow-lg scale-105'
+                                                : 'bg-white/10 text-white hover:bg-white/20'
+                                        }`}
+                                    >
+                                        <span className="text-lg">{item.emoji}</span>
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+                        
+                        {/* Scenes Row */}
+                        <div>
+                            <p className="text-green-300 text-xs font-bold mb-2">🌍 Where?</p>
+                            <div className="flex flex-wrap gap-2">
+                                {PROMPT_OPTIONS.scenes.map(item => (
+                                    <button
+                                        key={item.name}
+                                        onClick={() => setSelectedScene(selectedScene === item.name ? null : item.name)}
+                                        className={`px-3 py-2 rounded-xl text-sm font-medium transition-all transform hover:scale-105 ${
+                                            selectedScene === item.name
+                                                ? 'bg-green-400 text-green-900 shadow-lg scale-105'
+                                                : 'bg-white/10 text-white hover:bg-white/20'
+                                        }`}
+                                    >
+                                        <span className="text-lg">{item.emoji}</span>
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+                        
+                        {/* Preview of what they're creating */}
+                        {coverPrompt && (
+                            <div className="bg-white/10 rounded-xl p-3 border border-white/20">
+                                <p className="text-white/60 text-xs mb-1">Your picture will show:</p>
+                                <p className="text-white font-medium capitalize">{coverPrompt}</p>
+                                <button
+                                    onClick={handleClearSelections}
+                                    className="text-red-300 text-xs mt-2 hover:text-red-200"
+                                >
+                                    ✕ Start Over
+                                </button>
+                            </div>
+                        )}
                         
                         {/* Style Selector */}
                         <div>
-                            <p className="text-purple-200 text-xs font-medium mb-2 flex items-center gap-1">
-                                <Palette className="w-3 h-3" /> Art Style
+                            <p className="text-purple-200 text-xs font-bold mb-2 flex items-center gap-1">
+                                <Palette className="w-3 h-3" /> Pick a Style:
                             </p>
                             <div className="flex flex-wrap gap-2">
                                 {artStyles.map(style => (
@@ -201,7 +394,7 @@ const CreatePlaylistPage: React.FC = () => {
                                         onClick={() => setSelectedStyle(style.id)}
                                         className={`px-3 py-1.5 rounded-full text-xs font-medium transition-all ${
                                             selectedStyle === style.id
-                                                ? 'bg-purple-500 text-white'
+                                                ? 'bg-purple-500 text-white shadow-lg'
                                                 : 'bg-white/10 text-white/70 hover:bg-white/20'
                                         }`}
                                     >
@@ -211,20 +404,21 @@ const CreatePlaylistPage: React.FC = () => {
                             </div>
                         </div>
                         
+                        {/* Generate Button */}
                         <button
                             onClick={handleGenerateCover}
                             disabled={!coverPrompt.trim() || generatingCover}
-                            className="w-full py-3 rounded-xl bg-gradient-to-r from-purple-500 to-pink-500 text-white font-bold disabled:opacity-50 flex items-center justify-center gap-2"
+                            className="w-full py-4 rounded-xl bg-gradient-to-r from-purple-500 to-pink-500 text-white font-bold text-lg disabled:opacity-50 flex items-center justify-center gap-2 shadow-lg hover:shadow-xl transition-all hover:scale-[1.02]"
                         >
                             {generatingCover ? (
                                 <>
-                                    <Loader2 className="w-5 h-5 animate-spin" />
-                                    Generating...
+                                    <Loader2 className="w-6 h-6 animate-spin" />
+                                    Creating Magic...
                                 </>
                             ) : (
                                 <>
-                                    <Sparkles className="w-5 h-5" />
-                                    Generate Cover
+                                    <Sparkles className="w-6 h-6" />
+                                    Create My Picture! ✨
                                 </>
                             )}
                         </button>

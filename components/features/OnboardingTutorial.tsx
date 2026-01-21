@@ -581,8 +581,12 @@ const OnboardingTutorial: React.FC = () => {
 // Review prompt content
 const ReviewPromptContent: React.FC<{ onNext: () => void }> = ({ onNext }) => (
   <div className="text-center">
-    <div className="mb-4">
-      <span className="text-4xl">⭐</span>
+    <div className="mb-4 flex justify-center gap-1">
+      <span className="text-3xl">⭐</span>
+      <span className="text-3xl">⭐</span>
+      <span className="text-3xl">⭐</span>
+      <span className="text-3xl">⭐</span>
+      <span className="text-3xl">⭐</span>
     </div>
     <h3 className="text-[#FFD700] font-display font-bold text-xl mb-2">
       What Do You Think?

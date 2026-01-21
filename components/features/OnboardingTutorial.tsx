@@ -58,24 +58,24 @@ const DonationPracticeContent: React.FC<{
   </div>
 );
 
-// Swipe hint content - minimal: just text and animated finger
-const SwipeHintContent: React.FC<{ message: string }> = ({ message }) => (
+// Swipe hint content - just finger and text, positioned over image area
+const SwipeHintContent: React.FC = () => (
   <div className="flex flex-col items-center">
-    <p className="text-[#FFD700] font-bold text-lg drop-shadow-lg mb-1">Swipe to Read</p>
-    <span className="text-4xl animate-swipe-finger drop-shadow-lg">👆</span>
+    <p className="text-[#FFD700] font-bold text-xl drop-shadow-[0_2px_4px_rgba(0,0,0,0.8)] mb-2">Swipe to Read</p>
+    <span className="text-5xl animate-swipe-finger drop-shadow-[0_2px_4px_rgba(0,0,0,0.8)]">👆</span>
     <style>{`
       @keyframes swipe-finger {
         0%, 100% { 
-          transform: translateX(20px) rotate(15deg); 
-          opacity: 0.8; 
+          transform: translateX(30px) rotate(15deg); 
+          opacity: 0.9; 
         }
         50% { 
-          transform: translateX(-20px) rotate(-15deg); 
+          transform: translateX(-30px) rotate(-15deg); 
           opacity: 1; 
         }
       }
       .animate-swipe-finger {
-        animation: swipe-finger 1s ease-in-out infinite;
+        animation: swipe-finger 1.2s ease-in-out infinite;
       }
     `}</style>
   </div>
@@ -300,20 +300,19 @@ const OnboardingTutorial: React.FC = () => {
           />
         );
 
-      // STEP 3-6: Book swipe hints (shown in book reader)
+      // STEP 3-6: Book swipe hints (shown in book reader) - positioned over image area
       case 'book_swipe_intro':
       case 'book_swipe_1':
       case 'book_swipe_2':
         return (
           <TutorialSpotlight
-            title={config.title}
+            title=""
             description=""
             isVisible={true}
-            popupPosition="bottom-screen"
+            popupPosition="center"
             requiresElementClick={false}
-            compactPopup={true}
             hideOverlay={true}
-            customContent={<SwipeHintContent message={config.description} />}
+            customContent={<SwipeHintContent />}
           />
         );
 

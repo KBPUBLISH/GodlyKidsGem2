@@ -331,13 +331,6 @@ const PaywallPage: React.FC = () => {
                     Interactive Bible lessons, stories & activities that make Christian learning fun and engaging.
                 </p>
                 
-                {/* Free Trial Badge */}
-                <div className="bg-gradient-to-r from-[#fdd835] to-[#ffca28] px-5 py-2 rounded-full mb-4 shadow-md animate-pulse border border-[#f9a825]/30">
-                    <span className="text-[#3e2723] font-extrabold text-sm tracking-wide">
-                        🎁 START FREE FOR 7 DAYS
-                    </span>
-                </div>
-
                 {/* Error Message */}
                 {error && (
                   <div className="w-full bg-red-50 border border-red-200 text-red-700 px-4 py-2 rounded-xl mb-4 text-sm flex items-start gap-2">

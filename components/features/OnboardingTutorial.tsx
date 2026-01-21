@@ -58,23 +58,19 @@ const DonationPracticeContent: React.FC<{
   </div>
 );
 
-// Swipe hint content - shows animated finger with swipe gesture
+// Swipe hint content - minimal: just text and animated finger
 const SwipeHintContent: React.FC<{ message: string }> = ({ message }) => (
-  <div className="flex flex-col items-center gap-2 px-6 py-4 bg-black/70 backdrop-blur-md rounded-2xl">
-    <p className="text-[#FFD700] font-bold text-base">Swipe to Read</p>
-    <div className="flex items-center gap-2">
-      {/* Animated finger pointer */}
-      <span className="text-3xl animate-swipe-finger">👆</span>
-      <p className="text-white/90 text-sm">{message}</p>
-    </div>
+  <div className="flex flex-col items-center">
+    <p className="text-[#FFD700] font-bold text-lg drop-shadow-lg mb-1">Swipe to Read</p>
+    <span className="text-4xl animate-swipe-finger drop-shadow-lg">👆</span>
     <style>{`
       @keyframes swipe-finger {
         0%, 100% { 
-          transform: translateX(15px) rotate(10deg); 
-          opacity: 0.7; 
+          transform: translateX(20px) rotate(15deg); 
+          opacity: 0.8; 
         }
         50% { 
-          transform: translateX(-15px) rotate(-10deg); 
+          transform: translateX(-20px) rotate(-15deg); 
           opacity: 1; 
         }
       }

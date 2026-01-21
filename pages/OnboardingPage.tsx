@@ -917,18 +917,10 @@ const OnboardingPage: React.FC = () => {
     activityTrackingService.trackOnboardingEvent('step_3_complete', { step: 3, voiceSelected: selectedVoiceId });
     
     // For first-time users, skip the paywall and go directly to "Ready to Jump In"
-    // The paywall will be shown after the tutorial demo instead
+    // The 5-minute demo timer will start AFTER the tutorial is complete, not here
     playSuccess();
     activityTrackingService.trackOnboardingEvent('onboarding_complete');
     activityTrackingService.resetOnboardingSession();
-    
-    // Start demo mode automatically for first-time users
-    const demoEndTime = Date.now() + (5 * 60 * 1000); // 5 minutes from now
-    localStorage.setItem('godlykids_demo_end_time', demoEndTime.toString());
-    localStorage.setItem('godlykids_demo_active', 'true');
-    
-    // Track demo started
-    activityTrackingService.trackOnboardingEvent('demo_started', { duration: '5min', source: 'auto_after_voice' });
     
     navigate('/ready');
   };

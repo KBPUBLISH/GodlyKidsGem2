@@ -131,7 +131,7 @@ const TutorialCompleteContent: React.FC<{ onNext: () => void }> = ({ onNext }) =
   </div>
 );
 
-// Book controls intro - shows key reader controls
+// Book controls intro - shows key reader controls with tap animation
 const BookControlsIntroContent: React.FC = () => (
   <div className="text-center">
     <h3 className="text-[#FFD700] font-display font-bold text-lg mb-3">
@@ -152,13 +152,24 @@ const BookControlsIntroContent: React.FC = () => (
           <p className="text-white/70 text-xs">Change the reading language</p>
         </div>
       </div>
-      <div className="flex items-center gap-3 bg-white/10 rounded-lg p-2">
+      <div className="flex items-center gap-3 bg-[#FFD700]/20 border border-[#FFD700]/50 rounded-lg p-2 relative">
         <span className="text-2xl">📏</span>
         <div>
           <p className="text-white font-semibold text-sm">Tap Page</p>
           <p className="text-white/70 text-xs">Adjust text position on screen</p>
         </div>
+        {/* Animated tap finger */}
+        <span className="absolute -right-2 top-1/2 -translate-y-1/2 text-3xl animate-tap-bounce">👆</span>
       </div>
+    <style>{`
+      @keyframes tap-bounce {
+        0%, 100% { transform: translateY(-50%) scale(1); opacity: 0.7; }
+        50% { transform: translateY(-50%) scale(0.85); opacity: 1; }
+      }
+      .animate-tap-bounce {
+        animation: tap-bounce 0.8s ease-in-out infinite;
+      }
+    `}</style>
     </div>
     <p className="text-white/60 text-xs mt-3">Starting in a moment...</p>
   </div>

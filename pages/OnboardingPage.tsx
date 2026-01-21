@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { ChevronLeft, Check, Plus, Trash2, UserCircle, Mic, X, ChevronDown, ChevronUp, BookOpen, Music, Sparkles, Users, Loader2, Lock, Crown, ClipboardList, RefreshCw, Volume2, Eye, EyeOff } from 'lucide-react';
 import WoodButton from '../components/ui/WoodButton';
 import { useUser } from '../context/UserContext';
@@ -710,11 +710,15 @@ const PaywallStep: React.FC<{
 
 const OnboardingPage: React.FC = () => {
   const navigate = useNavigate();
+  const location = useLocation();
   const { setParentName, setEquippedAvatar, addKid, kids, removeKid, subscribe, resetUser, unlockVoice, parentName, equippedAvatar, equippedFrame, addCoins } = useUser();
   const { playClick, playSuccess } = useAudio();
   const { purchase, isLoading: isSubscriptionLoading, isPremium } = useSubscription();
   
-  const [step, setStep] = useState<1 | 2 | 3 | 4>(1); // Steps: 1=Parent, 2=Family, 3=Voice Selection, 4=Unlock
+  // Check if we should skip directly to paywall step (from tutorial)
+  const skipToPaywall = (location.state as any)?.skipToPaywall === true;
+  
+  const [step, setStep] = useState<1 | 2 | 3 | 4>(skipToPaywall ? 4 : 1); // Steps: 1=Parent, 2=Family, 3=Voice Selection, 4=Unlock
   const [isPurchasing, setIsPurchasing] = useState(false);
   const [isRestoring, setIsRestoring] = useState(false);
   const [purchaseError, setPurchaseError] = useState<string | null>(null);

@@ -916,17 +916,21 @@ const OnboardingPage: React.FC = () => {
     // Track step 3 completion
     activityTrackingService.trackOnboardingEvent('step_3_complete', { step: 3, voiceSelected: selectedVoiceId });
     
-    // ONLY skip paywall if subscribed during THIS onboarding session
-    if (subscribedDuringOnboarding) {
-      playSuccess();
-      activityTrackingService.trackOnboardingEvent('onboarding_complete');
-      activityTrackingService.resetOnboardingSession();
-      navigate('/ready');
-    } else {
-      // Track paywall view
-      activityTrackingService.trackOnboardingEvent('step_4_viewed', { step: 4, kidsCount: kids.length });
-      setStep(4); // Go to unlock/paywall step
-    }
+    // For first-time users, skip the paywall and go directly to "Ready to Jump In"
+    // The paywall will be shown after the tutorial demo instead
+    playSuccess();
+    activityTrackingService.trackOnboardingEvent('onboarding_complete');
+    activityTrackingService.resetOnboardingSession();
+    
+    // Start demo mode automatically for first-time users
+    const demoEndTime = Date.now() + (5 * 60 * 1000); // 5 minutes from now
+    localStorage.setItem('godlykids_demo_end_time', demoEndTime.toString());
+    localStorage.setItem('godlykids_demo_active', 'true');
+    
+    // Track demo started
+    activityTrackingService.trackOnboardingEvent('demo_started', { duration: '5min', source: 'auto_after_voice' });
+    
+    navigate('/ready');
   };
   
   const handleVoiceClick = async (voiceId: string) => {

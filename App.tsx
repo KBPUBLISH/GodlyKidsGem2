@@ -689,6 +689,9 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
       }
     } catch {}
   }, [location.pathname, location.hash, location.search]);
+  
+  // Check if running in Despia native runtime for safe area handling
+  const isDespiaNative = (window as any).__GK_IS_DESPIA__ || false;
   const isLanding = location.pathname === '/';
   const isSignIn = location.pathname === '/signin';
   const isOnboarding = location.pathname === '/onboarding';
@@ -721,7 +724,15 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   }
 
   return (
-    <div className="relative h-screen w-full overflow-hidden text-white flex flex-col">
+    <div 
+      className="relative h-screen w-full overflow-hidden text-white flex flex-col"
+      style={{
+        // Apply safe area padding for proper content positioning
+        // Despia native runtime provides these CSS variables automatically
+        paddingLeft: 'var(--safe-area-left, 0px)',
+        paddingRight: 'var(--safe-area-right, 0px)',
+      }}
+    >
 
       <PanoramaBackground />
 
@@ -738,6 +749,14 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
 
       {/* Onboarding Tutorial Overlay */}
       <OnboardingTutorial />
+      
+      {/* Bottom Safe Area Spacer - for pages without BottomNavigation */}
+      {(isBookDetail || isPlayer || isProfile || isCreateProfile || isEditProfile || isPaywall || isSettings || isBookReader || isAudioPage || isLessonPage || isBookSeries || isCreatePlaylist || isMyPlaylist) && (
+        <div 
+          className="w-full bg-transparent pointer-events-none" 
+          style={{ height: 'var(--safe-area-bottom, 0px)' }}
+        />
+      )}
     </div>
   );
 };

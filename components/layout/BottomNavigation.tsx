@@ -205,7 +205,13 @@ const BottomNavigation: React.FC = () => {
   }
 
   return (
-    <div className="fixed bottom-0 left-0 right-0 z-40 h-0 flex justify-center pointer-events-none">
+    <div 
+      className="fixed bottom-0 left-0 right-0 z-40 h-0 flex justify-center pointer-events-none"
+      style={{ 
+        // Account for safe area bottom (home indicator on iPhone X+)
+        paddingBottom: 'var(--safe-area-bottom, 0px)' 
+      }}
+    >
 
       {/* Wheel Hint for New Users */}
       {showWheelHint && (

@@ -309,6 +309,52 @@ export const DespiaService = {
       console.log('📱 Daily verse notification already scheduled for today');
     }
   },
+
+  /**
+   * Safe Area Support
+   * https://npm.despia.com/default-guide/native-features/fullscreen-safe-area
+   * 
+   * The Despia native runtime automatically provides CSS variables:
+   * - var(--safe-area-top) for status bar / notch
+   * - var(--safe-area-bottom) for home indicator
+   * - var(--safe-area-left) / var(--safe-area-right) for landscape mode
+   * 
+   * These are automatically injected into :root and update on orientation change.
+   * No npm package required - this is a built-in Despia feature.
+   */
+  safeArea: {
+    /**
+     * Get the current safe area inset value from CSS
+     */
+    getTop: (): number => {
+      if (typeof document === 'undefined') return 0;
+      const value = getComputedStyle(document.documentElement).getPropertyValue('--safe-area-top');
+      return parseInt(value) || 0;
+    },
+    getBottom: (): number => {
+      if (typeof document === 'undefined') return 0;
+      const value = getComputedStyle(document.documentElement).getPropertyValue('--safe-area-bottom');
+      return parseInt(value) || 0;
+    },
+    getLeft: (): number => {
+      if (typeof document === 'undefined') return 0;
+      const value = getComputedStyle(document.documentElement).getPropertyValue('--safe-area-left');
+      return parseInt(value) || 0;
+    },
+    getRight: (): number => {
+      if (typeof document === 'undefined') return 0;
+      const value = getComputedStyle(document.documentElement).getPropertyValue('--safe-area-right');
+      return parseInt(value) || 0;
+    },
+    /**
+     * Check if safe areas are available (Despia runtime or iOS PWA)
+     */
+    isAvailable: (): boolean => {
+      if (typeof document === 'undefined') return false;
+      const top = getComputedStyle(document.documentElement).getPropertyValue('--safe-area-top');
+      return top !== '' && top !== '0px' && top !== '0';
+    },
+  },
 };
 
 export default DespiaService;

@@ -92,7 +92,14 @@ const MiniPlayer: React.FC = () => {
     };
 
     return (
-        <div className="fixed bottom-0 left-0 right-0 z-[60] animate-slide-up">
+        <div 
+            className="fixed bottom-0 left-0 right-0 z-[60] animate-slide-up"
+            style={{
+                // Account for safe area bottom (home indicator on iPhone X+)
+                // Despia native runtime provides var(--safe-area-bottom) automatically
+                paddingBottom: 'var(--safe-area-bottom, 0px)'
+            }}
+        >
             <div
                 className="bg-[#8B4513] rounded-t-2xl shadow-[0_-4px_20px_rgba(0,0,0,0.4)] border-t-2 border-[#d4a373] overflow-hidden relative"
                 style={{

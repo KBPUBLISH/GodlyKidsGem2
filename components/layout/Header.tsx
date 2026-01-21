@@ -156,6 +156,12 @@ const Header: React.FC<HeaderProps> = ({ isVisible, title = "GODLY KIDS" }) => {
         className={`fixed top-0 left-0 right-0 z-50 drop-shadow-2xl transition-transform duration-300 ease-in-out ${isVisible ? 'translate-y-0' : '-translate-y-full'
           }`}
       >
+        {/* Safe Area Spacer for iOS notch/status bar - Despia provides var(--safe-area-top) */}
+        <div 
+          className="bg-[#CD853F]" 
+          style={{ height: 'var(--safe-area-top, 0px)' }}
+        />
+        
         {/* Main Plank Area */}
         <div className="relative bg-[#CD853F] px-4 pt-5 pb-3 shadow-sm border-t border-[#eecaa0]">
           {/* Wood Grain Texture Overlay */}

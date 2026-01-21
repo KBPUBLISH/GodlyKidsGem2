@@ -2,7 +2,7 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <title>Godly Kids</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -12,6 +12,32 @@
     <!-- Book reader fonts (must match portal PageEditor fonts) -->
     <link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@400;700&family=Bangers&family=Bubblegum+Sans&family=Caveat:wght@400;700&family=Chewy&family=Fredoka+One&family=Luckiest+Guy&family=Pacifico&family=Patrick+Hand&display=swap" rel="stylesheet">
     <style>
+      /* 
+       * Despia Native Safe Area CSS Variables
+       * These are automatically populated by the Despia native runtime with accurate
+       * safe area measurements including iPhone notches, status bars, home indicators,
+       * and other device-specific UI elements.
+       * 
+       * Fallback values are provided for web browser testing.
+       */
+      :root {
+        /* Fallback values for web - Despia runtime will override these */
+        --safe-area-top: env(safe-area-inset-top, 0px);
+        --safe-area-bottom: env(safe-area-inset-bottom, 0px);
+        --safe-area-left: env(safe-area-inset-left, 0px);
+        --safe-area-right: env(safe-area-inset-right, 0px);
+      }
+      
+      /* iOS PWA / Standalone viewport fixes */
+      @supports (padding-top: env(safe-area-inset-top)) {
+        :root {
+          --safe-area-top: env(safe-area-inset-top);
+          --safe-area-bottom: env(safe-area-inset-bottom);
+          --safe-area-left: env(safe-area-inset-left);
+          --safe-area-right: env(safe-area-inset-right);
+        }
+      }
+      
       body {
         font-family: 'Nunito', sans-serif;
         background-color: #0f172a; /* Fallback dark blue */

@@ -124,6 +124,7 @@ declare global {
   interface Window {
     onRevenueCatPurchase?: () => void;
     onRevenueCatRestore?: () => void;
+    iapSuccess?: (data?: any) => void; // Alternative callback from Despia RevenueCat Custom docs
   }
 }
 
@@ -142,6 +143,15 @@ const setupPurchaseListener = () => {
   (window as any).onRevenueCatRestore = () => {
     console.log('📱 DeSpia onRevenueCatRestore() called - will verify with backend before granting premium');
     // DO NOT set premium here - the restore flow will verify with backend
+  };
+  
+  // iapSuccess callback (alternative from Despia RevenueCat Custom docs)
+  // This receives transaction data but we still verify with backend
+  (window as any).iapSuccess = (data?: any) => {
+    console.log('📱 DeSpia iapSuccess() called with data:', data);
+    console.log('📱 Will verify with backend before granting premium');
+    // DO NOT set premium here - wait for backend webhook confirmation!
+    // The polling loop will check the backend and set premium when confirmed.
   };
 
   // Listen for custom events that DeSpia might fire

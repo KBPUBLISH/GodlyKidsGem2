@@ -479,9 +479,9 @@ const PaywallPage: React.FC = () => {
                                     <span className="font-display font-extrabold text-2xl text-[#1a237e]">
                                       $39.99
                                     </span>
-                                    <span className="text-xs text-gray-500 font-bold">/yr</span>
+                                    <span className="text-xs text-gray-500 font-bold">USD/yr</span>
                                  </div>
-                                 <span className="text-xs text-gray-400 line-through">$71.88</span>
+                                 <span className="text-xs text-gray-400 line-through">$71.88 USD</span>
                             </div>
                         </div>
                         
@@ -522,7 +522,7 @@ const PaywallPage: React.FC = () => {
                                      <span className="font-display font-extrabold text-2xl text-[#1a237e]">
                                        $5.99
                                      </span>
-                                     <span className="text-xs text-gray-500 font-bold">/mo</span>
+                                     <span className="text-xs text-gray-500 font-bold">USD/mo</span>
                                 </div>
                             </div>
                         </div>

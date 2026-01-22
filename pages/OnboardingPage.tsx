@@ -497,7 +497,7 @@ const PaywallStep: React.FC<{
                     <span className="text-[10px] text-[#4CAF50] font-semibold block">Save 44% • $0.77/week</span>
                   </div>
                 </div>
-                <span className="font-display font-extrabold text-xl text-[#3E1F07]">$39.99<span className="text-xs font-normal">/yr</span></span>
+                <span className="font-display font-extrabold text-xl text-[#3E1F07]">$39.99<span className="text-xs font-normal"> USD/yr</span></span>
               </div>
             </div>
 
@@ -520,7 +520,7 @@ const PaywallStep: React.FC<{
                     <span className="text-[10px] text-[#8B4513] block">Flexible billing</span>
                   </div>
                 </div>
-                <span className="font-display font-extrabold text-xl text-[#3E1F07]">$5.99<span className="text-xs font-normal">/mo</span></span>
+                <span className="font-display font-extrabold text-xl text-[#3E1F07]">$5.99<span className="text-xs font-normal"> USD/mo</span></span>
               </div>
             </div>
           </div>

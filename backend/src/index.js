@@ -114,6 +114,7 @@ app.use('/api/meta', require('./routes/metaConversions'));
 app.use('/api/campaigns', require('./routes/campaigns'));
 app.use('/api/donations', require('./routes/donations'));
 app.use('/api/campaign-updates', require('./routes/campaignUpdates'));
+app.use('/api/app-user', require('./routes/appUser'));
 
 // ===========================================
 // HEALTH & STATUS ENDPOINTS

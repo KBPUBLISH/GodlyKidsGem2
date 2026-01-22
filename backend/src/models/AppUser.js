@@ -73,6 +73,16 @@ const appUserSchema = new mongoose.Schema({
         type: Date,
     },
     
+    // Onboarding preferences (goals & features)
+    discipleshipGoals: {
+        type: [String], // Array of goal IDs selected during onboarding
+        default: [],
+    },
+    featureInterests: {
+        type: [String], // Array of feature IDs selected during onboarding
+        default: [],
+    },
+    
     // Parent profile
     parentName: {
         type: String,

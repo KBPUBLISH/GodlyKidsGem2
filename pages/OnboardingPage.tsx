@@ -842,6 +842,35 @@ const OnboardingPage: React.FC = () => {
     );
   };
   
+  // Save preferences to backend
+  const savePreferencesToBackend = async (goals: string[], features: string[]) => {
+    try {
+      const deviceId = localStorage.getItem('godlykids_device_id') || `dev_${Date.now()}_${Math.random().toString(36).slice(2)}`;
+      localStorage.setItem('godlykids_device_id', deviceId);
+      
+      const baseUrl = API_BASE_URL.replace(/\/+$/, '');
+      const response = await fetch(`${baseUrl}/app-user/preferences`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          deviceId,
+          discipleshipGoals: goals,
+          featureInterests: features,
+          parentName: pName,
+          kids: kids.map(k => ({ name: k.name, age: k.age, avatar: k.avatar })),
+        }),
+      });
+      
+      const data = await response.json();
+      if (data.success) {
+        console.log('✅ Preferences saved to backend');
+      }
+    } catch (error) {
+      console.error('Failed to save preferences to backend:', error);
+      // Don't block onboarding if backend fails - localStorage is the primary store
+    }
+  };
+  
   const handleStep3Continue = () => {
     playClick();
     // Track discipleship preferences
@@ -871,6 +900,8 @@ const OnboardingPage: React.FC = () => {
     activityTrackingService.trackOnboardingEvent('step_4_complete', { step: 4, features: selectedFeatures });
     // Save features to localStorage for personalization
     localStorage.setItem('godlykids_feature_interests', JSON.stringify(selectedFeatures));
+    // Save both goals and features to backend
+    savePreferencesToBackend(selectedPriorities, selectedFeatures);
     // Go to voice selection step
     setStep(5);
   };

@@ -11,6 +11,7 @@ import WebViewModal from '../components/features/WebViewModal';
 import EmailBonusModal from '../components/modals/EmailBonusModal';
 // Voice cloning removed - not offering this feature anymore
 import { ApiService } from '../services/apiService';
+import { API_BASE_URL } from '../constants';
 import { filterVisibleVoices } from '../services/voiceManagementService';
 import { cleanVoiceDescription, cleanVoiceCategory } from '../utils/voiceUtils';
 import { facebookPixelService } from '../services/facebookPixelService';
@@ -1002,7 +1003,7 @@ const OnboardingPage: React.FC = () => {
   // Shared account creation logic
   const handleCreateAccountLogic = async (email: string, password: string): Promise<{ success: boolean; error?: string }> => {
     try {
-      const response = await fetch(`${ApiService.getBaseUrl()}/auth/register`, {
+      const response = await fetch(`${API_BASE_URL}/auth/register`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

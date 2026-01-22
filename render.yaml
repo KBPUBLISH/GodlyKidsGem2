@@ -12,15 +12,12 @@ services:
       - key: NODE_ENV
         value: production
       - key: MONGO_URI
-        sync: false  # Set this in Render dashboard
+        sync: false
       - key: PORT
         value: 5001
       - key: ELEVENLABS_API_KEY
-        sync: false  # Set this in Render dashboard
+        sync: false
       - key: GCS_BUCKET_NAME
-        sync: false  # Set this in Render dashboard
+        sync: false
       - key: GOOGLE_APPLICATION_CREDENTIALS
-        sync: false  # Set this in Render dashboard or use service account JSON
-
-
-
+        sync: false

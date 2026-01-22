@@ -1465,7 +1465,7 @@ const OnboardingPage: React.FC = () => {
   };
 
   return (
-    <div className="flex flex-col h-full w-full relative overflow-y-auto no-scrollbar">
+    <div className="flex flex-col min-h-screen h-full w-full relative overflow-y-auto no-scrollbar bg-gradient-to-br from-[#1a237e] to-[#0d113a]">
       
       {/* Wood Header Bar */}
       <div className="relative z-20 pt-8 pb-4 px-6 bg-[#CD853F] shadow-md border-b-4 border-[#8B4513]">

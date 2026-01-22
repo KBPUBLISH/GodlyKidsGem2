@@ -1,4 +1,5 @@
-import React, { createContext, useContext, useState, useCallback, useEffect } from 'react';
+import React, { createContext, useContext, useState, useCallback, useEffect, useRef } from 'react';
+import { activityTrackingService } from '../services/activityTrackingService';
 
 // Tutorial step definitions
 // FLOW: Welcome book → Swipe pages → Quiz → Coins → Report Card → Shop → Giving → Explore → Books → Audio → Complete
@@ -366,6 +367,25 @@ export const TutorialProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       return () => clearTimeout(timer);
     }
   }, [currentStep, isTutorialActive, nextStep]);
+
+  // Track tutorial steps for analytics
+  const lastTrackedStep = useRef<TutorialStep | null>(null);
+  useEffect(() => {
+    // Only track if step changed and tutorial is active
+    if (currentStep !== 'idle' && currentStep !== lastTrackedStep.current) {
+      lastTrackedStep.current = currentStep;
+      
+      // Track step asynchronously
+      activityTrackingService.trackTutorialStep(currentStep, {
+        coinsDonated: donatedCoins > 0 ? donatedCoins : undefined,
+      }).catch(console.error);
+      
+      // Reset tutorial session when complete
+      if (currentStep === 'complete') {
+        activityTrackingService.resetTutorialSession();
+      }
+    }
+  }, [currentStep, donatedCoins]);
 
   return (
     <TutorialContext.Provider

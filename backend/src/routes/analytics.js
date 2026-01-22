@@ -3,6 +3,7 @@ const router = express.Router();
 const AppUser = require('../models/AppUser');
 const User = require('../models/User');
 const OnboardingEvent = require('../models/OnboardingEvent');
+const TutorialEvent = require('../models/TutorialEvent');
 const EmailSubscriber = require('../models/EmailSubscriber');
 
 /**
@@ -896,6 +897,264 @@ router.get('/content', async (req, res) => {
     } catch (error) {
         console.error('Content analytics error:', error);
         res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+// ============================================
+// TUTORIAL ANALYTICS
+// ============================================
+
+// Tutorial step order for funnel
+const TUTORIAL_STEP_ORDER = [
+    'welcome_book_tap',
+    'book_controls_intro',
+    'book_swipe_intro',
+    'book_swipe_1',
+    'book_swipe_2',
+    'book_swipe_3',
+    'book_end_quiz',
+    'quiz_in_progress',
+    'coins_highlight',
+    'coins_popup_open',
+    'report_card_highlight',
+    'report_card_open',
+    'shop_highlight',
+    'shop_open',
+    'navigate_to_give',
+    'campaign_highlight',
+    'give_button_highlight',
+    'donation_complete',
+    'navigate_to_explore',
+    'devotional_highlight',
+    'navigate_to_books',
+    'navigate_to_audio',
+    'audiobook_highlight',
+    'review_prompt',
+    'tutorial_complete',
+    'explore_pause',
+    'paywall',
+    'complete',
+];
+
+// Human-readable step names
+const TUTORIAL_STEP_LABELS = {
+    'welcome_book_tap': 'Started - Tap Book',
+    'book_controls_intro': 'Controls Intro',
+    'book_swipe_intro': 'Swipe Intro',
+    'book_swipe_1': 'Page 1',
+    'book_swipe_2': 'Page 2',
+    'book_swipe_3': 'Page 3',
+    'book_end_quiz': 'Quiz Prompt',
+    'quiz_in_progress': 'Taking Quiz',
+    'coins_highlight': 'Coins Earned',
+    'coins_popup_open': 'Coins Popup',
+    'report_card_highlight': 'Report Card',
+    'report_card_open': 'Report Card Open',
+    'shop_highlight': 'Shop Highlight',
+    'shop_open': 'Shop Open',
+    'navigate_to_give': 'Navigate to Give',
+    'campaign_highlight': 'Campaign Highlight',
+    'give_button_highlight': 'Give Button',
+    'donation_complete': 'Donated',
+    'navigate_to_explore': 'Navigate to Explore',
+    'devotional_highlight': 'Devotional Highlight',
+    'navigate_to_books': 'Navigate to Books',
+    'navigate_to_audio': 'Navigate to Audio',
+    'audiobook_highlight': 'Audiobook Highlight',
+    'review_prompt': 'Review Prompt',
+    'tutorial_complete': 'Tutorial Complete',
+    'explore_pause': 'Explore Pause',
+    'paywall': 'Paywall Shown',
+    'complete': 'Completed',
+    'skipped': 'Skipped',
+};
+
+/**
+ * POST /api/analytics/tutorial/event
+ * Track a tutorial step event from the app
+ */
+router.post('/tutorial/event', async (req, res) => {
+    try {
+        const { userId, sessionId, step, metadata } = req.body;
+        
+        if (!userId || !step) {
+            return res.status(400).json({ 
+                success: false, 
+                message: 'userId and step are required' 
+            });
+        }
+        
+        // Get step index
+        const stepIndex = TUTORIAL_STEP_ORDER.indexOf(step);
+        
+        const tutorialEvent = new TutorialEvent({
+            userId,
+            sessionId: sessionId || `tut_${Date.now()}`,
+            step,
+            stepIndex: stepIndex >= 0 ? stepIndex : 0,
+            metadata: metadata || {},
+        });
+        
+        await tutorialEvent.save();
+        
+        console.log(`📚 Tutorial event: ${step} (step ${stepIndex + 1}) for user ${userId}`);
+        
+        res.json({ success: true });
+    } catch (error) {
+        console.error('Tutorial event tracking error:', error);
+        res.status(500).json({ 
+            success: false, 
+            message: 'Failed to track event',
+            error: error.message 
+        });
+    }
+});
+
+/**
+ * GET /api/analytics/tutorial
+ * Get tutorial funnel analytics for the portal
+ * 
+ * Query params:
+ *   days: number of days to look back (default 30)
+ */
+router.get('/tutorial', async (req, res) => {
+    try {
+        const days = parseInt(req.query.days) || 30;
+        const startDate = new Date();
+        startDate.setDate(startDate.getDate() - days);
+        
+        // Get all events in the time range
+        const events = await TutorialEvent.find({
+            createdAt: { $gte: startDate }
+        }).lean();
+        
+        // Calculate funnel metrics
+        const uniqueUsers = new Set(events.map(e => e.userId));
+        const uniqueSessions = new Set(events.map(e => e.sessionId));
+        
+        // Count events by step
+        const stepCounts = {};
+        TUTORIAL_STEP_ORDER.forEach(step => {
+            stepCounts[step] = 0;
+        });
+        stepCounts['skipped'] = 0;
+        
+        // Track highest step reached per user
+        const userHighestStep = new Map();
+        events.forEach(e => {
+            stepCounts[e.step] = (stepCounts[e.step] || 0) + 1;
+            
+            const currentHighest = userHighestStep.get(e.userId) || -1;
+            const stepIdx = TUTORIAL_STEP_ORDER.indexOf(e.step);
+            if (stepIdx > currentHighest) {
+                userHighestStep.set(e.userId, stepIdx);
+            }
+        });
+        
+        // Calculate funnel (users who reached each step)
+        const usersAtStep = {};
+        userHighestStep.forEach((highestStepIdx, userId) => {
+            // User reached this step and all previous steps
+            for (let i = 0; i <= highestStepIdx; i++) {
+                const step = TUTORIAL_STEP_ORDER[i];
+                usersAtStep[step] = (usersAtStep[step] || 0) + 1;
+            }
+        });
+        
+        // Build funnel data - show key steps only for clarity
+        const keySteps = [
+            'welcome_book_tap',
+            'book_swipe_3',
+            'quiz_in_progress',
+            'coins_highlight',
+            'shop_open',
+            'donation_complete',
+            'audiobook_highlight',
+            'review_prompt',
+            'tutorial_complete',
+            'paywall',
+            'complete',
+        ];
+        
+        const started = usersAtStep['welcome_book_tap'] || 0;
+        const funnel = keySteps.map((step, idx) => ({
+            step: TUTORIAL_STEP_LABELS[step] || step,
+            stepKey: step,
+            count: usersAtStep[step] || 0,
+            rate: started > 0 ? Math.round(((usersAtStep[step] || 0) / started) * 100) : 0,
+        }));
+        
+        // Calculate drop-off points
+        const dropoffs = [];
+        for (let i = 1; i < keySteps.length; i++) {
+            const prevCount = usersAtStep[keySteps[i - 1]] || 0;
+            const currCount = usersAtStep[keySteps[i]] || 0;
+            const dropoff = prevCount - currCount;
+            if (dropoff > 0 && prevCount > 0) {
+                dropoffs.push({
+                    from: TUTORIAL_STEP_LABELS[keySteps[i - 1]] || keySteps[i - 1],
+                    to: TUTORIAL_STEP_LABELS[keySteps[i]] || keySteps[i],
+                    dropped: dropoff,
+                    dropRate: Math.round((dropoff / prevCount) * 100),
+                });
+            }
+        }
+        
+        // Sort by drop rate to find biggest issues
+        dropoffs.sort((a, b) => b.dropRate - a.dropRate);
+        
+        // Daily trends (tutorial starts per day)
+        const dailyTrends = [];
+        for (let i = Math.min(days - 1, 13); i >= 0; i--) {
+            const date = new Date();
+            date.setDate(date.getDate() - i);
+            const dayStr = date.toISOString().split('T')[0];
+            
+            const dayEvents = events.filter(e => {
+                const eventDate = new Date(e.createdAt).toISOString().split('T')[0];
+                return eventDate === dayStr;
+            });
+            
+            const dayUsers = new Set(dayEvents.map(e => e.userId));
+            const dayStarts = dayEvents.filter(e => e.step === 'welcome_book_tap').length;
+            const dayCompletes = dayEvents.filter(e => e.step === 'complete' || e.step === 'tutorial_complete').length;
+            
+            dailyTrends.push({
+                date: dayStr,
+                started: dayStarts,
+                completed: dayCompletes,
+                users: dayUsers.size,
+            });
+        }
+        
+        // Calculate completion rate
+        const completedUsers = (usersAtStep['complete'] || 0) + (usersAtStep['tutorial_complete'] || 0);
+        const completionRate = started > 0 ? Math.round((completedUsers / started) * 100) : 0;
+        const skipCount = stepCounts['skipped'] || 0;
+        
+        res.json({
+            success: true,
+            period: { days, startDate: startDate.toISOString() },
+            summary: {
+                totalUsers: uniqueUsers.size,
+                totalSessions: uniqueSessions.size,
+                totalEvents: events.length,
+                completionRate,
+                skipCount,
+                avgStepsCompleted: events.length > 0 ? Math.round(events.length / uniqueUsers.size) : 0,
+            },
+            funnel,
+            stepCounts,
+            dropoffs: dropoffs.slice(0, 5), // Top 5 drop-off points
+            dailyTrends,
+        });
+    } catch (error) {
+        console.error('Tutorial analytics error:', error);
+        res.status(500).json({ 
+            success: false, 
+            message: 'Failed to fetch tutorial analytics',
+            error: error.message 
+        });
     }
 });
 

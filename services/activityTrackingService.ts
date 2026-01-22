@@ -621,6 +621,63 @@ class ActivityTrackingService {
   resetOnboardingSession(): void {
     this.onboardingSessionId = null;
   }
+
+  // ============================================
+  // TUTORIAL ANALYTICS
+  // ============================================
+  
+  private tutorialSessionId: string | null = null;
+  
+  // Get or create tutorial session ID
+  private getTutorialSessionId(): string {
+    if (!this.tutorialSessionId) {
+      this.tutorialSessionId = `tut_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+    }
+    return this.tutorialSessionId;
+  }
+  
+  // Track tutorial step
+  async trackTutorialStep(
+    step: string, 
+    metadata?: { 
+      bookId?: string;
+      coinsEarned?: number;
+      coinsDonated?: number;
+    }
+  ): Promise<void> {
+    try {
+      const user = authService.getUser();
+      const userId = user?.email || user?._id || localStorage.getItem('godlykids_device_id') || `anon_${Date.now()}`;
+      
+      const API_BASE = (import.meta as any).env?.VITE_API_BASE_URL || 'https://backendgk2-0.onrender.com';
+      const apiUrl = API_BASE.endsWith('/api') ? API_BASE : `${API_BASE}/api`;
+      
+      const platform = (window as any).__GK_IS_DESPIA__ ? 'ios' : 'web';
+      
+      await fetch(`${apiUrl}/analytics/tutorial/event`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userId,
+          sessionId: this.getTutorialSessionId(),
+          step,
+          metadata: {
+            ...metadata,
+            platform,
+          },
+        }),
+      });
+      
+      console.log(`📚 Tutorial step tracked: ${step}`, metadata);
+    } catch (error) {
+      console.error('Failed to track tutorial step:', error);
+    }
+  }
+  
+  // Reset tutorial session (call when tutorial completes or user skips)
+  resetTutorialSession(): void {
+    this.tutorialSessionId = null;
+  }
 }
 
 export const activityTrackingService = new ActivityTrackingService();

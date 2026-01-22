@@ -2,6 +2,9 @@ const mongoose = require('mongoose');
 
 // Kid profile embedded in AppUser
 const kidProfileSchema = new mongoose.Schema({
+    frontendId: {
+        type: String, // Client-side ID for syncing between devices
+    },
     name: {
         type: String,
         required: true,

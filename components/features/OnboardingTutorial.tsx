@@ -578,16 +578,11 @@ const OnboardingTutorial: React.FC = () => {
                   
                   if (hasAccount) {
                     // User has account - go straight to payment-only paywall
-                    navigate('/paywall', { state: { fromTutorial: true } });
+                    navigate('/paywall', { state: { fromTutorial: true, hideCloseButton: true } });
                   } else {
-                    // No account - go to onboarding to create account first
+                    // No account - go to onboarding to create account first (then paywall)
                     navigate('/onboarding', { state: { skipToPaywall: true } });
                   }
-                  completeTutorial();
-                }}
-                onCreateAccount={() => {
-                  // Navigate to onboarding to create free account
-                  navigate('/onboarding', { state: { createFreeAccount: true } });
                   completeTutorial();
                 }}
               />
@@ -675,11 +670,8 @@ const ReviewPromptContent: React.FC<{ onNext: () => void }> = ({ onNext }) => {
   );
 };
 
-// Paywall content for tutorial with "One time offer"
-const PaywallContent: React.FC<{ onSubscribe: () => void; onCreateAccount: () => void }> = ({ 
-  onSubscribe, 
-  onCreateAccount
-}) => {
+// Paywall content for tutorial - HARD PAYWALL (subscription required)
+const PaywallContent: React.FC<{ onSubscribe: () => void }> = ({ onSubscribe }) => {
   return (
     <div className="text-center">
       {/* One Time Offer Badge */}
@@ -716,15 +708,9 @@ const PaywallContent: React.FC<{ onSubscribe: () => void; onCreateAccount: () =>
         </p>
       </div>
       
-      <WoodButton variant="gold" onClick={onSubscribe} className="w-full py-4 mb-3">
+      <WoodButton variant="gold" onClick={onSubscribe} className="w-full py-4">
         Start Free Trial
       </WoodButton>
-      <button
-        onClick={onCreateAccount}
-        className="text-white/70 text-sm hover:text-white transition-colors underline"
-      >
-        Create free account
-      </button>
     </div>
   );
 };

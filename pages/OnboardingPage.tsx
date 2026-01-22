@@ -63,17 +63,13 @@ const PaywallStep: React.FC<{
   selectedPlan: 'annual' | 'monthly';
   setSelectedPlan: (plan: 'annual' | 'monthly') => void;
   onSubscribe: (email: string, password: string) => void;
-  onSkip: () => void;
-  onExploreNow: () => void; // New: For "Explore Now" after creating free account
   onRestore: (email: string, password: string) => void;
   onCreateAccount: (email: string, password: string) => Promise<boolean>;
   isPurchasing?: boolean;
   isRestoring?: boolean;
   error?: string | null;
   kidsCount?: number; // Number of kids added during onboarding
-  isDemoExpired?: boolean; // If true, hide demo/skip option (user already used their demo)
-  isFreeAccountMode?: boolean; // If true, show "Explore Now" instead of demo option
-}> = ({ selectedPlan, setSelectedPlan, onSubscribe, onSkip, onExploreNow, onRestore, onCreateAccount, isPurchasing = false, isRestoring = false, error = null, kidsCount = 0, isDemoExpired = false, isFreeAccountMode = false }) => {
+}> = ({ selectedPlan, setSelectedPlan, onSubscribe, onRestore, onCreateAccount, isPurchasing = false, isRestoring = false, error = null, kidsCount = 0 }) => {
   const [showIncluded, setShowIncluded] = useState(true); // Open by default so users see features
   const carouselRef = useRef<HTMLDivElement>(null);
   const [currentBenefit, setCurrentBenefit] = useState(0);
@@ -393,28 +389,6 @@ const PaywallStep: React.FC<{
       {/* ==================== STEP 2: OPTIONAL SUBSCRIPTION ==================== */}
       <div className={`transition-all duration-300 ${accountCreated ? 'opacity-100' : 'opacity-50 pointer-events-none'}`}>
         
-        {/* Demo Expired - Welcome Back Message */}
-        {isDemoExpired && (
-          <div className="bg-gradient-to-br from-[#4CAF50]/20 to-[#2E7D32]/20 rounded-2xl p-4 mb-4 border-2 border-[#4CAF50]/50">
-            <div className="flex items-center gap-3">
-              <div className="w-12 h-12 bg-[#4CAF50]/20 rounded-full flex items-center justify-center flex-shrink-0">
-                <Check className="w-6 h-6 text-[#4CAF50]" />
-              </div>
-              <div>
-                <p className="text-white font-bold text-sm mb-1">
-                  ✨ Your progress is saved!
-                </p>
-                <p className="text-[#eecaa0] text-xs">
-                  {kidsCount > 0 
-                    ? `Your ${kidsCount} kid profile${kidsCount > 1 ? 's' : ''} and all settings are ready. Subscribe to continue!`
-                    : 'Your settings are saved. Subscribe to unlock full access!'
-                  }
-                </p>
-              </div>
-            </div>
-          </div>
-        )}
-
         {/* Hero Badge */}
         <div className="text-center mb-4">
           <div className="inline-block bg-gradient-to-r from-[#FFD700] to-[#FFA500] px-5 py-2 rounded-full animate-pulse shadow-lg">
@@ -423,7 +397,7 @@ const PaywallStep: React.FC<{
         </div>
 
         {/* Personalized Kids Message - Show if they added multiple kids */}
-        {kidsCount > 1 && !isDemoExpired && (
+        {kidsCount > 1 && (
           <div className="bg-gradient-to-br from-[#3E1F07] to-[#5c2e0b] rounded-2xl p-4 mb-4 border-2 border-[#FFD700]/40 relative overflow-hidden">
             <div className="absolute top-0 right-0 bg-[#FF6B6B] text-white text-[10px] font-bold px-2 py-1 rounded-bl-lg">
               ACTION REQUIRED
@@ -641,36 +615,6 @@ const PaywallStep: React.FC<{
       {/* Explore Now / Skip Option */}
       <div className="text-center">
         {/* Show "Explore Now" for free account mode (requires account creation first) */}
-        {isFreeAccountMode && (
-          <button 
-            onClick={onExploreNow}
-            disabled={!accountCreated}
-            className={`text-sm px-6 py-3 rounded-full font-bold mb-3 transition-all ${
-              accountCreated 
-                ? 'bg-gradient-to-r from-green-500 to-emerald-500 text-white hover:from-green-400 hover:to-emerald-400 shadow-lg'
-                : 'bg-white/10 border border-white/20 text-white/40 cursor-not-allowed'
-            }`}
-          >
-            {accountCreated ? '🚀 Explore Now' : '👆 Create account first'}
-          </button>
-        )}
-        
-        {/* Only show demo option when NOT in free account mode and demo not expired */}
-        {!isFreeAccountMode && !isDemoExpired && (
-          <button 
-            onClick={onSkip}
-            className="text-sm px-5 py-2.5 rounded-full bg-white/10 border border-white/20 transition-all text-white/70 hover:text-white hover:bg-white/20 font-medium mb-3"
-          >
-            ⏱️ Try 5-Minute Free Demo
-          </button>
-        )}
-        
-        {!isFreeAccountMode && isDemoExpired && (
-          <p className="text-[#FFD700]/80 text-xs mb-3 font-medium">
-            ⏱️ Demo time expired • Subscribe to continue
-          </p>
-        )}
-        
         {/* Restore Purchases Link */}
         <div>
           <button
@@ -734,8 +678,6 @@ const OnboardingPage: React.FC = () => {
   
   // Check if we should skip directly to paywall step (from tutorial - for subscription)
   const skipToPaywall = (location.state as any)?.skipToPaywall === true;
-  // Check if coming from "Create free account" button (just need to create account, then explore)
-  const createFreeAccount = (location.state as any)?.createFreeAccount === true;
   
   const [step, setStep] = useState<1 | 2 | 3 | 4>(skipToPaywall ? 4 : 1); // Steps: 1=Parent, 2=Family, 3=Voice Selection, 4=Unlock
   const [isPurchasing, setIsPurchasing] = useState(false);
@@ -770,12 +712,6 @@ const OnboardingPage: React.FC = () => {
   const [selectedPlan, setSelectedPlan] = useState<'annual' | 'monthly'>('annual');
   const [showParentGate, setShowParentGate] = useState(false);
   
-  // Demo mode state - track if user has used their 5-minute demo
-  const [isDemoExpired, setIsDemoExpired] = useState(() => {
-    // Check if demo was already used
-    const demoUsed = localStorage.getItem('godlykids_demo_used');
-    return demoUsed === 'true';
-  });
   
   // Email Bonus Modal State (for mobile users who skip) - Hidden but keeping logic
   const [showEmailBonusModal, setShowEmailBonusModal] = useState(false);
@@ -1703,42 +1639,18 @@ const OnboardingPage: React.FC = () => {
           </div>
         )}
 
-        {/* --- STEP 4: PAYWALL / VALUE PROPOSITION --- */}
+        {/* --- STEP 4: PAYWALL / VALUE PROPOSITION (HARD PAYWALL) --- */}
         {step === 4 && (
             <PaywallStep 
               selectedPlan={selectedPlan}
               setSelectedPlan={setSelectedPlan}
               onCreateAccount={handleCreateAccount}
               onSubscribe={handleSubscribeClick}
-              onSkip={() => {
-                // Start 5-minute demo mode (only available when NOT in free account mode)
-                console.log('⏱️ Starting 5-minute demo mode');
-                
-                // Save demo start time
-                const demoEndTime = Date.now() + (5 * 60 * 1000); // 5 minutes from now
-                localStorage.setItem('godlykids_demo_end_time', demoEndTime.toString());
-                localStorage.setItem('godlykids_demo_active', 'true');
-                
-                // Track demo started
-                activityTrackingService.trackOnboardingEvent('demo_started', { duration: '5min' });
-                
-                // Complete onboarding without subscription (enters demo mode)
-                completeOnboardingWithoutSubscription(false);
-              }}
-              onExploreNow={() => {
-                // User created free account and wants to explore
-                console.log('🚀 Explore Now clicked - free account created');
-                activityTrackingService.trackOnboardingEvent('free_account_explore');
-                playSuccess();
-                navigate('/home');
-              }}
               onRestore={handleRestorePurchases}
               isPurchasing={isPurchasing}
               isRestoring={isRestoring}
               error={purchaseError}
               kidsCount={kids.length}
-              isDemoExpired={isDemoExpired}
-              isFreeAccountMode={createFreeAccount}
             />
         )}
 

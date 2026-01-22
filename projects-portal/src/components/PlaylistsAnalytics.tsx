@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Eye, Play, Heart, Bookmark, ArrowUpDown, TrendingUp, TrendingDown, Music, Headphones, Calendar } from 'lucide-react';
+import { Eye, Play, Heart, Bookmark, ArrowUpDown, TrendingUp, TrendingDown, Music, Headphones, Calendar, Clock, Timer } from 'lucide-react';
 import apiClient from '../services/apiClient';
 import { Link } from 'react-router-dom';
 
@@ -15,11 +15,29 @@ interface PlaylistAnalytics {
     likeCount: number;
     favoriteCount: number;
     itemCount: number;
+    // Listening time metrics
+    totalListeningSeconds?: number;
+    listeningSessions?: number;
+    avgListeningSeconds?: number;
+    avgCompletionPercent?: number;
 }
 
-type SortField = 'viewCount' | 'playCount' | 'likeCount' | 'favoriteCount' | 'itemCount';
+type SortField = 'viewCount' | 'playCount' | 'likeCount' | 'favoriteCount' | 'itemCount' | 'avgListeningSeconds' | 'totalListeningSeconds';
 type SortDirection = 'asc' | 'desc';
 type TimeRange = 'day' | 'week' | 'month' | 'all';
+
+// Helper to format seconds into readable time
+const formatDuration = (seconds: number): string => {
+    if (seconds < 60) return `${seconds}s`;
+    if (seconds < 3600) {
+        const mins = Math.floor(seconds / 60);
+        const secs = seconds % 60;
+        return secs > 0 ? `${mins}m ${secs}s` : `${mins}m`;
+    }
+    const hours = Math.floor(seconds / 3600);
+    const mins = Math.floor((seconds % 3600) / 60);
+    return mins > 0 ? `${hours}h ${mins}m` : `${hours}h`;
+};
 
 const PlaylistsAnalytics: React.FC = () => {
     const [playlists, setPlaylists] = useState<PlaylistAnalytics[]>([]);
@@ -136,6 +154,8 @@ const PlaylistsAnalytics: React.FC = () => {
                 </div>
                 <div className="flex flex-wrap gap-2">
                     <SortButton field="playCount" label="Plays" icon={<Play className="w-4 h-4" />} />
+                    <SortButton field="avgListeningSeconds" label="Avg Listen Time" icon={<Timer className="w-4 h-4" />} />
+                    <SortButton field="totalListeningSeconds" label="Total Listen Time" icon={<Clock className="w-4 h-4" />} />
                     <SortButton field="viewCount" label="Views" icon={<Eye className="w-4 h-4" />} />
                     <SortButton field="likeCount" label="Likes" icon={<Heart className="w-4 h-4" />} />
                     <SortButton field="favoriteCount" label="Favorites" icon={<Bookmark className="w-4 h-4" />} />
@@ -156,19 +176,19 @@ const PlaylistsAnalytics: React.FC = () => {
                                     <Headphones className="w-4 h-4 inline" /> Plays
                                 </th>
                                 <th className="text-center py-3 px-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">
-                                    <Eye className="w-4 h-4 inline" /> Views
+                                    <Timer className="w-4 h-4 inline" /> Avg Listen
                                 </th>
                                 <th className="text-center py-3 px-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">
-                                    <Heart className="w-4 h-4 inline" /> Likes
+                                    <Clock className="w-4 h-4 inline" /> Total Listen
                                 </th>
                                 <th className="text-center py-3 px-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">
-                                    <Bookmark className="w-4 h-4 inline" /> Saves
+                                    Completion
                                 </th>
                                 <th className="text-center py-3 px-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">
                                     <Music className="w-4 h-4 inline" /> Tracks
                                 </th>
                                 <th className="text-center py-3 px-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">
-                                    Engagement Rate
+                                    Engagement
                                 </th>
                             </tr>
                         </thead>
@@ -223,20 +243,36 @@ const PlaylistsAnalytics: React.FC = () => {
                                             <span className="font-semibold text-purple-600">{(playlist.playCount || 0).toLocaleString()}</span>
                                         </td>
                                         <td className="py-3 px-4 text-center">
-                                            <span className="font-semibold text-gray-800">{(playlist.viewCount || 0).toLocaleString()}</span>
+                                            <span className="font-semibold text-teal-600">
+                                                {playlist.avgListeningSeconds ? formatDuration(playlist.avgListeningSeconds) : '-'}
+                                            </span>
                                         </td>
                                         <td className="py-3 px-4 text-center">
-                                            <span className="font-semibold text-red-500">{(playlist.likeCount || 0).toLocaleString()}</span>
+                                            <span className="font-semibold text-indigo-600">
+                                                {playlist.totalListeningSeconds ? formatDuration(playlist.totalListeningSeconds) : '-'}
+                                            </span>
                                         </td>
                                         <td className="py-3 px-4 text-center">
-                                            <span className="font-semibold text-amber-600">{(playlist.favoriteCount || 0).toLocaleString()}</span>
+                                            <div className="flex items-center justify-center gap-2">
+                                                <div className="w-12 h-2 bg-gray-200 rounded-full overflow-hidden">
+                                                    <div 
+                                                        className={`h-full rounded-full ${
+                                                            (playlist.avgCompletionPercent || 0) >= 70 ? 'bg-green-500' :
+                                                            (playlist.avgCompletionPercent || 0) >= 40 ? 'bg-yellow-500' :
+                                                            'bg-red-400'
+                                                        }`}
+                                                        style={{ width: `${Math.min(playlist.avgCompletionPercent || 0, 100)}%` }}
+                                                    />
+                                                </div>
+                                                <span className="text-xs font-medium text-gray-600">{playlist.avgCompletionPercent || 0}%</span>
+                                            </div>
                                         </td>
                                         <td className="py-3 px-4 text-center">
                                             <span className="font-semibold text-blue-600">{playlist.itemCount}</span>
                                         </td>
                                         <td className="py-3 px-4 text-center">
                                             <div className="flex items-center justify-center gap-2">
-                                                <div className="w-16 h-2 bg-gray-200 rounded-full overflow-hidden">
+                                                <div className="w-12 h-2 bg-gray-200 rounded-full overflow-hidden">
                                                     <div 
                                                         className={`h-full rounded-full ${
                                                             engagementRate >= 20 ? 'bg-green-500' :
@@ -246,7 +282,7 @@ const PlaylistsAnalytics: React.FC = () => {
                                                         style={{ width: `${Math.min(engagementRate, 100)}%` }}
                                                     />
                                                 </div>
-                                                <span className="text-sm font-medium text-gray-600">{engagementRate}%</span>
+                                                <span className="text-xs font-medium text-gray-600">{engagementRate}%</span>
                                             </div>
                                         </td>
                                     </tr>
@@ -264,7 +300,7 @@ const PlaylistsAnalytics: React.FC = () => {
             </div>
 
             {/* Summary Stats */}
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
                 <div className="bg-white rounded-xl p-4 shadow-sm border border-gray-100">
                     <p className="text-sm text-gray-500">Total Plays</p>
                     <p className="text-2xl font-bold text-purple-600">
@@ -272,15 +308,36 @@ const PlaylistsAnalytics: React.FC = () => {
                     </p>
                 </div>
                 <div className="bg-white rounded-xl p-4 shadow-sm border border-gray-100">
-                    <p className="text-sm text-gray-500">Total Views</p>
-                    <p className="text-2xl font-bold text-gray-800">
-                        {playlists.reduce((sum, p) => sum + (p.viewCount || 0), 0).toLocaleString()}
+                    <p className="text-sm text-gray-500">Total Listening Time</p>
+                    <p className="text-2xl font-bold text-indigo-600">
+                        {formatDuration(playlists.reduce((sum, p) => sum + (p.totalListeningSeconds || 0), 0))}
                     </p>
                 </div>
                 <div className="bg-white rounded-xl p-4 shadow-sm border border-gray-100">
-                    <p className="text-sm text-gray-500">Total Likes</p>
-                    <p className="text-2xl font-bold text-red-500">
-                        {playlists.reduce((sum, p) => sum + (p.likeCount || 0), 0).toLocaleString()}
+                    <p className="text-sm text-gray-500">Avg Listen Time</p>
+                    <p className="text-2xl font-bold text-teal-600">
+                        {(() => {
+                            const totalSessions = playlists.reduce((sum, p) => sum + (p.listeningSessions || 0), 0);
+                            const totalSeconds = playlists.reduce((sum, p) => sum + (p.totalListeningSeconds || 0), 0);
+                            return totalSessions > 0 ? formatDuration(Math.round(totalSeconds / totalSessions)) : '-';
+                        })()}
+                    </p>
+                </div>
+                <div className="bg-white rounded-xl p-4 shadow-sm border border-gray-100">
+                    <p className="text-sm text-gray-500">Avg Completion</p>
+                    <p className="text-2xl font-bold text-green-600">
+                        {(() => {
+                            const playlistsWithData = playlists.filter(p => p.avgCompletionPercent && p.avgCompletionPercent > 0);
+                            if (playlistsWithData.length === 0) return '-';
+                            const avgCompletion = Math.round(playlistsWithData.reduce((sum, p) => sum + (p.avgCompletionPercent || 0), 0) / playlistsWithData.length);
+                            return `${avgCompletion}%`;
+                        })()}
+                    </p>
+                </div>
+                <div className="bg-white rounded-xl p-4 shadow-sm border border-gray-100">
+                    <p className="text-sm text-gray-500">Listening Sessions</p>
+                    <p className="text-2xl font-bold text-amber-600">
+                        {playlists.reduce((sum, p) => sum + (p.listeningSessions || 0), 0).toLocaleString()}
                     </p>
                 </div>
                 <div className="bg-white rounded-xl p-4 shadow-sm border border-gray-100">

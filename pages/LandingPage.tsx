@@ -1,18 +1,170 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Globe, Check, X } from 'lucide-react';
 import WoodButton from '../components/ui/WoodButton';
 import { useLanguage } from '../context/LanguageContext';
+import { ApiService } from '../services/apiService';
 
 const STORAGE_KEY = 'godly_kids_data_v6';
 const TERMS_URL = 'https://www.godlykids.com/end-user-license-agreement';
+
+// Animated carousel column that scrolls continuously
+const CarouselColumn: React.FC<{
+  images: string[];
+  speed: number;
+  direction: 'up' | 'down';
+  columnIndex: number;
+}> = ({ images, speed, direction, columnIndex }) => {
+  const columnRef = useRef<HTMLDivElement>(null);
+  
+  // Double the images to create seamless loop
+  const doubledImages = useMemo(() => [...images, ...images], [images]);
+  
+  useEffect(() => {
+    const column = columnRef.current;
+    if (!column) return;
+    
+    let animationId: number;
+    let position = direction === 'up' ? 0 : -column.scrollHeight / 2;
+    
+    const animate = () => {
+      if (direction === 'up') {
+        position -= speed;
+        if (position <= -column.scrollHeight / 2) {
+          position = 0;
+        }
+      } else {
+        position += speed;
+        if (position >= 0) {
+          position = -column.scrollHeight / 2;
+        }
+      }
+      column.style.transform = `translateY(${position}px)`;
+      animationId = requestAnimationFrame(animate);
+    };
+    
+    animationId = requestAnimationFrame(animate);
+    return () => cancelAnimationFrame(animationId);
+  }, [speed, direction]);
+  
+  return (
+    <div className="overflow-hidden h-full">
+      <div ref={columnRef} className="flex flex-col gap-3">
+        {doubledImages.map((url, idx) => (
+          <div
+            key={`${columnIndex}-${idx}`}
+            className="w-full aspect-[3/4] rounded-2xl overflow-hidden shadow-lg flex-shrink-0"
+            style={{
+              background: 'linear-gradient(135deg, #4a1a7a 0%, #2d1b4e 100%)',
+            }}
+          >
+            <img
+              src={url}
+              alt=""
+              className="w-full h-full object-cover"
+              loading="lazy"
+              onError={(e) => {
+                // Hide broken images
+                (e.target as HTMLImageElement).style.display = 'none';
+              }}
+            />
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+};
+
+// Content Carousel - Multiple columns scrolling at different speeds
+const ContentCarousel: React.FC<{ coverUrls: string[] }> = ({ coverUrls }) => {
+  // Distribute images across 4 columns
+  const columns = useMemo(() => {
+    const cols: string[][] = [[], [], [], []];
+    coverUrls.forEach((url, idx) => {
+      cols[idx % 4].push(url);
+    });
+    return cols;
+  }, [coverUrls]);
+  
+  // Different speeds and directions for visual interest
+  const columnConfigs = [
+    { speed: 0.3, direction: 'up' as const },
+    { speed: 0.5, direction: 'down' as const },
+    { speed: 0.4, direction: 'up' as const },
+    { speed: 0.35, direction: 'down' as const },
+  ];
+  
+  return (
+    <div className="absolute inset-0 flex gap-3 px-3 py-4">
+      {columns.map((colImages, idx) => (
+        <div key={idx} className="flex-1 h-full">
+          {colImages.length > 0 && (
+            <CarouselColumn
+              images={colImages}
+              speed={columnConfigs[idx].speed}
+              direction={columnConfigs[idx].direction}
+              columnIndex={idx}
+            />
+          )}
+        </div>
+      ))}
+    </div>
+  );
+};
 
 const LandingPage: React.FC = () => {
   const navigate = useNavigate();
   const [isChecking, setIsChecking] = useState(true);
   const [showLanguageModal, setShowLanguageModal] = useState(false);
   const [showTermsModal, setShowTermsModal] = useState(false);
+  const [coverUrls, setCoverUrls] = useState<string[]>([]);
   const { currentLanguage, setLanguage, supportedLanguages, t } = useLanguage();
+
+  // Fetch cover images from published content (always use production API for splash page)
+  useEffect(() => {
+    const fetchCovers = async () => {
+      try {
+        // Use production API directly for landing page covers
+        const PROD_API = 'https://backendgk2-0.onrender.com/api';
+        
+        const [booksRes, playlistsRes] = await Promise.all([
+          fetch(`${PROD_API}/books`),
+          fetch(`${PROD_API}/playlists?status=published`),
+        ]);
+        
+        const booksData = await booksRes.json();
+        const playlistsData = await playlistsRes.json();
+        
+        // Handle both array and wrapped responses
+        const books = Array.isArray(booksData) ? booksData : (booksData.books || booksData.data || []);
+        const playlists = Array.isArray(playlistsData) ? playlistsData : (playlistsData.playlists || playlistsData.data || []);
+        
+        // Extract cover URLs from books and playlists
+        // Note: some books might not have status field, include them if they have a cover
+        const bookCovers = books
+          .filter((b: any) => b.coverUrl && (b.status === 'published' || !b.status))
+          .map((b: any) => b.coverUrl);
+        
+        const playlistCovers = playlists
+          .filter((p: any) => (p.coverImage || p.coverUrl) && (p.status === 'published' || !p.status))
+          .map((p: any) => p.coverImage || p.coverUrl);
+        
+        // Combine and shuffle
+        const allCovers = [...bookCovers, ...playlistCovers];
+        
+        console.log(`📚 Landing carousel: Found ${bookCovers.length} book covers, ${playlistCovers.length} playlist covers`);
+        
+        if (allCovers.length > 0) {
+          const shuffled = allCovers.sort(() => Math.random() - 0.5);
+          setCoverUrls(shuffled);
+        }
+      } catch (error) {
+        console.error('Failed to fetch cover images:', error);
+      }
+    };
+    
+    fetchCovers();
+  }, []);
 
   // Check if user has already completed onboarding
   useEffect(() => {
@@ -75,22 +227,19 @@ const LandingPage: React.FC = () => {
   }
 
   return (
-    <div className="relative h-full w-full overflow-hidden">
-      {/* 
-        NOTE: Background (Sky, Stars, Sunrise) is now handled globally in App.tsx > PanoramaBackground
-        to support the swipe navigation effect.
-      */}
-
-      {/* Ship Image - FULL PAGE background */}
-      <div className="absolute inset-0 z-10 pointer-events-none">
-        <img 
-          src="/assets/images/ship.jpg" 
-          alt="" 
-          className="w-full h-full object-cover"
-          style={{
-            objectPosition: 'center 40%', // Focus on ship
-          }}
-        />
+    <div className="relative h-full w-full overflow-hidden bg-gradient-to-b from-[#1a1a2e] via-[#16213e] to-[#0f3460]">
+      {/* Animated Content Carousel Background */}
+      <div className="absolute inset-0 z-10">
+        {coverUrls.length > 0 ? (
+          <ContentCarousel coverUrls={coverUrls} />
+        ) : (
+          // Placeholder gradient while loading
+          <div className="absolute inset-0 bg-gradient-to-b from-[#1a1a2e] via-[#16213e] to-[#0f3460]" />
+        )}
+        
+        {/* Gradient overlays for smooth transitions */}
+        <div className="absolute inset-0 bg-gradient-to-b from-black/60 via-transparent to-transparent z-20 pointer-events-none" />
+        <div className="absolute inset-0 bg-gradient-to-t from-[#0a192f] via-[#0a192f]/80 to-transparent z-20 pointer-events-none" style={{ height: '65%', top: '35%' }} />
       </div>
 
       {/* Language Selector Button - Hidden until more testing is done */}
@@ -168,53 +317,46 @@ const LandingPage: React.FC = () => {
         </div>
       )}
 
-      {/* --- OCEAN / UI SECTION --- */}
-      <div className="absolute bottom-0 left-0 right-0 h-[50%] z-20">
-          {/* Bubble Particles - Keep visible */}
-          <div className="absolute bottom-10 left-10 w-4 h-4 rounded-full bg-white/20 animate-[bounce_3s_infinite] z-30"></div>
-          <div className="absolute bottom-20 right-20 w-6 h-6 rounded-full bg-white/10 animate-[bounce_5s_infinite] z-30"></div>
+      {/* --- BOTTOM UI SECTION --- */}
+      <div className="absolute bottom-0 left-0 right-0 z-30 flex flex-col items-center px-6 pb-8" style={{ paddingBottom: 'calc(var(--safe-area-bottom, 0px) + 2rem)' }}>
+          
+          {/* App Title / Branding */}
+          <div className="relative mb-6 text-center">
+             <h1 className="font-display font-extrabold text-5xl text-white drop-shadow-[0_4px_8px_rgba(0,0,0,0.5)] tracking-wide">
+                Godly Kids
+             </h1>
+             <p className="text-white/80 font-sans font-semibold text-base mt-1 tracking-widest uppercase">
+                {t('adventureAwaits')}
+             </p>
+          </div>
 
-          {/* Content Container - Completely transparent background */}
-          <div className="absolute inset-0 top-2 flex flex-col items-center px-8 pt-4">
-              
-              {/* App Title (Styled to look integrated) */}
-              <div className="relative mb-8 text-center z-10">
-                 <h1 className="font-display font-extrabold text-4xl text-white drop-shadow-[0_4px_0_rgba(0,0,0,0.2)] tracking-wider">
-                    GODLY KIDS
-                 </h1>
-                 <p className="text-blue-100 font-sans font-bold text-sm mt-1 opacity-90">
-                    {t('adventureAwaits')}
-                 </p>
-              </div>
+          {/* Sign In and Guest Buttons */}
+          <div className="w-full max-w-sm space-y-3">
+              {/* Get Started Button - Main CTA */}
+              <button
+                onClick={() => navigate('/onboarding')}
+                className="w-full bg-[#2d5a27] hover:bg-[#3d7a37] text-white font-bold py-4 px-6 rounded-full text-lg shadow-lg transition-all active:scale-[0.98]"
+              >
+                Get Started
+              </button>
 
-              {/* Sign In and Guest Buttons */}
-              <div className="w-full max-w-sm space-y-3 relative z-10">
-                  <WoodButton 
-                    onClick={() => navigate('/signin')}
-                    fullWidth 
-                    variant="primary"
-                    className="py-4 text-lg"
-                  >
-                    {t('signIn')}
-                  </WoodButton>
+              {/* Sign In Button - Secondary */}
+              <button
+                onClick={() => navigate('/signin')}
+                className="w-full bg-white/95 hover:bg-white text-gray-800 font-semibold py-4 px-6 rounded-full text-lg shadow-lg border border-gray-200 transition-all active:scale-[0.98]"
+              >
+                I already have an account
+              </button>
 
-                  <button
-                    onClick={() => navigate('/onboarding')}
-                    className="w-full bg-white/10 hover:bg-white/20 backdrop-blur-sm border border-white/30 text-white font-bold py-3 px-4 rounded-xl shadow-[0_4px_0_rgba(0,0,0,0.1)] active:translate-y-[2px] active:shadow-none transition-all"
-                  >
-                    {t('continue')}
-                  </button>
-
-                  <p className="text-center text-white/60 text-xs mt-4">
-                    By continuing you agree to our{' '}
-                    <button 
-                      onClick={() => setShowTermsModal(true)}
-                      className="text-[#FFD700] underline hover:text-[#FFF8DC] transition-colors"
-                    >
-                      Terms & Conditions
-                    </button>
-                  </p>
-              </div>
+              <p className="text-center text-white/50 text-xs mt-4">
+                By continuing you agree to our{' '}
+                <button 
+                  onClick={() => setShowTermsModal(true)}
+                  className="text-white/70 underline hover:text-white transition-colors"
+                >
+                  Terms & Conditions
+                </button>
+              </p>
           </div>
       </div>
 

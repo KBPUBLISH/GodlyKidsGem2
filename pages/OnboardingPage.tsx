@@ -679,7 +679,7 @@ const OnboardingPage: React.FC = () => {
   // Check if we should skip directly to paywall step (from tutorial - for subscription)
   const skipToPaywall = (location.state as any)?.skipToPaywall === true;
   
-  const [step, setStep] = useState<1 | 2 | 3 | 4 | 5>(skipToPaywall ? 5 : 1); // Steps: 1=Parent, 2=Family, 3=Discipleship, 4=Voice, 5=Account
+  const [step, setStep] = useState<1 | 2 | 3 | 4 | 5 | 6>(skipToPaywall ? 6 : 1); // Steps: 1=Parent, 2=Family, 3=Goals, 4=Features, 5=Voice, 6=Account
   const [isPurchasing, setIsPurchasing] = useState(false);
   const [isRestoring, setIsRestoring] = useState(false);
   const [purchaseError, setPurchaseError] = useState<string | null>(null);
@@ -714,7 +714,20 @@ const OnboardingPage: React.FC = () => {
     { id: 'character', icon: '💪', label: 'Character Development', desc: 'Christlike values and virtues' },
   ];
   
-  // Step 4 State (Voice Selection)
+  // Step 4 State (Feature Interests)
+  const [selectedFeatures, setSelectedFeatures] = useState<string[]>([]);
+  const FEATURE_OPTIONS = [
+    { id: 'games', icon: '🎮', label: 'Bible & Cognitive Games', desc: 'Fun learning through interactive play' },
+    { id: 'devotionals', icon: '📺', label: 'Daily Video Devotionals', desc: 'Short videos to start each day with God' },
+    { id: 'quizzes', icon: '❓', label: 'Quizzes & Challenges', desc: 'Test knowledge and earn rewards' },
+    { id: 'reading', icon: '📚', label: 'Reading with Pictures & Highlighting', desc: 'Visual books with word-by-word narration' },
+    { id: 'audio', icon: '🎧', label: 'Audio Stories & Sound Effects', desc: 'Engaging narration with immersive audio' },
+    { id: 'avatar', icon: '👤', label: 'Custom Avatar Builder', desc: 'Earn coins and customize characters' },
+    { id: 'giving', icon: '💝', label: 'Teaching Generosity', desc: 'Learn about giving to those in need' },
+  ];
+  const MAX_FEATURES = 3;
+  
+  // Step 5 State (Voice Selection)
   const [availableVoices, setAvailableVoices] = useState<any[]>([]);
   const [selectedVoiceId, setSelectedVoiceId] = useState<string | null>(null);
   const [loadingVoices, setLoadingVoices] = useState(false);
@@ -834,8 +847,31 @@ const OnboardingPage: React.FC = () => {
     activityTrackingService.trackOnboardingEvent('step_3_complete', { step: 3, priorities: selectedPriorities });
     // Save priorities to localStorage for personalization
     localStorage.setItem('godlykids_discipleship_priorities', JSON.stringify(selectedPriorities));
-    // Go to voice selection step
+    // Go to features step
     setStep(4);
+  };
+  
+  const toggleFeature = (id: string) => {
+    setSelectedFeatures(prev => {
+      if (prev.includes(id)) {
+        return prev.filter(f => f !== id);
+      }
+      // Only allow up to MAX_FEATURES selections
+      if (prev.length >= MAX_FEATURES) {
+        return prev;
+      }
+      return [...prev, id];
+    });
+  };
+  
+  const handleStep4Continue = () => {
+    playClick();
+    // Track feature preferences
+    activityTrackingService.trackOnboardingEvent('step_4_complete', { step: 4, features: selectedFeatures });
+    // Save features to localStorage for personalization
+    localStorage.setItem('godlykids_feature_interests', JSON.stringify(selectedFeatures));
+    // Go to voice selection step
+    setStep(5);
   };
   
   // Free tier allows only 1 kid account, but let users add all kids during onboarding
@@ -874,9 +910,9 @@ const OnboardingPage: React.FC = () => {
     }
   };
   
-  // Load available voices for step 4 (Voice Selection)
+  // Load available voices for step 5 (Voice Selection)
   useEffect(() => {
-    if (step === 4) {
+    if (step === 5) {
       setLoadingVoices(true);
       ApiService.getVoices()
         .then(voices => {
@@ -899,7 +935,7 @@ const OnboardingPage: React.FC = () => {
     }
   }, [step]);
   
-  const handleStep4Continue = () => {
+  const handleStep5Continue = () => {
     if (!selectedVoiceId) return;
     playClick();
     // Stop any playing preview
@@ -913,11 +949,11 @@ const OnboardingPage: React.FC = () => {
     unlockVoice(selectedVoiceId); // Unlock the selected voice for free
     console.log(`🎤 Onboarding: Unlocked voice ${selectedVoiceId}`);
     
-    // Track step 4 completion
-    activityTrackingService.trackOnboardingEvent('step_4_complete', { step: 4, voiceSelected: selectedVoiceId });
+    // Track step 5 completion
+    activityTrackingService.trackOnboardingEvent('step_5_complete', { step: 5, voiceSelected: selectedVoiceId });
     
     // Go to account creation step
-    setStep(5);
+    setStep(6);
   };
   
   // Account creation state for step 5
@@ -1382,7 +1418,7 @@ const OnboardingPage: React.FC = () => {
   // --- RENDERERS ---
 
   const renderProgress = () => {
-    const totalSteps = 5; // Parent, Family, Goals, Voice, Account
+    const totalSteps = 6; // Parent, Family, Goals, Features, Voice, Account
     return (
     <div className="w-full max-w-md px-6 mb-6">
        {/* Wood plank container for progress */}
@@ -1391,12 +1427,13 @@ const OnboardingPage: React.FC = () => {
          <div className="absolute inset-0 opacity-10" style={{backgroundImage: 'repeating-linear-gradient(90deg, transparent, transparent 25px, #3E1F07 25px, #3E1F07 27px)'}}></div>
          
          <div className="relative">
-           <div className="flex justify-between mb-3 text-[#5c2e0b] font-display font-bold text-[10px] uppercase tracking-wide">
+           <div className="flex justify-between mb-3 text-[#5c2e0b] font-display font-bold text-[8px] uppercase tracking-wide">
               <span className={step >= 1 ? "text-[#3E1F07]" : "opacity-40"}>Parent</span>
               <span className={step >= 2 ? "text-[#3E1F07]" : "opacity-40"}>Family</span>
               <span className={step >= 3 ? "text-[#3E1F07]" : "opacity-40"}>Goals</span>
-              <span className={step >= 4 ? "text-[#3E1F07]" : "opacity-40"}>Voice</span>
-              <span className={step >= 5 ? "text-[#3E1F07]" : "opacity-40"}>Account</span>
+              <span className={step >= 4 ? "text-[#3E1F07]" : "opacity-40"}>Features</span>
+              <span className={step >= 5 ? "text-[#3E1F07]" : "opacity-40"}>Voice</span>
+              <span className={step >= 6 ? "text-[#3E1F07]" : "opacity-40"}>Account</span>
            </div>
            <div className="h-4 bg-[#5c2e0b] rounded-full overflow-hidden border-2 border-[#3E1F07] shadow-inner">
               <div 
@@ -1732,8 +1769,87 @@ const OnboardingPage: React.FC = () => {
           </div>
         )}
 
-        {/* --- STEP 4: VOICE SELECTION --- */}
+        {/* --- STEP 4: FEATURE INTERESTS --- */}
         {step === 4 && (
+          <div className="w-full max-w-md px-6 animate-in slide-in-from-right-10 duration-500 flex flex-col h-full">
+            <div className="text-center mb-4">
+              <div className="w-16 h-16 mx-auto mb-3 rounded-full bg-gradient-to-br from-[#FFD700] to-[#FFA500] flex items-center justify-center shadow-2xl border-4 border-[#8B4513]">
+                <span className="text-3xl">⭐</span>
+              </div>
+              <h2 className="text-xl font-bold text-white mb-1">
+                What Features Interest You Most?
+              </h2>
+              <p className="text-[#eecaa0] text-sm">
+                Select your <span className="text-[#FFD700] font-bold">top 3</span> favorites
+              </p>
+            </div>
+
+            {/* Feature Options */}
+            <div className="space-y-2 mb-4 max-h-[320px] overflow-y-auto flex-shrink-0 pr-1">
+              {FEATURE_OPTIONS.map((option) => {
+                const isSelected = selectedFeatures.includes(option.id);
+                const isDisabled = !isSelected && selectedFeatures.length >= MAX_FEATURES;
+                return (
+                  <button
+                    key={option.id}
+                    onClick={() => toggleFeature(option.id)}
+                    disabled={isDisabled}
+                    className={`w-full p-3 rounded-xl border-2 transition-all text-left ${
+                      isSelected
+                        ? 'bg-[#FFD700]/20 border-[#FFD700] shadow-lg'
+                        : isDisabled
+                        ? 'bg-[#3E1F07]/30 border-[#5c2e0b]/50 opacity-50'
+                        : 'bg-[#3E1F07]/50 border-[#5c2e0b] hover:border-[#FFD700]/50'
+                    }`}
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className={`w-10 h-10 rounded-full flex items-center justify-center border-2 flex-shrink-0 ${
+                        isSelected ? 'bg-[#FFD700]/30 border-[#FFD700]' : 'bg-[#5c2e0b] border-white/20'
+                      }`}>
+                        <span className="text-xl">{option.icon}</span>
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="text-white font-bold text-sm">{option.label}</div>
+                        <div className="text-[#eecaa0] text-xs mt-0.5 line-clamp-1">{option.desc}</div>
+                      </div>
+                      {isSelected ? (
+                        <div className="w-6 h-6 rounded-full bg-[#FFD700] flex items-center justify-center flex-shrink-0">
+                          <Check className="text-[#3E1F07]" size={16} />
+                        </div>
+                      ) : (
+                        <div className="w-6 h-6 rounded-full border-2 border-white/30 flex-shrink-0"></div>
+                      )}
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* Continue Button */}
+            <div className="mt-auto pt-4 pb-2 bg-gradient-to-t from-[#1a237e] via-[#1a237e] to-transparent -mx-6 px-6">
+              <p className="text-center text-[#eecaa0] text-sm mb-3">
+                {selectedFeatures.length === 0 ? (
+                  <span className="text-[#FFD700] animate-pulse">👆 Select your top 3 features</span>
+                ) : selectedFeatures.length < 3 ? (
+                  <span>{3 - selectedFeatures.length} more to go!</span>
+                ) : (
+                  <span className="text-[#4ade80]">✓ Perfect! You've selected 3</span>
+                )}
+              </p>
+              <WoodButton
+                fullWidth
+                onClick={handleStep4Continue}
+                disabled={selectedFeatures.length === 0}
+                className={`py-4 text-xl ${selectedFeatures.length === 0 ? 'opacity-40 grayscale' : ''}`}
+              >
+                {selectedFeatures.length > 0 ? `CONTINUE (${selectedFeatures.length}/3 selected)` : 'SELECT FEATURES'}
+              </WoodButton>
+            </div>
+          </div>
+        )}
+
+        {/* --- STEP 5: VOICE SELECTION --- */}
+        {step === 5 && (
           <div className="w-full max-w-md px-6 animate-in slide-in-from-right-10 duration-500 flex flex-col h-full">
             <div className="text-center mb-4">
               <div className="w-16 h-16 mx-auto mb-3 rounded-full bg-gradient-to-br from-[#FFD700] to-[#FFA500] flex items-center justify-center shadow-2xl border-4 border-[#8B4513]">
@@ -1804,7 +1920,7 @@ const OnboardingPage: React.FC = () => {
               )}
               <WoodButton
                 fullWidth
-                onClick={handleStep4Continue}
+                onClick={handleStep5Continue}
                 disabled={!selectedVoiceId}
                 className={`py-4 text-xl ${!selectedVoiceId ? 'opacity-40 grayscale' : 'animate-pulse'}`}
               >
@@ -1817,8 +1933,8 @@ const OnboardingPage: React.FC = () => {
           </div>
         )}
 
-        {/* --- STEP 5: ACCOUNT CREATION --- */}
-        {step === 5 && (
+        {/* --- STEP 6: ACCOUNT CREATION --- */}
+        {step === 6 && (
           <div className="w-full max-w-md px-6 animate-in slide-in-from-right-10 duration-500 flex flex-col h-full">
             {/* Header */}
             <div className="text-center mb-6">

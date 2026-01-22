@@ -679,7 +679,7 @@ const OnboardingPage: React.FC = () => {
   // Check if we should skip directly to paywall step (from tutorial - for subscription)
   const skipToPaywall = (location.state as any)?.skipToPaywall === true;
   
-  const [step, setStep] = useState<1 | 2 | 3 | 4>(skipToPaywall ? 4 : 1); // Steps: 1=Parent, 2=Family, 3=Voice Selection, 4=Unlock
+  const [step, setStep] = useState<1 | 2 | 3 | 4 | 5>(skipToPaywall ? 5 : 1); // Steps: 1=Parent, 2=Family, 3=Discipleship, 4=Voice, 5=Account
   const [isPurchasing, setIsPurchasing] = useState(false);
   const [isRestoring, setIsRestoring] = useState(false);
   const [purchaseError, setPurchaseError] = useState<string | null>(null);
@@ -701,7 +701,20 @@ const OnboardingPage: React.FC = () => {
   const [kidAge, setKidAge] = useState('');
   const [kidAvatar, setKidAvatar] = useState(FUNNY_HEADS[1]);
   
-  // Step 3 State (Voice Selection)
+  // Step 3 State (Discipleship Priorities)
+  const [selectedPriorities, setSelectedPriorities] = useState<string[]>([]);
+  const DISCIPLESHIP_OPTIONS = [
+    { id: 'bible-reading', icon: '📖', label: 'Learning to Read the Bible', desc: 'Building foundational reading skills with Scripture' },
+    { id: 'comprehension', icon: '💡', label: 'Understanding What They Read', desc: 'Deeper comprehension, not just memorization' },
+    { id: 'substance', icon: '✝️', label: 'Substance Over Entertainment', desc: 'Meaningful lessons, not just fun stories' },
+    { id: 'visual-learning', icon: '🎨', label: 'Visual & Interactive Lessons', desc: 'Engaging content that sticks' },
+    { id: 'real-teachers', icon: '👨‍🏫', label: 'Real-Life Teachers', desc: 'Authentic voices, not just cartoons' },
+    { id: 'scripture-memory', icon: '📝', label: 'Scripture Memory', desc: 'Hiding God\'s Word in their hearts' },
+    { id: 'prayer-life', icon: '🙏', label: 'Prayer & Devotion Habits', desc: 'Building a personal relationship with God' },
+    { id: 'character', icon: '💪', label: 'Character Development', desc: 'Christlike values and virtues' },
+  ];
+  
+  // Step 4 State (Voice Selection)
   const [availableVoices, setAvailableVoices] = useState<any[]>([]);
   const [selectedVoiceId, setSelectedVoiceId] = useState<string | null>(null);
   const [loadingVoices, setLoadingVoices] = useState(false);
@@ -803,8 +816,26 @@ const OnboardingPage: React.FC = () => {
     playClick();
     // Track step 2 completion with kids count
     activityTrackingService.trackOnboardingEvent('step_2_complete', { step: 2, kidsCount: kids.length });
-    // Go to voice selection step
+    // Go to discipleship priorities step
     setStep(3);
+  };
+  
+  const togglePriority = (id: string) => {
+    setSelectedPriorities(prev => 
+      prev.includes(id) 
+        ? prev.filter(p => p !== id)
+        : [...prev, id]
+    );
+  };
+  
+  const handleStep3Continue = () => {
+    playClick();
+    // Track discipleship preferences
+    activityTrackingService.trackOnboardingEvent('step_3_complete', { step: 3, priorities: selectedPriorities });
+    // Save priorities to localStorage for personalization
+    localStorage.setItem('godlykids_discipleship_priorities', JSON.stringify(selectedPriorities));
+    // Go to voice selection step
+    setStep(4);
   };
   
   // Free tier allows only 1 kid account, but let users add all kids during onboarding
@@ -843,9 +874,9 @@ const OnboardingPage: React.FC = () => {
     }
   };
   
-  // Load available voices for step 3
+  // Load available voices for step 4 (Voice Selection)
   useEffect(() => {
-    if (step === 3) {
+    if (step === 4) {
       setLoadingVoices(true);
       ApiService.getVoices()
         .then(voices => {
@@ -868,7 +899,7 @@ const OnboardingPage: React.FC = () => {
     }
   }, [step]);
   
-  const handleStep3Continue = () => {
+  const handleStep4Continue = () => {
     if (!selectedVoiceId) return;
     playClick();
     // Stop any playing preview
@@ -882,35 +913,35 @@ const OnboardingPage: React.FC = () => {
     unlockVoice(selectedVoiceId); // Unlock the selected voice for free
     console.log(`🎤 Onboarding: Unlocked voice ${selectedVoiceId}`);
     
-    // Track step 3 completion
-    activityTrackingService.trackOnboardingEvent('step_3_complete', { step: 3, voiceSelected: selectedVoiceId });
+    // Track step 4 completion
+    activityTrackingService.trackOnboardingEvent('step_4_complete', { step: 4, voiceSelected: selectedVoiceId });
     
     // Go to account creation step
-    setStep(4);
+    setStep(5);
   };
   
-  // Account creation state for step 4
+  // Account creation state for step 5
   const [accountEmail, setAccountEmail] = useState('');
   const [accountPassword, setAccountPassword] = useState('');
   const [showAccountPassword, setShowAccountPassword] = useState(false);
-  const [isCreatingAccountStep4, setIsCreatingAccountStep4] = useState(false);
-  const [accountStep4Error, setAccountStep4Error] = useState<string | null>(null);
+  const [isCreatingAccountStep5, setIsCreatingAccountStep5] = useState(false);
+  const [accountStep5Error, setAccountStep5Error] = useState<string | null>(null);
   
-  const handleStep4CreateAccount = async () => {
+  const handleStep5CreateAccount = async () => {
     if (!accountEmail.trim() || !accountPassword.trim()) return;
     
     // Basic validation
     if (!accountEmail.includes('@')) {
-      setAccountStep4Error('Please enter a valid email address');
+      setAccountStep5Error('Please enter a valid email address');
       return;
     }
     if (accountPassword.length < 6) {
-      setAccountStep4Error('Password must be at least 6 characters');
+      setAccountStep5Error('Password must be at least 6 characters');
       return;
     }
     
-    setIsCreatingAccountStep4(true);
-    setAccountStep4Error(null);
+    setIsCreatingAccountStep5(true);
+    setAccountStep5Error(null);
     
     try {
       // Use existing account creation logic
@@ -923,12 +954,12 @@ const OnboardingPage: React.FC = () => {
         activityTrackingService.resetOnboardingSession();
         navigate('/ready');
       } else {
-        setAccountStep4Error(result.error || 'Failed to create account');
+        setAccountStep5Error(result.error || 'Failed to create account');
       }
     } catch (error: any) {
-      setAccountStep4Error(error.message || 'Failed to create account');
+      setAccountStep5Error(error.message || 'Failed to create account');
     } finally {
-      setIsCreatingAccountStep4(false);
+      setIsCreatingAccountStep5(false);
     }
   };
   
@@ -1351,7 +1382,7 @@ const OnboardingPage: React.FC = () => {
   // --- RENDERERS ---
 
   const renderProgress = () => {
-    const totalSteps = 4; // Parent, Family, Voice Selection, Unlock
+    const totalSteps = 5; // Parent, Family, Goals, Voice, Account
     return (
     <div className="w-full max-w-md px-6 mb-6">
        {/* Wood plank container for progress */}
@@ -1360,11 +1391,12 @@ const OnboardingPage: React.FC = () => {
          <div className="absolute inset-0 opacity-10" style={{backgroundImage: 'repeating-linear-gradient(90deg, transparent, transparent 25px, #3E1F07 25px, #3E1F07 27px)'}}></div>
          
          <div className="relative">
-           <div className="flex justify-between mb-3 text-[#5c2e0b] font-display font-bold text-xs uppercase tracking-wide">
+           <div className="flex justify-between mb-3 text-[#5c2e0b] font-display font-bold text-[10px] uppercase tracking-wide">
               <span className={step >= 1 ? "text-[#3E1F07]" : "opacity-40"}>Parent</span>
               <span className={step >= 2 ? "text-[#3E1F07]" : "opacity-40"}>Family</span>
-              <span className={step >= 3 ? "text-[#3E1F07]" : "opacity-40"}>Voice</span>
-              <span className={step >= 4 ? "text-[#3E1F07]" : "opacity-40"}>Account</span>
+              <span className={step >= 3 ? "text-[#3E1F07]" : "opacity-40"}>Goals</span>
+              <span className={step >= 4 ? "text-[#3E1F07]" : "opacity-40"}>Voice</span>
+              <span className={step >= 5 ? "text-[#3E1F07]" : "opacity-40"}>Account</span>
            </div>
            <div className="h-4 bg-[#5c2e0b] rounded-full overflow-hidden border-2 border-[#3E1F07] shadow-inner">
               <div 
@@ -1630,8 +1662,71 @@ const OnboardingPage: React.FC = () => {
            </div>
         )}
 
-        {/* --- STEP 3: VOICE SELECTION --- */}
+        {/* --- STEP 3: DISCIPLESHIP GOALS --- */}
         {step === 3 && (
+          <div className="w-full max-w-md px-6 animate-in slide-in-from-right-10 duration-500 flex flex-col h-full">
+            <div className="text-center mb-4">
+              <div className="w-16 h-16 mx-auto mb-3 rounded-full bg-gradient-to-br from-[#FFD700] to-[#FFA500] flex items-center justify-center shadow-2xl border-4 border-[#8B4513]">
+                <span className="text-3xl">✝️</span>
+              </div>
+              <h2 className="text-xl font-bold text-white mb-1">
+                What's Important for Discipling Your Children?
+              </h2>
+              <p className="text-[#eecaa0] text-sm">
+                Select all that apply - we'll personalize their experience
+              </p>
+            </div>
+
+            {/* Discipleship Options Grid */}
+            <div className="space-y-2 mb-4 max-h-[320px] overflow-y-auto flex-shrink-0 pr-1">
+              {DISCIPLESHIP_OPTIONS.map((option) => (
+                <button
+                  key={option.id}
+                  onClick={() => togglePriority(option.id)}
+                  className={`w-full p-3 rounded-xl border-2 transition-all text-left ${
+                    selectedPriorities.includes(option.id)
+                      ? 'bg-[#FFD700]/20 border-[#FFD700] shadow-lg'
+                      : 'bg-[#3E1F07]/50 border-[#5c2e0b] hover:border-[#FFD700]/50'
+                  }`}
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-full bg-[#5c2e0b] flex items-center justify-center border-2 border-white/20 flex-shrink-0">
+                      <span className="text-xl">{option.icon}</span>
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="text-white font-bold text-sm">{option.label}</div>
+                      <div className="text-[#eecaa0] text-xs mt-0.5 line-clamp-1">{option.desc}</div>
+                    </div>
+                    {selectedPriorities.includes(option.id) ? (
+                      <Check className="text-[#FFD700] flex-shrink-0" size={22} />
+                    ) : (
+                      <div className="w-5 h-5 rounded-full border-2 border-white/30 flex-shrink-0"></div>
+                    )}
+                  </div>
+                </button>
+              ))}
+            </div>
+
+            {/* Continue Button */}
+            <div className="mt-auto pt-4 pb-2 bg-gradient-to-t from-[#1a237e] via-[#1a237e] to-transparent -mx-6 px-6">
+              {selectedPriorities.length === 0 && (
+                <p className="text-center text-[#FFD700]/70 text-sm mb-3">
+                  Select at least one to continue, or skip
+                </p>
+              )}
+              <WoodButton
+                fullWidth
+                onClick={handleStep3Continue}
+                className="py-4 text-xl"
+              >
+                {selectedPriorities.length > 0 ? `CONTINUE (${selectedPriorities.length} selected)` : 'SKIP FOR NOW'}
+              </WoodButton>
+            </div>
+          </div>
+        )}
+
+        {/* --- STEP 4: VOICE SELECTION --- */}
+        {step === 4 && (
           <div className="w-full max-w-md px-6 animate-in slide-in-from-right-10 duration-500 flex flex-col h-full">
             <div className="text-center mb-4">
               <div className="w-16 h-16 mx-auto mb-3 rounded-full bg-gradient-to-br from-[#FFD700] to-[#FFA500] flex items-center justify-center shadow-2xl border-4 border-[#8B4513]">
@@ -1702,7 +1797,7 @@ const OnboardingPage: React.FC = () => {
               )}
               <WoodButton
                 fullWidth
-                onClick={handleStep3Continue}
+                onClick={handleStep4Continue}
                 disabled={!selectedVoiceId}
                 className={`py-4 text-xl ${!selectedVoiceId ? 'opacity-40 grayscale' : 'animate-pulse'}`}
               >
@@ -1715,8 +1810,8 @@ const OnboardingPage: React.FC = () => {
           </div>
         )}
 
-        {/* --- STEP 4: ACCOUNT CREATION --- */}
-        {step === 4 && (
+        {/* --- STEP 5: ACCOUNT CREATION --- */}
+        {step === 5 && (
           <div className="w-full max-w-md px-6 animate-in slide-in-from-right-10 duration-500 flex flex-col h-full">
             {/* Header */}
             <div className="text-center mb-6">
@@ -1762,9 +1857,9 @@ const OnboardingPage: React.FC = () => {
               </div>
               
               {/* Error Message */}
-              {accountStep4Error && (
+              {accountStep5Error && (
                 <div className="bg-red-500/20 border border-red-500/50 text-red-200 text-sm px-4 py-2 rounded-lg mb-4">
-                  {accountStep4Error}
+                  {accountStep5Error}
                 </div>
               )}
               
@@ -1772,11 +1867,11 @@ const OnboardingPage: React.FC = () => {
               <WoodButton
                 fullWidth
                 variant="gold"
-                onClick={handleStep4CreateAccount}
-                disabled={isCreatingAccountStep4 || !accountEmail.trim() || !accountPassword.trim()}
+                onClick={handleStep5CreateAccount}
+                disabled={isCreatingAccountStep5 || !accountEmail.trim() || !accountPassword.trim()}
                 className="py-4 text-xl"
               >
-                {isCreatingAccountStep4 ? (
+                {isCreatingAccountStep5 ? (
                   <span className="flex items-center justify-center gap-2">
                     <Loader2 className="w-5 h-5 animate-spin" />
                     Creating...

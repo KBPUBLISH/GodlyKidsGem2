@@ -1190,4 +1190,73 @@ router.get('/tutorial', async (req, res) => {
     }
 });
 
+/**
+ * GET /api/analytics/onboarding/preferences
+ * Get aggregated data on user-selected goals and features from onboarding
+ */
+router.get('/onboarding/preferences', async (req, res) => {
+    try {
+        const days = parseInt(req.query.days) || 30;
+        const startDate = new Date();
+        startDate.setDate(startDate.getDate() - days);
+        
+        // Get all AppUsers created in the time range with goals or features
+        const appUsers = await AppUser.find({
+            createdAt: { $gte: startDate },
+            $or: [
+                { discipleshipGoals: { $exists: true, $ne: [] } },
+                { featureInterests: { $exists: true, $ne: [] } }
+            ]
+        }).select('discipleshipGoals featureInterests createdAt').lean();
+        
+        // Aggregate goals
+        const goalCounts = {};
+        const featureCounts = {};
+        let usersWithGoals = 0;
+        let usersWithFeatures = 0;
+        
+        appUsers.forEach(user => {
+            if (user.discipleshipGoals && user.discipleshipGoals.length > 0) {
+                usersWithGoals++;
+                user.discipleshipGoals.forEach(goal => {
+                    goalCounts[goal] = (goalCounts[goal] || 0) + 1;
+                });
+            }
+            if (user.featureInterests && user.featureInterests.length > 0) {
+                usersWithFeatures++;
+                user.featureInterests.forEach(feature => {
+                    featureCounts[feature] = (featureCounts[feature] || 0) + 1;
+                });
+            }
+        });
+        
+        // Sort by count and create arrays
+        const sortedGoals = Object.entries(goalCounts)
+            .map(([goal, count]) => ({ goal, count, percentage: usersWithGoals > 0 ? Math.round((count / usersWithGoals) * 100) : 0 }))
+            .sort((a, b) => b.count - a.count);
+            
+        const sortedFeatures = Object.entries(featureCounts)
+            .map(([feature, count]) => ({ feature, count, percentage: usersWithFeatures > 0 ? Math.round((count / usersWithFeatures) * 100) : 0 }))
+            .sort((a, b) => b.count - a.count);
+        
+        res.json({
+            success: true,
+            period: { days, startDate: startDate.toISOString() },
+            summary: {
+                totalUsers: appUsers.length,
+                usersWithGoals,
+                usersWithFeatures
+            },
+            goals: sortedGoals,
+            features: sortedFeatures
+        });
+    } catch (error) {
+        console.error('Error fetching onboarding preferences:', error);
+        res.status(500).json({
+            success: false,
+            error: error.message
+        });
+    }
+});
+
 module.exports = router;

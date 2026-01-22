@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { 
     TrendingUp, Users, UserPlus, Crown, XCircle, RefreshCw,
     ChevronRight, Calendar, BarChart3, ArrowDownRight, ArrowUpRight,
-    BookOpen, AlertTriangle, CheckCircle
+    BookOpen, AlertTriangle, CheckCircle, Target, Sparkles
 } from 'lucide-react';
 
 interface FunnelStep {
@@ -43,6 +43,30 @@ interface OnboardingData {
     planPreference: { annual: number; monthly: number };
 }
 
+interface GoalData {
+    goal: string;
+    count: number;
+    percentage: number;
+}
+
+interface FeatureData {
+    feature: string;
+    count: number;
+    percentage: number;
+}
+
+interface PreferencesData {
+    success: boolean;
+    period: { days: number; startDate: string };
+    summary: {
+        totalUsers: number;
+        usersWithGoals: number;
+        usersWithFeatures: number;
+    };
+    goals: GoalData[];
+    features: FeatureData[];
+}
+
 interface TutorialData {
     success: boolean;
     period: { days: number; startDate: string };
@@ -74,6 +98,7 @@ const API_BASE = getApiBase();
 const OnboardingAnalytics: React.FC = () => {
     const [data, setData] = useState<OnboardingData | null>(null);
     const [tutorialData, setTutorialData] = useState<TutorialData | null>(null);
+    const [preferencesData, setPreferencesData] = useState<PreferencesData | null>(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [days, setDays] = useState(7);
@@ -83,20 +108,25 @@ const OnboardingAnalytics: React.FC = () => {
         setLoading(true);
         setError(null);
         try {
-            // Fetch both onboarding and tutorial data in parallel
-            const [onboardingRes, tutorialRes] = await Promise.all([
+            // Fetch onboarding, tutorial, and preferences data in parallel
+            const [onboardingRes, tutorialRes, preferencesRes] = await Promise.all([
                 fetch(`${API_BASE}/analytics/onboarding?days=${days}`),
                 fetch(`${API_BASE}/analytics/tutorial?days=${days}`),
+                fetch(`${API_BASE}/analytics/onboarding/preferences?days=${days}`),
             ]);
             
             const onboardingResult = await onboardingRes.json();
             const tutorialResult = await tutorialRes.json();
+            const preferencesResult = await preferencesRes.json();
             
             if (onboardingResult.success) {
                 setData(onboardingResult);
             }
             if (tutorialResult.success) {
                 setTutorialData(tutorialResult);
+            }
+            if (preferencesResult.success) {
+                setPreferencesData(preferencesResult);
             }
             
             if (!onboardingResult.success && !tutorialResult.success) {
@@ -415,6 +445,101 @@ const OnboardingAnalytics: React.FC = () => {
                     </div>
                 </div>
             </div>
+
+            {/* User Preferences: Goals & Features */}
+            {preferencesData && (preferencesData.goals.length > 0 || preferencesData.features.length > 0) && (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {/* Discipleship Goals */}
+                <div className="bg-white rounded-xl border border-gray-100 p-6 shadow-sm">
+                    <h3 className="text-lg font-semibold text-gray-800 mb-4 flex items-center gap-2">
+                        <Target className="w-5 h-5 text-purple-600" />
+                        Discipleship Goals
+                        <span className="text-xs font-normal text-gray-500 ml-auto">
+                            {preferencesData.summary.usersWithGoals} users
+                        </span>
+                    </h3>
+                    {preferencesData.goals.length > 0 ? (
+                        <div className="space-y-3">
+                            {preferencesData.goals.map((item, idx) => (
+                                <div key={item.goal}>
+                                    <div className="flex justify-between items-center mb-1">
+                                        <span className="text-sm text-gray-700 flex items-center gap-2">
+                                            <span className={`w-5 h-5 rounded-full flex items-center justify-center text-xs font-bold ${
+                                                idx === 0 ? 'bg-yellow-100 text-yellow-700' :
+                                                idx === 1 ? 'bg-gray-100 text-gray-600' :
+                                                idx === 2 ? 'bg-orange-100 text-orange-700' :
+                                                'bg-gray-50 text-gray-500'
+                                            }`}>
+                                                {idx + 1}
+                                            </span>
+                                            <span className="truncate max-w-[180px]" title={item.goal}>
+                                                {item.goal}
+                                            </span>
+                                        </span>
+                                        <span className="text-sm font-semibold text-purple-600">
+                                            {item.count} ({item.percentage}%)
+                                        </span>
+                                    </div>
+                                    <div className="bg-gray-100 rounded-full h-2 overflow-hidden">
+                                        <div 
+                                            className="h-full bg-gradient-to-r from-purple-400 to-purple-600 rounded-full transition-all duration-500"
+                                            style={{ width: `${item.percentage}%` }}
+                                        />
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    ) : (
+                        <p className="text-gray-500 text-sm">No goal data collected yet</p>
+                    )}
+                </div>
+
+                {/* Feature Interests */}
+                <div className="bg-white rounded-xl border border-gray-100 p-6 shadow-sm">
+                    <h3 className="text-lg font-semibold text-gray-800 mb-4 flex items-center gap-2">
+                        <Sparkles className="w-5 h-5 text-amber-500" />
+                        Feature Interests
+                        <span className="text-xs font-normal text-gray-500 ml-auto">
+                            {preferencesData.summary.usersWithFeatures} users
+                        </span>
+                    </h3>
+                    {preferencesData.features.length > 0 ? (
+                        <div className="space-y-3">
+                            {preferencesData.features.map((item, idx) => (
+                                <div key={item.feature}>
+                                    <div className="flex justify-between items-center mb-1">
+                                        <span className="text-sm text-gray-700 flex items-center gap-2">
+                                            <span className={`w-5 h-5 rounded-full flex items-center justify-center text-xs font-bold ${
+                                                idx === 0 ? 'bg-yellow-100 text-yellow-700' :
+                                                idx === 1 ? 'bg-gray-100 text-gray-600' :
+                                                idx === 2 ? 'bg-orange-100 text-orange-700' :
+                                                'bg-gray-50 text-gray-500'
+                                            }`}>
+                                                {idx + 1}
+                                            </span>
+                                            <span className="truncate max-w-[180px]" title={item.feature}>
+                                                {item.feature}
+                                            </span>
+                                        </span>
+                                        <span className="text-sm font-semibold text-amber-600">
+                                            {item.count} ({item.percentage}%)
+                                        </span>
+                                    </div>
+                                    <div className="bg-gray-100 rounded-full h-2 overflow-hidden">
+                                        <div 
+                                            className="h-full bg-gradient-to-r from-amber-400 to-amber-600 rounded-full transition-all duration-500"
+                                            style={{ width: `${item.percentage}%` }}
+                                        />
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    ) : (
+                        <p className="text-gray-500 text-sm">No feature data collected yet</p>
+                    )}
+                </div>
+            </div>
+            )}
             </>
             )}
 

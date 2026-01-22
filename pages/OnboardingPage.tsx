@@ -1716,16 +1716,17 @@ const OnboardingPage: React.FC = () => {
             {/* Continue Button */}
             <div className="mt-auto pt-4 pb-2 bg-gradient-to-t from-[#1a237e] via-[#1a237e] to-transparent -mx-6 px-6">
               {selectedPriorities.length === 0 && (
-                <p className="text-center text-[#FFD700]/70 text-sm mb-3">
-                  Select at least one to continue, or skip
+                <p className="text-center text-[#FFD700] text-sm mb-3 animate-pulse">
+                  👆 Select at least one to continue
                 </p>
               )}
               <WoodButton
                 fullWidth
                 onClick={handleStep3Continue}
-                className="py-4 text-xl"
+                disabled={selectedPriorities.length === 0}
+                className={`py-4 text-xl ${selectedPriorities.length === 0 ? 'opacity-40 grayscale' : ''}`}
               >
-                {selectedPriorities.length > 0 ? `CONTINUE (${selectedPriorities.length} selected)` : 'SKIP FOR NOW'}
+                {selectedPriorities.length > 0 ? `CONTINUE (${selectedPriorities.length} selected)` : 'SELECT A GOAL'}
               </WoodButton>
             </div>
           </div>

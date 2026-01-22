@@ -563,33 +563,13 @@ const OnboardingTutorial: React.FC = () => {
         return null;
 
       case 'paywall':
-        return (
-          <TutorialSpotlight
-            title=""
-            description=""
-            isVisible={true}
-            popupPosition="center"
-            customContent={
-              <PaywallContent 
-                onSubscribe={() => {
-                  // Check if user already has an account
-                  const userEmail = localStorage.getItem('godlykids_user_email');
-                  const hasAccount = !!userEmail;
-                  
-                  if (hasAccount) {
-                    // User has account - go straight to payment-only paywall
-                    navigate('/paywall', { state: { fromTutorial: true, hideCloseButton: true } });
-                  } else {
-                    // No account - go to onboarding to create account first (then paywall)
-                    navigate('/onboarding', { state: { skipToPaywall: true } });
-                  }
-                  completeTutorial();
-                }}
-              />
-            }
-            requiresElementClick={false}
-          />
-        );
+        // Navigate to the full paywall page instead of showing inline popup
+        // Use a small timeout to ensure the tutorial state is properly cleaned up
+        setTimeout(() => {
+          completeTutorial();
+          navigate('/paywall', { state: { fromTutorial: true, hideCloseButton: true } });
+        }, 100);
+        return null;
 
       default:
         return null;
@@ -665,51 +645,6 @@ const ReviewPromptContent: React.FC<{ onNext: () => void }> = ({ onNext }) => {
         disabled={isSubmitting}
       >
         {isSubmitting ? 'Opening...' : 'Leave a Review ⭐'}
-      </WoodButton>
-    </div>
-  );
-};
-
-// Paywall content for tutorial - HARD PAYWALL (subscription required)
-const PaywallContent: React.FC<{ onSubscribe: () => void }> = ({ onSubscribe }) => {
-  return (
-    <div className="text-center">
-      {/* One Time Offer Badge */}
-      <div className="bg-red-500 text-white text-xs font-bold px-4 py-1 rounded-full mb-3 inline-block animate-pulse">
-        ⚡ ONE TIME OFFER ⚡
-      </div>
-      
-      <div className="mb-3">
-        <span className="text-4xl">🎉</span>
-      </div>
-      <h3 className="text-[#FFD700] font-display font-bold text-2xl mb-2">
-        Start Your Adventure!
-      </h3>
-      <p className="text-white/90 text-sm leading-relaxed mb-2">
-        Start Free 14 Day Adventure
-      </p>
-      
-      <div className="bg-white/10 rounded-xl p-4 mb-3">
-        <p className="text-[#FFD700] font-bold text-3xl mb-1">
-          $3.33<span className="text-lg">/mo</span>
-        </p>
-        <p className="text-white/70 text-sm">
-          with annual plan
-        </p>
-        <div className="inline-block bg-red-500 text-white text-xs font-bold px-3 py-1 rounded-full mt-2">
-          50% OFF
-        </div>
-      </div>
-      
-      {/* 10% Proceeds Info */}
-      <div className="bg-pink-500/20 border border-pink-400/30 rounded-lg px-3 py-2 mb-4">
-        <p className="text-pink-200 text-xs flex items-center justify-center gap-1">
-          💝 <span className="font-semibold">10% of proceeds</span> goes towards our Giving Feature
-        </p>
-      </div>
-      
-      <WoodButton variant="gold" onClick={onSubscribe} className="w-full py-4">
-        Start Free Trial
       </WoodButton>
     </div>
   );

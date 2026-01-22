@@ -1651,12 +1651,18 @@ const OnboardingPage: React.FC = () => {
               )}
 
               <div className="mt-auto">
+                 {kids.length === 0 && (
+                   <p className="text-center text-[#FFD700] text-sm mb-3 animate-pulse">
+                     👆 Add at least one child to continue
+                   </p>
+                 )}
                  <WoodButton 
                     fullWidth 
                     onClick={handleStep2Continue}
-                    className="py-4 text-xl"
+                    disabled={kids.length === 0}
+                    className={`py-4 text-xl ${kids.length === 0 ? 'opacity-40 grayscale' : ''}`}
                  >
-                    {kids.length > 0 ? "CONTINUE" : "SKIP FOR NOW"}
+                    {kids.length > 0 ? "CONTINUE" : "ADD A CHILD FIRST"}
                  </WoodButton>
               </div>
            </div>

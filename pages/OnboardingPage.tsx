@@ -1003,7 +1003,9 @@ const OnboardingPage: React.FC = () => {
   // Shared account creation logic
   const handleCreateAccountLogic = async (email: string, password: string): Promise<{ success: boolean; error?: string }> => {
     try {
-      const response = await fetch(`${API_BASE_URL}/auth/register`, {
+      // Normalize URL - API_BASE_URL may end with /api/ so use auth/register without leading slash
+      const baseUrl = API_BASE_URL.replace(/\/+$/, ''); // Remove trailing slashes
+      const response = await fetch(`${baseUrl}/auth/register`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

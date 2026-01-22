@@ -586,25 +586,31 @@ router.get('/onboarding', async (req, res) => {
         });
         
         // Calculate conversion rates
+        // New 6-step onboarding flow:
+        // 1. Parent Profile -> 2. Family/Kids -> 3. Discipleship Goals -> 4. Feature Interests -> 5. Voice Selection -> 6. Account Creation
         const started = eventCounts['onboarding_started'] || 0;
-        const step1 = eventCounts['step_1_complete'] || 0;
-        const step2 = eventCounts['step_2_complete'] || 0;
-        const step3 = eventCounts['step_3_complete'] || 0;
-        const paywallViewed = eventCounts['step_4_viewed'] || 0;
+        const step1 = eventCounts['step_1_complete'] || 0;  // Parent profile
+        const step2 = eventCounts['step_2_complete'] || 0;  // Family/Kids
+        const step3 = eventCounts['step_3_complete'] || 0;  // Discipleship Goals (NEW)
+        const step4 = eventCounts['step_4_complete'] || 0;  // Feature Interests (NEW)
+        const step5 = eventCounts['step_5_complete'] || 0;  // Voice Selection (was step 3)
+        const step6 = eventCounts['step_6_complete'] || 0;  // Account Creation (NEW)
+        const accountCreated = eventCounts['account_created'] || 0;
         const subscribeClicked = eventCounts['subscribe_clicked'] || 0;
         const subscriptionStarted = eventCounts['subscription_started'] || 0;
         const trialStarted = eventCounts['trial_started'] || 0;
         const skipped = eventCounts['skip_clicked'] || 0;
         const completed = eventCounts['onboarding_complete'] || 0;
         
-        // Build funnel data
+        // Build funnel data - New 6-step flow
         const funnel = [
             { step: 'Started', count: started, rate: 100 },
-            { step: 'Step 1 (Welcome)', count: step1, rate: started > 0 ? Math.round((step1 / started) * 100) : 0 },
-            { step: 'Step 2 (Kids)', count: step2, rate: started > 0 ? Math.round((step2 / started) * 100) : 0 },
-            { step: 'Step 3 (Voice)', count: step3, rate: started > 0 ? Math.round((step3 / started) * 100) : 0 },
-            { step: 'Paywall Viewed', count: paywallViewed, rate: started > 0 ? Math.round((paywallViewed / started) * 100) : 0 },
-            { step: 'Subscribe Clicked', count: subscribeClicked, rate: started > 0 ? Math.round((subscribeClicked / started) * 100) : 0 },
+            { step: 'Step 1 (Parent)', count: step1, rate: started > 0 ? Math.round((step1 / started) * 100) : 0 },
+            { step: 'Step 2 (Family)', count: step2, rate: started > 0 ? Math.round((step2 / started) * 100) : 0 },
+            { step: 'Step 3 (Goals)', count: step3, rate: started > 0 ? Math.round((step3 / started) * 100) : 0 },
+            { step: 'Step 4 (Features)', count: step4, rate: started > 0 ? Math.round((step4 / started) * 100) : 0 },
+            { step: 'Step 5 (Voice)', count: step5, rate: started > 0 ? Math.round((step5 / started) * 100) : 0 },
+            { step: 'Step 6 (Account)', count: step6 || accountCreated, rate: started > 0 ? Math.round(((step6 || accountCreated) / started) * 100) : 0 },
             { step: 'Subscribed', count: subscriptionStarted + trialStarted, rate: started > 0 ? Math.round(((subscriptionStarted + trialStarted) / started) * 100) : 0 },
         ];
         

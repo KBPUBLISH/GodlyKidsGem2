@@ -11,7 +11,9 @@
  * - Tracks purchases server-side for better ROAS reporting
  */
 
-const API_BASE_URL = (import.meta as any).env?.VITE_API_BASE_URL || 'https://backendgk2-0.onrender.com';
+// Normalize API base URL - remove trailing /api or slashes to prevent double /api//api/
+const rawApiBase = (import.meta as any).env?.VITE_API_BASE_URL || 'https://backendgk2-0.onrender.com';
+const API_BASE_URL = rawApiBase.replace(/\/api\/?$/, '').replace(/\/+$/, '');
 
 // Storage keys
 const STORAGE_KEYS = {

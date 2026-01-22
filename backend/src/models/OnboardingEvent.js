@@ -18,10 +18,13 @@ const onboardingEventSchema = new mongoose.Schema({
         required: true,
         enum: [
             'onboarding_started',
-            'step_1_complete',      // Welcome/intro
-            'step_2_complete',      // Add kids
-            'step_3_complete',      // Voice selection
-            'step_4_viewed',        // Paywall viewed
+            'step_1_complete',      // Parent profile
+            'step_2_complete',      // Family/kids
+            'step_3_complete',      // Discipleship goals
+            'step_4_complete',      // Feature interests
+            'step_5_complete',      // Voice selection
+            'step_6_complete',      // Account creation
+            'step_4_viewed',        // Paywall viewed (legacy)
             'plan_selected',        // User selected a plan
             'create_account_clicked',
             'account_created',
@@ -41,6 +44,9 @@ const onboardingEventSchema = new mongoose.Schema({
         planType: String,           // 'annual' | 'monthly'
         kidsCount: Number,
         voiceSelected: String,
+        priorities: [String],       // Discipleship goals selected
+        features: [String],         // Feature interests selected
+        email: String,              // Email for account creation
         platform: String,
         referrer: String,
     },

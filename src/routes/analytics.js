@@ -512,7 +512,10 @@ router.post('/onboarding/event', async (req, res) => {
     try {
         const { userId, sessionId, event, metadata } = req.body;
         
+        console.log(`📊 Onboarding event received: ${event} for user ${userId}`, { sessionId, metadata });
+        
         if (!userId || !event) {
+            console.log(`📊 Onboarding event REJECTED: missing userId or event`);
             return res.status(400).json({ 
                 success: false, 
                 message: 'userId and event are required' 
@@ -528,11 +531,14 @@ router.post('/onboarding/event', async (req, res) => {
         
         await onboardingEvent.save();
         
-        console.log(`📊 Onboarding event: ${event} for user ${userId}`);
+        console.log(`📊 Onboarding event SAVED: ${event} for user ${userId}`);
         
         res.json({ success: true });
     } catch (error) {
-        console.error('Onboarding event tracking error:', error);
+        console.error('📊 Onboarding event ERROR:', error.message);
+        if (error.name === 'ValidationError') {
+            console.error('📊 Validation details:', error.errors);
+        }
         res.status(500).json({ 
             success: false, 
             message: 'Failed to track event',

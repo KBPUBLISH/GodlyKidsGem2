@@ -572,8 +572,10 @@ class ActivityTrackingService {
       const user = authService.getUser();
       const userId = user?.email || user?._id || localStorage.getItem('godlykids_device_id') || `anon_${Date.now()}`;
       
-      const API_BASE = (import.meta as any).env?.VITE_API_BASE_URL || 'https://backendgk2-0.onrender.com';
-      const apiUrl = API_BASE.endsWith('/api') ? API_BASE : `${API_BASE}/api`;
+      // Normalize API URL - remove trailing slash and /api to avoid double /api//api
+      let API_BASE = (import.meta as any).env?.VITE_API_BASE_URL || 'https://backendgk2-0.onrender.com';
+      API_BASE = API_BASE.replace(/\/+$/, '').replace(/\/api$/, '');
+      const apiUrl = `${API_BASE}/api`;
       
       const platform = (window as any).__GK_IS_DESPIA__ ? 'ios' : 'web';
       
@@ -654,8 +656,10 @@ class ActivityTrackingService {
       const user = authService.getUser();
       const userId = user?.email || user?._id || localStorage.getItem('godlykids_device_id') || `anon_${Date.now()}`;
       
-      const API_BASE = (import.meta as any).env?.VITE_API_BASE_URL || 'https://backendgk2-0.onrender.com';
-      const apiUrl = API_BASE.endsWith('/api') ? API_BASE : `${API_BASE}/api`;
+      // Normalize API URL - remove trailing slash and /api to avoid double /api//api
+      let API_BASE = (import.meta as any).env?.VITE_API_BASE_URL || 'https://backendgk2-0.onrender.com';
+      API_BASE = API_BASE.replace(/\/+$/, '').replace(/\/api$/, '');
+      const apiUrl = `${API_BASE}/api`;
       
       const platform = (window as any).__GK_IS_DESPIA__ ? 'ios' : 'web';
       

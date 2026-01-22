@@ -800,6 +800,37 @@ router.get('/content', async (req, res) => {
                 .select('title author coverImage type status viewCount playCount likeCount favoriteCount items')
                 .lean();
             
+            // Get listening time aggregation for all playlists
+            const listeningTimeMatch = startDate 
+                ? { contentType: 'episode', playedAt: { $gte: startDate }, durationSeconds: { $gt: 0 } }
+                : { contentType: 'episode', durationSeconds: { $gt: 0 } };
+            
+            const listeningTimeAgg = await PlayEvent.aggregate([
+                { $match: listeningTimeMatch },
+                {
+                    $group: {
+                        _id: '$playlistId',
+                        totalListeningSeconds: { $sum: '$durationSeconds' },
+                        listeningSessions: { $sum: 1 },
+                        avgListeningSeconds: { $avg: '$durationSeconds' },
+                        avgCompletionPercent: { $avg: '$completionPercent' },
+                    }
+                }
+            ]);
+            
+            // Create a map for listening time data
+            const listeningTimeMap = new Map();
+            listeningTimeAgg.forEach(e => {
+                if (e._id) {
+                    listeningTimeMap.set(e._id.toString(), {
+                        totalListeningSeconds: Math.round(e.totalListeningSeconds || 0),
+                        listeningSessions: e.listeningSessions || 0,
+                        avgListeningSeconds: Math.round(e.avgListeningSeconds || 0),
+                        avgCompletionPercent: Math.round(e.avgCompletionPercent || 0),
+                    });
+                }
+            });
+            
             if (startDate) {
                 // Get play events for playlists and episodes
                 const playlistPlayEvents = await PlayEvent.aggregate([
@@ -825,6 +856,7 @@ router.get('/content', async (req, res) => {
                 
                 results.playlists = playlists.map(playlist => {
                     const playCount = playCountMap.get(playlist._id.toString()) || 0;
+                    const listeningData = listeningTimeMap.get(playlist._id.toString()) || {};
                     return {
                         ...playlist,
                         viewCount: playCount,
@@ -832,14 +864,27 @@ router.get('/content', async (req, res) => {
                         itemCount: playlist.items?.length || 0,
                         likeCount: 0,
                         favoriteCount: 0,
+                        // Listening time metrics
+                        totalListeningSeconds: listeningData.totalListeningSeconds || 0,
+                        listeningSessions: listeningData.listeningSessions || 0,
+                        avgListeningSeconds: listeningData.avgListeningSeconds || 0,
+                        avgCompletionPercent: listeningData.avgCompletionPercent || 0,
                     };
                 });
             } else {
-                // All time - use stored counts
-                results.playlists = playlists.map(p => ({
-                    ...p,
-                    itemCount: p.items?.length || 0,
-                }));
+                // All time - use stored counts + listening time data
+                results.playlists = playlists.map(p => {
+                    const listeningData = listeningTimeMap.get(p._id.toString()) || {};
+                    return {
+                        ...p,
+                        itemCount: p.items?.length || 0,
+                        // Listening time metrics
+                        totalListeningSeconds: listeningData.totalListeningSeconds || 0,
+                        listeningSessions: listeningData.listeningSessions || 0,
+                        avgListeningSeconds: listeningData.avgListeningSeconds || 0,
+                        avgCompletionPercent: listeningData.avgCompletionPercent || 0,
+                    };
+                });
             }
         }
         

@@ -1365,7 +1365,7 @@ const OnboardingPage: React.FC = () => {
       console.log('🛒 This will open the Apple subscription sheet...');
       
       // Facebook Pixel - Track checkout initiation (parent-gated)
-      const price = selectedPlan === 'annual' ? 49.99 : 9.99;
+      const price = selectedPlan === 'annual' ? 39.99 : 5.99;
       facebookPixelService.trackInitiateCheckout(selectedPlan, price);
       
       // Use quick mode - this triggers the Apple sheet and returns quickly
@@ -1386,7 +1386,7 @@ const OnboardingPage: React.FC = () => {
         setIsPurchasing(false);
         
         // Facebook Pixel - Track successful purchase (parent-gated)
-        const purchasePrice = selectedPlan === 'annual' ? 49.99 : 9.99;
+        const purchasePrice = selectedPlan === 'annual' ? 39.99 : 5.99;
         facebookPixelService.trackPurchase(selectedPlan, purchasePrice);
         facebookPixelService.trackSubscribe(selectedPlan, purchasePrice);
         

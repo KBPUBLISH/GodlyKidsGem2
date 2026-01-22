@@ -127,7 +127,7 @@ const PaywallPage: React.FC = () => {
     setError(null);
     
     // Facebook Pixel - Track checkout initiation
-    const price = selectedPlan === 'annual' ? 49.99 : 9.99;
+    const price = selectedPlan === 'annual' ? 39.99 : 5.99;
     facebookPixelService.trackInitiateCheckout(selectedPlan, price);
 
     try {

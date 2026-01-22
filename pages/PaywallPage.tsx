@@ -107,6 +107,69 @@ const PaywallPage: React.FC = () => {
       navigate('/home');
     }
   }, [isPremium, navigate, subscribe]);
+  
+  // Listen for premium status changes (from webhook confirmation after purchase)
+  // This handles the case where purchase polling timed out but webhook arrives later
+  useEffect(() => {
+    const handlePremiumChange = (event: CustomEvent) => {
+      console.log('📱 Premium status changed on paywall:', event.detail);
+      if (event.detail?.isPremium) {
+        console.log('✅ Premium confirmed via event - navigating to home');
+        subscribe();
+        navigate('/home');
+      }
+    };
+    
+    window.addEventListener('revenuecat:premiumChanged' as any, handlePremiumChange);
+    
+    // Also set up a background poll if we have a "processing" error
+    // This continues checking even after the initial 30s timeout
+    let backgroundPollInterval: ReturnType<typeof setInterval> | null = null;
+    
+    if (error && error.includes('processing')) {
+      console.log('🔄 Starting background poll for purchase confirmation...');
+      const apiBaseUrl = getApiBaseUrl();
+      const userId = localStorage.getItem('godlykids_device_id') || 
+                     localStorage.getItem('godlykids_user_email') || 
+                     'anonymous';
+      
+      backgroundPollInterval = setInterval(async () => {
+        try {
+          // Check localStorage first
+          const localPremium = localStorage.getItem('godlykids_premium') === 'true';
+          if (localPremium) {
+            console.log('✅ Premium found in background poll (localStorage)');
+            clearInterval(backgroundPollInterval!);
+            subscribe();
+            navigate('/home');
+            return;
+          }
+          
+          // Check backend
+          const response = await fetch(`${apiBaseUrl}/api/webhooks/purchase-status/${encodeURIComponent(userId)}`);
+          if (response.ok) {
+            const data = await response.json();
+            if (data.isPremium) {
+              console.log('✅ Premium found in background poll (backend)');
+              localStorage.setItem('godlykids_premium', 'true');
+              clearInterval(backgroundPollInterval!);
+              subscribe();
+              navigate('/home');
+            }
+          }
+        } catch (e) {
+          // Silently continue
+        }
+      }, 3000); // Check every 3 seconds
+    }
+    
+    return () => {
+      window.removeEventListener('revenuecat:premiumChanged' as any, handlePremiumChange);
+      if (backgroundPollInterval) {
+        clearInterval(backgroundPollInterval);
+      }
+    };
+  }, [error, subscribe, navigate]);
 
   const handleSubscribeClick = () => {
     setError(null);
@@ -331,29 +394,44 @@ const PaywallPage: React.FC = () => {
                     Interactive Bible lessons, stories & activities that make Christian learning fun and engaging.
                 </p>
                 
-                {/* Error Message */}
+                {/* Error/Processing Message */}
                 {error && (
-                  <div className="w-full bg-red-50 border border-red-200 text-red-700 px-4 py-2 rounded-xl mb-4 text-sm flex items-start gap-2">
-                    <AlertCircle size={16} className="shrink-0 mt-0.5" />
-                    <span>
-                      {error.includes('hello@kbpublish.org') 
-                        ? error.split('hello@kbpublish.org').map((part, i, arr) => (
-                            <span key={i}>
-                              {part}
-                              {i < arr.length - 1 && (
-                                <a 
-                                  href="mailto:hello@kbpublish.org?subject=Subscription%20Support%20Request" 
-                                  className="text-blue-600 underline font-semibold"
-                                >
-                                  hello@kbpublish.org
-                                </a>
-                              )}
-                            </span>
-                          ))
-                        : error
-                      }
-                    </span>
-                  </div>
+                  error.includes('processing') ? (
+                    // Special "processing" state with spinner - purchase may still complete
+                    <div className="w-full bg-amber-50 border border-amber-200 text-amber-800 px-4 py-3 rounded-xl mb-4 text-sm">
+                      <div className="flex items-center gap-2 mb-2">
+                        <Loader2 size={16} className="animate-spin shrink-0" />
+                        <span className="font-semibold">Confirming your purchase...</span>
+                      </div>
+                      <p className="text-amber-700 text-xs">
+                        Apple is processing your payment. This usually takes a few seconds. 
+                        If you completed the payment, we'll automatically activate your subscription.
+                      </p>
+                    </div>
+                  ) : (
+                    // Regular error state
+                    <div className="w-full bg-red-50 border border-red-200 text-red-700 px-4 py-2 rounded-xl mb-4 text-sm flex items-start gap-2">
+                      <AlertCircle size={16} className="shrink-0 mt-0.5" />
+                      <span>
+                        {error.includes('hello@kbpublish.org') 
+                          ? error.split('hello@kbpublish.org').map((part, i, arr) => (
+                              <span key={i}>
+                                {part}
+                                {i < arr.length - 1 && (
+                                  <a 
+                                    href="mailto:hello@kbpublish.org?subject=Subscription%20Support%20Request" 
+                                    className="text-blue-600 underline font-semibold"
+                                  >
+                                    hello@kbpublish.org
+                                  </a>
+                                )}
+                              </span>
+                            ))
+                          : error
+                        }
+                      </span>
+                    </div>
+                  )
                 )}
 
                 {/* Migration Result Message */}

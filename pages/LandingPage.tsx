@@ -321,38 +321,56 @@ const LandingPage: React.FC = () => {
       <div className="absolute bottom-0 left-0 right-0 z-30 flex flex-col items-center px-6 pb-8" style={{ paddingBottom: 'calc(var(--safe-area-bottom, 0px) + 2rem)' }}>
           
           {/* App Title / Branding */}
-          <div className="relative mb-6 text-center">
+          <div className="relative mb-5 text-center">
              <h1 className="font-display font-extrabold text-5xl text-white drop-shadow-[0_4px_8px_rgba(0,0,0,0.5)] tracking-wide">
                 Godly Kids
              </h1>
-             <p className="text-white/80 font-sans font-semibold text-base mt-1 tracking-widest uppercase">
-                {t('adventureAwaits')}
+             <p className="text-[#FFD700] font-sans font-semibold text-sm mt-2 tracking-wide">
+                Original Audio Stories, Books, Games, and More to Grow Faith
+             </p>
+             
+             {/* Pricing Badge */}
+             <div className="mt-3 inline-flex items-center gap-2 bg-white/10 backdrop-blur-sm px-4 py-2 rounded-full border border-white/20">
+                <span className="text-white font-bold text-lg">$3.33<span className="text-sm font-normal">/mo</span></span>
+                <span className="text-white/60 text-xs">•</span>
+                <span className="text-white/80 text-sm">Yearly Plan</span>
+                <span className="text-white/60 text-xs">•</span>
+                <span className="text-[#4ade80] text-sm font-semibold">14-day free trial</span>
+             </div>
+             
+             {/* Library Access */}
+             <p className="mt-2 text-white/70 text-sm">
+                Unlimited access to a library of 100s
              </p>
           </div>
 
           {/* Sign In and Guest Buttons */}
           <div className="w-full max-w-sm space-y-3">
-              {/* Get Started Button - Main CTA */}
-              <button
+              {/* Get Started Button - Main CTA (Gold) */}
+              <WoodButton 
                 onClick={() => navigate('/onboarding')}
-                className="w-full bg-[#2d5a27] hover:bg-[#3d7a37] text-white font-bold py-4 px-6 rounded-full text-lg shadow-lg transition-all active:scale-[0.98]"
+                fullWidth 
+                variant="gold"
+                className="py-4 text-lg"
               >
                 Get Started
-              </button>
+              </WoodButton>
 
-              {/* Sign In Button - Secondary */}
-              <button
+              {/* Sign In Button - Secondary (Primary wood) */}
+              <WoodButton 
                 onClick={() => navigate('/signin')}
-                className="w-full bg-white/95 hover:bg-white text-gray-800 font-semibold py-4 px-6 rounded-full text-lg shadow-lg border border-gray-200 transition-all active:scale-[0.98]"
+                fullWidth 
+                variant="primary"
+                className="py-4 text-lg"
               >
                 I already have an account
-              </button>
+              </WoodButton>
 
               <p className="text-center text-white/50 text-xs mt-4">
                 By continuing you agree to our{' '}
                 <button 
                   onClick={() => setShowTermsModal(true)}
-                  className="text-white/70 underline hover:text-white transition-colors"
+                  className="text-[#FFD700] underline hover:text-[#FFF8DC] transition-colors"
                 >
                   Terms & Conditions
                 </button>

@@ -885,13 +885,89 @@ const OnboardingPage: React.FC = () => {
     // Track step 3 completion
     activityTrackingService.trackOnboardingEvent('step_3_complete', { step: 3, voiceSelected: selectedVoiceId });
     
-    // For first-time users, skip the paywall and go directly to "Ready to Jump In"
-    // The 5-minute demo timer will start AFTER the tutorial is complete, not here
-    playSuccess();
-    activityTrackingService.trackOnboardingEvent('onboarding_complete');
-    activityTrackingService.resetOnboardingSession();
+    // Go to account creation step
+    setStep(4);
+  };
+  
+  // Account creation state for step 4
+  const [accountEmail, setAccountEmail] = useState('');
+  const [accountPassword, setAccountPassword] = useState('');
+  const [showAccountPassword, setShowAccountPassword] = useState(false);
+  const [isCreatingAccountStep4, setIsCreatingAccountStep4] = useState(false);
+  const [accountStep4Error, setAccountStep4Error] = useState<string | null>(null);
+  
+  const handleStep4CreateAccount = async () => {
+    if (!accountEmail.trim() || !accountPassword.trim()) return;
     
-    navigate('/ready');
+    // Basic validation
+    if (!accountEmail.includes('@')) {
+      setAccountStep4Error('Please enter a valid email address');
+      return;
+    }
+    if (accountPassword.length < 6) {
+      setAccountStep4Error('Password must be at least 6 characters');
+      return;
+    }
+    
+    setIsCreatingAccountStep4(true);
+    setAccountStep4Error(null);
+    
+    try {
+      // Use existing account creation logic
+      const result = await handleCreateAccountLogic(accountEmail, accountPassword);
+      
+      if (result.success) {
+        playSuccess();
+        activityTrackingService.trackOnboardingEvent('account_created', { email: accountEmail });
+        activityTrackingService.trackOnboardingEvent('onboarding_complete');
+        activityTrackingService.resetOnboardingSession();
+        navigate('/ready');
+      } else {
+        setAccountStep4Error(result.error || 'Failed to create account');
+      }
+    } catch (error: any) {
+      setAccountStep4Error(error.message || 'Failed to create account');
+    } finally {
+      setIsCreatingAccountStep4(false);
+    }
+  };
+  
+  // Shared account creation logic
+  const handleCreateAccountLogic = async (email: string, password: string): Promise<{ success: boolean; error?: string }> => {
+    try {
+      const response = await fetch(`${ApiService.getBaseUrl()}/auth/register`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: email.toLowerCase().trim(),
+          password,
+          parentName: pName || 'Parent',
+          kids: kids.map(k => ({ name: k.name, age: k.age, avatar: k.avatar })),
+        }),
+      });
+      
+      const data = await response.json();
+      
+      if (!response.ok) {
+        return { success: false, error: data.message || 'Registration failed' };
+      }
+      
+      // Save user data
+      if (data.token) {
+        localStorage.setItem('godlykids_auth_token', data.token);
+      }
+      localStorage.setItem('godlykids_user_email', email.toLowerCase().trim());
+      
+      // Update user context
+      setParentName(pName);
+      if (data.user?.id) {
+        // Sync with backend
+      }
+      
+      return { success: true };
+    } catch (error: any) {
+      return { success: false, error: error.message || 'Network error' };
+    }
   };
   
   const handleVoiceClick = async (voiceId: string) => {
@@ -1288,7 +1364,7 @@ const OnboardingPage: React.FC = () => {
               <span className={step >= 1 ? "text-[#3E1F07]" : "opacity-40"}>Parent</span>
               <span className={step >= 2 ? "text-[#3E1F07]" : "opacity-40"}>Family</span>
               <span className={step >= 3 ? "text-[#3E1F07]" : "opacity-40"}>Voice</span>
-              <span className={step >= 4 ? "text-[#3E1F07]" : "opacity-40"}>Unlock</span>
+              <span className={step >= 4 ? "text-[#3E1F07]" : "opacity-40"}>Account</span>
            </div>
            <div className="h-4 bg-[#5c2e0b] rounded-full overflow-hidden border-2 border-[#3E1F07] shadow-inner">
               <div 
@@ -1639,19 +1715,109 @@ const OnboardingPage: React.FC = () => {
           </div>
         )}
 
-        {/* --- STEP 4: PAYWALL / VALUE PROPOSITION (HARD PAYWALL) --- */}
+        {/* --- STEP 4: ACCOUNT CREATION --- */}
         {step === 4 && (
-            <PaywallStep 
-              selectedPlan={selectedPlan}
-              setSelectedPlan={setSelectedPlan}
-              onCreateAccount={handleCreateAccount}
-              onSubscribe={handleSubscribeClick}
-              onRestore={handleRestorePurchases}
-              isPurchasing={isPurchasing}
-              isRestoring={isRestoring}
-              error={purchaseError}
-              kidsCount={kids.length}
-            />
+          <div className="w-full max-w-md px-6 animate-in slide-in-from-right-10 duration-500 flex flex-col h-full">
+            {/* Header */}
+            <div className="text-center mb-6">
+              <h2 className="font-display font-extrabold text-3xl text-[#f3e5ab] leading-tight mb-3 drop-shadow-lg">
+                Don't miss the start of their faith journey
+              </h2>
+              <p className="text-[#eecaa0]/80 text-base">
+                Create a free account to save {kids.length > 0 ? `${kids[0]?.name || 'your child'}'s` : 'their'} personalized path
+              </p>
+            </div>
+            
+            {/* Account Form Card */}
+            <div className="bg-gradient-to-br from-[#3E1F07] to-[#5c2e0b] rounded-2xl p-5 border border-[#8B4513] mb-5">
+              {/* Email Field */}
+              <div className="mb-4">
+                <input
+                  type="email"
+                  value={accountEmail}
+                  onChange={(e) => setAccountEmail(e.target.value)}
+                  placeholder="Email"
+                  className="w-full bg-[#f3e5ab] text-[#3E1F07] placeholder:text-[#8B4513]/50 px-4 py-4 rounded-xl font-medium text-lg border-2 border-[#8B4513]/30 focus:border-[#FFD700] focus:outline-none transition-colors"
+                  autoComplete="email"
+                />
+              </div>
+              
+              {/* Password Field */}
+              <div className="mb-4 relative">
+                <input
+                  type={showAccountPassword ? 'text' : 'password'}
+                  value={accountPassword}
+                  onChange={(e) => setAccountPassword(e.target.value)}
+                  placeholder="Password"
+                  className="w-full bg-[#f3e5ab] text-[#3E1F07] placeholder:text-[#8B4513]/50 px-4 py-4 rounded-xl font-medium text-lg border-2 border-[#8B4513]/30 focus:border-[#FFD700] focus:outline-none transition-colors pr-12"
+                  autoComplete="new-password"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowAccountPassword(!showAccountPassword)}
+                  className="absolute right-4 top-1/2 -translate-y-1/2 text-[#8B4513]/60 hover:text-[#8B4513] transition-colors"
+                >
+                  {showAccountPassword ? <EyeOff size={20} /> : <Eye size={20} />}
+                </button>
+              </div>
+              
+              {/* Error Message */}
+              {accountStep4Error && (
+                <div className="bg-red-500/20 border border-red-500/50 text-red-200 text-sm px-4 py-2 rounded-lg mb-4">
+                  {accountStep4Error}
+                </div>
+              )}
+              
+              {/* Create Account Button */}
+              <WoodButton
+                fullWidth
+                variant="gold"
+                onClick={handleStep4CreateAccount}
+                disabled={isCreatingAccountStep4 || !accountEmail.trim() || !accountPassword.trim()}
+                className="py-4 text-xl"
+              >
+                {isCreatingAccountStep4 ? (
+                  <span className="flex items-center justify-center gap-2">
+                    <Loader2 className="w-5 h-5 animate-spin" />
+                    Creating...
+                  </span>
+                ) : (
+                  'CREATE FREE ACCOUNT'
+                )}
+              </WoodButton>
+            </div>
+            
+            {/* Trust Badges */}
+            <div className="flex justify-center gap-4 mb-4">
+              <div className="bg-[#3E1F07]/50 border border-[#8B4513]/30 rounded-xl px-4 py-3 text-center flex-1">
+                <div className="text-2xl mb-1">✝️</div>
+                <div className="text-[#FFD700] font-bold text-xs">#1 Christian</div>
+                <div className="text-[#eecaa0]/70 text-[10px]">KIDS APP</div>
+                <div className="flex justify-center gap-0.5 mt-1">
+                  {[1,2,3,4,5].map(i => <span key={i} className="text-[#FFD700] text-xs">★</span>)}
+                </div>
+              </div>
+              <div className="bg-[#3E1F07]/50 border border-[#8B4513]/30 rounded-xl px-4 py-3 text-center flex-1">
+                <div className="text-2xl mb-1">🏆</div>
+                <div className="text-[#FFD700] font-bold text-xs">BEST</div>
+                <div className="text-[#eecaa0]/70 text-[10px]">FAITH EDUCATION</div>
+                <div className="flex justify-center gap-0.5 mt-1">
+                  {[1,2,3,4,5].map(i => <span key={i} className="text-[#FFD700] text-xs">★</span>)}
+                </div>
+              </div>
+            </div>
+            
+            {/* Already have account link */}
+            <p className="text-center text-[#eecaa0]/60 text-sm">
+              Already have an account?{' '}
+              <button
+                onClick={() => navigate('/signin')}
+                className="text-[#FFD700] font-semibold hover:underline"
+              >
+                Sign In
+              </button>
+            </p>
+          </div>
         )}
 
         {/* Parent Gate Modal for Step 4 Paywall */}

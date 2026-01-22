@@ -759,51 +759,71 @@ router.get('/content', async (req, res) => {
                 .select('title author coverImage status viewCount readCount likeCount favoriteCount quizStartCount quizCompletionCount coloringSessionsCount gameUnlockCount gameOpenCount averageCompletionRate')
                 .lean();
             
-            if (startDate) {
-                // Get play events for the time range
-                const bookPlayEvents = await PlayEvent.aggregate([
-                    {
-                        $match: {
-                            contentType: 'book',
-                            playedAt: { $gte: startDate },
-                            isEngagementUpdate: { $ne: true } // Only count initial plays
-                        }
-                    },
-                    {
-                        $group: {
-                            _id: '$contentId',
-                            playCount: { $sum: 1 },
-                            avgCompletion: { $avg: '$completionPercent' }
-                        }
+            // Get reading metrics aggregation (pages read, sessions, completion)
+            const readingMetricsMatch = startDate 
+                ? { contentType: 'book', playedAt: { $gte: startDate } }
+                : { contentType: 'book' };
+            
+            const readingMetricsAgg = await PlayEvent.aggregate([
+                { $match: readingMetricsMatch },
+                {
+                    $group: {
+                        _id: '$contentId',
+                        totalPagesRead: { $sum: '$pagesViewed' },
+                        avgPagesRead: { $avg: '$pagesViewed' },
+                        readingSessions: { $sum: { $cond: [{ $ne: ['$isEngagementUpdate', true] }, 1, 0] } },
+                        avgCompletion: { $avg: '$completionPercent' },
+                        maxCompletion: { $max: '$completionPercent' },
                     }
-                ]);
-                
-                // Create a map of play counts
-                const playCountMap = new Map();
-                bookPlayEvents.forEach(e => {
-                    playCountMap.set(e._id.toString(), {
-                        playCount: e.playCount,
-                        avgCompletion: Math.round(e.avgCompletion || 0)
-                    });
+                }
+            ]);
+            
+            // Create a map of reading metrics by book ID
+            const readingMetricsMap = new Map();
+            readingMetricsAgg.forEach(e => {
+                readingMetricsMap.set(e._id.toString(), {
+                    totalPagesRead: e.totalPagesRead || 0,
+                    avgPagesRead: Math.round((e.avgPagesRead || 0) * 10) / 10, // Round to 1 decimal
+                    readingSessions: e.readingSessions || 0,
+                    avgCompletion: Math.round(e.avgCompletion || 0),
+                    maxCompletion: Math.round(e.maxCompletion || 0),
                 });
-                
-                // Merge with book data
+            });
+            
+            if (startDate) {
+                // Merge with book data for time-filtered view
                 results.books = books.map(book => {
-                    const stats = playCountMap.get(book._id.toString()) || { playCount: 0, avgCompletion: 0 };
+                    const stats = readingMetricsMap.get(book._id.toString()) || { 
+                        totalPagesRead: 0, avgPagesRead: 0, readingSessions: 0, avgCompletion: 0, maxCompletion: 0 
+                    };
                     return {
                         ...book,
                         // For time-filtered view, use play event counts
-                        viewCount: stats.playCount,
-                        readCount: stats.playCount,
+                        viewCount: stats.readingSessions,
+                        readCount: stats.readingSessions,
                         averageCompletionRate: stats.avgCompletion,
+                        // New reading metrics
+                        totalPagesRead: stats.totalPagesRead,
+                        avgPagesRead: stats.avgPagesRead,
+                        readingSessions: stats.readingSessions,
                         // Keep other counts as-is (they're cumulative)
                         likeCount: 0, // Would need separate event tracking
                         favoriteCount: 0,
                     };
                 });
             } else {
-                // All time - use stored counts
-                results.books = books;
+                // All time - use stored counts but add reading metrics
+                results.books = books.map(book => {
+                    const stats = readingMetricsMap.get(book._id.toString()) || { 
+                        totalPagesRead: 0, avgPagesRead: 0, readingSessions: 0, avgCompletion: 0, maxCompletion: 0 
+                    };
+                    return {
+                        ...book,
+                        totalPagesRead: stats.totalPagesRead,
+                        avgPagesRead: stats.avgPagesRead,
+                        readingSessions: stats.readingSessions,
+                    };
+                });
             }
         }
         

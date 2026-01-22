@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Eye, BookOpen, Heart, Bookmark, Trophy, HelpCircle, Palette, Gamepad2, ArrowUpDown, TrendingUp, TrendingDown, Calendar } from 'lucide-react';
+import { Eye, BookOpen, Heart, Bookmark, Trophy, HelpCircle, Palette, Gamepad2, ArrowUpDown, TrendingUp, TrendingDown, Calendar, FileText } from 'lucide-react';
 import apiClient from '../services/apiClient';
 import { Link } from 'react-router-dom';
 
@@ -19,9 +19,13 @@ interface BookAnalytics {
     gameUnlockCount: number;
     gameOpenCount: number;
     averageCompletionRate: number;
+    // New reading metrics
+    totalPagesRead?: number;
+    avgPagesRead?: number;
+    readingSessions?: number;
 }
 
-type SortField = 'viewCount' | 'readCount' | 'likeCount' | 'favoriteCount' | 'quizCompletionCount' | 'averageCompletionRate' | 'gameOpenCount';
+type SortField = 'viewCount' | 'readCount' | 'likeCount' | 'favoriteCount' | 'quizCompletionCount' | 'averageCompletionRate' | 'gameOpenCount' | 'avgPagesRead' | 'totalPagesRead';
 type SortDirection = 'asc' | 'desc';
 type TimeRange = 'day' | 'week' | 'month' | 'all';
 
@@ -138,6 +142,8 @@ const BooksAnalytics: React.FC = () => {
                 <div className="flex flex-wrap gap-2">
                     <SortButton field="viewCount" label="Views" icon={<Eye className="w-4 h-4" />} />
                     <SortButton field="readCount" label="Reads" icon={<BookOpen className="w-4 h-4" />} />
+                    <SortButton field="avgPagesRead" label="Avg Pages" icon={<FileText className="w-4 h-4" />} />
+                    <SortButton field="totalPagesRead" label="Total Pages" icon={<FileText className="w-4 h-4" />} />
                     <SortButton field="likeCount" label="Likes" icon={<Heart className="w-4 h-4" />} />
                     <SortButton field="favoriteCount" label="Favorites" icon={<Bookmark className="w-4 h-4" />} />
                     <SortButton field="quizCompletionCount" label="Quiz Completions" icon={<HelpCircle className="w-4 h-4" />} />
@@ -159,6 +165,12 @@ const BooksAnalytics: React.FC = () => {
                                 </th>
                                 <th className="text-center py-3 px-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">
                                     <BookOpen className="w-4 h-4 inline" /> Reads
+                                </th>
+                                <th className="text-center py-3 px-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                                    <FileText className="w-4 h-4 inline" /> Avg Pages
+                                </th>
+                                <th className="text-center py-3 px-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                                    <FileText className="w-4 h-4 inline" /> Total Pages
                                 </th>
                                 <th className="text-center py-3 px-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">
                                     <Heart className="w-4 h-4 inline" /> Likes
@@ -219,6 +231,12 @@ const BooksAnalytics: React.FC = () => {
                                         <span className="font-semibold text-green-600">{(book.readCount || 0).toLocaleString()}</span>
                                     </td>
                                     <td className="py-3 px-4 text-center">
+                                        <span className="font-semibold text-teal-600">{book.avgPagesRead || 0}</span>
+                                    </td>
+                                    <td className="py-3 px-4 text-center">
+                                        <span className="font-semibold text-cyan-600">{(book.totalPagesRead || 0).toLocaleString()}</span>
+                                    </td>
+                                    <td className="py-3 px-4 text-center">
                                         <span className="font-semibold text-red-500">{(book.likeCount || 0).toLocaleString()}</span>
                                     </td>
                                     <td className="py-3 px-4 text-center">
@@ -264,7 +282,7 @@ const BooksAnalytics: React.FC = () => {
             </div>
 
             {/* Summary Stats */}
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
                 <div className="bg-white rounded-xl p-4 shadow-sm border border-gray-100">
                     <p className="text-sm text-gray-500">Total Views</p>
                     <p className="text-2xl font-bold text-gray-800">
@@ -278,7 +296,24 @@ const BooksAnalytics: React.FC = () => {
                     </p>
                 </div>
                 <div className="bg-white rounded-xl p-4 shadow-sm border border-gray-100">
-                    <p className="text-sm text-gray-500">Avg Completion Rate</p>
+                    <p className="text-sm text-gray-500">Total Pages Read</p>
+                    <p className="text-2xl font-bold text-teal-600">
+                        {books.reduce((sum, b) => sum + (b.totalPagesRead || 0), 0).toLocaleString()}
+                    </p>
+                </div>
+                <div className="bg-white rounded-xl p-4 shadow-sm border border-gray-100">
+                    <p className="text-sm text-gray-500">Avg Pages/Session</p>
+                    <p className="text-2xl font-bold text-cyan-600">
+                        {(() => {
+                            const booksWithPages = books.filter(b => (b.avgPagesRead || 0) > 0);
+                            return booksWithPages.length > 0 
+                                ? (booksWithPages.reduce((sum, b) => sum + (b.avgPagesRead || 0), 0) / booksWithPages.length).toFixed(1)
+                                : '0';
+                        })()}
+                    </p>
+                </div>
+                <div className="bg-white rounded-xl p-4 shadow-sm border border-gray-100">
+                    <p className="text-sm text-gray-500">Avg Completion</p>
                     <p className="text-2xl font-bold text-indigo-600">
                         {books.length > 0 
                             ? Math.round(books.reduce((sum, b) => sum + (b.averageCompletionRate || 0), 0) / books.length)
@@ -286,7 +321,7 @@ const BooksAnalytics: React.FC = () => {
                     </p>
                 </div>
                 <div className="bg-white rounded-xl p-4 shadow-sm border border-gray-100">
-                    <p className="text-sm text-gray-500">Total Quiz Completions</p>
+                    <p className="text-sm text-gray-500">Quiz Completions</p>
                     <p className="text-2xl font-bold text-purple-600">
                         {books.reduce((sum, b) => sum + (b.quizCompletionCount || 0), 0).toLocaleString()}
                     </p>

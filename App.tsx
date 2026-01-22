@@ -584,7 +584,18 @@ const PanoramaBackground: React.FC = () => {
   }, [location.pathname]);
 
   return (
-    <div className="fixed inset-0 z-0 pointer-events-none overflow-hidden bg-[#1a3a52]">
+    <div 
+      className="z-0 pointer-events-none overflow-hidden bg-[#1a3a52]"
+      style={{
+        position: 'fixed',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        width: '100vw',
+        height: '100vh',
+      }}
+    >
       {/* 
         The "World" Container - 600vw wide.
         Translates horizontally based on current page.
@@ -724,20 +735,18 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   }
 
   return (
-    <div 
-      className="relative h-screen w-full overflow-hidden text-white flex flex-col"
-      style={{
-        // Apply safe area padding for proper content positioning
-        // Despia native runtime provides these CSS variables automatically
-        paddingLeft: 'var(--safe-area-left, 0px)',
-        paddingRight: 'var(--safe-area-right, 0px)',
-      }}
-    >
+    <div className="relative h-screen w-full overflow-hidden text-white flex flex-col">
 
       <PanoramaBackground />
 
-      {/* Content Wrapper */}
-      <div className="relative z-10 flex-1 overflow-hidden">
+      {/* Content Wrapper - safe area padding applied here so background is unaffected */}
+      <div 
+        className="relative z-10 flex-1 overflow-hidden"
+        style={{
+          paddingLeft: 'var(--safe-area-left, 0px)',
+          paddingRight: 'var(--safe-area-right, 0px)',
+        }}
+      >
         {children}
       </div>
 

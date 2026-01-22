@@ -475,10 +475,12 @@ router.post('/profile/save', async (req, res) => {
 
     } catch (error) {
         console.error('Profile save error:', error);
+        console.error('Profile save request body:', JSON.stringify(req.body, null, 2));
         res.status(500).json({ 
             success: false, 
             message: 'Failed to save profile',
-            error: error.message 
+            error: error.message,
+            stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
         });
     }
 });

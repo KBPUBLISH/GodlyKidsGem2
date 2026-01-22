@@ -1868,46 +1868,62 @@ const OnboardingPage: React.FC = () => {
             ) : availableVoices.length === 0 ? (
               <div className="text-center text-[#eecaa0] py-8">No voices available</div>
             ) : (
-              <div className="space-y-3 mb-4 max-h-[280px] overflow-y-auto flex-shrink-0">
-                {availableVoices.map((voice) => (
-                  <button
-                    key={voice.voice_id}
-                    onClick={() => handleVoiceClick(voice.voice_id)}
-                    disabled={previewingVoiceId === voice.voice_id}
-                    className={`w-full p-3 rounded-xl border-2 transition-all ${
-                      selectedVoiceId === voice.voice_id
-                        ? 'bg-[#FFD700]/20 border-[#FFD700] shadow-lg'
-                        : 'bg-[#3E1F07]/50 border-[#5c2e0b] hover:border-[#FFD700]/50'
-                    } ${previewingVoiceId === voice.voice_id ? 'opacity-75 cursor-wait' : ''}`}
-                  >
-                    <div className="flex items-center gap-3">
-                      {voice.characterImage ? (
-                        <img 
-                          src={voice.characterImage} 
-                          alt={voice.name}
-                          className="w-14 h-14 rounded-full object-cover border-2 border-white/20"
-                        />
-                      ) : (
-                        <div className="w-14 h-14 rounded-full bg-[#5c2e0b] flex items-center justify-center border-2 border-white/20">
-                          <Mic className="text-[#eecaa0]" size={20} />
+              <div className="relative flex-shrink-0 mb-4">
+                {/* Voice list with scroll */}
+                <div className="space-y-3 max-h-[280px] overflow-y-auto pb-8" id="voice-scroll-container">
+                  {availableVoices.map((voice) => (
+                    <button
+                      key={voice.voice_id}
+                      onClick={() => handleVoiceClick(voice.voice_id)}
+                      disabled={previewingVoiceId === voice.voice_id}
+                      className={`w-full p-3 rounded-xl border-2 transition-all ${
+                        selectedVoiceId === voice.voice_id
+                          ? 'bg-[#FFD700]/20 border-[#FFD700] shadow-lg'
+                          : 'bg-[#3E1F07]/50 border-[#5c2e0b] hover:border-[#FFD700]/50'
+                      } ${previewingVoiceId === voice.voice_id ? 'opacity-75 cursor-wait' : ''}`}
+                    >
+                      <div className="flex items-center gap-3">
+                        {voice.characterImage ? (
+                          <img 
+                            src={voice.characterImage} 
+                            alt={voice.name}
+                            className="w-14 h-14 rounded-full object-cover border-2 border-white/20"
+                          />
+                        ) : (
+                          <div className="w-14 h-14 rounded-full bg-[#5c2e0b] flex items-center justify-center border-2 border-white/20">
+                            <Mic className="text-[#eecaa0]" size={20} />
+                          </div>
+                        )}
+                        <div className="flex-1 text-left">
+                          <div className="text-white font-bold">{voice.name}</div>
+                          {cleanVoiceDescription(voice.description) && (
+                            <div className="text-[#eecaa0] text-xs mt-0.5 line-clamp-1">{cleanVoiceDescription(voice.description)}</div>
+                          )}
                         </div>
-                      )}
-                      <div className="flex-1 text-left">
-                        <div className="text-white font-bold">{voice.name}</div>
-                        {cleanVoiceDescription(voice.description) && (
-                          <div className="text-[#eecaa0] text-xs mt-0.5 line-clamp-1">{cleanVoiceDescription(voice.description)}</div>
+                        {previewingVoiceId === voice.voice_id ? (
+                          <div className="w-6 h-6 border-2 border-[#FFD700] border-t-transparent rounded-full animate-spin"></div>
+                        ) : selectedVoiceId === voice.voice_id ? (
+                          <Check className="text-[#FFD700]" size={24} />
+                        ) : (
+                          <Volume2 className="text-white/40" size={20} />
                         )}
                       </div>
-                      {previewingVoiceId === voice.voice_id ? (
-                        <div className="w-6 h-6 border-2 border-[#FFD700] border-t-transparent rounded-full animate-spin"></div>
-                      ) : selectedVoiceId === voice.voice_id ? (
-                        <Check className="text-[#FFD700]" size={24} />
-                      ) : (
-                        <Volume2 className="text-white/40" size={20} />
-                      )}
+                    </button>
+                  ))}
+                </div>
+                
+                {/* Scroll indicator - fade + chevron */}
+                {availableVoices.length > 3 && (
+                  <div className="absolute bottom-0 left-0 right-0 pointer-events-none">
+                    {/* Fade gradient */}
+                    <div className="h-16 bg-gradient-to-t from-[#1a237e] via-[#1a237e]/80 to-transparent"></div>
+                    {/* Scroll hint */}
+                    <div className="absolute bottom-1 left-0 right-0 flex flex-col items-center animate-bounce">
+                      <span className="text-[#FFD700] text-xs font-medium mb-0.5">Scroll for more voices</span>
+                      <ChevronDown className="text-[#FFD700]" size={18} />
                     </div>
-                  </button>
-                ))}
+                  </div>
+                )}
               </div>
             )}
 

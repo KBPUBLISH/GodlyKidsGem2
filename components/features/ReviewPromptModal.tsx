@@ -123,6 +123,8 @@ const ReviewPromptModal: React.FC<ReviewPromptModalProps> = ({ isOpen, onReviewS
 export default ReviewPromptModal;
 
 // Helper function to check if we should show the review prompt
+// NOTE: This is for the standalone review prompt (NOT the tutorial review step)
+// The tutorial has its own review prompt at the 'review_prompt' step
 export const shouldShowReviewPrompt = (): boolean => {
   // Check if we're in a native app (DeSpia or Capacitor)
   const isDespiaNative = DespiaService.isNative();
@@ -132,6 +134,14 @@ export const shouldShowReviewPrompt = (): boolean => {
   // Web users can't leave app store reviews
   if (!isDespiaNative && !isCapacitorNative) {
     console.log('🌟 Review prompt: Not showing (web mode)');
+    return false;
+  }
+  
+  // Don't show during onboarding tutorial - let the tutorial handle its own review prompt
+  const tutorialStep = localStorage.getItem('godlykids_tutorial_step');
+  const tutorialComplete = localStorage.getItem('godlykids_tutorial_complete');
+  if (tutorialStep && tutorialComplete !== 'true') {
+    console.log('🌟 Review prompt: Not showing (tutorial in progress)');
     return false;
   }
   

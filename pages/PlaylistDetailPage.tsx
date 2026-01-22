@@ -385,16 +385,8 @@ const PlaylistDetailPage: React.FC = () => {
     };
 
     const handleItemClick = (itemIndex: number) => {
-        const item = playlist?.items[itemIndex];
-        
-        // Check if this item is locked (members only and user not subscribed)
-        const itemIsLocked = item?.isMembersOnly && !isSubscribed;
-        
-        if (itemIsLocked) {
-            // Redirect to paywall
-            navigate('/paywall', { state: { from: `/playlist/${playlistId}` } });
-            return;
-        }
+        // Allow playing even locked items - the AudioContext handles the 1-minute preview
+        // The preview limit modal will appear after 60 seconds of playback
         
         // Check if this exact track is already playing
         if (isThisPlaylistPlaying && currentTrackIndex === itemIndex) {
@@ -402,6 +394,7 @@ const PlaylistDetailPage: React.FC = () => {
             togglePlayPause();
         } else {
             // Navigate to player with this track
+            // The player page will pass isMembersOnly to AudioContext for preview handling
             navigate(`/audio/playlist/${playlistId}/play/${itemIndex}`);
         }
     };

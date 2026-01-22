@@ -584,13 +584,26 @@ const BookDetailPage: React.FC = () => {
                     Loading...
                   </button>
                 ) : isLocked ? (
+                  // For locked books, still show Save to Library (it doesn't require subscription)
+                  // The paywall will appear when trying to read beyond 3 pages
                   <button
-                    onClick={() => navigate('/paywall', { state: { from: `/book-details/${id}` } })}
-                    className="w-full bg-gradient-to-b from-[#FFD700] to-[#FFA500] hover:from-[#FFE44D] hover:to-[#FFB733] text-[#5c2e0b] font-display font-bold text-xl py-3 rounded-full shadow-[0_4px_0_#B8860B,0_8px_15px_rgba(0,0,0,0.4)] border-2 border-[#B8860B] active:translate-y-[4px] active:shadow-[0_0_0_#B8860B] transition-all text-center flex items-center justify-center gap-2"
+                    onClick={handleSaveToLibrary}
+                    className={`w-full bg-gradient-to-b ${isInLibrary 
+                      ? 'from-[#6da34d] to-[#5a8a3f] hover:from-[#7db85b] hover:to-[#6a9a4f]' 
+                      : 'from-[#8B4513] to-[#5c2e0b] hover:from-[#A0522D] hover:to-[#70380d]'
+                    } text-[#f3e5ab] font-display font-bold text-xl py-3 rounded-full shadow-[0_4px_0_#3e1f07,0_8px_15px_rgba(0,0,0,0.4)] border-2 border-[#a05f2c] active:translate-y-[4px] active:shadow-[0_0_0_#3e1f07] transition-all text-center flex items-center justify-center gap-2`}
                   >
-                    <Lock size={20} />
-                    <span>{t('unlockToListen') || 'Unlock to Listen'}</span>
-                    <Crown size={18} />
+                    {isInLibrary ? (
+                      <>
+                        <Bookmark size={20} fill="currentColor" />
+                        <span>{t('savedToLibrary') || 'Saved to Library'}</span>
+                      </>
+                    ) : (
+                      <>
+                        <Plus size={20} />
+                        <span>{t('saveToLibrary') || 'Save to Library'}</span>
+                      </>
+                    )}
                   </button>
                 ) : (
                   <button
@@ -779,13 +792,13 @@ const BookDetailPage: React.FC = () => {
                     Loading...
                   </button>
                 ) : isLocked ? (
-                  // Locked state - show premium button that goes to paywall
+                  // Locked state - allow 3-page preview, then show paywall in reader
                   <button
-                    onClick={() => navigate('/paywall', { state: { from: `/book-details/${id}` } })}
+                    onClick={() => navigate(`/read/${id}`)}
                     className="flex-1 bg-gradient-to-b from-[#FFD700] to-[#FFA500] hover:from-[#FFE44D] hover:to-[#FFB733] text-[#5c2e0b] font-display font-bold text-xl py-3 rounded-2xl shadow-[0_4px_0_#B8860B] border-2 border-[#B8860B] active:translate-y-[4px] active:shadow-none transition-all text-center leading-none flex items-center justify-center gap-2"
                   >
-                    <Lock size={20} />
-                    <span>{t('unlockToRead') || 'Unlock to Read'}</span>
+                    <BookOpen size={20} />
+                    <span>{t('previewBook') || 'Preview (3 Pages Free)'}</span>
                     <Crown size={18} className="text-[#8B4513]" />
                   </button>
                 ) : (
@@ -1076,11 +1089,7 @@ const BookDetailPage: React.FC = () => {
                 <button
                   onClick={() => {
                     if (!id) return;
-                    // Check if book is locked before allowing coloring access
-                    if (isLocked) {
-                      navigate('/paywall', { state: { from: `/book-details/${id}` } });
-                      return;
-                    }
+                    // Allow access - the book reader handles 3-page preview limit
                     navigate(`/read/${id}?coloring=${encodeURIComponent(pinnedDrawing.pageRef)}`);
                   }}
                   className="bg-[#6da34d] hover:bg-[#7db85b] text-white text-sm font-bold py-2 px-5 rounded-full shadow-[0_3px_0_#3d5c2b] active:translate-y-[3px] active:shadow-none transition-all border border-[#ffffff20] flex items-center gap-2"
@@ -1148,11 +1157,7 @@ const BookDetailPage: React.FC = () => {
                   onClick={() => {
                     setShowDrawingModal(false);
                     if (!id) return;
-                    // Check if book is locked before allowing coloring access
-                    if (isLocked) {
-                      navigate('/paywall', { state: { from: `/book-details/${id}` } });
-                      return;
-                    }
+                    // Allow access - the book reader handles 3-page preview limit
                     navigate(`/read/${id}?coloring=${encodeURIComponent(pinnedDrawing.pageRef)}`);
                   }}
                   className="mt-4 w-full bg-[#6da34d] hover:bg-[#7db85b] text-white font-bold py-3 rounded-xl shadow-[0_4px_0_#3d5c2b] active:translate-y-[4px] active:shadow-none transition-all flex items-center justify-center gap-2"

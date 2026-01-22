@@ -381,10 +381,8 @@ const ListenPage: React.FC = () => {
                         id={index === 0 ? 'audiobook-card-0' : undefined}
                         data-tutorial={index === 0 ? 'audiobook-card-0' : undefined}
                         onClick={() => {
-                          if (isPlaylistLocked) {
-                            console.log('🔒 Playlist is locked - subscription required');
-                            return;
-                          }
+                          // Allow navigation to detail page even for locked content
+                          // The detail page will show preview functionality (1-minute demo)
                           // Advance tutorial when clicking highlighted audiobook
                           if (index === 0 && isTutorialActive && isStepActive('audiobook_highlight')) {
                             nextStep(); // Advance to tutorial_complete

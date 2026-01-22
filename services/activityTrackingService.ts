@@ -594,7 +594,7 @@ class ActivityTrackingService {
         console.log(`📊 Onboarding marked complete (step 5)`);
       }
       
-      await fetch(`${apiUrl}/analytics/onboarding/event`, {
+      const response = await fetch(`${apiUrl}/analytics/onboarding/event`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -608,7 +608,12 @@ class ActivityTrackingService {
         }),
       });
       
-      console.log(`📊 Onboarding event tracked: ${event}`, metadata);
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        console.error(`📊 Onboarding event FAILED: ${event}`, response.status, errorData);
+      } else {
+        console.log(`📊 Onboarding event tracked: ${event}`, metadata);
+      }
       
       // Trigger a stats sync to update the user's onboarding step in the database
       setTimeout(() => this.syncStatsToBackend(), 1000);

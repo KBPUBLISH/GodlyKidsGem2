@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
-import { ChevronLeft, ChevronRight, X, Play, Pause, Volume2, Mic, Check, Music, Home, Heart, Star, RotateCcw, Lock, Sparkles, HelpCircle, Share2, Copy, Smartphone, Grid3X3, Loader2, Globe, BookOpen, SkipForward, FileText, RefreshCw } from 'lucide-react';
+import { ChevronLeft, ChevronRight, X, Play, Pause, Volume2, Mic, Check, Music, Home, Heart, Star, RotateCcw, Lock, Sparkles, HelpCircle, Share2, Copy, Smartphone, Grid3X3, Loader2, Globe, BookOpen, SkipForward, FileText, RefreshCw, Crown } from 'lucide-react';
 import { ApiService } from '../services/apiService';
 import { voiceCloningService, ClonedVoice } from '../services/voiceCloningService';
 import { translationService, SUPPORTED_LANGUAGES } from '../services/translationService';
@@ -148,6 +148,9 @@ const WoodButton: React.FC<{ onClick: (e: React.MouseEvent) => void; icon: React
     </button>
 );
 
+// Premium preview constants
+const BOOK_PREVIEW_PAGES = 3; // Allow 3 page preview for premium books
+
 const BookReaderPage: React.FC = () => {
     const { bookId } = useParams<{ bookId: string }>();
     const navigate = useNavigate();
@@ -159,6 +162,10 @@ const BookReaderPage: React.FC = () => {
     const [pages, setPages] = useState<Page[]>([]);
     const [currentPageIndex, setCurrentPageIndex] = useState(0);
     const [loading, setLoading] = useState(true);
+    
+    // Premium preview state
+    const [isBookPremium, setIsBookPremium] = useState(false);
+    const [showPreviewLimitModal, setShowPreviewLimitModal] = useState(false);
     const [scrollState, setScrollState] = useState<ScrollState>('max'); // Default to max (60%) - matches portal editing view
     const [bookTitle, setBookTitle] = useState<string>('Book');
     const [bookOrientation, setBookOrientation] = useState<'portrait' | 'landscape'>('portrait');
@@ -934,13 +941,13 @@ const BookReaderPage: React.FC = () => {
             try {
                 const book = await ApiService.getBookById(bookId);
                 
-                // Check if book is members-only and user is not subscribed
-                // Skip this check during tutorial to allow users to experience the app
+                // Check if book is members-only - allow preview instead of blocking
                 const bookIsMembersOnly = (book as any)?.isMembersOnly === true;
                 if (bookIsMembersOnly && !isSubscribed && !isTutorialActive) {
-                    console.log('🔒 Book is members-only and user is not subscribed. Redirecting to paywall.');
-                    navigate('/paywall', { state: { from: `/book/${bookId}` } });
-                    return;
+                    console.log('📖 Premium book detected - allowing 3 page preview');
+                    setIsBookPremium(true);
+                } else {
+                    setIsBookPremium(false);
                 }
                 
                 // Set book title and orientation
@@ -1766,6 +1773,15 @@ const BookReaderPage: React.FC = () => {
         e.stopPropagation();
         if (isPageTurning) return;
         stopAudio();
+        
+        // Check preview limit for premium books (3 pages allowed)
+        const nextIndex = currentPageIndex + 1;
+        if (isBookPremium && !isSubscribed && nextIndex >= BOOK_PREVIEW_PAGES) {
+            console.log('📖 Preview limit reached - showing upgrade modal');
+            setShowPreviewLimitModal(true);
+            return;
+        }
+        
         if (currentPageIndex < pages.length - 1) {
             // Use desired scroll state if set, otherwise preserve current state from ref
             const scrollStateToUse = desiredScrollStateRef.current !== null
@@ -5172,6 +5188,71 @@ const BookReaderPage: React.FC = () => {
                             >
                                 Awesome! 🎤
                             </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+            
+            {/* Premium Preview Limit Modal */}
+            {showPreviewLimitModal && (
+                <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/80 backdrop-blur-sm animate-in fade-in duration-300">
+                    <div className="relative w-[90%] max-w-md bg-gradient-to-b from-[#1a237e] to-[#0d113a] rounded-3xl p-8 shadow-2xl animate-in zoom-in-75 duration-500 border-4 border-[#FFD700]">
+                        {/* Crown decoration */}
+                        <div className="absolute -top-6 left-1/2 -translate-x-1/2 w-16 h-16 bg-gradient-to-br from-[#FFD700] to-[#FFA500] rounded-full flex items-center justify-center border-4 border-white shadow-lg">
+                            <Crown className="w-8 h-8 text-[#5c2e0b]" />
+                        </div>
+                        
+                        {/* Content */}
+                        <div className="text-center mt-6">
+                            <h2 className="text-2xl font-bold text-white drop-shadow-lg mb-2">
+                                Enjoying the Story?
+                            </h2>
+                            <p className="text-[#eecaa0] text-base mb-2">
+                                You've read {BOOK_PREVIEW_PAGES} pages of this premium book!
+                            </p>
+                            <p className="text-white/70 text-sm mb-6">
+                                Unlock the full story and hundreds more with a subscription.
+                            </p>
+                            
+                            {/* Book preview indicator */}
+                            <div className="flex justify-center gap-2 mb-6">
+                                {[1, 2, 3, 4, 5].map((page) => (
+                                    <div
+                                        key={page}
+                                        className={`w-8 h-10 rounded border-2 flex items-center justify-center text-xs font-bold ${
+                                            page <= BOOK_PREVIEW_PAGES
+                                                ? 'bg-[#FFD700]/20 border-[#FFD700] text-[#FFD700]'
+                                                : 'bg-white/10 border-white/30 text-white/50'
+                                        }`}
+                                    >
+                                        {page <= BOOK_PREVIEW_PAGES ? '✓' : <Lock size={12} />}
+                                    </div>
+                                ))}
+                                <div className="w-8 h-10 flex items-center justify-center text-white/50">...</div>
+                            </div>
+                            
+                            {/* Buttons */}
+                            <div className="space-y-3">
+                                <button
+                                    onClick={() => {
+                                        setShowPreviewLimitModal(false);
+                                        navigate('/paywall', { state: { from: `/book/${bookId}` } });
+                                    }}
+                                    className="w-full bg-gradient-to-r from-[#FFD700] to-[#FFA500] text-[#5c2e0b] font-bold px-8 py-4 rounded-xl shadow-lg hover:opacity-90 transition-opacity text-lg"
+                                >
+                                    🌟 Unlock Full Access
+                                </button>
+                                <button
+                                    onClick={() => setShowPreviewLimitModal(false)}
+                                    className="w-full bg-white/10 text-white/70 font-medium px-8 py-3 rounded-xl hover:bg-white/20 transition-colors"
+                                >
+                                    Keep Reading Preview
+                                </button>
+                            </div>
+                            
+                            <p className="text-white/50 text-xs mt-4">
+                                14-day free trial • Cancel anytime
+                            </p>
                         </div>
                     </div>
                 </div>

@@ -3,6 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { ChevronLeft, Pause, Play, SkipBack, SkipForward, Music, Trash2, ListMusic, Edit2, X, Loader2, Camera } from 'lucide-react';
 import { userPlaylistService, UserPlaylist, PlaylistItem } from '../services/userPlaylistService';
 import { useAudio, Playlist as AudioPlaylist, AudioItem } from '../context/AudioContext';
+import { useUser } from '../context/UserContext';
 import CommentSection from '../components/features/CommentSection';
 
 const UserPlaylistPage: React.FC = () => {
@@ -32,6 +33,7 @@ const UserPlaylistPage: React.FC = () => {
         prevTrack,
         seek,
     } = useAudio();
+    const { isSubscribed } = useUser();
     
     // Check if this playlist is currently playing
     const isThisPlaylistPlaying = currentPlaylist?._id === id;
@@ -72,7 +74,7 @@ const UserPlaylistPage: React.FC = () => {
     const handlePlayTrack = (index: number) => {
         if (!playlist) return;
         const audioPlaylist = convertToAudioPlaylist(playlist);
-        playPlaylist(audioPlaylist, index);
+        playPlaylist(audioPlaylist, index, isSubscribed);
     };
     
     const handlePlayPause = () => {
@@ -83,7 +85,7 @@ const UserPlaylistPage: React.FC = () => {
         } else {
             // Start playing this playlist from the beginning
             const audioPlaylist = convertToAudioPlaylist(playlist);
-            playPlaylist(audioPlaylist, 0);
+            playPlaylist(audioPlaylist, 0, isSubscribed);
         }
     };
     

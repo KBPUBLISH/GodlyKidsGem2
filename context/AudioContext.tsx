@@ -27,7 +27,11 @@ export interface Playlist {
     type?: 'Song' | 'Audiobook';
     items: AudioItem[];
     playCount?: number;
+    isMembersOnly?: boolean;
 }
+
+// Premium preview constants
+const AUDIO_PREVIEW_SECONDS = 60; // 1 minute preview for premium audio
 
 interface AudioContextType {
     // Background Music & SFX (simplified - disabled by default)
@@ -51,12 +55,17 @@ interface AudioContextType {
     progress: number;
     currentTime: number;
     duration: number;
-    playPlaylist: (playlist: Playlist, startIndex?: number) => void;
+    playPlaylist: (playlist: Playlist, startIndex?: number, isSubscribed?: boolean) => void;
     togglePlayPause: () => void;
     nextTrack: () => void;
     prevTrack: () => void;
     seek: (time: number) => void;
     closePlayer: () => void;
+    
+    // Premium preview
+    previewLimitReached: boolean;
+    previewTimeRemaining: number;
+    dismissPreviewLimit: () => void;
 }
 
 const AudioContext = createContext<AudioContextType>({
@@ -85,6 +94,10 @@ const AudioContext = createContext<AudioContextType>({
     prevTrack: () => { },
     seek: () => { },
     closePlayer: () => { },
+    
+    previewLimitReached: false,
+    previewTimeRemaining: AUDIO_PREVIEW_SECONDS,
+    dismissPreviewLimit: () => { },
 });
 
 export const useAudio = () => useContext(AudioContext);
@@ -102,6 +115,13 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     const [progress, setProgress] = useState(0);
     const [currentTime, setCurrentTime] = useState(0);
     const [duration, setDuration] = useState(0);
+    
+    // --- Premium Preview State ---
+    const [previewLimitReached, setPreviewLimitReached] = useState(false);
+    const [previewTimeRemaining, setPreviewTimeRemaining] = useState(AUDIO_PREVIEW_SECONDS);
+    const [isPreviewMode, setIsPreviewMode] = useState(false); // True if playing premium content without subscription
+    const previewTimeAccumulator = useRef(0);
+    const isPreviewModeRef = useRef(false); // Ref for use in event listeners
 
     // --- Refs ---
     const audioRef = useRef<HTMLAudioElement | null>(null);
@@ -160,6 +180,11 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     // Track engagement update intervals (update every 30 seconds)
     const lastEngagementUpdateRef = useRef<number>(0);
     const ENGAGEMENT_UPDATE_INTERVAL = 30; // seconds
+    
+    // Keep preview mode ref in sync with state
+    useEffect(() => {
+        isPreviewModeRef.current = isPreviewMode;
+    }, [isPreviewMode]);
 
     // Create audio element once on mount
     useEffect(() => {
@@ -185,6 +210,21 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
                     if (listeningTimeAccumulatorRef.current >= 10) {
                         activityTrackingService.trackAudioListeningTime(Math.floor(listeningTimeAccumulatorRef.current));
                         listeningTimeAccumulatorRef.current = 0;
+                    }
+                    
+                    // Track preview time for premium content
+                    if (isPreviewModeRef.current) {
+                        previewTimeAccumulator.current += deltaSeconds;
+                        const remaining = Math.max(0, AUDIO_PREVIEW_SECONDS - previewTimeAccumulator.current);
+                        setPreviewTimeRemaining(Math.floor(remaining));
+                        
+                        // Check if preview limit reached
+                        if (previewTimeAccumulator.current >= AUDIO_PREVIEW_SECONDS) {
+                            console.log('🎵 Preview limit reached - pausing playback');
+                            audio.pause();
+                            setIsPlaying(false);
+                            setPreviewLimitReached(true);
+                        }
                     }
                 }
             }
@@ -480,10 +520,23 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     }, [playTone]);
 
     // --- Playlist Player Methods ---
-    const playPlaylist = useCallback((playlist: Playlist, startIndex: number = 0) => {
+    const playPlaylist = useCallback((playlist: Playlist, startIndex: number = 0, isSubscribed: boolean = true) => {
         setCurrentPlaylist(playlist);
         setCurrentTrackIndex(startIndex);
         setIsPlaying(true);
+        
+        // Check if this is premium content without subscription
+        const isPremiumPreview = playlist.isMembersOnly === true && !isSubscribed;
+        setIsPreviewMode(isPremiumPreview);
+        if (isPremiumPreview) {
+            // Reset preview time when starting a new premium playlist
+            previewTimeAccumulator.current = 0;
+            setPreviewTimeRemaining(AUDIO_PREVIEW_SECONDS);
+            setPreviewLimitReached(false);
+            console.log('🎵 Starting premium playlist in preview mode (60s limit)');
+        } else {
+            setPreviewLimitReached(false);
+        }
         
         // Reset engagement tracking for new track
         lastEngagementUpdateRef.current = 0;
@@ -558,6 +611,16 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
                 navigator.mediaSession.metadata = null;
             } catch { }
         }
+        
+        // Reset preview state
+        setPreviewLimitReached(false);
+        setIsPreviewMode(false);
+        previewTimeAccumulator.current = 0;
+        setPreviewTimeRemaining(AUDIO_PREVIEW_SECONDS);
+    }, []);
+    
+    const dismissPreviewLimit = useCallback(() => {
+        setPreviewLimitReached(false);
     }, []);
 
     // Stub methods for background music (disabled)
@@ -572,7 +635,8 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
             musicEnabled, sfxEnabled, musicVolume, toggleMusic, toggleSfx, setMusicVolume,
             playClick, playBack, playSuccess, playTab, setGameMode, setMusicPaused,
             currentPlaylist, currentTrackIndex, isPlaying, progress, currentTime, duration,
-            playPlaylist, togglePlayPause, nextTrack, prevTrack, seek, closePlayer
+            playPlaylist, togglePlayPause, nextTrack, prevTrack, seek, closePlayer,
+            previewLimitReached, previewTimeRemaining, dismissPreviewLimit
         }}>
             {children}
         </AudioContext.Provider>

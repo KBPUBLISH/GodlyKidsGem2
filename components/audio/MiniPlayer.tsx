@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { Play, Pause, X, Music, SkipBack, SkipForward } from 'lucide-react';
+import { Play, Pause, X, Music, SkipBack, SkipForward, Crown, Lock } from 'lucide-react';
 import { useAudio } from '../../context/AudioContext';
 
 const MiniPlayer: React.FC = () => {
@@ -15,7 +15,10 @@ const MiniPlayer: React.FC = () => {
         closePlayer,
         nextTrack,
         prevTrack,
-        seek
+        seek,
+        previewLimitReached,
+        previewTimeRemaining,
+        dismissPreviewLimit
     } = useAudio();
 
     const navigate = useNavigate();
@@ -210,6 +213,80 @@ const MiniPlayer: React.FC = () => {
                     </div>
                 </div>
             </div>
+            
+            {/* Premium Preview Limit Modal */}
+            {previewLimitReached && (
+                <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/80 backdrop-blur-sm animate-in fade-in duration-300">
+                    <div className="relative w-[90%] max-w-md bg-gradient-to-b from-[#1a237e] to-[#0d113a] rounded-3xl p-8 shadow-2xl animate-in zoom-in-75 duration-500 border-4 border-[#FFD700]">
+                        {/* Crown decoration */}
+                        <div className="absolute -top-6 left-1/2 -translate-x-1/2 w-16 h-16 bg-gradient-to-br from-[#FFD700] to-[#FFA500] rounded-full flex items-center justify-center border-4 border-white shadow-lg">
+                            <Crown className="w-8 h-8 text-[#5c2e0b]" />
+                        </div>
+                        
+                        {/* Content */}
+                        <div className="text-center mt-6">
+                            <h2 className="text-2xl font-bold text-white drop-shadow-lg mb-2">
+                                Enjoying the Audio?
+                            </h2>
+                            <p className="text-[#eecaa0] text-base mb-2">
+                                You've listened to your 1-minute free preview!
+                            </p>
+                            <p className="text-white/70 text-sm mb-6">
+                                Unlock unlimited listening with a subscription.
+                            </p>
+                            
+                            {/* Audio preview indicator */}
+                            <div className="bg-[#3E1F07]/50 rounded-xl p-4 mb-6">
+                                <div className="flex items-center justify-center gap-3">
+                                    <div className="w-12 h-12 rounded-lg overflow-hidden border-2 border-[#FFD700]/50">
+                                        {currentPlaylist?.coverImage ? (
+                                            <img src={currentPlaylist.coverImage} alt="" className="w-full h-full object-cover" />
+                                        ) : (
+                                            <div className="w-full h-full bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center">
+                                                <Music className="w-6 h-6 text-white/50" />
+                                            </div>
+                                        )}
+                                    </div>
+                                    <div className="text-left">
+                                        <p className="text-white font-bold text-sm truncate max-w-[180px]">{currentPlaylist?.title}</p>
+                                        <div className="flex items-center gap-1 text-[#FFD700] text-xs">
+                                            <Lock size={10} />
+                                            <span>Premium Content</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            {/* Buttons */}
+                            <div className="space-y-3">
+                                <button
+                                    onClick={() => {
+                                        dismissPreviewLimit();
+                                        closePlayer();
+                                        navigate('/paywall', { state: { from: `/audio/playlist/${currentPlaylist?._id}` } });
+                                    }}
+                                    className="w-full bg-gradient-to-r from-[#FFD700] to-[#FFA500] text-[#5c2e0b] font-bold px-8 py-4 rounded-xl shadow-lg hover:opacity-90 transition-opacity text-lg"
+                                >
+                                    🎵 Unlock Unlimited Audio
+                                </button>
+                                <button
+                                    onClick={() => {
+                                        dismissPreviewLimit();
+                                        closePlayer();
+                                    }}
+                                    className="w-full bg-white/10 text-white/70 font-medium px-8 py-3 rounded-xl hover:bg-white/20 transition-colors"
+                                >
+                                    Maybe Later
+                                </button>
+                            </div>
+                            
+                            <p className="text-white/50 text-xs mt-4">
+                                14-day free trial • Cancel anytime
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };

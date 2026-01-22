@@ -5,6 +5,7 @@ import { favoritesService } from '../services/favoritesService';
 import { getApiBaseUrl } from '../services/apiService';
 import { playCountService } from '../services/playCountService';
 import { useAudio, Playlist } from '../context/AudioContext';
+import { useUser } from '../context/UserContext';
 import AddToPlaylistModal from '../components/features/AddToPlaylistModal';
 
 // CSS for the pulse/heartbeat animation synced with music
@@ -114,6 +115,7 @@ const PlaylistPlayerPage: React.FC = () => {
         prevTrack,
         seek
     } = useAudio();
+    const { isSubscribed } = useUser();
 
     const [loading, setLoading] = useState(true);
     const [localPlaylist, setLocalPlaylist] = useState<Playlist | null>(null);
@@ -136,7 +138,7 @@ const PlaylistPlayerPage: React.FC = () => {
 
                     // If URL specifies a different track than what's playing, switch to it
                     if (itemIndex && parseInt(itemIndex) !== currentTrackIndex) {
-                        playPlaylist(currentPlaylist, targetIndex);
+                        playPlaylist(currentPlaylist, targetIndex, isSubscribed);
                     }
                     return;
                 }
@@ -153,7 +155,7 @@ const PlaylistPlayerPage: React.FC = () => {
                 setLocalPlaylist(data);
 
                 // Start playing the new playlist at the requested index
-                playPlaylist(data, targetIndex);
+                playPlaylist(data, targetIndex, isSubscribed);
 
             } catch (error) {
                 console.error('Error fetching playlist:', error);

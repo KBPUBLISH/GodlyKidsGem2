@@ -1005,21 +1005,35 @@ const OnboardingPage: React.FC = () => {
     try {
       // Normalize URL - API_BASE_URL may end with /api/ so use auth/register without leading slash
       const baseUrl = API_BASE_URL.replace(/\/+$/, ''); // Remove trailing slashes
+      
+      // Generate username from parentName or email
+      const username = (pName || email.split('@')[0]).toLowerCase().replace(/[^a-z0-9]/g, '') + '_' + Date.now().toString(36);
+      
       const response = await fetch(`${baseUrl}/auth/register`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          username,
           email: email.toLowerCase().trim(),
           password,
-          parentName: pName || 'Parent',
-          kids: kids.map(k => ({ name: k.name, age: k.age, avatar: k.avatar })),
         }),
       });
       
-      const data = await response.json();
+      // Handle response - backend may return plain text on error
+      const text = await response.text();
+      let data;
+      try {
+        data = JSON.parse(text);
+      } catch {
+        // Backend returned plain text error
+        if (!response.ok) {
+          return { success: false, error: text || 'Registration failed' };
+        }
+        data = {};
+      }
       
       if (!response.ok) {
-        return { success: false, error: data.message || 'Registration failed' };
+        return { success: false, error: data.msg || data.message || 'Registration failed' };
       }
       
       // Save user data

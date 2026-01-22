@@ -2764,29 +2764,80 @@ const BookReaderPage: React.FC = () => {
             });
             
             // Track time for word highlighting with OFFSET
+            // OPTIMIZED: Use RAF for smoother updates with binary search
+            const SEGMENT_LOOKAHEAD_MS = 0.05; // 50ms lookahead
             let lastHighlightedIdx = -1;
-            audio.ontimeupdate = () => {
-                if (playbackId !== multiSegmentPlaybackIdRef.current) return;
+            let lastLocalIdx = -1;
+            let segmentRafId: number | null = null;
+            
+            const findWordIndexInSegment = (time: number, words: Array<{ start: number; end: number }>, lastIdx: number): number => {
+                if (!words || words.length === 0) return -1;
+                const adjustedTime = time + SEGMENT_LOOKAHEAD_MS;
+                
+                // Quick check for same or next word
+                if (lastIdx >= 0 && lastIdx < words.length) {
+                    const w = words[lastIdx];
+                    if (adjustedTime >= w.start && adjustedTime < w.end) return lastIdx;
+                    if (lastIdx + 1 < words.length) {
+                        const next = words[lastIdx + 1];
+                        if (adjustedTime >= next.start && adjustedTime < next.end) return lastIdx + 1;
+                    }
+                }
+                
+                // Binary search
+                let low = 0, high = words.length - 1;
+                while (low <= high) {
+                    const mid = Math.floor((low + high) / 2);
+                    const w = words[mid];
+                    if (adjustedTime >= w.start && adjustedTime < w.end) return mid;
+                    if (adjustedTime < w.start) high = mid - 1;
+                    else low = mid + 1;
+                }
+                return -1;
+            };
+            
+            const updateSegmentHighlighting = () => {
+                if (playbackId !== multiSegmentPlaybackIdRef.current || audio.paused || audio.ended) {
+                    segmentRafId = null;
+                    return;
+                }
                 
                 const alignment = wordAlignmentRef.current;
                 if (alignment?.words) {
-                    for (let i = 0; i < alignment.words.length; i++) {
-                        const w = alignment.words[i];
-                        if (audio.currentTime >= w.start && audio.currentTime < w.end) {
-                            // Apply offset to get GLOBAL word index for display
-                            const globalIdx = wordOffset + i;
-                            if (globalIdx !== lastHighlightedIdx) {
-                                lastHighlightedIdx = globalIdx;
-                                setCurrentWordIndex(globalIdx);
-                            }
-                            break;
+                    const localIdx = findWordIndexInSegment(audio.currentTime, alignment.words, lastLocalIdx);
+                    if (localIdx !== -1) {
+                        lastLocalIdx = localIdx;
+                        const globalIdx = wordOffset + localIdx;
+                        if (globalIdx !== lastHighlightedIdx) {
+                            lastHighlightedIdx = globalIdx;
+                            setCurrentWordIndex(globalIdx);
                         }
                     }
+                }
+                
+                segmentRafId = requestAnimationFrame(updateSegmentHighlighting);
+            };
+            
+            // Start RAF on play
+            audio.onplay = () => {
+                if (!segmentRafId && playbackId === multiSegmentPlaybackIdRef.current) {
+                    segmentRafId = requestAnimationFrame(updateSegmentHighlighting);
+                }
+            };
+            
+            // Store cleanup function
+            const cleanupSegmentRaf = () => {
+                if (segmentRafId) {
+                    cancelAnimationFrame(segmentRafId);
+                    segmentRafId = null;
                 }
             };
             
             // When this segment ends, play the next one
             audio.onended = () => {
+                // Clean up RAF
+                cleanupSegmentRaf();
+                
                 // Check if still valid or if user explicitly stopped playback
                 if (playbackId !== multiSegmentPlaybackIdRef.current || !isPlayingMultiSegmentRef.current || userStoppedPlaybackRef.current) {
                     console.log(`🛑 Playback ${playbackId} ended but cancelled (userStopped: ${userStoppedPlaybackRef.current})`);
@@ -3288,133 +3339,165 @@ const BookReaderPage: React.FC = () => {
                 });
 
                 // Track audio time for word highlighting
-                // Helper to find word index, handling gaps between words (sound effects, etc.)
-                const findWordIndex = (currentTime: number, words: Array<{ start: number; end: number; word?: string }>) => {
+                // OPTIMIZED: Use binary search with sequential hint for O(1) normal case
+                // Add small lookahead (50ms) to compensate for audio buffering/latency
+                const AUDIO_LOOKAHEAD_MS = 0.05; // 50ms lookahead
+                
+                // Optimized word finder - starts search from last known index
+                const findWordIndexOptimized = (
+                    currentTime: number, 
+                    words: Array<{ start: number; end: number; word?: string }>,
+                    lastIndex: number
+                ): number => {
                     if (!words || words.length === 0) return -1;
                     
-                    // First pass: look for exact match (current time is within word boundaries)
-                    for (let i = 0; i < words.length; i++) {
-                        const w = words[i];
-                        if (currentTime >= w.start && currentTime < w.end) {
-                            return i; // Exact match
+                    // Add lookahead to compensate for latency
+                    const adjustedTime = currentTime + AUDIO_LOOKAHEAD_MS;
+                    
+                    // Quick check: is it still the same word?
+                    if (lastIndex >= 0 && lastIndex < words.length) {
+                        const w = words[lastIndex];
+                        if (adjustedTime >= w.start && adjustedTime < w.end) {
+                            return lastIndex;
+                        }
+                        
+                        // Check if it's the next word (most common case)
+                        if (lastIndex + 1 < words.length) {
+                            const next = words[lastIndex + 1];
+                            if (adjustedTime >= next.start && adjustedTime < next.end) {
+                                return lastIndex + 1;
+                            }
                         }
                     }
                     
-                    // Second pass: we're in a gap or edge case
-                    // Either before first word, in a gap between words, or after last word
-                    
-                    // Before first word - show first word
-                    if (words.length > 0 && currentTime < words[0].start) {
+                    // Before first word
+                    if (adjustedTime < words[0].start) {
                         return 0;
                     }
                     
-                    // After last word - stay on last word
-                    if (words.length > 0 && currentTime >= words[words.length - 1].end) {
+                    // After last word
+                    if (adjustedTime >= words[words.length - 1].end) {
                         return words.length - 1;
                     }
                     
-                    // In a gap between words - find the NEXT word to move forward
-                    // This handles cases where bracketed content creates timing gaps
-                    for (let i = 0; i < words.length - 1; i++) {
-                        const currentWord = words[i];
-                        const nextWord = words[i + 1];
+                    // Binary search for larger jumps (seeking)
+                    let low = 0;
+                    let high = words.length - 1;
+                    
+                    while (low <= high) {
+                        const mid = Math.floor((low + high) / 2);
+                        const w = words[mid];
                         
-                        // If we're between this word's end and next word's start
-                        if (currentTime >= currentWord.end && currentTime < nextWord.start) {
-                            // Gap handling: if we're closer to the next word's start, show next word
-                            // This prevents getting stuck on a word when there's a long gap (e.g., sound effect)
-                            const gapMidpoint = (currentWord.end + nextWord.start) / 2;
-                            if (currentTime >= gapMidpoint) {
-                                return i + 1; // Move to next word
-                            }
-                            return i; // Stay on current word
+                        if (adjustedTime >= w.start && adjustedTime < w.end) {
+                            return mid;
+                        } else if (adjustedTime < w.start) {
+                            high = mid - 1;
+                        } else {
+                            low = mid + 1;
                         }
                     }
                     
-                    // Fallback: return last word
-                    return words.length - 1;
+                    // In a gap between words - return the word we just passed or the next one
+                    // based on which is closer
+                    if (low < words.length && high >= 0) {
+                        const prevWord = words[high];
+                        const nextWord = words[low];
+                        const gapMidpoint = (prevWord.end + nextWord.start) / 2;
+                        return adjustedTime >= gapMidpoint ? low : high;
+                    }
+                    
+                    return Math.min(Math.max(0, low), words.length - 1);
                 };
                 
-                // Auto-scroll to keep highlighted word in view
+                // Cached scroll container reference to avoid repeated DOM queries
+                let cachedScrollContainer: Element | null = null;
+                let lastScrollWordIdx = -1;
+                
+                // Auto-scroll to keep highlighted word in view (throttled)
                 const scrollToHighlightedWord = (wordIdx: number) => {
                     if (wordIdx < 0) return;
                     
-                    // Only scroll if the scroll UI is visible - respect user's preference
+                    // Only scroll if the scroll UI is visible
                     if (scrollStateRef.current === 'hidden') return;
                     
-                    // Find the highlighted word element
-                    const wordElements = document.querySelectorAll('[data-word-index]');
-                    const targetWord = wordElements[wordIdx] as HTMLElement;
+                    // Only scroll every 3 words to avoid jank
+                    if (wordIdx !== 0 && Math.abs(wordIdx - lastScrollWordIdx) < 3) return;
+                    lastScrollWordIdx = wordIdx;
                     
-                    if (targetWord) {
-                        // Find the scrollable container (the text scroll area)
-                        const scrollContainer = targetWord.closest('[data-scroll-container]') || targetWord.closest('.overflow-y-auto');
+                    // Use cached DOM reference when possible
+                    const targetWord = document.querySelector(`[data-word-index="${wordIdx}"]`) as HTMLElement;
+                    if (!targetWord) return;
+                    
+                    if (!cachedScrollContainer) {
+                        cachedScrollContainer = targetWord.closest('[data-scroll-container]') || targetWord.closest('.overflow-y-auto');
+                    }
+                    
+                    if (cachedScrollContainer) {
+                        const containerRect = cachedScrollContainer.getBoundingClientRect();
+                        const wordRect = targetWord.getBoundingClientRect();
+                        const scrollTop = cachedScrollContainer.scrollTop;
                         
-                        if (scrollContainer) {
-                            // Scroll within the container only, not the whole page
-                            const containerRect = scrollContainer.getBoundingClientRect();
-                            const wordRect = targetWord.getBoundingClientRect();
-                            const scrollTop = scrollContainer.scrollTop;
-                            
-                            // Calculate position to center the word in the container
-                            const targetScrollTop = scrollTop + (wordRect.top - containerRect.top) - (containerRect.height / 2) + (wordRect.height / 2);
-                            
-                            scrollContainer.scrollTo({
-                                top: Math.max(0, targetScrollTop),
-                                behavior: 'smooth'
-                            });
-                        }
+                        // Calculate position to center the word in the container
+                        const targetScrollTop = scrollTop + (wordRect.top - containerRect.top) - (containerRect.height / 2) + (wordRect.height / 2);
+                        
+                        cachedScrollContainer.scrollTo({
+                            top: Math.max(0, targetScrollTop),
+                            behavior: 'smooth'
+                        });
                     }
                 };
                 
                 let lastHighlightedIndex = -1;
+                let rafId: number | null = null;
                 
-                // Use ontimeupdate as primary method
-                audio.ontimeupdate = () => {
-                    const currentAlignment = wordAlignmentRef.current;
-                    if (currentAlignment && currentAlignment.words && currentAlignment.words.length > 0) {
-                        const wordIndex = findWordIndex(audio.currentTime, currentAlignment.words);
-
-                        if (wordIndex !== -1 && wordIndex !== lastHighlightedIndex) {
-                            lastHighlightedIndex = wordIndex;
-                            setCurrentWordIndex(wordIndex);
-                            
-                            // Auto-scroll every few words to avoid too much scrolling
-                            if (wordIndex % 3 === 0 || wordIndex === 0) {
-                                scrollToHighlightedWord(wordIndex);
-                            }
-                        }
+                // Use requestAnimationFrame for smoother, browser-optimized updates
+                const updateHighlighting = () => {
+                    if (audio.paused || audio.ended) {
+                        rafId = null;
+                        return;
                     }
-                };
-                
-                // Also use interval for more frequent updates (smoother highlighting)
-                const highlightInterval = setInterval(() => {
-                    if (audio.paused || audio.ended) return;
                     
                     const currentAlignment = wordAlignmentRef.current;
                     if (currentAlignment && currentAlignment.words && currentAlignment.words.length > 0) {
-                        const wordIndex = findWordIndex(audio.currentTime, currentAlignment.words);
+                        const wordIndex = findWordIndexOptimized(
+                            audio.currentTime, 
+                            currentAlignment.words,
+                            lastHighlightedIndex
+                        );
 
                         if (wordIndex !== -1 && wordIndex !== lastHighlightedIndex) {
                             lastHighlightedIndex = wordIndex;
                             setCurrentWordIndex(wordIndex);
-                            
-                            // Auto-scroll
-                            if (wordIndex % 3 === 0) {
-                                scrollToHighlightedWord(wordIndex);
-                            }
+                            scrollToHighlightedWord(wordIndex);
                         }
                     }
-                }, 50); // 20 times per second
+                    
+                    // Continue the animation loop
+                    rafId = requestAnimationFrame(updateHighlighting);
+                };
                 
-                // Clean up interval on pause/end
+                // Start the RAF loop when audio plays
+                audio.onplay = () => {
+                    if (!rafId) {
+                        rafId = requestAnimationFrame(updateHighlighting);
+                    }
+                };
+                
+                // Clean up RAF on pause
                 audio.onpause = () => {
-                    clearInterval(highlightInterval);
+                    if (rafId) {
+                        cancelAnimationFrame(rafId);
+                        rafId = null;
+                    }
                 };
 
                 audio.onended = () => {
-                    // Clean up interval
-                    clearInterval(highlightInterval);
+                    // Clean up RAF
+                    if (rafId) {
+                        cancelAnimationFrame(rafId);
+                        rafId = null;
+                    }
+                    cachedScrollContainer = null; // Reset cached container
                     
                     // Highlight the last word when audio ends
                     const currentAlignment = wordAlignmentRef.current;

@@ -1,8 +1,46 @@
 // Favorites Service - Manages user's favorite books, playlists, and book series
+import { API_BASE_URL } from '../constants';
+
 const FAVORITES_KEY = 'godlykids_favorites';
 const LIKES_KEY = 'godlykids_likes';
 const PLAYLIST_FAVORITES_KEY = 'godlykids_playlist_favorites';
 const BOOK_SERIES_FAVORITES_KEY = 'godlykids_book_series_favorites';
+
+// Helper to sync favorite action to backend (non-blocking)
+const syncFavoriteToBackend = async (type: 'book' | 'playlist', id: string, action: 'add' | 'remove') => {
+  try {
+    const endpoint = type === 'book' 
+      ? `${API_BASE_URL}/api/books/${id}/favorite`
+      : `${API_BASE_URL}/api/playlists/${id}/favorite`;
+    
+    await fetch(endpoint, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action }),
+    });
+  } catch (error) {
+    // Non-blocking - don't fail if backend sync fails
+    console.warn(`Failed to sync ${type} favorite to backend:`, error);
+  }
+};
+
+// Helper to sync like action to backend (non-blocking)
+const syncLikeToBackend = async (type: 'book' | 'playlist', id: string, action: 'add' | 'remove') => {
+  try {
+    const endpoint = type === 'book' 
+      ? `${API_BASE_URL}/api/books/${id}/like`
+      : `${API_BASE_URL}/api/playlists/${id}/like`;
+    
+    await fetch(endpoint, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action }),
+    });
+  } catch (error) {
+    // Non-blocking - don't fail if backend sync fails
+    console.warn(`Failed to sync ${type} like to backend:`, error);
+  }
+};
 
 export interface FavoriteBook {
   bookId: string;
@@ -75,9 +113,11 @@ class FavoritesService {
   toggleFavorite(bookId: string): boolean {
     if (this.isFavorite(bookId)) {
       this.removeFavorite(bookId);
+      syncFavoriteToBackend('book', bookId, 'remove');
       return false;
     } else {
       this.addFavorite(bookId);
+      syncFavoriteToBackend('book', bookId, 'add');
       return true;
     }
   }
@@ -110,10 +150,12 @@ class FavoritesService {
       if (index > -1) {
         likes.splice(index, 1);
         localStorage.setItem(LIKES_KEY, JSON.stringify(likes));
+        syncLikeToBackend('book', bookId, 'remove');
         return false; // Unliked
       } else {
         likes.push(bookId);
         localStorage.setItem(LIKES_KEY, JSON.stringify(likes));
+        syncLikeToBackend('book', bookId, 'add');
         return true; // Liked
       }
     } catch (error) {
@@ -179,9 +221,11 @@ class FavoritesService {
   togglePlaylistFavorite(playlistId: string): boolean {
     if (this.isPlaylistFavorite(playlistId)) {
       this.removePlaylistFavorite(playlistId);
+      syncFavoriteToBackend('playlist', playlistId, 'remove');
       return false;
     } else {
       this.addPlaylistFavorite(playlistId);
+      syncFavoriteToBackend('playlist', playlistId, 'add');
       return true;
     }
   }

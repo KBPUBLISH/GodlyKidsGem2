@@ -546,7 +546,7 @@ const hasCompletedOnboarding = (): boolean => {
   } catch { return false; }
 };
 
-// Protected route wrapper - shows account creation modal if no account
+// Protected route wrapper - requires account AND completed onboarding for content access
 // Exception: allows full access during active tutorial for tutorial-first flow
 const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [hasAccount, setHasAccount] = useState(() => hasUserAccount());
@@ -554,23 +554,35 @@ const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) =
   
   // Allow FULL access during ANY active tutorial (don't interrupt tutorial flow)
   const tutorialActive = isTutorialInProgress();
-  
-  // If user has account or tutorial is active, allow access
-  if (hasAccount || tutorialActive) {
+  if (tutorialActive) {
     return <>{children}</>;
   }
   
-  // No account and no tutorial - show account creation modal (don't render children yet)
+  // Check if user has completed onboarding
+  const onboardingComplete = hasCompletedOnboarding();
+  
+  // If user has account AND completed onboarding, allow access
+  if (hasAccount && onboardingComplete) {
+    return <>{children}</>;
+  }
+  
+  // If user has account but NOT completed onboarding, redirect to onboarding
+  if (hasAccount && !onboardingComplete) {
+    return <Navigate to="/onboarding" replace />;
+  }
+  
+  // No account - show account creation modal
   return (
     <CreateAccountModal
       isOpen={true}
-      navigateToOnboarding={false} // Don't auto-navigate, let ProtectedRoute handle it
+      navigateToOnboarding={true} // After account creation, go to onboarding
       onClose={() => {
         // Go back to previous page
         window.history.back();
       }}
       onAccountCreated={() => {
         setHasAccount(true);
+        // Will redirect to onboarding via navigateToOnboarding={true}
       }}
       onSignIn={() => {
         navigate('/signin', { state: { returnTo: window.location.hash.replace('#', '') || '/home' } });

@@ -460,7 +460,7 @@ const ShopModal: React.FC<ShopModalProps> = ({ isOpen, onClose, initialTab, hide
         else if (selectedPart === 'body') currentScale = bodyScale;
         else if (selectedPart === 'hat') currentScale = hatScale;
 
-        const step = 0.1; // 10% increments
+        const step = 0.05; // 5% increments for finer control
         const next = currentScale + (delta * step);
         setPartScale(selectedPart, next);
     };
@@ -970,10 +970,10 @@ const ShopModal: React.FC<ShopModalProps> = ({ isOpen, onClose, initialTab, hide
                             <div className="flex flex-col gap-2 items-center">
                                 <span className="text-[10px] text-[#eecaa0]/60 font-bold uppercase tracking-wider">Move</span>
                                 <div className="grid grid-cols-2 gap-2">
-                                    <button onClick={() => updateOffset('x', -5)} className="w-12 h-12 bg-[#3E1F07] rounded-xl text-[#eecaa0] hover:bg-[#5c2e0b] active:scale-95 border-b-4 border-[#2a1505] active:border-b-0 active:translate-y-1 flex items-center justify-center"><MoveHorizontal size={20} className="rotate-180" /></button>
-                                    <button onClick={() => updateOffset('x', 5)} className="w-12 h-12 bg-[#3E1F07] rounded-xl text-[#eecaa0] hover:bg-[#5c2e0b] active:scale-95 border-b-4 border-[#2a1505] active:border-b-0 active:translate-y-1 flex items-center justify-center"><MoveHorizontal size={20} /></button>
-                                    <button onClick={() => updateOffset('y', -5)} className="w-12 h-12 bg-[#3E1F07] rounded-xl text-[#eecaa0] hover:bg-[#5c2e0b] active:scale-95 border-b-4 border-[#2a1505] active:border-b-0 active:translate-y-1 flex items-center justify-center"><ArrowUpToLine size={20} /></button>
-                                    <button onClick={() => updateOffset('y', 5)} className="w-12 h-12 bg-[#3E1F07] rounded-xl text-[#eecaa0] hover:bg-[#5c2e0b] active:scale-95 border-b-4 border-[#2a1505] active:border-b-0 active:translate-y-1 flex items-center justify-center"><ArrowDownToLine size={20} /></button>
+                                    <button onClick={() => updateOffset('x', -2)} className="w-12 h-12 bg-[#3E1F07] rounded-xl text-[#eecaa0] hover:bg-[#5c2e0b] active:scale-95 border-b-4 border-[#2a1505] active:border-b-0 active:translate-y-1 flex items-center justify-center"><MoveHorizontal size={20} className="rotate-180" /></button>
+                                    <button onClick={() => updateOffset('x', 2)} className="w-12 h-12 bg-[#3E1F07] rounded-xl text-[#eecaa0] hover:bg-[#5c2e0b] active:scale-95 border-b-4 border-[#2a1505] active:border-b-0 active:translate-y-1 flex items-center justify-center"><MoveHorizontal size={20} /></button>
+                                    <button onClick={() => updateOffset('y', -2)} className="w-12 h-12 bg-[#3E1F07] rounded-xl text-[#eecaa0] hover:bg-[#5c2e0b] active:scale-95 border-b-4 border-[#2a1505] active:border-b-0 active:translate-y-1 flex items-center justify-center"><ArrowUpToLine size={20} /></button>
+                                    <button onClick={() => updateOffset('y', 2)} className="w-12 h-12 bg-[#3E1F07] rounded-xl text-[#eecaa0] hover:bg-[#5c2e0b] active:scale-95 border-b-4 border-[#2a1505] active:border-b-0 active:translate-y-1 flex items-center justify-center"><ArrowDownToLine size={20} /></button>
                                 </div>
                             </div>
 
@@ -985,8 +985,8 @@ const ShopModal: React.FC<ShopModalProps> = ({ isOpen, onClose, initialTab, hide
                                     <div className="flex flex-col gap-2 items-center">
                                         <span className="text-[10px] text-[#eecaa0]/60 font-bold uppercase tracking-wider">Rotate</span>
                                         <div className="flex gap-2 h-full items-center">
-                                            <button onClick={() => updateRotation(-15)} className="w-14 h-14 bg-[#3E1F07] rounded-xl text-[#eecaa0] hover:bg-[#5c2e0b] active:scale-95 border-b-4 border-[#2a1505] active:border-b-0 active:translate-y-1 flex items-center justify-center"><RotateCcw size={24} /></button>
-                                            <button onClick={() => updateRotation(15)} className="w-14 h-14 bg-[#3E1F07] rounded-xl text-[#eecaa0] hover:bg-[#5c2e0b] active:scale-95 border-b-4 border-[#2a1505] active:border-b-0 active:translate-y-1 flex items-center justify-center"><RotateCw size={24} /></button>
+                                            <button onClick={() => updateRotation(-5)} className="w-14 h-14 bg-[#3E1F07] rounded-xl text-[#eecaa0] hover:bg-[#5c2e0b] active:scale-95 border-b-4 border-[#2a1505] active:border-b-0 active:translate-y-1 flex items-center justify-center"><RotateCcw size={24} /></button>
+                                            <button onClick={() => updateRotation(5)} className="w-14 h-14 bg-[#3E1F07] rounded-xl text-[#eecaa0] hover:bg-[#5c2e0b] active:scale-95 border-b-4 border-[#2a1505] active:border-b-0 active:translate-y-1 flex items-center justify-center"><RotateCw size={24} /></button>
                                         </div>
                                     </div>
                                 </>

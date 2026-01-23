@@ -3514,13 +3514,27 @@ const BookReaderPage: React.FC = () => {
                 let rafId: number | null = null;
                 
                 // Use requestAnimationFrame for smoother, browser-optimized updates
+                let rafLoopCount = 0;
                 const updateHighlighting = () => {
                     if (audio.paused || audio.ended) {
+                        console.log('🔴 RAF stopped: audio paused or ended');
                         rafId = null;
                         return;
                     }
                     
                     const currentAlignment = wordAlignmentRef.current;
+                    
+                    // Debug: Log every 30 frames (~0.5 sec)
+                    rafLoopCount++;
+                    if (rafLoopCount % 30 === 1) {
+                        console.log('🔄 RAF loop:', {
+                            currentTime: audio.currentTime.toFixed(2),
+                            hasAlignment: !!currentAlignment,
+                            wordCount: currentAlignment?.words?.length || 0,
+                            lastHighlightedIndex
+                        });
+                    }
+                    
                     if (currentAlignment && currentAlignment.words && currentAlignment.words.length > 0) {
                         const wordIndex = findWordIndexOptimized(
                             audio.currentTime, 
@@ -3530,6 +3544,7 @@ const BookReaderPage: React.FC = () => {
 
                         if (wordIndex !== -1 && wordIndex !== lastHighlightedIndex) {
                             lastHighlightedIndex = wordIndex;
+                            console.log('🔦 Highlighting word:', wordIndex, 'at time:', audio.currentTime.toFixed(2));
                             setCurrentWordIndex(wordIndex);
                             scrollToHighlightedWord(wordIndex);
                         }
@@ -3541,7 +3556,9 @@ const BookReaderPage: React.FC = () => {
                 
                 // Start the RAF loop when audio plays
                 audio.onplay = () => {
+                    console.log('▶️ Audio onplay fired, starting RAF loop. Alignment ready:', !!wordAlignmentRef.current);
                     if (!rafId) {
+                        rafLoopCount = 0;
                         rafId = requestAnimationFrame(updateHighlighting);
                     }
                 };

@@ -1772,6 +1772,9 @@ const BookReaderPage: React.FC = () => {
     const handleNext = (e: React.MouseEvent) => {
         e.stopPropagation();
         if (isPageTurning) return;
+        
+        // Check if TTS was playing before we stop it (for auto-play on next page)
+        const wasPlaying = playingRef.current || isPlayingMultiSegmentRef.current;
         stopAudio();
         
         // Check preview limit for premium books (3 pages allowed)
@@ -1838,24 +1841,26 @@ const BookReaderPage: React.FC = () => {
                     }
                 }
                 
-                // Auto-play narration after manual page swipe
-                setTimeout(() => {
-                    const newPage = pages[nextIndex];
-                    const contentTextBoxes = newPage?.content?.textBoxes;
-                    const pageTextBoxes = contentTextBoxes || newPage?.textBoxes || (newPage as any)?.content?.textBoxes || [];
-                    
-                    if (pageTextBoxes.length > 0) {
-                        const translatedTextBoxes = translatedContent.get(nextIndex);
-                        const firstBoxText = translatedTextBoxes?.[0]?.text || pageTextBoxes[0].text;
+                // Auto-play narration after manual page swipe (only if TTS was playing before)
+                if (wasPlaying) {
+                    setTimeout(() => {
+                        const newPage = pages[nextIndex];
+                        const contentTextBoxes = newPage?.content?.textBoxes;
+                        const pageTextBoxes = contentTextBoxes || newPage?.textBoxes || (newPage as any)?.content?.textBoxes || [];
                         
-                        if (firstBoxText) {
-                            console.log('▶️ Auto-playing TTS after manual swipe to page', nextIndex + 1);
-                            const shouldAutoPlay = ttsModeRef.current === 'auto';
-                            autoPlayModeRef.current = shouldAutoPlay;
-                            handlePlayText(firstBoxText, 0, { stopPropagation: () => {} } as React.MouseEvent, shouldAutoPlay);
+                        if (pageTextBoxes.length > 0) {
+                            const translatedTextBoxes = translatedContent.get(nextIndex);
+                            const firstBoxText = translatedTextBoxes?.[0]?.text || pageTextBoxes[0].text;
+                            
+                            if (firstBoxText) {
+                                console.log('▶️ Auto-playing TTS after manual swipe to page', nextIndex + 1);
+                                const shouldAutoPlay = ttsModeRef.current === 'auto';
+                                autoPlayModeRef.current = shouldAutoPlay;
+                                handlePlayText(firstBoxText, 0, { stopPropagation: () => {} } as React.MouseEvent, shouldAutoPlay);
+                            }
                         }
-                    }
-                }, 200); // Small delay to let page fully settle
+                    }, 200); // Small delay to let page fully settle
+                }
             }, 850); // Slightly after 0.8s animation completes
         }
     };
@@ -1863,6 +1868,9 @@ const BookReaderPage: React.FC = () => {
     const handlePrev = (e: React.MouseEvent) => {
         e.stopPropagation();
         if (isPageTurning) return;
+        
+        // Check if TTS was playing before we stop it (for auto-play on prev page)
+        const wasPlaying = playingRef.current || isPlayingMultiSegmentRef.current;
         stopAudio();
         if (currentPageIndex > 0) {
             // Preserve scroll state when turning pages manually - use ref to get latest value
@@ -1892,24 +1900,26 @@ const BookReaderPage: React.FC = () => {
                     readingProgressService.saveProgress(bookId, prevIndex);
                 }
                 
-                // Auto-play narration after manual swipe back
-                setTimeout(() => {
-                    const newPage = pages[prevIndex];
-                    const contentTextBoxes = newPage?.content?.textBoxes;
-                    const pageTextBoxes = contentTextBoxes || newPage?.textBoxes || (newPage as any)?.content?.textBoxes || [];
-                    
-                    if (pageTextBoxes.length > 0) {
-                        const translatedTextBoxes = translatedContent.get(prevIndex);
-                        const firstBoxText = translatedTextBoxes?.[0]?.text || pageTextBoxes[0].text;
+                // Auto-play narration after manual swipe back (only if TTS was playing before)
+                if (wasPlaying) {
+                    setTimeout(() => {
+                        const newPage = pages[prevIndex];
+                        const contentTextBoxes = newPage?.content?.textBoxes;
+                        const pageTextBoxes = contentTextBoxes || newPage?.textBoxes || (newPage as any)?.content?.textBoxes || [];
                         
-                        if (firstBoxText) {
-                            console.log('▶️ Auto-playing TTS after manual swipe back to page', prevIndex + 1);
-                            const shouldAutoPlay = ttsModeRef.current === 'auto';
-                            autoPlayModeRef.current = shouldAutoPlay;
-                            handlePlayText(firstBoxText, 0, { stopPropagation: () => {} } as React.MouseEvent, shouldAutoPlay);
+                        if (pageTextBoxes.length > 0) {
+                            const translatedTextBoxes = translatedContent.get(prevIndex);
+                            const firstBoxText = translatedTextBoxes?.[0]?.text || pageTextBoxes[0].text;
+                            
+                            if (firstBoxText) {
+                                console.log('▶️ Auto-playing TTS after manual swipe back to page', prevIndex + 1);
+                                const shouldAutoPlay = ttsModeRef.current === 'auto';
+                                autoPlayModeRef.current = shouldAutoPlay;
+                                handlePlayText(firstBoxText, 0, { stopPropagation: () => {} } as React.MouseEvent, shouldAutoPlay);
+                            }
                         }
-                    }
-                }, 200); // Small delay to let page fully settle
+                    }, 200); // Small delay to let page fully settle
+                }
             }, 850); // Slightly after 0.8s animation completes
         }
     };

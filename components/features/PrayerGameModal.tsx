@@ -527,7 +527,7 @@ const PrayerGameModal: React.FC<PrayerGameModalProps> = ({ isOpen, onClose }) =>
 
               {/* --- FOCUS / PRAYING --- */}
               {gameState === 'focus' && activeTopic && (
-                  <div className="flex flex-col items-center justify-center w-full h-full flex-1 animate-in zoom-in duration-500">
+                  <div className="flex flex-col items-center w-full h-full flex-1 animate-in zoom-in duration-500 overflow-y-auto">
                       
                       {/* Progress Header */}
                       <div className="text-[#e1bee7]/50 text-xs font-bold uppercase tracking-widest mb-8">
@@ -561,10 +561,10 @@ const PrayerGameModal: React.FC<PrayerGameModalProps> = ({ isOpen, onClose }) =>
                           </div>
                       </div>
 
-                      <h3 className="text-2xl font-display font-bold text-white mb-2 animate-pulse">
+                      <h3 className="text-3xl font-display font-bold text-white mb-3 animate-pulse">
                           {activeTopic.label}
                       </h3>
-                      <p className="text-[#e1bee7] text-center mb-4 px-4 leading-relaxed">
+                      <p className="text-white text-xl text-center mb-4 px-2 leading-relaxed font-medium">
                           {activeTopic.text}
                       </p>
 

@@ -1,12 +1,13 @@
 
 import React, { useMemo, useEffect, useState } from 'react';
-import { HashRouter, Routes, Route, useLocation, Navigate } from 'react-router-dom';
+import { HashRouter, Routes, Route, useLocation, Navigate, useNavigate } from 'react-router-dom';
 import LandingPage from './pages/LandingPage';
 import SignInPage from './pages/SignInPage';
 import ResetPasswordPage from './pages/ResetPasswordPage';
 import OnboardingPage from './pages/OnboardingPage';
 import HomePage from './pages/HomePage';
 import ReferralPromptModal from './components/features/ReferralPromptModal';
+import CreateAccountModal from './components/modals/CreateAccountModal';
 import { useUser } from './context/UserContext';
 
 // Diagnostic: Log when the entire app JS module is evaluated (WebView recreation)
@@ -466,6 +467,13 @@ import ShareBookPage from './pages/ShareBookPage';
 import ParentQuizPage from './pages/ParentQuizPage';
 import GivingPage from './pages/GivingPage';
 
+// Check if user has an account (auth token or email stored)
+const hasUserAccount = (): boolean => {
+  const token = localStorage.getItem('godlykids_auth_token');
+  const email = localStorage.getItem('godlykids_user_email');
+  return !!(token || email);
+};
+
 // Check if user is authenticated (has completed onboarding or has user data)
 const isUserAuthenticated = (): boolean => {
   // Check for auth token first
@@ -492,14 +500,53 @@ const isTutorialInProgress = (): boolean => {
   return !!(tutorialStep && tutorialComplete !== 'true');
 };
 
-// Protected route wrapper - redirects to landing if not authenticated
+// Check if user has completed onboarding (has parent name or kids set up)
+const hasCompletedOnboarding = (): boolean => {
+  const savedData = localStorage.getItem('godly_kids_data_v7') || localStorage.getItem('godly_kids_data_v6');
+  if (!savedData) return false;
+  try {
+    const data = JSON.parse(savedData);
+    return (data.parentName && data.parentName !== 'Parent' && data.parentName !== '') || 
+           (data.kids && data.kids.length > 0);
+  } catch { return false; }
+};
+
+// Protected route wrapper - shows account creation modal if no account
 // Exception: allows access during active tutorial for tutorial-first flow
 const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  if (!isUserAuthenticated() && !isTutorialInProgress()) {
-    console.log('🔒 User not authenticated and no tutorial in progress, redirecting to landing page');
-    return <Navigate to="/" replace />;
+  const [hasAccount, setHasAccount] = useState(() => hasUserAccount());
+  const navigate = useNavigate();
+  
+  // Allow access during tutorial without account check
+  if (isTutorialInProgress()) {
+    return <>{children}</>;
   }
-  return <>{children}</>;
+  
+  // If user has account, allow access without modal
+  if (hasAccount) {
+    return <>{children}</>;
+  }
+  
+  // No account and no tutorial - show account creation modal over the content
+  // This prompts users to create account even if they completed onboarding previously
+  return (
+    <>
+      {children}
+      <CreateAccountModal
+        isOpen={true}
+        onClose={() => {
+          // If they close without creating account, go to landing page
+          navigate('/', { replace: true });
+        }}
+        onAccountCreated={() => {
+          setHasAccount(true);
+        }}
+        onSignIn={() => {
+          navigate('/signin', { state: { returnTo: window.location.hash.replace('#', '') || '/home' } });
+        }}
+      />
+    </>
+  );
 };
 
 // Home page wrapper - shows welcome screen for new users who completed onboarding

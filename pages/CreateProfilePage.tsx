@@ -7,25 +7,30 @@ import { AVATAR_ASSETS } from '../components/avatar/AvatarAssets';
 import { useUser } from '../context/UserContext';
 import { useLanguage } from '../context/LanguageContext';
 
+// PNG-based heads from /public/avatars/heads/
 const FUNNY_HEADS = [
-  'head-toast',
-  'head-burger',
-  'head-cookie',
-  'head-tv',
-  'head-slime',
-  'head-pumpkin',
-  'head-earth',
-  'head-moon',
-  'head-bomb',
-  'head-eye',
-  'head-bear-brown',
-  'head-bear-polar',
-  'head-bear-aviator',
-  'head-dog-pug',
-  'head-dog-dalmatian',
-  'head-cat-orange',
-  'head-cat-black',
-  'head-lizard'
+  '/avatars/heads/head-1.png',
+  '/avatars/heads/head-2.png',
+  '/avatars/heads/head-3.png',
+  '/avatars/heads/head-4.png',
+  '/avatars/heads/head-5.png',
+  '/avatars/heads/head-6.png',
+  '/avatars/heads/head-7.png',
+  '/avatars/heads/head-8.png',
+  '/avatars/heads/head-9.png',
+  '/avatars/heads/head-11.png',
+  '/avatars/heads/head-12.png',
+  '/avatars/heads/head-13.png',
+  '/avatars/heads/head-14.png',
+  '/avatars/heads/head-15.png',
+  '/avatars/heads/head-16.png',
+  '/avatars/heads/head-17.png',
+  '/avatars/heads/head-18.png',
+  '/avatars/heads/head-19.png',
+  '/avatars/heads/head-20.png',
+  '/avatars/heads/head-21.png',
+  '/avatars/heads/head-22.png',
+  '/avatars/heads/head-23.png',
 ];
 
 const CreateProfilePage: React.FC = () => {

@@ -203,7 +203,7 @@ const UserContext = createContext<UserContextType>({
   subscribe: () => {},
   setIsSubscribed: () => {},
   resetUser: () => {},
-  getParentAvatar: () => 'head-toast',
+  getParentAvatar: () => '/avatars/heads/head-1.png',
 });
 
 export const useUser = () => useContext(UserContext);
@@ -302,7 +302,7 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
   });
 
   // Default Equipment - Start with TOAST!
-  const [equippedAvatar, setEquippedAvatar] = useState<string>(saved?.equippedAvatar ?? 'head-toast');
+  const [equippedAvatar, setEquippedAvatar] = useState<string>(saved?.equippedAvatar ?? '/avatars/heads/head-1.png');
   const [equippedFrame, setEquippedFrame] = useState<string>(saved?.equippedFrame ?? 'border-[#8B4513]');
   const [equippedHat, setEquippedHat] = useState<string | null>(saved?.equippedHat ?? null);
   const [equippedBody, setEquippedBody] = useState<string | null>(saved?.equippedBody ?? null);
@@ -1065,7 +1065,7 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
         if (kid.avatar !== undefined) {
           // Kid has saved avatar configuration
           applyAvatarState({
-            avatar: kid.avatar || kid.avatarSeed || 'head-toast',
+            avatar: kid.avatar || kid.avatarSeed || '/avatars/heads/head-1.png',
             frame: kid.frame || 'border-[#8B4513]',
             hat: kid.hat ?? null,
             body: kid.body ?? null,
@@ -1092,7 +1092,7 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
         } else {
           // First time switching to this kid - use defaults with their avatarSeed
           const defaultState = {
-            avatar: kid.avatarSeed || 'head-toast',
+            avatar: kid.avatarSeed || '/avatars/heads/head-1.png',
             frame: 'border-[#8B4513]',
             hat: null,
             body: null,
@@ -1307,7 +1307,7 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
       return equippedAvatar;
     } else {
       // Currently on a kid, use saved parent avatar data
-      return parentAvatarData?.avatar || 'head-toast';
+      return parentAvatarData?.avatar || '/avatars/heads/head-1.png';
     }
   }, [currentProfileId, equippedAvatar, parentAvatarData]);
 
@@ -1348,7 +1348,7 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setCurrentProfileId(null); // Reset to parent profile
     setParentAvatarData(null); // Clear parent avatar cache
     setParentEconomyData(null); // Clear parent economy cache
-    setEquippedAvatar('head-toast');
+    setEquippedAvatar('/avatars/heads/head-1.png');
     setEquippedFrame('border-[#8B4513]');
     setEquippedHat(null);
     setEquippedBody(null);

@@ -202,11 +202,10 @@ const OnboardingTutorial: React.FC = () => {
   // State to hide swipe hint after timeout
   const [hideSwipeHint, setHideSwipeHint] = useState(false);
   
-  // Hide swipe hint popup after 5 seconds
+  // Hide swipe hint popup after 5 seconds (only for book_swipe_intro)
   useEffect(() => {
-    const swipeSteps = ['book_swipe_intro', 'book_swipe_1', 'book_swipe_2'];
-    if (swipeSteps.includes(currentStep)) {
-      setHideSwipeHint(false); // Reset when entering swipe steps
+    if (currentStep === 'book_swipe_intro') {
+      setHideSwipeHint(false); // Reset when entering swipe intro
       const timer = setTimeout(() => {
         setHideSwipeHint(true);
       }, 5000); // Hide after 5 seconds
@@ -330,11 +329,9 @@ const OnboardingTutorial: React.FC = () => {
           />
         );
 
-      // STEP 3-6: Book swipe hints (shown in book reader) - positioned over image area
+      // STEP 3: Book swipe intro hint - only shown once on first page
       // Hide after 5 seconds to not obstruct the reading experience
       case 'book_swipe_intro':
-      case 'book_swipe_1':
-      case 'book_swipe_2':
         if (hideSwipeHint) {
           return null; // Hide the swipe hint after 5 seconds
         }
@@ -350,18 +347,11 @@ const OnboardingTutorial: React.FC = () => {
           />
         );
 
+      // STEP 4-6: Subsequent swipes - no popup, just track progress silently
+      case 'book_swipe_1':
+      case 'book_swipe_2':
       case 'book_swipe_3':
-        // Brief "Perfect!" message before auto-advancing
-        return (
-          <TutorialSpotlight
-            title={config.title}
-            description={config.description}
-            isVisible={true}
-            popupPosition="center"
-            requiresElementClick={false}
-            hideOverlay={true}
-          />
-        );
+        return null; // No visual hint on subsequent swipes
 
       // STEP 6: End modal with quiz button highlighted
       case 'book_end_quiz':

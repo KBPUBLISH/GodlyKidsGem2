@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { X, Eye, EyeOff, Check, Loader2, Sparkles } from 'lucide-react';
 import WoodButton from '../ui/WoodButton';
 import WebViewModal from '../features/WebViewModal';
@@ -10,6 +11,7 @@ interface CreateAccountModalProps {
   onClose: () => void;
   onAccountCreated: () => void;
   onSignIn?: () => void;
+  navigateToOnboarding?: boolean; // If true, navigate to onboarding after account creation
 }
 
 const CreateAccountModal: React.FC<CreateAccountModalProps> = ({
@@ -17,7 +19,10 @@ const CreateAccountModal: React.FC<CreateAccountModalProps> = ({
   onClose,
   onAccountCreated,
   onSignIn,
+  navigateToOnboarding = true, // Default to navigating to onboarding
 }) => {
+  const navigate = useNavigate();
+  
   // Form state
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -97,6 +102,11 @@ const CreateAccountModal: React.FC<CreateAccountModalProps> = ({
         
         // Notify parent component
         onAccountCreated();
+        
+        // Navigate to onboarding (skip account step since user already created account)
+        if (navigateToOnboarding) {
+          navigate('/onboarding', { state: { skipAccountStep: true } });
+        }
       } else {
         // Handle specific error cases
         if (result.error?.includes('exists') || result.error?.includes('duplicate') || result.error?.includes('already')) {

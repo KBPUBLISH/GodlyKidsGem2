@@ -862,6 +862,13 @@ export const BookPageRenderer: React.FC<BookPageRendererProps> = ({
                                         const words = cleanedText.split(/\s+/).filter(w => w.length > 0);
                                         
                                         // If active with word alignment, show with highlighting
+                                        // Debug word highlighting
+                                        if (isActive && !wordAlignment) {
+                                            console.log('⚠️ Word highlighting: Text box is active but no wordAlignment');
+                                        }
+                                        if (isActive && wordAlignment && highlightedWordIndex < 0) {
+                                            console.log('⚠️ Word highlighting: Has alignment but highlightedWordIndex is', highlightedWordIndex);
+                                        }
                                         if (isActive && wordAlignment && highlightedWordIndex >= 0) {
                                             return words.map((word, wIdx) => {
                                                 const isHighlighted = wIdx === highlightedWordIndex;

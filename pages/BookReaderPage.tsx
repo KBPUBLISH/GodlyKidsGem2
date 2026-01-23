@@ -3505,6 +3505,7 @@ const BookReaderPage: React.FC = () => {
 
                         if (wordIndex !== -1 && wordIndex !== lastHighlightedIndex) {
                             lastHighlightedIndex = wordIndex;
+                            console.log('🔦 Highlighting word:', wordIndex);
                             setCurrentWordIndex(wordIndex);
                             scrollToHighlightedWord(wordIndex);
                         }

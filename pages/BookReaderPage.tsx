@@ -1775,6 +1775,7 @@ const BookReaderPage: React.FC = () => {
         
         // Check if TTS was playing before we stop it (for auto-play on next page)
         const wasPlaying = playingRef.current || isPlayingMultiSegmentRef.current;
+        console.log('📖 handleNext - wasPlaying:', wasPlaying, 'playingRef:', playingRef.current, 'multiSegment:', isPlayingMultiSegmentRef.current);
         stopAudio();
         
         // Check preview limit for premium books (3 pages allowed)
@@ -1842,12 +1843,14 @@ const BookReaderPage: React.FC = () => {
                 }
                 
                 // Auto-play narration after manual page swipe (only if TTS was playing before)
+                console.log('📖 Checking auto-play: wasPlaying =', wasPlaying);
                 if (wasPlaying) {
                     setTimeout(() => {
                         const newPage = pages[nextIndex];
                         const contentTextBoxes = newPage?.content?.textBoxes;
                         const pageTextBoxes = contentTextBoxes || newPage?.textBoxes || (newPage as any)?.content?.textBoxes || [];
                         
+                        console.log('📖 Auto-play check: pageTextBoxes =', pageTextBoxes.length);
                         if (pageTextBoxes.length > 0) {
                             const translatedTextBoxes = translatedContent.get(nextIndex);
                             const firstBoxText = translatedTextBoxes?.[0]?.text || pageTextBoxes[0].text;
@@ -1860,6 +1863,8 @@ const BookReaderPage: React.FC = () => {
                             }
                         }
                     }, 200); // Small delay to let page fully settle
+                } else {
+                    console.log('📖 Not auto-playing: TTS was not playing before swipe');
                 }
             }, 850); // Slightly after 0.8s animation completes
         }

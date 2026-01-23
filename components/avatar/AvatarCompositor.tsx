@@ -116,10 +116,24 @@ const AvatarCompositor: React.FC<AvatarCompositorProps> = ({
       else headAnimationClass = 'anim-bounce-subtle';
   }
 
-  // Helper for limb classes
+  // Helper for limb classes (wings)
   const getLimbAnimClass = () => {
       if (isAnimating && animationStyle === 'anim-spin') return ' anim-rotate';
       return '';
+  };
+
+  // Helper for leg animation classes - uses squish animations anchored at top
+  const getLegsAnimClass = () => {
+      if (!isAnimating) return '';
+      if (animationStyle === 'anim-spin') return 'anim-rotate';
+      if (animationStyle === 'anim-bounce') return 'animate-legs-squish-fast';
+      if (animationStyle === 'anim-hop') return 'animate-legs-squish-fast';
+      if (animationStyle === 'anim-wobble') return 'animate-legs-wobble';
+      if (animationStyle === 'anim-jiggle') return 'animate-legs-jiggle';
+      if (animationStyle === 'anim-pulse') return 'animate-legs-squish';
+      if (animationStyle === 'anim-heartbeat') return 'animate-legs-squish-fast';
+      // Default gentle squish for breathe, float, sway, etc.
+      return 'animate-legs-squish';
   };
 
   return (
@@ -216,10 +230,11 @@ const AvatarCompositor: React.FC<AvatarCompositorProps> = ({
                             transform: `rotate(${legsRotation}deg) scale(${legsScale})`
                         }}
                     >
-                        {/* Inner wrapper for animation */}
+                        {/* Inner wrapper for animation - anchored at top for squish effect */}
                         <div
                             onClick={(e) => handlePartClick(e, 'legs')}
-                            className={`w-full h-full flex items-center justify-center ${onPartClick ? 'cursor-pointer hover:brightness-110 active:scale-95 pointer-events-auto' : ''} ${isAnimating && animationStyle !== 'anim-spin' ? 'animate-legs-bounce' : ''} ${getLimbAnimClass()}`}
+                            className={`w-full h-full flex items-center justify-center ${onPartClick ? 'cursor-pointer hover:brightness-110 active:scale-95 pointer-events-auto' : ''} ${getLegsAnimClass()}`}
+                            style={{ transformOrigin: 'top center' }}
                         >
                             {isFilePath(legs) ? (
                               <img src={legs} alt="Feet" className="w-full h-full object-contain object-center pointer-events-none" />
@@ -324,14 +339,45 @@ const AvatarCompositor: React.FC<AvatarCompositorProps> = ({
            animation: armSwayRight 2s ease-in-out infinite;
         }
 
-        /* --- LEGS BOUNCE --- */
-        @keyframes legsBounce {
-          0%, 100% { transform: translateY(0) rotate(0deg); }
-          25% { transform: translateY(-3px) rotate(-2deg); }
-          75% { transform: translateY(-3px) rotate(2deg); }
+        /* --- LEGS SQUISH ANIMATIONS (anchored at top, no vertical movement) --- */
+        @keyframes legsSquish {
+          0%, 100% { transform: scaleY(1) scaleX(1); }
+          50% { transform: scaleY(0.92) scaleX(1.04); }
         }
-        .animate-legs-bounce {
-           animation: legsBounce 1.5s ease-in-out infinite;
+        .animate-legs-squish {
+           animation: legsSquish 2s ease-in-out infinite;
+           transform-origin: top center;
+        }
+
+        @keyframes legsSquishFast {
+          0%, 100% { transform: scaleY(1) scaleX(1); }
+          50% { transform: scaleY(0.85) scaleX(1.08); }
+        }
+        .animate-legs-squish-fast {
+           animation: legsSquishFast 0.6s ease-in-out infinite;
+           transform-origin: top center;
+        }
+
+        @keyframes legsWobble {
+          0%, 100% { transform: scaleY(1) rotate(0deg); }
+          25% { transform: scaleY(0.95) rotate(-3deg); }
+          75% { transform: scaleY(0.95) rotate(3deg); }
+        }
+        .animate-legs-wobble {
+           animation: legsWobble 1s ease-in-out infinite;
+           transform-origin: top center;
+        }
+
+        @keyframes legsJiggle {
+          0% { transform: scaleY(1) rotate(0deg); }
+          25% { transform: scaleY(0.97) rotate(2deg); }
+          50% { transform: scaleY(1) rotate(-2deg); }
+          75% { transform: scaleY(0.97) rotate(1deg); }
+          100% { transform: scaleY(1) rotate(0deg); }
+        }
+        .animate-legs-jiggle {
+           animation: legsJiggle 0.4s ease-in-out infinite;
+           transform-origin: top center;
         }
 
         /* --- ANIM: BREATHE (Default) --- */

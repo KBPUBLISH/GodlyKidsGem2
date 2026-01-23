@@ -16,6 +16,7 @@ const MiniPlayer: React.FC = () => {
         nextTrack,
         prevTrack,
         seek,
+        isPreviewMode,
         previewLimitReached,
         previewTimeRemaining,
         dismissPreviewLimit
@@ -170,6 +171,17 @@ const MiniPlayer: React.FC = () => {
                             {formatTime(currentTime)} / {formatTime(duration)}
                         </p>
                     </div>
+                    
+                    {/* Preview Mode Badge */}
+                    {isPreviewMode && (
+                        <button
+                            onClick={(e) => { e.stopPropagation(); navigate('/paywall'); }}
+                            className="flex items-center gap-1 bg-gradient-to-r from-[#FFD700] to-[#FFA500] text-[#3E1F07] font-bold py-1.5 px-2.5 rounded-lg text-[10px] shadow-md transform hover:scale-105 transition-all duration-200 active:scale-95 mr-2"
+                        >
+                            <Lock className="w-3 h-3" />
+                            <span>{Math.floor(previewTimeRemaining / 60)}:{String(previewTimeRemaining % 60).padStart(2, '0')}</span>
+                        </button>
+                    )}
 
                     {/* Controls */}
                     <div className="flex items-center gap-2">

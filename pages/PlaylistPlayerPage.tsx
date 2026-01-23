@@ -114,6 +114,7 @@ const PlaylistPlayerPage: React.FC = () => {
         nextTrack,
         prevTrack,
         seek,
+        isPreviewMode,
         previewLimitReached,
         previewTimeRemaining,
         dismissPreviewLimit
@@ -504,6 +505,33 @@ const PlaylistPlayerPage: React.FC = () => {
                             {activePlaylist.title} • Track {currentTrackIndex + 1}/{activePlaylist.items.length}
                         </p>
                     </div>
+                    
+                    {/* Premium Preview Banner */}
+                    {isPreviewMode && (
+                        <div className="mt-4 w-full max-w-md">
+                            <div className="bg-gradient-to-r from-[#FFD700]/20 to-[#FFA500]/20 backdrop-blur-md rounded-2xl p-3 border-2 border-[#FFD700]/50">
+                                <div className="flex items-center justify-between gap-3">
+                                    <div className="flex items-center gap-2">
+                                        <div className="w-8 h-8 bg-[#FFD700] rounded-full flex items-center justify-center">
+                                            <Crown className="w-4 h-4 text-[#5c2e0b]" />
+                                        </div>
+                                        <div className="text-left">
+                                            <p className="text-white text-xs font-bold">FREE PREVIEW</p>
+                                            <p className="text-[#FFD700] text-sm font-bold">
+                                                {Math.floor(previewTimeRemaining / 60)}:{String(previewTimeRemaining % 60).padStart(2, '0')} remaining
+                                            </p>
+                                        </div>
+                                    </div>
+                                    <button
+                                        onClick={() => navigate('/paywall')}
+                                        className="bg-gradient-to-r from-[#FFD700] to-[#FFA500] text-[#3E1F07] font-bold py-2 px-4 rounded-xl text-xs shadow-lg transform hover:scale-105 transition-all duration-200 active:scale-95 whitespace-nowrap"
+                                    >
+                                        Unlock Full
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    )}
                 </div>
             </div>
 

@@ -63,6 +63,7 @@ interface AudioContextType {
     closePlayer: () => void;
     
     // Premium preview
+    isPreviewMode: boolean;
     previewLimitReached: boolean;
     previewTimeRemaining: number;
     dismissPreviewLimit: () => void;
@@ -95,6 +96,7 @@ const AudioContext = createContext<AudioContextType>({
     seek: () => { },
     closePlayer: () => { },
     
+    isPreviewMode: false,
     previewLimitReached: false,
     previewTimeRemaining: AUDIO_PREVIEW_SECONDS,
     dismissPreviewLimit: () => { },
@@ -644,7 +646,7 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
             playClick, playBack, playSuccess, playTab, setGameMode, setMusicPaused,
             currentPlaylist, currentTrackIndex, isPlaying, progress, currentTime, duration,
             playPlaylist, togglePlayPause, nextTrack, prevTrack, seek, closePlayer,
-            previewLimitReached, previewTimeRemaining, dismissPreviewLimit
+            isPreviewMode, previewLimitReached, previewTimeRemaining, dismissPreviewLimit
         }}>
             {children}
         </AudioContext.Provider>

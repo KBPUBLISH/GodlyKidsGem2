@@ -550,35 +550,33 @@ const hasCompletedOnboarding = (): boolean => {
 // Exception: allows full access during active tutorial for tutorial-first flow
 const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [hasAccount, setHasAccount] = useState(() => hasUserAccount());
+  const [modalDismissed, setModalDismissed] = useState(false);
   const navigate = useNavigate();
   
   // Allow FULL access during ANY active tutorial (don't interrupt tutorial flow)
-  if (isTutorialInProgress()) {
-    return <>{children}</>;
-  }
+  const tutorialActive = isTutorialInProgress();
   
-  // If user has account, allow access without modal
-  if (hasAccount) {
-    return <>{children}</>;
-  }
+  // Determine if we should show the modal
+  const shouldShowModal = !hasAccount && !tutorialActive && !modalDismissed;
   
-  // No account and no tutorial - show account creation modal
   return (
     <>
       {children}
-      <CreateAccountModal
-        isOpen={true}
-        onClose={() => {
-          // If they close without creating account, go to landing page
-          navigate('/', { replace: true });
-        }}
-        onAccountCreated={() => {
-          setHasAccount(true);
-        }}
-        onSignIn={() => {
-          navigate('/signin', { state: { returnTo: window.location.hash.replace('#', '') || '/home' } });
-        }}
-      />
+      {shouldShowModal && (
+        <CreateAccountModal
+          isOpen={true}
+          onClose={() => {
+            // Just close the modal, let user continue browsing
+            setModalDismissed(true);
+          }}
+          onAccountCreated={() => {
+            setHasAccount(true);
+          }}
+          onSignIn={() => {
+            navigate('/signin', { state: { returnTo: window.location.hash.replace('#', '') || '/home' } });
+          }}
+        />
+      )}
     </>
   );
 };

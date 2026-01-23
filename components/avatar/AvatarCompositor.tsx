@@ -200,6 +200,36 @@ const AvatarCompositor: React.FC<AvatarCompositorProps> = ({
           </div>
       )}
 
+      {/* LEGS - Separate from body so they don't inherit body animation */}
+      {legs && (isFilePath(legs) || AVATAR_ASSETS[legs]) && (
+          <div 
+              className="absolute z-[25]"
+              style={{ 
+                  top: `calc(85% + ${bodyOffset.y}% + ${DEFAULT_LEGS_TOP + legsOffset.y}% * 0.9)`, 
+                  left: `calc(50% + ${bodyOffset.x}% + (${DEFAULT_LEGS_LEFT + legsOffset.x}% - 50%) * 0.95)`, 
+                  width: `calc(95% * 0.7 * ${bodyScale})`, 
+                  height: `calc(90% * 0.7 * ${bodyScale})`,
+                  transformOrigin: 'top center',
+                  transform: `translate(-50%, 0) rotate(${legsRotation}deg) scale(${legsScale})`
+              }}
+          >
+              {/* Inner wrapper for animation - anchored at top for squish effect */}
+              <div
+                  onClick={(e) => handlePartClick(e, 'legs')}
+                  className={`w-full h-full flex items-center justify-center ${onPartClick ? 'cursor-pointer hover:brightness-110 active:scale-95 pointer-events-auto' : ''} ${getLegsAnimClass()}`}
+                  style={{ transformOrigin: 'top center' }}
+              >
+                  {isFilePath(legs) ? (
+                    <img src={legs} alt="Feet" className="w-full h-full object-contain object-center pointer-events-none" />
+                  ) : (
+                    <svg viewBox="0 0 100 60" className="w-full h-full overflow-visible">
+                        {AVATAR_ASSETS[legs]}
+                    </svg>
+                  )}
+              </div>
+          </div>
+      )}
+
       {/* BODY GROUP - Outer wrapper for position/scale, inner wrapper for animation */}
       {body && (isFilePath(body) || AVATAR_ASSETS[body]) && (
           <div
@@ -217,37 +247,7 @@ const AvatarCompositor: React.FC<AvatarCompositorProps> = ({
              className={`w-full h-full flex items-center justify-center ${bodyAnimationClass} ${onPartClick ? 'cursor-pointer hover:brightness-110 active:scale-95 pointer-events-auto' : 'pointer-events-none'}`}
              onClick={(e) => onPartClick && handlePartClick(e, 'body')}
           >
-               {/* 1. LEGS/FEET (In front of body Z-25) - Outer wrapper for position/scale */}
-               {legs && (isFilePath(legs) || AVATAR_ASSETS[legs]) && (
-                    <div 
-                        className="absolute z-[25]"
-                        style={{ 
-                            top: `${DEFAULT_LEGS_TOP + legsOffset.y}%`, 
-                            left: `${DEFAULT_LEGS_LEFT + legsOffset.x}%`, 
-                            width: '70%', 
-                            height: '70%',
-                            transformOrigin: 'top center',
-                            transform: `rotate(${legsRotation}deg) scale(${legsScale})`
-                        }}
-                    >
-                        {/* Inner wrapper for animation - anchored at top for squish effect */}
-                        <div
-                            onClick={(e) => handlePartClick(e, 'legs')}
-                            className={`w-full h-full flex items-center justify-center ${onPartClick ? 'cursor-pointer hover:brightness-110 active:scale-95 pointer-events-auto' : ''} ${getLegsAnimClass()}`}
-                            style={{ transformOrigin: 'top center' }}
-                        >
-                            {isFilePath(legs) ? (
-                              <img src={legs} alt="Feet" className="w-full h-full object-contain object-center pointer-events-none" />
-                            ) : (
-                              <svg viewBox="0 0 100 60" className="w-full h-full overflow-visible">
-                                  {AVATAR_ASSETS[legs]}
-                              </svg>
-                            )}
-                        </div>
-                    </div>
-                )}
-
-               {/* 2. MAIN BODY (Z-20) */}
+               {/* MAIN BODY */}
                <div 
                   onClick={(e) => handlePartClick(e, 'body')}
                   className={`absolute z-20 flex items-center justify-center ${onPartClick ? 'cursor-pointer hover:brightness-110 active:scale-95 pointer-events-auto' : ''}`}

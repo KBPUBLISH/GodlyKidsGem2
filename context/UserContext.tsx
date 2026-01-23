@@ -301,8 +301,16 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return null; // No kids, default to parent
   });
 
-  // Default Equipment - Start with TOAST!
-  const [equippedAvatar, setEquippedAvatar] = useState<string>(saved?.equippedAvatar ?? '/avatars/heads/head-1.png');
+  // Default Equipment - Start with new PNG head
+  // Migration: If user has old default 'head-toast', update to new PNG head
+  const getInitialAvatar = () => {
+    const savedAvatar = saved?.equippedAvatar;
+    if (!savedAvatar || savedAvatar === 'head-toast') {
+      return '/avatars/heads/head-1.png';
+    }
+    return savedAvatar;
+  };
+  const [equippedAvatar, setEquippedAvatar] = useState<string>(getInitialAvatar());
   const [equippedFrame, setEquippedFrame] = useState<string>(saved?.equippedFrame ?? 'border-[#8B4513]');
   const [equippedHat, setEquippedHat] = useState<string | null>(saved?.equippedHat ?? null);
   const [equippedBody, setEquippedBody] = useState<string | null>(saved?.equippedBody ?? null);

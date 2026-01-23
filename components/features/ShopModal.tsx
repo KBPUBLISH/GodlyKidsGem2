@@ -20,17 +20,23 @@ interface ShopModalProps {
 }
 
 // --- SHOP DATA ---
-// New file-based avatar heads (no names displayed in UI)
+// Pricing structure:
+// - 3 items FREE (price: 0) per category
+// - ~30% non-premium (purchasable with coins by anyone)
+// - ~70% premium (subscribers only)
+
+// New file-based avatar heads (23 heads: 7 non-premium [3 free], 16 premium)
 const SHOP_AVATARS: ShopItem[] = [
-    // Free heads (3 heads)
-    { id: 'av1', name: '', price: 100, type: 'avatar', value: '/avatars/heads/head-1.png' },
-    { id: 'av2', name: '', price: 150, type: 'avatar', value: '/avatars/heads/head-2.png' },
-    { id: 'av3', name: '', price: 100, type: 'avatar', value: '/avatars/heads/head-3.png' },
-    // Premium heads (20 heads)
-    { id: 'av4', name: '', price: 200, type: 'avatar', value: '/avatars/heads/head-4.png', isPremium: true },
-    { id: 'av5', name: '', price: 150, type: 'avatar', value: '/avatars/heads/head-5.png', isPremium: true },
-    { id: 'av6', name: '', price: 100, type: 'avatar', value: '/avatars/heads/head-6.png', isPremium: true },
-    { id: 'av7', name: '', price: 200, type: 'avatar', value: '/avatars/heads/head-7.png', isPremium: true },
+    // FREE heads (3 heads - price: 0)
+    { id: 'av1', name: '', price: 0, type: 'avatar', value: '/avatars/heads/head-1.png' },
+    { id: 'av2', name: '', price: 0, type: 'avatar', value: '/avatars/heads/head-2.png' },
+    { id: 'av3', name: '', price: 0, type: 'avatar', value: '/avatars/heads/head-3.png' },
+    // Non-premium heads with coin cost (4 heads)
+    { id: 'av4', name: '', price: 100, type: 'avatar', value: '/avatars/heads/head-4.png' },
+    { id: 'av5', name: '', price: 150, type: 'avatar', value: '/avatars/heads/head-5.png' },
+    { id: 'av6', name: '', price: 100, type: 'avatar', value: '/avatars/heads/head-6.png' },
+    { id: 'av7', name: '', price: 200, type: 'avatar', value: '/avatars/heads/head-7.png' },
+    // Premium heads - subscribers only (16 heads)
     { id: 'av8', name: '', price: 150, type: 'avatar', value: '/avatars/heads/head-8.png', isPremium: true },
     { id: 'av9', name: '', price: 200, type: 'avatar', value: '/avatars/heads/head-9.png', isPremium: true },
     { id: 'av10', name: '', price: 250, type: 'avatar', value: '/avatars/heads/heads-10.png', isPremium: true },
@@ -49,61 +55,53 @@ const SHOP_AVATARS: ShopItem[] = [
     { id: 'av23', name: '', price: 250, type: 'avatar', value: '/avatars/heads/head-23.png', isPremium: true },
 ];
 
-// New file-based hats (30 hats: 3 free, 27 premium)
-const SHOP_HATS: ShopItem[] = Array.from({ length: 30 }, (_, i) => ({
-    id: `h${i + 1}`,
-    name: '',
-    price: [100, 150, 200, 250, 300][Math.floor(Math.random() * 5)],
-    type: 'hat' as const,
-    value: `/avatars/hats/hat-${i + 1}.png`,
-    isPremium: i >= 3, // First 3 free, rest premium
-}));
+// Helper to generate shop items with 30% non-premium (3 free + some coins), 70% premium
+const generateShopItems = (
+    count: number, 
+    type: 'hat' | 'body' | 'leftArm' | 'rightArm' | 'legs',
+    pathPrefix: string,
+    idPrefix: string,
+    fileNumbers?: number[]
+): ShopItem[] => {
+    const nonPremiumCount = Math.ceil(count * 0.3); // 30% non-premium
+    const freeCount = 3; // 3 free items
+    const prices = [100, 150, 200, 250, 300];
+    
+    return Array.from({ length: count }, (_, i) => {
+        const fileNum = fileNumbers ? fileNumbers[i] : i + 1;
+        const isFree = i < freeCount;
+        const isNonPremium = i < nonPremiumCount;
+        
+        return {
+            id: `${idPrefix}${fileNum}`,
+            name: '',
+            price: isFree ? 0 : prices[i % 5],
+            type: type,
+            value: `${pathPrefix}${fileNum}.png`,
+            isPremium: !isNonPremium,
+        };
+    });
+};
 
-// New file-based bodies (25 bodies: 3 free, 22 premium)
-const SHOP_BODIES: ShopItem[] = Array.from({ length: 25 }, (_, i) => ({
-    id: `b${i + 1}`,
-    name: '',
-    price: [150, 200, 250, 300, 350][Math.floor(Math.random() * 5)],
-    type: 'body' as const,
-    value: `/avatars/bodies/body-${i + 1}.png`,
-    isPremium: i >= 3, // First 3 free, rest premium
-}));
+// New file-based hats (30 hats: 9 non-premium [3 free], 21 premium)
+const SHOP_HATS: ShopItem[] = generateShopItems(30, 'hat', '/avatars/hats/hat-', 'h');
 
-// New file-based wings/arms (34 pairs: left uses odd numbers 1-67, right uses even numbers 2-68)
-// Left wings: 34 items, 3 free, 31 premium
+// New file-based bodies (25 bodies: 8 non-premium [3 free], 17 premium)
+const SHOP_BODIES: ShopItem[] = generateShopItems(25, 'body', '/avatars/bodies/body-', 'b');
+
+// New file-based wings/arms
 const LEFT_WING_NUMBERS = [1, 3, 5, 7, 9, 11, 13, 15, 17, 19, 21, 23, 25, 27, 29, 31, 33, 35, 37, 39, 41, 43, 45, 47, 49, 51, 53, 55, 57, 59, 61, 63, 65, 67];
 const RIGHT_WING_NUMBERS = [2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22, 24, 26, 28, 30, 32, 34, 36, 38, 40, 42, 44, 46, 48, 50, 52, 54, 56, 58, 60, 62, 64, 66, 68];
 
-const SHOP_ARMS: ShopItem[] = [
-    // Left wings
-    ...LEFT_WING_NUMBERS.map((num, i) => ({
-        id: `wl${num}`,
-        name: 'Left Wing',
-        price: [100, 150, 200, 250, 300][i % 5],
-        type: 'leftArm' as const,
-        value: `/avatars/wings-left/wing-left-${num}.png`,
-        isPremium: i >= 3, // First 3 free, rest premium
-    })),
-    // Right wings
-    ...RIGHT_WING_NUMBERS.map((num, i) => ({
-        id: `wr${num}`,
-        name: 'Right Wing',
-        price: [100, 150, 200, 250, 300][i % 5],
-        type: 'rightArm' as const,
-        value: `/avatars/wings-right/wing-right-${num}.png`,
-        isPremium: i >= 3, // First 3 free, rest premium
-    })),
-];
+// Left wings: 34 items (10 non-premium [3 free], 24 premium)
+const SHOP_LEFT_WINGS: ShopItem[] = generateShopItems(34, 'leftArm', '/avatars/wings-left/wing-left-', 'wl', LEFT_WING_NUMBERS);
+// Right wings: 34 items (10 non-premium [3 free], 24 premium)
+const SHOP_RIGHT_WINGS: ShopItem[] = generateShopItems(34, 'rightArm', '/avatars/wings-right/wing-right-', 'wr', RIGHT_WING_NUMBERS);
 
-// New file-based feet/legs (30 feet: 3 free, 27 premium)
-const SHOP_LEGS: ShopItem[] = Array.from({ length: 30 }, (_, i) => ({
-    id: `f${i + 1}`,
-    name: '',
-    price: [150, 200, 250, 300, 350][Math.floor(Math.random() * 5)],
-    type: 'legs' as const,
-    value: `/avatars/feet/feet-${i + 1}.png`,
-    isPremium: i >= 3, // First 3 free, rest premium
-}));
+const SHOP_ARMS: ShopItem[] = [...SHOP_LEFT_WINGS, ...SHOP_RIGHT_WINGS];
+
+// New file-based feet/legs (30 feet: 9 non-premium [3 free], 21 premium)
+const SHOP_LEGS: ShopItem[] = generateShopItems(30, 'legs', '/avatars/feet/feet-', 'f');
 
 const SHOP_ANIMATIONS: ShopItem[] = [
     { id: 'anim1', name: 'Breathe', price: 100, type: 'animation', value: 'anim-breathe' },

@@ -404,6 +404,18 @@ export const TutorialProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     }
   }, [currentStep, donatedCoins]);
 
+  // Listen for tutorial abandoned event (fired when user exits tutorial to non-tutorial route)
+  useEffect(() => {
+    const handleTutorialAbandoned = () => {
+      console.log('📢 Tutorial abandoned event received - syncing state');
+      setCurrentStep('complete');
+      setIsComplete(true);
+    };
+    
+    window.addEventListener('tutorial_abandoned', handleTutorialAbandoned);
+    return () => window.removeEventListener('tutorial_abandoned', handleTutorialAbandoned);
+  }, []);
+
   return (
     <TutorialContext.Provider
       value={{

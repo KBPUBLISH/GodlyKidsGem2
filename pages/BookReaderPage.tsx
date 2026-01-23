@@ -155,7 +155,7 @@ const BookReaderPage: React.FC = () => {
     const { bookId } = useParams<{ bookId: string }>();
     const navigate = useNavigate();
     const [searchParams] = useSearchParams();
-    const { setGameMode, setMusicPaused } = useAudio();
+    const { setGameMode, setMusicPaused, currentPlaylist, isPlaying, togglePlayPause } = useAudio();
     const { isVoiceUnlocked, isSubscribed } = useUser();
     const { isTutorialActive, isStepActive, onPageSwipe, onBookEndModalOpen, onQuizStart, onBookQuizComplete, currentStep } = useTutorial();
     const wasMusicEnabledRef = useRef<boolean>(false);
@@ -193,6 +193,16 @@ const BookReaderPage: React.FC = () => {
             onBookEndModalOpen();
         }
     }, [isTutorialActive, currentStep, pages.length, onBookEndModalOpen]);
+
+    // Pause audiobook playlist when entering book reader to prevent audio overlap
+    useEffect(() => {
+        if (currentPlaylist && isPlaying) {
+            console.log('📖 Pausing audiobook playlist while reading book');
+            togglePlayPause();
+        }
+        // Only run on mount - we don't want to pause again if user manually resumes
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
 
     // Tutorial: Prevent browser back button from skipping tutorial
     useEffect(() => {

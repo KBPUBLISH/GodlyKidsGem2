@@ -556,9 +556,25 @@ const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) =
   // Get current path for tutorial validation
   const currentPath = location.pathname;
   
+  // Check if tutorial is valid for this route
+  const tutorialValidForRoute = isTutorialInProgressForRoute(currentPath);
+  
+  // If tutorial is "in progress" but NOT valid for this route, mark it as abandoned
+  // This clears the tutorial state so UI elements (like back buttons) work correctly
+  useEffect(() => {
+    if (isTutorialInProgress() && !tutorialValidForRoute) {
+      // Tutorial was abandoned - clear the tutorial state in localStorage
+      localStorage.setItem('godlykids_tutorial_complete', 'true');
+      localStorage.removeItem('godlykids_tutorial_step');
+      console.log('🚪 Tutorial abandoned - clearing tutorial state');
+      
+      // Dispatch event so TutorialContext can sync its React state
+      window.dispatchEvent(new Event('tutorial_abandoned'));
+    }
+  }, [tutorialValidForRoute, currentPath]);
+  
   // Allow access during tutorial ONLY if the step is valid for this route
-  // This prevents users who exited the tutorial from bypassing account check
-  if (isTutorialInProgressForRoute(currentPath)) {
+  if (tutorialValidForRoute) {
     return <>{children}</>;
   }
   

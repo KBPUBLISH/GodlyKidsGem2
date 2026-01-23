@@ -74,7 +74,7 @@ const LessonPlayerPage: React.FC = () => {
     const { lessonId } = useParams<{ lessonId: string }>();
     const navigate = useNavigate();
     const { addCoins, isOwned, purchaseItem, coins, isSubscribed, isVoiceUnlocked } = useUser();
-    const { setMusicPaused, musicEnabled } = useAudio();
+    const { setMusicPaused, musicEnabled, currentPlaylist, isPlaying, togglePlayPause } = useAudio();
     const { translateText, translateTexts, currentLanguage, t } = useLanguage();
 
     const [lesson, setLesson] = useState<Lesson | null>(null);
@@ -135,6 +135,16 @@ const LessonPlayerPage: React.FC = () => {
     const [showCoinReward, setShowCoinReward] = useState(false);
     const [coinRewardAmount, setCoinRewardAmount] = useState(0);
     const dailyVerseCoinsGivenRef = useRef(false);
+
+    // Pause audiobook playlist when entering lesson player to prevent audio overlap
+    useEffect(() => {
+        if (currentPlaylist && isPlaying) {
+            console.log('🎬 Pausing audiobook playlist while watching lesson');
+            togglePlayPause();
+        }
+        // Only run on mount - we don't want to pause again if user manually resumes
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
 
     useEffect(() => {
         if (lessonId) {

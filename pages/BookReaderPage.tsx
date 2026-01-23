@@ -1774,9 +1774,7 @@ const BookReaderPage: React.FC = () => {
         if (isPageTurning) return;
         
         // Check if TTS was playing before we stop it (for auto-play on next page)
-        // Check both refs AND state to be sure we catch playing status
-        const wasPlaying = playing || playingRef.current || isPlayingMultiSegmentRef.current;
-        console.log('📖 handleNext - wasPlaying:', wasPlaying, 'playing state:', playing, 'playingRef:', playingRef.current, 'multiSegment:', isPlayingMultiSegmentRef.current);
+        const wasPlayingTTS = playing || playingRef.current || isPlayingMultiSegmentRef.current;
         stopAudio();
         
         // Check preview limit for premium books (3 pages allowed)
@@ -1844,28 +1842,24 @@ const BookReaderPage: React.FC = () => {
                 }
                 
                 // Auto-play narration after manual page swipe (only if TTS was playing before)
-                console.log('📖 Checking auto-play: wasPlaying =', wasPlaying);
-                if (wasPlaying) {
+                if (wasPlayingTTS) {
                     setTimeout(() => {
                         const newPage = pages[nextIndex];
                         const contentTextBoxes = newPage?.content?.textBoxes;
                         const pageTextBoxes = contentTextBoxes || newPage?.textBoxes || (newPage as any)?.content?.textBoxes || [];
                         
-                        console.log('📖 Auto-play check: pageTextBoxes =', pageTextBoxes.length);
                         if (pageTextBoxes.length > 0) {
                             const translatedTextBoxes = translatedContent.get(nextIndex);
                             const firstBoxText = translatedTextBoxes?.[0]?.text || pageTextBoxes[0].text;
                             
                             if (firstBoxText) {
-                                console.log('▶️ Auto-playing TTS after manual swipe to page', nextIndex + 1);
+                                console.log('▶️ Auto-playing TTS after swipe to page', nextIndex + 1);
                                 const shouldAutoPlay = ttsModeRef.current === 'auto';
                                 autoPlayModeRef.current = shouldAutoPlay;
                                 handlePlayText(firstBoxText, 0, { stopPropagation: () => {} } as React.MouseEvent, shouldAutoPlay);
                             }
                         }
-                    }, 200); // Small delay to let page fully settle
-                } else {
-                    console.log('📖 Not auto-playing: TTS was not playing before swipe');
+                    }, 300); // Delay to let page settle
                 }
             }, 850); // Slightly after 0.8s animation completes
         }
@@ -1876,8 +1870,7 @@ const BookReaderPage: React.FC = () => {
         if (isPageTurning) return;
         
         // Check if TTS was playing before we stop it (for auto-play on prev page)
-        // Check both refs AND state to be sure we catch playing status
-        const wasPlaying = playing || playingRef.current || isPlayingMultiSegmentRef.current;
+        const wasPlayingTTS = playing || playingRef.current || isPlayingMultiSegmentRef.current;
         stopAudio();
         if (currentPageIndex > 0) {
             // Preserve scroll state when turning pages manually - use ref to get latest value
@@ -1908,7 +1901,7 @@ const BookReaderPage: React.FC = () => {
                 }
                 
                 // Auto-play narration after manual swipe back (only if TTS was playing before)
-                if (wasPlaying) {
+                if (wasPlayingTTS) {
                     setTimeout(() => {
                         const newPage = pages[prevIndex];
                         const contentTextBoxes = newPage?.content?.textBoxes;
@@ -1919,13 +1912,13 @@ const BookReaderPage: React.FC = () => {
                             const firstBoxText = translatedTextBoxes?.[0]?.text || pageTextBoxes[0].text;
                             
                             if (firstBoxText) {
-                                console.log('▶️ Auto-playing TTS after manual swipe back to page', prevIndex + 1);
+                                console.log('▶️ Auto-playing TTS after swipe back to page', prevIndex + 1);
                                 const shouldAutoPlay = ttsModeRef.current === 'auto';
                                 autoPlayModeRef.current = shouldAutoPlay;
                                 handlePlayText(firstBoxText, 0, { stopPropagation: () => {} } as React.MouseEvent, shouldAutoPlay);
                             }
                         }
-                    }, 200); // Small delay to let page fully settle
+                    }, 300); // Delay to let page settle
                 }
             }, 850); // Slightly after 0.8s animation completes
         }

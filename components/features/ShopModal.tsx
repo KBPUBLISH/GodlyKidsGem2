@@ -430,9 +430,8 @@ const ShopModal: React.FC<ShopModalProps> = ({ isOpen, onClose, initialTab, hide
         else if (selectedPart === 'body') currentVal = bodyOffset[axis];
         else if (selectedPart === 'hat') currentVal = hatOffset[axis];
 
-        const minVal = -50;
-        const maxVal = axis === 'y' ? 120 : 100;
-        const next = Math.max(minVal, Math.min(maxVal, currentVal + delta));
+        // No limits on movement
+        const next = currentVal + delta;
         setPartOffset(selectedPart, axis, next);
     };
 

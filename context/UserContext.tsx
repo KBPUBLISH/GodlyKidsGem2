@@ -1215,8 +1215,8 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const setPartScale = (part: 'leftArm' | 'rightArm' | 'legs' | 'head' | 'body' | 'hat', scale: number) => {
-    // Clamp scale between 0.5 (50%) and 2.0 (200%)
-    const clampedScale = Math.max(0.5, Math.min(2.0, scale));
+    // Only enforce minimum scale (0.1 = 10%), no upper limit
+    const clampedScale = Math.max(0.1, scale);
     if (part === 'leftArm') {
        setLeftArmScale(clampedScale);
     } else if (part === 'rightArm') {

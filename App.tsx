@@ -551,7 +551,6 @@ const hasCompletedOnboarding = (): boolean => {
 const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [hasAccount, setHasAccount] = useState(() => hasUserAccount());
   const navigate = useNavigate();
-  const location = useLocation();
   
   // Allow FULL access during ANY active tutorial (don't interrupt tutorial flow)
   const tutorialActive = isTutorialInProgress();
@@ -561,33 +560,14 @@ const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) =
     return <>{children}</>;
   }
   
-  // Determine where to go back to when modal is closed
-  const getBackPath = () => {
-    const path = location.pathname;
-    
-    // Book reader -> go back to book detail page
-    const bookMatch = path.match(/^\/read\/([^/]+)/);
-    if (bookMatch) {
-      return `/book/${bookMatch[1]}`;
-    }
-    
-    // Playlist player -> go back to playlist detail page
-    const playlistMatch = path.match(/^\/audio\/playlist\/([^/]+)\/play/);
-    if (playlistMatch) {
-      return `/audio/playlist/${playlistMatch[1]}`;
-    }
-    
-    // Default: go to home
-    return '/home';
-  };
-  
   // No account and no tutorial - show account creation modal (don't render children yet)
   return (
     <CreateAccountModal
       isOpen={true}
+      navigateToOnboarding={false} // Don't auto-navigate, let ProtectedRoute handle it
       onClose={() => {
-        // Go back to detail page or home
-        navigate(getBackPath(), { replace: true });
+        // Go back to previous page
+        window.history.back();
       }}
       onAccountCreated={() => {
         setHasAccount(true);

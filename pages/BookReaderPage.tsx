@@ -2781,12 +2781,12 @@ const BookReaderPage: React.FC = () => {
             // Get segment words for alignment
             const segmentWords = segment.text.split(/\s+/).filter(w => w.length > 0);
             
-            // Function to set up word alignment with OFFSET for proper highlighting
-            const setupSegmentAlignment = () => {
+            // Set up word alignment with OFFSET for proper highlighting
+            audio.addEventListener('loadedmetadata', () => {
                 if (playbackId !== multiSegmentPlaybackIdRef.current) return;
                 
                 const audioDuration = audio.duration;
-                if (segmentWords.length > 0 && audioDuration > 0 && isFinite(audioDuration)) {
+                if (segmentWords.length > 0 && audioDuration > 0) {
                     const wordDuration = audioDuration / segmentWords.length;
                     const alignment = {
                         words: segmentWords.map((word, idx) => ({
@@ -2799,15 +2799,7 @@ const BookReaderPage: React.FC = () => {
                     wordAlignmentRef.current = alignment;
                     console.log(`📝 Segment ${segmentIdx + 1} alignment: ${segmentWords.length} words, offset ${wordOffset}`);
                 }
-            };
-            
-            // Set up alignment: either immediately if metadata is ready, or wait for event
-            if (audio.readyState >= 1) {
-                console.log('📦 Segment audio metadata already loaded (cached)');
-                setupSegmentAlignment();
-            } else {
-                audio.addEventListener('loadedmetadata', setupSegmentAlignment, { once: true });
-            }
+            });
             
             // Track time for word highlighting with OFFSET
             // OPTIMIZED: Use RAF for smoother updates with binary search
@@ -3257,13 +3249,9 @@ const BookReaderPage: React.FC = () => {
             if (result && result.audioUrl) {
                 const audio = new Audio(result.audioUrl);
 
-                // Function to set up word alignment (called when metadata is available)
-                const setupWordAlignment = () => {
+                // Wait for audio metadata to load, then process alignment
+                audio.addEventListener('loadedmetadata', () => {
                     const audioDuration = audio.duration;
-                    if (!audioDuration || !isFinite(audioDuration)) {
-                        console.warn('⚠️ Invalid audio duration, skipping alignment setup');
-                        return;
-                    }
                     const alignment = result.alignment;
                     
                     // DEBUG: Log alignment data
@@ -3386,20 +3374,7 @@ const BookReaderPage: React.FC = () => {
                             console.warn('⚠️ No words found in text');
                         }
                     }
-                };
-
-                // Set up alignment: either immediately if metadata is ready, or wait for event
-                if (audio.readyState >= 1) {
-                    // Metadata already loaded (cached audio)
-                    console.log('📦 Audio metadata already loaded (cached), setting up alignment immediately');
-                    setupWordAlignment();
-                } else {
-                    // Wait for metadata to load
-                    audio.addEventListener('loadedmetadata', () => {
-                        console.log('📦 Audio metadata loaded via event');
-                        setupWordAlignment();
-                    }, { once: true });
-                }
+                });
 
                 // Track audio time for word highlighting
                 // OPTIMIZED: Use binary search with sequential hint for O(1) normal case
@@ -3514,27 +3489,13 @@ const BookReaderPage: React.FC = () => {
                 let rafId: number | null = null;
                 
                 // Use requestAnimationFrame for smoother, browser-optimized updates
-                let rafLoopCount = 0;
                 const updateHighlighting = () => {
                     if (audio.paused || audio.ended) {
-                        console.log('🔴 RAF stopped: audio paused or ended');
                         rafId = null;
                         return;
                     }
                     
                     const currentAlignment = wordAlignmentRef.current;
-                    
-                    // Debug: Log every 30 frames (~0.5 sec)
-                    rafLoopCount++;
-                    if (rafLoopCount % 30 === 1) {
-                        console.log('🔄 RAF loop:', {
-                            currentTime: audio.currentTime.toFixed(2),
-                            hasAlignment: !!currentAlignment,
-                            wordCount: currentAlignment?.words?.length || 0,
-                            lastHighlightedIndex
-                        });
-                    }
-                    
                     if (currentAlignment && currentAlignment.words && currentAlignment.words.length > 0) {
                         const wordIndex = findWordIndexOptimized(
                             audio.currentTime, 
@@ -3544,7 +3505,6 @@ const BookReaderPage: React.FC = () => {
 
                         if (wordIndex !== -1 && wordIndex !== lastHighlightedIndex) {
                             lastHighlightedIndex = wordIndex;
-                            console.log('🔦 Highlighting word:', wordIndex, 'at time:', audio.currentTime.toFixed(2));
                             setCurrentWordIndex(wordIndex);
                             scrollToHighlightedWord(wordIndex);
                         }
@@ -3556,9 +3516,7 @@ const BookReaderPage: React.FC = () => {
                 
                 // Start the RAF loop when audio plays
                 audio.onplay = () => {
-                    console.log('▶️ Audio onplay fired, starting RAF loop. Alignment ready:', !!wordAlignmentRef.current);
                     if (!rafId) {
-                        rafLoopCount = 0;
                         rafId = requestAnimationFrame(updateHighlighting);
                     }
                 };

@@ -49,116 +49,61 @@ const SHOP_AVATARS: ShopItem[] = [
     { id: 'av23', name: '', price: 250, type: 'avatar', value: '/avatars/heads/head-23.png', isPremium: true },
 ];
 
-const SHOP_HATS: ShopItem[] = [
-    { id: 'h1', name: 'Pirate Hat', price: 150, type: 'hat', value: 'hat-pirate' },
-    { id: 'h2', name: 'Viking Helmet', price: 200, type: 'hat', value: 'hat-viking', isPremium: true },
-    { id: 'h3', name: 'Propeller', price: 250, type: 'hat', value: 'hat-propeller' },
-    { id: 'h4', name: 'King Crown', price: 500, type: 'hat', value: 'hat-crown', isPremium: true },
-    { id: 'h5', name: 'Cowboy', price: 200, type: 'hat', value: 'hat-cowboy' },
-    { id: 'h6', name: 'Cone', price: 100, type: 'hat', value: 'hat-cone' },
-    { id: 'h7', name: 'Sombrero', price: 250, type: 'hat', value: 'hat-sombrero' },
-    { id: 'h8', name: 'Brain', price: 400, type: 'hat', value: 'hat-brain', isPremium: true },
-    { id: 'h9', name: 'Poo', price: 300, type: 'hat', value: 'hat-poo' },
-    { id: 'h10', name: 'Astronaut', price: 350, type: 'hat', value: 'hat-astronaut', isPremium: true },
-    { id: 'h11', name: 'Chef', price: 150, type: 'hat', value: 'hat-chef' },
-    { id: 'h12', name: 'Party', price: 100, type: 'hat', value: 'hat-party' },
-    { id: 'h13', name: 'Top Hat', price: 250, type: 'hat', value: 'hat-tophat' },
-    { id: 'h14', name: 'Flowers', price: 150, type: 'hat', value: 'hat-flowers' },
-    { id: 'h15', name: 'Ninja', price: 200, type: 'hat', value: 'hat-ninja', isPremium: true },
-    { id: 'h16', name: 'Backwards Cap', price: 150, type: 'hat', value: 'hat-cap-backwards' },
-    { id: 'h17', name: 'Beanie', price: 120, type: 'hat', value: 'hat-beanie' },
-    { id: 'h18', name: 'Jester', price: 300, type: 'hat', value: 'hat-jester', isPremium: true },
-    { id: 'h19', name: 'Afro', price: 200, type: 'hat', value: 'hat-afro' },
-    { id: 'h20', name: 'Grad', price: 250, type: 'hat', value: 'hat-grad', isPremium: true },
-    { id: 'h21', name: 'Headphones', price: 300, type: 'hat', value: 'hat-headphones', isPremium: true },
-];
+// New file-based hats (30 hats: 9 free, 21 premium)
+const SHOP_HATS: ShopItem[] = Array.from({ length: 30 }, (_, i) => ({
+    id: `h${i + 1}`,
+    name: '',
+    price: [100, 150, 200, 250, 300][Math.floor(Math.random() * 5)],
+    type: 'hat' as const,
+    value: `/avatars/hats/hat-${i + 1}.png`,
+    isPremium: i >= 9, // First 9 free (30%), rest premium
+}));
 
-const SHOP_BODIES: ShopItem[] = [
-    { id: 'b1', name: 'Robot Chest', price: 150, type: 'body', value: 'body-robot', isPremium: true },
-    { id: 'b2', name: 'Super Suit', price: 200, type: 'body', value: 'body-suit', isPremium: true },
-    { id: 'b3', name: 'Tuxedo', price: 250, type: 'body', value: 'body-tux' },
-    { id: 'b4', name: 'Hotdog', price: 300, type: 'body', value: 'body-hotdog' },
-    { id: 'b5', name: 'Skeleton', price: 300, type: 'body', value: 'body-skeleton', isPremium: true },
-    { id: 'b6', name: 'Armor', price: 350, type: 'body', value: 'body-armor', isPremium: true },
-    { id: 'b7', name: 'Donut', price: 250, type: 'body', value: 'body-donut' },
-    { id: 'b8', name: 'Dress', price: 200, type: 'body', value: 'body-dress' },
-    { id: 'b9', name: 'Overalls', price: 150, type: 'body', value: 'body-overalls' },
-    { id: 'b10', name: 'Muscle', price: 200, type: 'body', value: 'body-muscle' },
-    { id: 'b11', name: 'Ghost', price: 300, type: 'body', value: 'body-ghost' },
-    { id: 'b12', name: 'Hawaiian', price: 150, type: 'body', value: 'body-hawaiian' },
-    { id: 'b13', name: 'Puffer', price: 200, type: 'body', value: 'body-puffer' },
-    { id: 'b14', name: 'Hoodie', price: 150, type: 'body', value: 'body-hoodie' },
-    { id: 'b15', name: 'Logo Tee', price: 120, type: 'body', value: 'body-tshirt-logo' },
-    { id: 'b16', name: 'King Robe', price: 400, type: 'body', value: 'body-king-robe', isPremium: true },
-    { id: 'b17', name: 'Jester Suit', price: 300, type: 'body', value: 'body-jester', isPremium: true },
-    { id: 'b18', name: 'Karate', price: 200, type: 'body', value: 'body-karate' },
-    { id: 'b19', name: 'Space Suit', price: 350, type: 'body', value: 'body-space-suit', isPremium: true },
-];
+// New file-based bodies (25 bodies: 8 free, 17 premium)
+const SHOP_BODIES: ShopItem[] = Array.from({ length: 25 }, (_, i) => ({
+    id: `b${i + 1}`,
+    name: '',
+    price: [150, 200, 250, 300, 350][Math.floor(Math.random() * 5)],
+    type: 'body' as const,
+    value: `/avatars/bodies/body-${i + 1}.png`,
+    isPremium: i >= 8, // First 8 free (32%), rest premium
+}));
+
+// New file-based wings/arms (34 pairs: left uses odd numbers 1-67, right uses even numbers 2-68)
+// Left wings: 34 items, 10 free (30%), 24 premium (70%)
+const LEFT_WING_NUMBERS = [1, 3, 5, 7, 9, 11, 13, 15, 17, 19, 21, 23, 25, 27, 29, 31, 33, 35, 37, 39, 41, 43, 45, 47, 49, 51, 53, 55, 57, 59, 61, 63, 65, 67];
+const RIGHT_WING_NUMBERS = [2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22, 24, 26, 28, 30, 32, 34, 36, 38, 40, 42, 44, 46, 48, 50, 52, 54, 56, 58, 60, 62, 64, 66, 68];
 
 const SHOP_ARMS: ShopItem[] = [
-    { id: 'al1', name: 'L Robot', price: 100, type: 'leftArm', value: 'arm-l-robot', isPremium: true },
-    { id: 'ar1', name: 'R Robot', price: 100, type: 'rightArm', value: 'arm-r-robot', isPremium: true },
-    { id: 'al2', name: 'L Muscle', price: 120, type: 'leftArm', value: 'arm-l-muscle' },
-    { id: 'ar2', name: 'R Muscle', price: 120, type: 'rightArm', value: 'arm-r-muscle' },
-    { id: 'al3', name: 'L Tentacle', price: 150, type: 'leftArm', value: 'arm-l-tentacle', isPremium: true },
-    { id: 'ar3', name: 'R Tentacle', price: 150, type: 'rightArm', value: 'arm-r-tentacle', isPremium: true },
-    { id: 'al4', name: 'L Hook', price: 150, type: 'leftArm', value: 'arm-l-hook' },
-    { id: 'ar4', name: 'R Hook', price: 150, type: 'rightArm', value: 'arm-r-hook' },
-    { id: 'al5', name: 'L Crab', price: 200, type: 'leftArm', value: 'arm-l-crab', isPremium: true },
-    { id: 'ar5', name: 'R Crab', price: 200, type: 'rightArm', value: 'arm-r-crab', isPremium: true },
-    { id: 'al6', name: 'L Zombie', price: 200, type: 'leftArm', value: 'arm-l-zombie' },
-    { id: 'ar6', name: 'R Zombie', price: 200, type: 'rightArm', value: 'arm-r-zombie' },
-    { id: 'al7', name: 'L Wing', price: 250, type: 'leftArm', value: 'arm-l-wing' },
-    { id: 'ar7', name: 'R Wing', price: 250, type: 'rightArm', value: 'arm-r-wing' },
-    { id: 'al8', name: 'L Dragon', price: 300, type: 'leftArm', value: 'arm-l-wing-dragon', isPremium: true },
-    { id: 'ar8', name: 'R Dragon', price: 300, type: 'rightArm', value: 'arm-r-wing-dragon', isPremium: true },
-    { id: 'al9', name: 'L Cactus', price: 150, type: 'leftArm', value: 'arm-l-cactus' },
-    { id: 'ar9', name: 'R Cactus', price: 150, type: 'rightArm', value: 'arm-r-cactus' },
-    { id: 'al10', name: 'L Box', price: 100, type: 'leftArm', value: 'arm-l-box' },
-    { id: 'ar10', name: 'R Box', price: 100, type: 'rightArm', value: 'arm-r-box' },
-    { id: 'al11', name: 'L Slime', price: 250, type: 'leftArm', value: 'arm-l-slime' },
-    { id: 'ar11', name: 'R Slime', price: 250, type: 'rightArm', value: 'arm-r-slime' },
-    { id: 'al12', name: 'L Bone', price: 200, type: 'leftArm', value: 'arm-l-skeleton-fancy', isPremium: true },
-    { id: 'ar12', name: 'R Bone', price: 200, type: 'rightArm', value: 'arm-r-skeleton-fancy', isPremium: true },
-    { id: 'al13', name: 'L Drill', price: 300, type: 'leftArm', value: 'arm-l-drill', isPremium: true },
-    { id: 'ar13', name: 'R Drill', price: 300, type: 'rightArm', value: 'arm-r-drill', isPremium: true },
-    { id: 'al14', name: 'L Baguette', price: 150, type: 'leftArm', value: 'arm-l-baguette' },
-    { id: 'ar14', name: 'R Baguette', price: 150, type: 'rightArm', value: 'arm-r-baguette' },
-    { id: 'al15', name: 'L Angel', price: 250, type: 'leftArm', value: 'arm-l-wing-angel', isPremium: true },
-    { id: 'ar15', name: 'R Angel', price: 250, type: 'rightArm', value: 'arm-r-wing-angel', isPremium: true },
-    { id: 'al16', name: 'L Boxing', price: 150, type: 'leftArm', value: 'arm-l-glove-boxing' },
-    { id: 'ar16', name: 'R Boxing', price: 150, type: 'rightArm', value: 'arm-r-glove-boxing' },
-    { id: 'al17', name: 'L Claw', price: 200, type: 'leftArm', value: 'arm-l-claw-monster' },
-    { id: 'ar17', name: 'R Claw', price: 200, type: 'rightArm', value: 'arm-r-claw-monster' },
-    { id: 'al18', name: 'L Leaf', price: 120, type: 'leftArm', value: 'arm-l-leaf' },
-    { id: 'ar18', name: 'R Leaf', price: 120, type: 'rightArm', value: 'arm-r-leaf' },
-    { id: 'al19', name: 'L Wand', price: 300, type: 'leftArm', value: 'arm-l-wand', isPremium: true },
-    { id: 'ar19', name: 'R Wand', price: 300, type: 'rightArm', value: 'arm-r-wand', isPremium: true },
-    { id: 'al20', name: 'L Shield', price: 250, type: 'leftArm', value: 'arm-l-shield', isPremium: true },
-    { id: 'ar20', name: 'R Shield', price: 250, type: 'rightArm', value: 'arm-r-shield', isPremium: true },
+    // Left wings
+    ...LEFT_WING_NUMBERS.map((num, i) => ({
+        id: `wl${num}`,
+        name: '',
+        price: [100, 150, 200, 250, 300][i % 5],
+        type: 'leftArm' as const,
+        value: `/avatars/wings-left/wing-left-${num}.png`,
+        isPremium: i >= 10, // First 10 free (30%), rest premium
+    })),
+    // Right wings
+    ...RIGHT_WING_NUMBERS.map((num, i) => ({
+        id: `wr${num}`,
+        name: '',
+        price: [100, 150, 200, 250, 300][i % 5],
+        type: 'rightArm' as const,
+        value: `/avatars/wings-right/wing-right-${num}.png`,
+        isPremium: i >= 10, // First 10 free (30%), rest premium
+    })),
 ];
 
-const SHOP_LEGS: ShopItem[] = [
-    { id: 'l1', name: 'Wheels', price: 200, type: 'legs', value: 'legs-wheels' },
-    { id: 'l2', name: 'Chicken', price: 150, type: 'legs', value: 'legs-chicken' },
-    { id: 'l3', name: 'Rocket', price: 300, type: 'legs', value: 'legs-rocket', isPremium: true },
-    { id: 'l4', name: 'Mermaid', price: 350, type: 'legs', value: 'legs-mermaid', isPremium: true },
-    { id: 'l5', name: 'Spider', price: 300, type: 'legs', value: 'legs-spider', isPremium: true },
-    { id: 'l6', name: 'Peg', price: 200, type: 'legs', value: 'legs-peg' },
-    { id: 'l7', name: 'UFO', price: 400, type: 'legs', value: 'legs-ufo', isPremium: true },
-    { id: 'l8', name: 'Skates', price: 250, type: 'legs', value: 'legs-skates' },
-    { id: 'l9', name: 'Ghost', price: 200, type: 'legs', value: 'legs-ghost' },
-    { id: 'l10', name: 'Ballerina', price: 200, type: 'legs', value: 'legs-ballerina' },
-    { id: 'l11', name: 'Jeans', price: 150, type: 'legs', value: 'legs-jeans' },
-    { id: 'l12', name: 'Shorts', price: 150, type: 'legs', value: 'legs-shorts' },
-    { id: 'l13', name: 'Springs', price: 250, type: 'legs', value: 'legs-springs' },
-    { id: 'l14', name: 'Rain Boots', price: 150, type: 'legs', value: 'legs-boots-rain' },
-    { id: 'l15', name: 'Pink Tail', price: 350, type: 'legs', value: 'legs-tail-mermaid-pink', isPremium: true },
-    { id: 'l16', name: 'Hoverboard', price: 400, type: 'legs', value: 'legs-hoverboard', isPremium: true },
-    { id: 'l17', name: 'Cloud', price: 300, type: 'legs', value: 'legs-cloud', isPremium: true },
-    { id: 'l18', name: 'Elf', price: 200, type: 'legs', value: 'legs-elf' },
-    { id: 'l19', name: 'Karate', price: 150, type: 'legs', value: 'legs-karate' },
-];
+// New file-based feet/legs (30 feet: 9 free, 21 premium)
+const SHOP_LEGS: ShopItem[] = Array.from({ length: 30 }, (_, i) => ({
+    id: `f${i + 1}`,
+    name: '',
+    price: [150, 200, 250, 300, 350][Math.floor(Math.random() * 5)],
+    type: 'legs' as const,
+    value: `/avatars/feet/feet-${i + 1}.png`,
+    isPremium: i >= 9, // First 9 free (30%), rest premium
+}));
 
 const SHOP_ANIMATIONS: ShopItem[] = [
     { id: 'anim1', name: 'Breathe', price: 100, type: 'animation', value: 'anim-breathe' },

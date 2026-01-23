@@ -74,6 +74,11 @@ const AvatarCompositor: React.FC<AvatarCompositorProps> = ({
   // Card Styles for BODY PARTS only
   const cardClass = "bg-[#fdf6e3] border-[3px] border-[#8B4513] shadow-[0_2px_0_rgba(0,0,0,0.15)] flex items-center justify-center overflow-hidden";
   
+  // Helper to check if a value is a file path (PNG) vs internal SVG asset
+  const isFilePath = (value: string | null | undefined): boolean => {
+    return !!value && value.startsWith('/');
+  };
+  
   // Check if it's an internal SVG asset (starts with 'head-' but NOT a file path starting with '/')
   const isInternalHead = headUrl && headUrl.startsWith('head-') && !headUrl.startsWith('/');
   const headAsset = isInternalHead ? AVATAR_ASSETS[headUrl] : null;
@@ -153,7 +158,7 @@ const AvatarCompositor: React.FC<AvatarCompositorProps> = ({
       </div>
 
       {/* 5. HAT (Topmost Z-60) */}
-      {hat && AVATAR_ASSETS[hat] && (
+      {hat && (isFilePath(hat) || AVATAR_ASSETS[hat]) && (
           <div 
             className="absolute inset-0 z-[60] flex items-center justify-center"
             style={{
@@ -169,17 +174,20 @@ const AvatarCompositor: React.FC<AvatarCompositorProps> = ({
                     style={{ animationDuration: animationStyle === 'anim-spin' ? '1s' : '2s', animationDelay: '0.1s' }}
                     onClick={(e) => onPartClick && handlePartClick(e, 'hat')}
                  >
-                      {/* Transparent Hat Container */}
-                      <svg viewBox="0 0 100 80" className="w-full h-full p-1 overflow-visible filter drop-shadow-md">
-                          {AVATAR_ASSETS[hat]}
-                      </svg>
+                      {isFilePath(hat) ? (
+                        <img src={hat} alt="Hat" className="w-full h-full object-contain object-center pointer-events-none filter drop-shadow-md" />
+                      ) : (
+                        <svg viewBox="0 0 100 80" className="w-full h-full p-1 overflow-visible filter drop-shadow-md">
+                            {AVATAR_ASSETS[hat]}
+                        </svg>
+                      )}
                  </div>
              </div>
           </div>
       )}
 
       {/* BODY GROUP */}
-      {body && AVATAR_ASSETS[body] && (
+      {body && (isFilePath(body) || AVATAR_ASSETS[body]) && (
           <div
              className={`absolute z-20 flex items-center justify-center ${bodyAnimationClass} ${onPartClick ? 'cursor-pointer hover:brightness-110 active:scale-95 pointer-events-auto' : 'pointer-events-none'}`}
              style={{
@@ -191,8 +199,8 @@ const AvatarCompositor: React.FC<AvatarCompositorProps> = ({
              }}
              onClick={(e) => onPartClick && handlePartClick(e, 'body')}
           >
-               {/* 1. LEGS (Bottom Layer Z-10) - No Container */}
-               {legs && AVATAR_ASSETS[legs] && (
+               {/* 1. LEGS/FEET (Bottom Layer Z-10) */}
+               {legs && (isFilePath(legs) || AVATAR_ASSETS[legs]) && (
                     <div 
                         onClick={(e) => handlePartClick(e, 'legs')}
                         className={`absolute z-10 transition-transform duration-300 flex items-center justify-center ${onPartClick ? 'cursor-pointer hover:brightness-110 active:scale-95 pointer-events-auto' : ''} ${getLimbAnimClass()}`}
@@ -205,30 +213,38 @@ const AvatarCompositor: React.FC<AvatarCompositorProps> = ({
                             transform: `rotate(${legsRotation}deg) scale(${legsScale})`
                         }}
                     >
-                        <svg viewBox="0 0 100 60" className="w-full h-full overflow-visible">
-                            {AVATAR_ASSETS[legs]}
-                        </svg>
+                        {isFilePath(legs) ? (
+                          <img src={legs} alt="Feet" className="w-full h-full object-contain object-center pointer-events-none" />
+                        ) : (
+                          <svg viewBox="0 0 100 60" className="w-full h-full overflow-visible">
+                              {AVATAR_ASSETS[legs]}
+                          </svg>
+                        )}
                     </div>
                 )}
 
-               {/* 2. MAIN BODY (Z-20) - No Container */}
+               {/* 2. MAIN BODY (Z-20) */}
                <div 
                   className={`absolute z-20 flex items-center justify-center`}
                   style={{ width: '100%', height: '100%' }}
                 >
-                   <svg viewBox="0 0 100 80" className="w-full h-full overflow-visible" style={{ transform: 'scale(1.3)' }}>
-                      {AVATAR_ASSETS[body]}
-                   </svg>
+                   {isFilePath(body) ? (
+                     <img src={body} alt="Body" className="w-full h-full object-contain object-center pointer-events-none" style={{ transform: 'scale(1.3)' }} />
+                   ) : (
+                     <svg viewBox="0 0 100 80" className="w-full h-full overflow-visible" style={{ transform: 'scale(1.3)' }}>
+                        {AVATAR_ASSETS[body]}
+                     </svg>
+                   )}
                </div>
 
-               {/* 3. RIGHT ARM (Viewer Left) (Z-30) - No Container, Full Solid */}
-               {rightArm && AVATAR_ASSETS[rightArm] && (
+               {/* 3. RIGHT WING/ARM (Viewer Left) (Z-30) */}
+               {rightArm && (isFilePath(rightArm) || AVATAR_ASSETS[rightArm]) && (
                   <div 
                     className="absolute z-30"
                     style={{ 
                         top: `${DEFAULT_ARM_TOP + rightArmOffset.y}%`, 
                         left: `${DEFAULT_ARM_SIDE - rightArmOffset.x}%`,
-                        width: '44%', // Widened from 38%
+                        width: '44%',
                         height: '80%',
                         transformOrigin: '90% 15%', 
                         transform: `rotate(${rightArmRotation}deg) scale(${rightArmScale})`
@@ -239,21 +255,25 @@ const AvatarCompositor: React.FC<AvatarCompositorProps> = ({
                         className={`w-full h-full transition-colors duration-300 flex items-center justify-center ${onPartClick ? 'cursor-pointer hover:brightness-110 active:scale-95 pointer-events-auto' : ''} ${isAnimating && animationStyle !== 'anim-spin' ? 'animate-arm-sway-right' : ''} ${getLimbAnimClass()}`}
                         style={{ transformOrigin: '50% 15%' }} 
                       >
-                           <svg viewBox="0 0 50 100" className="w-full h-full overflow-visible">
-                              {AVATAR_ASSETS[rightArm]}
-                          </svg>
+                           {isFilePath(rightArm) ? (
+                             <img src={rightArm} alt="Right Wing" className="w-full h-full object-contain object-center pointer-events-none" />
+                           ) : (
+                             <svg viewBox="0 0 50 100" className="w-full h-full overflow-visible">
+                                {AVATAR_ASSETS[rightArm]}
+                            </svg>
+                           )}
                       </div>
                   </div>
                )}
 
-               {/* 4. LEFT ARM (Viewer Right) (Z-30) - No Container, Full Solid */}
-               {leftArm && AVATAR_ASSETS[leftArm] && (
+               {/* 4. LEFT WING/ARM (Viewer Right) (Z-30) */}
+               {leftArm && (isFilePath(leftArm) || AVATAR_ASSETS[leftArm]) && (
                   <div 
                     className="absolute z-30"
                     style={{ 
                         top: `${DEFAULT_ARM_TOP + leftArmOffset.y}%`, 
                         right: `${DEFAULT_ARM_SIDE - leftArmOffset.x}%`,
-                        width: '44%', // Widened from 38%
+                        width: '44%',
                         height: '80%',
                         transformOrigin: '10% 15%',
                         transform: `rotate(${leftArmRotation}deg) scale(${leftArmScale})`
@@ -264,9 +284,13 @@ const AvatarCompositor: React.FC<AvatarCompositorProps> = ({
                         className={`w-full h-full transition-colors duration-300 flex items-center justify-center ${onPartClick ? 'cursor-pointer hover:brightness-110 active:scale-95 pointer-events-auto' : ''} ${isAnimating && animationStyle !== 'anim-spin' ? 'animate-arm-sway-left' : ''} ${getLimbAnimClass()}`}
                         style={{ transformOrigin: '50% 15%' }} 
                       >
-                           <svg viewBox="0 0 50 100" className="w-full h-full overflow-visible">
-                              {AVATAR_ASSETS[leftArm]}
-                          </svg>
+                           {isFilePath(leftArm) ? (
+                             <img src={leftArm} alt="Left Wing" className="w-full h-full object-contain object-center pointer-events-none" />
+                           ) : (
+                             <svg viewBox="0 0 50 100" className="w-full h-full overflow-visible">
+                                {AVATAR_ASSETS[leftArm]}
+                            </svg>
+                           )}
                       </div>
                   </div>
                )}

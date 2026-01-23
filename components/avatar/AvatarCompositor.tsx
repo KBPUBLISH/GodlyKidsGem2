@@ -72,7 +72,8 @@ const AvatarCompositor: React.FC<AvatarCompositorProps> = ({
   // Card Styles for BODY PARTS only
   const cardClass = "bg-[#fdf6e3] border-[3px] border-[#8B4513] shadow-[0_2px_0_rgba(0,0,0,0.15)] flex items-center justify-center overflow-hidden";
   
-  const isInternalHead = headUrl && headUrl.startsWith('head-');
+  // Check if it's an internal SVG asset (starts with 'head-' but NOT a file path starting with '/')
+  const isInternalHead = headUrl && headUrl.startsWith('head-') && !headUrl.startsWith('/');
   const headAsset = isInternalHead ? AVATAR_ASSETS[headUrl] : null;
 
       const handlePartClick = (e: React.MouseEvent, part: 'leftArm' | 'rightArm' | 'legs' | 'head' | 'body' | 'hat') => {
@@ -137,8 +138,13 @@ const AvatarCompositor: React.FC<AvatarCompositorProps> = ({
                           {headAsset}
                       </svg>
                   ) : (
-                      // IMAGE HEAD
-                      <img src={headUrl || ''} alt="Head" className="w-full h-full object-cover pointer-events-none rounded-2xl" />
+                      // IMAGE HEAD - use object-contain for proper centering
+                      <img 
+                        src={headUrl || ''} 
+                        alt="Head" 
+                        className="w-full h-full object-contain object-center pointer-events-none" 
+                        style={{ transform: 'scale(1.15)' }}
+                      />
                   )}
               </div>
           </div>

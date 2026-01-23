@@ -36,11 +36,15 @@ const AvatarDetailModal: React.FC<AvatarDetailModalProps> = ({ isOpen, onClose, 
 
   const content = (
     <div className="fixed inset-0 z-[100] flex justify-center px-4 pointer-events-auto overflow-hidden">
-      {/* Backdrop */}
+      {/* Backdrop with Island Background */}
       <div 
-        className="fixed inset-0 bg-black/90 backdrop-blur-md animate-in fade-in duration-300"
+        className="fixed inset-0 bg-cover bg-center animate-in fade-in duration-300"
+        style={{ backgroundImage: `url('/assets/images/islandbackground.jpg')` }}
         onClick={onClose}
-      ></div>
+      >
+        {/* Dark overlay for readability */}
+        <div className="absolute inset-0 bg-black/40"></div>
+      </div>
 
       {/* Main Container */}
       <div className="relative w-full max-w-sm flex flex-col items-center justify-center min-h-full py-10 z-10">
@@ -78,9 +82,6 @@ const AvatarDetailModal: React.FC<AvatarDetailModalProps> = ({ isOpen, onClose, 
 
           {/* Avatar Large View - Zoomed out */}
           <div className={`relative shrink-0 transition-all duration-700 ease-[cubic-bezier(0.34,1.56,0.64,1)] ${isPlaying ? 'w-48 h-48 md:w-56 md:h-56 mb-8' : 'w-40 h-40 md:w-48 md:h-48 mb-10 mt-10'}`}>
-              {/* Glow */}
-              <div className={`absolute inset-0 bg-[#FFD700] rounded-full blur-3xl animate-pulse transition-opacity duration-500 ${isPlaying ? 'opacity-30' : 'opacity-10'}`}></div>
-              
               <div className="w-full h-full relative z-10 overflow-visible">
                    <AvatarCompositor 
                         headUrl={equippedAvatar}
@@ -116,12 +117,7 @@ const AvatarDetailModal: React.FC<AvatarDetailModalProps> = ({ isOpen, onClose, 
               
               {/* Standard Info & Buttons (When NOT Playing) */}
               <div className={`w-full flex flex-col items-center transition-all duration-500 ease-in-out absolute bottom-0 left-0 right-0 ${isPlaying ? 'opacity-0 translate-y-20 pointer-events-none' : 'opacity-100 translate-y-0 relative'}`}>
-                  <div className="text-center relative bg-black/40 p-4 rounded-2xl backdrop-blur-sm w-full mb-8 border border-white/5 shadow-xl">
-                    <h2 className="font-display font-extrabold text-white text-3xl mb-1 text-shadow-lg tracking-wide">YOUR AVATAR</h2>
-                    <p className="text-white/70 font-bold">Ready for adventure!</p>
-                  </div>
-
-                  <div className="w-full max-w-xs space-y-3 pb-10">
+                  <div className="w-full max-w-xs space-y-3 pb-6 mt-48">
                       <WoodButton variant="gold" onClick={() => { onClose(); onEdit(); }} className="w-full py-4 text-xl shadow-xl">
                         BUILDER SHOP
                       </WoodButton>

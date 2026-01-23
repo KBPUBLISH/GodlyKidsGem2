@@ -20,27 +20,31 @@ interface ShopModalProps {
 }
 
 // --- SHOP DATA ---
+// New file-based avatar heads (no names displayed in UI)
 const SHOP_AVATARS: ShopItem[] = [
-    // FUNNY HEADS
-    { id: 'av1', name: 'Toast', price: 50, type: 'avatar', value: 'head-toast' },
-    { id: 'av2', name: 'Burger', price: 50, type: 'avatar', value: 'head-burger' },
-    { id: 'av3', name: 'TV', price: 50, type: 'avatar', value: 'head-tv' },
-    { id: 'av4', name: 'Cookie', price: 50, type: 'avatar', value: 'head-cookie' },
-    { id: 'av5', name: 'Slime', price: 50, type: 'avatar', value: 'head-slime' },
-    { id: 'av6', name: 'Pumpkin', price: 50, type: 'avatar', value: 'head-pumpkin' },
-    { id: 'av7', name: 'Earth', price: 50, type: 'avatar', value: 'head-earth', isPremium: true },
-    { id: 'av8', name: 'Moon', price: 50, type: 'avatar', value: 'head-moon', isPremium: true },
-    { id: 'av9', name: 'Bomb', price: 50, type: 'avatar', value: 'head-bomb', isPremium: true },
-    { id: 'av10', name: 'Eye', price: 50, type: 'avatar', value: 'head-eye', isPremium: true },
-    // ANIMAL HEADS
-    { id: 'av13', name: 'Bear', price: 50, type: 'avatar', value: 'head-bear-brown' },
-    { id: 'av14', name: 'Polar Bear', price: 50, type: 'avatar', value: 'head-bear-polar', isPremium: true },
-    { id: 'av15', name: 'Aviator', price: 75, type: 'avatar', value: 'head-bear-aviator', isPremium: true },
-    { id: 'av16', name: 'Pug', price: 50, type: 'avatar', value: 'head-dog-pug' },
-    { id: 'av17', name: 'Dalmatian', price: 50, type: 'avatar', value: 'head-dog-dalmatian', isPremium: true },
-    { id: 'av18', name: 'Orange Cat', price: 50, type: 'avatar', value: 'head-cat-orange' },
-    { id: 'av19', name: 'Black Cat', price: 50, type: 'avatar', value: 'head-cat-black', isPremium: true },
-    { id: 'av20', name: 'Lizard', price: 50, type: 'avatar', value: 'head-lizard', isPremium: true },
+    { id: 'av1', name: '', price: 0, type: 'avatar', value: '/avatars/heads/head-1.png' },
+    { id: 'av2', name: '', price: 0, type: 'avatar', value: '/avatars/heads/head-2.png' },
+    { id: 'av3', name: '', price: 0, type: 'avatar', value: '/avatars/heads/head-3.png' },
+    { id: 'av4', name: '', price: 0, type: 'avatar', value: '/avatars/heads/head-4.png' },
+    { id: 'av5', name: '', price: 0, type: 'avatar', value: '/avatars/heads/head-5.png' },
+    { id: 'av6', name: '', price: 0, type: 'avatar', value: '/avatars/heads/head-6.png' },
+    { id: 'av7', name: '', price: 0, type: 'avatar', value: '/avatars/heads/head-7.png' },
+    { id: 'av8', name: '', price: 0, type: 'avatar', value: '/avatars/heads/head-8.png' },
+    { id: 'av9', name: '', price: 0, type: 'avatar', value: '/avatars/heads/head-9.png' },
+    { id: 'av10', name: '', price: 0, type: 'avatar', value: '/avatars/heads/heads-10.png' },
+    { id: 'av11', name: '', price: 0, type: 'avatar', value: '/avatars/heads/head-11.png' },
+    { id: 'av12', name: '', price: 0, type: 'avatar', value: '/avatars/heads/head-12.png' },
+    { id: 'av13', name: '', price: 0, type: 'avatar', value: '/avatars/heads/head-13.png' },
+    { id: 'av14', name: '', price: 0, type: 'avatar', value: '/avatars/heads/head-14.png' },
+    { id: 'av15', name: '', price: 0, type: 'avatar', value: '/avatars/heads/head-15.png' },
+    { id: 'av16', name: '', price: 0, type: 'avatar', value: '/avatars/heads/head-16.png' },
+    { id: 'av17', name: '', price: 0, type: 'avatar', value: '/avatars/heads/head-17.png' },
+    { id: 'av18', name: '', price: 0, type: 'avatar', value: '/avatars/heads/head-18.png' },
+    { id: 'av19', name: '', price: 0, type: 'avatar', value: '/avatars/heads/head-19.png' },
+    { id: 'av20', name: '', price: 0, type: 'avatar', value: '/avatars/heads/head-20.png' },
+    { id: 'av21', name: '', price: 0, type: 'avatar', value: '/avatars/heads/head-21.png' },
+    { id: 'av22', name: '', price: 0, type: 'avatar', value: '/avatars/heads/head-22.png' },
+    { id: 'av23', name: '', price: 0, type: 'avatar', value: '/avatars/heads/head-23.png' },
 ];
 
 const SHOP_HATS: ShopItem[] = [
@@ -584,7 +588,9 @@ const ShopModal: React.FC<ShopModalProps> = ({ isOpen, onClose, initialTab, hide
                     )}
                 </div>
 
-                <h3 className="text-white font-display font-bold text-xs mb-2 text-center leading-tight h-8 flex items-center justify-center">{item.name}</h3>
+                {item.name && (
+                    <h3 className="text-white font-display font-bold text-xs mb-2 text-center leading-tight h-8 flex items-center justify-center">{item.name}</h3>
+                )}
 
                 {/* Action Buttons */}
                 {isLocked ? (
@@ -757,15 +763,9 @@ const ShopModal: React.FC<ShopModalProps> = ({ isOpen, onClose, initialTab, hide
 
                 {/* Preview Area (Live updates) */}
                 <div
-                    className={`w-full bg-[#8B4513] relative shrink-0 shadow-inner overflow-hidden flex flex-col items-center transition-all duration-500 ease-in-out ${isMenuMinimized ? 'flex-1' : 'h-[20rem] shrink-0'}`}
+                    className={`w-full relative shrink-0 shadow-inner overflow-hidden flex flex-col items-center transition-all duration-500 ease-in-out bg-cover bg-center ${isMenuMinimized ? 'flex-1' : 'h-[20rem] shrink-0'}`}
+                    style={{ backgroundImage: `url('/assets/images/dressing-room.jpg')` }}
                 >
-                    {/* Background Pattern */}
-                    <div className="absolute inset-0 opacity-10 pointer-events-none"
-                        style={{ backgroundImage: 'radial-gradient(#000 1px, transparent 1px)', backgroundSize: '10px 10px' }}>
-                    </div>
-
-                    {/* Spotlight */}
-                    <div className="absolute top-0 left-1/2 -translate-x-1/2 w-40 h-full bg-gradient-to-b from-white/20 to-transparent pointer-events-none blur-md"></div>
 
                     {/* Toolbar: Builder Mode & Play */}
                     <div className="absolute top-4 left-4 right-4 flex justify-between z-30 pointer-events-none">

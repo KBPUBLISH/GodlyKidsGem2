@@ -19,26 +19,31 @@ import { activityTrackingService } from '../services/activityTrackingService';
 import { metaAttributionService } from '../services/metaAttributionService';
 import { Capacitor } from '@capacitor/core';
 
-// Use Funny Heads instead of generic human seeds
+// File-based avatar heads
 const FUNNY_HEADS = [
-  'head-toast',
-  'head-burger',
-  'head-cookie',
-  'head-tv',
-  'head-slime',
-  'head-pumpkin',
-  'head-earth',
-  'head-moon',
-  'head-bomb',
-  'head-eye',
-  'head-bear-brown',
-  'head-bear-polar',
-  'head-bear-aviator',
-  'head-dog-pug',
-  'head-dog-dalmatian',
-  'head-cat-orange',
-  'head-cat-black',
-  'head-lizard'
+  '/avatars/heads/head-1.png',
+  '/avatars/heads/head-2.png',
+  '/avatars/heads/head-3.png',
+  '/avatars/heads/head-4.png',
+  '/avatars/heads/head-5.png',
+  '/avatars/heads/head-6.png',
+  '/avatars/heads/head-7.png',
+  '/avatars/heads/head-8.png',
+  '/avatars/heads/head-9.png',
+  '/avatars/heads/heads-10.png',
+  '/avatars/heads/head-11.png',
+  '/avatars/heads/head-12.png',
+  '/avatars/heads/head-13.png',
+  '/avatars/heads/head-14.png',
+  '/avatars/heads/head-15.png',
+  '/avatars/heads/head-16.png',
+  '/avatars/heads/head-17.png',
+  '/avatars/heads/head-18.png',
+  '/avatars/heads/head-19.png',
+  '/avatars/heads/head-20.png',
+  '/avatars/heads/head-21.png',
+  '/avatars/heads/head-22.png',
+  '/avatars/heads/head-23.png',
 ];
 
 // Benefits carousel data - Education focused for Academy
@@ -1497,7 +1502,7 @@ const OnboardingPage: React.FC = () => {
 
   // Helper for rendering internal avatar asset
   const renderAvatarAsset = (headKey: string) => {
-    const isInternalHead = headKey.startsWith('head-');
+    const isInternalHead = headKey.startsWith('head-') && !headKey.startsWith('/');
     if (isInternalHead && AVATAR_ASSETS[headKey]) {
       return (
         <div className="w-[90%] h-[90%]">
@@ -1507,8 +1512,14 @@ const OnboardingPage: React.FC = () => {
         </div>
       );
     }
+    // File-based images - use object-contain to show full image, centered
     return (
-      <img src={headKey} alt="avatar" className="w-full h-full object-cover" />
+      <img 
+        src={headKey} 
+        alt="avatar" 
+        className="w-full h-full object-contain object-center" 
+        style={{ transform: 'scale(1.1)' }} // Slight scale up to fill circle better
+      />
     );
   };
 
@@ -1563,19 +1574,19 @@ const OnboardingPage: React.FC = () => {
                  </div>
              </div>
 
-             {/* Avatar Picker - Wood Container */}
-             <div className="bg-[#CD853F] rounded-2xl p-5 mb-6 border-2 border-[#8B4513] shadow-lg relative">
-                {/* Wood grain - use clip-path instead of overflow-hidden to not crop children */}
-                <div className="absolute inset-0 opacity-10 rounded-2xl" style={{backgroundImage: 'repeating-linear-gradient(90deg, transparent, transparent 20px, #3E1F07 20px, #3E1F07 22px)', clipPath: 'inset(0 round 1rem)'}}></div>
-                
-                <div className="relative flex flex-col items-center">
-                  <div className="w-28 h-28 rounded-full border-4 border-[#8B4513] shadow-lg bg-[#f3e5ab] mb-4 relative overflow-hidden flex items-center justify-center">
-                       <div className="w-[90%] h-[90%] flex items-center justify-center">
-                           {renderAvatarAsset(pAvatar)}
-                       </div>
-                  </div>
-                  
-                  <p className="text-[#5c2e0b] text-xs font-bold mb-3">Tap to change avatar</p>
+            {/* Avatar Picker - Ship Deck Background */}
+            <div className="rounded-2xl p-5 mb-6 border-2 border-[#8B4513] shadow-lg relative overflow-hidden" style={{backgroundImage: 'url(/assets/images/ship-deck.jpg)', backgroundSize: 'cover', backgroundPosition: 'center'}}>
+               {/* Slight overlay for better contrast */}
+               <div className="absolute inset-0 bg-black/20 rounded-2xl"></div>
+               
+               <div className="relative flex flex-col items-center">
+                 <div className="w-28 h-28 mb-4 relative flex items-center justify-center">
+                      <div className="w-[90%] h-[90%] flex items-center justify-center">
+                          {renderAvatarAsset(pAvatar)}
+                      </div>
+                 </div>
+                 
+                 <p className="text-white text-xs font-bold mb-3 drop-shadow-lg">Tap to change avatar</p>
                   
                   {/* Extra padding to prevent clipping of scaled items */}
                   <div className="w-full overflow-x-auto no-scrollbar py-3 -my-1">

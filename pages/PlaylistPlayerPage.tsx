@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { ChevronLeft, Pause, Play, SkipBack, SkipForward, Music, Heart, RotateCcw, ListPlus, BookOpen, Share2 } from 'lucide-react';
+import { ChevronLeft, Pause, Play, SkipBack, SkipForward, Music, Heart, RotateCcw, ListPlus, BookOpen, Share2, Crown } from 'lucide-react';
 import { favoritesService } from '../services/favoritesService';
 import { getApiBaseUrl } from '../services/apiService';
 import { playCountService } from '../services/playCountService';
@@ -113,7 +113,10 @@ const PlaylistPlayerPage: React.FC = () => {
         togglePlayPause,
         nextTrack,
         prevTrack,
-        seek
+        seek,
+        previewLimitReached,
+        previewTimeRemaining,
+        dismissPreviewLimit
     } = useAudio();
     const { isSubscribed } = useUser();
 
@@ -611,6 +614,53 @@ const PlaylistPlayerPage: React.FC = () => {
                     itemCover={currentTrack.coverImage || activePlaylist.coverImage}
                     itemType={activePlaylist.type as 'Song' | 'Audiobook'}
                 />
+            )}
+            
+            {/* Premium Preview Limit Modal */}
+            {previewLimitReached && (
+                <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/80 backdrop-blur-sm animate-in fade-in duration-300">
+                    <div className="relative w-[90%] max-w-md bg-gradient-to-b from-[#1a237e] to-[#0d113a] rounded-3xl p-8 shadow-2xl animate-in zoom-in-75 duration-500 border-4 border-[#FFD700]">
+                        {/* Crown decoration */}
+                        <div className="absolute -top-6 left-1/2 -translate-x-1/2 w-16 h-16 bg-gradient-to-br from-[#FFD700] to-[#FFA500] rounded-full flex items-center justify-center border-4 border-white shadow-lg">
+                            <Crown className="w-8 h-8 text-[#5c2e0b]" />
+                        </div>
+                        
+                        {/* Content */}
+                        <div className="text-center mt-6">
+                            <h2 className="text-2xl font-bold text-white drop-shadow-lg mb-2">
+                                Enjoying the Audio?
+                            </h2>
+                            <p className="text-[#eecaa0] text-base mb-2">
+                                You've listened to your 2-minute free preview!
+                            </p>
+                            <p className="text-white/70 text-sm mb-6">
+                                Unlock unlimited listening with a subscription.
+                            </p>
+                            
+                            {/* Upgrade Button */}
+                            <button
+                                onClick={() => {
+                                    dismissPreviewLimit();
+                                    navigate('/paywall');
+                                }}
+                                className="w-full bg-gradient-to-r from-[#FFD700] to-[#FFA500] text-[#3E1F07] font-bold py-4 px-8 rounded-2xl text-lg shadow-lg transform hover:scale-105 transition-all duration-300 active:scale-95 border-b-4 border-[#CC8400]"
+                            >
+                                Unlock Full Access
+                            </button>
+                            
+                            {/* Maybe Later Button */}
+                            <button
+                                onClick={() => {
+                                    dismissPreviewLimit();
+                                    navigate(-1);
+                                }}
+                                className="mt-4 w-full text-white/70 hover:text-white py-2 text-sm transition-colors"
+                            >
+                                Maybe Later
+                            </button>
+                        </div>
+                    </div>
+                </div>
             )}
         </div>
     );

@@ -229,7 +229,7 @@ const MiniPlayer: React.FC = () => {
                                 Enjoying the Audio?
                             </h2>
                             <p className="text-[#eecaa0] text-base mb-2">
-                                You've listened to your 1-minute free preview!
+                                You've listened to your 2-minute free preview!
                             </p>
                             <p className="text-white/70 text-sm mb-6">
                                 Unlock unlimited listening with a subscription.

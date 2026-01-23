@@ -153,6 +153,7 @@ interface Playlist {
     status: 'draft' | 'published';
     playCount?: number;
     likeCount?: number;
+    isMembersOnly?: boolean;
 }
 
 const PlaylistDetailPage: React.FC = () => {

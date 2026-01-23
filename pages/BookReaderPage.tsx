@@ -1769,12 +1769,15 @@ const BookReaderPage: React.FC = () => {
         }
     };
 
+    // Track if user has started TTS at least once (for auto-play on swipe)
+    const hasStartedTTSRef = useRef(false);
+    
     const handleNext = (e: React.MouseEvent) => {
         e.stopPropagation();
         if (isPageTurning) return;
         
-        // Check if TTS was playing before we stop it (for auto-play on next page)
-        const wasPlayingTTS = playing || playingRef.current || isPlayingMultiSegmentRef.current;
+        // Auto-play if TTS has been started at least once this session
+        const shouldAutoPlayOnSwipe = hasStartedTTSRef.current;
         stopAudio();
         
         // Check preview limit for premium books (3 pages allowed)
@@ -1841,8 +1844,8 @@ const BookReaderPage: React.FC = () => {
                     }
                 }
                 
-                // Auto-play narration after manual page swipe (only if TTS was playing before)
-                if (wasPlayingTTS) {
+                // Auto-play narration after swipe (if user has used TTS this session)
+                if (shouldAutoPlayOnSwipe) {
                     setTimeout(() => {
                         const newPage = pages[nextIndex];
                         const contentTextBoxes = newPage?.content?.textBoxes;
@@ -1859,7 +1862,7 @@ const BookReaderPage: React.FC = () => {
                                 handlePlayText(firstBoxText, 0, { stopPropagation: () => {} } as React.MouseEvent, shouldAutoPlay);
                             }
                         }
-                    }, 300); // Delay to let page settle
+                    }, 300);
                 }
             }, 850); // Slightly after 0.8s animation completes
         }
@@ -3019,6 +3022,9 @@ const BookReaderPage: React.FC = () => {
     
     const handlePlayText = async (text: string, index: number, e: React.MouseEvent, isAutoPlay: boolean = false) => {
         e.stopPropagation();
+        
+        // Mark that TTS has been started at least once (for auto-play on swipe feature)
+        hasStartedTTSRef.current = true;
         
         console.log('🎤 handlePlayText called:', { 
             isAutoPlay, 

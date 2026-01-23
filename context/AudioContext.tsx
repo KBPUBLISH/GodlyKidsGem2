@@ -31,7 +31,7 @@ export interface Playlist {
 }
 
 // Premium preview constants
-const AUDIO_PREVIEW_SECONDS = 60; // 1 minute preview for premium audio
+const AUDIO_PREVIEW_SECONDS = 120; // 2 minute preview for premium audio
 
 interface AudioContextType {
     // Background Music & SFX (simplified - disabled by default)
@@ -521,6 +521,13 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
     // --- Playlist Player Methods ---
     const playPlaylist = useCallback((playlist: Playlist, startIndex: number = 0, isSubscribed: boolean = true) => {
+        console.log('🎵 playPlaylist called:', {
+            title: playlist.title,
+            isMembersOnly: playlist.isMembersOnly,
+            isSubscribed: isSubscribed,
+            willBePreviewMode: playlist.isMembersOnly === true && !isSubscribed
+        });
+        
         setCurrentPlaylist(playlist);
         setCurrentTrackIndex(startIndex);
         setIsPlaying(true);
@@ -533,8 +540,9 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
             previewTimeAccumulator.current = 0;
             setPreviewTimeRemaining(AUDIO_PREVIEW_SECONDS);
             setPreviewLimitReached(false);
-            console.log('🎵 Starting premium playlist in preview mode (60s limit)');
+            console.log('🎵 Starting premium playlist in preview mode (2 min limit)');
         } else {
+            console.log('🎵 Full playback mode - no preview limit');
             setPreviewLimitReached(false);
         }
         

@@ -8,6 +8,32 @@ import { ApiService } from '../services/apiService';
 const STORAGE_KEY = 'godly_kids_data_v6';
 const TERMS_URL = 'https://www.godlykids.com/end-user-license-agreement';
 
+// Optimized image component with blur-up loading
+const OptimizedImage: React.FC<{ src: string; alt?: string }> = ({ src, alt = '' }) => {
+  const [loaded, setLoaded] = useState(false);
+  const [error, setError] = useState(false);
+  
+  if (error) return null;
+  
+  return (
+    <div className="relative w-full h-full">
+      {/* Placeholder gradient shown while loading */}
+      {!loaded && (
+        <div className="absolute inset-0 bg-gradient-to-br from-[#6a3093] to-[#3d1a5c] animate-pulse" />
+      )}
+      <img
+        src={src}
+        alt={alt}
+        className={`w-full h-full object-cover transition-opacity duration-300 ${loaded ? 'opacity-100' : 'opacity-0'}`}
+        loading="lazy"
+        decoding="async"
+        onLoad={() => setLoaded(true)}
+        onError={() => setError(true)}
+      />
+    </div>
+  );
+};
+
 // Animated carousel column that scrolls continuously
 const CarouselColumn: React.FC<{
   images: string[];
@@ -54,20 +80,8 @@ const CarouselColumn: React.FC<{
           <div
             key={`${columnIndex}-${idx}`}
             className="w-full aspect-[3/4] rounded-2xl overflow-hidden shadow-lg flex-shrink-0"
-            style={{
-              background: 'linear-gradient(135deg, #4a1a7a 0%, #2d1b4e 100%)',
-            }}
           >
-            <img
-              src={url}
-              alt=""
-              className="w-full h-full object-cover"
-              loading="lazy"
-              onError={(e) => {
-                // Hide broken images
-                (e.target as HTMLImageElement).style.display = 'none';
-              }}
-            />
+            <OptimizedImage src={url} />
           </div>
         ))}
       </div>
@@ -155,7 +169,8 @@ const LandingPage: React.FC = () => {
         console.log(`📚 Landing carousel: Found ${bookCovers.length} book covers, ${playlistCovers.length} playlist covers`);
         
         if (allCovers.length > 0) {
-          const shuffled = allCovers.sort(() => Math.random() - 0.5);
+          // Shuffle and limit to 20 images for faster loading
+          const shuffled = allCovers.sort(() => Math.random() - 0.5).slice(0, 20);
           setCoverUrls(shuffled);
         }
       } catch (error) {

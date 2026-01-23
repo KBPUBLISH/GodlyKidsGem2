@@ -521,10 +521,14 @@ const ShopModal: React.FC<ShopModalProps> = ({ isOpen, onClose, initialTab, hide
                             )}
                         </>
                     )}
-                    {(['hat', 'body', 'leftArm', 'rightArm', 'legs'].includes(item.type)) && AVATAR_ASSETS[item.value] && (
-                        <svg viewBox="0 0 100 100" className="w-full h-full p-2 overflow-visible">
-                            {AVATAR_ASSETS[item.value]}
-                        </svg>
+                    {(['hat', 'body', 'leftArm', 'rightArm', 'legs'].includes(item.type)) && (
+                        item.value.startsWith('/') ? (
+                            <img src={item.value} alt={item.name || item.type} className="w-full h-full object-contain p-1" />
+                        ) : AVATAR_ASSETS[item.value] ? (
+                            <svg viewBox="0 0 100 100" className="w-full h-full p-2 overflow-visible">
+                                {AVATAR_ASSETS[item.value]}
+                            </svg>
+                        ) : null
                     )}
                     {isDisabled && !isLocked && (
                         <div className="absolute inset-0 bg-black/50 flex items-center justify-center backdrop-blur-[1px]">

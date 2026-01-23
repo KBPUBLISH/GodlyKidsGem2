@@ -191,6 +191,7 @@ const OnboardingTutorial: React.FC = () => {
     isStepActive,
     startTutorial,
     nextStep,
+    goToStep,
     completeTutorial,
     getStepConfig,
     donatedCoins,

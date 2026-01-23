@@ -247,14 +247,14 @@ const AvatarCompositor: React.FC<AvatarCompositorProps> = ({
                         left: `${DEFAULT_ARM_SIDE - leftArmOffset.x}%`,
                         width: '44%',
                         height: '80%',
-                        transformOrigin: '90% 15%', 
+                        transformOrigin: '50% 50%', 
                         transform: `rotate(${leftArmRotation}deg) scale(${leftArmScale})`
                     }}
                   >
                       <div
                         onClick={(e) => handlePartClick(e, 'leftArm')}
                         className={`w-full h-full transition-colors duration-300 flex items-center justify-center ${onPartClick ? 'cursor-pointer hover:brightness-110 active:scale-95 pointer-events-auto' : ''} ${isAnimating && animationStyle !== 'anim-spin' ? 'animate-arm-sway-left' : ''} ${getLimbAnimClass()}`}
-                        style={{ transformOrigin: '50% 15%' }} 
+                        style={{ transformOrigin: '50% 50%' }} 
                       >
                            {isFilePath(leftArm) ? (
                              <img src={leftArm} alt="Left Wing" className="w-full h-full object-contain object-center pointer-events-none" />
@@ -276,14 +276,14 @@ const AvatarCompositor: React.FC<AvatarCompositorProps> = ({
                         right: `${DEFAULT_ARM_SIDE - rightArmOffset.x}%`,
                         width: '44%',
                         height: '80%',
-                        transformOrigin: '10% 15%',
+                        transformOrigin: '50% 50%',
                         transform: `rotate(${rightArmRotation}deg) scale(${rightArmScale})`
                     }}
                   >
                       <div 
                         onClick={(e) => handlePartClick(e, 'rightArm')}
                         className={`w-full h-full transition-colors duration-300 flex items-center justify-center ${onPartClick ? 'cursor-pointer hover:brightness-110 active:scale-95 pointer-events-auto' : ''} ${isAnimating && animationStyle !== 'anim-spin' ? 'animate-arm-sway-right' : ''} ${getLimbAnimClass()}`}
-                        style={{ transformOrigin: '50% 15%' }} 
+                        style={{ transformOrigin: '50% 50%' }} 
                       >
                            {isFilePath(rightArm) ? (
                              <img src={rightArm} alt="Right Wing" className="w-full h-full object-contain object-center pointer-events-none" />

@@ -238,10 +238,10 @@ const AvatarCompositor: React.FC<AvatarCompositorProps> = ({
                    )}
                </div>
 
-               {/* 3. LEFT WING/ARM (Viewer's Left) (Z-30) */}
+               {/* 3. LEFT WING/ARM (Viewer's Left) (Z-15 - behind body) */}
                {leftArm && (isFilePath(leftArm) || AVATAR_ASSETS[leftArm]) && (
                   <div 
-                    className="absolute z-30"
+                    className="absolute z-[15]"
                     style={{ 
                         top: `${DEFAULT_ARM_TOP + leftArmOffset.y}%`, 
                         left: `${DEFAULT_ARM_SIDE - leftArmOffset.x}%`,
@@ -267,10 +267,10 @@ const AvatarCompositor: React.FC<AvatarCompositorProps> = ({
                   </div>
                )}
 
-               {/* 4. RIGHT WING/ARM (Viewer's Right) (Z-30) */}
+               {/* 4. RIGHT WING/ARM (Viewer's Right) (Z-15 - behind body) */}
                {rightArm && (isFilePath(rightArm) || AVATAR_ASSETS[rightArm]) && (
                   <div 
-                    className="absolute z-30"
+                    className="absolute z-[15]"
                     style={{ 
                         top: `${DEFAULT_ARM_TOP + rightArmOffset.y}%`, 
                         right: `${DEFAULT_ARM_SIDE - rightArmOffset.x}%`,

@@ -466,6 +466,33 @@ import ShareBookPage from './pages/ShareBookPage';
 import ParentQuizPage from './pages/ParentQuizPage';
 import GivingPage from './pages/GivingPage';
 
+// Check if user is authenticated (has completed onboarding or has user data)
+const isUserAuthenticated = (): boolean => {
+  // Check for auth token first
+  const token = localStorage.getItem('godlykids_auth_token');
+  if (token) return true;
+  
+  // Check for user data from onboarding
+  const savedData = localStorage.getItem('godly_kids_data_v7') || localStorage.getItem('godly_kids_data_v6');
+  if (!savedData) return false;
+  
+  try {
+    const data = JSON.parse(savedData);
+    // User has completed onboarding if they have a parent name or kids
+    return (data.parentName && data.parentName !== 'Parent' && data.parentName !== '') || 
+           (data.kids && data.kids.length > 0);
+  } catch { return false; }
+};
+
+// Protected route wrapper - redirects to landing if not authenticated
+const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  if (!isUserAuthenticated()) {
+    console.log('🔒 User not authenticated, redirecting to landing page');
+    return <Navigate to="/" replace />;
+  }
+  return <>{children}</>;
+};
+
 // Home page wrapper - shows welcome screen for new users who completed onboarding
 const HomePageWithWelcomeCheck: React.FC = () => {
   // Show welcome screen AFTER onboarding is complete (user has parent name or kids)
@@ -797,11 +824,20 @@ const App: React.FC = () => {
           const currentHash = window.location.hash;
           const lastRoute = localStorage.getItem('gk_last_route');
           
+          // Check if user is authenticated before restoring to protected route
+          const isAuthenticated = isUserAuthenticated();
+          
           // If hash is empty or malformed, restore to last known good route
           if (!currentHash || currentHash === '#' || currentHash === '#/') {
-            const targetRoute = lastRoute || '#/home';
-            console.log('📱 Despia: Restoring route to:', targetRoute);
-            window.location.hash = targetRoute;
+            // If not authenticated, go to landing page
+            if (!isAuthenticated) {
+              console.log('📱 Despia: User not authenticated, going to landing page');
+              window.location.hash = '#/';
+            } else {
+              const targetRoute = lastRoute || '#/home';
+              console.log('📱 Despia: Restoring route to:', targetRoute);
+              window.location.hash = targetRoute;
+            }
           }
         } catch {}
         
@@ -930,31 +966,31 @@ const App: React.FC = () => {
                   <Route path="/ready" element={<ReadyToJumpInPage />} />
                   <Route path="/welcome" element={<NewUserWelcomePage />} />
                   <Route path="/payment-success" element={<PaymentSuccessPage />} />
-                  <Route path="/home" element={<HomePageWithWelcomeCheck />} />
-                  <Route path="/listen" element={<ListenPage />} />
-                  <Route path="/read" element={<ReadPage />} />
-                  <Route path="/library" element={<LibraryPage />} />
-                  <Route path="/book/:id" element={<BookDetailPage />} />
-                  <Route path="/read/:bookId" element={<BookReaderPage />} />
-                  <Route path="/player/:bookId/:chapterId" element={<AudioPlayerPage />} />
-                  <Route path="/audio" element={<AudioPage />} />
-                  <Route path="/audio/playlist/:playlistId" element={<PlaylistDetailPage />} />
-                  <Route path="/audio/playlist/:playlistId/play/:itemIndex" element={<PlaylistPlayerPage />} />
-                  <Route path="/my-playlist/:id" element={<UserPlaylistPage />} />
-                  <Route path="/create-playlist" element={<CreatePlaylistPage />} />
-                  <Route path="/book-series/:seriesId" element={<BookSeriesDetailPage />} />
-                  <Route path="/lessons" element={<LessonsPage />} />
-                  <Route path="/lesson/:lessonId" element={<LessonPlayerPage />} />
-                  <Route path="/giving" element={<GivingPage />} />
-                  <Route path="/profile" element={<ProfileSelectionPage />} />
-                  <Route path="/create-profile" element={<CreateProfilePage />} />
-                  <Route path="/edit-profile" element={<EditProfilePage />} />
+                  <Route path="/home" element={<ProtectedRoute><HomePageWithWelcomeCheck /></ProtectedRoute>} />
+                  <Route path="/listen" element={<ProtectedRoute><ListenPage /></ProtectedRoute>} />
+                  <Route path="/read" element={<ProtectedRoute><ReadPage /></ProtectedRoute>} />
+                  <Route path="/library" element={<ProtectedRoute><LibraryPage /></ProtectedRoute>} />
+                  <Route path="/book/:id" element={<ProtectedRoute><BookDetailPage /></ProtectedRoute>} />
+                  <Route path="/read/:bookId" element={<ProtectedRoute><BookReaderPage /></ProtectedRoute>} />
+                  <Route path="/player/:bookId/:chapterId" element={<ProtectedRoute><AudioPlayerPage /></ProtectedRoute>} />
+                  <Route path="/audio" element={<ProtectedRoute><AudioPage /></ProtectedRoute>} />
+                  <Route path="/audio/playlist/:playlistId" element={<ProtectedRoute><PlaylistDetailPage /></ProtectedRoute>} />
+                  <Route path="/audio/playlist/:playlistId/play/:itemIndex" element={<ProtectedRoute><PlaylistPlayerPage /></ProtectedRoute>} />
+                  <Route path="/my-playlist/:id" element={<ProtectedRoute><UserPlaylistPage /></ProtectedRoute>} />
+                  <Route path="/create-playlist" element={<ProtectedRoute><CreatePlaylistPage /></ProtectedRoute>} />
+                  <Route path="/book-series/:seriesId" element={<ProtectedRoute><BookSeriesDetailPage /></ProtectedRoute>} />
+                  <Route path="/lessons" element={<ProtectedRoute><LessonsPage /></ProtectedRoute>} />
+                  <Route path="/lesson/:lessonId" element={<ProtectedRoute><LessonPlayerPage /></ProtectedRoute>} />
+                  <Route path="/giving" element={<ProtectedRoute><GivingPage /></ProtectedRoute>} />
+                  <Route path="/profile" element={<ProtectedRoute><ProfileSelectionPage /></ProtectedRoute>} />
+                  <Route path="/create-profile" element={<ProtectedRoute><CreateProfilePage /></ProtectedRoute>} />
+                  <Route path="/edit-profile" element={<ProtectedRoute><EditProfilePage /></ProtectedRoute>} />
                   <Route path="/paywall" element={<PaywallPage />} />
-                  <Route path="/settings" element={<SettingsPage />} />
+                  <Route path="/settings" element={<ProtectedRoute><SettingsPage /></ProtectedRoute>} />
                   <Route path="/demo/video-lesson" element={<VideoLessonDemo />} />
-                  <Route path="/game" element={<GameWebViewPage />} />
-                  {/* Catch-all route - prevents white screen when route doesn't match */}
-                  <Route path="*" element={<Navigate to="/home" replace />} />
+                  <Route path="/game" element={<ProtectedRoute><GameWebViewPage /></ProtectedRoute>} />
+                  {/* Catch-all route - redirect to landing if not authenticated, home if authenticated */}
+                  <Route path="*" element={isUserAuthenticated() ? <Navigate to="/home" replace /> : <Navigate to="/" replace />} />
                 </Routes>
               </Layout>
               </ReferralPromptWrapper>

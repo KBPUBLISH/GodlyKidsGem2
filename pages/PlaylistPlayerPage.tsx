@@ -386,32 +386,32 @@ const PlaylistPlayerPage: React.FC = () => {
             />
 
             {/* Top Bar */}
-            <div className="absolute top-0 left-0 right-0 p-6 z-30 flex justify-between items-center pt-8">
+            <div className="absolute top-0 left-0 right-0 p-4 z-30 flex justify-between items-center pt-6">
                 <button
                     onClick={() => navigate(-1)}
-                    className="w-12 h-12 bg-[#e67e22] rounded-2xl border-b-4 border-[#d35400] shadow-lg flex items-center justify-center active:translate-y-1 active:border-b-0 active:shadow-none transition-all"
+                    className="w-10 h-10 bg-[#e67e22] rounded-xl border-b-3 border-[#d35400] shadow-lg flex items-center justify-center active:translate-y-1 active:border-b-0 active:shadow-none transition-all"
                 >
-                    <ChevronLeft size={32} className="text-[#5c2e0b]" strokeWidth={3} />
+                    <ChevronLeft size={24} className="text-[#5c2e0b]" strokeWidth={3} />
                 </button>
 
-                <div className="flex items-center gap-3">
+                <div className="flex items-center gap-2">
                     {/* Play Count - Personal plays tracked locally */}
-                    <div className="bg-[#f3e5ab] rounded-full px-3 py-1.5 border-2 border-[#d4c5a0] flex items-center gap-2 shadow-sm">
-                        <Play size={16} className="text-[#8B4513]" fill="#8B4513" />
-                        <span className="text-[#8B4513] text-sm font-bold">{playCount}</span>
-                        <span className="text-[#8B4513]/70 text-xs font-medium">My Plays</span>
+                    <div className="bg-[#f3e5ab] rounded-full px-2 py-1 border-2 border-[#d4c5a0] flex items-center gap-1 shadow-sm">
+                        <Play size={12} className="text-[#8B4513]" fill="#8B4513" />
+                        <span className="text-[#8B4513] text-xs font-bold">{playCount}</span>
+                        <span className="text-[#8B4513]/70 text-[10px] font-medium">My<br/>Plays</span>
                     </div>
 
                     {/* Like Button */}
                     <button
                         onClick={handleLike}
-                        className={`w-12 h-12 rounded-full border-2 flex items-center justify-center shadow-lg transition-all ${isLiked
+                        className={`w-10 h-10 rounded-full border-2 flex items-center justify-center shadow-md transition-all active:scale-95 ${isLiked
                             ? 'bg-red-500 border-red-600'
                             : 'bg-[#f3e5ab] border-[#d4c5a0]'
                             }`}
                     >
                         <Heart
-                            size={24}
+                            size={18}
                             className={isLiked ? 'text-white fill-white' : 'text-[#8B4513]'}
                             fill={isLiked ? 'white' : 'none'}
                         />
@@ -420,19 +420,19 @@ const PlaylistPlayerPage: React.FC = () => {
                     {/* Share Button */}
                     <button
                         onClick={handleShare}
-                        className="w-12 h-12 rounded-full border-2 flex items-center justify-center shadow-lg transition-all active:scale-95 bg-[#f3e5ab] border-[#d4c5a0] hover:bg-[#e8d99f]"
+                        className="w-10 h-10 rounded-full border-2 flex items-center justify-center shadow-md transition-all active:scale-95 bg-[#f3e5ab] border-[#d4c5a0] hover:bg-[#e8d99f]"
                         title="Share"
                     >
-                        <Share2 className="text-[#8B4513]" size={22} />
+                        <Share2 className="text-[#8B4513]" size={18} />
                     </button>
 
                     {/* Add to Playlist Button */}
                     <button
                         onClick={() => setShowAddToPlaylist(true)}
-                        className="w-12 h-12 rounded-full border-2 flex items-center justify-center shadow-lg transition-all active:scale-95 bg-[#f3e5ab] border-[#d4c5a0] hover:bg-[#e8d99f]"
+                        className="w-10 h-10 rounded-full border-2 flex items-center justify-center shadow-md transition-all active:scale-95 bg-[#f3e5ab] border-[#d4c5a0] hover:bg-[#e8d99f]"
                         title="Add to Playlist"
                     >
-                        <ListPlus className="text-[#8B4513]" size={24} />
+                        <ListPlus className="text-[#8B4513]" size={18} />
                     </button>
                 </div>
             </div>

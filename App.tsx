@@ -484,10 +484,19 @@ const isUserAuthenticated = (): boolean => {
   } catch { return false; }
 };
 
+// Check if tutorial is currently active (allows unauthenticated access during tutorial)
+const isTutorialInProgress = (): boolean => {
+  const tutorialStep = localStorage.getItem('godlykids_tutorial_step');
+  const tutorialComplete = localStorage.getItem('godlykids_tutorial_complete');
+  // Tutorial is in progress if there's a step saved and it's not marked complete
+  return !!(tutorialStep && tutorialComplete !== 'true');
+};
+
 // Protected route wrapper - redirects to landing if not authenticated
+// Exception: allows access during active tutorial for tutorial-first flow
 const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  if (!isUserAuthenticated()) {
-    console.log('🔒 User not authenticated, redirecting to landing page');
+  if (!isUserAuthenticated() && !isTutorialInProgress()) {
+    console.log('🔒 User not authenticated and no tutorial in progress, redirecting to landing page');
     return <Navigate to="/" replace />;
   }
   return <>{children}</>;

@@ -492,11 +492,46 @@ const isUserAuthenticated = (): boolean => {
   } catch { return false; }
 };
 
-// Check if tutorial is currently active (allows unauthenticated access during tutorial)
+// Tutorial steps that are valid for specific routes
+const TUTORIAL_VALID_ROUTES: Record<string, string[]> = {
+  '/welcome': ['welcome_book_tap'],
+  '/read': ['book_controls_intro', 'book_swipe_intro', 'book_swipe_1', 'book_swipe_2', 'book_swipe_3', 'book_end_quiz', 'quiz_in_progress'],
+  '/home': ['coins_highlight', 'coins_popup_open', 'report_card_highlight', 'report_card_open', 'shop_highlight', 'shop_open', 'navigate_to_give', 'navigate_to_explore', 'devotional_highlight', 'navigate_to_books', 'navigate_to_audio', 'tutorial_complete', 'explore_pause', 'paywall'],
+  '/giving': ['navigate_to_give', 'campaign_highlight', 'give_button_highlight', 'donation_complete'],
+  '/listen': ['navigate_to_audio', 'audiobook_highlight', 'review_prompt'],
+  '/read-page': ['navigate_to_books'], // /read page (book list)
+};
+
+// Check if tutorial is currently active AND valid for the given route
+const isTutorialInProgressForRoute = (currentPath: string): boolean => {
+  const tutorialStep = localStorage.getItem('godlykids_tutorial_step');
+  const tutorialComplete = localStorage.getItem('godlykids_tutorial_complete');
+  
+  // Tutorial not in progress if complete or no step
+  if (!tutorialStep || tutorialComplete === 'true') return false;
+  
+  // Check if current step is valid for the current route
+  // /read/:bookId -> check /read
+  // /home -> check /home
+  const pathBase = currentPath.split('/').slice(0, 2).join('/') || currentPath;
+  
+  // Special case: /read page (book list) vs /read/:bookId (reader)
+  const isBookReader = /^\/read\/[^/]+/.test(currentPath);
+  const routeKey = isBookReader ? '/read' : (pathBase === '/read' ? '/read-page' : pathBase);
+  
+  const validSteps = TUTORIAL_VALID_ROUTES[routeKey];
+  if (!validSteps) {
+    // Route not in tutorial flow - tutorial doesn't apply here
+    return false;
+  }
+  
+  return validSteps.includes(tutorialStep);
+};
+
+// Legacy check for backward compatibility (used in some places)
 const isTutorialInProgress = (): boolean => {
   const tutorialStep = localStorage.getItem('godlykids_tutorial_step');
   const tutorialComplete = localStorage.getItem('godlykids_tutorial_complete');
-  // Tutorial is in progress if there's a step saved and it's not marked complete
   return !!(tutorialStep && tutorialComplete !== 'true');
 };
 
@@ -512,13 +547,18 @@ const hasCompletedOnboarding = (): boolean => {
 };
 
 // Protected route wrapper - shows account creation modal if no account
-// Exception: allows access during active tutorial for tutorial-first flow
+// Exception: allows access during active tutorial for tutorial-first flow (only on valid routes)
 const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [hasAccount, setHasAccount] = useState(() => hasUserAccount());
   const navigate = useNavigate();
+  const location = useLocation();
   
-  // Allow access during tutorial without account check
-  if (isTutorialInProgress()) {
+  // Get current path for tutorial validation
+  const currentPath = location.pathname;
+  
+  // Allow access during tutorial ONLY if the step is valid for this route
+  // This prevents users who exited the tutorial from bypassing account check
+  if (isTutorialInProgressForRoute(currentPath)) {
     return <>{children}</>;
   }
   
@@ -527,8 +567,8 @@ const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) =
     return <>{children}</>;
   }
   
-  // No account and no tutorial - show account creation modal over the content
-  // This prompts users to create account even if they completed onboarding previously
+  // No account and no valid tutorial for this route - show account creation modal
+  // This prompts users to create account even if they exited tutorial early
   return (
     <>
       {children}

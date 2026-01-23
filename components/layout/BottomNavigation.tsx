@@ -25,7 +25,7 @@ const BottomNavigation: React.FC = () => {
   const [activeTab, setActiveTab] = useState(() => getTabFromPath(location.pathname));
   const { playTab, currentPlaylist } = useAudio();
   const { t } = useLanguage();
-  const { isTutorialActive } = useTutorial();
+  const { isTutorialActive, skipTutorial, currentStep } = useTutorial();
   const isPlayerActive = !!currentPlaylist;
   const [isHidden, setIsHidden] = useState(false);
   
@@ -112,6 +112,15 @@ const BottomNavigation: React.FC = () => {
 
   const handleNav = (id: string, path: string) => {
     if (activeTab === id) return;
+    
+    // If tutorial is active and user manually navigates (not via tutorial auto-navigation),
+    // mark tutorial as skipped so account creation modal will show
+    if (isTutorialActive && currentStep !== 'navigate_to_give' && currentStep !== 'navigate_to_explore' && 
+        currentStep !== 'navigate_to_books' && currentStep !== 'navigate_to_audio') {
+      console.log('🚪 User exited tutorial by navigating to:', path);
+      skipTutorial();
+    }
+    
     playTab();
     setActiveTab(id);
     navigate(path);

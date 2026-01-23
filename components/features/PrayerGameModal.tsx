@@ -32,84 +32,84 @@ const PRAYER_TOPICS = [
 
 const PRAYER_TEXTS: Record<string, string[]> = {
   family: [
-    "Papa God, thank You so much for my family! You gave them to me to love and hold. Please watch over them and keep them safe day and night. Help us to always stick together and support each other through good times and hard times. I love my family so much!",
-    "Dear Jesus, please bless my mom and dad today. Give them strength and joy in everything they do. Help me to be a good helper in our house and to always listen when they teach me. Thank You for giving me parents who love me and take care of me every single day.",
-    "Father God, thank You for my home and the roof over my head. Please fill our house with Your peace and love. Help everyone in my family to be kind to one another, to forgive quickly when we make mistakes, and to always remember how much You love us all.",
-    "Papa God, bless my brother and sister today. Help us to play nicely together, to share our toys without fighting, and to be best friends. Thank You for giving me friends right in my own home. Help us to laugh together and build happy memories.",
-    "Lord, thank You for my grandparents and all the love they give me. Please keep them healthy and strong for many more years. Give them joy in their hearts and help me to spend time with them whenever I can. I love them so much and I am so thankful for them!",
-    "God, please protect my family when we go out and when we come back home. Be our shield and our safe place in every situation. Surround us with Your angels and keep danger far away from us. Thank You for always watching over us.",
-    "Jesus, be the center of our family and our home. Help us to love You more than anything else in the world. Teach us to pray together, read Your Word together, and grow closer to You as a family. Let our home bring glory to Your name.",
-    "Papa God, thank You for family dinners and special time together. Bless the food we eat and the conversations we share. Help us to put down our screens and really talk to each other. Thank You for the gift of being together as a family."
+    "Papa God, thank You for my family! I love them so much. Please keep them safe and happy. Help us to love each other and be kind. I am so glad You gave me my family!",
+    "Dear Jesus, please bless my mom and dad today. Help them to be strong and happy. Help me to be a good helper at home. Thank You for parents who love me!",
+    "Father God, thank You for my home. Please fill it with love and happiness. Help everyone in my family to be nice to each other. We love You, God!",
+    "Papa God, bless my brother and sister. Help us to play nicely and share our toys. Thank You for giving me friends in my own home!",
+    "Lord, thank You for my grandma and grandpa. Please keep them healthy and strong. I love spending time with them. They are so special to me!",
+    "God, please keep my family safe wherever we go. Send Your angels to watch over us. Thank You for always taking care of us!",
+    "Jesus, help my family to love You very much. Help us to pray together and read the Bible together. We want to follow You!",
+    "Papa God, thank You for dinner time with my family. Thank You for the yummy food. Help us to talk and laugh together. Family time is the best!"
   ],
   friends: [
-    "Papa God, thank You for my friends! They make my life so much fun and happy. Help me to be a kind and loving friend to them today and every day. Show me how to encourage them, share with them, and be there when they need me. Thank You for the gift of friendship!",
-    "Jesus, please bless my best friend today. Let them know how much You love them and how special they are. Help our friendship to grow stronger and help us to always be honest and kind to each other. Thank You for bringing them into my life.",
-    "Father, help me to share my things and take turns without complaining. Help me to show Jesus' love when I play with my friends. When we disagree, help us to work it out and still be friends. Give me a generous heart that loves to share.",
-    "God, please give me wisdom to choose good friends who love You too. Help me to be a good influence on others and to stand up for what is right. Surround me with friends who will help me grow closer to You and become the best version of myself.",
-    "Lord, help me to include kids who might feel lonely or left out. Give me eyes to see the kid sitting alone and courage to invite them to play. Help me be a friend to everyone, not just the popular kids. Let me show Your love to all.",
-    "Papa God, thank You for all the fun times and adventures I have with my friends. Thank You for the laughter, the games, and the silly moments we share. Help us to make even more happy memories together and to always treasure our friendship.",
-    "Jesus, help me to forgive my friend quickly if they hurt my feelings. Help us to say sorry and make up so our friendship stays strong. Teach me that forgiveness is more important than being right. Help us to always work things out.",
-    "Father, protect my friends at their homes and wherever they go. Keep them safe and healthy. Watch over their families too. I pray that they would feel Your love surrounding them every moment of every day."
+    "Papa God, thank You for my friends! They make me so happy. Help me to be a good friend. Help me to share and be kind to them every day!",
+    "Jesus, please bless my best friend today. Help them to know how much You love them. Thank You for bringing them into my life!",
+    "Father, help me to share my toys and take turns. Help me to be nice when we play games. Give me a happy heart that loves to share!",
+    "God, help me to pick good friends who love You. Help me to be a good friend too. Thank You for all my wonderful friends!",
+    "Lord, help me to be friends with kids who are lonely. Help me to invite them to play. I want to show Your love to everyone!",
+    "Papa God, thank You for all the fun times with my friends. Thank You for the giggles and games. Help us to have more happy days together!",
+    "Jesus, help me to forgive my friend if they hurt my feelings. Help us to say sorry and be friends again. I want to always make up!",
+    "Father, please keep my friends safe and healthy. Watch over their families too. Help them to feel Your love every single day!"
   ],
   world: [
-    "Papa God, You made the whole wide world and everything in it! Thank You for the beautiful trees, the tall mountains, the deep oceans, and all the amazing animals. Help us to take good care of Your creation and to appreciate the beauty You made for us to enjoy.",
-    "Jesus, please bring peace to countries that are fighting and hurting. Help the leaders to put down their weapons and choose to talk instead. Comfort the families who are scared and bring healing to lands that have been damaged by war. You are the Prince of Peace!",
-    "Father, please feed the hungry people all over the world today. Provide food for the children who have empty tummies and clean water for those who are thirsty. Show me and my family how we can help those in need. Give us generous hearts.",
-    "God, bless the leaders of our country and all the leaders around the world. Give them wisdom to make good choices that help people. Help them to be honest and fair. Put good advisors around them and let justice and peace rule in every land.",
-    "Lord, help people in every nation to hear about Your great love for them. Send brave missionaries to share the good news of Jesus. Open the hearts of people who have never heard Your name. Let Your light shine in every corner of the earth.",
-    "Papa God, protect the children all over the earth today. Keep them safe from harm, from sickness, and from people who might hurt them. Give them food to eat, homes to live in, and people who love them. Every child is precious to You.",
-    "Jesus, bless the missionaries who leave their homes and go far away to tell people about You. Keep them safe and healthy. Give them courage when things are hard and joy when they see people come to know You. Provide everything they need.",
-    "Father, help us to take good care of Your beautiful earth. Help us not to waste food, water, or energy. Show us how to recycle and protect the animals and plants You created. We want to be good stewards of this amazing world You gave us."
+    "Papa God, You made the whole world! Thank You for the trees, the mountains, the ocean, and all the animals. Help us to take good care of everything You made!",
+    "Jesus, please bring peace to places where people are fighting. Help everyone to be kind and stop hurting each other. You are the Prince of Peace!",
+    "Father, please give food to hungry kids all over the world. Give them clean water to drink. Show me how I can help people who need it!",
+    "God, please help the leaders of our country to make good choices. Help them to be fair and kind to everyone!",
+    "Lord, help people everywhere to learn about Your love. Send helpers to tell them about Jesus. Let Your love reach every person!",
+    "Papa God, please keep all the children in the world safe today. Give them food, homes, and people who love them. Every kid is special to You!",
+    "Jesus, please take care of the people who travel far away to tell others about You. Keep them safe and give them what they need!",
+    "Father, help us to take care of Your beautiful earth. Help us not to waste things. We want to be good helpers of the world You made!"
   ],
   sick: [
-    "Papa God, please heal my friend who is not feeling well. Touch their body with Your healing power and make them strong again. Take away their pain and give them rest. Be close to them and let them feel Your loving presence surrounding them today.",
-    "Jesus, You are the Great Physician and nothing is too hard for You. We ask You to heal every sickness and take away every pain. Restore health to bodies that are weak and fill them with energy and strength. We believe in Your healing power!",
-    "Father, please be with everyone in the hospital today, especially the kids. Help them not to be afraid. Send kind nurses and wise doctors to take care of them. Comfort their families who are worried. Let Your peace fill every hospital room.",
-    "God, thank You for doctors, nurses, and all the people who help sick people get better. Give them wisdom to know exactly what to do. Help them to be kind and patient. Bless their hands as they care for the sick and give them energy for long days.",
-    "Lord, please take away the pain from those who are hurting today. Give them peaceful rest and sweet sleep. Help their bodies to heal quickly. Wrap them in Your comfort like a warm blanket and remind them that You are right there with them.",
-    "Papa God, heal my tummy ache and headache and help me feel full of energy again. Thank You that You care about every part of me, even the small hurts. Help me to rest and drink water and do what I need to do to get better. I trust You!",
-    "Jesus, thank You that by Your stripes we are healed. Your Word says You took our sicknesses and carried our pain. We trust in Your promises and believe that You want us to be well. Help us to have faith even when healing takes time.",
-    "Father, give strength to bodies that are weak and tired. Build them up again with Your mighty power. Restore what sickness has stolen. We speak life and health over every sick person in Jesus' powerful name! Thank You for the miracle of healing."
+    "Papa God, please make my friend feel better. Help their body to get strong again. Take away their owies and give them rest. Be close to them today!",
+    "Jesus, You can heal anyone! Please make sick people well again. Take away their pain and make them strong. We know You can do it!",
+    "Father, please be with the kids in the hospital. Help them not to be scared. Send nice doctors and nurses to help them. Give their families peace!",
+    "God, thank You for doctors and nurses who help sick people. Help them to know just what to do. Bless them for caring for others!",
+    "Lord, please take away the hurt from people who are in pain. Help them to rest well and feel better soon. Hug them close like a warm blanket!",
+    "Papa God, please make my tummy ache go away. Help me to feel better soon. Thank You that You care about even my little owies!",
+    "Jesus, Your Bible says You can heal us. We believe You want us to be well. Please help sick people get better. We trust You!",
+    "Father, please give strength to people who feel weak and tired. Make their bodies strong again. Thank You for taking care of us!"
   ],
   thanks: [
-    "Papa God, thank You for this beautiful new day! Thank You for waking me up healthy and strong. Thank You for the air I breathe, the sun that shines, and all the wonderful things You have planned for me today. I am so grateful to be alive!",
-    "Jesus, thank You for dying on the cross for me so I can be God's child forever. Thank You for taking my punishment and giving me eternal life. Your love for me is so big I can hardly understand it! I am so thankful to belong to You.",
-    "Father, thank You for the yummy food on my table. I am so full and happy! Thank You for the farmers who grow the food and the people who prepare it. Help me to never take my meals for granted. You are such a good provider!",
-    "God, thank You for my warm bed and a roof over my head. You take such good care of me and my family! While many people in the world don't have homes, You have given me a safe and cozy place to sleep. I am so blessed!",
-    "Lord, thank You for the sun that shines during the day and the rain that waters all the plants. Thank You for the seasons and the weather. You control everything in nature with perfect wisdom. Your creation is amazing and beautiful!",
-    "Papa God, thank You for my clothes, my shoes, and everything I need. You provide for me in so many ways I don't even notice. Help me to have a grateful heart that sees all Your blessings, big and small. You are an amazing Father!",
-    "Jesus, thank You for loving me even when I make mistakes. Your grace is so big and so free! Thank You for never giving up on me and for always giving me another chance. I don't deserve Your love, but You give it anyway.",
-    "Father, thank You for the Bible so I can read about You and learn Your ways. Thank You for preserving Your Word for thousands of years so I could have it today. Help me to treasure the Bible and read it often. It is a lamp to my feet!"
+    "Papa God, thank You for this awesome day! Thank You for waking me up happy and healthy. Thank You for everything good You have for me today!",
+    "Jesus, thank You for loving me so much that You died for me. Now I can be God's kid forever! Your love is SO big! Thank You!",
+    "Father, thank You for the yummy food on my plate. I love it! Thank You for everyone who helped make my food. You give me everything I need!",
+    "God, thank You for my cozy bed and my warm house. You take such good care of me and my family! I am so thankful!",
+    "Lord, thank You for the sunny days and the rainy days. Thank You for all the seasons. You made everything so beautiful!",
+    "Papa God, thank You for my clothes and shoes and all my stuff. You give me so many good things! Help me to always say thank You!",
+    "Jesus, thank You for loving me even when I mess up. You always give me another chance. Your love is amazing! Thank You!",
+    "Father, thank You for the Bible so I can learn about You. Thank You for Your stories and promises. Help me to read it and love it!"
   ],
   sorry: [
-    "Papa God, I am sorry for not listening to my parents today. Please forgive me for being stubborn and thinking I knew better. Help me to have a respectful heart and to obey quickly and cheerfully next time. Thank You for patient parents who love me anyway.",
-    "Jesus, I am sorry I got angry and lost my temper today. Help me to have peace inside my heart even when things don't go my way. Teach me to take deep breaths, count to ten, and respond with kindness instead of anger. I want to be more like You.",
-    "Father, forgive me for saying mean words that hurt someone's feelings. Please wash my mouth and heart clean. Help me to think before I speak and to only say things that build people up. Let my words be like honey, sweet and helpful.",
-    "God, I am sorry I disobeyed and made a wrong choice. Help me to choose the right way next time, even when it's hard. Give me courage to do what's right even when no one is watching. I want to make You proud of me.",
-    "Lord, forgive me for fighting with my siblings and friends. Help me to be a peacemaker who brings people together instead of pushing them apart. Teach me to use my words to solve problems and to be quick to say sorry when I'm wrong.",
-    "Papa God, I am sorry for being selfish and not wanting to share. Help me to have a generous heart like Yours. Remind me that everything I have is a gift from You, and help me to hold my things loosely and share them freely with others.",
-    "Jesus, thank You for forgiving me completely. Help me to forgive myself too and not keep feeling bad about my mistakes. Your blood covers all my sins! Help me to accept Your forgiveness and move forward with joy and freedom.",
-    "Father, I am sorry I lied instead of telling the truth. Help me to always speak honestly, even when it's scary. Give me courage to be truthful and help me to trust that the truth is always better than a lie in the end."
+    "Papa God, I am sorry I did not listen to my mom and dad. Please forgive me. Help me to obey next time. Thank You for loving me anyway!",
+    "Jesus, I am sorry I got mad and yelled. Help me to stay calm when things are hard. Help me to be kind instead of angry. I want to be like You!",
+    "Father, forgive me for saying mean words. I am sorry I hurt someone's feelings. Help me to only say nice things that make people happy!",
+    "God, I am sorry I made a bad choice. Help me to do the right thing next time. I want to make You proud of me!",
+    "Lord, forgive me for fighting with my brother or sister. Help me to get along with them. Help me to say sorry when I am wrong!",
+    "Papa God, I am sorry for not wanting to share. Help me to have a giving heart like You. Help me to share my things with others!",
+    "Jesus, thank You for forgiving me when I mess up. Help me to forgive myself too. Your love makes everything okay again!",
+    "Father, I am sorry I told a lie. Help me to always tell the truth, even when it is hard. The truth is always better than a lie!"
   ],
   school: [
-    "Papa God, help me to learn new things today! Open my mind to understand difficult concepts and remember what I study. Give me curiosity and a love for learning. Help me to see school as an exciting adventure where I get to discover more about Your amazing world.",
-    "Jesus, help me to focus and listen carefully to my teacher today. Help me not to get distracted by my friends or daydream during class. Give me concentration and help me to make the most of my learning time. I want to do my very best!",
-    "Father, give me a smart mind to solve problems, read well, and understand math. Thank You for the brain You gave me! Help me to use it well and to work hard even when the work is difficult. I know You gave me everything I need to succeed.",
-    "God, thank You for my school, my teachers, and all my classmates. Bless each one of them today! Help us to get along, work together, and learn from each other. Make our classroom a happy and safe place where everyone can grow.",
-    "Lord, help me to do my homework with a good attitude and not complain. Help me to work hard and do my best, not just rush through it. Teach me that hard work pays off and that discipline now will help me later in life.",
-    "Papa God, help me when learning gets tricky and I feel like giving up. Remind me that I can do hard things with Your help! Give me perseverance to keep trying and confidence to believe in myself. You made me capable of great things!",
-    "Jesus, give me wisdom and understanding that only comes from You. You are the source of all truth and knowledge! Help me to learn not just facts, but wisdom for life. Guide my thoughts and help me think clearly.",
-    "Father, help me to be a good example at school by being kind, honest, and hardworking. Let my light shine so others can see Jesus in me. Help me to stand up for what's right even when it's not popular. I want to represent You well."
+    "Papa God, help me to learn new things today! Help my brain to understand and remember. I want to learn lots of cool stuff!",
+    "Jesus, help me to listen to my teacher and pay attention. Help me not to get distracted. I want to do my very best in class!",
+    "Father, help me to be good at reading and math. Thank You for my brain! Help me to work hard even when it is tricky!",
+    "God, thank You for my school and my teachers and my friends in class. Bless them all today! Make our classroom a happy place!",
+    "Lord, help me to do my homework without complaining. Help me to try my best and not rush. I know working hard is good!",
+    "Papa God, help me when learning gets hard and I want to give up. Remind me that I can do hard things with Your help! You made me smart!",
+    "Jesus, give me wisdom that comes from You. Help me to think clearly and understand my lessons. You know everything!",
+    "Father, help me to be kind and honest at school. Let other kids see Jesus in me. I want to be a good example!"
   ],
   love: [
-    "Papa God, help me to love others just like You love me—big, unconditional, and never-ending. Teach me what real love looks like and help me to put others before myself. Fill me up with so much love that it overflows to everyone around me!",
-    "Jesus, fill my heart with Your love today until it overflows to everyone I meet. Let people feel Your warmth and kindness through me. Help me to see others the way You see them—precious and valuable. Make me a channel of Your love!",
-    "Father, help me to be patient and kind, not jealous or proud. Teach me that love is not about getting but about giving. Help me to celebrate when others succeed instead of feeling left out. Give me a heart that is truly happy for others.",
-    "God, thank You that Your love never fails and is always there for me no matter what. Even on my worst days, Your love doesn't change! It is steady, strong, and forever. I am so secure in Your love. Thank You for loving me unconditionally!",
-    "Lord, help me to love people who are hard to love. Give me Your eyes to see them and Your heart to care for them. Help me to be kind even when others are mean, and to respond with love even when it's difficult. Transform my heart!",
-    "Papa God, show me how to serve others in love today. Help me to look for ways to be a helper and to put smiles on people's faces. Open my eyes to see needs around me and give me the courage and energy to meet them with joy.",
-    "Jesus, thank You for loving me first, even before I knew You or loved You back. Your love found me when I was lost and brought me home. Help me to love others the same way—without waiting for them to earn it or deserve it.",
-    "Father, let everything I do today be done in love—my words, my actions, my thoughts, and my attitudes. Help love to be my motivation in everything. When I am tempted to be selfish or unkind, remind me to choose love instead."
+    "Papa God, help me to love others the way You love me—so much and forever! Fill my heart with so much love that it spills over to everyone!",
+    "Jesus, fill my heart with Your love today! Help people to feel how much You love them through me. Make me a love-giver!",
+    "Father, help me to be patient and kind, not jealous or show-offy. Help me to be happy when good things happen to others!",
+    "God, thank You that Your love never stops! Even on my worst days, You still love me the same. Your love is the best! Thank You!",
+    "Lord, help me to love people who are hard to love. Help me to be kind even when others are mean. Change my heart to be more like Yours!",
+    "Papa God, show me how to help others today. Help me to look for ways to make people smile. I want to share Your love everywhere!",
+    "Jesus, thank You for loving me first, before I even knew You. Help me to love others the same way—without them having to do anything!",
+    "Father, help everything I do today to be done with love. My words, my actions, everything! When I want to be mean, help me to choose love!"
   ]
 };
 

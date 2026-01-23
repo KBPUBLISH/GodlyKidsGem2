@@ -848,10 +848,13 @@ const OnboardingPage: React.FC = () => {
   };
   
   // Save preferences to backend
-  const savePreferencesToBackend = async (goals: string[], features: string[]) => {
+  const savePreferencesToBackend = async (goals: string[], features: string[], userEmail?: string) => {
     try {
-      const deviceId = localStorage.getItem('godlykids_device_id') || `dev_${Date.now()}_${Math.random().toString(36).slice(2)}`;
+      const deviceId = localStorage.getItem('godlykids_device_id') || `device_${Date.now()}_${Math.random().toString(36).slice(2)}`;
       localStorage.setItem('godlykids_device_id', deviceId);
+      
+      // Get email from parameter, state, or localStorage
+      const email = userEmail || accountEmail || localStorage.getItem('godlykids_user_email');
       
       const baseUrl = API_BASE_URL.replace(/\/+$/, '');
       const response = await fetch(`${baseUrl}/app-user/preferences`, {
@@ -859,6 +862,7 @@ const OnboardingPage: React.FC = () => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           deviceId,
+          email: email ? email.toLowerCase().trim() : undefined,
           discipleshipGoals: goals,
           featureInterests: features,
           parentName: pName,
@@ -868,7 +872,7 @@ const OnboardingPage: React.FC = () => {
       
       const data = await response.json();
       if (data.success) {
-        console.log('✅ Preferences saved to backend');
+        console.log('✅ Preferences saved to backend with email:', email);
       }
     } catch (error) {
       console.error('Failed to save preferences to backend:', error);
@@ -1022,6 +1026,8 @@ const OnboardingPage: React.FC = () => {
       
       if (result.success) {
         playSuccess();
+        // Update AppUser with email after successful account creation
+        await savePreferencesToBackend(selectedPriorities, selectedFeatures, accountEmail);
         activityTrackingService.trackOnboardingEvent('account_created', { email: accountEmail });
         activityTrackingService.trackOnboardingEvent('onboarding_complete');
         activityTrackingService.resetOnboardingSession();
@@ -1080,8 +1086,23 @@ const OnboardingPage: React.FC = () => {
       
       // Update user context
       setParentName(pName);
-      if (data.user?.id) {
-        // Sync with backend
+      
+      // Link email to device in AppUser for analytics
+      try {
+        const deviceId = localStorage.getItem('godlykids_device_id');
+        if (deviceId) {
+          await fetch(`${baseUrl}/app-user/link-email`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              deviceId,
+              email: email.toLowerCase().trim(),
+            }),
+          });
+          console.log('✅ Email linked to device in AppUser');
+        }
+      } catch (linkErr) {
+        console.warn('Failed to link email to device (non-critical):', linkErr);
       }
       
       return { success: true };
@@ -1173,6 +1194,25 @@ const OnboardingPage: React.FC = () => {
         setUserEmail(email);
         setUserPassword(password);
         window.dispatchEvent(new Event('authTokenUpdated'));
+        
+        // Link email to device in AppUser for analytics
+        try {
+          const deviceId = localStorage.getItem('godlykids_device_id');
+          const baseUrl = API_BASE_URL.replace(/\/+$/, '');
+          if (deviceId) {
+            await fetch(`${baseUrl}/app-user/link-email`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                deviceId,
+                email: email.toLowerCase().trim(),
+              }),
+            });
+            console.log('✅ Email linked to device in AppUser');
+          }
+        } catch (linkErr) {
+          console.warn('Failed to link email (non-critical):', linkErr);
+        }
         
         // Facebook Pixel - Track sign up (parent-gated)
         facebookPixelService.init();

@@ -126,6 +126,99 @@ router.get('/preferences/:identifier', async (req, res) => {
 });
 
 /**
+ * POST /api/app-user/link-email
+ * Link a device ID to an email address after account creation
+ */
+router.post('/link-email', async (req, res) => {
+    try {
+        const { deviceId, email } = req.body;
+        
+        if (!deviceId || !email) {
+            return res.status(400).json({ 
+                success: false, 
+                error: 'Both deviceId and email are required' 
+            });
+        }
+        
+        const normalizedEmail = email.toLowerCase().trim();
+        
+        // First, check if there's an existing user with this email
+        const existingEmailUser = await AppUser.findOne({ email: normalizedEmail });
+        
+        // Find the device-based user
+        const deviceUser = await AppUser.findOne({ deviceId });
+        
+        if (existingEmailUser && deviceUser && existingEmailUser._id.toString() !== deviceUser._id.toString()) {
+            // Merge: copy data from device user to email user
+            if (deviceUser.discipleshipGoals?.length) {
+                existingEmailUser.discipleshipGoals = deviceUser.discipleshipGoals;
+            }
+            if (deviceUser.featureInterests?.length) {
+                existingEmailUser.featureInterests = deviceUser.featureInterests;
+            }
+            if (deviceUser.parentName) {
+                existingEmailUser.parentName = deviceUser.parentName;
+            }
+            if (deviceUser.kidProfiles?.length) {
+                existingEmailUser.kidProfiles = deviceUser.kidProfiles;
+            }
+            existingEmailUser.deviceId = deviceId; // Link device to email account
+            existingEmailUser.lastActiveAt = new Date();
+            await existingEmailUser.save();
+            
+            // Delete the orphan device user
+            await AppUser.deleteOne({ _id: deviceUser._id });
+            
+            console.log('✅ Merged device user into existing email user:', normalizedEmail);
+            
+            return res.json({ 
+                success: true,
+                userId: existingEmailUser._id,
+                message: 'Account merged successfully'
+            });
+        }
+        
+        if (deviceUser) {
+            // Update device user with email
+            deviceUser.email = normalizedEmail;
+            deviceUser.lastActiveAt = new Date();
+            await deviceUser.save();
+            
+            console.log('✅ Linked email to device user:', normalizedEmail);
+            
+            return res.json({ 
+                success: true,
+                userId: deviceUser._id,
+                message: 'Email linked successfully'
+            });
+        }
+        
+        // No device user found, create new one with email
+        const newUser = new AppUser({
+            deviceId,
+            email: normalizedEmail,
+            lastActiveAt: new Date(),
+        });
+        await newUser.save();
+        
+        console.log('✅ Created new user with email:', normalizedEmail);
+        
+        res.json({ 
+            success: true,
+            userId: newUser._id,
+            message: 'User created with email'
+        });
+        
+    } catch (error) {
+        console.error('Error linking email:', error);
+        res.status(500).json({ 
+            success: false, 
+            error: 'Failed to link email' 
+        });
+    }
+});
+
+/**
  * POST /api/app-user/complete-onboarding
  * Mark onboarding as complete and save final preferences
  */

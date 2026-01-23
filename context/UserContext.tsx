@@ -1147,6 +1147,13 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
     // Check if voice is in the user's purchased/unlocked list
     // Premium users do NOT automatically get all voices - they still need to purchase them
     // Premium just allows them to purchase the 70% of voices that are "premium only"
+    
+    // Also check if this is the user's saved default voice (selected during onboarding)
+    const savedDefaultVoice = localStorage.getItem('godlykids_default_voice');
+    if (savedDefaultVoice === voiceId) {
+      return true;
+    }
+    
     return unlockedVoices.includes(voiceId);
   };
 

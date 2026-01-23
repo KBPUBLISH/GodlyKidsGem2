@@ -547,34 +547,13 @@ const hasCompletedOnboarding = (): boolean => {
 };
 
 // Protected route wrapper - shows account creation modal if no account
-// Exception: allows access during active tutorial for tutorial-first flow (only on valid routes)
+// Exception: allows full access during active tutorial for tutorial-first flow
 const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [hasAccount, setHasAccount] = useState(() => hasUserAccount());
   const navigate = useNavigate();
-  const location = useLocation();
   
-  // Get current path for tutorial validation
-  const currentPath = location.pathname;
-  
-  // Check if tutorial is valid for this route
-  const tutorialValidForRoute = isTutorialInProgressForRoute(currentPath);
-  
-  // If tutorial is "in progress" but NOT valid for this route, mark it as abandoned
-  // This clears the tutorial state so UI elements (like back buttons) work correctly
-  useEffect(() => {
-    if (isTutorialInProgress() && !tutorialValidForRoute) {
-      // Tutorial was abandoned - clear the tutorial state in localStorage
-      localStorage.setItem('godlykids_tutorial_complete', 'true');
-      localStorage.removeItem('godlykids_tutorial_step');
-      console.log('🚪 Tutorial abandoned - clearing tutorial state');
-      
-      // Dispatch event so TutorialContext can sync its React state
-      window.dispatchEvent(new Event('tutorial_abandoned'));
-    }
-  }, [tutorialValidForRoute, currentPath]);
-  
-  // Allow access during tutorial ONLY if the step is valid for this route
-  if (tutorialValidForRoute) {
+  // Allow FULL access during ANY active tutorial (don't interrupt tutorial flow)
+  if (isTutorialInProgress()) {
     return <>{children}</>;
   }
   
@@ -583,8 +562,7 @@ const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) =
     return <>{children}</>;
   }
   
-  // No account and no valid tutorial for this route - show account creation modal
-  // This prompts users to create account even if they exited tutorial early
+  // No account and no tutorial - show account creation modal
   return (
     <>
       {children}
@@ -1082,12 +1060,12 @@ const App: React.FC = () => {
                   <Route path="/listen" element={<ProtectedRoute><ListenPage /></ProtectedRoute>} />
                   <Route path="/read" element={<ProtectedRoute><ReadPage /></ProtectedRoute>} />
                   <Route path="/library" element={<ProtectedRoute><LibraryPage /></ProtectedRoute>} />
-                  <Route path="/book/:id" element={<ProtectedRoute><BookDetailPage /></ProtectedRoute>} />
-                  <Route path="/read/:bookId" element={<ProtectedRoute><BookReaderPage /></ProtectedRoute>} />
+                  <Route path="/book/:id" element={<BookDetailPage />} /> {/* Detail page - no account required */}
+                  <Route path="/read/:bookId" element={<ProtectedRoute><BookReaderPage /></ProtectedRoute>} /> {/* Reading - account required */}
                   <Route path="/player/:bookId/:chapterId" element={<ProtectedRoute><AudioPlayerPage /></ProtectedRoute>} />
                   <Route path="/audio" element={<ProtectedRoute><AudioPage /></ProtectedRoute>} />
-                  <Route path="/audio/playlist/:playlistId" element={<ProtectedRoute><PlaylistDetailPage /></ProtectedRoute>} />
-                  <Route path="/audio/playlist/:playlistId/play/:itemIndex" element={<ProtectedRoute><PlaylistPlayerPage /></ProtectedRoute>} />
+                  <Route path="/audio/playlist/:playlistId" element={<PlaylistDetailPage />} /> {/* Detail page - no account required */}
+                  <Route path="/audio/playlist/:playlistId/play/:itemIndex" element={<ProtectedRoute><PlaylistPlayerPage /></ProtectedRoute>} /> {/* Playing - account required */}
                   <Route path="/my-playlist/:id" element={<ProtectedRoute><UserPlaylistPage /></ProtectedRoute>} />
                   <Route path="/create-playlist" element={<ProtectedRoute><CreatePlaylistPage /></ProtectedRoute>} />
                   <Route path="/book-series/:seriesId" element={<ProtectedRoute><BookSeriesDetailPage /></ProtectedRoute>} />

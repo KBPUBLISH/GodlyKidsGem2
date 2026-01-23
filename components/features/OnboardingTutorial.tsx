@@ -69,21 +69,10 @@ const DonationPracticeContent: React.FC<{
 );
 
 // Swipe hint content - just finger and text, positioned over image area
-// Now includes a "Skip to Quiz" button to let users jump ahead
-const SwipeHintContent: React.FC<{ onSkipToQuiz?: () => void }> = ({ onSkipToQuiz }) => (
+const SwipeHintContent: React.FC = () => (
   <div className="flex flex-col items-center">
     <p className="text-[#FFD700] font-bold text-xl drop-shadow-[0_2px_4px_rgba(0,0,0,0.8)] mb-2">Swipe to Read</p>
     <span className="text-5xl animate-swipe-finger drop-shadow-[0_2px_4px_rgba(0,0,0,0.8)]">👆</span>
-    
-    {/* Skip to Quiz button */}
-    {onSkipToQuiz && (
-      <button
-        onClick={onSkipToQuiz}
-        className="mt-6 px-6 py-2 bg-[#FFD700] text-[#3E1F07] font-bold rounded-full shadow-lg hover:bg-[#FFC107] transition-colors"
-      >
-        Skip to Quiz →
-      </button>
-    )}
     
     <style>{`
       @keyframes swipe-finger {
@@ -380,9 +369,9 @@ const OnboardingTutorial: React.FC = () => {
           />
         );
 
-      // STEP 3: Book swipe intro hint - only shown once on first page
+      // STEP 3: Book swipe intro hint - shown on first page
       // Hide after 5 seconds to not obstruct the reading experience
-      // Includes "Skip to Quiz" button for users who want to jump ahead
+      // Persistent "Skip to Quiz" button is shown separately at bottom of screen
       case 'book_swipe_intro':
         if (hideSwipeHint) {
           return null; // Hide the swipe hint after 5 seconds
@@ -395,14 +384,7 @@ const OnboardingTutorial: React.FC = () => {
             popupPosition="center"
             requiresElementClick={false}
             hideOverlay={true}
-            customContent={
-              <SwipeHintContent 
-                onSkipToQuiz={() => {
-                  // Jump directly to the quiz step
-                  goToStep('book_end_quiz');
-                }}
-              />
-            }
+            customContent={<SwipeHintContent />}
           />
         );
 
@@ -669,9 +651,30 @@ const OnboardingTutorial: React.FC = () => {
     }
   };
 
+  // Determine if we should show the persistent Skip to Quiz button
+  // Show during book reading steps (except when already at quiz or taking quiz)
+  const bookReadingSteps: TutorialStep[] = ['book_controls_intro', 'book_swipe_intro', 'book_swipe_1', 'book_swipe_2', 'book_swipe_3'];
+  const showSkipToQuizButton = isOnBookReader && bookReadingSteps.includes(currentStep);
+
   return (
     <>
       {renderSpotlight()}
+      
+      {/* Persistent Skip to Quiz button - top right corner, separate from swipe hint */}
+      {showSkipToQuizButton && (
+        <div 
+          className="fixed right-4 z-[200] animate-in fade-in slide-in-from-right-4 duration-300"
+          style={{ top: 'calc(var(--safe-area-top, 0px) + 16px)' }}
+        >
+          <button
+            onClick={() => goToStep('book_end_quiz')}
+            className="px-4 py-2 bg-[#FFD700] text-[#3E1F07] font-bold rounded-full shadow-lg hover:bg-[#FFC107] active:scale-95 transition-all flex items-center gap-2 border-2 border-[#B8860B]"
+          >
+            <span>Skip to Quiz</span>
+            <span>→</span>
+          </button>
+        </div>
+      )}
       
       {/* Account Creation Modal - shown after tutorial when user doesn't have account */}
       <CreateAccountModal

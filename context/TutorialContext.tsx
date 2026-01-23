@@ -71,8 +71,9 @@ export const TUTORIAL_STEP_CONFIG: Record<TutorialStep, {
   },
   book_swipe_3: {
     title: 'Perfect!',
-    description: 'Let\'s take a quiz to earn coins!',
-    autoAdvanceDelay: 1500,
+    description: 'Keep reading or tap Skip to Quiz!',
+    requiresClick: false,
+    // No auto-advance - user must click Skip to Quiz button or reach The End naturally
   },
   book_end_quiz: {
     title: 'Take the Quiz!',

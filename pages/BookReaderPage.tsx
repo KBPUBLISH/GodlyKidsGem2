@@ -157,7 +157,7 @@ const BookReaderPage: React.FC = () => {
     const [searchParams] = useSearchParams();
     const { setGameMode, setMusicPaused, currentPlaylist, isPlaying, togglePlayPause } = useAudio();
     const { isVoiceUnlocked, isSubscribed } = useUser();
-    const { isTutorialActive, isStepActive, onPageSwipe, onBookEndModalOpen, onQuizStart, onBookQuizComplete, currentStep } = useTutorial();
+    const { isTutorialActive, isStepActive, onPageSwipe, onBookEndModalOpen, onQuizStart, onBookQuizComplete, currentStep, goToStep } = useTutorial();
     const wasMusicEnabledRef = useRef<boolean>(false);
     const [pages, setPages] = useState<Page[]>([]);
     const [currentPageIndex, setCurrentPageIndex] = useState(0);
@@ -1753,6 +1753,20 @@ const BookReaderPage: React.FC = () => {
             handleUnlockRewardVoice();
         }
     }, [isTheEndPage, pages.length, bookId]); // eslint-disable-line react-hooks/exhaustive-deps
+
+    // Tutorial: Automatically advance to quiz step when user naturally reaches The End page
+    // This handles the case where user reads through the whole book without clicking "Skip to Quiz"
+    useEffect(() => {
+        if (!isTutorialActive || !isTheEndPage || pages.length === 0) return;
+        
+        // List of book reading steps where we should auto-advance to quiz
+        const bookReadingSteps = ['book_controls_intro', 'book_swipe_intro', 'book_swipe_1', 'book_swipe_2', 'book_swipe_3'];
+        
+        if (bookReadingSteps.includes(currentStep)) {
+            console.log('📖 Tutorial: User reached The End naturally - advancing to quiz step');
+            goToStep('book_end_quiz');
+        }
+    }, [isTutorialActive, isTheEndPage, pages.length, currentStep, goToStep]);
 
     // Handle unlocking the reward voice when book is completed
     const handleUnlockRewardVoice = async () => {

@@ -634,8 +634,7 @@ const HomePageWithWelcomeCheck: React.FC = () => {
           navigateToOnboarding={true}
           onClose={() => {
             setShowAccountModal(false);
-            // Go back to landing if they dismiss without creating account
-            navigate('/', { replace: true });
+            // Stay on explore page - user can continue exploring without account
           }}
           onAccountCreated={() => {
             setHasAccount(true);

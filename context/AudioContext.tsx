@@ -527,24 +527,24 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
             title: playlist.title,
             isMembersOnly: playlist.isMembersOnly,
             isSubscribed: isSubscribed,
-            willBePreviewMode: playlist.isMembersOnly === true && !isSubscribed
+            willBePreviewMode: !isSubscribed
         });
         
         setCurrentPlaylist(playlist);
         setCurrentTrackIndex(startIndex);
         setIsPlaying(true);
         
-        // Check if this is premium content without subscription
-        const isPremiumPreview = playlist.isMembersOnly === true && !isSubscribed;
+        // Enable preview mode for ALL non-subscribed users (2 min limit on all audio)
+        const isPremiumPreview = !isSubscribed;
         setIsPreviewMode(isPremiumPreview);
         if (isPremiumPreview) {
-            // Reset preview time when starting a new premium playlist
+            // Reset preview time when starting a new playlist
             previewTimeAccumulator.current = 0;
             setPreviewTimeRemaining(AUDIO_PREVIEW_SECONDS);
             setPreviewLimitReached(false);
-            console.log('🎵 Starting premium playlist in preview mode (2 min limit)');
+            console.log('🎵 Starting playlist in preview mode (2 min limit) - user not subscribed');
         } else {
-            console.log('🎵 Full playback mode - no preview limit');
+            console.log('🎵 Full playback mode - user is subscribed');
             setPreviewLimitReached(false);
         }
         

@@ -506,8 +506,8 @@ const PlaylistPlayerPage: React.FC = () => {
                         </p>
                     </div>
                     
-                    {/* Premium Preview Banner */}
-                    {isPreviewMode && (
+                    {/* Premium Preview Banner - show for non-subscribed users */}
+                    {!isSubscribed && (
                         <div className="mt-4 w-full max-w-md">
                             <div className="bg-gradient-to-r from-[#FFD700]/20 to-[#FFA500]/20 backdrop-blur-md rounded-2xl p-3 border-2 border-[#FFD700]/50">
                                 <div className="flex items-center justify-between gap-3">

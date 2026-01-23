@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { Play, Pause, X, Music, SkipBack, SkipForward, Crown, Lock } from 'lucide-react';
 import { useAudio } from '../../context/AudioContext';
+import { useUser } from '../../context/UserContext';
 
 const MiniPlayer: React.FC = () => {
     const {
@@ -24,6 +25,7 @@ const MiniPlayer: React.FC = () => {
 
     const navigate = useNavigate();
     const location = useLocation();
+    const { isSubscribed } = useUser();
     const [isDragging, setIsDragging] = useState(false);
 
     // Don't show mini player if:
@@ -172,8 +174,8 @@ const MiniPlayer: React.FC = () => {
                         </p>
                     </div>
                     
-                    {/* Preview Mode Badge */}
-                    {isPreviewMode && (
+                    {/* Preview Mode Badge - show for non-subscribed users */}
+                    {!isSubscribed && (
                         <button
                             onClick={(e) => { e.stopPropagation(); navigate('/paywall'); }}
                             className="flex items-center gap-1 bg-gradient-to-r from-[#FFD700] to-[#FFA500] text-[#3E1F07] font-bold py-1.5 px-2.5 rounded-lg text-[10px] shadow-md transform hover:scale-105 transition-all duration-200 active:scale-95 mr-2"

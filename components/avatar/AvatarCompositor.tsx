@@ -199,11 +199,11 @@ const AvatarCompositor: React.FC<AvatarCompositorProps> = ({
              }}
              onClick={(e) => onPartClick && handlePartClick(e, 'body')}
           >
-               {/* 1. LEGS/FEET (Bottom Layer Z-10) */}
+               {/* 1. LEGS/FEET (In front of body Z-25) */}
                {legs && (isFilePath(legs) || AVATAR_ASSETS[legs]) && (
                     <div 
                         onClick={(e) => handlePartClick(e, 'legs')}
-                        className={`absolute z-10 transition-transform duration-300 flex items-center justify-center ${onPartClick ? 'cursor-pointer hover:brightness-110 active:scale-95 pointer-events-auto' : ''} ${getLimbAnimClass()}`}
+                        className={`absolute z-[25] transition-transform duration-300 flex items-center justify-center ${onPartClick ? 'cursor-pointer hover:brightness-110 active:scale-95 pointer-events-auto' : ''} ${getLimbAnimClass()}`}
                         style={{ 
                             top: `${DEFAULT_LEGS_TOP + legsOffset.y}%`, 
                             left: `${DEFAULT_LEGS_LEFT + legsOffset.x}%`, 

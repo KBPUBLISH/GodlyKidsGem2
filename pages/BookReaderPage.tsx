@@ -183,16 +183,25 @@ const BookReaderPage: React.FC = () => {
     }, [scrollState]);
 
     // Tutorial: Auto-jump to end page when book_end_quiz step starts
+    // Also handles case where user swiped too fast - ensures they're on the end page
     useEffect(() => {
         if (isTutorialActive && currentStep === 'book_end_quiz' && pages.length > 0) {
-            // Jump to last page (The End page)
             const lastPageIndex = pages.length - 1;
-            setCurrentPageIndex(lastPageIndex);
-            currentPageIndexRef.current = lastPageIndex;
-            // Trigger end modal open
-            onBookEndModalOpen();
+            const isAlreadyAtEnd = currentPageIndex === lastPageIndex;
+            
+            if (!isAlreadyAtEnd) {
+                console.log('📖 Tutorial: Jumping to end page for quiz step');
+                // Jump to last page (The End page)
+                setCurrentPageIndex(lastPageIndex);
+                currentPageIndexRef.current = lastPageIndex;
+            }
+            
+            // Small delay to ensure page state has updated before triggering modal
+            setTimeout(() => {
+                onBookEndModalOpen();
+            }, 100);
         }
-    }, [isTutorialActive, currentStep, pages.length, onBookEndModalOpen]);
+    }, [isTutorialActive, currentStep, pages.length, currentPageIndex, onBookEndModalOpen]);
 
     // Pause audiobook playlist when entering book reader to prevent audio overlap
     useEffect(() => {

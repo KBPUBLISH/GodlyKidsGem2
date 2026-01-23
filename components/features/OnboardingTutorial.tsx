@@ -247,6 +247,45 @@ const OnboardingTutorial: React.FC = () => {
     setDonatedCoins(newTotal);
   };
 
+  // Track when quiz button is available (for book_end_quiz step)
+  const [quizButtonReady, setQuizButtonReady] = useState(false);
+  
+  useEffect(() => {
+    if (currentStep !== 'book_end_quiz') {
+      setQuizButtonReady(false);
+      return;
+    }
+    
+    // Poll for quiz button to appear (after page jump to The End)
+    const checkForQuizButton = () => {
+      const quizButton = document.getElementById('quiz-button') || document.querySelector('[data-tutorial="quiz-button"]');
+      if (quizButton) {
+        setQuizButtonReady(true);
+        return true;
+      }
+      return false;
+    };
+    
+    // Check immediately
+    if (checkForQuizButton()) return;
+    
+    // Poll every 100ms for up to 3 seconds
+    const interval = setInterval(() => {
+      if (checkForQuizButton()) {
+        clearInterval(interval);
+      }
+    }, 100);
+    
+    const timeout = setTimeout(() => {
+      clearInterval(interval);
+    }, 3000);
+    
+    return () => {
+      clearInterval(interval);
+      clearTimeout(timeout);
+    };
+  }, [currentStep]);
+
   if (!isTutorialActive) return null;
 
   // Don't show tutorial overlay on these pages - allow full interaction
@@ -354,7 +393,12 @@ const OnboardingTutorial: React.FC = () => {
         return null; // No visual hint on subsequent swipes
 
       // STEP 6: End modal with quiz button highlighted
+      // Only show when the quiz-button element exists (user is on The End page)
       case 'book_end_quiz':
+        // Wait for quiz button to be ready (page jumped to The End)
+        if (!quizButtonReady) {
+          return null;
+        }
         return (
           <TutorialSpotlight
             targetElement="quiz-button"

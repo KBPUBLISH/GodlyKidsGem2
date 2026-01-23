@@ -238,49 +238,20 @@ const AvatarCompositor: React.FC<AvatarCompositorProps> = ({
                    )}
                </div>
 
-               {/* 3. RIGHT WING/ARM (Viewer Left) (Z-30) */}
-               {rightArm && (isFilePath(rightArm) || AVATAR_ASSETS[rightArm]) && (
-                  <div 
-                    className="absolute z-30"
-                    style={{ 
-                        top: `${DEFAULT_ARM_TOP + rightArmOffset.y}%`, 
-                        left: `${DEFAULT_ARM_SIDE - rightArmOffset.x}%`,
-                        width: '44%',
-                        height: '80%',
-                        transformOrigin: '90% 15%', 
-                        transform: `rotate(${rightArmRotation}deg) scale(${rightArmScale})`
-                    }}
-                  >
-                      <div
-                        onClick={(e) => handlePartClick(e, 'rightArm')}
-                        className={`w-full h-full transition-colors duration-300 flex items-center justify-center ${onPartClick ? 'cursor-pointer hover:brightness-110 active:scale-95 pointer-events-auto' : ''} ${isAnimating && animationStyle !== 'anim-spin' ? 'animate-arm-sway-right' : ''} ${getLimbAnimClass()}`}
-                        style={{ transformOrigin: '50% 15%' }} 
-                      >
-                           {isFilePath(rightArm) ? (
-                             <img src={rightArm} alt="Right Wing" className="w-full h-full object-contain object-center pointer-events-none" />
-                           ) : (
-                             <svg viewBox="0 0 50 100" className="w-full h-full overflow-visible">
-                                {AVATAR_ASSETS[rightArm]}
-                            </svg>
-                           )}
-                      </div>
-                  </div>
-               )}
-
-               {/* 4. LEFT WING/ARM (Viewer Right) (Z-30) */}
+               {/* 3. LEFT WING/ARM (Viewer's Left) (Z-30) */}
                {leftArm && (isFilePath(leftArm) || AVATAR_ASSETS[leftArm]) && (
                   <div 
                     className="absolute z-30"
                     style={{ 
                         top: `${DEFAULT_ARM_TOP + leftArmOffset.y}%`, 
-                        right: `${DEFAULT_ARM_SIDE - leftArmOffset.x}%`,
+                        left: `${DEFAULT_ARM_SIDE - leftArmOffset.x}%`,
                         width: '44%',
                         height: '80%',
-                        transformOrigin: '10% 15%',
+                        transformOrigin: '90% 15%', 
                         transform: `rotate(${leftArmRotation}deg) scale(${leftArmScale})`
                     }}
                   >
-                      <div 
+                      <div
                         onClick={(e) => handlePartClick(e, 'leftArm')}
                         className={`w-full h-full transition-colors duration-300 flex items-center justify-center ${onPartClick ? 'cursor-pointer hover:brightness-110 active:scale-95 pointer-events-auto' : ''} ${isAnimating && animationStyle !== 'anim-spin' ? 'animate-arm-sway-left' : ''} ${getLimbAnimClass()}`}
                         style={{ transformOrigin: '50% 15%' }} 
@@ -290,6 +261,35 @@ const AvatarCompositor: React.FC<AvatarCompositorProps> = ({
                            ) : (
                              <svg viewBox="0 0 50 100" className="w-full h-full overflow-visible">
                                 {AVATAR_ASSETS[leftArm]}
+                            </svg>
+                           )}
+                      </div>
+                  </div>
+               )}
+
+               {/* 4. RIGHT WING/ARM (Viewer's Right) (Z-30) */}
+               {rightArm && (isFilePath(rightArm) || AVATAR_ASSETS[rightArm]) && (
+                  <div 
+                    className="absolute z-30"
+                    style={{ 
+                        top: `${DEFAULT_ARM_TOP + rightArmOffset.y}%`, 
+                        right: `${DEFAULT_ARM_SIDE - rightArmOffset.x}%`,
+                        width: '44%',
+                        height: '80%',
+                        transformOrigin: '10% 15%',
+                        transform: `rotate(${rightArmRotation}deg) scale(${rightArmScale})`
+                    }}
+                  >
+                      <div 
+                        onClick={(e) => handlePartClick(e, 'rightArm')}
+                        className={`w-full h-full transition-colors duration-300 flex items-center justify-center ${onPartClick ? 'cursor-pointer hover:brightness-110 active:scale-95 pointer-events-auto' : ''} ${isAnimating && animationStyle !== 'anim-spin' ? 'animate-arm-sway-right' : ''} ${getLimbAnimClass()}`}
+                        style={{ transformOrigin: '50% 15%' }} 
+                      >
+                           {isFilePath(rightArm) ? (
+                             <img src={rightArm} alt="Right Wing" className="w-full h-full object-contain object-center pointer-events-none" />
+                           ) : (
+                             <svg viewBox="0 0 50 100" className="w-full h-full overflow-visible">
+                                {AVATAR_ASSETS[rightArm]}
                             </svg>
                            )}
                       </div>

@@ -207,7 +207,7 @@ const AvatarCompositor: React.FC<AvatarCompositorProps> = ({
                {legs && (isFilePath(legs) || AVATAR_ASSETS[legs]) && (
                     <div 
                         onClick={(e) => handlePartClick(e, 'legs')}
-                        className={`absolute z-[25] transition-transform duration-300 flex items-center justify-center ${onPartClick ? 'cursor-pointer hover:brightness-110 active:scale-95 pointer-events-auto' : ''} ${getLimbAnimClass()}`}
+                        className={`absolute z-[25] transition-transform duration-300 flex items-center justify-center ${onPartClick ? 'cursor-pointer hover:brightness-110 active:scale-95 pointer-events-auto' : ''} ${isAnimating && animationStyle !== 'anim-spin' ? 'animate-legs-bounce' : ''} ${getLimbAnimClass()}`}
                         style={{ 
                             top: `${DEFAULT_LEGS_TOP + legsOffset.y}%`, 
                             left: `${DEFAULT_LEGS_LEFT + legsOffset.x}%`, 
@@ -317,6 +317,16 @@ const AvatarCompositor: React.FC<AvatarCompositorProps> = ({
         }
         .animate-arm-sway-right {
            animation: armSwayRight 2s ease-in-out infinite;
+        }
+
+        /* --- LEGS BOUNCE --- */
+        @keyframes legsBounce {
+          0%, 100% { transform: translateY(0) rotate(0deg); }
+          25% { transform: translateY(-3px) rotate(-2deg); }
+          75% { transform: translateY(-3px) rotate(2deg); }
+        }
+        .animate-legs-bounce {
+           animation: legsBounce 1.5s ease-in-out infinite;
         }
 
         /* --- ANIM: BREATHE (Default) --- */

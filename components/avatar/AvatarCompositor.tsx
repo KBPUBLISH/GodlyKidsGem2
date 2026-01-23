@@ -244,7 +244,7 @@ const AvatarCompositor: React.FC<AvatarCompositorProps> = ({
                     className="absolute z-[15]"
                     style={{ 
                         top: `${DEFAULT_ARM_TOP + leftArmOffset.y}%`, 
-                        left: `${DEFAULT_ARM_SIDE - leftArmOffset.x}%`,
+                        left: `${DEFAULT_ARM_SIDE + leftArmOffset.x}%`,
                         width: '44%',
                         height: '80%',
                         transformOrigin: '50% 50%', 

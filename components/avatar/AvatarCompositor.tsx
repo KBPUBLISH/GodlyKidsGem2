@@ -127,7 +127,7 @@ const AvatarCompositor: React.FC<AvatarCompositorProps> = ({
       
       {/* 4. HEAD (Top Layer Z-50) */}
       <div 
-        className="absolute inset-0 z-50 flex items-center justify-center"
+        className="absolute inset-0 z-50 flex items-center justify-center pointer-events-none"
         style={{
           transform: `translate(${headOffset.x}%, ${headOffset.y}%) scale(${headScale})`
         }}
@@ -160,7 +160,7 @@ const AvatarCompositor: React.FC<AvatarCompositorProps> = ({
       {/* 5. HAT (Topmost Z-60) */}
       {hat && (isFilePath(hat) || AVATAR_ASSETS[hat]) && (
           <div 
-            className="absolute inset-0 z-[60] flex items-center justify-center"
+            className="absolute inset-0 z-[60] flex items-center justify-center pointer-events-none"
             style={{
               transform: `translate(${hatOffset.x}%, ${hatOffset.y}%) scale(${hatScale})`
             }}
@@ -225,13 +225,14 @@ const AvatarCompositor: React.FC<AvatarCompositorProps> = ({
 
                {/* 2. MAIN BODY (Z-20) */}
                <div 
-                  className={`absolute z-20 flex items-center justify-center`}
+                  onClick={(e) => handlePartClick(e, 'body')}
+                  className={`absolute z-20 flex items-center justify-center ${onPartClick ? 'cursor-pointer hover:brightness-110 active:scale-95 pointer-events-auto' : ''}`}
                   style={{ width: '100%', height: '100%' }}
                 >
                    {isFilePath(body) ? (
                      <img src={body} alt="Body" className="w-full h-full object-contain object-center pointer-events-none" style={{ transform: 'scale(1.3)' }} />
                    ) : (
-                     <svg viewBox="0 0 100 80" className="w-full h-full overflow-visible" style={{ transform: 'scale(1.3)' }}>
+                     <svg viewBox="0 0 100 80" className="w-full h-full overflow-visible pointer-events-none" style={{ transform: 'scale(1.3)' }}>
                         {AVATAR_ASSETS[body]}
                      </svg>
                    )}

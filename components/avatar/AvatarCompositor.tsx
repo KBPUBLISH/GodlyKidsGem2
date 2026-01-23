@@ -186,10 +186,10 @@ const AvatarCompositor: React.FC<AvatarCompositorProps> = ({
           </div>
       )}
 
-      {/* BODY GROUP */}
+      {/* BODY GROUP - Outer wrapper for position/scale, inner wrapper for animation */}
       {body && (isFilePath(body) || AVATAR_ASSETS[body]) && (
           <div
-             className={`absolute z-20 flex items-center justify-center ${bodyAnimationClass} ${onPartClick ? 'cursor-pointer hover:brightness-110 active:scale-95 pointer-events-auto' : 'pointer-events-none'}`}
+             className="absolute z-20"
              style={{
                 top: `calc(85% + ${bodyOffset.y}%)`, 
                 left: `calc(50% + ${bodyOffset.x}%)`, 
@@ -197,6 +197,10 @@ const AvatarCompositor: React.FC<AvatarCompositorProps> = ({
                 height: '90%',
                 transform: `translate(-50%, 0) scale(${bodyScale})` 
              }}
+          >
+          {/* Inner animation wrapper */}
+          <div
+             className={`w-full h-full flex items-center justify-center ${bodyAnimationClass} ${onPartClick ? 'cursor-pointer hover:brightness-110 active:scale-95 pointer-events-auto' : 'pointer-events-none'}`}
              onClick={(e) => onPartClick && handlePartClick(e, 'body')}
           >
                {/* 1. LEGS/FEET (In front of body Z-25) */}
@@ -296,6 +300,7 @@ const AvatarCompositor: React.FC<AvatarCompositorProps> = ({
                   </div>
                )}
           </div>
+          </div>
       )}
       <style>{`
         /* --- ARM SWAY (Standard for all) --- */
@@ -315,9 +320,10 @@ const AvatarCompositor: React.FC<AvatarCompositorProps> = ({
         }
 
         /* --- ANIM: BREATHE (Default) --- */
+        /* Note: Scale is handled by outer wrapper, animations only do position/rotation */
         @keyframes animBreathe {
-          0%, 100% { transform: translate(-50%, 0) scale(1); }
-          50% { transform: translate(-50%, -2px) scale(1.02); }
+          0%, 100% { transform: translateY(0); }
+          50% { transform: translateY(-2px); }
         }
         .anim-breathe {
            animation: animBreathe 3s ease-in-out infinite;
@@ -325,8 +331,8 @@ const AvatarCompositor: React.FC<AvatarCompositorProps> = ({
 
         /* --- ANIM: BOUNCE (Energetic) --- */
         @keyframes animBounce {
-          0%, 100% { transform: translate(-50%, 0); }
-          50% { transform: translate(-50%, -15px); }
+          0%, 100% { transform: translateY(0); }
+          50% { transform: translateY(-15px); }
         }
         .anim-bounce {
            animation: animBounce 0.6s cubic-bezier(0.28, 0.84, 0.42, 1) infinite;
@@ -341,8 +347,8 @@ const AvatarCompositor: React.FC<AvatarCompositorProps> = ({
 
         /* --- ANIM: FLOAT (Ghostly/Space) --- */
         @keyframes animFloat {
-          0%, 100% { transform: translate(-50%, 0); }
-          50% { transform: translate(-50%, -10px); }
+          0%, 100% { transform: translateY(0); }
+          50% { transform: translateY(-10px); }
         }
         .anim-float {
            animation: animFloat 2.5s ease-in-out infinite;
@@ -350,8 +356,8 @@ const AvatarCompositor: React.FC<AvatarCompositorProps> = ({
 
         /* --- ANIM: WIGGLE (Silly) --- */
         @keyframes animWiggle {
-          0%, 100% { transform: translate(-50%, 0) rotate(-3deg); }
-          50% { transform: translate(-50%, 0) rotate(3deg); }
+          0%, 100% { transform: rotate(-3deg); }
+          50% { transform: rotate(3deg); }
         }
         .anim-wiggle {
            animation: animWiggle 0.4s ease-in-out infinite;
@@ -359,8 +365,8 @@ const AvatarCompositor: React.FC<AvatarCompositorProps> = ({
 
         /* --- ANIM: PULSE (Power) --- */
         @keyframes animPulse {
-          0%, 100% { transform: translate(-50%, 0) scale(1); }
-          50% { transform: translate(-50%, 0) scale(1.08); }
+          0%, 100% { transform: scale(1); }
+          50% { transform: scale(1.08); }
         }
         .anim-pulse {
            animation: animPulse 1s ease-in-out infinite;
@@ -370,8 +376,8 @@ const AvatarCompositor: React.FC<AvatarCompositorProps> = ({
 
         /* SPIN (Old body container spin - maintained for ref, but replaced for anim-spin) */
         @keyframes animSpin {
-          0% { transform: translate(-50%, 0) rotate(0deg); }
-          100% { transform: translate(-50%, 0) rotate(360deg); }
+          0% { transform: rotate(0deg); }
+          100% { transform: rotate(360deg); }
         }
         /* ROTATE (Pure rotation for limbs/head) */
         @keyframes animRotate {
@@ -384,9 +390,9 @@ const AvatarCompositor: React.FC<AvatarCompositorProps> = ({
 
         /* SHAKE */
         @keyframes animShake {
-          0%, 100% { transform: translate(-50%, 0); }
-          10%, 30%, 50%, 70%, 90% { transform: translate(calc(-50% - 5px), 0); }
-          20%, 40%, 60%, 80% { transform: translate(calc(-50% + 5px), 0); }
+          0%, 100% { transform: translateX(0); }
+          10%, 30%, 50%, 70%, 90% { transform: translateX(-5px); }
+          20%, 40%, 60%, 80% { transform: translateX(5px); }
         }
         .anim-shake {
            animation: animShake 0.5s ease-in-out infinite;
@@ -394,9 +400,9 @@ const AvatarCompositor: React.FC<AvatarCompositorProps> = ({
 
         /* WOBBLE */
         @keyframes animWobble {
-          0%, 100% { transform: translate(-50%, 0) rotate(0deg); }
-          25% { transform: translate(-50%, 0) rotate(-10deg); }
-          75% { transform: translate(-50%, 0) rotate(10deg); }
+          0%, 100% { transform: rotate(0deg); }
+          25% { transform: rotate(-10deg); }
+          75% { transform: rotate(10deg); }
         }
         .anim-wobble {
            animation: animWobble 1s ease-in-out infinite;
@@ -404,11 +410,11 @@ const AvatarCompositor: React.FC<AvatarCompositorProps> = ({
 
         /* HEARTBEAT */
         @keyframes animHeartbeat {
-          0% { transform: translate(-50%, 0) scale(1); }
-          14% { transform: translate(-50%, 0) scale(1.15); }
-          28% { transform: translate(-50%, 0) scale(1); }
-          42% { transform: translate(-50%, 0) scale(1.15); }
-          70% { transform: translate(-50%, 0) scale(1); }
+          0% { transform: scale(1); }
+          14% { transform: scale(1.15); }
+          28% { transform: scale(1); }
+          42% { transform: scale(1.15); }
+          70% { transform: scale(1); }
         }
         .anim-heartbeat {
            animation: animHeartbeat 1.3s ease-in-out infinite;
@@ -416,11 +422,11 @@ const AvatarCompositor: React.FC<AvatarCompositorProps> = ({
 
         /* JIGGLE */
         @keyframes animJiggle {
-          0% { transform: translate(-50%, 0) rotate(0deg); }
-          25% { transform: translate(-50%, 0) rotate(3deg); }
-          50% { transform: translate(-50%, 0) rotate(-3deg); }
-          75% { transform: translate(-50%, 0) rotate(1deg); }
-          100% { transform: translate(-50%, 0) rotate(0deg); }
+          0% { transform: rotate(0deg); }
+          25% { transform: rotate(3deg); }
+          50% { transform: rotate(-3deg); }
+          75% { transform: rotate(1deg); }
+          100% { transform: rotate(0deg); }
         }
         .anim-jiggle {
            animation: animJiggle 0.4s ease-in-out infinite;
@@ -428,8 +434,8 @@ const AvatarCompositor: React.FC<AvatarCompositorProps> = ({
 
         /* SWAY */
         @keyframes animSway {
-          0%, 100% { transform: translate(calc(-50% - 5px), 0) rotate(-5deg); }
-          50% { transform: translate(calc(-50% + 5px), 0) rotate(5deg); }
+          0%, 100% { transform: translateX(-5px) rotate(-5deg); }
+          50% { transform: translateX(5px) rotate(5deg); }
         }
         .anim-sway {
            animation: animSway 3s ease-in-out infinite;
@@ -437,8 +443,8 @@ const AvatarCompositor: React.FC<AvatarCompositorProps> = ({
 
         /* HOP */
         @keyframes animHop {
-          0%, 100% { transform: translate(-50%, 0); }
-          50% { transform: translate(-50%, -20px); }
+          0%, 100% { transform: translateY(0); }
+          50% { transform: translateY(-20px); }
         }
         .anim-hop {
            animation: animHop 0.8s cubic-bezier(0.25, 1.5, 0.5, 1) infinite;

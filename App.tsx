@@ -593,9 +593,13 @@ const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) =
 
 // Home page wrapper - shows welcome screen for new users who completed onboarding
 const HomePageWithWelcomeCheck: React.FC = () => {
-  // Show welcome screen AFTER onboarding is complete (user has parent name or kids)
+  const navigate = useNavigate();
+  const [showAccountModal, setShowAccountModal] = useState(false);
+  const [hasAccount, setHasAccount] = useState(() => hasUserAccount());
+  
+  // Check if user completed onboarding
   const savedData = localStorage.getItem('godly_kids_data_v7') || localStorage.getItem('godly_kids_data_v6');
-  const hasCompletedOnboarding = (() => {
+  const userCompletedOnboarding = (() => {
     if (!savedData) return false;
     try {
       const data = JSON.parse(savedData);
@@ -604,11 +608,46 @@ const HomePageWithWelcomeCheck: React.FC = () => {
     } catch { return false; }
   })();
   
+  // Check if tutorial is still in progress
+  const tutorialActive = isTutorialInProgress();
+  
+  // Show account modal if: tutorial is done/skipped AND no account AND not completed onboarding
+  useEffect(() => {
+    if (!tutorialActive && !hasAccount && !userCompletedOnboarding) {
+      // Small delay to let page render first
+      const timer = setTimeout(() => setShowAccountModal(true), 500);
+      return () => clearTimeout(timer);
+    }
+  }, [tutorialActive, hasAccount, userCompletedOnboarding]);
+  
   // Only show welcome screen if user completed onboarding AND hasn't seen welcome yet
-  if (hasCompletedOnboarding && shouldShowWelcome()) {
+  if (userCompletedOnboarding && shouldShowWelcome()) {
     return <NewUserWelcomePage />;
   }
-  return <HomePage />;
+  
+  return (
+    <>
+      <HomePage />
+      {showAccountModal && (
+        <CreateAccountModal
+          isOpen={true}
+          navigateToOnboarding={true}
+          onClose={() => {
+            setShowAccountModal(false);
+            // Go back to landing if they dismiss without creating account
+            navigate('/', { replace: true });
+          }}
+          onAccountCreated={() => {
+            setHasAccount(true);
+            setShowAccountModal(false);
+          }}
+          onSignIn={() => {
+            navigate('/signin', { state: { returnTo: '/home' } });
+          }}
+        />
+      )}
+    </>
+  );
 };
 
 import MiniPlayer from './components/audio/MiniPlayer';

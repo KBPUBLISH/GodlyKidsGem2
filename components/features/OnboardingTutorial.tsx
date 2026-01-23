@@ -69,10 +69,22 @@ const DonationPracticeContent: React.FC<{
 );
 
 // Swipe hint content - just finger and text, positioned over image area
-const SwipeHintContent: React.FC = () => (
+// Now includes a "Skip to Quiz" button to let users jump ahead
+const SwipeHintContent: React.FC<{ onSkipToQuiz?: () => void }> = ({ onSkipToQuiz }) => (
   <div className="flex flex-col items-center">
     <p className="text-[#FFD700] font-bold text-xl drop-shadow-[0_2px_4px_rgba(0,0,0,0.8)] mb-2">Swipe to Read</p>
     <span className="text-5xl animate-swipe-finger drop-shadow-[0_2px_4px_rgba(0,0,0,0.8)]">👆</span>
+    
+    {/* Skip to Quiz button */}
+    {onSkipToQuiz && (
+      <button
+        onClick={onSkipToQuiz}
+        className="mt-6 px-6 py-2 bg-[#FFD700] text-[#3E1F07] font-bold rounded-full shadow-lg hover:bg-[#FFC107] transition-colors"
+      >
+        Skip to Quiz →
+      </button>
+    )}
+    
     <style>{`
       @keyframes swipe-finger {
         0%, 100% { 
@@ -370,6 +382,7 @@ const OnboardingTutorial: React.FC = () => {
 
       // STEP 3: Book swipe intro hint - only shown once on first page
       // Hide after 5 seconds to not obstruct the reading experience
+      // Includes "Skip to Quiz" button for users who want to jump ahead
       case 'book_swipe_intro':
         if (hideSwipeHint) {
           return null; // Hide the swipe hint after 5 seconds
@@ -382,7 +395,14 @@ const OnboardingTutorial: React.FC = () => {
             popupPosition="center"
             requiresElementClick={false}
             hideOverlay={true}
-            customContent={<SwipeHintContent />}
+            customContent={
+              <SwipeHintContent 
+                onSkipToQuiz={() => {
+                  // Jump directly to the quiz step
+                  goToStep('book_end_quiz');
+                }}
+              />
+            }
           />
         );
 

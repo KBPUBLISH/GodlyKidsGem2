@@ -241,17 +241,26 @@ const SignInPage: React.FC = () => {
   };
 
   return (
-    <div className="flex flex-col h-full w-full relative overflow-y-auto no-scrollbar px-6 py-6">
+    <div className="flex flex-col h-full w-full relative overflow-y-auto no-scrollbar">
+      {/* Background Image */}
+      <div 
+        className="absolute inset-0 bg-cover bg-center bg-no-repeat"
+        style={{ 
+          backgroundImage: 'url(/assets/images/signin-background.jpg)',
+        }}
+      />
+      {/* Dark overlay for better text readability */}
+      <div className="absolute inset-0 bg-black/30" />
       
       {/* Back Button */}
       <button 
         onClick={() => navigate(-1)} 
-        className="absolute top-6 left-6 z-30 w-10 h-10 bg-white/20 backdrop-blur-md rounded-full flex items-center justify-center text-white border border-white/30 active:scale-95 transition-transform"
+        className="absolute top-6 left-6 z-30 w-10 h-10 bg-black/30 backdrop-blur-md rounded-full flex items-center justify-center text-white border border-white/20 active:scale-95 transition-transform"
       >
         <ChevronLeft size={24} />
       </button>
 
-      <div className="flex-1 flex flex-col items-center justify-center pt-12 pb-10 max-w-md mx-auto w-full">
+      <div className="flex-1 flex flex-col items-center justify-center pt-12 pb-10 px-6 max-w-md mx-auto w-full relative z-10">
           
           {/* Header Sign */}
           <div className="relative mb-8 animate-in slide-in-from-top-10 duration-700">

@@ -2781,12 +2781,12 @@ const BookReaderPage: React.FC = () => {
             // Get segment words for alignment
             const segmentWords = segment.text.split(/\s+/).filter(w => w.length > 0);
             
-            // Set up word alignment with OFFSET for proper highlighting
-            audio.addEventListener('loadedmetadata', () => {
+            // Function to set up word alignment with OFFSET for proper highlighting
+            const setupSegmentAlignment = () => {
                 if (playbackId !== multiSegmentPlaybackIdRef.current) return;
                 
                 const audioDuration = audio.duration;
-                if (segmentWords.length > 0 && audioDuration > 0) {
+                if (segmentWords.length > 0 && audioDuration > 0 && isFinite(audioDuration)) {
                     const wordDuration = audioDuration / segmentWords.length;
                     const alignment = {
                         words: segmentWords.map((word, idx) => ({
@@ -2799,7 +2799,15 @@ const BookReaderPage: React.FC = () => {
                     wordAlignmentRef.current = alignment;
                     console.log(`📝 Segment ${segmentIdx + 1} alignment: ${segmentWords.length} words, offset ${wordOffset}`);
                 }
-            });
+            };
+            
+            // Set up alignment: either immediately if metadata is ready, or wait for event
+            if (audio.readyState >= 1) {
+                console.log('📦 Segment audio metadata already loaded (cached)');
+                setupSegmentAlignment();
+            } else {
+                audio.addEventListener('loadedmetadata', setupSegmentAlignment, { once: true });
+            }
             
             // Track time for word highlighting with OFFSET
             // OPTIMIZED: Use RAF for smoother updates with binary search
@@ -3249,9 +3257,13 @@ const BookReaderPage: React.FC = () => {
             if (result && result.audioUrl) {
                 const audio = new Audio(result.audioUrl);
 
-                // Wait for audio metadata to load, then process alignment
-                audio.addEventListener('loadedmetadata', () => {
+                // Function to set up word alignment (called when metadata is available)
+                const setupWordAlignment = () => {
                     const audioDuration = audio.duration;
+                    if (!audioDuration || !isFinite(audioDuration)) {
+                        console.warn('⚠️ Invalid audio duration, skipping alignment setup');
+                        return;
+                    }
                     const alignment = result.alignment;
                     
                     // DEBUG: Log alignment data
@@ -3374,7 +3386,20 @@ const BookReaderPage: React.FC = () => {
                             console.warn('⚠️ No words found in text');
                         }
                     }
-                });
+                };
+
+                // Set up alignment: either immediately if metadata is ready, or wait for event
+                if (audio.readyState >= 1) {
+                    // Metadata already loaded (cached audio)
+                    console.log('📦 Audio metadata already loaded (cached), setting up alignment immediately');
+                    setupWordAlignment();
+                } else {
+                    // Wait for metadata to load
+                    audio.addEventListener('loadedmetadata', () => {
+                        console.log('📦 Audio metadata loaded via event');
+                        setupWordAlignment();
+                    }, { once: true });
+                }
 
                 // Track audio time for word highlighting
                 // OPTIMIZED: Use binary search with sequential hint for O(1) normal case

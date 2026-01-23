@@ -78,7 +78,7 @@ const SHOP_ARMS: ShopItem[] = [
     // Left wings
     ...LEFT_WING_NUMBERS.map((num, i) => ({
         id: `wl${num}`,
-        name: '',
+        name: 'Left Wing',
         price: [100, 150, 200, 250, 300][i % 5],
         type: 'leftArm' as const,
         value: `/avatars/wings-left/wing-left-${num}.png`,
@@ -87,7 +87,7 @@ const SHOP_ARMS: ShopItem[] = [
     // Right wings
     ...RIGHT_WING_NUMBERS.map((num, i) => ({
         id: `wr${num}`,
-        name: '',
+        name: 'Right Wing',
         price: [100, 150, 200, 250, 300][i % 5],
         type: 'rightArm' as const,
         value: `/avatars/wings-right/wing-right-${num}.png`,
@@ -864,7 +864,7 @@ const ShopModal: React.FC<ShopModalProps> = ({ isOpen, onClose, initialTab, hide
                             {renderTab('head', 'HEADS')}
                             {renderTab('hat', 'HATS')}
                             {renderTab('body', 'BODIES')}
-                            {renderTab('arms', 'ARMS')}
+                            {renderTab('arms', 'WINGS')}
                             {renderTab('legs', 'LEGS')}
                             {renderTab('moves', 'MOVES')}
                             {renderTab('voices', 'VOICES')}

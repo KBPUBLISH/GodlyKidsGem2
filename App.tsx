@@ -1052,19 +1052,22 @@ const App: React.FC = () => {
                   <Route path="/ready" element={<ReadyToJumpInPage />} />
                   <Route path="/welcome" element={<NewUserWelcomePage />} />
                   <Route path="/payment-success" element={<PaymentSuccessPage />} />
-                  <Route path="/home" element={<ProtectedRoute><HomePageWithWelcomeCheck /></ProtectedRoute>} />
-                  <Route path="/listen" element={<ProtectedRoute><ListenPage /></ProtectedRoute>} />
-                  <Route path="/read" element={<ProtectedRoute><ReadPage /></ProtectedRoute>} />
-                  <Route path="/library" element={<ProtectedRoute><LibraryPage /></ProtectedRoute>} />
-                  <Route path="/book/:id" element={<BookDetailPage />} /> {/* Detail page - no account required */}
-                  <Route path="/read/:bookId" element={<ProtectedRoute><BookReaderPage /></ProtectedRoute>} /> {/* Reading - account required */}
+                  {/* BROWSING PAGES - No account required, users can explore freely */}
+                  <Route path="/home" element={<HomePageWithWelcomeCheck />} />
+                  <Route path="/listen" element={<ListenPage />} />
+                  <Route path="/read" element={<ReadPage />} />
+                  <Route path="/library" element={<LibraryPage />} />
+                  <Route path="/audio" element={<AudioPage />} />
+                  <Route path="/book/:id" element={<BookDetailPage />} />
+                  <Route path="/audio/playlist/:playlistId" element={<PlaylistDetailPage />} />
+                  <Route path="/book-series/:seriesId" element={<BookSeriesDetailPage />} />
+                  
+                  {/* CONTENT CONSUMPTION - Account required to read/play */}
+                  <Route path="/read/:bookId" element={<ProtectedRoute><BookReaderPage /></ProtectedRoute>} />
                   <Route path="/player/:bookId/:chapterId" element={<ProtectedRoute><AudioPlayerPage /></ProtectedRoute>} />
-                  <Route path="/audio" element={<ProtectedRoute><AudioPage /></ProtectedRoute>} />
-                  <Route path="/audio/playlist/:playlistId" element={<PlaylistDetailPage />} /> {/* Detail page - no account required */}
-                  <Route path="/audio/playlist/:playlistId/play/:itemIndex" element={<ProtectedRoute><PlaylistPlayerPage /></ProtectedRoute>} /> {/* Playing - account required */}
+                  <Route path="/audio/playlist/:playlistId/play/:itemIndex" element={<ProtectedRoute><PlaylistPlayerPage /></ProtectedRoute>} />
                   <Route path="/my-playlist/:id" element={<ProtectedRoute><UserPlaylistPage /></ProtectedRoute>} />
                   <Route path="/create-playlist" element={<ProtectedRoute><CreatePlaylistPage /></ProtectedRoute>} />
-                  <Route path="/book-series/:seriesId" element={<ProtectedRoute><BookSeriesDetailPage /></ProtectedRoute>} />
                   <Route path="/lessons" element={<ProtectedRoute><LessonsPage /></ProtectedRoute>} />
                   <Route path="/lesson/:lessonId" element={<ProtectedRoute><LessonPlayerPage /></ProtectedRoute>} />
                   <Route path="/giving" element={<ProtectedRoute><GivingPage /></ProtectedRoute>} />

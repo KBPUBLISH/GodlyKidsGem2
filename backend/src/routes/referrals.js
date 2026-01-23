@@ -474,8 +474,24 @@ router.post('/profile/save', async (req, res) => {
         });
 
     } catch (error) {
-        console.error('Profile save error:', error);
-        console.error('Profile save request body:', JSON.stringify(req.body, null, 2));
+        console.error('❌ Profile save error:', error.name, error.message);
+        console.error('❌ Profile save error stack:', error.stack);
+        console.error('❌ Profile save request body:', JSON.stringify(req.body, null, 2));
+        
+        // Check for specific Mongoose validation errors
+        if (error.name === 'ValidationError') {
+            const validationErrors = Object.keys(error.errors).map(key => ({
+                field: key,
+                message: error.errors[key].message
+            }));
+            console.error('❌ Validation errors:', validationErrors);
+            return res.status(400).json({ 
+                success: false, 
+                message: 'Validation failed',
+                errors: validationErrors
+            });
+        }
+        
         res.status(500).json({ 
             success: false, 
             message: 'Failed to save profile',

@@ -13,6 +13,7 @@ interface AvatarCompositorProps {
   leftArmRotation?: number;
   rightArmRotation?: number;
   legsRotation?: number;
+  hatRotation?: number;
   leftArmOffset?: { x: number, y: number };
   rightArmOffset?: { x: number, y: number };
   legsOffset?: { x: number, y: number };
@@ -47,6 +48,7 @@ const AvatarCompositor: React.FC<AvatarCompositorProps> = ({
   leftArmRotation = 0,
   rightArmRotation = 0,
   legsRotation = 0,
+  hatRotation = 0,
   leftArmOffset = { x: 0, y: 0 },
   rightArmOffset = { x: 0, y: 0 },
   legsOffset = { x: 0, y: 0 },
@@ -160,7 +162,7 @@ const AvatarCompositor: React.FC<AvatarCompositorProps> = ({
           >
              <div 
                 className="absolute top-[-25%] left-1/2 w-[90%] h-[70%] origin-center"
-                style={{ transform: 'translateX(-50%) rotate(-3deg)' }}
+                style={{ transform: `translateX(-50%) rotate(${hatRotation - 3}deg)` }}
              >
                  <div 
                     className={`absolute inset-0 flex items-center justify-center ${headAnimationClass} ${onPartClick ? 'cursor-pointer hover:brightness-110 active:scale-95 pointer-events-auto' : 'pointer-events-none'}`}

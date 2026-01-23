@@ -97,7 +97,8 @@ interface UserContextType {
   equippedLeftArmRotation: number;
   equippedRightArmRotation: number;
   equippedLegsRotation: number;
-  setPartRotation: (part: 'leftArm' | 'rightArm' | 'legs', rotation: number) => void;
+  equippedHatRotation: number;
+  setPartRotation: (part: 'leftArm' | 'rightArm' | 'legs' | 'hat', rotation: number) => void;
 
   // Individual Part Positioning (Offsets)
   leftArmOffset: { x: number, y: number };
@@ -172,6 +173,7 @@ const UserContext = createContext<UserContextType>({
   equippedLeftArmRotation: 0,
   equippedRightArmRotation: 0,
   equippedLegsRotation: 0,
+  equippedHatRotation: 0,
   setPartRotation: () => {},
   leftArmOffset: { x: 0, y: 0 },
   rightArmOffset: { x: 0, y: 0 },
@@ -318,6 +320,7 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [equippedLeftArmRotation, setEquippedLeftArmRotation] = useState<number>(saved?.equippedLeftArmRotation ?? 0);
   const [equippedRightArmRotation, setEquippedRightArmRotation] = useState<number>(saved?.equippedRightArmRotation ?? 0);
   const [equippedLegsRotation, setEquippedLegsRotation] = useState<number>(saved?.equippedLegsRotation ?? 0);
+  const [equippedHatRotation, setEquippedHatRotation] = useState<number>(saved?.equippedHatRotation ?? 0);
 
   // Individual Offsets
   const [leftArmOffset, setLeftArmOffset] = useState<{x: number, y: number}>(saved?.leftArmOffset ?? { x: 0, y: 0 });
@@ -623,6 +626,7 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
       equippedLeftArmRotation,
       equippedRightArmRotation,
       equippedLegsRotation,
+      equippedHatRotation,
       leftArmOffset,
       rightArmOffset,
       legsOffset,
@@ -670,7 +674,7 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
     coins, coinTransactions, referralCode, redeemedCodes, ownedItems, unlockedVoices, parentName, kids, currentProfileId, parentEconomyData,
       equippedAvatar, equippedFrame, equippedHat, equippedBody,
     equippedLeftArm, equippedRightArm, equippedLegs, equippedAnimation,
-    equippedLeftArmRotation, equippedRightArmRotation, equippedLegsRotation,
+    equippedLeftArmRotation, equippedRightArmRotation, equippedLegsRotation, equippedHatRotation,
     leftArmOffset, rightArmOffset, legsOffset, headOffset, bodyOffset, hatOffset,
     leftArmScale, rightArmScale, legsScale, headScale, bodyScale, hatScale,
     savedCharacters,
@@ -995,7 +999,7 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   }, [currentProfileId, equippedAvatar, equippedFrame, equippedHat, equippedBody, 
       equippedLeftArm, equippedRightArm, equippedLegs, equippedAnimation,
-      equippedLeftArmRotation, equippedRightArmRotation, equippedLegsRotation,
+      equippedLeftArmRotation, equippedRightArmRotation, equippedLegsRotation, equippedHatRotation,
       leftArmOffset, rightArmOffset, legsOffset, headOffset, bodyOffset, hatOffset,
       leftArmScale, rightArmScale, legsScale, headScale, bodyScale, hatScale]);
 
@@ -1022,7 +1026,7 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, [
     equippedAvatar, equippedFrame, equippedHat, equippedBody,
     equippedLeftArm, equippedRightArm, equippedLegs, equippedAnimation,
-    equippedLeftArmRotation, equippedRightArmRotation, equippedLegsRotation,
+    equippedLeftArmRotation, equippedRightArmRotation, equippedLegsRotation, equippedHatRotation,
     leftArmOffset, rightArmOffset, legsOffset, headOffset, bodyOffset, hatOffset,
     leftArmScale, rightArmScale, legsScale, headScale, bodyScale, hatScale,
     currentProfileId,
@@ -1180,10 +1184,11 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  const setPartRotation = (part: 'leftArm' | 'rightArm' | 'legs', rotation: number) => {
+  const setPartRotation = (part: 'leftArm' | 'rightArm' | 'legs' | 'hat', rotation: number) => {
     if (part === 'leftArm') setEquippedLeftArmRotation(rotation);
     else if (part === 'rightArm') setEquippedRightArmRotation(rotation);
     else if (part === 'legs') setEquippedLegsRotation(rotation);
+    else if (part === 'hat') setEquippedHatRotation(rotation);
   };
 
   const setPartOffset = (part: 'leftArm' | 'rightArm' | 'legs' | 'head' | 'body' | 'hat', axis: 'x' | 'y', val: number) => {
@@ -1407,6 +1412,7 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
       equippedLeftArmRotation,
       equippedRightArmRotation,
       equippedLegsRotation,
+      equippedHatRotation,
       setPartRotation,
       leftArmOffset,
       rightArmOffset,

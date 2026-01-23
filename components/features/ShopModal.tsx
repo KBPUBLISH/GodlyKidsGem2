@@ -22,29 +22,31 @@ interface ShopModalProps {
 // --- SHOP DATA ---
 // New file-based avatar heads (no names displayed in UI)
 const SHOP_AVATARS: ShopItem[] = [
-    { id: 'av1', name: '', price: 0, type: 'avatar', value: '/avatars/heads/head-1.png' },
-    { id: 'av2', name: '', price: 0, type: 'avatar', value: '/avatars/heads/head-2.png' },
-    { id: 'av3', name: '', price: 0, type: 'avatar', value: '/avatars/heads/head-3.png' },
-    { id: 'av4', name: '', price: 0, type: 'avatar', value: '/avatars/heads/head-4.png' },
-    { id: 'av5', name: '', price: 0, type: 'avatar', value: '/avatars/heads/head-5.png' },
-    { id: 'av6', name: '', price: 0, type: 'avatar', value: '/avatars/heads/head-6.png' },
-    { id: 'av7', name: '', price: 0, type: 'avatar', value: '/avatars/heads/head-7.png' },
-    { id: 'av8', name: '', price: 0, type: 'avatar', value: '/avatars/heads/head-8.png' },
-    { id: 'av9', name: '', price: 0, type: 'avatar', value: '/avatars/heads/head-9.png' },
-    { id: 'av10', name: '', price: 0, type: 'avatar', value: '/avatars/heads/heads-10.png' },
-    { id: 'av11', name: '', price: 0, type: 'avatar', value: '/avatars/heads/head-11.png' },
-    { id: 'av12', name: '', price: 0, type: 'avatar', value: '/avatars/heads/head-12.png' },
-    { id: 'av13', name: '', price: 0, type: 'avatar', value: '/avatars/heads/head-13.png' },
-    { id: 'av14', name: '', price: 0, type: 'avatar', value: '/avatars/heads/head-14.png' },
-    { id: 'av15', name: '', price: 0, type: 'avatar', value: '/avatars/heads/head-15.png' },
-    { id: 'av16', name: '', price: 0, type: 'avatar', value: '/avatars/heads/head-16.png' },
-    { id: 'av17', name: '', price: 0, type: 'avatar', value: '/avatars/heads/head-17.png' },
-    { id: 'av18', name: '', price: 0, type: 'avatar', value: '/avatars/heads/head-18.png' },
-    { id: 'av19', name: '', price: 0, type: 'avatar', value: '/avatars/heads/head-19.png' },
-    { id: 'av20', name: '', price: 0, type: 'avatar', value: '/avatars/heads/head-20.png' },
-    { id: 'av21', name: '', price: 0, type: 'avatar', value: '/avatars/heads/head-21.png' },
-    { id: 'av22', name: '', price: 0, type: 'avatar', value: '/avatars/heads/head-22.png' },
-    { id: 'av23', name: '', price: 0, type: 'avatar', value: '/avatars/heads/head-23.png' },
+    // Free heads (30% - 7 heads)
+    { id: 'av1', name: '', price: 100, type: 'avatar', value: '/avatars/heads/head-1.png' },
+    { id: 'av2', name: '', price: 150, type: 'avatar', value: '/avatars/heads/head-2.png' },
+    { id: 'av3', name: '', price: 100, type: 'avatar', value: '/avatars/heads/head-3.png' },
+    { id: 'av4', name: '', price: 200, type: 'avatar', value: '/avatars/heads/head-4.png' },
+    { id: 'av5', name: '', price: 150, type: 'avatar', value: '/avatars/heads/head-5.png' },
+    { id: 'av6', name: '', price: 100, type: 'avatar', value: '/avatars/heads/head-6.png' },
+    { id: 'av7', name: '', price: 200, type: 'avatar', value: '/avatars/heads/head-7.png' },
+    // Premium heads (70% - 16 heads)
+    { id: 'av8', name: '', price: 150, type: 'avatar', value: '/avatars/heads/head-8.png', isPremium: true },
+    { id: 'av9', name: '', price: 200, type: 'avatar', value: '/avatars/heads/head-9.png', isPremium: true },
+    { id: 'av10', name: '', price: 250, type: 'avatar', value: '/avatars/heads/heads-10.png', isPremium: true },
+    { id: 'av11', name: '', price: 100, type: 'avatar', value: '/avatars/heads/head-11.png', isPremium: true },
+    { id: 'av12', name: '', price: 300, type: 'avatar', value: '/avatars/heads/head-12.png', isPremium: true },
+    { id: 'av13', name: '', price: 200, type: 'avatar', value: '/avatars/heads/head-13.png', isPremium: true },
+    { id: 'av14', name: '', price: 150, type: 'avatar', value: '/avatars/heads/head-14.png', isPremium: true },
+    { id: 'av15', name: '', price: 250, type: 'avatar', value: '/avatars/heads/head-15.png', isPremium: true },
+    { id: 'av16', name: '', price: 300, type: 'avatar', value: '/avatars/heads/head-16.png', isPremium: true },
+    { id: 'av17', name: '', price: 100, type: 'avatar', value: '/avatars/heads/head-17.png', isPremium: true },
+    { id: 'av18', name: '', price: 200, type: 'avatar', value: '/avatars/heads/head-18.png', isPremium: true },
+    { id: 'av19', name: '', price: 250, type: 'avatar', value: '/avatars/heads/head-19.png', isPremium: true },
+    { id: 'av20', name: '', price: 150, type: 'avatar', value: '/avatars/heads/head-20.png', isPremium: true },
+    { id: 'av21', name: '', price: 300, type: 'avatar', value: '/avatars/heads/head-21.png', isPremium: true },
+    { id: 'av22', name: '', price: 200, type: 'avatar', value: '/avatars/heads/head-22.png', isPremium: true },
+    { id: 'av23', name: '', price: 250, type: 'avatar', value: '/avatars/heads/head-23.png', isPremium: true },
 ];
 
 const SHOP_HATS: ShopItem[] = [
@@ -335,6 +337,7 @@ const ShopModal: React.FC<ShopModalProps> = ({ isOpen, onClose, initialTab, hide
         equippedLeftArmRotation,
         equippedRightArmRotation,
         equippedLegsRotation,
+        equippedHatRotation,
         setPartRotation,
         leftArmOffset, rightArmOffset, legsOffset, headOffset, bodyOffset, hatOffset,
         setPartOffset,
@@ -464,9 +467,11 @@ const ShopModal: React.FC<ShopModalProps> = ({ isOpen, onClose, initialTab, hide
 
     // --- BUILDER CONTROLS LOGIC ---
     const handlePartClick = (part: 'leftArm' | 'rightArm' | 'legs' | 'head' | 'body' | 'hat') => {
-        if (isBuilderMode) {
-            setSelectedPart(part);
+        // Auto-enable builder mode and select part when clicking on avatar
+        if (!isBuilderMode) {
+            setIsBuilderMode(true);
         }
+        setSelectedPart(part);
     };
 
     const updateOffset = (axis: 'x' | 'y', delta: number) => {
@@ -492,11 +497,12 @@ const ShopModal: React.FC<ShopModalProps> = ({ isOpen, onClose, initialTab, hide
         if (selectedPart === 'leftArm') current = equippedLeftArmRotation;
         if (selectedPart === 'rightArm') current = equippedRightArmRotation;
         if (selectedPart === 'legs') current = equippedLegsRotation;
+        if (selectedPart === 'hat') current = equippedHatRotation;
 
         let next = current + delta;
         if (next > 180) next = 180;
         if (next < -180) next = -180;
-        setPartRotation(selectedPart, next);
+        setPartRotation(selectedPart as 'leftArm' | 'rightArm' | 'legs' | 'hat', next);
     };
 
     const updateScale = (delta: number) => {
@@ -765,6 +771,7 @@ const ShopModal: React.FC<ShopModalProps> = ({ isOpen, onClose, initialTab, hide
                 <div
                     className={`w-full relative shrink-0 shadow-inner overflow-hidden flex flex-col items-center transition-all duration-500 ease-in-out bg-cover bg-center ${isMenuMinimized ? 'flex-1' : 'h-[20rem] shrink-0'}`}
                     style={{ backgroundImage: `url('/assets/images/dressing-room.jpg')` }}
+                    onClick={() => setIsMenuMinimized(!isMenuMinimized)}
                 >
 
                     {/* Toolbar: Builder Mode & Play */}
@@ -816,7 +823,6 @@ const ShopModal: React.FC<ShopModalProps> = ({ isOpen, onClose, initialTab, hide
                     {/* The Compositor */}
                     <div
                         className={`w-40 h-40 relative z-20 transition-all duration-500 ease-in-out mt-10 ${isMenuMinimized ? 'scale-125 mt-20' : ''}`}
-                        onClick={() => setIsMenuMinimized(true)}
                     >
                         {/* Wrapper now only sizes; Compositor handles frame */}
                         <div className="w-full h-full relative">
@@ -831,6 +837,7 @@ const ShopModal: React.FC<ShopModalProps> = ({ isOpen, onClose, initialTab, hide
                                 leftArmRotation={equippedLeftArmRotation}
                                 rightArmRotation={equippedRightArmRotation}
                                 legsRotation={equippedLegsRotation}
+                                hatRotation={equippedHatRotation}
                                 leftArmOffset={leftArmOffset}
                                 rightArmOffset={rightArmOffset}
                                 legsOffset={legsOffset}
@@ -843,7 +850,7 @@ const ShopModal: React.FC<ShopModalProps> = ({ isOpen, onClose, initialTab, hide
                                 headScale={headScale}
                                 bodyScale={bodyScale}
                                 hatScale={hatScale}
-                                onPartClick={isBuilderMode ? handlePartClick : undefined}
+                                onPartClick={handlePartClick}
                                 isAnimating={isPlaying}
                                 frameClass={equippedFrame} // Pass frame
                             />
@@ -1022,8 +1029,8 @@ const ShopModal: React.FC<ShopModalProps> = ({ isOpen, onClose, initialTab, hide
                                 </div>
                             </div>
 
-                            {/* Rotation Controls (Not for Head/Body/Hat) */}
-                            {selectedPart !== 'head' && selectedPart !== 'body' && selectedPart !== 'hat' && (
+                            {/* Rotation Controls (Not for Head/Body) */}
+                            {selectedPart !== 'head' && selectedPart !== 'body' && (
                                 <>
                                     <div className="w-px h-24 bg-white/10"></div>
 

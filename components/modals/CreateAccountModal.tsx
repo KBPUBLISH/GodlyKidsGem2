@@ -1,10 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { X, Eye, EyeOff, Check, Loader2, Sparkles } from 'lucide-react';
 import WoodButton from '../ui/WoodButton';
 import WebViewModal from '../features/WebViewModal';
 import { ApiService } from '../../services/apiService';
 import { facebookPixelService } from '../../services/facebookPixelService';
-import { activityTrackingService } from '../../services/activityTrackingService';
 
 interface CreateAccountModalProps {
   isOpen: boolean;
@@ -33,6 +32,19 @@ const CreateAccountModal: React.FC<CreateAccountModalProps> = ({
   const [showTermsModal, setShowTermsModal] = useState(false);
   const [termsModalUrl, setTermsModalUrl] = useState('');
   const [termsModalTitle, setTermsModalTitle] = useState('');
+
+  // Hide the navigation wheel when modal is open
+  useEffect(() => {
+    if (isOpen) {
+      document.body.setAttribute('data-modal-open', 'true');
+    } else {
+      document.body.removeAttribute('data-modal-open');
+    }
+    
+    return () => {
+      document.body.removeAttribute('data-modal-open');
+    };
+  }, [isOpen]);
 
   const isValidEmail = (emailStr: string) => {
     return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailStr);
@@ -64,30 +76,34 @@ const CreateAccountModal: React.FC<CreateAccountModalProps> = ({
     setError(null);
 
     try {
-      // Track registration start
-      activityTrackingService.trackOnboardingEvent('account_creation_started', { source: 'post_tutorial_modal' });
-      
       // Use existing signUp API
       const result = await ApiService.signUp(email, password);
       
       if (result.success) {
+        // Store auth token if provided
+        if (result.token) {
+          localStorage.setItem('godlykids_auth_token', result.token);
+        }
+        
         // Store email in localStorage for account detection
         localStorage.setItem('godlykids_user_email', email);
         
-        // Get user ID from response
-        const userId = result.user?._id || result.user?.id;
-        
-        // Track successful registration
-        facebookPixelService.trackCompleteRegistration('email');
-        activityTrackingService.trackOnboardingEvent('account_created', { 
-          source: 'post_tutorial_modal',
-          userId: userId 
-        });
+        // Track successful registration (use trackSignUp, not trackCompleteRegistration)
+        try {
+          facebookPixelService.trackSignUp('email');
+        } catch (e) {
+          console.warn('FB tracking failed:', e);
+        }
         
         // Notify parent component
         onAccountCreated();
       } else {
-        setError(result.error || 'Failed to create account');
+        // Handle specific error cases
+        if (result.error?.includes('exists') || result.error?.includes('duplicate') || result.error?.includes('already')) {
+          setError('An account with this email already exists. Please sign in instead.');
+        } else {
+          setError(result.error || 'Failed to create account');
+        }
       }
     } catch (err: any) {
       console.error('Account creation error:', err);
@@ -101,7 +117,7 @@ const CreateAccountModal: React.FC<CreateAccountModalProps> = ({
 
   return (
     <>
-      <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
+      <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
         <div className="bg-gradient-to-b from-[#2a1810] to-[#1a0f08] rounded-3xl w-full max-w-md border-2 border-[#8B4513] shadow-2xl overflow-hidden animate-in zoom-in-95 duration-300">
           {/* Header */}
           <div className="relative px-6 pt-6 pb-4 bg-gradient-to-b from-[#3E1F07] to-transparent">

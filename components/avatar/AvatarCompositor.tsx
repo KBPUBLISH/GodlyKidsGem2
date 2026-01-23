@@ -203,11 +203,10 @@ const AvatarCompositor: React.FC<AvatarCompositorProps> = ({
              className={`w-full h-full flex items-center justify-center ${bodyAnimationClass} ${onPartClick ? 'cursor-pointer hover:brightness-110 active:scale-95 pointer-events-auto' : 'pointer-events-none'}`}
              onClick={(e) => onPartClick && handlePartClick(e, 'body')}
           >
-               {/* 1. LEGS/FEET (In front of body Z-25) */}
+               {/* 1. LEGS/FEET (In front of body Z-25) - Outer wrapper for position/scale */}
                {legs && (isFilePath(legs) || AVATAR_ASSETS[legs]) && (
                     <div 
-                        onClick={(e) => handlePartClick(e, 'legs')}
-                        className={`absolute z-[25] transition-transform duration-300 flex items-center justify-center ${onPartClick ? 'cursor-pointer hover:brightness-110 active:scale-95 pointer-events-auto' : ''} ${isAnimating && animationStyle !== 'anim-spin' ? 'animate-legs-bounce' : ''} ${getLimbAnimClass()}`}
+                        className="absolute z-[25]"
                         style={{ 
                             top: `${DEFAULT_LEGS_TOP + legsOffset.y}%`, 
                             left: `${DEFAULT_LEGS_LEFT + legsOffset.x}%`, 
@@ -217,13 +216,19 @@ const AvatarCompositor: React.FC<AvatarCompositorProps> = ({
                             transform: `rotate(${legsRotation}deg) scale(${legsScale})`
                         }}
                     >
-                        {isFilePath(legs) ? (
-                          <img src={legs} alt="Feet" className="w-full h-full object-contain object-center pointer-events-none" />
-                        ) : (
-                          <svg viewBox="0 0 100 60" className="w-full h-full overflow-visible">
-                              {AVATAR_ASSETS[legs]}
-                          </svg>
-                        )}
+                        {/* Inner wrapper for animation */}
+                        <div
+                            onClick={(e) => handlePartClick(e, 'legs')}
+                            className={`w-full h-full flex items-center justify-center ${onPartClick ? 'cursor-pointer hover:brightness-110 active:scale-95 pointer-events-auto' : ''} ${isAnimating && animationStyle !== 'anim-spin' ? 'animate-legs-bounce' : ''} ${getLimbAnimClass()}`}
+                        >
+                            {isFilePath(legs) ? (
+                              <img src={legs} alt="Feet" className="w-full h-full object-contain object-center pointer-events-none" />
+                            ) : (
+                              <svg viewBox="0 0 100 60" className="w-full h-full overflow-visible">
+                                  {AVATAR_ASSETS[legs]}
+                              </svg>
+                            )}
+                        </div>
                     </div>
                 )}
 

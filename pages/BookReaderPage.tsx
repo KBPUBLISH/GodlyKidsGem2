@@ -1774,8 +1774,9 @@ const BookReaderPage: React.FC = () => {
         if (isPageTurning) return;
         
         // Check if TTS was playing before we stop it (for auto-play on next page)
-        const wasPlaying = playingRef.current || isPlayingMultiSegmentRef.current;
-        console.log('📖 handleNext - wasPlaying:', wasPlaying, 'playingRef:', playingRef.current, 'multiSegment:', isPlayingMultiSegmentRef.current);
+        // Check both refs AND state to be sure we catch playing status
+        const wasPlaying = playing || playingRef.current || isPlayingMultiSegmentRef.current;
+        console.log('📖 handleNext - wasPlaying:', wasPlaying, 'playing state:', playing, 'playingRef:', playingRef.current, 'multiSegment:', isPlayingMultiSegmentRef.current);
         stopAudio();
         
         // Check preview limit for premium books (3 pages allowed)
@@ -1875,7 +1876,8 @@ const BookReaderPage: React.FC = () => {
         if (isPageTurning) return;
         
         // Check if TTS was playing before we stop it (for auto-play on prev page)
-        const wasPlaying = playingRef.current || isPlayingMultiSegmentRef.current;
+        // Check both refs AND state to be sure we catch playing status
+        const wasPlaying = playing || playingRef.current || isPlayingMultiSegmentRef.current;
         stopAudio();
         if (currentPageIndex > 0) {
             // Preserve scroll state when turning pages manually - use ref to get latest value

@@ -240,6 +240,10 @@ interface TutorialContextType {
   getStepConfig: () => typeof TUTORIAL_STEP_CONFIG[TutorialStep];
   donatedCoins: number;
   setDonatedCoins: (amount: number) => void;
+  // New: Account creation flow
+  showAccountCreation: boolean;
+  setShowAccountCreation: (show: boolean) => void;
+  onAccountCreated: () => void;     // Called after user creates account post-tutorial
 }
 
 const TutorialContext = createContext<TutorialContextType | undefined>(undefined);
@@ -260,6 +264,19 @@ export const TutorialProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   });
 
   const [donatedCoins, setDonatedCoins] = useState(0);
+  
+  // New: Account creation state for post-tutorial flow
+  const [showAccountCreation, setShowAccountCreation] = useState(false);
+  
+  // Called when user creates account after tutorial
+  const onAccountCreated = useCallback(() => {
+    setShowAccountCreation(false);
+    // Mark tutorial as complete and navigate to onboarding to continue setup
+    setCurrentStep('complete');
+    setIsComplete(true);
+    localStorage.setItem(TUTORIAL_STORAGE_KEY, 'true');
+    localStorage.removeItem(TUTORIAL_STEP_KEY);
+  }, []);
 
   const isTutorialActive = currentStep !== 'idle' && currentStep !== 'complete' && !isComplete;
 
@@ -405,6 +422,9 @@ export const TutorialProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         getStepConfig,
         donatedCoins,
         setDonatedCoins,
+        showAccountCreation,
+        setShowAccountCreation,
+        onAccountCreated,
       }}
     >
       {children}

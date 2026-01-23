@@ -187,8 +187,11 @@ const OnboardingAnalytics: React.FC = () => {
                         Onboarding & Tutorial Analytics
                     </h1>
                     <p className="text-gray-600 mt-1">
-                        Track user journey through onboarding and in-app tutorial
+                        Track user journey through tutorial-first onboarding flow
                     </p>
+                    <div className="mt-2 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 text-xs text-amber-800">
+                        <strong>New Flow:</strong> Let's Explore → Tutorial → Create Account Popup → Onboarding (Parent/Kids/Preferences) → Paywall
+                    </div>
                 </div>
                 <div className="flex items-center gap-3">
                     <select
@@ -237,7 +240,7 @@ const OnboardingAnalytics: React.FC = () => {
                 >
                     <span className="flex items-center gap-2">
                         <BookOpen className="w-4 h-4" />
-                        In-App Tutorial
+                        Tutorial (First Step)
                         {tutorialData && tutorialData.summary.totalUsers > 0 && (
                             <span className="bg-green-100 text-green-700 text-xs px-2 py-0.5 rounded-full">
                                 {tutorialData.summary.totalUsers}
@@ -752,7 +755,7 @@ const OnboardingAnalytics: React.FC = () => {
                 <div className="bg-gray-50 rounded-xl p-12 text-center">
                     <BookOpen className="w-12 h-12 text-gray-300 mx-auto mb-4" />
                     <p className="text-gray-500">No tutorial data available yet</p>
-                    <p className="text-gray-400 text-sm mt-2">Tutorial events will appear here as users progress through the in-app tutorial</p>
+                    <p className="text-gray-400 text-sm mt-2">Tutorial is now the first step - users click "Let's Explore" and start the tutorial immediately</p>
                 </div>
             )}
         </div>

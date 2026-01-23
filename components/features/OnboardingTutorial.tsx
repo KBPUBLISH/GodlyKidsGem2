@@ -6,6 +6,8 @@ import { useTutorial, TutorialStep } from '../../context/TutorialContext';
 import { Heart, Coins, Hand } from 'lucide-react';
 import WoodButton from '../ui/WoodButton';
 import { DespiaService } from '../../services/despiaService';
+import CreateAccountModal from '../modals/CreateAccountModal';
+import { useUser } from '../../context/UserContext';
 
 // Custom popup content for specific steps
 const GivePopupContent: React.FC<{ onNext: () => void }> = ({ onNext }) => (
@@ -176,6 +178,7 @@ const BookControlsIntroContent: React.FC = () => (
 const OnboardingTutorial: React.FC = () => {
   const location = useLocation();
   const navigate = useNavigate();
+  const { userId, email } = useUser();
   const {
     currentStep,
     isTutorialActive,
@@ -186,7 +189,13 @@ const OnboardingTutorial: React.FC = () => {
     getStepConfig,
     donatedCoins,
     setDonatedCoins,
+    showAccountCreation,
+    setShowAccountCreation,
+    onAccountCreated,
   } = useTutorial();
+  
+  // Check if user has an account
+  const hasAccount = !!(userId || email);
 
   // Start tutorial if coming from ReadyToJumpInPage
   useEffect(() => {
@@ -563,11 +572,18 @@ const OnboardingTutorial: React.FC = () => {
         return null;
 
       case 'paywall':
-        // Navigate to the full paywall page instead of showing inline popup
-        // Use a small timeout to ensure the tutorial state is properly cleaned up
+        // NEW FLOW: Check if user has account first
+        // If no account, show account creation modal
+        // After account creation, continue to onboarding flow
         setTimeout(() => {
-          completeTutorial();
-          navigate('/paywall', { state: { fromTutorial: true, hideCloseButton: true } });
+          if (!hasAccount) {
+            // Show account creation modal
+            setShowAccountCreation(true);
+          } else {
+            // User has account, go to onboarding to continue setup (add kids, etc.)
+            completeTutorial();
+            navigate('/onboarding', { state: { fromTutorial: true, skipAccountStep: true } });
+          }
         }, 100);
         return null;
 
@@ -576,7 +592,33 @@ const OnboardingTutorial: React.FC = () => {
     }
   };
 
-  return renderSpotlight();
+  return (
+    <>
+      {renderSpotlight()}
+      
+      {/* Account Creation Modal - shown after tutorial when user doesn't have account */}
+      <CreateAccountModal
+        isOpen={showAccountCreation}
+        onClose={() => {
+          setShowAccountCreation(false);
+          // If they close without creating account, still go to onboarding
+          // They can create account there
+          completeTutorial();
+          navigate('/onboarding', { state: { fromTutorial: true } });
+        }}
+        onAccountCreated={() => {
+          onAccountCreated();
+          // Navigate to onboarding to continue with kid setup, etc.
+          navigate('/onboarding', { state: { fromTutorial: true, skipAccountStep: true } });
+        }}
+        onSignIn={() => {
+          setShowAccountCreation(false);
+          completeTutorial();
+          navigate('/signin', { state: { returnTo: '/onboarding' } });
+        }}
+      />
+    </>
+  );
 };
 
 // Review prompt content - triggers native review dialog

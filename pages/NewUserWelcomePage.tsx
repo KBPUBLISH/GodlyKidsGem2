@@ -1,10 +1,12 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Sparkles, BookOpen, Music, Video } from 'lucide-react';
+import { Sparkles, BookOpen, Music, Video, ArrowLeft } from 'lucide-react';
 import { API_BASE_URL } from '../constants';
 import WoodButton from '../components/ui/WoodButton';
 import { useAudio } from '../context/AudioContext';
 import { useTutorial } from '../context/TutorialContext';
+import { useUser } from '../context/UserContext';
+import CreateAccountModal from '../components/modals/CreateAccountModal';
 
 interface ContentItem {
   _id: string;
@@ -73,7 +75,8 @@ const ShootingStar: React.FC<{ delay: number; top: number }> = ({ delay, top }) 
 const NewUserWelcomePage: React.FC = () => {
   const navigate = useNavigate();
   const { playClick } = useAudio();
-  const { isTutorialActive, isStepActive, nextStep } = useTutorial();
+  const { isTutorialActive, isStepActive, nextStep, skipTutorial, onAccountCreated } = useTutorial();
+  const { userId, email } = useUser();
   const [config, setConfig] = useState<WelcomeConfig>({
     title: 'Choose a Bedtime Story',
     subtitle: 'Pick something to start your adventure',
@@ -84,6 +87,10 @@ const NewUserWelcomePage: React.FC = () => {
   const [items, setItems] = useState<ContentItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [showContent, setShowContent] = useState(false);
+  const [showAccountModal, setShowAccountModal] = useState(false);
+  
+  // Check if user has an account
+  const hasAccount = !!(userId || email);
 
   // Generate random small dot stars
   const smallStars = useMemo(() => 
@@ -195,6 +202,21 @@ const NewUserWelcomePage: React.FC = () => {
     markWelcomeSeen();
     startDemoTimer(); // Start demo timer even when skipping
     navigate('/onboarding'); // Go to onboarding flow, which leads to tutorial
+  };
+  
+  // Handle back/exit from tutorial
+  const handleBackOut = () => {
+    playClick();
+    
+    // Check if user has an account
+    if (!hasAccount) {
+      // Show account creation modal
+      setShowAccountModal(true);
+    } else {
+      // User has account, skip tutorial and go to home
+      skipTutorial();
+      navigate('/home');
+    }
   };
 
   const getTypeIcon = (type: string) => {
@@ -315,6 +337,18 @@ const NewUserWelcomePage: React.FC = () => {
       `}</style>
 
       <div className="relative z-10 px-5 py-8 pb-32 max-w-lg mx-auto">
+        {/* Back button - allows user to exit tutorial */}
+        <button
+          onClick={handleBackOut}
+          className="absolute top-4 left-4 z-20 w-10 h-10 rounded-full bg-black/30 backdrop-blur-sm flex items-center justify-center hover:bg-black/50 transition-colors"
+          style={{
+            opacity: showContent ? 1 : 0,
+            transition: 'opacity 0.5s ease-out',
+          }}
+        >
+          <ArrowLeft className="w-5 h-5 text-white/80" />
+        </button>
+        
         {/* Header with golden script text - like reference */}
         <div 
           className="text-center mb-8 pt-4"
@@ -421,6 +455,28 @@ const NewUserWelcomePage: React.FC = () => {
           </div>
         )}
       </div>
+      
+      {/* Account Creation Modal - shown when user backs out without account */}
+      <CreateAccountModal
+        isOpen={showAccountModal}
+        onClose={() => {
+          setShowAccountModal(false);
+          // If they close, still let them continue to onboarding
+          skipTutorial();
+          navigate('/onboarding', { state: { fromTutorial: true } });
+        }}
+        onAccountCreated={() => {
+          setShowAccountModal(false);
+          onAccountCreated();
+          // Navigate to onboarding to continue with kid setup
+          navigate('/onboarding', { state: { fromTutorial: true, skipAccountStep: true } });
+        }}
+        onSignIn={() => {
+          setShowAccountModal(false);
+          skipTutorial();
+          navigate('/signin', { state: { returnTo: '/onboarding' } });
+        }}
+      />
     </div>
   );
 };

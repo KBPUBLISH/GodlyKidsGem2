@@ -684,6 +684,9 @@ const OnboardingPage: React.FC = () => {
   
   // Check if we should skip directly to paywall step (from tutorial - for subscription)
   const skipToPaywall = (location.state as any)?.skipToPaywall === true;
+  // NEW FLOW: Check if coming from tutorial with account already created
+  const fromTutorial = (location.state as any)?.fromTutorial === true;
+  const skipAccountStep = (location.state as any)?.skipAccountStep === true;
   
   const [step, setStep] = useState<1 | 2 | 3 | 4 | 5 | 6>(skipToPaywall ? 6 : 1); // Steps: 1=Parent, 2=Family, 3=Goals, 4=Features, 5=Voice, 6=Account
   const [isPurchasing, setIsPurchasing] = useState(false);
@@ -992,6 +995,15 @@ const OnboardingPage: React.FC = () => {
     
     // Track step 5 completion
     activityTrackingService.trackOnboardingEvent('step_5_complete', { step: 5, voiceSelected: selectedVoiceId });
+    
+    // NEW FLOW: If coming from tutorial with account already created, skip to paywall
+    if (skipAccountStep || fromTutorial) {
+      // Track onboarding complete and go to paywall
+      activityTrackingService.trackOnboardingEvent('onboarding_complete');
+      activityTrackingService.resetOnboardingSession();
+      navigate('/paywall', { state: { fromOnboarding: true } });
+      return;
+    }
     
     // Go to account creation step
     setStep(6);

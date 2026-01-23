@@ -736,12 +736,12 @@ const ShopModal: React.FC<ShopModalProps> = ({ isOpen, onClose, initialTab, hide
                                 <Wrench size={18} fill={isBuilderMode ? "currentColor" : "none"} />
                             </button>
 
-                            {/* Swap Arms Button in Toolbar when Builder Mode is Active */}
+                            {/* Swap Wings Button in Toolbar when Builder Mode is Active */}
                             {isBuilderMode && (
                                 <button
                                     onClick={swapArms}
                                     className="w-10 h-10 rounded-full flex items-center justify-center shadow-lg border-2 transition-all active:scale-95 bg-[#FFD700] border-[#B8860B] text-[#5c2e0b]"
-                                    title="Swap Arms"
+                                    title="Swap Wings"
                                 >
                                     <ArrowLeftRight size={18} />
                                 </button>
@@ -956,7 +956,7 @@ const ShopModal: React.FC<ShopModalProps> = ({ isOpen, onClose, initialTab, hide
                             <div className="flex items-center gap-2">
                                 <div className="bg-[#FFD700] w-2 h-6 rounded-full"></div>
                                 <span className="text-white font-display font-bold text-lg uppercase tracking-wider">
-                                    Adjust {selectedPart === 'legs' ? 'Legs' : selectedPart === 'leftArm' ? 'Left Arm' : selectedPart === 'rightArm' ? 'Right Arm' : selectedPart === 'head' ? 'Head' : selectedPart === 'hat' ? 'Hat' : 'Body'}
+                                    Adjust {selectedPart === 'legs' ? 'Legs' : selectedPart === 'leftArm' ? 'Left Wing' : selectedPart === 'rightArm' ? 'Right Wing' : selectedPart === 'head' ? 'Head' : selectedPart === 'hat' ? 'Hat' : 'Body'}
                                 </span>
                             </div>
                             <button

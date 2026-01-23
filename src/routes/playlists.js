@@ -597,4 +597,64 @@ router.post('/:playlistId/items/:itemId/play', async (req, res) => {
     }
 });
 
+// POST increment like count
+router.post('/:id/like', async (req, res) => {
+    try {
+        const { action } = req.body; // 'add' or 'remove'
+        const increment = action === 'remove' ? -1 : 1;
+        
+        const playlist = await Playlist.findByIdAndUpdate(
+            req.params.id,
+            { $inc: { likeCount: increment } },
+            { new: true }
+        );
+        
+        if (!playlist) {
+            return res.status(404).json({ message: 'Playlist not found' });
+        }
+        
+        // Ensure count doesn't go negative
+        if (playlist.likeCount < 0) {
+            playlist.likeCount = 0;
+            await playlist.save();
+        }
+        
+        console.log(`👍 Playlist "${playlist.title}" like count: ${playlist.likeCount}`);
+        res.json({ likeCount: playlist.likeCount });
+    } catch (error) {
+        console.error('Error updating playlist like count:', error);
+        res.status(500).json({ message: error.message });
+    }
+});
+
+// POST increment favorite count
+router.post('/:id/favorite', async (req, res) => {
+    try {
+        const { action } = req.body; // 'add' or 'remove'
+        const increment = action === 'remove' ? -1 : 1;
+        
+        const playlist = await Playlist.findByIdAndUpdate(
+            req.params.id,
+            { $inc: { favoriteCount: increment } },
+            { new: true }
+        );
+        
+        if (!playlist) {
+            return res.status(404).json({ message: 'Playlist not found' });
+        }
+        
+        // Ensure count doesn't go negative
+        if (playlist.favoriteCount < 0) {
+            playlist.favoriteCount = 0;
+            await playlist.save();
+        }
+        
+        console.log(`❤️ Playlist "${playlist.title}" favorite count: ${playlist.favoriteCount}`);
+        res.json({ favoriteCount: playlist.favoriteCount });
+    } catch (error) {
+        console.error('Error updating playlist favorite count:', error);
+        res.status(500).json({ message: error.message });
+    }
+});
+
 module.exports = router;

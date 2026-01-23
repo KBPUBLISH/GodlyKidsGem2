@@ -1483,29 +1483,34 @@ const BookReaderPage: React.FC = () => {
                 // Find an unlocked voice to use as default
                 const unlockedVoices = finalVoiceList.filter((v: any) => isVoiceUnlocked(v.voice_id));
 
-                // Tutorial mode: Default to "Mary" voice for new users
-                if (isTutorialActive) {
+                // Priority for voice selection:
+                // 1. User's saved default voice (from onboarding)
+                // 2. "Mary" voice (our app default)
+                // 3. First unlocked voice
+                // 4. First voice in list
+                
+                if (defaultVoiceId && isVoiceUnlocked(defaultVoiceId)) {
+                    // User has a saved preference from onboarding - use it
+                    setSelectedVoiceId(defaultVoiceId);
+                    console.log(`🎤 Using user's saved default voice: ${defaultVoiceId}`);
+                } else {
+                    // No saved preference - default to Mary
                     const maryVoice = finalVoiceList.find((v: any) => 
                         v.name?.toLowerCase() === 'mary' || 
                         v.customName?.toLowerCase() === 'mary'
                     );
                     if (maryVoice) {
                         setSelectedVoiceId(maryVoice.voice_id);
-                        console.log(`🎤 Tutorial mode: Using Mary voice (${maryVoice.voice_id})`);
+                        console.log(`🎤 Using default Mary voice (${maryVoice.voice_id})`);
+                    } else if (unlockedVoices.length > 0) {
+                        // Fallback to first unlocked voice
+                        setSelectedVoiceId(unlockedVoices[0].voice_id);
+                        console.log(`🎤 Mary not found, using first unlocked voice: ${unlockedVoices[0].name}`);
                     } else if (finalVoiceList.length > 0) {
-                        // Fallback to first voice if Mary not found
+                        // Last fallback: first voice (may be locked)
                         setSelectedVoiceId(finalVoiceList[0].voice_id);
-                        console.log(`🎤 Tutorial mode: Mary voice not found, using ${finalVoiceList[0].name}`);
+                        console.log(`🎤 No unlocked voices, using first voice: ${finalVoiceList[0].name}`);
                     }
-                } else if (defaultVoiceId && isVoiceUnlocked(defaultVoiceId)) {
-                    // Use the default voice if it's unlocked
-                    setSelectedVoiceId(defaultVoiceId);
-                } else if (unlockedVoices.length > 0) {
-                    // Use first unlocked voice
-                    setSelectedVoiceId(unlockedVoices[0].voice_id);
-                } else if (finalVoiceList.length > 0) {
-                    // Fallback: use first voice (will show as locked in UI)
-                    setSelectedVoiceId(finalVoiceList[0].voice_id);
                 }
                 console.log(`✅ Loaded ${finalVoiceList.length} voice(s), ${unlockedVoices.length} unlocked`);
             } else {
@@ -1522,7 +1527,7 @@ const BookReaderPage: React.FC = () => {
             console.log(`✅ Loaded ${cloned.length} cloned voice(s) from local storage`);
         };
         loadClonedVoices();
-    }, [bookId, isTutorialActive]);
+    }, [bookId]);
 
     // Deep link: /read/:bookId?coloring=<pageNumber|pageId> opens coloring modal directly
     useEffect(() => {

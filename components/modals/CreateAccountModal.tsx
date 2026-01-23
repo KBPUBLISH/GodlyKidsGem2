@@ -3,7 +3,6 @@ import { X, Eye, EyeOff, Check, Loader2, Sparkles } from 'lucide-react';
 import WoodButton from '../ui/WoodButton';
 import WebViewModal from '../features/WebViewModal';
 import { ApiService } from '../../services/apiService';
-import { useUser } from '../../context/UserContext';
 import { facebookPixelService } from '../../services/facebookPixelService';
 import { activityTrackingService } from '../../services/activityTrackingService';
 
@@ -20,8 +19,6 @@ const CreateAccountModal: React.FC<CreateAccountModalProps> = ({
   onAccountCreated,
   onSignIn,
 }) => {
-  const { setUserId, setEmail: setUserEmail } = useUser();
-  
   // Form state
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -70,18 +67,21 @@ const CreateAccountModal: React.FC<CreateAccountModalProps> = ({
       // Track registration start
       activityTrackingService.trackOnboardingEvent('account_creation_started', { source: 'post_tutorial_modal' });
       
-      const result = await ApiService.registerUser(email, password);
+      // Use existing signUp API
+      const result = await ApiService.signUp(email, password);
       
-      if (result.success && result.userId) {
-        // Update user context
-        setUserId(result.userId);
-        setUserEmail(email);
+      if (result.success) {
+        // Store email in localStorage for account detection
+        localStorage.setItem('godlykids_user_email', email);
+        
+        // Get user ID from response
+        const userId = result.user?._id || result.user?.id;
         
         // Track successful registration
         facebookPixelService.trackCompleteRegistration('email');
         activityTrackingService.trackOnboardingEvent('account_created', { 
           source: 'post_tutorial_modal',
-          userId: result.userId 
+          userId: userId 
         });
         
         // Notify parent component

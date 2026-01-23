@@ -7,7 +7,13 @@ import { Heart, Coins, Hand } from 'lucide-react';
 import WoodButton from '../ui/WoodButton';
 import { DespiaService } from '../../services/despiaService';
 import CreateAccountModal from '../modals/CreateAccountModal';
-import { useUser } from '../../context/UserContext';
+
+// Check if user has an account (auth token or email stored)
+const checkHasAccount = (): boolean => {
+  const token = localStorage.getItem('godlykids_auth_token');
+  const email = localStorage.getItem('godlykids_user_email');
+  return !!(token || email);
+};
 
 // Custom popup content for specific steps
 const GivePopupContent: React.FC<{ onNext: () => void }> = ({ onNext }) => (
@@ -178,7 +184,6 @@ const BookControlsIntroContent: React.FC = () => (
 const OnboardingTutorial: React.FC = () => {
   const location = useLocation();
   const navigate = useNavigate();
-  const { userId, email } = useUser();
   const {
     currentStep,
     isTutorialActive,
@@ -194,8 +199,22 @@ const OnboardingTutorial: React.FC = () => {
     onAccountCreated,
   } = useTutorial();
   
-  // Check if user has an account
-  const hasAccount = !!(userId || email);
+  // State to hide swipe hint after timeout
+  const [hideSwipeHint, setHideSwipeHint] = useState(false);
+  
+  // Hide swipe hint popup after 5 seconds
+  useEffect(() => {
+    const swipeSteps = ['book_swipe_intro', 'book_swipe_1', 'book_swipe_2'];
+    if (swipeSteps.includes(currentStep)) {
+      setHideSwipeHint(false); // Reset when entering swipe steps
+      const timer = setTimeout(() => {
+        setHideSwipeHint(true);
+      }, 5000); // Hide after 5 seconds
+      return () => clearTimeout(timer);
+    } else {
+      setHideSwipeHint(false); // Reset for other steps
+    }
+  }, [currentStep]);
 
   // Start tutorial if coming from ReadyToJumpInPage
   useEffect(() => {
@@ -312,9 +331,13 @@ const OnboardingTutorial: React.FC = () => {
         );
 
       // STEP 3-6: Book swipe hints (shown in book reader) - positioned over image area
+      // Hide after 5 seconds to not obstruct the reading experience
       case 'book_swipe_intro':
       case 'book_swipe_1':
       case 'book_swipe_2':
+        if (hideSwipeHint) {
+          return null; // Hide the swipe hint after 5 seconds
+        }
         return (
           <TutorialSpotlight
             title=""
@@ -576,7 +599,7 @@ const OnboardingTutorial: React.FC = () => {
         // If no account, show account creation modal
         // After account creation, continue to onboarding flow
         setTimeout(() => {
-          if (!hasAccount) {
+          if (!checkHasAccount()) {
             // Show account creation modal
             setShowAccountCreation(true);
           } else {

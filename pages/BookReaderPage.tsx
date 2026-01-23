@@ -1464,7 +1464,21 @@ const BookReaderPage: React.FC = () => {
                 // Find an unlocked voice to use as default
                 const unlockedVoices = finalVoiceList.filter((v: any) => isVoiceUnlocked(v.voice_id));
 
-                if (defaultVoiceId && isVoiceUnlocked(defaultVoiceId)) {
+                // Tutorial mode: Default to "Mary" voice for new users
+                if (isTutorialActive) {
+                    const maryVoice = finalVoiceList.find((v: any) => 
+                        v.name?.toLowerCase() === 'mary' || 
+                        v.customName?.toLowerCase() === 'mary'
+                    );
+                    if (maryVoice) {
+                        setSelectedVoiceId(maryVoice.voice_id);
+                        console.log(`🎤 Tutorial mode: Using Mary voice (${maryVoice.voice_id})`);
+                    } else if (finalVoiceList.length > 0) {
+                        // Fallback to first voice if Mary not found
+                        setSelectedVoiceId(finalVoiceList[0].voice_id);
+                        console.log(`🎤 Tutorial mode: Mary voice not found, using ${finalVoiceList[0].name}`);
+                    }
+                } else if (defaultVoiceId && isVoiceUnlocked(defaultVoiceId)) {
                     // Use the default voice if it's unlocked
                     setSelectedVoiceId(defaultVoiceId);
                 } else if (unlockedVoices.length > 0) {
@@ -1489,7 +1503,7 @@ const BookReaderPage: React.FC = () => {
             console.log(`✅ Loaded ${cloned.length} cloned voice(s) from local storage`);
         };
         loadClonedVoices();
-    }, [bookId]);
+    }, [bookId, isTutorialActive]);
 
     // Deep link: /read/:bookId?coloring=<pageNumber|pageId> opens coloring modal directly
     useEffect(() => {

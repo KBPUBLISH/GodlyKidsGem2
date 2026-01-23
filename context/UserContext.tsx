@@ -237,7 +237,7 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const saved = loadState();
 
-  const [coins, setCoins] = useState(10000); // DEV: Force 10000 coins for testing (change back to: saved?.coins ?? 500)
+  const [coins, setCoins] = useState(saved?.coins ?? 500); // Default 500 coins for new users
   const [coinTransactions, setCoinTransactions] = useState<CoinTransaction[]>(saved?.coinTransactions ?? []);
   const [referralCode] = useState<string>(saved?.referralCode ?? generateReferralCode());
   const [redeemedCodes, setRedeemedCodes] = useState<string[]>(saved?.redeemedCodes ?? []);

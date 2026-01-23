@@ -5,8 +5,14 @@ import { API_BASE_URL } from '../constants';
 import WoodButton from '../components/ui/WoodButton';
 import { useAudio } from '../context/AudioContext';
 import { useTutorial } from '../context/TutorialContext';
-import { useUser } from '../context/UserContext';
 import CreateAccountModal from '../components/modals/CreateAccountModal';
+
+// Check if user has an account (auth token or email stored)
+const checkHasAccount = (): boolean => {
+  const token = localStorage.getItem('godlykids_auth_token');
+  const email = localStorage.getItem('godlykids_user_email');
+  return !!(token || email);
+};
 
 interface ContentItem {
   _id: string;
@@ -76,7 +82,6 @@ const NewUserWelcomePage: React.FC = () => {
   const navigate = useNavigate();
   const { playClick } = useAudio();
   const { isTutorialActive, isStepActive, nextStep, skipTutorial, onAccountCreated } = useTutorial();
-  const { userId, email } = useUser();
   const [config, setConfig] = useState<WelcomeConfig>({
     title: 'Choose a Bedtime Story',
     subtitle: 'Pick something to start your adventure',
@@ -88,9 +93,6 @@ const NewUserWelcomePage: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [showContent, setShowContent] = useState(false);
   const [showAccountModal, setShowAccountModal] = useState(false);
-  
-  // Check if user has an account
-  const hasAccount = !!(userId || email);
 
   // Generate random small dot stars
   const smallStars = useMemo(() => 
@@ -209,7 +211,7 @@ const NewUserWelcomePage: React.FC = () => {
     playClick();
     
     // Check if user has an account
-    if (!hasAccount) {
+    if (!checkHasAccount()) {
       // Show account creation modal
       setShowAccountModal(true);
     } else {

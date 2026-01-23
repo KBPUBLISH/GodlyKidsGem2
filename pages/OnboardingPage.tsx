@@ -996,8 +996,14 @@ const OnboardingPage: React.FC = () => {
     // Track step 5 completion
     activityTrackingService.trackOnboardingEvent('step_5_complete', { step: 5, voiceSelected: selectedVoiceId });
     
-    // NEW FLOW: If coming from tutorial with account already created, skip to paywall
-    if (skipAccountStep || fromTutorial) {
+    // Check if user already has an account (auth token or email in localStorage)
+    const hasExistingAccount = !!(
+      localStorage.getItem('godlykids_auth_token') || 
+      localStorage.getItem('godlykids_user_email')
+    );
+    
+    // Skip account creation if user already has an account or coming from tutorial
+    if (skipAccountStep || fromTutorial || hasExistingAccount) {
       // Track onboarding complete and go to paywall
       activityTrackingService.trackOnboardingEvent('onboarding_complete');
       activityTrackingService.resetOnboardingSession();
@@ -1005,7 +1011,7 @@ const OnboardingPage: React.FC = () => {
       return;
     }
     
-    // Go to account creation step
+    // Go to account creation step (only if no account exists)
     setStep(6);
   };
   

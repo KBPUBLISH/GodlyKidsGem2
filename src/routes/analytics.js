@@ -587,7 +587,8 @@ router.get('/onboarding', async (req, res) => {
         
         // Calculate conversion rates
         // Onboarding flow:
-        // 1. Account Created (from tutorial) -> 2. Parent Profile -> 3. Family/Kids -> 4. Goals -> 5. Features -> 6. Voice -> Paywall
+        // Started -> Account Created -> Step 1 (Parent) -> Step 2 (Family) -> Step 3 (Goals) -> 
+        // Step 4 (Features) -> Step 5 (Voice) -> Step 6 (Paywall Shown) -> Step 7 (Exit Paywall) / Step 8 (Start Trial)
         const started = eventCounts['onboarding_started'] || 0;
         const accountCreated = eventCounts['account_created'] || 0;
         const step1 = eventCounts['step_1_complete'] || 0;  // Parent profile
@@ -618,9 +619,9 @@ router.get('/onboarding', async (req, res) => {
             { step: 'Step 3 (Goals)', count: step3, rate: started > 0 ? Math.round((step3 / started) * 100) : 0 },
             { step: 'Step 4 (Features)', count: step4, rate: started > 0 ? Math.round((step4 / started) * 100) : 0 },
             { step: 'Step 5 (Voice)', count: step5, rate: started > 0 ? Math.round((step5 / started) * 100) : 0 },
-            { step: 'Paywall Shown', count: paywallShown, rate: started > 0 ? Math.round((paywallShown / started) * 100) : 0 },
-            { step: 'Trial Clicked', count: paywallTrialClicked, rate: paywallShown > 0 ? Math.round((paywallTrialClicked / paywallShown) * 100) : 0 },
-            { step: 'Paywall Closed', count: paywallClosed, rate: paywallShown > 0 ? Math.round((paywallClosed / paywallShown) * 100) : 0 },
+            { step: 'Step 6 (Paywall Shown)', count: paywallShown, rate: started > 0 ? Math.round((paywallShown / started) * 100) : 0 },
+            { step: 'Step 7 (Exit Paywall)', count: paywallClosed, rate: paywallShown > 0 ? Math.round((paywallClosed / paywallShown) * 100) : 0 },
+            { step: 'Step 8 (Start Trial)', count: paywallTrialClicked, rate: paywallShown > 0 ? Math.round((paywallTrialClicked / paywallShown) * 100) : 0 },
             { step: 'Subscribed', count: totalSubscribed, rate: started > 0 ? Math.round((totalSubscribed / started) * 100) : 0 },
         ];
         

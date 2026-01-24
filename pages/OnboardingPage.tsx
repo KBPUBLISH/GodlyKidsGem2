@@ -1236,6 +1236,9 @@ const OnboardingPage: React.FC = () => {
         facebookPixelService.init();
         facebookPixelService.trackSignUp('email');
         
+        // Track account created for onboarding analytics
+        activityTrackingService.trackOnboardingEvent('account_created', { email });
+        
         return true;
       } else {
         // If account already exists, try logging in instead

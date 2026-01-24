@@ -5,6 +5,7 @@ import WoodButton from '../ui/WoodButton';
 import WebViewModal from '../features/WebViewModal';
 import { ApiService } from '../../services/apiService';
 import { facebookPixelService } from '../../services/facebookPixelService';
+import { activityTrackingService } from '../../services/activityTrackingService';
 
 interface CreateAccountModalProps {
   isOpen: boolean;
@@ -93,12 +94,15 @@ const CreateAccountModal: React.FC<CreateAccountModalProps> = ({
         // Store email in localStorage for account detection
         localStorage.setItem('godlykids_user_email', email);
         
-        // Track successful registration (use trackSignUp, not trackCompleteRegistration)
+        // Track successful registration
         try {
           facebookPixelService.trackSignUp('email');
         } catch (e) {
           console.warn('FB tracking failed:', e);
         }
+        
+        // Track account created for onboarding analytics
+        activityTrackingService.trackOnboardingEvent('account_created', { email });
         
         // Notify parent component
         onAccountCreated();

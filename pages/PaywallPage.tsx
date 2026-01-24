@@ -9,6 +9,7 @@ import { authService } from '../services/authService';
 import { getApiBaseUrl } from '../services/apiService';
 import { facebookPixelService } from '../services/facebookPixelService';
 import { metaAttributionService } from '../services/metaAttributionService';
+import { activityTrackingService } from '../services/activityTrackingService';
 
 // Check if user has a real account (not just device ID)
 const hasAccount = (): boolean => {
@@ -67,10 +68,13 @@ const PaywallPage: React.FC = () => {
     { name: 'Joshua P.', location: 'Michigan', time: '32 min ago' },
   ];
   
-  // Facebook Pixel - Track paywall view (parent-gated area)
+  // Track paywall view for analytics
   useEffect(() => {
+    // Facebook Pixel
     facebookPixelService.init();
     facebookPixelService.trackPaywallView();
+    // Onboarding funnel tracking
+    activityTrackingService.trackOnboardingEvent('paywall_shown');
   }, []);
   
   // Show social proof notifications periodically
@@ -174,6 +178,9 @@ const PaywallPage: React.FC = () => {
   const handleSubscribeClick = () => {
     setError(null);
     
+    // Track trial button clicked
+    activityTrackingService.trackOnboardingEvent('paywall_trial_clicked', { planType: selectedPlan });
+    
     // Check if user has an account - require account before purchase
     if (!hasAccount()) {
       setShowAccountRequired(true);
@@ -210,6 +217,9 @@ const PaywallPage: React.FC = () => {
           currency: 'USD',
           plan: selectedPlan,
         });
+        
+        // Track successful subscription in onboarding funnel
+        activityTrackingService.trackOnboardingEvent('subscribed', { planType: selectedPlan });
         
         // Update local state
         subscribe();
@@ -350,7 +360,11 @@ const PaywallPage: React.FC = () => {
         {/* Close Button - hidden when timer expires from tutorial */}
         {!hideCloseButton && (
           <button 
-            onClick={() => navigate('/home')} 
+            onClick={() => {
+              // Track paywall closed/skipped
+              activityTrackingService.trackOnboardingEvent('paywall_closed');
+              navigate('/home');
+            }} 
             className="absolute top-6 left-6 z-50 p-2 bg-white/10 hover:bg-white/20 backdrop-blur-md rounded-full text-white/80 transition-colors"
           >
             <X size={24} strokeWidth={3} />

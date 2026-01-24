@@ -190,7 +190,7 @@ const OnboardingAnalytics: React.FC = () => {
                         Track user journey through tutorial-first onboarding flow
                     </p>
                     <div className="mt-2 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 text-xs text-amber-800">
-                        <strong>New Flow:</strong> Let's Explore → Tutorial → Create Account Popup → Onboarding (Parent/Kids/Preferences) → Paywall
+                        <strong>Flow:</strong> Let's Explore → Tutorial → Create Account → Onboarding (Parent/Kids/Goals/Features/Voice) → Paywall (Shown → Trial Click / Close)
                     </div>
                 </div>
                 <div className="flex items-center gap-3">

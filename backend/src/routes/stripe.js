@@ -5,9 +5,11 @@ const router = express.Router();
 const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
 
 // Stripe Price IDs (from your Stripe dashboard)
+// Annual: $39.99/year, Monthly: $5.99/month, Lifetime: $69.99 one-time
 const PRICE_IDS = {
   annual: process.env.STRIPE_PRICE_ANNUAL || 'price_annual_placeholder',
   monthly: process.env.STRIPE_PRICE_MONTHLY || 'price_monthly_placeholder',
+  lifetime: process.env.STRIPE_PRICE_LIFETIME || 'price_lifetime_placeholder',
 };
 
 /**
@@ -51,9 +53,12 @@ router.post('/create-checkout-session', async (req, res) => {
 
     console.log('🛒 Creating Stripe checkout session:', { plan, userId, email });
 
+    // Lifetime is a one-time payment, others are subscriptions
+    const isLifetime = plan === 'lifetime';
+
     // Build checkout session options
     const sessionOptions = {
-      mode: 'subscription',
+      mode: isLifetime ? 'payment' : 'subscription',
       payment_method_types: ['card'],
       line_items: [
         {
@@ -67,17 +72,21 @@ router.post('/create-checkout-session', async (req, res) => {
         userId: userId || 'anonymous',
         plan: plan,
       },
-      subscription_data: {
+      // Allow promotion codes
+      allow_promotion_codes: true,
+    };
+
+    // Add subscription-specific options (trial period) for non-lifetime plans
+    if (!isLifetime) {
+      sessionOptions.subscription_data = {
         metadata: {
           userId: userId || 'anonymous',
           plan: plan,
         },
         // 7-day free trial
         trial_period_days: 7,
-      },
-      // Allow promotion codes
-      allow_promotion_codes: true,
-    };
+      };
+    }
 
     // Add customer email if provided
     if (email) {

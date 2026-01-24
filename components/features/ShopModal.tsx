@@ -964,43 +964,43 @@ const ShopModal: React.FC<ShopModalProps> = ({ isOpen, onClose, initialTab, hide
                             </button>
                         </div>
 
-                        <div className="flex justify-around items-center">
-                            <div className="flex flex-col gap-2 items-center">
+                        <div className="flex justify-between items-start gap-2 px-2">
+                            <div className="flex flex-col gap-1 items-center flex-shrink-0">
                                 <span className="text-[10px] text-[#eecaa0]/60 font-bold uppercase tracking-wider">Move</span>
-                                <div className="grid grid-cols-2 gap-2">
-                                    <button onClick={() => updateOffset('x', -2)} className="w-12 h-12 bg-[#3E1F07] rounded-xl text-[#eecaa0] hover:bg-[#5c2e0b] active:scale-95 border-b-4 border-[#2a1505] active:border-b-0 active:translate-y-1 flex items-center justify-center"><MoveHorizontal size={20} className="rotate-180" /></button>
-                                    <button onClick={() => updateOffset('x', 2)} className="w-12 h-12 bg-[#3E1F07] rounded-xl text-[#eecaa0] hover:bg-[#5c2e0b] active:scale-95 border-b-4 border-[#2a1505] active:border-b-0 active:translate-y-1 flex items-center justify-center"><MoveHorizontal size={20} /></button>
-                                    <button onClick={() => updateOffset('y', -2)} className="w-12 h-12 bg-[#3E1F07] rounded-xl text-[#eecaa0] hover:bg-[#5c2e0b] active:scale-95 border-b-4 border-[#2a1505] active:border-b-0 active:translate-y-1 flex items-center justify-center"><ArrowUpToLine size={20} /></button>
-                                    <button onClick={() => updateOffset('y', 2)} className="w-12 h-12 bg-[#3E1F07] rounded-xl text-[#eecaa0] hover:bg-[#5c2e0b] active:scale-95 border-b-4 border-[#2a1505] active:border-b-0 active:translate-y-1 flex items-center justify-center"><ArrowDownToLine size={20} /></button>
+                                <div className="grid grid-cols-2 gap-1">
+                                    <button onClick={() => updateOffset('x', -2)} className="w-10 h-10 bg-[#3E1F07] rounded-lg text-[#eecaa0] hover:bg-[#5c2e0b] active:scale-95 border-b-2 border-[#2a1505] flex items-center justify-center"><MoveHorizontal size={16} className="rotate-180" /></button>
+                                    <button onClick={() => updateOffset('x', 2)} className="w-10 h-10 bg-[#3E1F07] rounded-lg text-[#eecaa0] hover:bg-[#5c2e0b] active:scale-95 border-b-2 border-[#2a1505] flex items-center justify-center"><MoveHorizontal size={16} /></button>
+                                    <button onClick={() => updateOffset('y', -2)} className="w-10 h-10 bg-[#3E1F07] rounded-lg text-[#eecaa0] hover:bg-[#5c2e0b] active:scale-95 border-b-2 border-[#2a1505] flex items-center justify-center"><ArrowUpToLine size={16} /></button>
+                                    <button onClick={() => updateOffset('y', 2)} className="w-10 h-10 bg-[#3E1F07] rounded-lg text-[#eecaa0] hover:bg-[#5c2e0b] active:scale-95 border-b-2 border-[#2a1505] flex items-center justify-center"><ArrowDownToLine size={16} /></button>
                                 </div>
                             </div>
 
                             {/* Rotation Controls (Not for Head/Body) */}
                             {selectedPart !== 'head' && selectedPart !== 'body' && (
                                 <>
-                                    <div className="w-px h-24 bg-white/10"></div>
+                                    <div className="w-px h-20 bg-white/10 flex-shrink-0"></div>
 
-                                    <div className="flex flex-col gap-2 items-center">
+                                    <div className="flex flex-col gap-1 items-center flex-shrink-0">
                                         <span className="text-[10px] text-[#eecaa0]/60 font-bold uppercase tracking-wider">Rotate</span>
-                                        <div className="flex gap-2 h-full items-center">
-                                            <button onClick={() => updateRotation(-5)} className="w-14 h-14 bg-[#3E1F07] rounded-xl text-[#eecaa0] hover:bg-[#5c2e0b] active:scale-95 border-b-4 border-[#2a1505] active:border-b-0 active:translate-y-1 flex items-center justify-center"><RotateCcw size={24} /></button>
-                                            <button onClick={() => updateRotation(5)} className="w-14 h-14 bg-[#3E1F07] rounded-xl text-[#eecaa0] hover:bg-[#5c2e0b] active:scale-95 border-b-4 border-[#2a1505] active:border-b-0 active:translate-y-1 flex items-center justify-center"><RotateCw size={24} /></button>
+                                        <div className="flex gap-1 items-center">
+                                            <button onClick={() => updateRotation(-5)} className="w-11 h-11 bg-[#3E1F07] rounded-lg text-[#eecaa0] hover:bg-[#5c2e0b] active:scale-95 border-b-2 border-[#2a1505] flex items-center justify-center"><RotateCcw size={18} /></button>
+                                            <button onClick={() => updateRotation(5)} className="w-11 h-11 bg-[#3E1F07] rounded-lg text-[#eecaa0] hover:bg-[#5c2e0b] active:scale-95 border-b-2 border-[#2a1505] flex items-center justify-center"><RotateCw size={18} /></button>
                                         </div>
                                     </div>
                                 </>
                             )}
 
                             {/* Scale Controls (All Parts) */}
-                            <div className="w-px h-24 bg-white/10"></div>
+                            <div className="w-px h-20 bg-white/10 flex-shrink-0"></div>
 
-                            <div className="flex flex-col gap-2 items-center">
+                            <div className="flex flex-col gap-1 items-center flex-shrink-0">
                                 <span className="text-[10px] text-[#eecaa0]/60 font-bold uppercase tracking-wider">Scale</span>
-                                <div className="flex gap-2 h-full items-center">
-                                    <button onClick={() => updateScale(-1)} className="w-14 h-14 bg-[#3E1F07] rounded-xl text-[#eecaa0] hover:bg-[#5c2e0b] active:scale-95 border-b-4 border-[#2a1505] active:border-b-0 active:translate-y-1 flex items-center justify-center" title="Make Smaller"><ZoomOut size={24} /></button>
-                                    <button onClick={() => updateScale(1)} className="w-14 h-14 bg-[#3E1F07] rounded-xl text-[#eecaa0] hover:bg-[#5c2e0b] active:scale-95 border-b-4 border-[#2a1505] active:border-b-0 active:translate-y-1 flex items-center justify-center" title="Make Bigger"><ZoomIn size={24} /></button>
+                                <div className="flex gap-1 items-center">
+                                    <button onClick={() => updateScale(-1)} className="w-11 h-11 bg-[#3E1F07] rounded-lg text-[#eecaa0] hover:bg-[#5c2e0b] active:scale-95 border-b-2 border-[#2a1505] flex items-center justify-center" title="Make Smaller"><ZoomOut size={18} /></button>
+                                    <button onClick={() => updateScale(1)} className="w-11 h-11 bg-[#3E1F07] rounded-lg text-[#eecaa0] hover:bg-[#5c2e0b] active:scale-95 border-b-2 border-[#2a1505] flex items-center justify-center" title="Make Bigger"><ZoomIn size={18} /></button>
                                 </div>
                                 {/* Display current scale percentage */}
-                                <span className="text-[10px] text-[#eecaa0] font-bold mt-1">
+                                <span className="text-[10px] text-[#eecaa0] font-bold">
                                     {(() => {
                                         let currentScale = 1;
                                         if (selectedPart === 'leftArm') currentScale = leftArmScale;

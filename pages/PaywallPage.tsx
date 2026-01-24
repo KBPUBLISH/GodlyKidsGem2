@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { Check, X, Loader2, RefreshCw, AlertCircle, CheckCircle, Mail, UserPlus } from 'lucide-react';
+import { Check, X, Loader2, RefreshCw, AlertCircle, CheckCircle, Mail, UserPlus, Bell, Lock, Calendar, CreditCard } from 'lucide-react';
 import { useUser } from '../context/UserContext';
 import { useSubscription } from '../context/SubscriptionContext';
 import ParentGateModal from '../components/features/ParentGateModal';
@@ -10,12 +10,43 @@ import { getApiBaseUrl } from '../services/apiService';
 import { facebookPixelService } from '../services/facebookPixelService';
 import { metaAttributionService } from '../services/metaAttributionService';
 import { activityTrackingService } from '../services/activityTrackingService';
+import despia from 'despia-native';
+
+// Check if running in Despia native app
+const isDespiaNative = (): boolean => {
+  const ua = navigator.userAgent.toLowerCase();
+  return ua.includes('despia');
+};
 
 // Check if user has a real account (not just device ID)
 const hasAccount = (): boolean => {
   const userEmail = localStorage.getItem('godlykids_user_email');
   const user = authService.getUser();
   return !!(userEmail || user?.email);
+};
+
+// Get user's first name for personalization
+const getUserFirstName = (): string => {
+  // Try to get from the main user data storage
+  const savedData = localStorage.getItem('godly_kids_data_v7') || localStorage.getItem('godly_kids_data_v6');
+  if (savedData) {
+    try {
+      const parsed = JSON.parse(savedData);
+      if (parsed.parentName) {
+        return parsed.parentName.split(' ')[0];
+      }
+    } catch (e) {
+      // Ignore parse errors
+    }
+  }
+  
+  // Fallback to auth user
+  const user = authService.getUser();
+  if (user?.username && !user.username.startsWith('device_') && !user.username.includes('_')) {
+    return user.username.split(' ')[0];
+  }
+  
+  return '';
 };
 
 const PaywallPage: React.FC = () => {
@@ -33,7 +64,7 @@ const PaywallPage: React.FC = () => {
     restorePurchases,
   } = useSubscription();
   
-  const [selectedPlan, setSelectedPlan] = useState<'annual' | 'monthly'>('annual');
+  const [selectedPlan, setSelectedPlan] = useState<'annual' | 'monthly' | 'lifetime'>('annual');
   const [showParentGate, setShowParentGate] = useState(false);
   const [isPurchasing, setIsPurchasing] = useState(false);
   const [isRestoring, setIsRestoring] = useState(false);
@@ -43,6 +74,76 @@ const PaywallPage: React.FC = () => {
     message: string;
   } | null>(null);
   
+  // Trial reminder toggle state - check notification permission
+  const [trialReminderEnabled, setTrialReminderEnabled] = useState(false);
+  const [notificationsAllowed, setNotificationsAllowed] = useState<boolean | null>(null);
+  
+  // Check notification permission on mount
+  useEffect(() => {
+    const checkNotificationPermission = async () => {
+      if (isDespiaNative()) {
+        // In Despia native app - assume notifications are available
+        // The actual permission is managed at OS level
+        setNotificationsAllowed(true);
+        setTrialReminderEnabled(true);
+      } else if ('Notification' in window) {
+        // Web browser - check Notification API
+        const permission = Notification.permission;
+        if (permission === 'granted') {
+          setNotificationsAllowed(true);
+          setTrialReminderEnabled(true);
+        } else if (permission === 'denied') {
+          setNotificationsAllowed(false);
+          setTrialReminderEnabled(false);
+        } else {
+          // Permission is 'default' - not yet asked
+          setNotificationsAllowed(null);
+          setTrialReminderEnabled(false);
+        }
+      } else {
+        // No notification support
+        setNotificationsAllowed(false);
+        setTrialReminderEnabled(false);
+      }
+    };
+    
+    checkNotificationPermission();
+  }, []);
+  
+  // Handle notification toggle - opens native settings if needed
+  const handleNotificationToggle = async () => {
+    if (trialReminderEnabled) {
+      // Just turn off
+      setTrialReminderEnabled(false);
+      return;
+    }
+    
+    // Trying to enable
+    if (isDespiaNative()) {
+      // Open native settings app where user can enable notifications
+      despia('settingsapp://');
+      // Optimistically enable - user is going to settings
+      setTrialReminderEnabled(true);
+      setNotificationsAllowed(true);
+    } else if ('Notification' in window) {
+      if (Notification.permission === 'default') {
+        // Request permission
+        const permission = await Notification.requestPermission();
+        if (permission === 'granted') {
+          setNotificationsAllowed(true);
+          setTrialReminderEnabled(true);
+        } else {
+          setNotificationsAllowed(false);
+        }
+      } else if (Notification.permission === 'denied') {
+        // Can't request again - show message
+        setNotificationsAllowed(false);
+      } else {
+        setTrialReminderEnabled(true);
+      }
+    }
+  };
+  
   // Restore modal state
   const [showRestoreModal, setShowRestoreModal] = useState(false);
   const [restoreEmail, setRestoreEmail] = useState('');
@@ -50,23 +151,8 @@ const PaywallPage: React.FC = () => {
   // Account required modal state
   const [showAccountRequired, setShowAccountRequired] = useState(false);
   
-  // Social proof notification state
-  const [showSocialProof, setShowSocialProof] = useState(false);
-  const [socialProofData, setSocialProofData] = useState({ name: '', location: '', time: '' });
-  
-  // Social proof data - random names and locations for validation
-  const SOCIAL_PROOF_DATA = [
-    { name: 'Sarah M.', location: 'Texas', time: '2 min ago' },
-    { name: 'Michael R.', location: 'California', time: '5 min ago' },
-    { name: 'Emily T.', location: 'Florida', time: '8 min ago' },
-    { name: 'David K.', location: 'New York', time: '12 min ago' },
-    { name: 'Jessica L.', location: 'Ohio', time: '15 min ago' },
-    { name: 'Christopher B.', location: 'Georgia', time: '18 min ago' },
-    { name: 'Amanda W.', location: 'North Carolina', time: '22 min ago' },
-    { name: 'Matthew H.', location: 'Pennsylvania', time: '25 min ago' },
-    { name: 'Ashley D.', location: 'Arizona', time: '28 min ago' },
-    { name: 'Joshua P.', location: 'Michigan', time: '32 min ago' },
-  ];
+  // Get personalized name
+  const firstName = getUserFirstName();
   
   // Track paywall view for analytics
   useEffect(() => {
@@ -75,33 +161,6 @@ const PaywallPage: React.FC = () => {
     facebookPixelService.trackPaywallView();
     // Onboarding funnel tracking
     activityTrackingService.trackOnboardingEvent('paywall_shown');
-  }, []);
-  
-  // Show social proof notifications periodically
-  useEffect(() => {
-    let timeoutId: NodeJS.Timeout;
-    let intervalId: NodeJS.Timeout;
-    
-    // Start showing after 3 seconds
-    timeoutId = setTimeout(() => {
-      const randomIndex = Math.floor(Math.random() * SOCIAL_PROOF_DATA.length);
-      setSocialProofData(SOCIAL_PROOF_DATA[randomIndex]);
-      setShowSocialProof(true);
-      
-      setTimeout(() => setShowSocialProof(false), 4000);
-      
-      intervalId = setInterval(() => {
-        const newIndex = Math.floor(Math.random() * SOCIAL_PROOF_DATA.length);
-        setSocialProofData(SOCIAL_PROOF_DATA[newIndex]);
-        setShowSocialProof(true);
-        setTimeout(() => setShowSocialProof(false), 4000);
-      }, 12000 + Math.random() * 6000);
-    }, 3000);
-    
-    return () => {
-      clearTimeout(timeoutId);
-      clearInterval(intervalId);
-    };
   }, []);
 
   // If user already has premium, redirect to home
@@ -113,7 +172,6 @@ const PaywallPage: React.FC = () => {
   }, [isPremium, navigate, subscribe]);
   
   // Listen for premium status changes (from webhook confirmation after purchase)
-  // This handles the case where purchase polling timed out but webhook arrives later
   useEffect(() => {
     const handlePremiumChange = (event: CustomEvent) => {
       console.log('📱 Premium status changed on paywall:', event.detail);
@@ -126,8 +184,7 @@ const PaywallPage: React.FC = () => {
     
     window.addEventListener('revenuecat:premiumChanged' as any, handlePremiumChange);
     
-    // Also set up a background poll if we have a "processing" error
-    // This continues checking even after the initial 30s timeout
+    // Background poll if we have a "processing" error
     let backgroundPollInterval: ReturnType<typeof setInterval> | null = null;
     
     if (error && error.includes('processing')) {
@@ -139,7 +196,6 @@ const PaywallPage: React.FC = () => {
       
       backgroundPollInterval = setInterval(async () => {
         try {
-          // Check localStorage first
           const localPremium = localStorage.getItem('godlykids_premium') === 'true';
           if (localPremium) {
             console.log('✅ Premium found in background poll (localStorage)');
@@ -149,7 +205,6 @@ const PaywallPage: React.FC = () => {
             return;
           }
           
-          // Check backend
           const response = await fetch(`${apiBaseUrl}/api/webhooks/purchase-status/${encodeURIComponent(userId)}`);
           if (response.ok) {
             const data = await response.json();
@@ -164,7 +219,7 @@ const PaywallPage: React.FC = () => {
         } catch (e) {
           // Silently continue
         }
-      }, 3000); // Check every 3 seconds
+      }, 3000);
     }
     
     return () => {
@@ -197,11 +252,10 @@ const PaywallPage: React.FC = () => {
     setError(null);
     
     // Facebook Pixel - Track checkout initiation
-    const price = selectedPlan === 'annual' ? 39.99 : 5.99;
+    const price = selectedPlan === 'lifetime' ? 69.99 : selectedPlan === 'annual' ? 39.99 : 5.99;
     facebookPixelService.trackInitiateCheckout(selectedPlan, price);
 
     try {
-      // Purchase through DeSpia/RevenueCat native integration
       const result = await purchase(selectedPlan);
 
       if (result.success) {
@@ -209,7 +263,7 @@ const PaywallPage: React.FC = () => {
         facebookPixelService.trackPurchase(selectedPlan, price);
         facebookPixelService.trackSubscribe(selectedPlan, price);
         
-        // Meta Conversions API - Server-side purchase tracking for ROAS
+        // Meta Conversions API - Server-side purchase tracking
         const userEmail = localStorage.getItem('godlykids_user_email') || authService.getUser()?.email;
         metaAttributionService.trackPurchase({
           email: userEmail || undefined,
@@ -218,7 +272,7 @@ const PaywallPage: React.FC = () => {
           plan: selectedPlan,
         });
         
-        // Track successful subscription in onboarding funnel
+        // Track successful subscription
         activityTrackingService.trackOnboardingEvent('subscribed', { planType: selectedPlan });
         
         // Update local state
@@ -242,29 +296,20 @@ const PaywallPage: React.FC = () => {
     setShowRestoreModal(false);
 
     try {
-      console.log('🔄 Starting restore purchases...');
-      console.log('🔄 isNativeApp:', isNativeApp);
-      console.log('🔄 emailToSearch:', emailToSearch);
-      
-      // IMPORTANT: Store the email BEFORE any restore calls so it can be used for backend checks
       const user = authService.getUser();
       const emailForRestore = emailToSearch || user?.email;
       if (emailForRestore) {
-        console.log('📧 Storing email for restore:', emailForRestore);
         localStorage.setItem('godlykids_user_email', emailForRestore.toLowerCase().trim());
       }
       
-      // First, check backend directly with the email (fastest path)
+      // First, check backend directly with the email
       const baseUrl = getApiBaseUrl();
       if (emailForRestore) {
-        console.log('🔄 Checking backend for email:', emailForRestore);
         try {
           const response = await fetch(`${baseUrl}/api/webhooks/purchase-status/${encodeURIComponent(emailForRestore)}`);
           if (response.ok) {
             const data = await response.json();
-            console.log('🔄 Backend response for email:', data);
             if (data.isPremium) {
-              console.log('✅ Premium found via email lookup!');
               localStorage.setItem('godlykids_premium', 'true');
               subscribe();
               setMigrationResult({
@@ -280,22 +325,14 @@ const PaywallPage: React.FC = () => {
         }
       }
       
-      // Try native RevenueCat/DeSpia restore (this asks Apple directly)
-      const result = await restorePurchases(true); // true = trigger native Apple restore
-      console.log('🔄 Native restore result:', result);
-
-      // Check if premium was set (either by restore or by checking localStorage)
-      // Give a moment for state to propagate
+      // Try native RevenueCat/DeSpia restore
+      const result = await restorePurchases(true);
       await new Promise(resolve => setTimeout(resolve, 500));
       
-      // Check localStorage directly since state might not have updated yet
       const localPremium = localStorage.getItem('godlykids_premium') === 'true';
-      console.log('🔄 Local premium after restore:', localPremium);
       
       if (result.success && (result.isPremium || localPremium)) {
-        // Native restore worked!
-        console.log('✅ Restore successful - user has premium!');
-        subscribe(); // Update context
+        subscribe();
         setMigrationResult({
           type: 'success',
           message: 'Your subscription has been restored! 🎉',
@@ -306,8 +343,6 @@ const PaywallPage: React.FC = () => {
 
       // Try migration API for OLD app users
       if (emailForRestore) {
-        console.log('🔄 Checking migration API for:', emailForRestore);
-        console.log('🔄 Migration API URL:', `${baseUrl}/api/migration/restore-subscription`);
         const migrationResponse = await fetch(`${baseUrl}/api/migration/restore-subscription`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -315,31 +350,28 @@ const PaywallPage: React.FC = () => {
         });
 
         const migrationData = await migrationResponse.json();
-        console.log('🔄 Migration result:', migrationData);
 
         if (migrationData.subscriptionRestored) {
-          // Successfully restored from old app!
           subscribe();
           setMigrationResult({
             type: 'success',
-            message: `Welcome back! Your subscription for ${emailForRestore} has been restored! 🎉`,
+            message: `Welcome back! Your subscription has been restored! 🎉`,
           });
           setTimeout(() => navigate('/home'), 2000);
           return;
         } else if (migrationData.found) {
           setMigrationResult({
             type: 'info',
-            message: migrationData.message || `Account found for ${emailForRestore} but subscription has expired.`,
+            message: migrationData.message || `Account found but subscription has expired.`,
           });
           return;
         } else {
-          setError(`No subscription found for ${emailForRestore}. Please contact hello@kbpublish.org if you believe this is an error.`);
+          setError(`No subscription found for ${emailForRestore}. Contact hello@kbpublish.org for help.`);
           return;
         }
       }
 
-      // No email provided and not signed in
-      setError('No subscription found. Please contact hello@kbpublish.org for assistance.');
+      setError('No subscription found. Contact hello@kbpublish.org for assistance.');
     } catch (err: any) {
       console.error('Restore error:', err);
       setError(err.message || 'Failed to restore purchases. Please try again.');
@@ -348,301 +380,358 @@ const PaywallPage: React.FC = () => {
     }
   };
 
+  // Calculate prices and savings
+  const monthlyPrice = 5.99;
+  const annualPrice = 39.99;
+  const lifetimePrice = 69.99;
+  const annualMonthly = (annualPrice / 12).toFixed(2);
+  const savings = Math.round(((monthlyPrice * 12 - annualPrice) / (monthlyPrice * 12)) * 100);
+
   return (
-    <div className="relative h-full w-full bg-gradient-to-b from-[#1a237e] via-[#283593] to-[#3949ab] overflow-y-auto no-scrollbar flex flex-col">
-        {/* Decorative elements */}
+    <div className="relative h-full w-full bg-gradient-to-b from-[#f8faff] via-[#eef2ff] to-[#e0e7ff] overflow-y-auto no-scrollbar flex flex-col">
+        {/* Decorative clouds/shapes */}
         <div className="absolute inset-0 overflow-hidden pointer-events-none">
-          <div className="absolute top-20 left-10 w-32 h-32 bg-[#fdd835]/10 rounded-full blur-3xl"></div>
-          <div className="absolute bottom-40 right-5 w-40 h-40 bg-[#4fc3f7]/10 rounded-full blur-3xl"></div>
-          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-64 h-64 bg-white/5 rounded-full blur-3xl"></div>
+          <div className="absolute top-10 left-0 w-32 h-20 bg-gradient-to-r from-[#c7d2fe]/40 to-transparent rounded-full blur-2xl"></div>
+          <div className="absolute top-20 right-0 w-40 h-24 bg-gradient-to-l from-[#ddd6fe]/40 to-transparent rounded-full blur-2xl"></div>
+          <div className="absolute bottom-40 left-5 w-24 h-16 bg-[#c7d2fe]/30 rounded-full blur-xl"></div>
+          <div className="absolute bottom-20 right-10 w-32 h-20 bg-[#fde68a]/20 rounded-full blur-xl"></div>
         </div>
 
-        {/* Close Button - hidden when timer expires from tutorial */}
-        {!hideCloseButton && (
-          <button 
+        {/* Header with close and restore */}
+        <div className="relative z-20 flex items-center justify-between px-4 pt-6 pb-2" style={{ paddingTop: 'calc(var(--safe-area-top, 0px) + 24px)' }}>
+          {!hideCloseButton ? (
+            <button 
+              onClick={() => {
+                activityTrackingService.trackOnboardingEvent('paywall_closed');
+                navigate('/home');
+              }} 
+              className="p-2 text-gray-400 hover:text-gray-600 transition-colors"
+            >
+              <X size={24} strokeWidth={2.5} />
+            </button>
+          ) : (
+            <div className="w-10" />
+          )}
+          
+          <button
             onClick={() => {
-              // Track paywall closed/skipped
-              activityTrackingService.trackOnboardingEvent('paywall_closed');
-              navigate('/home');
-            }} 
-            className="absolute top-6 left-6 z-50 p-2 bg-white/10 hover:bg-white/20 backdrop-blur-md rounded-full text-white/80 transition-colors"
+              const user = authService.getUser();
+              setRestoreEmail(user?.email || '');
+              setShowRestoreModal(true);
+            }}
+            disabled={isRestoring}
+            className="text-[#6366f1] text-sm font-semibold hover:text-[#4f46e5] transition-colors disabled:opacity-50"
           >
-            <X size={24} strokeWidth={3} />
+            {isRestoring ? 'Restoring...' : 'Restore'}
           </button>
-        )}
+        </div>
 
-        <div className="flex-1 flex flex-col items-center px-6 pt-10 pb-20 min-h-[600px] relative z-10">
+        <div className="flex-1 flex flex-col items-center px-5 pb-8 relative z-10">
             
-            {/* Brand Logo */}
-            <div className="mb-4 flex flex-col items-center">
-                 <div className="flex items-center gap-1">
-                   <span className="text-3xl">📚</span>
-                   <div className="flex flex-col items-start -space-y-1">
-                     <h1 className="font-display font-extrabold text-2xl text-white tracking-wide drop-shadow-lg">
-                        GODLY KIDS
-                     </h1>
-                     <h2 className="font-display font-bold text-lg text-[#fdd835] tracking-[0.2em] drop-shadow-md">
-                        ACADEMY
-                     </h2>
-                   </div>
-                 </div>
-                 <p className="text-white/60 text-xs mt-1 font-medium tracking-wide">Christian Learning for Ages 4-10+</p>
+            {/* Main Title */}
+            <div className="text-center mb-6">
+              <h1 className="text-[#1e1b4b] font-display font-extrabold text-2xl leading-tight mb-2">
+                Free full access to
+              </h1>
+              <h2 className="text-[#6366f1] font-display font-extrabold text-3xl">
+                Godly Kids Plus
+              </h2>
             </div>
 
-            {/* Main Card */}
-            <div className="relative bg-white/95 backdrop-blur-sm rounded-[2rem] p-6 w-full max-w-sm shadow-2xl border border-white/20 flex flex-col items-center text-center animate-in slide-in-from-bottom-10 duration-700">
-                
-                {/* Homeschool Badge */}
-                <div className="absolute -top-3 left-1/2 -translate-x-1/2 bg-gradient-to-r from-[#7c4dff] to-[#536dfe] px-4 py-1.5 rounded-full shadow-lg">
-                    <span className="text-white font-bold text-xs tracking-wide flex items-center gap-1.5">
-                        🏠 Perfect for Homeschool
-                    </span>
+            {/* Timeline Cards */}
+            <div className="flex gap-3 w-full max-w-sm mb-6">
+              {/* Today */}
+              <div className="flex-1 bg-gradient-to-b from-[#6366f1] to-[#4f46e5] rounded-2xl p-4 text-white shadow-lg shadow-indigo-200">
+                <div className="w-10 h-10 bg-white/20 rounded-full flex items-center justify-center mb-3 mx-auto">
+                  <Lock size={20} className="text-white" />
                 </div>
-
-                <h2 className="text-[#1a237e] font-display font-extrabold text-2xl leading-tight mb-2 mt-4 drop-shadow-sm">
-                    Give Your Child a<br/>
-                    <span className="text-[#7c4dff]">Faith-Filled Education</span>
-                </h2>
-
-                <p className="text-[#455a64] font-sans font-medium text-sm mb-3 leading-snug px-2">
-                    Interactive Bible lessons, stories & activities that make Christian learning fun and engaging.
+                <p className="font-bold text-sm text-center">Today</p>
+                <p className="text-[11px] text-white/80 text-center mt-1 leading-tight">
+                  Full access to all content
                 </p>
-                
-                {/* Error/Processing Message */}
-                {error && (
-                  error.includes('processing') ? (
-                    // Special "processing" state with spinner - purchase may still complete
-                    <div className="w-full bg-amber-50 border border-amber-200 text-amber-800 px-4 py-3 rounded-xl mb-4 text-sm">
-                      <div className="flex items-center gap-2 mb-2">
-                        <Loader2 size={16} className="animate-spin shrink-0" />
-                        <span className="font-semibold">Confirming your purchase...</span>
-                      </div>
-                      <p className="text-amber-700 text-xs">
-                        Apple is processing your payment. This usually takes a few seconds. 
-                        If you completed the payment, we'll automatically activate your subscription.
-                      </p>
-                    </div>
-                  ) : (
-                    // Regular error state
-                    <div className="w-full bg-red-50 border border-red-200 text-red-700 px-4 py-2 rounded-xl mb-4 text-sm flex items-start gap-2">
-                      <AlertCircle size={16} className="shrink-0 mt-0.5" />
-                      <span>
-                        {error.includes('hello@kbpublish.org') 
-                          ? error.split('hello@kbpublish.org').map((part, i, arr) => (
-                              <span key={i}>
-                                {part}
-                                {i < arr.length - 1 && (
-                                  <a 
-                                    href="mailto:hello@kbpublish.org?subject=Subscription%20Support%20Request" 
-                                    className="text-blue-600 underline font-semibold"
-                                  >
-                                    hello@kbpublish.org
-                                  </a>
-                                )}
-                              </span>
-                            ))
-                          : error
-                        }
-                      </span>
-                    </div>
-                  )
-                )}
-
-                {/* Migration Result Message */}
-                {migrationResult && (
-                  <div className={`w-full px-4 py-2 rounded-xl mb-4 text-sm flex items-start gap-2 ${
-                    migrationResult.type === 'success' 
-                      ? 'bg-green-50 border border-green-200 text-green-700' 
-                      : 'bg-blue-50 border border-blue-200 text-blue-700'
-                  }`}>
-                    {migrationResult.type === 'success' ? (
-                      <CheckCircle size={16} className="shrink-0 mt-0.5" />
-                    ) : (
-                      <AlertCircle size={16} className="shrink-0 mt-0.5" />
-                    )}
-                    {migrationResult.message}
-                  </div>
-                )}
-
-                {/* Pricing Options */}
-                <div className="w-full space-y-3 mb-5">
-                    
-                    {/* Annual Option */}
-                    <div 
-                        onClick={() => setSelectedPlan('annual')}
-                        className={`relative w-full rounded-2xl border-2 overflow-hidden cursor-pointer transition-all ${
-                            selectedPlan === 'annual' 
-                            ? 'bg-[#ede7f6] border-[#7c4dff] shadow-md scale-[1.02] ring-1 ring-[#7c4dff]' 
-                            : 'bg-gray-50 border-gray-200 opacity-90 hover:opacity-100'
-                        }`}
-                    >
-                        <div className="bg-gradient-to-r from-[#fdd835] to-[#ffca28] py-1 text-center shadow-sm absolute top-0 left-0 right-0 z-10">
-                            <span className="text-[#3e2723] text-[10px] font-extrabold uppercase tracking-widest">
-                                ⭐ BEST FOR FAMILIES • SAVE 45%
-                            </span>
-                        </div>
-                        <div className="px-4 pt-8 pb-3 flex items-center justify-between">
-                            <div className="flex flex-col text-left">
-                                <span className={`font-display font-bold text-lg ${selectedPlan === 'annual' ? 'text-[#1a237e]' : 'text-gray-600'}`}>Annual Plan</span>
-                                <span className="text-xs text-[#7c4dff] font-semibold bg-[#ede7f6] px-2 py-0.5 rounded-md w-fit">
-                                  Save 44% • $0.77/week
-                                </span>
-                            </div>
-                            <div className="flex flex-col items-end">
-                                 <div className="flex items-center gap-1">
-                                    <span className="font-display font-extrabold text-2xl text-[#1a237e]">
-                                      $39.99
-                                    </span>
-                                    <span className="text-xs text-gray-500 font-bold">USD/yr</span>
-                                 </div>
-                                 <span className="text-xs text-gray-400 line-through">$71.88 USD</span>
-                            </div>
-                        </div>
-                        
-                        {/* Checkmark circle */}
-                        <div className="absolute top-8 right-2 transition-all">
-                            <div className={`rounded-full p-1 ${selectedPlan === 'annual' ? 'bg-[#7c4dff] text-white' : 'bg-transparent border-2 border-gray-300'}`}>
-                                {selectedPlan === 'annual' && <Check size={12} strokeWidth={4} />}
-                                {selectedPlan !== 'annual' && <div className="w-3 h-3" />}
-                            </div>
-                        </div>
-                    </div>
-
-                    {/* Monthly Option */}
-                    <div 
-                        onClick={() => setSelectedPlan('monthly')}
-                        className={`relative w-full rounded-2xl border-2 overflow-hidden cursor-pointer transition-all ${
-                            selectedPlan === 'monthly' 
-                            ? 'bg-[#ede7f6] border-[#7c4dff] shadow-md scale-[1.02] ring-1 ring-[#7c4dff]' 
-                            : 'bg-gray-50 border-gray-200 opacity-90 hover:opacity-100'
-                        }`}
-                    >
-                        {selectedPlan === 'monthly' && (
-                            <div className="bg-[#ede7f6] py-1 text-center shadow-sm absolute top-0 left-0 right-0 z-10">
-                                <span className="text-[#7c4dff] text-[10px] font-extrabold uppercase tracking-widest">
-                                    14-DAY FREE TRIAL INCLUDED
-                                </span>
-                            </div>
-                        )}
-                        <div className={`px-4 ${selectedPlan === 'monthly' ? 'pt-8 pb-3' : 'py-4'} flex items-center justify-between`}>
-                            <div className="flex flex-col text-left">
-                                <span className={`font-display font-bold text-lg ${selectedPlan === 'monthly' ? 'text-[#1a237e]' : 'text-gray-600'}`}>Monthly Plan</span>
-                                <span className="text-xs text-gray-500 font-semibold bg-gray-100 px-2 py-0.5 rounded-md w-fit">
-                                    Cancel anytime
-                                </span>
-                            </div>
-                            <div className="flex flex-col items-end">
-                                <div className="flex items-center gap-1">
-                                     <span className="font-display font-extrabold text-2xl text-[#1a237e]">
-                                       $5.99
-                                     </span>
-                                     <span className="text-xs text-gray-500 font-bold">USD/mo</span>
-                                </div>
-                            </div>
-                        </div>
-
-                         {/* Checkmark circle */}
-                        <div className={`absolute ${selectedPlan === 'monthly' ? 'top-8' : 'top-1/2 -translate-y-1/2'} right-2`}>
-                            <div className={`rounded-full p-1 ${selectedPlan === 'monthly' ? 'bg-[#7c4dff] text-white' : 'bg-transparent border-2 border-gray-300'}`}>
-                                {selectedPlan === 'monthly' && <Check size={12} strokeWidth={4} />}
-                                {selectedPlan !== 'monthly' && <div className="w-3 h-3" />}
-                            </div>
-                        </div>
-                    </div>
-
+              </div>
+              
+              {/* Day 5 */}
+              <div className="flex-1 bg-white rounded-2xl p-4 border border-gray-100 shadow-sm">
+                <div className="w-10 h-10 bg-[#fef3c7] rounded-full flex items-center justify-center mb-3 mx-auto">
+                  <Bell size={20} className="text-[#f59e0b]" />
                 </div>
+                <p className="font-bold text-sm text-[#1e1b4b] text-center">Day 5</p>
+                <p className="text-[11px] text-gray-500 text-center mt-1 leading-tight">
+                  Reminder about trial ending
+                </p>
+              </div>
+              
+              {/* Day 7 */}
+              <div className="flex-1 bg-white rounded-2xl p-4 border border-gray-100 shadow-sm">
+                <div className="w-10 h-10 bg-[#dbeafe] rounded-full flex items-center justify-center mb-3 mx-auto">
+                  <CreditCard size={20} className="text-[#3b82f6]" />
+                </div>
+                <p className="font-bold text-sm text-[#1e1b4b] text-center">Day 7</p>
+                <p className="text-[11px] text-gray-500 text-center mt-1 leading-tight">
+                  Billing starts. Cancel anytime before.
+                </p>
+              </div>
+            </div>
 
-                {/* CTA Button */}
-                <button 
-                    onClick={handleSubscribeClick}
-                    disabled={isPurchasing || isRestoring || isLoading}
-                    className="w-full bg-gradient-to-b from-[#7c4dff] to-[#651fff] hover:from-[#9575cd] hover:to-[#7c4dff] text-white font-display font-bold text-lg py-5 rounded-2xl shadow-[0_4px_0_#4527a0,0_8px_15px_rgba(0,0,0,0.2)] active:translate-y-[4px] active:shadow-[0_0_0_#4527a0] transition-all mb-3 border-t border-[#b388ff] relative overflow-hidden group disabled:opacity-70 disabled:cursor-not-allowed"
-                >
-                    <span className="relative z-10 flex flex-col items-center justify-center">
-                        {isPurchasing ? (
-                          <span className="flex items-center gap-2">
-                            <Loader2 className="w-5 h-5 animate-spin" />
-                            Processing...
-                          </span>
-                        ) : (
-                          <>
-                            <span className="text-lg font-bold">🎁 START 14-DAY FREE TRIAL</span>
-                            <span className="text-xs opacity-80 font-normal">Cancel anytime • No charge until trial ends</span>
-                          </>
-                        )}
-                    </span>
-                    {/* Shine effect */}
-                    <div className="absolute top-0 -left-full w-full h-full bg-gradient-to-r from-transparent via-white/20 to-transparent skew-x-[-20deg] group-hover:animate-[shimmer_1s_infinite]"></div>
-                </button>
-
-                {/* Restore Purchases Button - Opens modal to enter email */}
+            {/* Trial Reminder Toggle */}
+            <div className="w-full max-w-sm bg-white rounded-2xl px-4 py-3 shadow-sm border border-gray-100 mb-6">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <Bell size={20} className={trialReminderEnabled ? 'text-[#6366f1]' : 'text-gray-400'} />
+                  <span className="font-semibold text-[#1e1b4b] text-sm">
+                    Trial reminder {trialReminderEnabled ? 'enabled' : 'disabled'}
+                  </span>
+                </div>
                 <button
-                  onClick={() => {
-                    const user = authService.getUser();
-                    setRestoreEmail(user?.email || '');
-                    setShowRestoreModal(true);
-                  }}
-                  disabled={isRestoring}
-                  className="text-[#7c4dff] text-sm font-semibold flex items-center gap-2 mb-4 hover:text-[#651fff] transition-colors disabled:opacity-50"
+                  onClick={handleNotificationToggle}
+                  className={`w-12 h-7 rounded-full transition-colors relative ${
+                    trialReminderEnabled ? 'bg-[#6366f1]' : 'bg-gray-300'
+                  }`}
                 >
-                  {isRestoring ? (
-                    <>
-                      <Loader2 className="w-4 h-4 animate-spin" />
-                      Restoring...
-                    </>
-                  ) : (
-                    <>
-                      <RefreshCw className="w-4 h-4" />
-                      Restore Purchases
-                    </>
-                  )}
+                  <div className={`absolute top-1 w-5 h-5 bg-white rounded-full shadow-md transition-transform ${
+                    trialReminderEnabled ? 'translate-x-6' : 'translate-x-1'
+                  }`} />
                 </button>
-
-                {/* Features - Education focused */}
-                <div className="space-y-2.5 text-left w-full mb-2">
-                    {[
-                        { icon: "📖", text: "Bible Stories & Scripture Memory" },
-                        { icon: "🎮", text: "Interactive Learning Games" },
-                        { icon: "🎧", text: "Audio Lessons & Devotionals" },
-                        { icon: "📝", text: "Quizzes to Reinforce Learning" },
-                        { icon: "🏆", text: "Rewards System Kids Love" },
-                        { icon: "🔒", text: "100% Ad-Free & Safe" },
-                    ].map((feature, i) => (
-                        <div key={i} className="flex items-center gap-3 text-[#1a237e] font-semibold text-sm group">
-                             <span className="text-base">{feature.icon}</span>
-                            <span>{feature.text}</span>
-                        </div>
-                    ))}
-                </div>
-            </div>
-            
-            {/* Trust Badge */}
-            <div className="mt-6 flex flex-col items-center">
-                <p className="text-white/70 text-xs font-medium mb-2">Trusted by Christian families everywhere</p>
-                <div className="flex items-center gap-1">
-                    {[1,2,3,4,5].map(i => (
-                        <span key={i} className="text-[#fdd835] text-lg">★</span>
-                    ))}
-                    <span className="text-white/60 text-xs ml-1">4.9 Rating</span>
-                </div>
+              </div>
+              {notificationsAllowed === false && !isDespiaNative() && (
+                <p className="text-xs text-gray-500 mt-2">
+                  Enable notifications in your device settings to receive trial reminders.
+                </p>
+              )}
             </div>
 
-            <p className="text-white/40 text-[10px] font-medium mt-6 text-center px-6 max-w-xs">
-                Free trial for 14 days, then subscription automatically renews unless cancelled at least 24-hours before the trial ends. Cancel anytime in App Store or Google Play.
+            {/* Pricing Section */}
+            <div className="w-full max-w-sm space-y-3 mb-5">
+              {/* Annual Option */}
+              <div 
+                onClick={() => setSelectedPlan('annual')}
+                className={`relative w-full rounded-2xl border-2 overflow-hidden cursor-pointer transition-all ${
+                  selectedPlan === 'annual' 
+                  ? 'bg-[#eef2ff] border-[#6366f1] shadow-md' 
+                  : 'bg-white border-gray-200'
+                }`}
+              >
+                {/* Best Value Badge */}
+                <div className="absolute -top-0 -right-0">
+                  <div className="bg-gradient-to-r from-[#f59e0b] to-[#fbbf24] text-white text-[10px] font-bold px-3 py-1 rounded-bl-xl">
+                    SAVE {savings}%
+                  </div>
+                </div>
+                
+                <div className="p-4 flex items-center gap-4">
+                  <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center ${
+                    selectedPlan === 'annual' ? 'bg-[#6366f1] border-[#6366f1]' : 'border-gray-300'
+                  }`}>
+                    {selectedPlan === 'annual' && <Check size={14} className="text-white" strokeWidth={3} />}
+                  </div>
+                  
+                  <div className="flex-1">
+                    <p className="font-bold text-[#1e1b4b]">Annual</p>
+                    <p className="text-xs text-gray-500">${annualMonthly}/month • Billed yearly</p>
+                  </div>
+                  
+                  <div className="text-right">
+                    <p className="font-extrabold text-xl text-[#1e1b4b]">${annualPrice}</p>
+                    <p className="text-xs text-gray-400 line-through">${(monthlyPrice * 12).toFixed(2)}</p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Monthly Option */}
+              <div 
+                onClick={() => setSelectedPlan('monthly')}
+                className={`relative w-full rounded-2xl border-2 overflow-hidden cursor-pointer transition-all ${
+                  selectedPlan === 'monthly' 
+                  ? 'bg-[#eef2ff] border-[#6366f1] shadow-md' 
+                  : 'bg-white border-gray-200'
+                }`}
+              >
+                <div className="p-4 flex items-center gap-4">
+                  <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center ${
+                    selectedPlan === 'monthly' ? 'bg-[#6366f1] border-[#6366f1]' : 'border-gray-300'
+                  }`}>
+                    {selectedPlan === 'monthly' && <Check size={14} className="text-white" strokeWidth={3} />}
+                  </div>
+                  
+                  <div className="flex-1">
+                    <p className="font-bold text-[#1e1b4b]">Monthly</p>
+                    <p className="text-xs text-gray-500">Cancel anytime</p>
+                  </div>
+                  
+                  <div className="text-right">
+                    <p className="font-extrabold text-xl text-[#1e1b4b]">${monthlyPrice}</p>
+                    <p className="text-xs text-gray-400">/month</p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Lifetime Option */}
+              <div 
+                onClick={() => setSelectedPlan('lifetime')}
+                className={`relative w-full rounded-2xl border-2 overflow-hidden cursor-pointer transition-all ${
+                  selectedPlan === 'lifetime' 
+                  ? 'bg-gradient-to-r from-[#fef3c7] to-[#fde68a] border-[#f59e0b] shadow-md' 
+                  : 'bg-white border-gray-200'
+                }`}
+              >
+                {/* Best Deal Badge */}
+                <div className="absolute -top-0 -right-0">
+                  <div className="bg-gradient-to-r from-[#7c3aed] to-[#8b5cf6] text-white text-[10px] font-bold px-3 py-1 rounded-bl-xl">
+                    BEST DEAL
+                  </div>
+                </div>
+                
+                <div className="p-4 flex items-center gap-4">
+                  <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center ${
+                    selectedPlan === 'lifetime' ? 'bg-[#f59e0b] border-[#f59e0b]' : 'border-gray-300'
+                  }`}>
+                    {selectedPlan === 'lifetime' && <Check size={14} className="text-white" strokeWidth={3} />}
+                  </div>
+                  
+                  <div className="flex-1">
+                    <p className="font-bold text-[#1e1b4b]">Lifetime Access</p>
+                    <p className="text-xs text-gray-500">One-time payment • Forever yours</p>
+                  </div>
+                  
+                  <div className="text-right">
+                    <p className="font-extrabold text-xl text-[#1e1b4b]">${lifetimePrice}</p>
+                    <p className="text-xs text-gray-400">one time</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Pricing Summary */}
+            <p className="text-center text-[#6366f1] font-medium text-sm mb-4">
+              {selectedPlan === 'lifetime' ? (
+                <>
+                  One-time payment of ${lifetimePrice} for lifetime access.
+                  <br />
+                  <span className="text-gray-500 font-normal">No subscriptions. Yours forever!</span>
+                </>
+              ) : (
+                <>
+                  Try 7 days for free, then {selectedPlan === 'annual' ? `$${annualPrice}/year` : `$${monthlyPrice}/month`}.
+                  <br />
+                  <span className="text-gray-500 font-normal">No commitment. Cancel anytime.</span>
+                </>
+              )}
             </p>
 
-            {/* Debug info for development */}
-            {!isNativeApp && (
-              <p className="text-white/20 text-[10px] mt-4">
-                Running in web mode (DeSpia will handle native purchases)
-              </p>
+            {/* Error Messages */}
+            {error && (
+              error.includes('processing') ? (
+                <div className="w-full max-w-sm bg-amber-50 border border-amber-200 text-amber-800 px-4 py-3 rounded-xl mb-4 text-sm">
+                  <div className="flex items-center gap-2 mb-1">
+                    <Loader2 size={16} className="animate-spin shrink-0" />
+                    <span className="font-semibold">Confirming your purchase...</span>
+                  </div>
+                  <p className="text-amber-700 text-xs">
+                    Payment is processing. We'll activate your subscription shortly.
+                  </p>
+                </div>
+              ) : (
+                <div className="w-full max-w-sm bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-xl mb-4 text-sm flex items-start gap-2">
+                  <AlertCircle size={16} className="shrink-0 mt-0.5" />
+                  <span>{error}</span>
+                </div>
+              )
             )}
+
+            {/* Migration Result */}
+            {migrationResult && (
+              <div className={`w-full max-w-sm px-4 py-3 rounded-xl mb-4 text-sm flex items-start gap-2 ${
+                migrationResult.type === 'success' 
+                  ? 'bg-green-50 border border-green-200 text-green-700' 
+                  : 'bg-blue-50 border border-blue-200 text-blue-700'
+              }`}>
+                {migrationResult.type === 'success' ? (
+                  <CheckCircle size={16} className="shrink-0 mt-0.5" />
+                ) : (
+                  <AlertCircle size={16} className="shrink-0 mt-0.5" />
+                )}
+                {migrationResult.message}
+              </div>
+            )}
+
+            {/* CTA Button */}
+            <button 
+              onClick={handleSubscribeClick}
+              disabled={isPurchasing || isRestoring || isLoading}
+              className={`w-full max-w-sm font-bold text-lg py-4 rounded-2xl shadow-lg active:scale-[0.98] transition-all mb-3 disabled:opacity-70 disabled:cursor-not-allowed ${
+                selectedPlan === 'lifetime'
+                  ? 'bg-gradient-to-r from-[#7c3aed] to-[#8b5cf6] text-white shadow-purple-200/50'
+                  : 'bg-gradient-to-r from-[#fbbf24] to-[#f59e0b] text-[#1e1b4b] shadow-amber-200/50'
+              }`}
+            >
+              {isPurchasing ? (
+                <span className="flex items-center justify-center gap-2">
+                  <Loader2 className="w-5 h-5 animate-spin" />
+                  Processing...
+                </span>
+              ) : (
+                <span className="flex flex-col items-center">
+                  {selectedPlan === 'lifetime' ? (
+                    <span>{firstName ? `${firstName}, ` : ''}Get Lifetime Access</span>
+                  ) : (
+                    <span>{firstName ? `${firstName}, ` : ''}Start your free trial</span>
+                  )}
+                </span>
+              )}
+            </button>
+
+            {/* No Payment Now Badge - only show for subscription plans */}
+            {selectedPlan !== 'lifetime' && (
+              <div className="flex items-center gap-2 text-green-600 mb-6">
+                <Check size={18} strokeWidth={3} />
+                <span className="font-semibold text-sm">No payment now!</span>
+              </div>
+            )}
+            
+            {/* Lifetime badge */}
+            {selectedPlan === 'lifetime' && (
+              <div className="flex items-center gap-2 text-purple-600 mb-6">
+                <Check size={18} strokeWidth={3} />
+                <span className="font-semibold text-sm">One-time purchase • No recurring fees</span>
+              </div>
+            )}
+
+            {/* How to Cancel Section */}
+            <div className="w-full max-w-sm bg-white rounded-2xl p-4 border border-gray-100 shadow-sm mb-6">
+              <h3 className="font-bold text-[#1e1b4b] mb-2">How can I cancel?</h3>
+              <p className="text-gray-600 text-sm leading-relaxed">
+                It's easy! Open your phone Settings, tap your name, then tap Subscriptions and choose Godly Kids. Tap Cancel Subscription. Done!
+              </p>
+            </div>
+
+            {/* Features Grid */}
+            <div className="w-full max-w-sm grid grid-cols-2 gap-3 mb-6">
+              {[
+                { icon: "📖", text: "Bible Stories" },
+                { icon: "🎮", text: "Learning Games" },
+                { icon: "🎧", text: "Audio Lessons" },
+                { icon: "📝", text: "Fun Quizzes" },
+                { icon: "🏆", text: "Rewards System" },
+                { icon: "🔒", text: "100% Ad-Free" },
+              ].map((feature, i) => (
+                <div key={i} className="flex items-center gap-2 bg-white rounded-xl px-3 py-2 border border-gray-100">
+                  <span className="text-lg">{feature.icon}</span>
+                  <span className="text-sm font-medium text-[#1e1b4b]">{feature.text}</span>
+                </div>
+              ))}
+            </div>
+
+            {/* Fine Print */}
+            <p className="text-gray-400 text-[10px] text-center px-4 max-w-sm leading-relaxed">
+              Free trial for 7 days, then subscription automatically renews unless cancelled at least 24-hours before the trial ends. Cancel anytime in App Store or Google Play.
+            </p>
         </div>
 
         <ParentGateModal 
-            isOpen={showParentGate} 
-            onClose={() => setShowParentGate(false)} 
-            onSuccess={handleGateSuccess} 
+          isOpen={showParentGate} 
+          onClose={() => setShowParentGate(false)} 
+          onSuccess={handleGateSuccess} 
         />
 
         {/* Account Required Modal */}
@@ -661,15 +750,15 @@ const PaywallPage: React.FC = () => {
               </button>
               
               <div className="flex flex-col items-center text-center">
-                <div className="w-16 h-16 bg-[#ede7f6] rounded-full flex items-center justify-center mb-4">
-                  <UserPlus size={32} className="text-[#7c4dff]" />
+                <div className="w-16 h-16 bg-[#eef2ff] rounded-full flex items-center justify-center mb-4">
+                  <UserPlus size={32} className="text-[#6366f1]" />
                 </div>
                 
-                <h2 className="text-[#1a237e] font-display font-bold text-xl mb-2">
+                <h2 className="text-[#1e1b4b] font-bold text-xl mb-2">
                   Create an Account First
                 </h2>
                 <p className="text-gray-600 text-sm mb-6">
-                  To manage your subscription and sync your progress across devices, please create a free account before subscribing.
+                  To manage your subscription and sync progress across devices, please create a free account.
                 </p>
                 
                 <button
@@ -677,7 +766,7 @@ const PaywallPage: React.FC = () => {
                     setShowAccountRequired(false);
                     navigate('/onboarding');
                   }}
-                  className="w-full bg-gradient-to-r from-[#7c4dff] to-[#536dfe] text-white font-bold py-3 px-4 rounded-xl shadow-lg flex items-center justify-center gap-2 mb-3"
+                  className="w-full bg-gradient-to-r from-[#6366f1] to-[#4f46e5] text-white font-bold py-3 px-4 rounded-xl shadow-lg flex items-center justify-center gap-2 mb-3"
                 >
                   <UserPlus size={18} />
                   Create Free Account
@@ -688,7 +777,7 @@ const PaywallPage: React.FC = () => {
                     setShowAccountRequired(false);
                     navigate('/signin');
                   }}
-                  className="text-[#7c4dff] text-sm font-semibold hover:underline"
+                  className="text-[#6366f1] text-sm font-semibold hover:underline"
                 >
                   Already have an account? Sign In
                 </button>
@@ -712,11 +801,11 @@ const PaywallPage: React.FC = () => {
                 <X size={24} />
               </button>
               
-              <h2 className="text-[#1a237e] font-display font-bold text-xl mb-2">
+              <h2 className="text-[#1e1b4b] font-bold text-xl mb-2">
                 Restore Subscription
               </h2>
               <p className="text-gray-600 text-sm mb-4">
-                Enter the email address you used when you originally subscribed:
+                Enter your email to find your subscription:
               </p>
               
               <div className="relative mb-4">
@@ -726,7 +815,7 @@ const PaywallPage: React.FC = () => {
                   value={restoreEmail}
                   onChange={(e) => setRestoreEmail(e.target.value)}
                   placeholder="your@email.com"
-                  className="w-full bg-gray-50 border border-gray-200 rounded-xl py-3 pl-10 pr-4 text-gray-800 placeholder:text-gray-400 focus:outline-none focus:border-[#7c4dff] focus:ring-2 focus:ring-[#7c4dff]/20"
+                  className="w-full bg-gray-50 border border-gray-200 rounded-xl py-3 pl-10 pr-4 text-gray-800 placeholder:text-gray-400 focus:outline-none focus:border-[#6366f1] focus:ring-2 focus:ring-[#6366f1]/20"
                   autoFocus
                 />
               </div>
@@ -734,7 +823,7 @@ const PaywallPage: React.FC = () => {
               <button
                 onClick={() => handleRestorePurchases(restoreEmail)}
                 disabled={!restoreEmail || isRestoring}
-                className="w-full bg-gradient-to-r from-[#7c4dff] to-[#536dfe] text-white font-bold py-3 px-4 rounded-xl shadow-lg disabled:opacity-50 flex items-center justify-center gap-2"
+                className="w-full bg-gradient-to-r from-[#6366f1] to-[#4f46e5] text-white font-bold py-3 px-4 rounded-xl shadow-lg disabled:opacity-50 flex items-center justify-center gap-2"
               >
                 {isRestoring ? (
                   <>
@@ -748,39 +837,9 @@ const PaywallPage: React.FC = () => {
                   </>
                 )}
               </button>
-              
-              <p className="text-gray-400 text-xs text-center mt-3">
-                This will check both the new app and old GodlyKids app databases.
-              </p>
             </div>
           </div>
         )}
-        
-        {/* Social Proof Notification */}
-        <div 
-          className={`fixed bottom-24 left-4 right-4 z-50 transition-all duration-500 ${
-            showSocialProof 
-              ? 'opacity-100 translate-y-0' 
-              : 'opacity-0 translate-y-4 pointer-events-none'
-          }`}
-        >
-          <div className="bg-white/95 backdrop-blur-sm rounded-2xl shadow-xl border border-[#7c4dff]/20 p-3 flex items-center gap-3 max-w-sm mx-auto">
-            <div className="w-10 h-10 rounded-full bg-gradient-to-br from-[#7c4dff] to-[#536dfe] flex items-center justify-center flex-shrink-0">
-              <span className="text-lg">👨‍👩‍👧</span>
-            </div>
-            <div className="flex-1 min-w-0">
-              <p className="text-[#1a237e] font-semibold text-sm truncate">
-                {socialProofData.name} from {socialProofData.location}
-              </p>
-              <p className="text-gray-500 text-xs">
-                Just subscribed! • {socialProofData.time}
-              </p>
-            </div>
-            <div className="text-green-500 flex-shrink-0">
-              <Check size={20} />
-            </div>
-          </div>
-        </div>
     </div>
   );
 };

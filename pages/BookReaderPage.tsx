@@ -5357,7 +5357,7 @@ const BookReaderPage: React.FC = () => {
                             </div>
                             
                             <p className="text-white/50 text-xs mt-4">
-                                14-day free trial • Cancel anytime
+                                7-day free trial • Cancel anytime
                             </p>
                         </div>
                     </div>

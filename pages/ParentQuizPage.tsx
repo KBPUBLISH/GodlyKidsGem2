@@ -839,7 +839,7 @@ const ParentQuizPage: React.FC = () => {
                   ✨ Founding Family Plan ✨
                 </p>
                 <div className="bg-white/80 rounded-xl p-4 my-4">
-                  <p className="text-sm text-stone-500 mb-1">14-day free trial, then</p>
+                  <p className="text-sm text-stone-500 mb-1">7-day free trial, then</p>
                   <div className="flex items-center justify-center gap-3">
                     <div>
                       <p className="text-2xl font-bold text-amber-600">$39.99/yr</p>

@@ -11,7 +11,7 @@ interface SubscriptionContextType {
   
   // Actions
   checkPremiumStatus: () => Promise<boolean>;
-  purchase: (plan: 'annual' | 'monthly') => Promise<{ success: boolean; error?: string }>;
+  purchase: (plan: 'annual' | 'monthly' | 'lifetime') => Promise<{ success: boolean; error?: string }>;
   restorePurchases: () => Promise<{ success: boolean; error?: string }>;
   
   // For testing in web browser
@@ -225,7 +225,7 @@ export const SubscriptionProvider: React.FC<SubscriptionProviderProps> = ({ chil
   }, [checkSubscriptionFromAllSources]);
 
   // Purchase a subscription
-  const purchase = useCallback(async (plan: 'annual' | 'monthly'): Promise<{ success: boolean; error?: string }> => {
+  const purchase = useCallback(async (plan: 'annual' | 'monthly' | 'lifetime'): Promise<{ success: boolean; error?: string }> => {
     setIsLoading(true);
     
     try {

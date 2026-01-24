@@ -23,6 +23,7 @@ export const PREMIUM_ENTITLEMENT_ID = 'premium';
 export const PRODUCT_IDS = {
   ANNUAL: 'kbpublish.godlykids.yearly',
   MONTHLY: 'kbpublish.godlykids.monthly',
+  LIFETIME: 'Lifetimepurchase',
 };
 
 // Web Billing product IDs (Stripe products linked in RevenueCat Web Billing)
@@ -256,11 +257,15 @@ export const RevenueCatService = {
 
   /**
    * Purchase a subscription using DeSpia URL scheme
-   * @param productId - 'annual' or 'monthly'
+   * @param productId - 'annual', 'monthly', or 'lifetime'
    * @param quickMode - if true, returns success quickly after triggering Apple sheet (optimistic)
    */
-  purchase: async (productId: 'annual' | 'monthly', quickMode: boolean = true): Promise<{ success: boolean; error?: string }> => {
-    const rcProductId = productId === 'annual' ? PRODUCT_IDS.ANNUAL : PRODUCT_IDS.MONTHLY;
+  purchase: async (productId: 'annual' | 'monthly' | 'lifetime', quickMode: boolean = true): Promise<{ success: boolean; error?: string }> => {
+    const rcProductId = productId === 'lifetime' 
+      ? PRODUCT_IDS.LIFETIME 
+      : productId === 'annual' 
+        ? PRODUCT_IDS.ANNUAL 
+        : PRODUCT_IDS.MONTHLY;
     const userId = getUserId();
     
     console.log('🛒 Initiating purchase via DeSpia URL scheme');
@@ -581,7 +586,7 @@ export const RevenueCatService = {
    * Web-based purchase via Stripe Checkout
    * Redirects directly to Stripe's hosted checkout page
    */
-  purchaseWeb: async (productId: 'annual' | 'monthly'): Promise<{ success: boolean; error?: string }> => {
+  purchaseWeb: async (productId: 'annual' | 'monthly' | 'lifetime'): Promise<{ success: boolean; error?: string }> => {
     const userId = getUserId();
     const userEmail = localStorage.getItem('godlykids_user_email') || '';
     

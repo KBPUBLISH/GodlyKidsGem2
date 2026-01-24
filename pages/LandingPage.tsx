@@ -352,7 +352,7 @@ const LandingPage: React.FC = () => {
                 <span className="text-white/60 text-xs">•</span>
                 <span className="text-white/80 text-sm">~$3.33/mo</span>
                 <span className="text-white/60 text-xs">•</span>
-                <span className="text-[#4ade80] text-sm font-semibold">14-day free trial</span>
+                <span className="text-[#4ade80] text-sm font-semibold">7-day free trial</span>
              </div>
              
              {/* Library Access */}

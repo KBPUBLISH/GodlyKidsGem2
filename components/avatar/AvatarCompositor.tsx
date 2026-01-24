@@ -94,7 +94,7 @@ const AvatarCompositor: React.FC<AvatarCompositorProps> = ({
   const DEFAULT_ARM_TOP = 15; 
   const DEFAULT_ARM_SIDE = -25; // Adjusted for 44% width
   const DEFAULT_LEGS_TOP = 85;
-  const DEFAULT_LEGS_LEFT = 15;
+  const DEFAULT_LEGS_LEFT = 50; // Centered horizontally
 
   // Determine which animation class to apply to the body container
   let bodyAnimationClass = isAnimating ? animationStyle : '';

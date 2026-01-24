@@ -522,8 +522,23 @@ router.post('/onboarding/event', async (req, res) => {
             });
         }
         
+        // For account_created event, use the email as userId and update all previous events in this session
+        let finalUserId = userId;
+        if (event === 'account_created' && metadata?.email) {
+            finalUserId = metadata.email.toLowerCase().trim();
+            
+            // Update all previous events in this session to use the email instead of device ID
+            if (sessionId) {
+                const updateResult = await OnboardingEvent.updateMany(
+                    { sessionId, userId: { $ne: finalUserId } },
+                    { $set: { userId: finalUserId } }
+                );
+                console.log(`📊 Updated ${updateResult.modifiedCount} previous events in session ${sessionId} to use email ${finalUserId}`);
+            }
+        }
+        
         const onboardingEvent = new OnboardingEvent({
-            userId,
+            userId: finalUserId,
             sessionId: sessionId || `session_${Date.now()}`,
             event,
             metadata: metadata || {},
@@ -531,7 +546,7 @@ router.post('/onboarding/event', async (req, res) => {
         
         await onboardingEvent.save();
         
-        console.log(`📊 Onboarding event SAVED: ${event} for user ${userId}`);
+        console.log(`📊 Onboarding event SAVED: ${event} for user ${finalUserId}`);
         
         res.json({ success: true });
     } catch (error) {

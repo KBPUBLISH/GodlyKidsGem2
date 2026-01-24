@@ -586,32 +586,42 @@ router.get('/onboarding', async (req, res) => {
         });
         
         // Calculate conversion rates
-        // New 6-step onboarding flow:
-        // 1. Parent Profile -> 2. Family/Kids -> 3. Discipleship Goals -> 4. Feature Interests -> 5. Voice Selection -> 6. Account Creation
+        // Onboarding flow:
+        // 1. Account Created (from tutorial) -> 2. Parent Profile -> 3. Family/Kids -> 4. Goals -> 5. Features -> 6. Voice -> Paywall
         const started = eventCounts['onboarding_started'] || 0;
+        const accountCreated = eventCounts['account_created'] || 0;
         const step1 = eventCounts['step_1_complete'] || 0;  // Parent profile
         const step2 = eventCounts['step_2_complete'] || 0;  // Family/Kids
-        const step3 = eventCounts['step_3_complete'] || 0;  // Discipleship Goals (NEW)
-        const step4 = eventCounts['step_4_complete'] || 0;  // Feature Interests (NEW)
-        const step5 = eventCounts['step_5_complete'] || 0;  // Voice Selection (was step 3)
-        const step6 = eventCounts['step_6_complete'] || 0;  // Account Creation (NEW)
-        const accountCreated = eventCounts['account_created'] || 0;
+        const step3 = eventCounts['step_3_complete'] || 0;  // Discipleship Goals
+        const step4 = eventCounts['step_4_complete'] || 0;  // Feature Interests
+        const step5 = eventCounts['step_5_complete'] || 0;  // Voice Selection
+        const step6 = eventCounts['step_6_complete'] || 0;  // (Legacy) Account at end
+        const paywallShown = eventCounts['paywall_shown'] || 0;
+        const paywallTrialClicked = eventCounts['paywall_trial_clicked'] || 0;
+        const paywallClosed = eventCounts['paywall_closed'] || 0;
+        const subscribed = eventCounts['subscribed'] || 0;
         const subscribeClicked = eventCounts['subscribe_clicked'] || 0;
         const subscriptionStarted = eventCounts['subscription_started'] || 0;
         const trialStarted = eventCounts['trial_started'] || 0;
         const skipped = eventCounts['skip_clicked'] || 0;
         const completed = eventCounts['onboarding_complete'] || 0;
         
-        // Build funnel data - New 6-step flow
+        // Total subscribed (from various events)
+        const totalSubscribed = subscribed + subscriptionStarted + trialStarted;
+        
+        // Build funnel data - Account first, then onboarding steps, then paywall
         const funnel = [
             { step: 'Started', count: started, rate: 100 },
+            { step: 'Account Created', count: accountCreated || step6, rate: started > 0 ? Math.round(((accountCreated || step6) / started) * 100) : 0 },
             { step: 'Step 1 (Parent)', count: step1, rate: started > 0 ? Math.round((step1 / started) * 100) : 0 },
             { step: 'Step 2 (Family)', count: step2, rate: started > 0 ? Math.round((step2 / started) * 100) : 0 },
             { step: 'Step 3 (Goals)', count: step3, rate: started > 0 ? Math.round((step3 / started) * 100) : 0 },
             { step: 'Step 4 (Features)', count: step4, rate: started > 0 ? Math.round((step4 / started) * 100) : 0 },
             { step: 'Step 5 (Voice)', count: step5, rate: started > 0 ? Math.round((step5 / started) * 100) : 0 },
-            { step: 'Step 6 (Account)', count: step6 || accountCreated, rate: started > 0 ? Math.round(((step6 || accountCreated) / started) * 100) : 0 },
-            { step: 'Subscribed', count: subscriptionStarted + trialStarted, rate: started > 0 ? Math.round(((subscriptionStarted + trialStarted) / started) * 100) : 0 },
+            { step: 'Paywall Shown', count: paywallShown, rate: started > 0 ? Math.round((paywallShown / started) * 100) : 0 },
+            { step: 'Trial Clicked', count: paywallTrialClicked, rate: paywallShown > 0 ? Math.round((paywallTrialClicked / paywallShown) * 100) : 0 },
+            { step: 'Paywall Closed', count: paywallClosed, rate: paywallShown > 0 ? Math.round((paywallClosed / paywallShown) * 100) : 0 },
+            { step: 'Subscribed', count: totalSubscribed, rate: started > 0 ? Math.round((totalSubscribed / started) * 100) : 0 },
         ];
         
         // Daily trends (last 14 days)
@@ -1255,6 +1265,207 @@ router.get('/onboarding/preferences', async (req, res) => {
         res.status(500).json({
             success: false,
             error: error.message
+        });
+    }
+});
+
+/**
+ * GET /api/analytics/retention
+ * Get user retention metrics (Day 1, 7, 14, 30)
+ * 
+ * Query params:
+ *   days: number of days to look back for cohorts (default 30)
+ */
+router.get('/retention', async (req, res) => {
+    try {
+        const days = parseInt(req.query.days) || 30;
+        const now = new Date();
+        const startDate = new Date(now);
+        startDate.setDate(startDate.getDate() - days);
+        
+        // Get all users who signed up in the period
+        const users = await AppUser.find({
+            createdAt: { $gte: startDate }
+        }).select('createdAt lastActiveAt').lean();
+        
+        // Also get auth users
+        const authUsers = await User.find({
+            createdAt: { $gte: startDate }
+        }).select('email createdAt updatedAt').lean();
+        
+        // Merge: Create map of email -> AppUser lastActiveAt
+        const appUserMap = new Map();
+        users.forEach(u => {
+            if (u.email) appUserMap.set(u.email.toLowerCase(), u);
+        });
+        
+        // Combine all users with their best lastActiveAt
+        const allUsers = [];
+        const processedEmails = new Set();
+        
+        // First add auth users with app user data if available
+        authUsers.forEach(authUser => {
+            const email = authUser.email?.toLowerCase();
+            const appUser = email ? appUserMap.get(email) : null;
+            
+            allUsers.push({
+                createdAt: authUser.createdAt,
+                lastActiveAt: appUser?.lastActiveAt || authUser.updatedAt,
+            });
+            
+            if (email) processedEmails.add(email);
+        });
+        
+        // Then add app-only users
+        users.forEach(u => {
+            const email = u.email?.toLowerCase();
+            if (email && processedEmails.has(email)) return;
+            
+            allUsers.push({
+                createdAt: u.createdAt,
+                lastActiveAt: u.lastActiveAt,
+            });
+        });
+        
+        // Retention periods to calculate
+        const retentionDays = [1, 3, 7, 14, 21, 30];
+        
+        // Calculate retention for each cohort day
+        const dailyCohorts = [];
+        for (let i = days - 1; i >= 0; i--) {
+            const cohortDate = new Date(now);
+            cohortDate.setDate(cohortDate.getDate() - i);
+            cohortDate.setHours(0, 0, 0, 0);
+            
+            const nextDay = new Date(cohortDate);
+            nextDay.setDate(nextDay.getDate() + 1);
+            
+            // Users who signed up on this day
+            const cohortUsers = allUsers.filter(u => {
+                const created = new Date(u.createdAt);
+                return created >= cohortDate && created < nextDay;
+            });
+            
+            const cohortSize = cohortUsers.length;
+            if (cohortSize === 0) continue;
+            
+            // Calculate retention for each period
+            const retention = {};
+            retentionDays.forEach(retDay => {
+                // Only calculate if enough time has passed
+                const daysSinceCohort = i;
+                if (daysSinceCohort < retDay) {
+                    retention[`day${retDay}`] = null; // Not enough time has passed
+                    return;
+                }
+                
+                // Users who were active on or after retDay days from signup
+                const retainedUsers = cohortUsers.filter(u => {
+                    if (!u.lastActiveAt) return false;
+                    
+                    const created = new Date(u.createdAt);
+                    const lastActive = new Date(u.lastActiveAt);
+                    const targetDate = new Date(created);
+                    targetDate.setDate(targetDate.getDate() + retDay);
+                    
+                    return lastActive >= targetDate;
+                });
+                
+                retention[`day${retDay}`] = Math.round((retainedUsers.length / cohortSize) * 100);
+            });
+            
+            dailyCohorts.push({
+                date: cohortDate.toISOString().split('T')[0],
+                cohortSize,
+                ...retention,
+            });
+        }
+        
+        // Calculate average retention rates across all cohorts
+        const avgRetention = {};
+        retentionDays.forEach(retDay => {
+            const key = `day${retDay}`;
+            const validCohorts = dailyCohorts.filter(c => c[key] !== null);
+            if (validCohorts.length > 0) {
+                avgRetention[key] = Math.round(
+                    validCohorts.reduce((sum, c) => sum + c[key], 0) / validCohorts.length
+                );
+            } else {
+                avgRetention[key] = null;
+            }
+        });
+        
+        // Weekly cohort aggregation (for cleaner visualization)
+        const weeklyCohorts = [];
+        const weeklyData = {};
+        
+        dailyCohorts.forEach(cohort => {
+            const date = new Date(cohort.date);
+            const weekStart = new Date(date);
+            weekStart.setDate(weekStart.getDate() - weekStart.getDay()); // Sunday
+            const weekKey = weekStart.toISOString().split('T')[0];
+            
+            if (!weeklyData[weekKey]) {
+                weeklyData[weekKey] = {
+                    weekStart: weekKey,
+                    cohortSize: 0,
+                    retention: {},
+                    counts: {},
+                };
+                retentionDays.forEach(d => {
+                    weeklyData[weekKey].retention[`day${d}`] = 0;
+                    weeklyData[weekKey].counts[`day${d}`] = 0;
+                });
+            }
+            
+            weeklyData[weekKey].cohortSize += cohort.cohortSize;
+            retentionDays.forEach(d => {
+                const key = `day${d}`;
+                if (cohort[key] !== null) {
+                    weeklyData[weekKey].retention[key] += cohort[key] * cohort.cohortSize;
+                    weeklyData[weekKey].counts[key] += cohort.cohortSize;
+                }
+            });
+        });
+        
+        Object.values(weeklyData).forEach(week => {
+            const weekResult = {
+                weekStart: week.weekStart,
+                cohortSize: week.cohortSize,
+            };
+            
+            retentionDays.forEach(d => {
+                const key = `day${d}`;
+                if (week.counts[key] > 0) {
+                    weekResult[key] = Math.round(week.retention[key] / week.counts[key]);
+                } else {
+                    weekResult[key] = null;
+                }
+            });
+            
+            weeklyCohorts.push(weekResult);
+        });
+        
+        // Sort by date
+        weeklyCohorts.sort((a, b) => new Date(a.weekStart) - new Date(b.weekStart));
+        
+        res.json({
+            success: true,
+            period: { days, startDate: startDate.toISOString() },
+            summary: {
+                totalUsers: allUsers.length,
+                avgRetention,
+            },
+            retentionDays,
+            dailyCohorts: dailyCohorts.slice(-14), // Last 14 days
+            weeklyCohorts,
+        });
+    } catch (error) {
+        console.error('Retention analytics error:', error);
+        res.status(500).json({ 
+            success: false, 
+            message: 'Failed to fetch retention analytics',
+            error: error.message 
         });
     }
 });

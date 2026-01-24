@@ -21,7 +21,7 @@ router.get('/create-checkout-session', (req, res) => {
     message: 'Stripe checkout endpoint is working! Use POST method with: plan, userId, email, successUrl, cancelUrl',
     method: 'POST required',
     example: {
-      plan: 'annual or monthly',
+      plan: 'annual, monthly, or lifetime',
       userId: 'user-id',
       email: 'user@example.com',
       successUrl: 'https://app.godlykids.com/#/payment-success',
@@ -41,8 +41,8 @@ router.post('/create-checkout-session', async (req, res) => {
   try {
     const { plan, userId, email, successUrl, cancelUrl } = req.body;
 
-    if (!plan || !['annual', 'monthly'].includes(plan)) {
-      return res.status(400).json({ error: 'Invalid plan. Must be "annual" or "monthly"' });
+    if (!plan || !['annual', 'monthly', 'lifetime'].includes(plan)) {
+      return res.status(400).json({ error: 'Invalid plan. Must be "annual", "monthly", or "lifetime"' });
     }
 
     const priceId = PRICE_IDS[plan];

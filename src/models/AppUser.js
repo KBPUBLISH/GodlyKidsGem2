@@ -145,6 +145,27 @@ const appUserSchema = new mongoose.Schema({
         default: 500,
     },
     
+    // Token balance for Godly Hub purchases
+    tokenBalance: {
+        type: Number,
+        default: 0,
+    },
+    
+    // Godly Hub content purchases
+    hubPurchases: [{
+        playlistId: {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: 'HubPlaylist',
+        },
+        purchasedAt: {
+            type: Date,
+            default: Date.now,
+        },
+        tokensPaid: {
+            type: Number,
+        },
+    }],
+    
     // Referral system
     referralCode: {
         type: String,

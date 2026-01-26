@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Bell, Send, Clock, Users, Image, Link, AlertCircle, CheckCircle, Settings, Calendar, Sun, Moon, Sparkles, Save, ToggleLeft, ToggleRight } from 'lucide-react';
+import { Bell, Send, Clock, Users, Image, Link, AlertCircle, CheckCircle, Settings, Calendar, Sun, Moon, Sparkles, Save, ToggleLeft, ToggleRight, BarChart3, TrendingUp, Eye, MousePointer, RefreshCw } from 'lucide-react';
 import apiClient from '../services/apiClient';
 
 interface NotificationForm {
@@ -9,6 +9,27 @@ interface NotificationForm {
     imageUrl: string;
     segment: string;
     scheduledTime: string;
+}
+
+interface NotificationStats {
+    id: string;
+    heading: string;
+    contents: string;
+    successful: number;
+    failed: number;
+    converted: number;
+    remaining: number;
+    queued_at: string;
+    completed_at: string;
+    platform_delivery_stats?: {
+        ios?: { successful: number; failed: number; converted: number };
+        android?: { successful: number; failed: number; converted: number };
+    };
+}
+
+interface NotificationHistory {
+    notifications: NotificationStats[];
+    total_count: number;
 }
 
 interface AutoNotificationSettings {
@@ -56,9 +77,14 @@ const Notifications: React.FC = () => {
     });
     const [sending, setSending] = useState(false);
     const [result, setResult] = useState<{ success: boolean; message: string } | null>(null);
-    const [activeTab, setActiveTab] = useState<'manual' | 'automatic'>('manual');
+    const [activeTab, setActiveTab] = useState<'manual' | 'automatic' | 'analytics'>('manual');
     const [savingAuto, setSavingAuto] = useState(false);
     const [autoResult, setAutoResult] = useState<{ success: boolean; message: string } | null>(null);
+    
+    // Analytics state
+    const [notificationHistory, setNotificationHistory] = useState<NotificationHistory | null>(null);
+    const [loadingHistory, setLoadingHistory] = useState(false);
+    const [analyticsError, setAnalyticsError] = useState<string | null>(null);
     
     const [autoSettings, setAutoSettings] = useState<AutoNotificationSettings>({
         dailyReminder: {
@@ -108,6 +134,27 @@ const Notifications: React.FC = () => {
         };
         loadAutoSettings();
     }, []);
+
+    // Load notification history when analytics tab is active
+    const loadNotificationHistory = async () => {
+        setLoadingHistory(true);
+        setAnalyticsError(null);
+        try {
+            const response = await apiClient.get('/api/notifications/history');
+            setNotificationHistory(response.data);
+        } catch (error: any) {
+            console.error('Error loading notification history:', error);
+            setAnalyticsError(error.response?.data?.message || 'Failed to load notification history');
+        } finally {
+            setLoadingHistory(false);
+        }
+    };
+
+    useEffect(() => {
+        if (activeTab === 'analytics') {
+            loadNotificationHistory();
+        }
+    }, [activeTab]);
 
     const saveAutoSettings = async () => {
         setSavingAuto(true);
@@ -259,6 +306,17 @@ const Notifications: React.FC = () => {
                 >
                     <Settings className="w-4 h-4" />
                     Automatic Notifications
+                </button>
+                <button
+                    onClick={() => setActiveTab('analytics')}
+                    className={`px-6 py-3 rounded-lg font-medium transition-all flex items-center gap-2 ${
+                        activeTab === 'analytics'
+                            ? 'bg-indigo-600 text-white shadow-md'
+                            : 'bg-white text-gray-600 border border-gray-200 hover:bg-gray-50'
+                    }`}
+                >
+                    <BarChart3 className="w-4 h-4" />
+                    Analytics
                 </button>
             </div>
 
@@ -883,6 +941,251 @@ const Notifications: React.FC = () => {
                             )}
                         </button>
                     </div>
+                </div>
+            )}
+
+            {/* Analytics Tab */}
+            {activeTab === 'analytics' && (
+                <div className="space-y-6">
+                    {/* Header with Refresh */}
+                    <div className="flex items-center justify-between">
+                        <div className="bg-gradient-to-r from-green-50 to-blue-50 rounded-xl p-6 border border-green-100 flex-1">
+                            <div className="flex items-start gap-4">
+                                <div className="p-3 bg-white rounded-lg shadow-sm">
+                                    <BarChart3 className="w-6 h-6 text-green-600" />
+                                </div>
+                                <div>
+                                    <h3 className="font-semibold text-gray-800">Notification Analytics</h3>
+                                    <p className="text-sm text-gray-600 mt-1">
+                                        Track the performance of your push notifications. See how many were sent, delivered, and opened.
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+                        <button
+                            onClick={loadNotificationHistory}
+                            disabled={loadingHistory}
+                            className="ml-4 p-3 bg-white rounded-lg border border-gray-200 hover:bg-gray-50 transition disabled:opacity-50"
+                        >
+                            <RefreshCw className={`w-5 h-5 text-gray-600 ${loadingHistory ? 'animate-spin' : ''}`} />
+                        </button>
+                    </div>
+
+                    {/* Error Message */}
+                    {analyticsError && (
+                        <div className="bg-red-50 border border-red-200 text-red-800 p-4 rounded-lg flex items-center gap-3">
+                            <AlertCircle className="w-5 h-5 text-red-600" />
+                            {analyticsError}
+                        </div>
+                    )}
+
+                    {/* Loading State */}
+                    {loadingHistory && (
+                        <div className="flex items-center justify-center py-12">
+                            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div>
+                        </div>
+                    )}
+
+                    {/* Summary Stats */}
+                    {notificationHistory && !loadingHistory && (
+                        <>
+                            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                                <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-5">
+                                    <div className="flex items-center gap-3">
+                                        <div className="p-2 bg-blue-100 rounded-lg">
+                                            <Send className="w-5 h-5 text-blue-600" />
+                                        </div>
+                                        <div>
+                                            <p className="text-sm text-gray-500">Total Sent</p>
+                                            <p className="text-2xl font-bold text-gray-900">
+                                                {notificationHistory.notifications.reduce((sum, n) => sum + n.successful, 0).toLocaleString()}
+                                            </p>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-5">
+                                    <div className="flex items-center gap-3">
+                                        <div className="p-2 bg-green-100 rounded-lg">
+                                            <CheckCircle className="w-5 h-5 text-green-600" />
+                                        </div>
+                                        <div>
+                                            <p className="text-sm text-gray-500">Delivered</p>
+                                            <p className="text-2xl font-bold text-gray-900">
+                                                {notificationHistory.notifications.reduce((sum, n) => sum + n.successful - n.failed, 0).toLocaleString()}
+                                            </p>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-5">
+                                    <div className="flex items-center gap-3">
+                                        <div className="p-2 bg-purple-100 rounded-lg">
+                                            <MousePointer className="w-5 h-5 text-purple-600" />
+                                        </div>
+                                        <div>
+                                            <p className="text-sm text-gray-500">Opened</p>
+                                            <p className="text-2xl font-bold text-gray-900">
+                                                {notificationHistory.notifications.reduce((sum, n) => sum + n.converted, 0).toLocaleString()}
+                                            </p>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-5">
+                                    <div className="flex items-center gap-3">
+                                        <div className="p-2 bg-amber-100 rounded-lg">
+                                            <TrendingUp className="w-5 h-5 text-amber-600" />
+                                        </div>
+                                        <div>
+                                            <p className="text-sm text-gray-500">Avg Open Rate</p>
+                                            <p className="text-2xl font-bold text-gray-900">
+                                                {(() => {
+                                                    const totalSent = notificationHistory.notifications.reduce((sum, n) => sum + n.successful, 0);
+                                                    const totalOpened = notificationHistory.notifications.reduce((sum, n) => sum + n.converted, 0);
+                                                    return totalSent > 0 ? ((totalOpened / totalSent) * 100).toFixed(1) + '%' : '0%';
+                                                })()}
+                                            </p>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Notification History Table */}
+                            <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+                                <div className="px-6 py-4 border-b border-gray-100">
+                                    <h3 className="font-semibold text-gray-800">Recent Notifications</h3>
+                                    <p className="text-sm text-gray-500">Last {notificationHistory.notifications.length} notifications sent</p>
+                                </div>
+                                
+                                {notificationHistory.notifications.length === 0 ? (
+                                    <div className="p-8 text-center text-gray-500">
+                                        <Bell className="w-12 h-12 mx-auto mb-3 text-gray-300" />
+                                        <p>No notifications sent yet</p>
+                                        <p className="text-sm text-gray-400 mt-1">Send your first notification to see analytics</p>
+                                    </div>
+                                ) : (
+                                    <div className="overflow-x-auto">
+                                        <table className="w-full">
+                                            <thead className="bg-gray-50 border-b border-gray-100">
+                                                <tr>
+                                                    <th className="text-left px-6 py-3 text-sm font-medium text-gray-500">Notification</th>
+                                                    <th className="text-center px-4 py-3 text-sm font-medium text-gray-500">Sent</th>
+                                                    <th className="text-center px-4 py-3 text-sm font-medium text-gray-500">Delivered</th>
+                                                    <th className="text-center px-4 py-3 text-sm font-medium text-gray-500">Opened</th>
+                                                    <th className="text-center px-4 py-3 text-sm font-medium text-gray-500">Open Rate</th>
+                                                    <th className="text-right px-6 py-3 text-sm font-medium text-gray-500">Date</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody className="divide-y divide-gray-100">
+                                                {notificationHistory.notifications.map((notification) => {
+                                                    const delivered = notification.successful - notification.failed;
+                                                    const openRate = notification.successful > 0 
+                                                        ? ((notification.converted / notification.successful) * 100).toFixed(1) 
+                                                        : '0';
+                                                    return (
+                                                        <tr key={notification.id} className="hover:bg-gray-50">
+                                                            <td className="px-6 py-4">
+                                                                <div className="max-w-xs">
+                                                                    <p className="font-medium text-gray-900 truncate">{notification.heading}</p>
+                                                                    <p className="text-sm text-gray-500 truncate">{notification.contents}</p>
+                                                                </div>
+                                                            </td>
+                                                            <td className="px-4 py-4 text-center">
+                                                                <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                                                                    {notification.successful.toLocaleString()}
+                                                                </span>
+                                                            </td>
+                                                            <td className="px-4 py-4 text-center">
+                                                                <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                                                                    {delivered.toLocaleString()}
+                                                                </span>
+                                                            </td>
+                                                            <td className="px-4 py-4 text-center">
+                                                                <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-800">
+                                                                    {notification.converted.toLocaleString()}
+                                                                </span>
+                                                            </td>
+                                                            <td className="px-4 py-4 text-center">
+                                                                <div className="flex items-center justify-center gap-2">
+                                                                    <div className="w-16 bg-gray-200 rounded-full h-2">
+                                                                        <div 
+                                                                            className="bg-indigo-600 h-2 rounded-full" 
+                                                                            style={{ width: `${Math.min(parseFloat(openRate), 100)}%` }}
+                                                                        />
+                                                                    </div>
+                                                                    <span className="text-sm text-gray-600">{openRate}%</span>
+                                                                </div>
+                                                            </td>
+                                                            <td className="px-6 py-4 text-right text-sm text-gray-500">
+                                                                {new Date(notification.queued_at).toLocaleDateString('en-US', {
+                                                                    month: 'short',
+                                                                    day: 'numeric',
+                                                                    hour: '2-digit',
+                                                                    minute: '2-digit'
+                                                                })}
+                                                            </td>
+                                                        </tr>
+                                                    );
+                                                })}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                )}
+                            </div>
+
+                            {/* Platform Breakdown */}
+                            {notificationHistory.notifications.length > 0 && notificationHistory.notifications[0].platform_delivery_stats && (
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                    <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                                        <div className="flex items-center gap-3 mb-4">
+                                            <div className="p-2 bg-gray-100 rounded-lg">
+                                                <span className="text-xl">🍎</span>
+                                            </div>
+                                            <h3 className="font-semibold text-gray-800">iOS Performance</h3>
+                                        </div>
+                                        <div className="space-y-3">
+                                            <div className="flex justify-between items-center">
+                                                <span className="text-sm text-gray-600">Delivered</span>
+                                                <span className="font-medium text-gray-900">
+                                                    {notificationHistory.notifications.reduce((sum, n) => 
+                                                        sum + (n.platform_delivery_stats?.ios?.successful || 0), 0).toLocaleString()}
+                                                </span>
+                                            </div>
+                                            <div className="flex justify-between items-center">
+                                                <span className="text-sm text-gray-600">Opened</span>
+                                                <span className="font-medium text-gray-900">
+                                                    {notificationHistory.notifications.reduce((sum, n) => 
+                                                        sum + (n.platform_delivery_stats?.ios?.converted || 0), 0).toLocaleString()}
+                                                </span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                                        <div className="flex items-center gap-3 mb-4">
+                                            <div className="p-2 bg-gray-100 rounded-lg">
+                                                <span className="text-xl">🤖</span>
+                                            </div>
+                                            <h3 className="font-semibold text-gray-800">Android Performance</h3>
+                                        </div>
+                                        <div className="space-y-3">
+                                            <div className="flex justify-between items-center">
+                                                <span className="text-sm text-gray-600">Delivered</span>
+                                                <span className="font-medium text-gray-900">
+                                                    {notificationHistory.notifications.reduce((sum, n) => 
+                                                        sum + (n.platform_delivery_stats?.android?.successful || 0), 0).toLocaleString()}
+                                                </span>
+                                            </div>
+                                            <div className="flex justify-between items-center">
+                                                <span className="text-sm text-gray-600">Opened</span>
+                                                <span className="font-medium text-gray-900">
+                                                    {notificationHistory.notifications.reduce((sum, n) => 
+                                                        sum + (n.platform_delivery_stats?.android?.converted || 0), 0).toLocaleString()}
+                                                </span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+                        </>
+                    )}
                 </div>
             )}
         </div>

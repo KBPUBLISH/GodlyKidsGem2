@@ -416,6 +416,136 @@ router.post('/auto-settings', async (req, res) => {
     }
 });
 
+// GET /history - Get notification history with stats
+router.get('/history', async (req, res) => {
+    try {
+        const appId = process.env.ONESIGNAL_APP_ID;
+        const apiKey = process.env.ONESIGNAL_REST_API_KEY;
+
+        if (!appId || !apiKey) {
+            return res.status(500).json({ message: 'OneSignal not configured' });
+        }
+
+        const limit = parseInt(req.query.limit) || 50;
+        const offset = parseInt(req.query.offset) || 0;
+
+        // Fetch notifications from OneSignal REST API
+        const response = await fetch(
+            `https://onesignal.com/api/v1/notifications?app_id=${appId}&limit=${limit}&offset=${offset}`,
+            {
+                method: 'GET',
+                headers: {
+                    'Authorization': `Basic ${apiKey}`,
+                    'Content-Type': 'application/json'
+                }
+            }
+        );
+
+        if (!response.ok) {
+            const error = await response.text();
+            console.error('OneSignal API error:', error);
+            return res.status(response.status).json({ 
+                message: 'Failed to fetch notifications from OneSignal',
+                error 
+            });
+        }
+
+        const data = await response.json();
+        
+        // Transform the data to include relevant stats
+        const notifications = (data.notifications || []).map(n => ({
+            id: n.id,
+            heading: n.headings?.en || 'No title',
+            contents: n.contents?.en || 'No content',
+            successful: n.successful || 0,
+            failed: n.failed || 0,
+            converted: n.converted || 0, // Clicks/opens
+            remaining: n.remaining || 0,
+            queued_at: n.queued_at,
+            completed_at: n.completed_at,
+            platform_delivery_stats: n.platform_delivery_stats
+        }));
+
+        res.json({
+            success: true,
+            notifications,
+            total_count: data.total_count || notifications.length
+        });
+
+    } catch (error) {
+        console.error('❌ Get notification history error:', error);
+        res.status(500).json({ 
+            success: false,
+            message: 'Failed to get notification history', 
+            error: error.message 
+        });
+    }
+});
+
+// GET /stats/:id - Get detailed stats for a specific notification
+router.get('/stats/:id', async (req, res) => {
+    try {
+        const appId = process.env.ONESIGNAL_APP_ID;
+        const apiKey = process.env.ONESIGNAL_REST_API_KEY;
+
+        if (!appId || !apiKey) {
+            return res.status(500).json({ message: 'OneSignal not configured' });
+        }
+
+        const { id } = req.params;
+
+        const response = await fetch(
+            `https://onesignal.com/api/v1/notifications/${id}?app_id=${appId}`,
+            {
+                method: 'GET',
+                headers: {
+                    'Authorization': `Basic ${apiKey}`,
+                    'Content-Type': 'application/json'
+                }
+            }
+        );
+
+        if (!response.ok) {
+            const error = await response.text();
+            return res.status(response.status).json({ 
+                message: 'Failed to fetch notification stats',
+                error 
+            });
+        }
+
+        const data = await response.json();
+        
+        res.json({
+            success: true,
+            notification: {
+                id: data.id,
+                heading: data.headings?.en || 'No title',
+                contents: data.contents?.en || 'No content',
+                successful: data.successful || 0,
+                failed: data.failed || 0,
+                errored: data.errored || 0,
+                converted: data.converted || 0,
+                remaining: data.remaining || 0,
+                queued_at: data.queued_at,
+                send_after: data.send_after,
+                completed_at: data.completed_at,
+                canceled: data.canceled,
+                platform_delivery_stats: data.platform_delivery_stats,
+                // Outcomes data if available
+                outcomes: data.outcomes
+            }
+        });
+
+    } catch (error) {
+        console.error('❌ Get notification stats error:', error);
+        res.status(500).json({ 
+            success: false,
+            message: 'Failed to get notification stats', 
+            error: error.message 
+        });
+    }
+});
+
 // POST /send-auto - Trigger an automatic notification (called by scheduler/cron)
 router.post('/send-auto', async (req, res) => {
     try {

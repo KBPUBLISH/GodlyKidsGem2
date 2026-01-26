@@ -56,6 +56,7 @@ const PlaylistsAnalytics: React.FC = () => {
             if (res.data?.episodes) {
                 console.log(`📊 Analytics: Loaded ${res.data.episodes.length} episodes (${timeRange})`);
                 setEpisodes(res.data.episodes);
+                setLoading(false);
                 return;
             }
         } catch (error) {

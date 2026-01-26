@@ -557,11 +557,8 @@ const OnboardingTutorial: React.FC = () => {
       <CreateAccountModal
         isOpen={showAccountCreation}
         onClose={() => {
+          // Just close the modal and stay on current screen
           setShowAccountCreation(false);
-          // If they close without creating account, still go to onboarding
-          // They can create account there
-          completeTutorial();
-          navigate('/onboarding', { state: { fromTutorial: true } });
         }}
         onAccountCreated={() => {
           onAccountCreated();
@@ -570,8 +567,7 @@ const OnboardingTutorial: React.FC = () => {
         }}
         onSignIn={() => {
           setShowAccountCreation(false);
-          completeTutorial();
-          navigate('/signin', { state: { returnTo: '/onboarding' } });
+          navigate('/signin', { state: { returnTo: '/home' } });
         }}
       />
     </>

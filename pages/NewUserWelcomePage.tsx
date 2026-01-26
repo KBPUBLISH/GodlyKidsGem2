@@ -462,10 +462,8 @@ const NewUserWelcomePage: React.FC = () => {
       <CreateAccountModal
         isOpen={showAccountModal}
         onClose={() => {
+          // Just close the modal and stay on current screen
           setShowAccountModal(false);
-          // If they close, still let them continue to onboarding
-          skipTutorial();
-          navigate('/onboarding', { state: { fromTutorial: true } });
         }}
         onAccountCreated={() => {
           setShowAccountModal(false);
@@ -475,8 +473,7 @@ const NewUserWelcomePage: React.FC = () => {
         }}
         onSignIn={() => {
           setShowAccountModal(false);
-          skipTutorial();
-          navigate('/signin', { state: { returnTo: '/onboarding' } });
+          navigate('/signin', { state: { returnTo: '/home' } });
         }}
       />
     </div>

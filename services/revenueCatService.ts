@@ -131,35 +131,57 @@ declare global {
 
 // Set up listener for purchase completion
 const setupPurchaseListener = () => {
-  // ⚠️ IMPORTANT: We NO LONGER trust these callbacks for instant premium grant!
-  // DeSpia may fire these callbacks before the Apple payment is actually confirmed.
-  // We only grant premium after the backend webhook confirms the purchase.
+  // DeSpia purchase callbacks - these fire when Apple confirms the purchase
+  // We trust these NOW because they mean Apple has confirmed payment
   (window as any).onRevenueCatPurchase = () => {
-    console.log('📱 DeSpia onRevenueCatPurchase() called - will verify with backend before granting premium');
-    // DO NOT set premium here - wait for backend webhook confirmation!
-    // The polling loop will check the backend and set premium when confirmed.
+    console.log('📱✅ DeSpia onRevenueCatPurchase() called - Apple confirmed purchase!');
+    // Set premium immediately - Apple has confirmed payment
+    localStorage.setItem('godlykids_premium', 'true');
+    window.dispatchEvent(new CustomEvent('revenuecat:premiumChanged', { detail: { isPremium: true } }));
+    if (purchaseResolve) {
+      purchaseResolve({ success: true });
+      purchaseResolve = null;
+    }
+    cleanupPurchaseState();
   };
   
   // Also register restore callback
   (window as any).onRevenueCatRestore = () => {
-    console.log('📱 DeSpia onRevenueCatRestore() called - will verify with backend before granting premium');
-    // DO NOT set premium here - the restore flow will verify with backend
+    console.log('📱✅ DeSpia onRevenueCatRestore() called - purchases restored!');
+    localStorage.setItem('godlykids_premium', 'true');
+    window.dispatchEvent(new CustomEvent('revenuecat:premiumChanged', { detail: { isPremium: true } }));
+    if (purchaseResolve) {
+      purchaseResolve({ success: true });
+      purchaseResolve = null;
+    }
+    cleanupPurchaseState();
   };
   
   // iapSuccess callback (alternative from Despia RevenueCat Custom docs)
-  // This receives transaction data but we still verify with backend
+  // This receives transaction data from Apple
   (window as any).iapSuccess = (data?: any) => {
-    console.log('📱 DeSpia iapSuccess() called with data:', data);
-    console.log('📱 Will verify with backend before granting premium');
-    // DO NOT set premium here - wait for backend webhook confirmation!
-    // The polling loop will check the backend and set premium when confirmed.
+    console.log('📱✅ DeSpia iapSuccess() called with data:', data);
+    // Set premium immediately - this callback only fires on successful Apple purchase
+    localStorage.setItem('godlykids_premium', 'true');
+    window.dispatchEvent(new CustomEvent('revenuecat:premiumChanged', { detail: { isPremium: true } }));
+    if (purchaseResolve) {
+      purchaseResolve({ success: true });
+      purchaseResolve = null;
+    }
+    cleanupPurchaseState();
   };
 
   // Listen for custom events that DeSpia might fire
-  // ⚠️ We do NOT grant premium on these events - only after backend webhook confirms
+  // These events mean Apple has confirmed the purchase
   window.addEventListener('despia-purchase-success', () => {
-    console.log('📱 DeSpia despia-purchase-success event - will verify with backend');
-    // Do NOT set premium here - wait for backend confirmation
+    console.log('📱✅ DeSpia despia-purchase-success event received!');
+    localStorage.setItem('godlykids_premium', 'true');
+    window.dispatchEvent(new CustomEvent('revenuecat:premiumChanged', { detail: { isPremium: true } }));
+    if (purchaseResolve) {
+      purchaseResolve({ success: true });
+      purchaseResolve = null;
+    }
+    cleanupPurchaseState();
   });
 
   window.addEventListener('despia-purchase-failed', (event: any) => {
@@ -181,14 +203,19 @@ const setupPurchaseListener = () => {
   });
   
   // Listen for DeSpia callback when payment sheet completes (success or failure)
-  // ⚠️ We do NOT grant premium on success messages - only after backend webhook confirms
   window.addEventListener('message', (event: MessageEvent) => {
     try {
       const data = typeof event.data === 'string' ? JSON.parse(event.data) : event.data;
       
       if (data?.type === 'revenuecat_purchase_success' || data?.type === 'despia_purchase_complete') {
-        console.log('📱 Purchase complete message received - will verify with backend:', data);
-        // Do NOT set premium here - wait for backend confirmation via polling
+        console.log('📱✅ Purchase complete message received:', data);
+        localStorage.setItem('godlykids_premium', 'true');
+        window.dispatchEvent(new CustomEvent('revenuecat:premiumChanged', { detail: { isPremium: true } }));
+        if (purchaseResolve) {
+          purchaseResolve({ success: true });
+          purchaseResolve = null;
+        }
+        cleanupPurchaseState();
       } else if (data?.type === 'revenuecat_purchase_failed' || data?.type === 'despia_purchase_failed') {
         console.log('❌ Purchase failed message received:', data);
         if (purchaseResolve) {
@@ -307,8 +334,8 @@ export const RevenueCatService = {
         
         let resolved = false;
         let pollCount = 0;
-        const maxPolls = 30; // 30 seconds max wait (reduced from 60)
-        const minWaitBeforeCheck = 1; // Just 1 second to let Apple sheet appear
+        const maxPolls = 60; // 60 seconds max wait - RevenueCat webhooks can be slow
+        const minWaitBeforeCheck = 2; // 2 seconds to let Apple sheet appear
         
         // Poll faster initially (every 500ms for first 15 seconds), then slower
         const getPollInterval = () => pollCount < 30 ? 500 : 1000;

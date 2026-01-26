@@ -273,7 +273,8 @@ const BookSeriesDetailPage: React.FC = () => {
         if (!series) return;
         
         // Use app.godlykids.com for consistent deep linking
-        const shareUrl = `https://app.godlykids.com/#/book-series/${seriesId}`;
+        // Deep link format (no hash) - allows universal links to open directly in app
+        const shareUrl = `https://app.godlykids.com/book-series/${seriesId}`;
         const shareTitle = translatedTitle || series.title;
         const bookCount = series.books?.length || 0;
         const shareText = `📚 Check out the "${shareTitle}" book series on GodlyKids! ${bookCount} books to explore.`;

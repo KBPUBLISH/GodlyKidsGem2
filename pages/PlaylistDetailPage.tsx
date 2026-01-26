@@ -352,7 +352,8 @@ const PlaylistDetailPage: React.FC = () => {
         if (!playlist) return;
         
         // Share link goes directly to the playlist page in the web app
-        const shareUrl = `https://app.godlykids.com/#/audio/playlist/${playlistId}`;
+        // Deep link format (no hash) - allows universal links to open directly in app
+        const shareUrl = `https://app.godlykids.com/audio/playlist/${playlistId}`;
         const isAudiobook = playlist.type === 'Audiobook';
         const emoji = isAudiobook ? '📖' : '🎵';
         const typeLabel = isAudiobook ? 'audiobook' : 'playlist';

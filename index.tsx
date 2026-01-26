@@ -3,11 +3,15 @@ import ReactDOM from 'react-dom/client';
 import App from './App';
 
 // ============================================================
-// URL NORMALIZATION - MUST RUN BEFORE REACT MOUNTS
+// URL NORMALIZATION & DEEP LINK HANDLING - MUST RUN BEFORE REACT MOUNTS
 // ============================================================
 // iOS WebViews (DeSpia) can inject query params or have malformed URLs.
 // We normalize the URL ONCE here, BEFORE React Router initializes.
 // This prevents white screens from route mismatches.
+// 
+// DEEP LINK HANDLING:
+// When deep links open the app (e.g., https://app.godlykids.com/book/123),
+// we need to convert the path to hash format (#/book/123) for HashRouter.
 (() => {
   try {
     const ua = navigator.userAgent || '';
@@ -30,6 +34,76 @@ import App from './App';
       window.history.replaceState(null, '', url.toString());
       window.location.reload();
       return; // Skip rest - reload will handle it
+    }
+
+    // ============================================================
+    // DEEP LINK CONVERSION (works for both web and Despia)
+    // ============================================================
+    // Universal links / deep links open with path in pathname, not hash.
+    // Convert: https://app.godlykids.com/book/123 → #/book/123
+    // 
+    // Supported deep link paths:
+    // - /book/:id → book detail page
+    // - /read/:bookId → book reader
+    // - /audio/playlist/:playlistId → playlist detail
+    // - /audio/playlist/:playlistId/play/:itemIndex → specific track
+    // - /playlist/:playlistId → playlist (legacy format)
+    // - /playlist/:playlistId/:trackIndex → playlist with track
+    // - /share/playlist/:playlistId → share playlist page
+    // - /share/book/:bookId → share book page
+    // - /s/p/:playlistId → short playlist share
+    // - /s/b/:bookId → short book share
+    // - /lesson/:lessonId → lesson player
+    // - /lessons → lessons list
+    // - /home → home page
+    // - /listen → listen page
+    // - /read → read page
+    // - /signin → sign in page
+    // - /onboarding → onboarding
+    // - /paywall → paywall
+    // - /book-series/:seriesId → book series detail
+    
+    const deepLinkPaths = [
+      /^\/book\/[^/]+$/,                           // /book/:id
+      /^\/read\/[^/]+$/,                           // /read/:bookId
+      /^\/audio\/playlist\/[^/]+$/,                // /audio/playlist/:playlistId
+      /^\/audio\/playlist\/[^/]+\/play\/\d+$/,     // /audio/playlist/:playlistId/play/:itemIndex
+      /^\/playlist\/[^/]+$/,                       // /playlist/:playlistId (legacy)
+      /^\/playlist\/[^/]+\/\d+$/,                  // /playlist/:playlistId/:trackIndex
+      /^\/share\/playlist\/[^/]+$/,                // /share/playlist/:playlistId
+      /^\/share\/playlist\/[^/]+\/\d+$/,           // /share/playlist/:playlistId/:trackIndex
+      /^\/share\/book\/[^/]+$/,                    // /share/book/:bookId
+      /^\/s\/p\/[^/]+$/,                           // /s/p/:playlistId (short)
+      /^\/s\/p\/[^/]+\/\d+$/,                      // /s/p/:playlistId/:trackIndex
+      /^\/s\/b\/[^/]+$/,                           // /s/b/:bookId (short)
+      /^\/lesson\/[^/]+$/,                         // /lesson/:lessonId
+      /^\/book-series\/[^/]+$/,                    // /book-series/:seriesId
+      /^\/lessons$/,
+      /^\/home$/,
+      /^\/listen$/,
+      /^\/read$/,
+      /^\/signin$/,
+      /^\/sign-in$/,
+      /^\/onboarding$/,
+      /^\/paywall$/,
+      /^\/library$/,
+      /^\/giving$/,
+      /^\/settings$/,
+      /^\/profile$/,
+    ];
+    
+    const pathname = url.pathname;
+    const isDeepLinkPath = deepLinkPaths.some(pattern => pattern.test(pathname));
+    
+    if (isDeepLinkPath && (!url.hash || url.hash === '#' || url.hash === '#/')) {
+      // This is a deep link! Convert pathname to hash
+      console.log('🔗 Deep link detected:', pathname);
+      url.hash = '#' + pathname + (url.search || '');
+      url.pathname = '/'; // Clear pathname
+      url.search = '';    // Search params are now in the hash
+      console.log('🔗 Converted to hash route:', url.hash);
+      window.history.replaceState(null, '', url.toString());
+      // Don't return - continue with other normalization if needed
     }
     
     if (isDespia) {
@@ -56,7 +130,8 @@ import App from './App';
         console.log('📱 Despia: Returning from background, last route:', lastRoute);
         
         // If current hash is empty/default but we have a saved route, restore it
-        if ((!url.hash || url.hash === '#' || url.hash === '#/') && lastRoute) {
+        // BUT don't override if we just processed a deep link
+        if ((!url.hash || url.hash === '#' || url.hash === '#/') && lastRoute && !isDeepLinkPath) {
           targetHash = lastRoute;
           console.log('📱 Despia: Restoring to saved route:', targetHash);
         }

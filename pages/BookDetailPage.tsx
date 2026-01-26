@@ -434,7 +434,8 @@ const BookDetailPage: React.FC = () => {
     if (!book) return;
     
     // Share link goes directly to the book page in the web app
-    const shareUrl = `https://app.godlykids.com/#/book/${id}`;
+    // Deep link format (no hash) - allows universal links to open directly in app
+    const shareUrl = `https://app.godlykids.com/book/${id}`;
     const shareTitle = translatedTitle || book.title;
     const shareText = `📚 Check out "${shareTitle}" on GodlyKids!\n\n${translatedDescription || book.description || 'A wonderful book for kids!'}`.trim();
     

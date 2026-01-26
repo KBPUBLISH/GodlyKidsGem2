@@ -346,17 +346,8 @@ const LandingPage: React.FC = () => {
                 Original Audio Stories, Books, Games, and More to Grow Faith
              </p>
              
-             {/* Pricing Badge */}
-             <div className="mt-3 inline-flex items-center gap-2 bg-white/10 backdrop-blur-sm px-4 py-2 rounded-full border border-white/20">
-                <span className="text-white font-bold text-lg">$39.99<span className="text-sm font-normal"> USD/yr</span></span>
-                <span className="text-white/60 text-xs">•</span>
-                <span className="text-white/80 text-sm">~$3.33/mo</span>
-                <span className="text-white/60 text-xs">•</span>
-                <span className="text-[#4ade80] text-sm font-semibold">7-day free trial</span>
-             </div>
-             
              {/* Library Access */}
-             <p className="mt-2 text-white/70 text-sm">
+             <p className="mt-3 text-white/70 text-sm">
                 Unlimited access to a library of 100s
              </p>
           </div>

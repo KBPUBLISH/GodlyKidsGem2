@@ -116,6 +116,11 @@ app.use('/api/donations', require('./routes/donations'));
 app.use('/api/campaign-updates', require('./routes/campaignUpdates'));
 app.use('/api/app-user', require('./routes/appUser'));
 
+// Godly Hub - Creator marketplace
+app.use('/api/creator', authLimiter, require('./routes/creatorAuth'));
+app.use('/api/tokens', require('./routes/tokens'));
+app.use('/api/hub', require('./routes/hub'));
+
 // ===========================================
 // HEALTH & STATUS ENDPOINTS
 // ===========================================

@@ -1,6 +1,6 @@
 import React from 'react';
 import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom';
-import { Book, Music, Layout as LayoutIcon, Home, Tag, Volume2, Gamepad2, Video, LogOut, Bell, Music2, Star, CalendarDays, BarChart3, Library, Sparkles, TrendingUp, Radio, Mail, Heart } from 'lucide-react';
+import { Book, Music, Layout as LayoutIcon, Home, Tag, Volume2, Gamepad2, Video, LogOut, Bell, Music2, Star, CalendarDays, BarChart3, Library, Sparkles, TrendingUp, Radio, Mail, Heart, Store, Users, ClipboardCheck } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 
 const Layout: React.FC = () => {
@@ -34,6 +34,9 @@ const Layout: React.FC = () => {
         { path: '/radio', icon: Radio, label: 'Radio Station' },
         { path: '/email-subscribers', icon: Mail, label: 'Email Subscribers' },
         { path: '/campaigns', icon: Heart, label: 'Giving Campaigns' },
+        // Godly Hub
+        { path: '/hub/creators', icon: Users, label: 'Hub: Creators' },
+        { path: '/hub/review', icon: ClipboardCheck, label: 'Hub: Content Review' },
     ];
 
     return (

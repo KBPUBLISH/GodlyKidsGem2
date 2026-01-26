@@ -1,37 +1,35 @@
 import React, { useState, useEffect } from 'react';
-import { Eye, Play, Heart, Bookmark, ArrowUpDown, TrendingUp, TrendingDown, Music, Headphones, Calendar, Clock, Timer } from 'lucide-react';
+import { Eye, Play, Heart, Bookmark, ArrowUpDown, TrendingUp, TrendingDown, Music, Headphones, Calendar, Clock, Timer, ListMusic } from 'lucide-react';
 import apiClient from '../services/apiClient';
 import { Link } from 'react-router-dom';
 
-interface PlaylistAnalytics {
+interface EpisodeAnalytics {
     _id: string;
     title: string;
-    author: string;
-    coverImage?: string;
+    playlistId: string;
+    playlistTitle: string;
+    playlistCoverImage?: string;
     type: 'Song' | 'Audiobook';
-    status: string;
-    viewCount: number;
+    audioUrl?: string;
+    duration?: number;
     playCount: number;
-    likeCount: number;
-    favoriteCount: number;
-    itemCount: number;
-    // Listening time metrics
     totalListeningSeconds?: number;
     listeningSessions?: number;
     avgListeningSeconds?: number;
     avgCompletionPercent?: number;
 }
 
-type SortField = 'viewCount' | 'playCount' | 'likeCount' | 'favoriteCount' | 'itemCount' | 'avgListeningSeconds' | 'totalListeningSeconds';
+type SortField = 'playCount' | 'avgListeningSeconds' | 'totalListeningSeconds' | 'avgCompletionPercent' | 'duration';
 type SortDirection = 'asc' | 'desc';
 type TimeRange = 'day' | 'week' | 'month' | 'all';
 
 // Helper to format seconds into readable time
 const formatDuration = (seconds: number): string => {
-    if (seconds < 60) return `${seconds}s`;
+    if (!seconds || seconds <= 0) return '-';
+    if (seconds < 60) return `${Math.round(seconds)}s`;
     if (seconds < 3600) {
         const mins = Math.floor(seconds / 60);
-        const secs = seconds % 60;
+        const secs = Math.round(seconds % 60);
         return secs > 0 ? `${mins}m ${secs}s` : `${mins}m`;
     }
     const hours = Math.floor(seconds / 3600);
@@ -40,38 +38,63 @@ const formatDuration = (seconds: number): string => {
 };
 
 const PlaylistsAnalytics: React.FC = () => {
-    const [playlists, setPlaylists] = useState<PlaylistAnalytics[]>([]);
+    const [episodes, setEpisodes] = useState<EpisodeAnalytics[]>([]);
     const [loading, setLoading] = useState(true);
     const [sortField, setSortField] = useState<SortField>('playCount');
     const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
     const [timeRange, setTimeRange] = useState<TimeRange>('all');
 
     useEffect(() => {
-        fetchPlaylistsAnalytics();
+        fetchEpisodeAnalytics();
     }, [timeRange]);
 
-    const fetchPlaylistsAnalytics = async () => {
+    const fetchEpisodeAnalytics = async () => {
         setLoading(true);
         try {
-            // Use the new content analytics endpoint with time filtering
-            const res = await apiClient.get(`/api/analytics/content?type=playlist&timeRange=${timeRange}`);
-            const playlistsData = res.data?.playlists || [];
-            console.log(`📊 Analytics: Loaded ${playlistsData.length} playlists (${timeRange})`);
-            setPlaylists(playlistsData);
-        } catch (error) {
-            console.error('Error fetching playlists analytics:', error);
-            // Fallback to direct playlists endpoint
-            try {
-                const response = await apiClient.get('/api/playlists?status=all');
-                const playlistsData = Array.isArray(response.data) ? response.data : (response.data?.data || []);
-                const data = playlistsData.map((p: any) => ({
-                    ...p,
-                    itemCount: p.items?.length || 0,
-                }));
-                setPlaylists(data);
-            } catch (fallbackError) {
-                console.error('Fallback also failed:', fallbackError);
+            // First try to get episode-level analytics
+            const res = await apiClient.get(`/api/analytics/content?type=episodes&timeRange=${timeRange}`);
+            if (res.data?.episodes) {
+                console.log(`📊 Analytics: Loaded ${res.data.episodes.length} episodes (${timeRange})`);
+                setEpisodes(res.data.episodes);
+                return;
             }
+        } catch (error) {
+            console.error('Error fetching episode analytics:', error);
+        }
+
+        // Fallback: fetch playlists and extract episodes
+        try {
+            const response = await apiClient.get('/api/playlists?status=all');
+            const playlistsData = Array.isArray(response.data) ? response.data : (response.data?.data || []);
+            
+            // Extract all episodes from playlists
+            const allEpisodes: EpisodeAnalytics[] = [];
+            playlistsData.forEach((playlist: any) => {
+                if (playlist.items && Array.isArray(playlist.items)) {
+                    playlist.items.forEach((item: any, index: number) => {
+                        allEpisodes.push({
+                            _id: item._id || `${playlist._id}-${index}`,
+                            title: item.title || `Track ${index + 1}`,
+                            playlistId: playlist._id,
+                            playlistTitle: playlist.title,
+                            playlistCoverImage: playlist.coverImage,
+                            type: playlist.type || 'Song',
+                            audioUrl: item.audioUrl,
+                            duration: item.duration || 0,
+                            playCount: item.playCount || 0,
+                            totalListeningSeconds: item.totalListeningSeconds || 0,
+                            listeningSessions: item.listeningSessions || 0,
+                            avgListeningSeconds: item.avgListeningSeconds || 0,
+                            avgCompletionPercent: item.avgCompletionPercent || 0,
+                        });
+                    });
+                }
+            });
+            
+            console.log(`📊 Analytics: Extracted ${allEpisodes.length} episodes from ${playlistsData.length} playlists`);
+            setEpisodes(allEpisodes);
+        } catch (fallbackError) {
+            console.error('Fallback also failed:', fallbackError);
         } finally {
             setLoading(false);
         }
@@ -86,7 +109,7 @@ const PlaylistsAnalytics: React.FC = () => {
         }
     };
 
-    const sortedPlaylists = [...playlists].sort((a, b) => {
+    const sortedEpisodes = [...episodes].sort((a, b) => {
         const aValue = a[sortField] || 0;
         const bValue = b[sortField] || 0;
         return sortDirection === 'desc' ? bValue - aValue : aValue - bValue;
@@ -156,24 +179,33 @@ const PlaylistsAnalytics: React.FC = () => {
                     <SortButton field="playCount" label="Plays" icon={<Play className="w-4 h-4" />} />
                     <SortButton field="avgListeningSeconds" label="Avg Listen Time" icon={<Timer className="w-4 h-4" />} />
                     <SortButton field="totalListeningSeconds" label="Total Listen Time" icon={<Clock className="w-4 h-4" />} />
-                    <SortButton field="viewCount" label="Views" icon={<Eye className="w-4 h-4" />} />
-                    <SortButton field="likeCount" label="Likes" icon={<Heart className="w-4 h-4" />} />
-                    <SortButton field="favoriteCount" label="Favorites" icon={<Bookmark className="w-4 h-4" />} />
-                    <SortButton field="itemCount" label="Track Count" icon={<Music className="w-4 h-4" />} />
+                    <SortButton field="avgCompletionPercent" label="Completion %" icon={<TrendingUp className="w-4 h-4" />} />
+                    <SortButton field="duration" label="Duration" icon={<Music className="w-4 h-4" />} />
                 </div>
             </div>
 
-            {/* Leaderboard Table */}
+            {/* Episode Leaderboard Table */}
             <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+                <div className="px-4 py-3 border-b border-gray-100 bg-gray-50">
+                    <div className="flex items-center gap-2">
+                        <ListMusic className="w-5 h-5 text-purple-600" />
+                        <h3 className="font-semibold text-gray-800">Episode Analytics</h3>
+                        <span className="text-sm text-gray-500">({sortedEpisodes.length} episodes)</span>
+                    </div>
+                </div>
                 <div className="overflow-x-auto">
                     <table className="w-full">
                         <thead className="bg-gray-50 border-b border-gray-100">
                             <tr>
                                 <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Rank</th>
+                                <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Episode</th>
                                 <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Playlist</th>
                                 <th className="text-center py-3 px-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Type</th>
                                 <th className="text-center py-3 px-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">
                                     <Headphones className="w-4 h-4 inline" /> Plays
+                                </th>
+                                <th className="text-center py-3 px-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                                    <Music className="w-4 h-4 inline" /> Duration
                                 </th>
                                 <th className="text-center py-3 px-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">
                                     <Timer className="w-4 h-4 inline" /> Avg Listen
@@ -184,141 +216,128 @@ const PlaylistsAnalytics: React.FC = () => {
                                 <th className="text-center py-3 px-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">
                                     Completion
                                 </th>
-                                <th className="text-center py-3 px-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">
-                                    <Music className="w-4 h-4 inline" /> Tracks
-                                </th>
-                                <th className="text-center py-3 px-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">
-                                    Engagement
-                                </th>
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-gray-100">
-                            {sortedPlaylists.map((playlist, index) => {
-                                // Calculate engagement rate: (likes + favorites) / plays * 100
-                                const engagementRate = playlist.playCount > 0 
-                                    ? Math.round(((playlist.likeCount + playlist.favoriteCount) / playlist.playCount) * 100)
-                                    : 0;
-
-                                return (
-                                    <tr key={playlist._id} className="hover:bg-gray-50 transition-colors">
-                                        <td className="py-3 px-4">
-                                            <span className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold ${
-                                                index === 0 ? 'bg-yellow-100 text-yellow-700' :
-                                                index === 1 ? 'bg-gray-200 text-gray-700' :
-                                                index === 2 ? 'bg-amber-100 text-amber-700' :
-                                                'bg-gray-100 text-gray-500'
-                                            }`}>
-                                                {index + 1}
-                                            </span>
-                                        </td>
-                                        <td className="py-3 px-4">
-                                            <Link to={`/playlists/${playlist._id}/edit`} className="flex items-center gap-3 hover:opacity-80">
-                                                {playlist.coverImage ? (
-                                                    <img 
-                                                        src={playlist.coverImage} 
-                                                        alt={playlist.title}
-                                                        className="w-10 h-10 rounded-lg object-cover"
-                                                    />
-                                                ) : (
-                                                    <div className="w-10 h-10 rounded-lg bg-purple-100 flex items-center justify-center">
-                                                        <Music className="w-5 h-5 text-purple-500" />
-                                                    </div>
-                                                )}
-                                                <div>
-                                                    <p className="font-medium text-gray-800 text-sm">{playlist.title}</p>
-                                                    <p className="text-xs text-gray-500">{playlist.author}</p>
-                                                </div>
-                                            </Link>
-                                        </td>
-                                        <td className="py-3 px-4 text-center">
-                                            <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                                                playlist.type === 'Song' 
-                                                    ? 'bg-green-100 text-green-700' 
-                                                    : 'bg-blue-100 text-blue-700'
-                                            }`}>
-                                                {playlist.type}
-                                            </span>
-                                        </td>
-                                        <td className="py-3 px-4 text-center">
-                                            <span className="font-semibold text-purple-600">{(playlist.playCount || 0).toLocaleString()}</span>
-                                        </td>
-                                        <td className="py-3 px-4 text-center">
-                                            <span className="font-semibold text-teal-600">
-                                                {playlist.avgListeningSeconds ? formatDuration(playlist.avgListeningSeconds) : '-'}
-                                            </span>
-                                        </td>
-                                        <td className="py-3 px-4 text-center">
-                                            <span className="font-semibold text-indigo-600">
-                                                {playlist.totalListeningSeconds ? formatDuration(playlist.totalListeningSeconds) : '-'}
-                                            </span>
-                                        </td>
-                                        <td className="py-3 px-4 text-center">
-                                            <div className="flex items-center justify-center gap-2">
-                                                <div className="w-12 h-2 bg-gray-200 rounded-full overflow-hidden">
-                                                    <div 
-                                                        className={`h-full rounded-full ${
-                                                            (playlist.avgCompletionPercent || 0) >= 70 ? 'bg-green-500' :
-                                                            (playlist.avgCompletionPercent || 0) >= 40 ? 'bg-yellow-500' :
-                                                            'bg-red-400'
-                                                        }`}
-                                                        style={{ width: `${Math.min(playlist.avgCompletionPercent || 0, 100)}%` }}
-                                                    />
-                                                </div>
-                                                <span className="text-xs font-medium text-gray-600">{playlist.avgCompletionPercent || 0}%</span>
+                            {sortedEpisodes.map((episode, index) => (
+                                <tr key={episode._id} className="hover:bg-gray-50 transition-colors">
+                                    <td className="py-3 px-4">
+                                        <span className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold ${
+                                            index === 0 ? 'bg-yellow-100 text-yellow-700' :
+                                            index === 1 ? 'bg-gray-200 text-gray-700' :
+                                            index === 2 ? 'bg-amber-100 text-amber-700' :
+                                            'bg-gray-100 text-gray-500'
+                                        }`}>
+                                            {index + 1}
+                                        </span>
+                                    </td>
+                                    <td className="py-3 px-4">
+                                        <div className="flex items-center gap-3">
+                                            <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-purple-100 to-indigo-100 flex items-center justify-center">
+                                                <Music className="w-5 h-5 text-purple-500" />
                                             </div>
-                                        </td>
-                                        <td className="py-3 px-4 text-center">
-                                            <span className="font-semibold text-blue-600">{playlist.itemCount}</span>
-                                        </td>
-                                        <td className="py-3 px-4 text-center">
-                                            <div className="flex items-center justify-center gap-2">
-                                                <div className="w-12 h-2 bg-gray-200 rounded-full overflow-hidden">
-                                                    <div 
-                                                        className={`h-full rounded-full ${
-                                                            engagementRate >= 20 ? 'bg-green-500' :
-                                                            engagementRate >= 10 ? 'bg-yellow-500' :
-                                                            'bg-red-400'
-                                                        }`}
-                                                        style={{ width: `${Math.min(engagementRate, 100)}%` }}
-                                                    />
-                                                </div>
-                                                <span className="text-xs font-medium text-gray-600">{engagementRate}%</span>
+                                            <div>
+                                                <p className="font-medium text-gray-800 text-sm max-w-[200px] truncate">{episode.title}</p>
                                             </div>
-                                        </td>
-                                    </tr>
-                                );
-                            })}
+                                        </div>
+                                    </td>
+                                    <td className="py-3 px-4">
+                                        <Link to={`/playlists/${episode.playlistId}/edit`} className="flex items-center gap-2 hover:opacity-80">
+                                            {episode.playlistCoverImage ? (
+                                                <img 
+                                                    src={episode.playlistCoverImage} 
+                                                    alt={episode.playlistTitle}
+                                                    className="w-8 h-8 rounded object-cover"
+                                                />
+                                            ) : (
+                                                <div className="w-8 h-8 rounded bg-gray-100 flex items-center justify-center">
+                                                    <ListMusic className="w-4 h-4 text-gray-400" />
+                                                </div>
+                                            )}
+                                            <span className="text-sm text-gray-600 max-w-[150px] truncate">{episode.playlistTitle}</span>
+                                        </Link>
+                                    </td>
+                                    <td className="py-3 px-4 text-center">
+                                        <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                                            episode.type === 'Song' 
+                                                ? 'bg-green-100 text-green-700' 
+                                                : 'bg-blue-100 text-blue-700'
+                                        }`}>
+                                            {episode.type}
+                                        </span>
+                                    </td>
+                                    <td className="py-3 px-4 text-center">
+                                        <span className="font-semibold text-purple-600">{(episode.playCount || 0).toLocaleString()}</span>
+                                    </td>
+                                    <td className="py-3 px-4 text-center">
+                                        <span className="font-medium text-gray-600">
+                                            {episode.duration ? formatDuration(episode.duration) : '-'}
+                                        </span>
+                                    </td>
+                                    <td className="py-3 px-4 text-center">
+                                        <span className="font-semibold text-teal-600">
+                                            {episode.avgListeningSeconds ? formatDuration(episode.avgListeningSeconds) : '-'}
+                                        </span>
+                                    </td>
+                                    <td className="py-3 px-4 text-center">
+                                        <span className="font-semibold text-indigo-600">
+                                            {episode.totalListeningSeconds ? formatDuration(episode.totalListeningSeconds) : '-'}
+                                        </span>
+                                    </td>
+                                    <td className="py-3 px-4 text-center">
+                                        <div className="flex items-center justify-center gap-2">
+                                            <div className="w-12 h-2 bg-gray-200 rounded-full overflow-hidden">
+                                                <div 
+                                                    className={`h-full rounded-full ${
+                                                        (episode.avgCompletionPercent || 0) >= 70 ? 'bg-green-500' :
+                                                        (episode.avgCompletionPercent || 0) >= 40 ? 'bg-yellow-500' :
+                                                        'bg-red-400'
+                                                    }`}
+                                                    style={{ width: `${Math.min(episode.avgCompletionPercent || 0, 100)}%` }}
+                                                />
+                                            </div>
+                                            <span className="text-xs font-medium text-gray-600">{Math.round(episode.avgCompletionPercent || 0)}%</span>
+                                        </div>
+                                    </td>
+                                </tr>
+                            ))}
                         </tbody>
                     </table>
                 </div>
 
-                {sortedPlaylists.length === 0 && (
+                {sortedEpisodes.length === 0 && (
                     <div className="text-center py-12 text-gray-500">
-                        No playlists found. Create some playlists to see analytics.
+                        No episodes found. Add episodes to your playlists to see analytics.
                     </div>
                 )}
             </div>
 
             {/* Summary Stats */}
-            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
+                <div className="bg-white rounded-xl p-4 shadow-sm border border-gray-100">
+                    <p className="text-sm text-gray-500">Total Episodes</p>
+                    <p className="text-2xl font-bold text-blue-600">
+                        {episodes.length.toLocaleString()}
+                    </p>
+                </div>
                 <div className="bg-white rounded-xl p-4 shadow-sm border border-gray-100">
                     <p className="text-sm text-gray-500">Total Plays</p>
                     <p className="text-2xl font-bold text-purple-600">
-                        {playlists.reduce((sum, p) => sum + (p.playCount || 0), 0).toLocaleString()}
+                        {episodes.reduce((sum, e) => sum + (e.playCount || 0), 0).toLocaleString()}
                     </p>
                 </div>
                 <div className="bg-white rounded-xl p-4 shadow-sm border border-gray-100">
                     <p className="text-sm text-gray-500">Total Listening Time</p>
                     <p className="text-2xl font-bold text-indigo-600">
-                        {formatDuration(playlists.reduce((sum, p) => sum + (p.totalListeningSeconds || 0), 0))}
+                        {formatDuration(episodes.reduce((sum, e) => sum + (e.totalListeningSeconds || 0), 0))}
                     </p>
                 </div>
                 <div className="bg-white rounded-xl p-4 shadow-sm border border-gray-100">
                     <p className="text-sm text-gray-500">Avg Listen Time</p>
                     <p className="text-2xl font-bold text-teal-600">
                         {(() => {
-                            const totalSessions = playlists.reduce((sum, p) => sum + (p.listeningSessions || 0), 0);
-                            const totalSeconds = playlists.reduce((sum, p) => sum + (p.totalListeningSeconds || 0), 0);
+                            const totalSessions = episodes.reduce((sum, e) => sum + (e.listeningSessions || 0), 0);
+                            const totalSeconds = episodes.reduce((sum, e) => sum + (e.totalListeningSeconds || 0), 0);
                             return totalSessions > 0 ? formatDuration(Math.round(totalSeconds / totalSessions)) : '-';
                         })()}
                     </p>
@@ -327,23 +346,11 @@ const PlaylistsAnalytics: React.FC = () => {
                     <p className="text-sm text-gray-500">Avg Completion</p>
                     <p className="text-2xl font-bold text-green-600">
                         {(() => {
-                            const playlistsWithData = playlists.filter(p => p.avgCompletionPercent && p.avgCompletionPercent > 0);
-                            if (playlistsWithData.length === 0) return '-';
-                            const avgCompletion = Math.round(playlistsWithData.reduce((sum, p) => sum + (p.avgCompletionPercent || 0), 0) / playlistsWithData.length);
+                            const episodesWithData = episodes.filter(e => e.avgCompletionPercent && e.avgCompletionPercent > 0);
+                            if (episodesWithData.length === 0) return '-';
+                            const avgCompletion = Math.round(episodesWithData.reduce((sum, e) => sum + (e.avgCompletionPercent || 0), 0) / episodesWithData.length);
                             return `${avgCompletion}%`;
                         })()}
-                    </p>
-                </div>
-                <div className="bg-white rounded-xl p-4 shadow-sm border border-gray-100">
-                    <p className="text-sm text-gray-500">Listening Sessions</p>
-                    <p className="text-2xl font-bold text-amber-600">
-                        {playlists.reduce((sum, p) => sum + (p.listeningSessions || 0), 0).toLocaleString()}
-                    </p>
-                </div>
-                <div className="bg-white rounded-xl p-4 shadow-sm border border-gray-100">
-                    <p className="text-sm text-gray-500">Total Tracks</p>
-                    <p className="text-2xl font-bold text-blue-600">
-                        {playlists.reduce((sum, p) => sum + (p.itemCount || 0), 0).toLocaleString()}
                     </p>
                 </div>
             </div>

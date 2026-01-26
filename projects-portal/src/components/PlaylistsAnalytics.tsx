@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Eye, Play, Heart, Bookmark, ArrowUpDown, TrendingUp, TrendingDown, Music, Headphones, Calendar, Clock, Timer, ListMusic } from 'lucide-react';
+import { Play, ArrowUpDown, TrendingUp, TrendingDown, Music, Headphones, Calendar, Clock, Timer, ListMusic } from 'lucide-react';
 import apiClient from '../services/apiClient';
 import { Link } from 'react-router-dom';
 

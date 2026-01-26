@@ -2,7 +2,7 @@ import React, { createContext, useContext, useState, useCallback, useEffect, use
 import { activityTrackingService } from '../services/activityTrackingService';
 
 // Tutorial step definitions
-// FLOW: Welcome book → Swipe pages → Quiz → Coins → Report Card → Shop → Giving → Explore → Books → Audio → Complete
+// FLOW: Welcome book → Swipe pages → Quiz → Coins → Report Card → Shop → Explore → Books → Audio → Complete
 export type TutorialStep = 
   | 'idle'
   | 'welcome_book_tap'    // On welcome page, finger points to a book
@@ -19,11 +19,7 @@ export type TutorialStep =
   | 'report_card_open'
   | 'shop_highlight'
   | 'shop_open'
-  | 'navigate_to_give'
-  | 'campaign_highlight'  // Highlight a campaign to click
-  | 'give_button_highlight' // Highlight the Give button
-  | 'donation_complete'   // After donation is made
-  | 'navigate_to_explore' // Go back to explore/home
+  | 'navigate_to_explore' // Go to explore/home
   | 'devotional_highlight' // Highlight daily devotional videos
   | 'navigate_to_books'   // Turn wheel to books page
   | 'navigate_to_audio'   // Turn wheel to audio page
@@ -119,28 +115,6 @@ export const TUTORIAL_STEP_CONFIG: Record<TutorialStep, {
     description: 'Customize your character with avatars and more!',
     requiresClick: false,
   },
-  navigate_to_give: {
-    title: 'Practice Generosity',
-    description: 'Watch the wheel spin to the Give section...',
-    autoAdvanceDelay: 2000,
-  },
-  campaign_highlight: {
-    title: 'Practice Giving!',
-    description: 'Tap the Give button to donate coins!',
-    targetElement: 'give-button-0',
-    requiresClick: true,
-  },
-  give_button_highlight: {
-    title: 'Tap to Donate!',
-    description: 'Tap to give your coins and help people in need!',
-    targetElement: 'donate-coins-button',
-    requiresClick: true,
-  },
-  donation_complete: {
-    title: 'Amazing! 🎉',
-    description: 'You just practiced generosity! Your coins help real people.',
-    autoAdvanceDelay: 4500, // Give user more time to appreciate the message
-  },
   navigate_to_explore: {
     title: 'Let\'s Explore More!',
     description: 'Watch the wheel spin to the Explore section...',
@@ -193,7 +167,7 @@ export const TUTORIAL_STEP_CONFIG: Record<TutorialStep, {
 };
 
 // Step order for progression
-// FLOW: Welcome book → Swipe 3 pages → Quiz → Coins → Report Card → Shop → Giving → Explore → Books → Audio → Review → Complete
+// FLOW: Welcome book → Swipe 3 pages → Quiz → Coins → Report Card → Shop → Explore → Books → Audio → Review → Complete
 const STEP_ORDER: TutorialStep[] = [
   'welcome_book_tap',     // 1. On welcome page, tap a book
   'book_controls_intro',  // 2. Quick controls overview
@@ -209,19 +183,15 @@ const STEP_ORDER: TutorialStep[] = [
   'report_card_open',     // 12. Report card modal
   'shop_highlight',       // 13. Highlight shop
   'shop_open',            // 14. Shop modal
-  'navigate_to_give',     // 15. Navigate wheel to give
-  'campaign_highlight',   // 16. Highlight a campaign
-  'give_button_highlight',// 17. Highlight give button
-  'donation_complete',    // 18. Donation done celebration
-  'navigate_to_explore',  // 19. Navigate to explore/home
-  'devotional_highlight', // 20. Highlight devotionals
-  'navigate_to_books',    // 21. Navigate to books
-  'navigate_to_audio',    // 22. Navigate to audio
-  'audiobook_highlight',  // 23. Highlight audiobook (user clicks → navigates away)
-  'review_prompt',        // 24. Show review when returning to listen page
-  'tutorial_complete',    // 25. Confetti celebration on explore page
-  'explore_pause',        // 26. Let user explore for 10 seconds
-  'paywall',              // 27. Show subscription
+  'navigate_to_explore',  // 15. Navigate to explore/home
+  'devotional_highlight', // 16. Highlight devotionals
+  'navigate_to_books',    // 17. Navigate to books
+  'navigate_to_audio',    // 18. Navigate to audio
+  'audiobook_highlight',  // 19. Highlight audiobook (user clicks → navigates away)
+  'review_prompt',        // 20. Show review when returning to listen page
+  'tutorial_complete',    // 21. Confetti celebration on explore page
+  'explore_pause',        // 22. Let user explore for 10 seconds
+  'paywall',              // 23. Show subscription
   'complete',
 ];
 

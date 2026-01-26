@@ -3,7 +3,6 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { Capacitor } from '@capacitor/core';
 import TutorialSpotlight from './TutorialSpotlight';
 import { useTutorial, TutorialStep } from '../../context/TutorialContext';
-import { Heart, Coins, Hand } from 'lucide-react';
 import WoodButton from '../ui/WoodButton';
 import { DespiaService } from '../../services/despiaService';
 import CreateAccountModal from '../modals/CreateAccountModal';
@@ -14,59 +13,6 @@ const checkHasAccount = (): boolean => {
   const email = localStorage.getItem('godlykids_user_email');
   return !!(token || email);
 };
-
-// Custom popup content for specific steps
-const GivePopupContent: React.FC<{ onNext: () => void }> = ({ onNext }) => (
-  <div className="text-center">
-    <div className="mb-4">
-      <Heart className="w-16 h-16 text-red-400 mx-auto animate-pulse" />
-    </div>
-    <h3 className="text-[#FFD700] font-display font-bold text-xl mb-2">
-      Practice Generosity
-    </h3>
-    <p className="text-white/90 text-sm leading-relaxed mb-4">
-      Your child's progress makes a real world impact. Every coin donated helps support children's ministries around the world.
-    </p>
-    <WoodButton variant="gold" onClick={onNext} className="w-full py-3">
-      Let's Practice Giving!
-    </WoodButton>
-  </div>
-);
-
-const DonationPracticeContent: React.FC<{ 
-  donatedAmount: number;
-  onDonate: (amount: number) => void;
-  onComplete: () => void;
-}> = ({ donatedAmount, onDonate, onComplete }) => (
-  <div className="text-center">
-    <div className="mb-4 flex items-center justify-center gap-2">
-      <Coins className="w-8 h-8 text-[#FFD700]" />
-      <span className="text-2xl font-display font-bold text-[#FFD700]">
-        {donatedAmount} / 10
-      </span>
-    </div>
-    <p className="text-white/90 text-sm mb-4">
-      Tap to donate coins and see generosity in action!
-    </p>
-    <div className="flex gap-2 justify-center mb-4">
-      {[1, 5, 10 - donatedAmount].filter(v => v > 0).map((amount) => (
-        <button
-          key={amount}
-          onClick={() => onDonate(amount)}
-          disabled={donatedAmount >= 10}
-          className="px-4 py-2 bg-[#FFD700] text-[#3E1F07] font-bold rounded-lg hover:bg-[#FFA500] transition-colors disabled:opacity-50"
-        >
-          +{amount}
-        </button>
-      ))}
-    </div>
-    {donatedAmount >= 10 && (
-      <WoodButton variant="gold" onClick={onComplete} className="w-full py-3 animate-pulse">
-        Amazing! Continue →
-      </WoodButton>
-    )}
-  </div>
-);
 
 // Swipe hint content - just finger and text, positioned over image area
 const SwipeHintContent: React.FC = () => (
@@ -188,14 +134,11 @@ const OnboardingTutorial: React.FC = () => {
   const {
     currentStep,
     isTutorialActive,
-    isStepActive,
     startTutorial,
     nextStep,
     goToStep,
     completeTutorial,
     getStepConfig,
-    donatedCoins,
-    setDonatedCoins,
     showAccountCreation,
     setShowAccountCreation,
     onAccountCreated,
@@ -232,9 +175,7 @@ const OnboardingTutorial: React.FC = () => {
 
   // Handle wheel navigation steps - must be before any conditional returns!
   useEffect(() => {
-    if (currentStep === 'navigate_to_give') {
-      window.dispatchEvent(new CustomEvent('tutorial_navigate_wheel', { detail: { target: 'give' } }));
-    } else if (currentStep === 'navigate_to_explore') {
+    if (currentStep === 'navigate_to_explore') {
       window.dispatchEvent(new CustomEvent('tutorial_navigate_wheel', { detail: { target: 'explore' } }));
     } else if (currentStep === 'navigate_to_books') {
       window.dispatchEvent(new CustomEvent('tutorial_navigate_wheel', { detail: { target: 'read' } }));
@@ -242,12 +183,6 @@ const OnboardingTutorial: React.FC = () => {
       window.dispatchEvent(new CustomEvent('tutorial_navigate_wheel', { detail: { target: 'listen' } }));
     }
   }, [currentStep]);
-
-  // Handle donation
-  const handleDonate = (amount: number) => {
-    const newTotal = Math.min(donatedCoins + amount, 10);
-    setDonatedCoins(newTotal);
-  };
 
   // Track when quiz button is available (for book_end_quiz step)
   const [quizButtonReady, setQuizButtonReady] = useState(false);
@@ -301,7 +236,6 @@ const OnboardingTutorial: React.FC = () => {
   const isOnWelcomePage = currentPath === '/welcome';
   const isOnBookReader = currentPath.startsWith('/read/');
   const isOnHomePage = currentPath === '/home';
-  const isOnGivePage = currentPath === '/giving';
 
   // Book-related steps should only show on book reader
   const bookSteps: TutorialStep[] = ['book_controls_intro', 'book_swipe_intro', 'book_swipe_1', 'book_swipe_2', 'book_swipe_3', 'book_end_quiz', 'quiz_in_progress'];
@@ -317,12 +251,6 @@ const OnboardingTutorial: React.FC = () => {
   // Home-based steps (coins, report card, shop) should only show on home page
   const homeSteps: TutorialStep[] = ['coins_highlight', 'coins_popup_open', 'report_card_highlight', 'report_card_open', 'shop_highlight', 'shop_open', 'devotional_highlight'];
   if (homeSteps.includes(currentStep) && !isOnHomePage) {
-    return null;
-  }
-
-  // Give-related steps should only show on give page
-  const giveSteps: TutorialStep[] = ['campaign_highlight', 'give_button_highlight', 'donation_complete'];
-  if (giveSteps.includes(currentStep) && !isOnGivePage) {
     return null;
   }
   
@@ -501,58 +429,6 @@ const OnboardingTutorial: React.FC = () => {
             compactPopup={true}
             showContinueButton={true}
             hideOverlay={true}
-          />
-        );
-
-      case 'navigate_to_give':
-        return (
-          <TutorialSpotlight
-            title={config.title}
-            description={config.description}
-            isVisible={true}
-            popupPosition="center"
-            requiresElementClick={false}
-          />
-        );
-
-      case 'campaign_highlight':
-        return (
-          <TutorialSpotlight
-            targetElement="give-button-0"
-            title={config.title}
-            description={config.description}
-            isVisible={true}
-            fingerPosition="top"
-            popupPosition="top"
-            requiresElementClick={true}
-          />
-        );
-
-      case 'give_button_highlight':
-        // Target the donate button in the donation modal
-        return (
-          <TutorialSpotlight
-            targetElement="donate-coins-button"
-            title="Tap to Donate!"
-            description="Tap to give your coins and help people in need!"
-            isVisible={true}
-            fingerPosition="top"
-            popupPosition="top-screen"
-            compactPopup={true}
-            requiresElementClick={true}
-          />
-        );
-
-      case 'donation_complete':
-        return (
-          <TutorialSpotlight
-            title={config.title}
-            description={config.description}
-            isVisible={true}
-            popupPosition="top-screen"
-            requiresElementClick={false}
-            hideOverlay={true}
-            compactPopup={true}
           />
         );
 

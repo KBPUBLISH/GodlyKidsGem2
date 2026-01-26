@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Bell, Send, Clock, Users, Image, Link, AlertCircle, CheckCircle, Settings, Calendar, Sun, Moon, Sparkles, Save, ToggleLeft, ToggleRight, BarChart3, TrendingUp, Eye, MousePointer, RefreshCw } from 'lucide-react';
+import { Bell, Send, Clock, Users, Image, Link, AlertCircle, CheckCircle, Settings, Calendar, Sun, Moon, Sparkles, Save, ToggleLeft, ToggleRight, BarChart3, TrendingUp, MousePointer, RefreshCw } from 'lucide-react';
 import apiClient from '../services/apiClient';
 
 interface NotificationForm {

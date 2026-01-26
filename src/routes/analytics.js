@@ -947,6 +947,97 @@ router.get('/content', async (req, res) => {
             }
         }
         
+        // Get episode-level analytics
+        if (type === 'episodes') {
+            const Playlist = require('../models/Playlist');
+            const PlayEvent = require('../models/PlayEvent');
+            
+            // Get all playlists with items
+            const playlists = await Playlist.find({ status: { $in: ['published', 'draft'] } })
+                .select('title coverImage type items')
+                .lean();
+            
+            // Create a map of playlist info
+            const playlistMap = new Map();
+            const allEpisodes = [];
+            
+            playlists.forEach(playlist => {
+                playlistMap.set(playlist._id.toString(), {
+                    title: playlist.title,
+                    coverImage: playlist.coverImage,
+                    type: playlist.type,
+                });
+                
+                // Extract episodes from playlist
+                if (playlist.items && Array.isArray(playlist.items)) {
+                    playlist.items.forEach((item, index) => {
+                        if (item._id) {
+                            allEpisodes.push({
+                                _id: item._id.toString(),
+                                title: item.title || `Track ${index + 1}`,
+                                playlistId: playlist._id.toString(),
+                                playlistTitle: playlist.title,
+                                playlistCoverImage: playlist.coverImage,
+                                type: playlist.type || 'Song',
+                                duration: item.duration || 0,
+                                itemIndex: index,
+                            });
+                        }
+                    });
+                }
+            });
+            
+            // Aggregate play events by episode
+            const episodeMatch = startDate 
+                ? { contentType: 'episode', playedAt: { $gte: startDate } }
+                : { contentType: 'episode' };
+            
+            const episodeStatsAgg = await PlayEvent.aggregate([
+                { $match: episodeMatch },
+                {
+                    $group: {
+                        _id: '$contentId',
+                        playCount: { $sum: { $cond: [{ $ne: ['$isEngagementUpdate', true] }, 1, 0] } },
+                        totalListeningSeconds: { $sum: '$durationSeconds' },
+                        listeningSessions: { $sum: { $cond: [{ $and: [{ $gt: ['$durationSeconds', 0] }, { $ne: ['$isEngagementUpdate', true] }] }, 1, 0] } },
+                        avgListeningSeconds: { $avg: { $cond: [{ $gt: ['$durationSeconds', 0] }, '$durationSeconds', null] } },
+                        avgCompletionPercent: { $avg: { $cond: [{ $gt: ['$completionPercent', 0] }, '$completionPercent', null] } },
+                    }
+                }
+            ]);
+            
+            // Create a map of episode stats
+            const episodeStatsMap = new Map();
+            episodeStatsAgg.forEach(e => {
+                if (e._id) {
+                    episodeStatsMap.set(e._id.toString(), {
+                        playCount: e.playCount || 0,
+                        totalListeningSeconds: Math.round(e.totalListeningSeconds || 0),
+                        listeningSessions: e.listeningSessions || 0,
+                        avgListeningSeconds: Math.round(e.avgListeningSeconds || 0),
+                        avgCompletionPercent: Math.round(e.avgCompletionPercent || 0),
+                    });
+                }
+            });
+            
+            // Merge episode metadata with stats
+            results.episodes = allEpisodes.map(episode => {
+                const stats = episodeStatsMap.get(episode._id) || {
+                    playCount: 0,
+                    totalListeningSeconds: 0,
+                    listeningSessions: 0,
+                    avgListeningSeconds: 0,
+                    avgCompletionPercent: 0,
+                };
+                return {
+                    ...episode,
+                    ...stats,
+                };
+            }).sort((a, b) => b.playCount - a.playCount); // Sort by play count desc
+            
+            console.log(`📊 Episode analytics: ${allEpisodes.length} episodes, ${episodeStatsAgg.length} with play data`);
+        }
+        
         res.json({
             success: true,
             timeRange,

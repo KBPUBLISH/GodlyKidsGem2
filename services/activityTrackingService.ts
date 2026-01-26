@@ -566,6 +566,7 @@ class ActivityTrackingService {
       planType?: string; 
       kidsCount?: number; 
       voiceSelected?: string;
+      email?: string;  // For account_created event
     }
   ): Promise<void> {
     try {
@@ -596,18 +597,25 @@ class ActivityTrackingService {
         console.log(`📊 Onboarding marked complete (step 5)`);
       }
       
+      const payload = {
+        userId,
+        sessionId: this.getOnboardingSessionId(),
+        event,
+        metadata: {
+          ...metadata,
+          platform,
+        },
+      };
+      
+      // Log account_created events specifically for debugging
+      if (event === 'account_created') {
+        console.log(`📊 ACCOUNT CREATED event being sent:`, JSON.stringify(payload));
+      }
+      
       const response = await fetch(`${apiUrl}/analytics/onboarding/event`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          userId,
-          sessionId: this.getOnboardingSessionId(),
-          event,
-          metadata: {
-            ...metadata,
-            platform,
-          },
-        }),
+        body: JSON.stringify(payload),
       });
       
       if (!response.ok) {

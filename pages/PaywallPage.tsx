@@ -260,7 +260,7 @@ const PaywallPage: React.FC = () => {
     setError(null);
     
     // Facebook Pixel - Track checkout initiation
-    const price = selectedPlan === 'lifetime' ? 69.99 : selectedPlan === 'annual' ? 39.99 : 5.99;
+    const price = selectedPlan === 'lifetime' ? lifetimeSalePrice : selectedPlan === 'annual' ? 39.99 : 5.99;
     facebookPixelService.trackInitiateCheckout(selectedPlan, price);
     
     // Track purchase attempt
@@ -402,9 +402,56 @@ const PaywallPage: React.FC = () => {
   // Calculate prices and savings
   const monthlyPrice = 5.99;
   const annualPrice = 39.99;
-  const lifetimePrice = 69.99;
+  const lifetimeOriginalPrice = 69.99;
+  const lifetimeSalePrice = 19.99;
+  const lifetimeDiscount = Math.round(((lifetimeOriginalPrice - lifetimeSalePrice) / lifetimeOriginalPrice) * 100);
   const annualMonthly = (annualPrice / 12).toFixed(2);
   const savings = Math.round(((monthlyPrice * 12 - annualPrice) / (monthlyPrice * 12)) * 100);
+  
+  // 24-hour countdown timer for lifetime deal
+  const LIFETIME_DEAL_KEY = 'godlykids_lifetime_deal_start';
+  const DEAL_DURATION_MS = 24 * 60 * 60 * 1000; // 24 hours
+  
+  const [timeRemaining, setTimeRemaining] = useState<{ hours: number; minutes: number; seconds: number } | null>(null);
+  const [dealExpired, setDealExpired] = useState(false);
+  
+  // Initialize and track the 24-hour countdown
+  useEffect(() => {
+    // Get or set the deal start time
+    let dealStartTime = localStorage.getItem(LIFETIME_DEAL_KEY);
+    if (!dealStartTime) {
+      dealStartTime = Date.now().toString();
+      localStorage.setItem(LIFETIME_DEAL_KEY, dealStartTime);
+    }
+    
+    const startTime = parseInt(dealStartTime, 10);
+    const endTime = startTime + DEAL_DURATION_MS;
+    
+    const updateTimer = () => {
+      const now = Date.now();
+      const remaining = endTime - now;
+      
+      if (remaining <= 0) {
+        setDealExpired(true);
+        setTimeRemaining(null);
+        return;
+      }
+      
+      const hours = Math.floor(remaining / (1000 * 60 * 60));
+      const minutes = Math.floor((remaining % (1000 * 60 * 60)) / (1000 * 60));
+      const seconds = Math.floor((remaining % (1000 * 60)) / 1000);
+      
+      setTimeRemaining({ hours, minutes, seconds });
+    };
+    
+    // Update immediately
+    updateTimer();
+    
+    // Update every second
+    const interval = setInterval(updateTimer, 1000);
+    
+    return () => clearInterval(interval);
+  }, []);
 
   return (
     <div className="relative h-full w-full bg-gradient-to-b from-[#f8faff] via-[#eef2ff] to-[#e0e7ff] overflow-y-auto no-scrollbar flex flex-col">
@@ -585,37 +632,58 @@ const PaywallPage: React.FC = () => {
                 </div>
               </div>
 
-              {/* Lifetime Option */}
+              {/* Lifetime Option with Timer */}
               <div 
                 onClick={() => setSelectedPlan('lifetime')}
                 className={`relative w-full rounded-2xl border-2 overflow-hidden cursor-pointer transition-all ${
                   selectedPlan === 'lifetime' 
-                  ? 'bg-gradient-to-r from-[#fef3c7] to-[#fde68a] border-[#f59e0b] shadow-md' 
-                  : 'bg-white border-gray-200'
+                  ? 'bg-gradient-to-r from-[#fef3c7] to-[#fde68a] border-[#f59e0b] shadow-lg' 
+                  : 'bg-gradient-to-r from-[#fffbeb] to-[#fef3c7] border-[#fbbf24]'
                 }`}
               >
-                {/* Best Deal Badge */}
+                {/* Discount Badge */}
                 <div className="absolute -top-0 -right-0">
-                  <div className="bg-gradient-to-r from-[#7c3aed] to-[#8b5cf6] text-white text-[10px] font-bold px-3 py-1 rounded-bl-xl">
-                    BEST DEAL
+                  <div className="bg-gradient-to-r from-[#dc2626] to-[#ef4444] text-white text-[10px] font-bold px-3 py-1 rounded-bl-xl animate-pulse">
+                    {lifetimeDiscount}% OFF
                   </div>
                 </div>
                 
+                {/* Countdown Timer Banner */}
+                {timeRemaining && !dealExpired && (
+                  <div className="bg-gradient-to-r from-[#7c3aed] to-[#8b5cf6] px-4 py-2 flex items-center justify-center gap-2">
+                    <span className="text-white text-xs font-semibold">⏰ Limited Time Offer:</span>
+                    <div className="flex gap-1">
+                      <span className="bg-white/20 text-white font-mono font-bold text-sm px-2 py-0.5 rounded">
+                        {String(timeRemaining.hours).padStart(2, '0')}
+                      </span>
+                      <span className="text-white font-bold">:</span>
+                      <span className="bg-white/20 text-white font-mono font-bold text-sm px-2 py-0.5 rounded">
+                        {String(timeRemaining.minutes).padStart(2, '0')}
+                      </span>
+                      <span className="text-white font-bold">:</span>
+                      <span className="bg-white/20 text-white font-mono font-bold text-sm px-2 py-0.5 rounded">
+                        {String(timeRemaining.seconds).padStart(2, '0')}
+                      </span>
+                    </div>
+                  </div>
+                )}
+                
                 <div className="p-4 flex items-center gap-4">
                   <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center ${
-                    selectedPlan === 'lifetime' ? 'bg-[#f59e0b] border-[#f59e0b]' : 'border-gray-300'
+                    selectedPlan === 'lifetime' ? 'bg-[#f59e0b] border-[#f59e0b]' : 'border-[#f59e0b]'
                   }`}>
                     {selectedPlan === 'lifetime' && <Check size={14} className="text-white" strokeWidth={3} />}
                   </div>
                   
                   <div className="flex-1">
-                    <p className="font-bold text-[#1e1b4b]">Lifetime Access</p>
-                    <p className="text-xs text-gray-500">One-time payment • Forever yours</p>
+                    <p className="font-bold text-[#1e1b4b]">🔥 Lifetime Access</p>
+                    <p className="text-xs text-gray-600">One-time payment • Forever yours</p>
                   </div>
                   
                   <div className="text-right">
-                    <p className="font-extrabold text-xl text-[#1e1b4b]">${lifetimePrice}</p>
-                    <p className="text-xs text-gray-400">one time</p>
+                    <p className="text-xs text-gray-400 line-through">${lifetimeOriginalPrice}</p>
+                    <p className="font-extrabold text-xl text-[#dc2626]">${lifetimeSalePrice}</p>
+                    <p className="text-[10px] text-green-600 font-semibold">Save ${(lifetimeOriginalPrice - lifetimeSalePrice).toFixed(2)}</p>
                   </div>
                 </div>
               </div>
@@ -625,9 +693,9 @@ const PaywallPage: React.FC = () => {
             <p className="text-center text-[#6366f1] font-medium text-sm mb-4">
               {selectedPlan === 'lifetime' ? (
                 <>
-                  One-time payment of ${lifetimePrice} for lifetime access.
+                  <span className="text-[#dc2626]">Special offer: ${lifetimeSalePrice}</span> <span className="text-gray-400 line-through text-xs">${lifetimeOriginalPrice}</span>
                   <br />
-                  <span className="text-gray-500 font-normal">No subscriptions. Yours forever!</span>
+                  <span className="text-gray-500 font-normal">One-time payment. Yours forever!</span>
                 </>
               ) : (
                 <>
@@ -680,7 +748,7 @@ const PaywallPage: React.FC = () => {
               disabled={isPurchasing || isRestoring || isLoading}
               className={`w-full max-w-sm font-bold text-lg py-4 rounded-2xl shadow-lg active:scale-[0.98] transition-all mb-3 disabled:opacity-70 disabled:cursor-not-allowed ${
                 selectedPlan === 'lifetime'
-                  ? 'bg-gradient-to-r from-[#7c3aed] to-[#8b5cf6] text-white shadow-purple-200/50'
+                  ? 'bg-gradient-to-r from-[#dc2626] to-[#ef4444] text-white shadow-red-200/50'
                   : 'bg-gradient-to-r from-[#fbbf24] to-[#f59e0b] text-[#1e1b4b] shadow-amber-200/50'
               }`}
             >
@@ -692,7 +760,10 @@ const PaywallPage: React.FC = () => {
               ) : (
                 <span className="flex flex-col items-center">
                   {selectedPlan === 'lifetime' ? (
-                    <span>{firstName ? `${firstName}, ` : ''}Get Lifetime Access</span>
+                    <>
+                      <span>{firstName ? `${firstName}, ` : ''}Get Lifetime for ${lifetimeSalePrice}</span>
+                      <span className="text-xs font-normal opacity-90">Save ${(lifetimeOriginalPrice - lifetimeSalePrice).toFixed(2)} today!</span>
+                    </>
                   ) : (
                     <span>{firstName ? `${firstName}, ` : ''}Start your free trial</span>
                   )}
@@ -710,9 +781,9 @@ const PaywallPage: React.FC = () => {
             
             {/* Lifetime badge */}
             {selectedPlan === 'lifetime' && (
-              <div className="flex items-center gap-2 text-purple-600 mb-6">
+              <div className="flex items-center gap-2 text-[#dc2626] mb-6">
                 <Check size={18} strokeWidth={3} />
-                <span className="font-semibold text-sm">One-time purchase • No recurring fees</span>
+                <span className="font-semibold text-sm">🔥 {lifetimeDiscount}% off • Limited time only!</span>
               </div>
             )}
 

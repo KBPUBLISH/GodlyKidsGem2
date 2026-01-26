@@ -3,13 +3,10 @@ import axios from 'axios';
 import { 
   UserPlus, 
   User, 
-  Mail, 
   CheckCircle, 
   XCircle, 
   Clock,
-  Copy,
-  MoreVertical,
-  DollarSign
+  Copy
 } from 'lucide-react';
 
 const API_URL = import.meta.env.VITE_API_URL || 'https://backendgk2-0.onrender.com';

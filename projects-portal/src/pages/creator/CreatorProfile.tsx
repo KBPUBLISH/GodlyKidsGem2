@@ -15,7 +15,7 @@ interface ProfileData {
 }
 
 const CreatorProfile: React.FC = () => {
-  const { getToken, user } = useAuth();
+  const { getToken } = useAuth();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);

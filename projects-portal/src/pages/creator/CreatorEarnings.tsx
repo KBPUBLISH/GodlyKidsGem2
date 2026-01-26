@@ -4,8 +4,7 @@ import {
   DollarSign, 
   TrendingUp, 
   CreditCard,
-  Calendar,
-  Download
+  Calendar
 } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 

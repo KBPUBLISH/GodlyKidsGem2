@@ -11,8 +11,7 @@ import {
   Clock,
   CheckCircle,
   XCircle,
-  AlertCircle,
-  MoreVertical
+  AlertCircle
 } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 
@@ -40,7 +39,6 @@ const CreatorContent: React.FC = () => {
   const [playlists, setPlaylists] = useState<Playlist[]>([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<string>('all');
-  const [actionMenu, setActionMenu] = useState<string | null>(null);
 
   useEffect(() => {
     fetchPlaylists();
@@ -72,7 +70,6 @@ const CreatorContent: React.FC = () => {
     } catch (error: any) {
       alert(error.response?.data?.error || 'Failed to submit for review');
     }
-    setActionMenu(null);
   };
 
   const handleDelete = async (playlistId: string) => {
@@ -87,7 +84,6 @@ const CreatorContent: React.FC = () => {
     } catch (error: any) {
       alert(error.response?.data?.error || 'Failed to delete');
     }
-    setActionMenu(null);
   };
 
   const getStatusBadge = (status: string) => {

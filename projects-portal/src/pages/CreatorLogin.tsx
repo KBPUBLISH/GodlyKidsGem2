@@ -1,11 +1,10 @@
 import React, { useState } from 'react';
-import { useNavigate, Link, useSearchParams } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { Store, Mail, Lock, ArrowRight } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 
 const CreatorLogin: React.FC = () => {
   const navigate = useNavigate();
-  const [searchParams] = useSearchParams();
   const { loginAsCreator } = useAuth();
   
   const [email, setEmail] = useState('');

@@ -5,7 +5,6 @@ import {
   XCircle, 
   Music2, 
   User, 
-  Play,
   Eye,
   Clock
 } from 'lucide-react';

@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { Bell, Send, Clock, Users, Image, Link, AlertCircle, CheckCircle } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Bell, Send, Clock, Users, Image, Link, AlertCircle, CheckCircle, Settings, Calendar, Sun, Moon, Sparkles, Save, ToggleLeft, ToggleRight } from 'lucide-react';
 import apiClient from '../services/apiClient';
 
 interface NotificationForm {
@@ -9,6 +9,40 @@ interface NotificationForm {
     imageUrl: string;
     segment: string;
     scheduledTime: string;
+}
+
+interface AutoNotificationSettings {
+    dailyReminder: {
+        enabled: boolean;
+        time: string;
+        title: string;
+        message: string;
+    };
+    morningDevotional: {
+        enabled: boolean;
+        time: string;
+        title: string;
+        message: string;
+    };
+    eveningStory: {
+        enabled: boolean;
+        time: string;
+        title: string;
+        message: string;
+    };
+    weeklyDigest: {
+        enabled: boolean;
+        dayOfWeek: number;
+        time: string;
+        title: string;
+        message: string;
+    };
+    inactivityReminder: {
+        enabled: boolean;
+        daysInactive: number;
+        title: string;
+        message: string;
+    };
 }
 
 const Notifications: React.FC = () => {
@@ -22,6 +56,84 @@ const Notifications: React.FC = () => {
     });
     const [sending, setSending] = useState(false);
     const [result, setResult] = useState<{ success: boolean; message: string } | null>(null);
+    const [activeTab, setActiveTab] = useState<'manual' | 'automatic'>('manual');
+    const [savingAuto, setSavingAuto] = useState(false);
+    const [autoResult, setAutoResult] = useState<{ success: boolean; message: string } | null>(null);
+    
+    const [autoSettings, setAutoSettings] = useState<AutoNotificationSettings>({
+        dailyReminder: {
+            enabled: false,
+            time: '09:00',
+            title: '🌟 Time to Learn!',
+            message: "Your daily adventure awaits! Open the app to continue your faith journey."
+        },
+        morningDevotional: {
+            enabled: false,
+            time: '07:00',
+            title: '☀️ Good Morning!',
+            message: "Start your day with today's devotional lesson. A new story is waiting!"
+        },
+        eveningStory: {
+            enabled: false,
+            time: '19:00',
+            title: '🌙 Bedtime Story',
+            message: "Wind down with a calming Bible story before bed. Sweet dreams!"
+        },
+        weeklyDigest: {
+            enabled: false,
+            dayOfWeek: 0, // Sunday
+            time: '10:00',
+            title: '📊 Weekly Progress',
+            message: "See how much you've learned this week! Check out your achievements."
+        },
+        inactivityReminder: {
+            enabled: false,
+            daysInactive: 3,
+            title: '👋 We Miss You!',
+            message: "It's been a while! Your friends in Godly Kids are waiting for you."
+        }
+    });
+
+    // Load auto settings on mount
+    useEffect(() => {
+        const loadAutoSettings = async () => {
+            try {
+                const response = await apiClient.get('/api/notifications/auto-settings');
+                if (response.data.settings) {
+                    setAutoSettings(response.data.settings);
+                }
+            } catch (error) {
+                console.log('No existing auto settings found');
+            }
+        };
+        loadAutoSettings();
+    }, []);
+
+    const saveAutoSettings = async () => {
+        setSavingAuto(true);
+        setAutoResult(null);
+        try {
+            await apiClient.post('/api/notifications/auto-settings', { settings: autoSettings });
+            setAutoResult({ success: true, message: 'Automatic notification settings saved successfully!' });
+        } catch (error: any) {
+            setAutoResult({ 
+                success: false, 
+                message: error.response?.data?.message || 'Failed to save settings' 
+            });
+        } finally {
+            setSavingAuto(false);
+        }
+    };
+
+    const daysOfWeek = [
+        { value: 0, label: 'Sunday' },
+        { value: 1, label: 'Monday' },
+        { value: 2, label: 'Tuesday' },
+        { value: 3, label: 'Wednesday' },
+        { value: 4, label: 'Thursday' },
+        { value: 5, label: 'Friday' },
+        { value: 6, label: 'Saturday' }
+    ];
 
     const segments = [
         { id: 'All', name: 'All Users', description: 'Send to all subscribed users' },
@@ -111,19 +223,47 @@ const Notifications: React.FC = () => {
     ];
 
     return (
-        <div className="max-w-4xl mx-auto">
-            <div className="flex items-center gap-3 mb-8">
-                <div className="p-3 bg-indigo-100 rounded-xl">
-                    <Bell className="w-8 h-8 text-indigo-600" />
-                </div>
-                <div>
-                    <h1 className="text-2xl font-bold text-gray-800">Push Notifications</h1>
-                    <p className="text-gray-500">Send notifications to your app users</p>
+        <div className="max-w-5xl mx-auto">
+            <div className="flex items-center justify-between mb-8">
+                <div className="flex items-center gap-3">
+                    <div className="p-3 bg-indigo-100 rounded-xl">
+                        <Bell className="w-8 h-8 text-indigo-600" />
+                    </div>
+                    <div>
+                        <h1 className="text-2xl font-bold text-gray-800">Push Notifications</h1>
+                        <p className="text-gray-500">Send notifications to your app users</p>
+                    </div>
                 </div>
             </div>
 
+            {/* Tabs */}
+            <div className="flex gap-2 mb-6">
+                <button
+                    onClick={() => setActiveTab('manual')}
+                    className={`px-6 py-3 rounded-lg font-medium transition-all flex items-center gap-2 ${
+                        activeTab === 'manual'
+                            ? 'bg-indigo-600 text-white shadow-md'
+                            : 'bg-white text-gray-600 border border-gray-200 hover:bg-gray-50'
+                    }`}
+                >
+                    <Send className="w-4 h-4" />
+                    Manual Notifications
+                </button>
+                <button
+                    onClick={() => setActiveTab('automatic')}
+                    className={`px-6 py-3 rounded-lg font-medium transition-all flex items-center gap-2 ${
+                        activeTab === 'automatic'
+                            ? 'bg-indigo-600 text-white shadow-md'
+                            : 'bg-white text-gray-600 border border-gray-200 hover:bg-gray-50'
+                    }`}
+                >
+                    <Settings className="w-4 h-4" />
+                    Automatic Notifications
+                </button>
+            </div>
+
             {/* Result Message */}
-            {result && (
+            {result && activeTab === 'manual' && (
                 <div className={`mb-6 p-4 rounded-lg flex items-center gap-3 ${
                     result.success 
                         ? 'bg-green-50 border border-green-200 text-green-800' 
@@ -138,6 +278,23 @@ const Notifications: React.FC = () => {
                 </div>
             )}
 
+            {autoResult && activeTab === 'automatic' && (
+                <div className={`mb-6 p-4 rounded-lg flex items-center gap-3 ${
+                    autoResult.success 
+                        ? 'bg-green-50 border border-green-200 text-green-800' 
+                        : 'bg-red-50 border border-red-200 text-red-800'
+                }`}>
+                    {autoResult.success ? (
+                        <CheckCircle className="w-5 h-5 text-green-600" />
+                    ) : (
+                        <AlertCircle className="w-5 h-5 text-red-600" />
+                    )}
+                    {autoResult.message}
+                </div>
+            )}
+
+            {/* Manual Notifications Tab */}
+            {activeTab === 'manual' && (
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                 {/* Main Form */}
                 <div className="lg:col-span-2">
@@ -331,6 +488,403 @@ const Notifications: React.FC = () => {
                     )}
                 </div>
             </div>
+            )}
+
+            {/* Automatic Notifications Tab */}
+            {activeTab === 'automatic' && (
+                <div className="space-y-6">
+                    <div className="bg-gradient-to-r from-indigo-50 to-purple-50 rounded-xl p-6 border border-indigo-100">
+                        <div className="flex items-start gap-4">
+                            <div className="p-3 bg-white rounded-lg shadow-sm">
+                                <Clock className="w-6 h-6 text-indigo-600" />
+                            </div>
+                            <div>
+                                <h3 className="font-semibold text-gray-800">Automatic Notifications (Local User Time)</h3>
+                                <p className="text-sm text-gray-600 mt-1">
+                                    Configure notifications that are sent automatically based on each user's local timezone. 
+                                    These notifications help keep users engaged with consistent reminders.
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                        {/* Daily Reminder */}
+                        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                            <div className="flex items-center justify-between mb-4">
+                                <div className="flex items-center gap-3">
+                                    <div className="p-2 bg-amber-100 rounded-lg">
+                                        <Sparkles className="w-5 h-5 text-amber-600" />
+                                    </div>
+                                    <div>
+                                        <h3 className="font-semibold text-gray-800">Daily Reminder</h3>
+                                        <p className="text-xs text-gray-500">Encourage daily app usage</p>
+                                    </div>
+                                </div>
+                                <button
+                                    onClick={() => setAutoSettings({
+                                        ...autoSettings,
+                                        dailyReminder: { ...autoSettings.dailyReminder, enabled: !autoSettings.dailyReminder.enabled }
+                                    })}
+                                    className="text-2xl"
+                                >
+                                    {autoSettings.dailyReminder.enabled ? (
+                                        <ToggleRight className="w-10 h-10 text-indigo-600" />
+                                    ) : (
+                                        <ToggleLeft className="w-10 h-10 text-gray-300" />
+                                    )}
+                                </button>
+                            </div>
+                            <div className={`space-y-3 ${!autoSettings.dailyReminder.enabled && 'opacity-50 pointer-events-none'}`}>
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">Time (User's Local)</label>
+                                    <input
+                                        type="time"
+                                        value={autoSettings.dailyReminder.time}
+                                        onChange={(e) => setAutoSettings({
+                                            ...autoSettings,
+                                            dailyReminder: { ...autoSettings.dailyReminder, time: e.target.value }
+                                        })}
+                                        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">Title</label>
+                                    <input
+                                        type="text"
+                                        value={autoSettings.dailyReminder.title}
+                                        onChange={(e) => setAutoSettings({
+                                            ...autoSettings,
+                                            dailyReminder: { ...autoSettings.dailyReminder, title: e.target.value }
+                                        })}
+                                        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">Message</label>
+                                    <textarea
+                                        value={autoSettings.dailyReminder.message}
+                                        onChange={(e) => setAutoSettings({
+                                            ...autoSettings,
+                                            dailyReminder: { ...autoSettings.dailyReminder, message: e.target.value }
+                                        })}
+                                        rows={2}
+                                        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm resize-none"
+                                    />
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Morning Devotional */}
+                        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                            <div className="flex items-center justify-between mb-4">
+                                <div className="flex items-center gap-3">
+                                    <div className="p-2 bg-orange-100 rounded-lg">
+                                        <Sun className="w-5 h-5 text-orange-600" />
+                                    </div>
+                                    <div>
+                                        <h3 className="font-semibold text-gray-800">Morning Devotional</h3>
+                                        <p className="text-xs text-gray-500">Start the day with faith</p>
+                                    </div>
+                                </div>
+                                <button
+                                    onClick={() => setAutoSettings({
+                                        ...autoSettings,
+                                        morningDevotional: { ...autoSettings.morningDevotional, enabled: !autoSettings.morningDevotional.enabled }
+                                    })}
+                                    className="text-2xl"
+                                >
+                                    {autoSettings.morningDevotional.enabled ? (
+                                        <ToggleRight className="w-10 h-10 text-indigo-600" />
+                                    ) : (
+                                        <ToggleLeft className="w-10 h-10 text-gray-300" />
+                                    )}
+                                </button>
+                            </div>
+                            <div className={`space-y-3 ${!autoSettings.morningDevotional.enabled && 'opacity-50 pointer-events-none'}`}>
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">Time (User's Local)</label>
+                                    <input
+                                        type="time"
+                                        value={autoSettings.morningDevotional.time}
+                                        onChange={(e) => setAutoSettings({
+                                            ...autoSettings,
+                                            morningDevotional: { ...autoSettings.morningDevotional, time: e.target.value }
+                                        })}
+                                        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">Title</label>
+                                    <input
+                                        type="text"
+                                        value={autoSettings.morningDevotional.title}
+                                        onChange={(e) => setAutoSettings({
+                                            ...autoSettings,
+                                            morningDevotional: { ...autoSettings.morningDevotional, title: e.target.value }
+                                        })}
+                                        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">Message</label>
+                                    <textarea
+                                        value={autoSettings.morningDevotional.message}
+                                        onChange={(e) => setAutoSettings({
+                                            ...autoSettings,
+                                            morningDevotional: { ...autoSettings.morningDevotional, message: e.target.value }
+                                        })}
+                                        rows={2}
+                                        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm resize-none"
+                                    />
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Evening Story */}
+                        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                            <div className="flex items-center justify-between mb-4">
+                                <div className="flex items-center gap-3">
+                                    <div className="p-2 bg-indigo-100 rounded-lg">
+                                        <Moon className="w-5 h-5 text-indigo-600" />
+                                    </div>
+                                    <div>
+                                        <h3 className="font-semibold text-gray-800">Evening Story Time</h3>
+                                        <p className="text-xs text-gray-500">Bedtime stories reminder</p>
+                                    </div>
+                                </div>
+                                <button
+                                    onClick={() => setAutoSettings({
+                                        ...autoSettings,
+                                        eveningStory: { ...autoSettings.eveningStory, enabled: !autoSettings.eveningStory.enabled }
+                                    })}
+                                    className="text-2xl"
+                                >
+                                    {autoSettings.eveningStory.enabled ? (
+                                        <ToggleRight className="w-10 h-10 text-indigo-600" />
+                                    ) : (
+                                        <ToggleLeft className="w-10 h-10 text-gray-300" />
+                                    )}
+                                </button>
+                            </div>
+                            <div className={`space-y-3 ${!autoSettings.eveningStory.enabled && 'opacity-50 pointer-events-none'}`}>
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">Time (User's Local)</label>
+                                    <input
+                                        type="time"
+                                        value={autoSettings.eveningStory.time}
+                                        onChange={(e) => setAutoSettings({
+                                            ...autoSettings,
+                                            eveningStory: { ...autoSettings.eveningStory, time: e.target.value }
+                                        })}
+                                        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">Title</label>
+                                    <input
+                                        type="text"
+                                        value={autoSettings.eveningStory.title}
+                                        onChange={(e) => setAutoSettings({
+                                            ...autoSettings,
+                                            eveningStory: { ...autoSettings.eveningStory, title: e.target.value }
+                                        })}
+                                        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">Message</label>
+                                    <textarea
+                                        value={autoSettings.eveningStory.message}
+                                        onChange={(e) => setAutoSettings({
+                                            ...autoSettings,
+                                            eveningStory: { ...autoSettings.eveningStory, message: e.target.value }
+                                        })}
+                                        rows={2}
+                                        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm resize-none"
+                                    />
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Weekly Digest */}
+                        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                            <div className="flex items-center justify-between mb-4">
+                                <div className="flex items-center gap-3">
+                                    <div className="p-2 bg-green-100 rounded-lg">
+                                        <Calendar className="w-5 h-5 text-green-600" />
+                                    </div>
+                                    <div>
+                                        <h3 className="font-semibold text-gray-800">Weekly Progress Digest</h3>
+                                        <p className="text-xs text-gray-500">Weekly achievement summary</p>
+                                    </div>
+                                </div>
+                                <button
+                                    onClick={() => setAutoSettings({
+                                        ...autoSettings,
+                                        weeklyDigest: { ...autoSettings.weeklyDigest, enabled: !autoSettings.weeklyDigest.enabled }
+                                    })}
+                                    className="text-2xl"
+                                >
+                                    {autoSettings.weeklyDigest.enabled ? (
+                                        <ToggleRight className="w-10 h-10 text-indigo-600" />
+                                    ) : (
+                                        <ToggleLeft className="w-10 h-10 text-gray-300" />
+                                    )}
+                                </button>
+                            </div>
+                            <div className={`space-y-3 ${!autoSettings.weeklyDigest.enabled && 'opacity-50 pointer-events-none'}`}>
+                                <div className="grid grid-cols-2 gap-3">
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700 mb-1">Day of Week</label>
+                                        <select
+                                            value={autoSettings.weeklyDigest.dayOfWeek}
+                                            onChange={(e) => setAutoSettings({
+                                                ...autoSettings,
+                                                weeklyDigest: { ...autoSettings.weeklyDigest, dayOfWeek: parseInt(e.target.value) }
+                                            })}
+                                            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                                        >
+                                            {daysOfWeek.map(day => (
+                                                <option key={day.value} value={day.value}>{day.label}</option>
+                                            ))}
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700 mb-1">Time</label>
+                                        <input
+                                            type="time"
+                                            value={autoSettings.weeklyDigest.time}
+                                            onChange={(e) => setAutoSettings({
+                                                ...autoSettings,
+                                                weeklyDigest: { ...autoSettings.weeklyDigest, time: e.target.value }
+                                            })}
+                                            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                                        />
+                                    </div>
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">Title</label>
+                                    <input
+                                        type="text"
+                                        value={autoSettings.weeklyDigest.title}
+                                        onChange={(e) => setAutoSettings({
+                                            ...autoSettings,
+                                            weeklyDigest: { ...autoSettings.weeklyDigest, title: e.target.value }
+                                        })}
+                                        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">Message</label>
+                                    <textarea
+                                        value={autoSettings.weeklyDigest.message}
+                                        onChange={(e) => setAutoSettings({
+                                            ...autoSettings,
+                                            weeklyDigest: { ...autoSettings.weeklyDigest, message: e.target.value }
+                                        })}
+                                        rows={2}
+                                        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm resize-none"
+                                    />
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Inactivity Reminder */}
+                        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 lg:col-span-2">
+                            <div className="flex items-center justify-between mb-4">
+                                <div className="flex items-center gap-3">
+                                    <div className="p-2 bg-red-100 rounded-lg">
+                                        <Bell className="w-5 h-5 text-red-600" />
+                                    </div>
+                                    <div>
+                                        <h3 className="font-semibold text-gray-800">Inactivity Reminder</h3>
+                                        <p className="text-xs text-gray-500">Re-engage inactive users</p>
+                                    </div>
+                                </div>
+                                <button
+                                    onClick={() => setAutoSettings({
+                                        ...autoSettings,
+                                        inactivityReminder: { ...autoSettings.inactivityReminder, enabled: !autoSettings.inactivityReminder.enabled }
+                                    })}
+                                    className="text-2xl"
+                                >
+                                    {autoSettings.inactivityReminder.enabled ? (
+                                        <ToggleRight className="w-10 h-10 text-indigo-600" />
+                                    ) : (
+                                        <ToggleLeft className="w-10 h-10 text-gray-300" />
+                                    )}
+                                </button>
+                            </div>
+                            <div className={`grid grid-cols-1 md:grid-cols-3 gap-4 ${!autoSettings.inactivityReminder.enabled && 'opacity-50 pointer-events-none'}`}>
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">Days Inactive</label>
+                                    <select
+                                        value={autoSettings.inactivityReminder.daysInactive}
+                                        onChange={(e) => setAutoSettings({
+                                            ...autoSettings,
+                                            inactivityReminder: { ...autoSettings.inactivityReminder, daysInactive: parseInt(e.target.value) }
+                                        })}
+                                        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                                    >
+                                        <option value={1}>1 day</option>
+                                        <option value={2}>2 days</option>
+                                        <option value={3}>3 days</option>
+                                        <option value={5}>5 days</option>
+                                        <option value={7}>7 days</option>
+                                        <option value={14}>14 days</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">Title</label>
+                                    <input
+                                        type="text"
+                                        value={autoSettings.inactivityReminder.title}
+                                        onChange={(e) => setAutoSettings({
+                                            ...autoSettings,
+                                            inactivityReminder: { ...autoSettings.inactivityReminder, title: e.target.value }
+                                        })}
+                                        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">Message</label>
+                                    <input
+                                        type="text"
+                                        value={autoSettings.inactivityReminder.message}
+                                        onChange={(e) => setAutoSettings({
+                                            ...autoSettings,
+                                            inactivityReminder: { ...autoSettings.inactivityReminder, message: e.target.value }
+                                        })}
+                                        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                                    />
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Save Button */}
+                    <div className="flex justify-end">
+                        <button
+                            onClick={saveAutoSettings}
+                            disabled={savingAuto}
+                            className="px-6 py-3 bg-indigo-600 text-white rounded-lg font-semibold hover:bg-indigo-700 transition disabled:opacity-50 flex items-center gap-2"
+                        >
+                            {savingAuto ? (
+                                <>
+                                    <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                                    Saving...
+                                </>
+                            ) : (
+                                <>
+                                    <Save className="w-5 h-5" />
+                                    Save Auto Notification Settings
+                                </>
+                            )}
+                        </button>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };

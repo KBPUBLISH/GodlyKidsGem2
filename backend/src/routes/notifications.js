@@ -1,6 +1,46 @@
 const express = require('express');
 const router = express.Router();
 const OneSignal = require('onesignal-node');
+const mongoose = require('mongoose');
+
+// Auto Notification Settings Schema
+const autoNotificationSettingsSchema = new mongoose.Schema({
+    dailyReminder: {
+        enabled: { type: Boolean, default: false },
+        time: { type: String, default: '09:00' },
+        title: { type: String, default: '🌟 Time to Learn!' },
+        message: { type: String, default: 'Your daily adventure awaits! Open the app to continue your faith journey.' }
+    },
+    morningDevotional: {
+        enabled: { type: Boolean, default: false },
+        time: { type: String, default: '07:00' },
+        title: { type: String, default: '☀️ Good Morning!' },
+        message: { type: String, default: 'Start your day with today\'s devotional lesson. A new story is waiting!' }
+    },
+    eveningStory: {
+        enabled: { type: Boolean, default: false },
+        time: { type: String, default: '19:00' },
+        title: { type: String, default: '🌙 Bedtime Story' },
+        message: { type: String, default: 'Wind down with a calming Bible story before bed. Sweet dreams!' }
+    },
+    weeklyDigest: {
+        enabled: { type: Boolean, default: false },
+        dayOfWeek: { type: Number, default: 0 }, // 0 = Sunday
+        time: { type: String, default: '10:00' },
+        title: { type: String, default: '📊 Weekly Progress' },
+        message: { type: String, default: 'See how much you\'ve learned this week! Check out your achievements.' }
+    },
+    inactivityReminder: {
+        enabled: { type: Boolean, default: false },
+        daysInactive: { type: Number, default: 3 },
+        title: { type: String, default: '👋 We Miss You!' },
+        message: { type: String, default: 'It\'s been a while! Your friends in Godly Kids are waiting for you.' }
+    },
+    updatedAt: { type: Date, default: Date.now }
+}, { collection: 'autoNotificationSettings' });
+
+// Check if model already exists to prevent recompilation error
+const AutoNotificationSettings = mongoose.models.AutoNotificationSettings || mongoose.model('AutoNotificationSettings', autoNotificationSettingsSchema);
 
 // Initialize OneSignal client
 const getOneSignalClient = () => {
@@ -273,6 +313,154 @@ router.delete('/:id', async (req, res) => {
         console.error('❌ Cancel notification error:', error);
         res.status(500).json({ 
             message: 'Failed to cancel notification', 
+            error: error.message 
+        });
+    }
+});
+
+// GET /auto-settings - Get automatic notification settings
+router.get('/auto-settings', async (req, res) => {
+    try {
+        // Get the single settings document (or create default if none exists)
+        let settings = await AutoNotificationSettings.findOne();
+        
+        if (!settings) {
+            // Return default settings
+            settings = {
+                dailyReminder: {
+                    enabled: false,
+                    time: '09:00',
+                    title: '🌟 Time to Learn!',
+                    message: 'Your daily adventure awaits! Open the app to continue your faith journey.'
+                },
+                morningDevotional: {
+                    enabled: false,
+                    time: '07:00',
+                    title: '☀️ Good Morning!',
+                    message: 'Start your day with today\'s devotional lesson. A new story is waiting!'
+                },
+                eveningStory: {
+                    enabled: false,
+                    time: '19:00',
+                    title: '🌙 Bedtime Story',
+                    message: 'Wind down with a calming Bible story before bed. Sweet dreams!'
+                },
+                weeklyDigest: {
+                    enabled: false,
+                    dayOfWeek: 0,
+                    time: '10:00',
+                    title: '📊 Weekly Progress',
+                    message: 'See how much you\'ve learned this week! Check out your achievements.'
+                },
+                inactivityReminder: {
+                    enabled: false,
+                    daysInactive: 3,
+                    title: '👋 We Miss You!',
+                    message: 'It\'s been a while! Your friends in Godly Kids are waiting for you.'
+                }
+            };
+        }
+        
+        res.json({ success: true, settings });
+    } catch (error) {
+        console.error('❌ Get auto settings error:', error);
+        res.status(500).json({ 
+            success: false,
+            message: 'Failed to get auto notification settings', 
+            error: error.message 
+        });
+    }
+});
+
+// POST /auto-settings - Save automatic notification settings
+router.post('/auto-settings', async (req, res) => {
+    try {
+        const { settings } = req.body;
+        
+        if (!settings) {
+            return res.status(400).json({ 
+                success: false, 
+                message: 'Settings object is required' 
+            });
+        }
+
+        // Update or create the settings document
+        const updatedSettings = await AutoNotificationSettings.findOneAndUpdate(
+            {}, // Match any document (we only have one)
+            {
+                $set: {
+                    ...settings,
+                    updatedAt: new Date()
+                }
+            },
+            { 
+                upsert: true, // Create if doesn't exist
+                new: true,    // Return the updated document
+                runValidators: true
+            }
+        );
+        
+        console.log('✅ Auto notification settings saved');
+        res.json({ 
+            success: true, 
+            message: 'Auto notification settings saved successfully',
+            settings: updatedSettings
+        });
+    } catch (error) {
+        console.error('❌ Save auto settings error:', error);
+        res.status(500).json({ 
+            success: false,
+            message: 'Failed to save auto notification settings', 
+            error: error.message 
+        });
+    }
+});
+
+// POST /send-auto - Trigger an automatic notification (called by scheduler/cron)
+router.post('/send-auto', async (req, res) => {
+    try {
+        const client = getOneSignalClient();
+        if (!client) {
+            return res.status(500).json({ message: 'OneSignal not configured' });
+        }
+
+        const { type, timezone } = req.body; // type: 'dailyReminder', 'morningDevotional', etc.
+        
+        const settings = await AutoNotificationSettings.findOne();
+        if (!settings || !settings[type] || !settings[type].enabled) {
+            return res.status(400).json({ 
+                success: false, 
+                message: `Auto notification type '${type}' is not enabled` 
+            });
+        }
+
+        const notificationConfig = settings[type];
+        
+        // Build notification with timezone-aware delivery
+        const notification = {
+            headings: { en: notificationConfig.title },
+            contents: { en: notificationConfig.message },
+            included_segments: ['All'],
+            // Use delayed_option to send at user's local time
+            delayed_option: 'timezone',
+            delivery_time_of_day: notificationConfig.time + ':00' // Format: "09:00:00"
+        };
+
+        const response = await client.createNotification(notification);
+        
+        console.log(`✅ Auto notification '${type}' scheduled:`, response.body);
+        res.json({
+            success: true,
+            type,
+            id: response.body.id,
+            recipients: response.body.recipients
+        });
+
+    } catch (error) {
+        console.error('❌ Send auto notification error:', error);
+        res.status(500).json({ 
+            success: false,
+            message: 'Failed to send auto notification', 
             error: error.message 
         });
     }

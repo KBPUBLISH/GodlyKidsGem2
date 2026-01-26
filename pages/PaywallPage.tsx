@@ -234,19 +234,27 @@ const PaywallPage: React.FC = () => {
     setError(null);
     
     // Track trial button clicked
+    console.log('🔘 Start Trial button clicked, plan:', selectedPlan);
     activityTrackingService.trackOnboardingEvent('paywall_trial_clicked', { planType: selectedPlan });
     
     // Check if user has an account - require account before purchase
     if (!hasAccount()) {
+      console.log('⚠️ No account found, showing account required modal');
+      activityTrackingService.trackOnboardingEvent('paywall_account_required', { planType: selectedPlan });
       setShowAccountRequired(true);
       return;
     }
     
     // Show parent gate before processing
+    console.log('🔐 Account found, showing parent gate');
+    activityTrackingService.trackOnboardingEvent('paywall_parent_gate_shown', { planType: selectedPlan });
     setShowParentGate(true);
   };
 
   const handleGateSuccess = async () => {
+    console.log('✅ Parent gate passed, starting purchase flow');
+    activityTrackingService.trackOnboardingEvent('paywall_parent_gate_passed', { planType: selectedPlan });
+    
     setShowParentGate(false);
     setIsPurchasing(true);
     setError(null);
@@ -254,9 +262,14 @@ const PaywallPage: React.FC = () => {
     // Facebook Pixel - Track checkout initiation
     const price = selectedPlan === 'lifetime' ? 69.99 : selectedPlan === 'annual' ? 39.99 : 5.99;
     facebookPixelService.trackInitiateCheckout(selectedPlan, price);
+    
+    // Track purchase attempt
+    activityTrackingService.trackOnboardingEvent('paywall_purchase_started', { planType: selectedPlan });
 
     try {
+      console.log('💳 Calling purchase() with plan:', selectedPlan);
       const result = await purchase(selectedPlan);
+      console.log('💳 Purchase result:', result);
 
       if (result.success) {
         // Facebook Pixel - Track successful purchase
@@ -279,10 +292,16 @@ const PaywallPage: React.FC = () => {
         subscribe();
         navigate('/home');
       } else if (result.error && result.error !== 'Purchase cancelled') {
+        console.error('❌ Purchase failed:', result.error);
+        activityTrackingService.trackOnboardingEvent('paywall_purchase_error', { planType: selectedPlan, error: result.error });
         setError(result.error);
+      } else {
+        console.log('⏸️ Purchase cancelled by user');
+        activityTrackingService.trackOnboardingEvent('paywall_purchase_cancelled', { planType: selectedPlan });
       }
     } catch (err: any) {
       console.error('Purchase error:', err);
+      activityTrackingService.trackOnboardingEvent('paywall_purchase_error', { planType: selectedPlan, error: err.message });
       setError(err.message || 'An error occurred during purchase');
     } finally {
       setIsPurchasing(false);

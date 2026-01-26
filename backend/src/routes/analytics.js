@@ -614,6 +614,12 @@ router.get('/onboarding', async (req, res) => {
         const step6 = eventCounts['step_6_complete'] || 0;  // (Legacy) Account at end
         const paywallShown = eventCounts['paywall_shown'] || 0;
         const paywallTrialClicked = eventCounts['paywall_trial_clicked'] || 0;
+        const paywallAccountRequired = eventCounts['paywall_account_required'] || 0;
+        const paywallParentGateShown = eventCounts['paywall_parent_gate_shown'] || 0;
+        const paywallParentGatePassed = eventCounts['paywall_parent_gate_passed'] || 0;
+        const paywallPurchaseStarted = eventCounts['paywall_purchase_started'] || 0;
+        const paywallPurchaseError = eventCounts['paywall_purchase_error'] || 0;
+        const paywallPurchaseCancelled = eventCounts['paywall_purchase_cancelled'] || 0;
         const paywallClosed = eventCounts['paywall_closed'] || 0;
         const subscribed = eventCounts['subscribed'] || 0;
         const subscribeClicked = eventCounts['subscribe_clicked'] || 0;
@@ -634,10 +640,23 @@ router.get('/onboarding', async (req, res) => {
             { step: 'Step 3 (Goals)', count: step3, rate: started > 0 ? Math.round((step3 / started) * 100) : 0 },
             { step: 'Step 4 (Features)', count: step4, rate: started > 0 ? Math.round((step4 / started) * 100) : 0 },
             { step: 'Step 5 (Voice)', count: step5, rate: started > 0 ? Math.round((step5 / started) * 100) : 0 },
-            { step: 'Step 6 (Paywall Shown)', count: paywallShown, rate: started > 0 ? Math.round((paywallShown / started) * 100) : 0 },
-            { step: 'Step 7 (Exit Paywall)', count: paywallClosed, rate: paywallShown > 0 ? Math.round((paywallClosed / paywallShown) * 100) : 0 },
-            { step: 'Step 8 (Start Trial)', count: paywallTrialClicked, rate: paywallShown > 0 ? Math.round((paywallTrialClicked / paywallShown) * 100) : 0 },
+            { step: 'Paywall Shown', count: paywallShown, rate: started > 0 ? Math.round((paywallShown / started) * 100) : 0 },
+            { step: 'Exit Paywall (X)', count: paywallClosed, rate: paywallShown > 0 ? Math.round((paywallClosed / paywallShown) * 100) : 0 },
+            { step: 'Start Trial Clicked', count: paywallTrialClicked, rate: paywallShown > 0 ? Math.round((paywallTrialClicked / paywallShown) * 100) : 0 },
             { step: 'Subscribed', count: totalSubscribed, rate: started > 0 ? Math.round((totalSubscribed / started) * 100) : 0 },
+        ];
+        
+        // Detailed paywall funnel breakdown
+        const paywallFunnel = [
+            { step: 'Paywall Shown', count: paywallShown, rate: 100 },
+            { step: 'Clicked Start Trial', count: paywallTrialClicked, rate: paywallShown > 0 ? Math.round((paywallTrialClicked / paywallShown) * 100) : 0 },
+            { step: 'Account Required (blocked)', count: paywallAccountRequired, rate: paywallTrialClicked > 0 ? Math.round((paywallAccountRequired / paywallTrialClicked) * 100) : 0 },
+            { step: 'Parent Gate Shown', count: paywallParentGateShown, rate: paywallTrialClicked > 0 ? Math.round((paywallParentGateShown / paywallTrialClicked) * 100) : 0 },
+            { step: 'Parent Gate Passed', count: paywallParentGatePassed, rate: paywallParentGateShown > 0 ? Math.round((paywallParentGatePassed / paywallParentGateShown) * 100) : 0 },
+            { step: 'Purchase Started', count: paywallPurchaseStarted, rate: paywallParentGatePassed > 0 ? Math.round((paywallPurchaseStarted / paywallParentGatePassed) * 100) : 0 },
+            { step: 'Purchase Error', count: paywallPurchaseError, rate: paywallPurchaseStarted > 0 ? Math.round((paywallPurchaseError / paywallPurchaseStarted) * 100) : 0 },
+            { step: 'Purchase Cancelled', count: paywallPurchaseCancelled, rate: paywallPurchaseStarted > 0 ? Math.round((paywallPurchaseCancelled / paywallPurchaseStarted) * 100) : 0 },
+            { step: 'Subscribed', count: totalSubscribed, rate: paywallPurchaseStarted > 0 ? Math.round((totalSubscribed / paywallPurchaseStarted) * 100) : 0 },
         ];
         
         // Daily trends (last 14 days)
@@ -677,6 +696,7 @@ router.get('/onboarding', async (req, res) => {
                 skipRate: started > 0 ? Math.round((skipped / started) * 100) : 0,
             },
             funnel,
+            paywallFunnel,
             eventCounts,
             dailyTrends,
             planPreference: planCounts,

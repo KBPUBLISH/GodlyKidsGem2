@@ -107,6 +107,7 @@ const getUserId = (): string => {
 let purchaseResolve: ((value: { success: boolean; error?: string }) => void) | null = null;
 let purchaseTimeout: ReturnType<typeof setTimeout> | null = null;
 let purchasePollInterval: ReturnType<typeof setInterval> | null = null;
+let purchaseSuccessHandled = false; // Guard against multiple callbacks
 
 // Clean up any pending purchase state
 const cleanupPurchaseState = () => {
@@ -118,6 +119,29 @@ const cleanupPurchaseState = () => {
     clearInterval(purchasePollInterval);
     purchasePollInterval = null;
   }
+};
+
+// Handle purchase success - with guard against multiple calls
+const handlePurchaseSuccess = () => {
+  if (purchaseSuccessHandled) {
+    console.log('⚠️ Purchase success already handled, ignoring duplicate callback');
+    return;
+  }
+  purchaseSuccessHandled = true;
+  
+  console.log('✅ Setting premium status');
+  localStorage.setItem('godlykids_premium', 'true');
+  
+  if (purchaseResolve) {
+    purchaseResolve({ success: true });
+    purchaseResolve = null;
+  }
+  cleanupPurchaseState();
+  
+  // Reset the guard after a short delay (for next purchase)
+  setTimeout(() => {
+    purchaseSuccessHandled = false;
+  }, 5000);
 };
 
 // Extend window to include DeSpia callbacks
@@ -132,56 +156,27 @@ declare global {
 // Set up listener for purchase completion
 const setupPurchaseListener = () => {
   // DeSpia purchase callbacks - these fire when Apple confirms the purchase
-  // We trust these NOW because they mean Apple has confirmed payment
   (window as any).onRevenueCatPurchase = () => {
-    console.log('📱✅ DeSpia onRevenueCatPurchase() called - Apple confirmed purchase!');
-    // Set premium immediately - Apple has confirmed payment
-    localStorage.setItem('godlykids_premium', 'true');
-    window.dispatchEvent(new CustomEvent('revenuecat:premiumChanged', { detail: { isPremium: true } }));
-    if (purchaseResolve) {
-      purchaseResolve({ success: true });
-      purchaseResolve = null;
-    }
-    cleanupPurchaseState();
+    console.log('📱✅ DeSpia onRevenueCatPurchase() called');
+    handlePurchaseSuccess();
   };
   
   // Also register restore callback
   (window as any).onRevenueCatRestore = () => {
-    console.log('📱✅ DeSpia onRevenueCatRestore() called - purchases restored!');
-    localStorage.setItem('godlykids_premium', 'true');
-    window.dispatchEvent(new CustomEvent('revenuecat:premiumChanged', { detail: { isPremium: true } }));
-    if (purchaseResolve) {
-      purchaseResolve({ success: true });
-      purchaseResolve = null;
-    }
-    cleanupPurchaseState();
+    console.log('📱✅ DeSpia onRevenueCatRestore() called');
+    handlePurchaseSuccess();
   };
   
   // iapSuccess callback (alternative from Despia RevenueCat Custom docs)
-  // This receives transaction data from Apple
   (window as any).iapSuccess = (data?: any) => {
     console.log('📱✅ DeSpia iapSuccess() called with data:', data);
-    // Set premium immediately - this callback only fires on successful Apple purchase
-    localStorage.setItem('godlykids_premium', 'true');
-    window.dispatchEvent(new CustomEvent('revenuecat:premiumChanged', { detail: { isPremium: true } }));
-    if (purchaseResolve) {
-      purchaseResolve({ success: true });
-      purchaseResolve = null;
-    }
-    cleanupPurchaseState();
+    handlePurchaseSuccess();
   };
 
   // Listen for custom events that DeSpia might fire
-  // These events mean Apple has confirmed the purchase
   window.addEventListener('despia-purchase-success', () => {
-    console.log('📱✅ DeSpia despia-purchase-success event received!');
-    localStorage.setItem('godlykids_premium', 'true');
-    window.dispatchEvent(new CustomEvent('revenuecat:premiumChanged', { detail: { isPremium: true } }));
-    if (purchaseResolve) {
-      purchaseResolve({ success: true });
-      purchaseResolve = null;
-    }
-    cleanupPurchaseState();
+    console.log('📱✅ DeSpia despia-purchase-success event received');
+    handlePurchaseSuccess();
   });
 
   window.addEventListener('despia-purchase-failed', (event: any) => {
@@ -209,13 +204,7 @@ const setupPurchaseListener = () => {
       
       if (data?.type === 'revenuecat_purchase_success' || data?.type === 'despia_purchase_complete') {
         console.log('📱✅ Purchase complete message received:', data);
-        localStorage.setItem('godlykids_premium', 'true');
-        window.dispatchEvent(new CustomEvent('revenuecat:premiumChanged', { detail: { isPremium: true } }));
-        if (purchaseResolve) {
-          purchaseResolve({ success: true });
-          purchaseResolve = null;
-        }
-        cleanupPurchaseState();
+        handlePurchaseSuccess();
       } else if (data?.type === 'revenuecat_purchase_failed' || data?.type === 'despia_purchase_failed') {
         console.log('❌ Purchase failed message received:', data);
         if (purchaseResolve) {
@@ -230,16 +219,11 @@ const setupPurchaseListener = () => {
   });
   
   // Listen for localStorage changes from backend webhook confirmation
-  // This is safe because the backend only sets premium after Apple confirms payment
+  // Only handle if we're in the middle of a purchase flow
   window.addEventListener('storage', (event: StorageEvent) => {
-    if (event.key === 'godlykids_premium' && event.newValue === 'true') {
-      console.log('✅ Premium status confirmed via storage event (likely from backend webhook)');
-      window.dispatchEvent(new CustomEvent('revenuecat:premiumChanged', { detail: { isPremium: true } }));
-      if (purchaseResolve) {
-        purchaseResolve({ success: true });
-        purchaseResolve = null;
-      }
-      cleanupPurchaseState();
+    if (event.key === 'godlykids_premium' && event.newValue === 'true' && purchaseResolve) {
+      console.log('✅ Premium status confirmed via storage event');
+      handlePurchaseSuccess();
     }
   });
 };
@@ -359,13 +343,22 @@ export const RevenueCatService = {
             return;
           }
           
+          // Check if already handled by DeSpia callback
+          if (purchaseSuccessHandled && !resolved) {
+            resolved = true;
+            console.log('✅ Purchase already handled by callback');
+            cleanupPurchaseState();
+            resolve({ success: true });
+            purchaseResolve = null;
+            return;
+          }
+          
           // Check localStorage first (fastest)
           const localPremium = localStorage.getItem('godlykids_premium') === 'true';
           if (localPremium && !resolved) {
             resolved = true;
             console.log('✅ Premium detected in localStorage after', elapsedSeconds.toFixed(1), 'seconds');
             cleanupPurchaseState();
-            window.dispatchEvent(new CustomEvent('revenuecat:premiumChanged', { detail: { isPremium: true } }));
             resolve({ success: true });
             purchaseResolve = null;
             return;
@@ -381,7 +374,6 @@ export const RevenueCatService = {
               console.log('✅ Premium confirmed by backend webhook after', elapsedSeconds.toFixed(1), 'seconds');
               localStorage.setItem('godlykids_premium', 'true');
               cleanupPurchaseState();
-              window.dispatchEvent(new CustomEvent('revenuecat:premiumChanged', { detail: { isPremium: true } }));
               resolve({ success: true });
               purchaseResolve = null;
               return;
@@ -408,7 +400,6 @@ export const RevenueCatService = {
             const finalPremium = localStorage.getItem('godlykids_premium') === 'true';
             if (finalPremium) {
               console.log('✅ Premium found in final check');
-              window.dispatchEvent(new CustomEvent('revenuecat:premiumChanged', { detail: { isPremium: true } }));
               resolve({ success: true });
               purchaseResolve = null;
               return;
@@ -520,7 +511,6 @@ export const RevenueCatService = {
           if (data.isPremium) {
             console.log('✅ Premium confirmed by backend!');
             localStorage.setItem('godlykids_premium', 'true');
-            window.dispatchEvent(new CustomEvent('revenuecat:premiumChanged', { detail: { isPremium: true } }));
             return { success: true, isPremium: true };
           }
         }
@@ -547,7 +537,6 @@ export const RevenueCatService = {
           if (isPremiumNow) {
             clearInterval(pollInterval);
             console.log('✅ Premium restored via Apple!');
-            window.dispatchEvent(new CustomEvent('revenuecat:premiumChanged', { detail: { isPremium: true } }));
             resolve({ success: true, isPremium: true });
             return;
           }
@@ -561,7 +550,6 @@ export const RevenueCatService = {
                 if (data.isPremium) {
                   clearInterval(pollInterval);
                   localStorage.setItem('godlykids_premium', 'true');
-                  window.dispatchEvent(new CustomEvent('revenuecat:premiumChanged', { detail: { isPremium: true } }));
                   resolve({ success: true, isPremium: true });
                   return;
                 }
@@ -679,10 +667,7 @@ export const RevenueCatService = {
    */
   markPurchaseSuccess: (): void => {
     console.log('✅ Marking purchase as successful');
-    localStorage.setItem('godlykids_premium', 'true');
-    
-    // Dispatch event for any listeners
-    window.dispatchEvent(new CustomEvent('despia-purchase-success'));
+    handlePurchaseSuccess();
   },
 
   /**

@@ -1002,8 +1002,9 @@ const OnboardingPage: React.FC = () => {
       localStorage.getItem('godlykids_user_email')
     );
     
-    // Skip account creation if user already has an account or coming from tutorial
-    if (skipAccountStep || fromTutorial || hasExistingAccount) {
+    // Skip account creation ONLY if user already has an account
+    // Note: fromTutorial alone should NOT skip account creation - they still need to create an account
+    if (skipAccountStep || hasExistingAccount) {
       // Track onboarding complete and go to paywall
       activityTrackingService.trackOnboardingEvent('onboarding_complete');
       activityTrackingService.resetOnboardingSession();

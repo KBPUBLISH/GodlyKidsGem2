@@ -68,14 +68,35 @@ router.post('/revenuecat', async (req, res) => {
         
         console.log('📦 RevenueCat Webhook received:', JSON.stringify(event, null, 2));
         
-        // RevenueCat webhook structure
-        const eventType = event.event?.type || event.type;
-        const appUserId = event.event?.app_user_id || event.app_user_id;
-        const externalId = event.event?.aliases?.[0] || appUserId;
-        const productId = event.event?.product_id || event.product_id;
-        const expirationDate = event.event?.expiration_at_ms || event.expiration_at_ms;
+        // RevenueCat webhook structure - handle nested event object
+        const eventData = event.event || event;
+        const eventType = eventData.type;
+        const appUserId = eventData.app_user_id;
+        const aliases = eventData.aliases || [];
+        const subscriberAttributes = eventData.subscriber_attributes || {};
+        const productId = eventData.product_id;
+        const expirationDate = eventData.expiration_at_ms;
         
-        console.log(`🎯 Event: ${eventType}, User: ${externalId}, Product: ${productId}`);
+        // Get email from subscriber attributes if available
+        const emailAttr = subscriberAttributes.$email?.value;
+        
+        // Collect ALL possible identifiers for this user
+        const allIdentifiers = new Set();
+        if (appUserId) allIdentifiers.add(appUserId);
+        if (emailAttr) allIdentifiers.add(emailAttr.toLowerCase());
+        aliases.forEach(alias => {
+            if (alias) allIdentifiers.add(alias);
+            // If alias looks like an email, also add lowercase version
+            if (alias && alias.includes('@')) {
+                allIdentifiers.add(alias.toLowerCase());
+            }
+        });
+        
+        // Use email as primary identifier if available, else first alias, else app_user_id
+        const primaryId = emailAttr || aliases[0] || appUserId;
+        
+        console.log(`🎯 Event: ${eventType}, Primary ID: ${primaryId}, Product: ${productId}`);
+        console.log(`📋 All identifiers:`, Array.from(allIdentifiers));
         
         // Handle different event types
         switch (eventType) {
@@ -84,87 +105,105 @@ router.post('/revenuecat', async (req, res) => {
             case 'PRODUCT_CHANGE':
             case 'RESTORE':
                 // User has active subscription
-                console.log(`✅ User ${externalId} has active subscription`);
+                console.log(`✅ User ${primaryId} has active subscription`);
                 
-                // Mark purchase as complete for polling
-                pendingPurchases.set(externalId, {
+                // Mark purchase as complete for polling - store under ALL identifiers
+                // This ensures frontend can find it regardless of which ID it polls with
+                const purchaseData = {
                     status: 'active',
                     productId,
                     expirationDate,
-                    updatedAt: Date.now()
+                    updatedAt: Date.now(),
+                    allIds: Array.from(allIdentifiers)
+                };
+                
+                allIdentifiers.forEach(id => {
+                    console.log(`📝 Storing active subscription under: ${id}`);
+                    pendingPurchases.set(id, purchaseData);
                 });
                 
                 // Try to update user in BOTH database collections
+                // Try ALL identifiers to find the user
                 let userUpdated = false;
                 
-                // Update User collection
-                try {
-                    const user = await User.findOne(buildUserQuery(externalId));
-                    if (user) {
-                        user.isPremium = true;
-                        user.subscriptionProductId = productId;
-                        user.subscriptionExpiresAt = expirationDate ? new Date(expirationDate) : null;
-                        await user.save();
-                        console.log(`✅ Updated User ${user._id} (${user.email}) to premium`);
-                        userUpdated = true;
+                for (const userId of allIdentifiers) {
+                    // Update User collection
+                    try {
+                        const user = await User.findOne(buildUserQuery(userId));
+                        if (user && !userUpdated) {
+                            user.isPremium = true;
+                            user.subscriptionProductId = productId;
+                            user.subscriptionExpiresAt = expirationDate ? new Date(expirationDate) : null;
+                            await user.save();
+                            console.log(`✅ Updated User ${user._id} (${user.email}) to premium`);
+                            userUpdated = true;
+                        }
+                    } catch (dbError) {
+                        console.error('User DB update error:', dbError);
                     }
-                } catch (dbError) {
-                    console.error('User DB update error:', dbError);
-                }
-                
-                // Update AppUser collection
-                try {
-                    const appUser = await AppUser.findOne(buildUserQuery(externalId));
-                    if (appUser) {
-                        appUser.subscriptionStatus = 'active';
-                        appUser.subscriptionPlan = productId?.includes('yearly') || productId?.includes('annual') ? 'annual' : 'monthly';
-                        appUser.subscriptionStartDate = new Date();
-                        appUser.subscriptionEndDate = expirationDate ? new Date(expirationDate) : null;
-                        await appUser.save();
-                        console.log(`✅ Updated AppUser ${appUser._id} (${appUser.email || appUser.deviceId}) to active subscription`);
-                        userUpdated = true;
+                    
+                    // Update AppUser collection
+                    try {
+                        const appUser = await AppUser.findOne(buildUserQuery(userId));
+                        if (appUser) {
+                            appUser.subscriptionStatus = 'active';
+                            appUser.subscriptionPlan = productId?.includes('yearly') || productId?.includes('annual') ? 'annual' : 
+                                                       productId?.includes('Lifetime') ? 'lifetime' : 'monthly';
+                            appUser.subscriptionStartDate = new Date();
+                            appUser.subscriptionEndDate = expirationDate ? new Date(expirationDate) : null;
+                            await appUser.save();
+                            console.log(`✅ Updated AppUser ${appUser._id} (${appUser.email || appUser.deviceId}) to active subscription`);
+                            userUpdated = true;
+                        }
+                    } catch (dbError) {
+                        console.error('AppUser DB update error:', dbError);
                     }
-                } catch (dbError) {
-                    console.error('AppUser DB update error:', dbError);
                 }
                 
                 if (!userUpdated) {
-                    console.log(`⚠️ No user found in either collection for: ${externalId}, but marked in pending`);
+                    console.log(`⚠️ No user found in either collection for any ID: ${Array.from(allIdentifiers).join(', ')}, but marked in pending`);
                 }
                 break;
                 
             case 'CANCELLATION':
             case 'EXPIRATION':
                 // User no longer has active subscription
-                console.log(`❌ User ${externalId} subscription ended`);
+                console.log(`❌ User ${primaryId} subscription ended`);
                 
-                pendingPurchases.set(externalId, {
+                // Mark as expired under ALL identifiers
+                const expiredData = {
                     status: 'expired',
                     updatedAt: Date.now()
+                };
+                allIdentifiers.forEach(id => {
+                    pendingPurchases.set(id, expiredData);
                 });
                 
-                // Update User collection
-                try {
-                    const user = await User.findOne(buildUserQuery(externalId));
-                    if (user) {
-                        user.isPremium = false;
-                        await user.save();
-                        console.log(`✅ Updated User ${user._id} (${user.email}) to non-premium`);
+                // Update User and AppUser collections for all identifiers
+                for (const userId of allIdentifiers) {
+                    // Update User collection
+                    try {
+                        const user = await User.findOne(buildUserQuery(userId));
+                        if (user) {
+                            user.isPremium = false;
+                            await user.save();
+                            console.log(`✅ Updated User ${user._id} (${user.email}) to non-premium`);
+                        }
+                    } catch (dbError) {
+                        console.error('User DB update error:', dbError);
                     }
-                } catch (dbError) {
-                    console.error('User DB update error:', dbError);
-                }
-                
-                // Update AppUser collection
-                try {
-                    const appUser = await AppUser.findOne(buildUserQuery(externalId));
-                    if (appUser) {
-                        appUser.subscriptionStatus = 'expired';
-                        await appUser.save();
-                        console.log(`✅ Updated AppUser ${appUser._id} (${appUser.email || appUser.deviceId}) to expired`);
+                    
+                    // Update AppUser collection
+                    try {
+                        const appUser = await AppUser.findOne(buildUserQuery(userId));
+                        if (appUser) {
+                            appUser.subscriptionStatus = 'expired';
+                            await appUser.save();
+                            console.log(`✅ Updated AppUser ${appUser._id} (${appUser.email || appUser.deviceId}) to expired`);
+                        }
+                    } catch (dbError) {
+                        console.error('AppUser DB update error:', dbError);
                     }
-                } catch (dbError) {
-                    console.error('AppUser DB update error:', dbError);
                 }
                 break;
                 

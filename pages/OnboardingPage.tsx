@@ -1050,7 +1050,8 @@ const OnboardingPage: React.FC = () => {
         activityTrackingService.trackOnboardingEvent('account_created', { email: accountEmail });
         activityTrackingService.trackOnboardingEvent('onboarding_complete');
         activityTrackingService.resetOnboardingSession();
-        navigate('/ready');
+        // Navigate to paywall (not /ready) so users can subscribe
+        navigate('/paywall', { state: { fromOnboarding: true } });
       } else {
         setAccountStep5Error(result.error || 'Failed to create account');
       }

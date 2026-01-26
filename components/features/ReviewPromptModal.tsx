@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Heart } from 'lucide-react';
+import { Heart, X } from 'lucide-react';
 import { Capacitor } from '@capacitor/core';
 import { DespiaService } from '../../services/despiaService';
 
@@ -75,6 +75,15 @@ const ReviewPromptModal: React.FC<ReviewPromptModalProps> = ({ isOpen, onReviewS
       
       {/* Simple Modal Content */}
       <div className="relative bg-gradient-to-b from-[#5c2e0b] to-[#3E1F07] rounded-2xl p-6 mx-4 max-w-xs w-full border-2 border-[#8B4513] shadow-2xl animate-in zoom-in-95 duration-200">
+        
+        {/* Close X Button */}
+        <button
+          onClick={onReviewSubmitted}
+          className="absolute top-3 right-3 w-8 h-8 flex items-center justify-center text-[#d4b896] hover:text-white transition-colors"
+          aria-label="Close"
+        >
+          <X className="w-5 h-5" />
+        </button>
         
         {showThankYou ? (
           /* Thank You State */

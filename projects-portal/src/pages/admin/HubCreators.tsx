@@ -41,12 +41,16 @@ const HubCreators: React.FC = () => {
   const fetchCreators = async () => {
     try {
       const token = localStorage.getItem('portal_admin_token');
+      console.log('Fetching creators with token:', token ? 'exists' : 'missing');
       const res = await axios.get(`${API_URL}/api/hub/admin/creators`, {
         headers: { Authorization: `Bearer ${token}` }
       });
+      console.log('Creators response:', res.data);
       setCreators(res.data.creators || []);
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error fetching creators:', error);
+      console.error('Error response:', error.response?.data);
+      console.error('Error status:', error.response?.status);
     } finally {
       setLoading(false);
     }

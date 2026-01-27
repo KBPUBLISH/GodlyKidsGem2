@@ -411,6 +411,7 @@ router.get('/my-earnings', authenticateCreator, async (req, res) => {
 router.get('/admin/creators', authenticateAdmin, async (req, res) => {
     try {
         const { status } = req.query;
+        console.log('Fetching creators, status filter:', status || 'none');
         
         const query = {};
         if (status) query.status = status;
@@ -420,10 +421,11 @@ router.get('/admin/creators', authenticateAdmin, async (req, res) => {
             .sort({ createdAt: -1 })
             .lean();
         
+        console.log(`Found ${creators.length} creators`);
         res.json({ creators });
     } catch (error) {
         console.error('Get creators error:', error);
-        res.status(500).json({ error: 'Failed to get creators' });
+        res.status(500).json({ error: 'Failed to get creators', details: error.message });
     }
 });
 

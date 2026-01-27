@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, lazy, Suspense } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { Crown, FileText } from 'lucide-react';
+import { Crown, FileText, Clock } from 'lucide-react';
 const ShopModal = lazy(() => import('../features/ShopModal'));
 import AvatarDetailModal from '../features/AvatarDetailModal';
 import CoinHistoryModal from '../features/CoinHistoryModal';
@@ -10,6 +10,10 @@ import { useUser } from '../../context/UserContext';
 import { useTutorial } from '../../context/TutorialContext';
 import ErrorBoundary from '../common/ErrorBoundary';
 import { AVATAR_ASSETS } from '../avatar/AvatarAssets';
+
+// Lifetime deal timer constants - shared with PaywallPage
+const LIFETIME_DEAL_KEY = 'godlykids_lifetime_deal_start';
+const DEAL_DURATION_MS = 24 * 60 * 60 * 1000; // 24 hours
 
 interface HeaderProps {
   isVisible: boolean;
@@ -25,6 +29,48 @@ const Header: React.FC<HeaderProps> = ({ isVisible, title = "GODLY KIDS" }) => {
   const [isDetailOpen, setIsDetailOpen] = useState(false);
   const [isCoinHistoryOpen, setIsCoinHistoryOpen] = useState(false);
   const [isReportCardOpen, setIsReportCardOpen] = useState(false);
+  
+  // Lifetime deal countdown timer state
+  const [dealTimeRemaining, setDealTimeRemaining] = useState<{ hours: number; minutes: number; seconds: number } | null>(null);
+  
+  // Track the 24-hour countdown for lifetime deal (only if not subscribed)
+  useEffect(() => {
+    if (isSubscribed) {
+      setDealTimeRemaining(null);
+      return;
+    }
+    
+    // Check if deal timer has been started
+    const dealStartTime = localStorage.getItem(LIFETIME_DEAL_KEY);
+    if (!dealStartTime) {
+      setDealTimeRemaining(null);
+      return;
+    }
+    
+    const startTime = parseInt(dealStartTime, 10);
+    const endTime = startTime + DEAL_DURATION_MS;
+    
+    const updateTimer = () => {
+      const now = Date.now();
+      const remaining = endTime - now;
+      
+      if (remaining <= 0) {
+        setDealTimeRemaining(null);
+        return;
+      }
+      
+      const hours = Math.floor(remaining / (1000 * 60 * 60));
+      const minutes = Math.floor((remaining % (1000 * 60 * 60)) / (1000 * 60));
+      const seconds = Math.floor((remaining % (1000 * 60)) / 1000);
+      
+      setDealTimeRemaining({ hours, minutes, seconds });
+    };
+    
+    updateTimer();
+    const interval = setInterval(updateTimer, 1000);
+    
+    return () => clearInterval(interval);
+  }, [isSubscribed]);
 
   // Auto-close modals when tutorial step advances past the popup_open steps
   useEffect(() => {
@@ -163,6 +209,22 @@ const Header: React.FC<HeaderProps> = ({ isVisible, title = "GODLY KIDS" }) => {
                 />
               </div>
             </div>
+            
+            {/* Lifetime Deal Timer - Show next to avatar if deal is active and not subscribed */}
+            {dealTimeRemaining && !isSubscribed && (
+              <button
+                onClick={() => navigate('/paywall')}
+                className="ml-2 bg-gradient-to-r from-[#dc2626] to-[#ef4444] px-2 py-1 rounded-lg border border-[#b91c1c] shadow-md flex items-center gap-1.5 animate-pulse hover:animate-none active:scale-95 transition-transform"
+              >
+                <Clock size={12} className="text-white" />
+                <span className="text-white font-mono font-bold text-xs">
+                  {String(dealTimeRemaining.hours).padStart(2, '0')}:
+                  {String(dealTimeRemaining.minutes).padStart(2, '0')}:
+                  {String(dealTimeRemaining.seconds).padStart(2, '0')}
+                </span>
+                <span className="text-white/80 text-[10px] font-semibold">DEAL</span>
+              </button>
+            )}
 
             {/* Center - Empty for now */}
             <div className="flex-1"></div>

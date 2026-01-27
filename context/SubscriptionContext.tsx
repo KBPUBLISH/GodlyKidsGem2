@@ -111,7 +111,8 @@ export const SubscriptionProvider: React.FC<SubscriptionProviderProps> = ({ chil
           if (data.isPremium) {
             console.log(`✅ Premium confirmed by backend for: ${userId}`);
             localStorage.setItem('godlykids_premium', 'true');
-            window.dispatchEvent(new CustomEvent('revenuecat:premiumChanged', { detail: { isPremium: true } }));
+            // NOTE: Don't dispatch event here - caller will update state directly
+            // Dispatching events here caused infinite loops (stack overflow)
             return true;
           }
         }

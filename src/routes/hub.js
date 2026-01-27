@@ -162,7 +162,7 @@ router.get('/my-playlists', authenticateCreator, async (req, res) => {
 // POST /api/hub/my-playlists - Create new playlist (draft)
 router.post('/my-playlists', authenticateCreator, async (req, res) => {
     try {
-        const { title, description, type, priceTokens, coverImage, categories, minAge, items } = req.body;
+        const { title, description, type, priceTokens, priceUSD, usdPurchaseEnabled, coverImage, categories, minAge, items } = req.body;
         
         if (!title || !priceTokens) {
             return res.status(400).json({ error: 'Title and price are required' });
@@ -172,6 +172,11 @@ router.post('/my-playlists', authenticateCreator, async (req, res) => {
             return res.status(400).json({ error: 'Price must be between 1 and 500 tokens' });
         }
         
+        // Validate USD price if enabled
+        if (usdPurchaseEnabled && (!priceUSD || priceUSD < 0.99 || priceUSD > 99.99)) {
+            return res.status(400).json({ error: 'USD price must be between $0.99 and $99.99' });
+        }
+        
         const playlist = new HubPlaylist({
             creatorId: req.creator._id,
             title,
@@ -179,6 +184,8 @@ router.post('/my-playlists', authenticateCreator, async (req, res) => {
             description,
             type: type || 'Audiobook',
             priceTokens,
+            priceUSD: usdPurchaseEnabled ? priceUSD : null,
+            usdPurchaseEnabled: usdPurchaseEnabled || false,
             coverImage,
             categories: categories || ['Godly Hub'],
             minAge,
@@ -239,7 +246,7 @@ router.put('/my-playlists/:id', authenticateCreator, async (req, res) => {
             });
         }
         
-        const { title, description, type, priceTokens, coverImage, categories, minAge, items } = req.body;
+        const { title, description, type, priceTokens, priceUSD, usdPurchaseEnabled, coverImage, categories, minAge, items } = req.body;
         
         if (title) playlist.title = title;
         if (description !== undefined) playlist.description = description;
@@ -249,6 +256,20 @@ router.put('/my-playlists/:id', authenticateCreator, async (req, res) => {
                 return res.status(400).json({ error: 'Price must be between 1 and 500 tokens' });
             }
             playlist.priceTokens = priceTokens;
+        }
+        // Handle USD pricing
+        if (usdPurchaseEnabled !== undefined) {
+            playlist.usdPurchaseEnabled = usdPurchaseEnabled;
+            if (usdPurchaseEnabled) {
+                if (!priceUSD || priceUSD < 0.99 || priceUSD > 99.99) {
+                    return res.status(400).json({ error: 'USD price must be between $0.99 and $99.99' });
+                }
+                playlist.priceUSD = priceUSD;
+            } else {
+                playlist.priceUSD = null;
+            }
+        } else if (priceUSD !== undefined) {
+            playlist.priceUSD = priceUSD;
         }
         if (coverImage) playlist.coverImage = coverImage;
         if (categories) playlist.categories = categories;

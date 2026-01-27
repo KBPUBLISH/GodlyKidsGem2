@@ -547,7 +547,16 @@ router.get('/stats/:id', async (req, res) => {
 });
 
 // POST /send-auto - Trigger an automatic notification (called by scheduler/cron)
+// DISABLED: Automatic notifications are currently disabled to prevent duplicates
+// Re-enable when proper deduplication is implemented
 router.post('/send-auto', async (req, res) => {
+    console.log('⚠️ Auto notification endpoint called but is DISABLED');
+    return res.status(503).json({ 
+        success: false, 
+        message: 'Automatic notifications are currently disabled. Use manual notifications from the portal instead.' 
+    });
+    
+    /* DISABLED - Original implementation:
     try {
         const client = getOneSignalClient();
         if (!client) {
@@ -594,6 +603,7 @@ router.post('/send-auto', async (req, res) => {
             error: error.message 
         });
     }
+    */
 });
 
 module.exports = router;

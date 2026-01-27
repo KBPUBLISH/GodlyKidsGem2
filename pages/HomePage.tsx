@@ -1472,8 +1472,8 @@ const HomePage: React.FC = () => {
                       <div className="absolute top-2 left-2 w-8 h-8 bg-gradient-to-br from-orange-500 to-red-600 rounded-full flex items-center justify-center text-white text-base font-black shadow-lg">
                         {index + 1}
                       </div>
-                      {/* Premium badge */}
-                      {episode.isMembersOnly && (
+                      {/* Premium badge - Only show if user is NOT subscribed */}
+                      {episode.isMembersOnly && !isSubscribed && (
                         <div className="absolute top-2 right-2 px-2 py-1 bg-amber-500/90 rounded-full text-xs font-bold text-white flex items-center gap-0.5">
                           <Lock className="w-3 h-3" />
                         </div>
@@ -1529,8 +1529,8 @@ const HomePage: React.FC = () => {
                       <div className="absolute top-2 left-2 w-8 h-8 bg-gradient-to-br from-green-500 to-emerald-600 rounded-full flex items-center justify-center text-white text-base font-black shadow-lg">
                         {index + 1}
                       </div>
-                      {/* Premium badge */}
-                      {book.isMembersOnly && (
+                      {/* Premium badge - Only show if user is NOT subscribed */}
+                      {book.isMembersOnly && !isSubscribed && (
                         <div className="absolute top-2 right-2 px-2 py-1 bg-amber-500/90 rounded-full text-xs font-bold text-white flex items-center gap-0.5">
                           <Lock className="w-3 h-3" />
                         </div>
@@ -1991,8 +1991,8 @@ const HomePage: React.FC = () => {
                         <div className="absolute bottom-2 left-2 bg-black/60 backdrop-blur-sm text-white text-xs font-bold px-2 py-1 rounded-md">
                           {series.books?.length || 0} books
                         </div>
-                        {/* Premium badge */}
-                        {series.isMembersOnly && (
+                        {/* Premium badge - Only show if user is NOT subscribed */}
+                        {series.isMembersOnly && !isSubscribed && (
                           <div className="absolute top-2 right-2 bg-gradient-to-r from-[#FFD700] to-[#FFA500] text-[#5c2e0b] text-[10px] font-bold px-2 py-1 rounded-full">
                             👑 PREMIUM
                           </div>

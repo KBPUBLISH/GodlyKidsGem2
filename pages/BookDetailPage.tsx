@@ -563,8 +563,8 @@ const BookDetailPage: React.FC = () => {
             <div className="absolute bottom-3 left-4 text-white/80 text-xl animate-pulse delay-700 filter drop-shadow-md">✨</div>
           </div>
 
-          {/* Premium Badge for Members Only Content */}
-          {isMembersOnly && (
+          {/* Premium Badge for Members Only Content - Only show if user is NOT subscribed */}
+          {isMembersOnly && !isSubscribed && (
             <div className="flex items-center gap-2 bg-gradient-to-r from-[#FFD700] to-[#FFA500] text-[#5c2e0b] px-4 py-2 rounded-full shadow-lg border-2 border-[#B8860B]">
               <Crown size={18} />
               <span className="font-display font-bold text-sm">{t('premiumContent') || 'PREMIUM CONTENT'}</span>

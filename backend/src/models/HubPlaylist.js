@@ -69,12 +69,26 @@ const hubPlaylistSchema = new mongoose.Schema({
     },
     items: [hubAudioItemSchema],
     
-    // Pricing (in tokens)
+    // Pricing (in tokens) - for in-app token purchases
     priceTokens: {
         type: Number,
         required: true,
         min: 1,
         max: 500,
+    },
+    
+    // Pricing (in USD) - for Stripe purchases via webview
+    priceUSD: {
+        type: Number,
+        min: 0.99,
+        max: 99.99,
+        default: null, // null means not available for USD purchase
+    },
+    
+    // Whether USD purchase is enabled (allows Stripe checkout)
+    usdPurchaseEnabled: {
+        type: Boolean,
+        default: false,
     },
     
     // Review status
@@ -107,6 +121,16 @@ const hubPlaylistSchema = new mongoose.Schema({
     },
     totalTokensEarned: {
         type: Number,
+        default: 0,
+    },
+    
+    // USD sales stats (Stripe)
+    usdPurchaseCount: {
+        type: Number,
+        default: 0,
+    },
+    totalUSDEarned: {
+        type: Number, // In cents
         default: 0,
     },
     

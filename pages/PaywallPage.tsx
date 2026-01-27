@@ -598,8 +598,8 @@ const PaywallPage: React.FC = () => {
                   </div>
                   
                   <div className="text-right">
-                    <p className="font-extrabold text-xl text-[#1e1b4b]">${annualPrice}</p>
-                    <p className="text-xs text-gray-400 line-through">${(monthlyPrice * 12).toFixed(2)}</p>
+                    <p className="font-extrabold text-xl text-[#1e1b4b]">${annualPrice} <span className="text-sm font-medium">USD</span></p>
+                    <p className="text-xs text-gray-400 line-through">${(monthlyPrice * 12).toFixed(2)} USD</p>
                   </div>
                 </div>
               </div>
@@ -626,7 +626,7 @@ const PaywallPage: React.FC = () => {
                   </div>
                   
                   <div className="text-right">
-                    <p className="font-extrabold text-xl text-[#1e1b4b]">${monthlyPrice}</p>
+                    <p className="font-extrabold text-xl text-[#1e1b4b]">${monthlyPrice} <span className="text-sm font-medium">USD</span></p>
                     <p className="text-xs text-gray-400">/month</p>
                   </div>
                 </div>
@@ -681,9 +681,9 @@ const PaywallPage: React.FC = () => {
                   </div>
                   
                   <div className="text-right">
-                    <p className="text-xs text-gray-400 line-through">${lifetimeOriginalPrice}</p>
-                    <p className="font-extrabold text-xl text-[#dc2626]">${lifetimeSalePrice}</p>
-                    <p className="text-[10px] text-green-600 font-semibold">Save ${(lifetimeOriginalPrice - lifetimeSalePrice).toFixed(2)}</p>
+                    <p className="text-xs text-gray-400 line-through">${lifetimeOriginalPrice} USD</p>
+                    <p className="font-extrabold text-xl text-[#dc2626]">${lifetimeSalePrice} <span className="text-sm">USD</span></p>
+                    <p className="text-[10px] text-green-600 font-semibold">Save ${(lifetimeOriginalPrice - lifetimeSalePrice).toFixed(2)} USD</p>
                   </div>
                 </div>
               </div>
@@ -693,13 +693,13 @@ const PaywallPage: React.FC = () => {
             <p className="text-center text-[#6366f1] font-medium text-sm mb-4">
               {selectedPlan === 'lifetime' ? (
                 <>
-                  <span className="text-[#dc2626]">Special offer: ${lifetimeSalePrice}</span> <span className="text-gray-400 line-through text-xs">${lifetimeOriginalPrice}</span>
+                  <span className="text-[#dc2626]">Special offer: ${lifetimeSalePrice} USD</span> <span className="text-gray-400 line-through text-xs">${lifetimeOriginalPrice} USD</span>
                   <br />
                   <span className="text-gray-500 font-normal">One-time payment. Yours forever!</span>
                 </>
               ) : (
                 <>
-                  Try 7 days for free, then {selectedPlan === 'annual' ? `$${annualPrice}/year` : `$${monthlyPrice}/month`}.
+                  Try 7 days for free, then {selectedPlan === 'annual' ? `$${annualPrice} USD/year` : `$${monthlyPrice} USD/month`}.
                   <br />
                   <span className="text-gray-500 font-normal">No commitment. Cancel anytime.</span>
                 </>
@@ -761,8 +761,8 @@ const PaywallPage: React.FC = () => {
                 <span className="flex flex-col items-center">
                   {selectedPlan === 'lifetime' ? (
                     <>
-                      <span>{firstName ? `${firstName}, ` : ''}Get Lifetime for ${lifetimeSalePrice}</span>
-                      <span className="text-xs font-normal opacity-90">Save ${(lifetimeOriginalPrice - lifetimeSalePrice).toFixed(2)} today!</span>
+                      <span>{firstName ? `${firstName}, ` : ''}Get Lifetime for ${lifetimeSalePrice} USD</span>
+                      <span className="text-xs font-normal opacity-90">Save ${(lifetimeOriginalPrice - lifetimeSalePrice).toFixed(2)} USD today!</span>
                     </>
                   ) : (
                     <span>{firstName ? `${firstName}, ` : ''}Start your free trial</span>

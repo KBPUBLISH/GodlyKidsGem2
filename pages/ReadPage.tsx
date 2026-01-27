@@ -5,13 +5,14 @@ import BookCard from '../components/ui/BookCard';
 import Header from '../components/layout/Header';
 import SectionTitle from '../components/ui/SectionTitle';
 import { useBooks } from '../context/BooksContext';
+import { useUser } from '../context/UserContext';
 import { ApiService } from '../services/apiService';
 import { Search, ChevronDown, BookOpen } from 'lucide-react';
 
 const ageOptions = ['All Ages', '3+', '4+', '5+', '6+', '7+', '8+', '9+', '10+'];
 
 // Series card component
-const SeriesCard: React.FC<{ series: any; onClick: () => void }> = ({ series, onClick }) => (
+const SeriesCard: React.FC<{ series: any; onClick: () => void; isSubscribed?: boolean }> = ({ series, onClick, isSubscribed }) => (
   <div 
     onClick={onClick}
     className="cursor-pointer group"
@@ -39,8 +40,8 @@ const SeriesCard: React.FC<{ series: any; onClick: () => void }> = ({ series, on
         <div className="absolute bottom-2 right-2 bg-black/60 backdrop-blur-sm text-white text-xs font-bold px-2 py-1 rounded-md">
           {series.books?.length || 0} books
         </div>
-        {/* Premium badge */}
-        {series.isMembersOnly && (
+        {/* Premium badge - Only show if user is NOT subscribed */}
+        {series.isMembersOnly && !isSubscribed && (
           <div className="absolute top-2 right-2 bg-gradient-to-r from-[#FFD700] to-[#FFA500] text-[#5c2e0b] text-[10px] font-bold px-2 py-1 rounded-full">
             👑
           </div>
@@ -61,6 +62,7 @@ const SeriesCard: React.FC<{ series: any; onClick: () => void }> = ({ series, on
 const ReadPage: React.FC = () => {
   const navigate = useNavigate();
   const { books, loading } = useBooks();
+  const { isSubscribed } = useUser();
   const [isHeaderVisible, setIsHeaderVisible] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedAge, setSelectedAge] = useState<string>('All Ages');
@@ -376,6 +378,7 @@ const ReadPage: React.FC = () => {
                           key={`series-${item.data._id}`}
                           series={item.data}
                           onClick={() => navigate(`/book-series/${item.data._id}`)}
+                          isSubscribed={isSubscribed}
                         />
                       ) : (
                         <BookCard 

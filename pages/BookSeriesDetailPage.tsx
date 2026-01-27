@@ -381,8 +381,8 @@ const BookSeriesDetailPage: React.FC = () => {
                     <Share2 size={20} />
                 </button>
 
-                {/* Premium Badge */}
-                {series.isMembersOnly && (
+                {/* Premium Badge - Only show if user is NOT subscribed */}
+                {series.isMembersOnly && !isSubscribed && (
                     <div className="absolute top-4 right-4 z-30 flex items-center gap-1 px-3 py-1 bg-amber-500 rounded-full">
                         <Crown size={14} className="text-white" />
                         <span className="text-white text-xs font-bold">Premium</span>

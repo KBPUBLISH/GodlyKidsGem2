@@ -419,8 +419,8 @@ const ListenPage: React.FC = () => {
                             </div>
                           )}
                           
-                          {/* Members Only Badge */}
-                          {playlist.isMembersOnly && (
+                          {/* Members Only Badge - Only show if user is NOT subscribed */}
+                          {playlist.isMembersOnly && !isSubscribed && (
                             <div className="absolute top-2 right-2 bg-gradient-to-r from-[#FFD700] to-[#FFA500] text-[#5c2e0b] text-[10px] font-bold px-2 py-1 rounded-full flex items-center gap-1 shadow-lg z-20">
                               <Crown size={10} />
                               <span>PREMIUM</span>

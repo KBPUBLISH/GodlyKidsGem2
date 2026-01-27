@@ -31,6 +31,8 @@ interface PlaylistData {
   description: string;
   type: 'Audiobook' | 'Song';
   priceTokens: number;
+  priceUSD: number | null;
+  usdPurchaseEnabled: boolean;
   coverImage: string;
   categories: string[];
   minAge?: number;
@@ -52,6 +54,8 @@ const CreatorContentForm: React.FC = () => {
     description: '',
     type: 'Audiobook',
     priceTokens: 10,
+    priceUSD: null,
+    usdPurchaseEnabled: false,
     coverImage: '',
     categories: ['Godly Hub'],
     items: [],
@@ -76,6 +80,8 @@ const CreatorContentForm: React.FC = () => {
         description: playlist.description || '',
         type: playlist.type,
         priceTokens: playlist.priceTokens,
+        priceUSD: playlist.priceUSD || null,
+        usdPurchaseEnabled: playlist.usdPurchaseEnabled || false,
         coverImage: playlist.coverImage || '',
         categories: playlist.categories || ['Godly Hub'],
         minAge: playlist.minAge,
@@ -192,7 +198,12 @@ const CreatorContentForm: React.FC = () => {
     }
 
     if (data.priceTokens < 1 || data.priceTokens > 500) {
-      alert('Price must be between 1 and 500 tokens');
+      alert('Token price must be between 1 and 500 tokens');
+      return;
+    }
+
+    if (data.usdPurchaseEnabled && (!data.priceUSD || data.priceUSD < 0.99 || data.priceUSD > 99.99)) {
+      alert('USD price must be between $0.99 and $99.99');
       return;
     }
 
@@ -344,33 +355,103 @@ const CreatorContentForm: React.FC = () => {
           />
         </div>
 
-        {/* Price */}
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">
-            Price (in tokens) *
-          </label>
-          <div className="flex items-center gap-4">
-            <div className="relative flex-1 max-w-xs">
-              <input
-                type="number"
-                value={data.priceTokens}
-                onChange={(e) => setData(prev => ({ ...prev, priceTokens: parseInt(e.target.value) || 0 }))}
-                min={1}
-                max={500}
-                className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
-              />
+        {/* Pricing Section */}
+        <div className="space-y-4">
+          <h3 className="text-sm font-semibold text-gray-800 flex items-center gap-2">
+            <DollarSign className="w-4 h-4 text-green-600" />
+            Pricing Options
+          </h3>
+
+          {/* Token Price */}
+          <div className="bg-gray-50 rounded-lg p-4">
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Token Price (in-app purchases) *
+            </label>
+            <div className="flex items-center gap-4">
+              <div className="relative flex-1 max-w-xs">
+                <input
+                  type="number"
+                  value={data.priceTokens}
+                  onChange={(e) => setData(prev => ({ ...prev, priceTokens: parseInt(e.target.value) || 0 }))}
+                  min={1}
+                  max={500}
+                  className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent bg-white"
+                />
+                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm">tokens</span>
+              </div>
+              <div className="flex items-center gap-2 px-4 py-2 bg-green-50 rounded-lg">
+                <span className="text-sm font-medium text-green-700">
+                  ~${estimatedEarnings} your earnings
+                </span>
+              </div>
             </div>
-            <div className="flex items-center gap-2 px-4 py-2 bg-green-50 rounded-lg">
-              <DollarSign className="w-4 h-4 text-green-600" />
-              <span className="text-sm font-medium text-green-700">
-                ~${estimatedEarnings} your earnings
-              </span>
-            </div>
+            <p className="text-xs text-gray-400 mt-2 flex items-center gap-1">
+              <Info className="w-3 h-3" />
+              Token purchases: After fees (Apple 15% + GodlyKids 20%), you earn ~$0.54 per token.
+            </p>
           </div>
-          <p className="text-xs text-gray-400 mt-2 flex items-center gap-1">
-            <Info className="w-3 h-3" />
-            1 token ≈ $1. After fees (Apple 15% + GodlyKids 20%), you earn ~$0.54 per token.
-          </p>
+
+          {/* USD Price (Stripe) */}
+          <div className="bg-indigo-50 rounded-lg p-4 border border-indigo-100">
+            <div className="flex items-center justify-between mb-3">
+              <label className="text-sm font-medium text-gray-700">
+                USD Price (Stripe checkout)
+              </label>
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={data.usdPurchaseEnabled}
+                  onChange={(e) => setData(prev => ({ 
+                    ...prev, 
+                    usdPurchaseEnabled: e.target.checked,
+                    priceUSD: e.target.checked && !prev.priceUSD ? 4.99 : prev.priceUSD
+                  }))}
+                  className="w-4 h-4 text-indigo-600 rounded focus:ring-indigo-500"
+                />
+                <span className="text-sm text-gray-600">Enable USD purchases</span>
+              </label>
+            </div>
+            
+            {data.usdPurchaseEnabled && (
+              <>
+                <div className="flex items-center gap-4">
+                  <div className="relative flex-1 max-w-xs">
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500">$</span>
+                    <input
+                      type="number"
+                      value={data.priceUSD || ''}
+                      onChange={(e) => setData(prev => ({ ...prev, priceUSD: parseFloat(e.target.value) || null }))}
+                      min={0.99}
+                      max={99.99}
+                      step={0.01}
+                      placeholder="4.99"
+                      className="w-full pl-7 pr-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent bg-white"
+                    />
+                  </div>
+                  {data.priceUSD && (
+                    <div className="flex items-center gap-2 px-4 py-2 bg-green-50 rounded-lg">
+                      <span className="text-sm font-medium text-green-700">
+                        ~${(data.priceUSD * 0.70).toFixed(2)} your earnings
+                      </span>
+                    </div>
+                  )}
+                </div>
+                <p className="text-xs text-gray-500 mt-2 flex items-center gap-1">
+                  <Info className="w-3 h-3" />
+                  Stripe purchases: After fees (Stripe 3% + GodlyKids 27%), you earn ~70% of the price.
+                </p>
+                <p className="text-xs text-indigo-600 mt-1">
+                  💡 USD purchases bypass Apple's IAP, allowing direct credit card payments via Stripe.
+                </p>
+              </>
+            )}
+            
+            {!data.usdPurchaseEnabled && (
+              <p className="text-xs text-gray-500">
+                Enable this to allow parents to purchase directly with credit card (higher creator earnings).
+              </p>
+            )}
+          </div>
         </div>
 
         {/* Age Recommendation */}

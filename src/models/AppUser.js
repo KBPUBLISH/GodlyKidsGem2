@@ -11,7 +11,7 @@ const kidProfileSchema = new mongoose.Schema({
     },
     age: {
         type: Number,
-        min: 1,
+        min: 0,  // Allow 0 for babies under 1 year old
         max: 18,
     },
     avatarSeed: {

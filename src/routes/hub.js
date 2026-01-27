@@ -475,7 +475,11 @@ router.post('/admin/creators/invite', authenticateAdmin, async (req, res) => {
         });
     } catch (error) {
         console.error('Invite creator error:', error);
-        res.status(500).json({ error: 'Failed to invite creator' });
+        res.status(500).json({ 
+            error: 'Failed to invite creator',
+            details: error.message,
+            code: error.code
+        });
     }
 });
 

@@ -263,8 +263,35 @@ router.get('/users', async (req, res) => {
             return d.toISOString();
         };
 
+        // Get tutorial progress for all users (highest step reached)
+        const tutorialProgress = await TutorialEvent.aggregate([
+            {
+                $group: {
+                    _id: '$userId',
+                    maxStepIndex: { $max: '$stepIndex' },
+                    lastStep: { $last: '$step' }
+                }
+            }
+        ]);
+        
+        // Create a map for quick lookup
+        const tutorialProgressMap = {};
+        tutorialProgress.forEach(tp => {
+            tutorialProgressMap[tp._id] = {
+                stepIndex: tp.maxStepIndex || 0,
+                lastStep: tp.lastStep || 'not_started'
+            };
+        });
+
         // Format users for display
-        const formattedUsers = allUsers.map(user => ({
+        const formattedUsers = allUsers.map(user => {
+            // Find tutorial progress for this user (match by email or deviceId)
+            const tutorialData = tutorialProgressMap[user.email] || 
+                                 tutorialProgressMap[user.deviceId] ||
+                                 tutorialProgressMap[`device_${user.deviceId}`] ||
+                                 { stepIndex: 0, lastStep: 'not_started' };
+            
+            return {
             id: user._id,
             email: user.email || 'Anonymous',
             username: user.username,
@@ -283,6 +310,8 @@ router.get('/users', async (req, res) => {
             gamesPlayed: user.stats?.gamesPlayed || 0,
             // Progress tracking
             onboardingStep: user.stats?.onboardingStep || 0,
+            tutorialStep: tutorialData.stepIndex,
+            tutorialLastStep: tutorialData.lastStep,
             farthestPage: user.stats?.farthestPageReached || '/',
             // Account info
             subscriptionStatus: user.subscriptionStatus || 'free',
@@ -302,7 +331,8 @@ router.get('/users', async (req, res) => {
             createdAtMs: safeDate(user.createdAt),
             lastActiveAtMs: safeDate(user.lastActiveAt),
             source: user.source, // 'auth' = has login account, 'app' = anonymous/app-only
-        }));
+        };
+        });
 
         // Count by source (use statsUsers for time-range stats)
         const authUserCount = statsUsers.filter(u => u.source === 'auth').length;

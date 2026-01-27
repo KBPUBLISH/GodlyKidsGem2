@@ -121,6 +121,9 @@ app.use('/api/creator', authLimiter, require('./routes/creatorAuth'));
 app.use('/api/tokens', require('./routes/tokens'));
 app.use('/api/hub', require('./routes/hub'));
 
+// Surveys & Feedback
+app.use('/api/survey', require('./routes/survey'));
+
 // ===========================================
 // HEALTH & STATUS ENDPOINTS
 // ===========================================

@@ -4,6 +4,7 @@ import { Globe, Check, X } from 'lucide-react';
 import WoodButton from '../components/ui/WoodButton';
 import { useLanguage } from '../context/LanguageContext';
 import { ApiService } from '../services/apiService';
+import { activityTrackingService } from '../services/activityTrackingService';
 
 const STORAGE_KEY = 'godly_kids_data_v6';
 const TERMS_URL = 'https://www.godlykids.com/end-user-license-agreement';
@@ -229,6 +230,15 @@ const LandingPage: React.FC = () => {
     setIsChecking(false);
   }, [navigate]);
 
+  // Track splash page view (only once per session)
+  useEffect(() => {
+    const splashViewedKey = 'godlykids_splash_viewed_session';
+    if (!sessionStorage.getItem(splashViewedKey) && !isChecking) {
+      sessionStorage.setItem(splashViewedKey, 'true');
+      activityTrackingService.trackOnboardingEvent('splash_page_viewed');
+    }
+  }, [isChecking]);
+
   // Show loading while checking
   if (isChecking) {
     return (
@@ -355,6 +365,8 @@ const LandingPage: React.FC = () => {
               {/* Let's Explore Button - Main CTA (Gold) - Goes to explore page, tutorial prompt shows later */}
               <WoodButton 
                 onClick={() => {
+                  // Track the explore button click
+                  activityTrackingService.trackOnboardingEvent('splash_explore_clicked');
                   // Go directly to explore page - tutorial prompt will show after a delay
                   navigate('/home');
                 }}
@@ -367,7 +379,11 @@ const LandingPage: React.FC = () => {
 
               {/* Sign In Button - Secondary (Primary wood) */}
               <WoodButton 
-                onClick={() => navigate('/signin')}
+                onClick={() => {
+                  // Track sign in button click
+                  activityTrackingService.trackOnboardingEvent('splash_signin_clicked');
+                  navigate('/signin');
+                }}
                 fullWidth 
                 variant="primary"
                 className="py-4 text-lg"

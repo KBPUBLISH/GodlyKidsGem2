@@ -17,6 +17,11 @@ const onboardingEventSchema = new mongoose.Schema({
         type: String,
         required: true,
         enum: [
+            // Splash page events
+            'splash_page_viewed',
+            'splash_explore_clicked',
+            'splash_signin_clicked',
+            
             // Onboarding flow events
             'onboarding_started',
             'step_1_complete',      // Parent profile

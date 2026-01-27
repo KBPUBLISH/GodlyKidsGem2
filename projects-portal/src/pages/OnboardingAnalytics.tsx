@@ -372,6 +372,57 @@ const OnboardingAnalytics: React.FC = () => {
             {/* ============ ONBOARDING TAB ============ */}
             {activeTab === 'onboarding' && data && (
             <>
+            {/* Splash Page Stats */}
+            {(data.eventCounts['splash_page_viewed'] || data.eventCounts['splash_explore_clicked']) && (
+                <div className="bg-gradient-to-r from-indigo-50 to-purple-50 rounded-xl border border-indigo-200 p-6 shadow-sm">
+                    <h3 className="text-lg font-semibold text-gray-800 mb-4 flex items-center gap-2">
+                        <Sparkles className="w-5 h-5 text-indigo-600" />
+                        Splash Page Performance
+                    </h3>
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                        <div className="bg-white rounded-lg p-4 shadow-sm">
+                            <div className="text-sm text-gray-500 mb-1">Page Views</div>
+                            <p className="text-2xl font-bold text-indigo-600">
+                                {(data.eventCounts['splash_page_viewed'] || 0).toLocaleString()}
+                            </p>
+                        </div>
+                        <div className="bg-white rounded-lg p-4 shadow-sm">
+                            <div className="text-sm text-gray-500 mb-1">Clicked "Let's Explore"</div>
+                            <p className="text-2xl font-bold text-green-600">
+                                {(data.eventCounts['splash_explore_clicked'] || 0).toLocaleString()}
+                            </p>
+                            <p className="text-xs text-gray-400 mt-1">
+                                {data.eventCounts['splash_page_viewed'] > 0 
+                                    ? `${((data.eventCounts['splash_explore_clicked'] || 0) / data.eventCounts['splash_page_viewed'] * 100).toFixed(1)}% of views`
+                                    : '—'}
+                            </p>
+                        </div>
+                        <div className="bg-white rounded-lg p-4 shadow-sm">
+                            <div className="text-sm text-gray-500 mb-1">Clicked "Sign In"</div>
+                            <p className="text-2xl font-bold text-blue-600">
+                                {(data.eventCounts['splash_signin_clicked'] || 0).toLocaleString()}
+                            </p>
+                            <p className="text-xs text-gray-400 mt-1">
+                                {data.eventCounts['splash_page_viewed'] > 0 
+                                    ? `${((data.eventCounts['splash_signin_clicked'] || 0) / data.eventCounts['splash_page_viewed'] * 100).toFixed(1)}% of views`
+                                    : '—'}
+                            </p>
+                        </div>
+                        <div className="bg-white rounded-lg p-4 shadow-sm">
+                            <div className="text-sm text-gray-500 mb-1">Bounce Rate</div>
+                            <p className="text-2xl font-bold text-red-600">
+                                {data.eventCounts['splash_page_viewed'] > 0 
+                                    ? `${(100 - (((data.eventCounts['splash_explore_clicked'] || 0) + (data.eventCounts['splash_signin_clicked'] || 0)) / data.eventCounts['splash_page_viewed'] * 100)).toFixed(1)}%`
+                                    : '—'}
+                            </p>
+                            <p className="text-xs text-gray-400 mt-1">
+                                Users who left without clicking
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            )}
+
             {/* Summary Cards */}
             <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
                 <div className="bg-white rounded-xl border border-gray-100 p-4 shadow-sm">

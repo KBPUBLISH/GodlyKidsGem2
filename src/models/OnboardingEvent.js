@@ -17,6 +17,7 @@ const onboardingEventSchema = new mongoose.Schema({
         type: String,
         required: true,
         enum: [
+            // Onboarding flow events
             'onboarding_started',
             'step_1_complete',      // Parent profile
             'step_2_complete',      // Family/kids
@@ -24,12 +25,28 @@ const onboardingEventSchema = new mongoose.Schema({
             'step_4_complete',      // Feature interests
             'step_5_complete',      // Voice selection
             'step_6_complete',      // Account creation
-            'step_4_viewed',        // Paywall viewed (legacy)
-            'paywall_viewed',       // Paywall shown
-            'paywall_exit',         // User closed paywall
-            'plan_selected',        // User selected a plan
+            'onboarding_complete',
+            
+            // Account events
             'create_account_clicked',
             'account_created',
+            
+            // Paywall events
+            'step_4_viewed',        // Paywall viewed (legacy)
+            'paywall_viewed',       // Paywall shown
+            'paywall_shown',        // Alias for paywall_viewed
+            'paywall_exit',         // User closed paywall
+            'paywall_closed',       // Alias for paywall_exit
+            'paywall_trial_clicked',
+            'paywall_account_required',
+            'paywall_parent_gate_shown',
+            'paywall_parent_gate_passed',
+            'paywall_purchase_started',
+            'paywall_purchase_error',
+            'paywall_purchase_cancelled',
+            
+            // Subscription events
+            'plan_selected',        // User selected a plan
             'subscribe_clicked',
             'subscription_started',
             'subscribed',           // User completed subscription/purchase
@@ -37,7 +54,6 @@ const onboardingEventSchema = new mongoose.Schema({
             'restore_clicked',
             'restore_success',
             'skip_clicked',         // User skipped paywall
-            'onboarding_complete',
         ],
     },
     
@@ -52,6 +68,7 @@ const onboardingEventSchema = new mongoose.Schema({
         email: String,              // Email for account creation
         platform: String,
         referrer: String,
+        error: String,              // Error message for purchase errors
     },
     
     createdAt: {

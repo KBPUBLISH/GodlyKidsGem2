@@ -25,11 +25,14 @@ const onboardingEventSchema = new mongoose.Schema({
             'step_5_complete',      // Voice selection
             'step_6_complete',      // Account creation
             'step_4_viewed',        // Paywall viewed (legacy)
+            'paywall_viewed',       // Paywall shown
+            'paywall_exit',         // User closed paywall
             'plan_selected',        // User selected a plan
             'create_account_clicked',
             'account_created',
             'subscribe_clicked',
             'subscription_started',
+            'subscribed',           // User completed subscription/purchase
             'trial_started',
             'restore_clicked',
             'restore_success',
@@ -41,7 +44,7 @@ const onboardingEventSchema = new mongoose.Schema({
     // Additional data
     metadata: {
         step: Number,
-        planType: String,           // 'annual' | 'monthly'
+        planType: String,           // 'annual' | 'monthly' | 'lifetime'
         kidsCount: Number,
         voiceSelected: String,
         priorities: [String],       // Discipleship goals selected

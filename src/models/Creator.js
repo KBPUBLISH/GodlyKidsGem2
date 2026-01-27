@@ -98,18 +98,13 @@ const creatorSchema = new mongoose.Schema({
 });
 
 // Hash password before saving
-creatorSchema.pre('save', async function(next) {
+creatorSchema.pre('save', async function() {
     if (!this.isModified('password') || !this.password) {
-        return next();
+        return;
     }
     
-    try {
-        const salt = await bcrypt.genSalt(10);
-        this.password = await bcrypt.hash(this.password, salt);
-        next();
-    } catch (error) {
-        next(error);
-    }
+    const salt = await bcrypt.genSalt(10);
+    this.password = await bcrypt.hash(this.password, salt);
 });
 
 // Compare password method

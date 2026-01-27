@@ -7,12 +7,18 @@ interface ProtectedRouteProps {
 }
 
 const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children }) => {
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, role } = useAuth();
   const location = useLocation();
 
   if (!isAuthenticated) {
     // Redirect to login page, but save the attempted URL
     return <Navigate to="/login" state={{ from: location }} replace />;
+  }
+
+  // If user is a creator, redirect them to their own dashboard
+  // They should not access the admin portal
+  if (role === 'creator') {
+    return <Navigate to="/creator" replace />;
   }
 
   return <>{children}</>;

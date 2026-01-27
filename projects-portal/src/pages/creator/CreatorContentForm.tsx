@@ -102,10 +102,13 @@ const CreatorContentForm: React.FC = () => {
 
     try {
       const formData = new FormData();
-      formData.append('image', file);
+      formData.append('file', file); // Backend expects 'file' field name
+
+      // Use 'thumbnail' type for item covers (backend-supported type)
+      const uploadType = type === 'item' ? 'thumbnail' : 'cover';
 
       const res = await axios.post(
-        `${API_URL}/api/upload/image?bookId=hub-content&type=${type}`,
+        `${API_URL}/api/upload/image?bookId=hub-content&type=${uploadType}`,
         formData,
         { headers: { 'Content-Type': 'multipart/form-data' } }
       );

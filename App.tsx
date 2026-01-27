@@ -1121,9 +1121,9 @@ const App: React.FC = () => {
                   <Route path="/lessons" element={<ProtectedRoute><LessonsPage /></ProtectedRoute>} />
                   <Route path="/lesson/:lessonId" element={<ProtectedRoute><LessonPlayerPage /></ProtectedRoute>} />
                   <Route path="/giving" element={<ProtectedRoute><GivingPage /></ProtectedRoute>} />
-                  <Route path="/profile" element={<ProtectedRoute><ProfileSelectionPage /></ProtectedRoute>} />
-                  <Route path="/create-profile" element={<ProtectedRoute><CreateProfilePage /></ProtectedRoute>} />
-                  <Route path="/edit-profile" element={<ProtectedRoute><EditProfilePage /></ProtectedRoute>} />
+                  <Route path="/profile" element={<ProfileSelectionPage />} />
+                  <Route path="/create-profile" element={<CreateProfilePage />} />
+                  <Route path="/edit-profile" element={<EditProfilePage />} />
                   <Route path="/paywall" element={<PaywallPage />} />
                   <Route path="/settings" element={<ProtectedRoute><SettingsPage /></ProtectedRoute>} />
                   <Route path="/demo/video-lesson" element={<VideoLessonDemo />} />

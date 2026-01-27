@@ -256,11 +256,13 @@ export const TutorialProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   }, [currentStep, isTutorialActive]);
 
   const startTutorial = useCallback(() => {
-    if (!isComplete) {
-      setCurrentStep('welcome_book_tap');
-      localStorage.setItem(TUTORIAL_STEP_KEY, 'welcome_book_tap');
-    }
-  }, [isComplete]);
+    // Reset complete state so tutorial can start fresh
+    setIsComplete(false);
+    localStorage.removeItem(TUTORIAL_STORAGE_KEY);
+    // Start at the first tutorial step
+    setCurrentStep('welcome_book_tap');
+    localStorage.setItem(TUTORIAL_STEP_KEY, 'welcome_book_tap');
+  }, []);
 
   // Called when user swipes a page in book reader
   const onPageSwipe = useCallback(() => {

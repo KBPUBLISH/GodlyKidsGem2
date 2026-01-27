@@ -13,6 +13,9 @@ import ChallengeGameModal from '../components/features/ChallengeGameModal';
 import PrayerGameModal from '../components/features/PrayerGameModal';
 import ReviewPromptModal, { shouldShowReviewPrompt } from '../components/features/ReviewPromptModal';
 import EmailSignupModal from '../components/features/EmailSignupModal';
+import SurveyPopup, { shouldShowSurvey } from '../components/features/SurveyPopup';
+import TutorialPromptModal, { shouldShowTutorialPrompt, markTutorialPromptShown } from '../components/modals/TutorialPromptModal';
+import { useTutorial } from '../context/TutorialContext';
 import { Key, Brain, Heart, Video, Lock, Check, Play, CheckCircle, Clock, Coins, BookOpen, Sparkles } from 'lucide-react';
 import { ApiService } from '../services/apiService';
 import { 
@@ -83,7 +86,7 @@ const markGamePurchased = (gameId: string): void => {
 const HomePage: React.FC = () => {
   const navigate = useNavigate();
   const { books, loading, error: booksError, refreshBooks } = useBooks();
-  const { coins, spendCoins, kids, currentProfileId } = useUser();
+  const { coins, spendCoins, kids, currentProfileId, isSubscribed } = useUser();
   const [isRetrying, setIsRetrying] = useState(false);
 
   const [isHeaderVisible, setIsHeaderVisible] = useState(true);
@@ -92,6 +95,11 @@ const HomePage: React.FC = () => {
   const [showPrayerGame, setShowPrayerGame] = useState(false);
   const [showReviewPrompt, setShowReviewPrompt] = useState(false);
   const [showEmailSignup, setShowEmailSignup] = useState(false);
+  const [showSurvey, setShowSurvey] = useState(false);
+  const [showTutorialPrompt, setShowTutorialPrompt] = useState(false);
+  
+  // Tutorial context
+  const { startTutorial, isTutorialActive } = useTutorial();
   
   // Coin reward animation state (triggered when returning from lessons)
   const [showCoinReward, setShowCoinReward] = useState(false);
@@ -283,6 +291,47 @@ const HomePage: React.FC = () => {
     
     return () => clearTimeout(timer);
   }, []);
+
+  // Check if we should show the survey popup (after 7 days of use)
+  useEffect(() => {
+    // Longer delay - show survey after user has been on page a bit
+    const timer = setTimeout(() => {
+      try {
+        // Don't show if review prompt is showing
+        if (!showReviewPrompt && shouldShowSurvey()) {
+          console.log('📊 Showing survey popup!');
+          setShowSurvey(true);
+        }
+      } catch (e) {
+        console.error('Survey check error:', e);
+      }
+    }, 5000); // 5 second delay after page load
+    
+    return () => clearTimeout(timer);
+  }, [showReviewPrompt]);
+
+  // Show tutorial prompt for new users after they've explored for a bit
+  useEffect(() => {
+    // Don't show if tutorial is already active
+    if (isTutorialActive) return;
+    
+    // Wait 12 seconds to let user explore before showing prompt
+    const timer = setTimeout(() => {
+      try {
+        // Don't show if other modals are showing
+        if (!showReviewPrompt && !showSurvey && shouldShowTutorialPrompt()) {
+          console.log('🎓 Showing tutorial prompt!');
+          // Track that we showed the prompt
+          activityTrackingService.trackTutorialStep('tutorial_prompt_shown', {});
+          setShowTutorialPrompt(true);
+        }
+      } catch (e) {
+        console.error('Tutorial prompt check error:', e);
+      }
+    }, 12000); // 12 second delay - enough time to look around
+    
+    return () => clearTimeout(timer);
+  }, [isTutorialActive, showReviewPrompt, showSurvey]);
 
   // Show email signup popup for web users after 30 seconds
   // DISABLED: Pausing email popup during tutorial development
@@ -867,6 +916,27 @@ const HomePage: React.FC = () => {
       <EmailSignupModal
         isOpen={showEmailSignup}
         onClose={() => setShowEmailSignup(false)}
+      />
+
+      <SurveyPopup
+        isOpen={showSurvey}
+        onClose={() => setShowSurvey(false)}
+        userId={localStorage.getItem('godlykids_user_email') || localStorage.getItem('godlykids_device_id') || 'anonymous'}
+        email={localStorage.getItem('godlykids_user_email') || undefined}
+        platform={/despia/i.test(navigator.userAgent) ? (/iphone|ipad/i.test(navigator.userAgent) ? 'ios' : 'android') : 'web'}
+        subscriptionStatus={isSubscribed ? 'active' : 'free'}
+      />
+
+      <TutorialPromptModal
+        isOpen={showTutorialPrompt}
+        onStartTutorial={() => {
+          setShowTutorialPrompt(false);
+          startTutorial();
+          navigate('/welcome');
+        }}
+        onSkip={() => {
+          setShowTutorialPrompt(false);
+        }}
       />
 
       <div className="px-4 pt-28 space-y-2 pb-52">

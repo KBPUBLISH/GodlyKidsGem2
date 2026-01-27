@@ -17,6 +17,11 @@ const tutorialEventSchema = new mongoose.Schema({
         type: String,
         required: true,
         enum: [
+            // Tutorial prompt events
+            'tutorial_prompt_shown',
+            'tutorial_prompt_accepted',
+            'tutorial_prompt_skipped',
+            // Tutorial flow events
             'welcome_book_tap',
             'book_controls_intro',
             'book_swipe_intro',

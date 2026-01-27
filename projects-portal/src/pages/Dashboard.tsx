@@ -22,6 +22,8 @@ interface UserData {
     lessonsCompleted: number;
     gamesPlayed: number;
     onboardingStep: number;
+    tutorialStep: number;
+    tutorialLastStep: string;
     farthestPage: string;
     subscriptionStatus: string;
     platform: string;
@@ -287,7 +289,7 @@ const Dashboard: React.FC = () => {
                 <div className="bg-white rounded-xl border border-gray-100 p-4 shadow-sm">
                     <div className="flex items-center gap-2 text-gray-500 text-sm mb-1">
                         <Users className="w-4 h-4" />
-                        {selectedTimeRange === 'all' ? 'Total Users' : 'Active Users'}
+                        {selectedTimeRange === 'all' ? 'Total Users' : 'Users (in period)'}
                     </div>
                     <p className="text-2xl font-bold text-gray-900">{data.summary.totalUsers.toLocaleString()}</p>
                     {selectedTimeRange !== 'all' && data.summary.totalUsersAllTime && (
@@ -396,11 +398,12 @@ const Dashboard: React.FC = () => {
                     </div>
                 </div>
 
-                {/* Active Users */}
+                {/* Active Users - by last activity */}
                 <div className="bg-white rounded-xl border border-gray-100 p-6 shadow-sm">
                     <h3 className="text-lg font-semibold text-gray-800 flex items-center gap-2 mb-4">
                         <Activity className="w-5 h-5 text-green-600" />
                         Active Users
+                        <span className="text-xs font-normal text-gray-400">(by last activity)</span>
                     </h3>
                     <div className="grid grid-cols-3 gap-4">
                         <div className="text-center p-3 bg-green-50 rounded-lg">
@@ -704,6 +707,7 @@ const Dashboard: React.FC = () => {
                                                         <p className="text-xs text-gray-500 mb-1">Engagement</p>
                                                         <p className="text-sm">⏱️ {user.timeSpentMinutes} min total</p>
                                                         <p className="text-sm">📍 Step {user.onboardingStep} onboarding</p>
+                                                        <p className="text-sm">🎓 Step {user.tutorialStep || 0} tutorial</p>
                                                         <p className="text-sm text-xs truncate" title={user.farthestPage}>🚀 {user.farthestPage || '/'}</p>
                                                     </div>
                                                     <div>

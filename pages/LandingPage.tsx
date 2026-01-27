@@ -4,7 +4,6 @@ import { Globe, Check, X } from 'lucide-react';
 import WoodButton from '../components/ui/WoodButton';
 import { useLanguage } from '../context/LanguageContext';
 import { ApiService } from '../services/apiService';
-import { useTutorial } from '../context/TutorialContext';
 
 const STORAGE_KEY = 'godly_kids_data_v6';
 const TERMS_URL = 'https://www.godlykids.com/end-user-license-agreement';
@@ -129,7 +128,6 @@ const ContentCarousel: React.FC<{ coverUrls: string[] }> = ({ coverUrls }) => {
 
 const LandingPage: React.FC = () => {
   const navigate = useNavigate();
-  const { startTutorial } = useTutorial();
   const [isChecking, setIsChecking] = useState(true);
   const [showLanguageModal, setShowLanguageModal] = useState(false);
   const [showTermsModal, setShowTermsModal] = useState(false);
@@ -354,12 +352,11 @@ const LandingPage: React.FC = () => {
 
           {/* Sign In and Guest Buttons */}
           <div className="w-full max-w-sm space-y-3">
-              {/* Let's Explore Button - Main CTA (Gold) - Goes straight to tutorial */}
+              {/* Let's Explore Button - Main CTA (Gold) - Goes to explore page, tutorial prompt shows later */}
               <WoodButton 
                 onClick={() => {
-                  // Start tutorial and go directly to welcome/book selection
-                  startTutorial();
-                  navigate('/welcome');
+                  // Go directly to explore page - tutorial prompt will show after a delay
+                  navigate('/home');
                 }}
                 fullWidth 
                 variant="gold"

@@ -2,7 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { 
     TrendingUp, Users, UserPlus, Crown, XCircle, RefreshCw,
     ChevronRight, Calendar, BarChart3, ArrowDownRight, ArrowUpRight,
-    BookOpen, AlertTriangle, CheckCircle, Target, Sparkles
+    BookOpen, AlertTriangle, CheckCircle, Target, Sparkles, MessageSquare,
+    ThumbsUp, ThumbsDown, Star, Gamepad2, Headphones, Music
 } from 'lucide-react';
 
 interface FunnelStep {
@@ -98,6 +99,45 @@ interface RetentionData {
     weeklyCohorts: RetentionCohort[];
 }
 
+interface SurveyFeedback {
+    id: string;
+    userId: string;
+    email?: string;
+    feedback: string;
+    npsScore?: number;
+    createdAt: string;
+    platform?: string;
+    subscriptionStatus?: string;
+}
+
+interface SurveyData {
+    success: boolean;
+    analytics: {
+        totalResponses: number;
+        dateRange: { start: string; end: string; days: number };
+        contentPreferences: {
+            games: number;
+            books: number;
+            audioDramas: number;
+            lessons: number;
+            songs: number;
+        };
+        nps: {
+            averageScore: number;
+            npsScore: number; // -100 to 100
+            totalResponses: number;
+            breakdown: {
+                promoters: number;
+                passives: number;
+                detractors: number;
+            };
+            distribution: Record<string, number>;
+        };
+        recentFeedback: SurveyFeedback[];
+        dailyResponses: Record<string, number>;
+    };
+}
+
 interface TutorialData {
     success: boolean;
     period: { days: number; startDate: string };
@@ -131,27 +171,30 @@ const OnboardingAnalytics: React.FC = () => {
     const [tutorialData, setTutorialData] = useState<TutorialData | null>(null);
     const [preferencesData, setPreferencesData] = useState<PreferencesData | null>(null);
     const [retentionData, setRetentionData] = useState<RetentionData | null>(null);
+    const [surveyData, setSurveyData] = useState<SurveyData | null>(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [days, setDays] = useState(7);
-    const [activeTab, setActiveTab] = useState<'onboarding' | 'tutorial' | 'retention'>('onboarding');
+    const [activeTab, setActiveTab] = useState<'onboarding' | 'tutorial' | 'retention' | 'survey'>('onboarding');
 
     const fetchData = async () => {
         setLoading(true);
         setError(null);
         try {
-            // Fetch onboarding, tutorial, preferences, and retention data in parallel
-            const [onboardingRes, tutorialRes, preferencesRes, retentionRes] = await Promise.all([
+            // Fetch onboarding, tutorial, preferences, retention, and survey data in parallel
+            const [onboardingRes, tutorialRes, preferencesRes, retentionRes, surveyRes] = await Promise.all([
                 fetch(`${API_BASE}/analytics/onboarding?days=${days}`),
                 fetch(`${API_BASE}/analytics/tutorial?days=${days}`),
                 fetch(`${API_BASE}/analytics/onboarding/preferences?days=${days}`),
                 fetch(`${API_BASE}/analytics/retention?days=${Math.max(days, 30)}`), // At least 30 days for retention
+                fetch(`${API_BASE}/survey/analytics?days=${days}`),
             ]);
             
             const onboardingResult = await onboardingRes.json();
             const tutorialResult = await tutorialRes.json();
             const preferencesResult = await preferencesRes.json();
             const retentionResult = await retentionRes.json();
+            const surveyResult = await surveyRes.json();
             
             if (onboardingResult.success) {
                 setData(onboardingResult);
@@ -164,6 +207,9 @@ const OnboardingAnalytics: React.FC = () => {
             }
             if (retentionResult.success) {
                 setRetentionData(retentionResult);
+            }
+            if (surveyResult.success) {
+                setSurveyData(surveyResult);
             }
             
             if (!onboardingResult.success && !tutorialResult.success) {
@@ -299,6 +345,24 @@ const OnboardingAnalytics: React.FC = () => {
                         {retentionData && retentionData.summary.avgRetention.day7 !== null && (
                             <span className="bg-purple-100 text-purple-700 text-xs px-2 py-0.5 rounded-full">
                                 D7: {retentionData.summary.avgRetention.day7}%
+                            </span>
+                        )}
+                    </span>
+                </button>
+                <button
+                    onClick={() => setActiveTab('survey')}
+                    className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                        activeTab === 'survey'
+                            ? 'bg-white text-indigo-600 shadow-sm'
+                            : 'text-gray-600 hover:text-gray-800'
+                    }`}
+                >
+                    <span className="flex items-center gap-2">
+                        <MessageSquare className="w-4 h-4" />
+                        User Surveys
+                        {surveyData && surveyData.analytics.totalResponses > 0 && (
+                            <span className="bg-amber-100 text-amber-700 text-xs px-2 py-0.5 rounded-full">
+                                {surveyData.analytics.totalResponses}
                             </span>
                         )}
                     </span>
@@ -955,6 +1019,222 @@ const OnboardingAnalytics: React.FC = () => {
                     <TrendingUp className="w-12 h-12 text-gray-300 mx-auto mb-4" />
                     <p className="text-gray-500">No retention data available yet</p>
                     <p className="text-gray-400 text-sm mt-2">Retention metrics require user activity data over time</p>
+                </div>
+            )}
+
+            {/* ============ SURVEY TAB ============ */}
+            {activeTab === 'survey' && surveyData && (
+            <>
+            {/* Survey Summary Cards */}
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                <div className="bg-white rounded-xl border border-gray-200 p-6">
+                    <div className="flex items-center gap-3 mb-2">
+                        <div className="p-2 bg-amber-100 rounded-lg">
+                            <MessageSquare className="w-5 h-5 text-amber-600" />
+                        </div>
+                        <span className="text-gray-600 text-sm">Total Responses</span>
+                    </div>
+                    <p className="text-3xl font-bold text-gray-800">
+                        {surveyData.analytics.totalResponses}
+                    </p>
+                </div>
+                
+                <div className="bg-white rounded-xl border border-gray-200 p-6">
+                    <div className="flex items-center gap-3 mb-2">
+                        <div className="p-2 bg-blue-100 rounded-lg">
+                            <Star className="w-5 h-5 text-blue-600" />
+                        </div>
+                        <span className="text-gray-600 text-sm">Avg NPS Score</span>
+                    </div>
+                    <p className="text-3xl font-bold text-gray-800">
+                        {surveyData.analytics.nps.averageScore.toFixed(1)}
+                        <span className="text-lg text-gray-400">/10</span>
+                    </p>
+                </div>
+
+                <div className="bg-white rounded-xl border border-gray-200 p-6">
+                    <div className="flex items-center gap-3 mb-2">
+                        <div className={`p-2 rounded-lg ${
+                            surveyData.analytics.nps.npsScore >= 50 ? 'bg-green-100' :
+                            surveyData.analytics.nps.npsScore >= 0 ? 'bg-yellow-100' : 'bg-red-100'
+                        }`}>
+                            {surveyData.analytics.nps.npsScore >= 50 ? (
+                                <ThumbsUp className="w-5 h-5 text-green-600" />
+                            ) : surveyData.analytics.nps.npsScore >= 0 ? (
+                                <Target className="w-5 h-5 text-yellow-600" />
+                            ) : (
+                                <ThumbsDown className="w-5 h-5 text-red-600" />
+                            )}
+                        </div>
+                        <span className="text-gray-600 text-sm">NPS Score</span>
+                    </div>
+                    <p className={`text-3xl font-bold ${
+                        surveyData.analytics.nps.npsScore >= 50 ? 'text-green-600' :
+                        surveyData.analytics.nps.npsScore >= 0 ? 'text-yellow-600' : 'text-red-600'
+                    }`}>
+                        {surveyData.analytics.nps.npsScore > 0 ? '+' : ''}{surveyData.analytics.nps.npsScore}
+                    </p>
+                    <p className="text-xs text-gray-400 mt-1">Scale: -100 to +100</p>
+                </div>
+
+                <div className="bg-white rounded-xl border border-gray-200 p-6">
+                    <div className="flex items-center gap-3 mb-2">
+                        <div className="p-2 bg-green-100 rounded-lg">
+                            <Users className="w-5 h-5 text-green-600" />
+                        </div>
+                        <span className="text-gray-600 text-sm">Promoters</span>
+                    </div>
+                    <p className="text-3xl font-bold text-green-600">
+                        {surveyData.analytics.nps.breakdown.promoters}
+                    </p>
+                    <p className="text-xs text-gray-400 mt-1">Score 9-10 (would refer)</p>
+                </div>
+            </div>
+
+            {/* Content Preferences */}
+            <div className="bg-white rounded-xl border border-gray-200 p-6">
+                <h3 className="text-lg font-semibold text-gray-800 mb-4 flex items-center gap-2">
+                    <Sparkles className="w-5 h-5 text-amber-500" />
+                    What Users Want More Of
+                </h3>
+                <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+                    {[
+                        { key: 'games', label: 'Games', icon: Gamepad2, color: 'purple' },
+                        { key: 'books', label: 'Books', icon: BookOpen, color: 'blue' },
+                        { key: 'audioDramas', label: 'Audio Dramas', icon: Headphones, color: 'orange' },
+                        { key: 'lessons', label: 'Lessons', icon: Target, color: 'green' },
+                        { key: 'songs', label: 'Songs', icon: Music, color: 'pink' },
+                    ].map(item => {
+                        const count = surveyData.analytics.contentPreferences[item.key as keyof typeof surveyData.analytics.contentPreferences];
+                        const percentage = surveyData.analytics.totalResponses > 0 
+                            ? Math.round((count / surveyData.analytics.totalResponses) * 100) 
+                            : 0;
+                        const colorClasses = {
+                            purple: 'bg-purple-100 text-purple-600 border-purple-200',
+                            blue: 'bg-blue-100 text-blue-600 border-blue-200',
+                            orange: 'bg-orange-100 text-orange-600 border-orange-200',
+                            green: 'bg-green-100 text-green-600 border-green-200',
+                            pink: 'bg-pink-100 text-pink-600 border-pink-200',
+                        };
+                        const Icon = item.icon;
+                        return (
+                            <div key={item.key} className={`rounded-xl border p-4 text-center ${colorClasses[item.color as keyof typeof colorClasses]}`}>
+                                <Icon className="w-8 h-8 mx-auto mb-2" />
+                                <p className="font-semibold text-lg">{count}</p>
+                                <p className="text-sm opacity-80">{item.label}</p>
+                                <p className="text-xs mt-1 opacity-60">{percentage}% of users</p>
+                            </div>
+                        );
+                    })}
+                </div>
+            </div>
+
+            {/* NPS Distribution */}
+            <div className="bg-white rounded-xl border border-gray-200 p-6">
+                <h3 className="text-lg font-semibold text-gray-800 mb-4 flex items-center gap-2">
+                    <BarChart3 className="w-5 h-5 text-blue-500" />
+                    Referral Likelihood Distribution (1-10)
+                </h3>
+                <div className="flex items-end gap-2 h-40">
+                    {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map(score => {
+                        const count = surveyData.analytics.nps.distribution[score] || 0;
+                        const maxCount = Math.max(...Object.values(surveyData.analytics.nps.distribution), 1);
+                        const height = (count / maxCount) * 100;
+                        const colorClass = score >= 9 ? 'bg-green-500' : score >= 7 ? 'bg-yellow-400' : 'bg-red-400';
+                        return (
+                            <div key={score} className="flex-1 flex flex-col items-center">
+                                <span className="text-xs text-gray-500 mb-1">{count}</span>
+                                <div 
+                                    className={`w-full rounded-t ${colorClass} transition-all`}
+                                    style={{ height: `${Math.max(height, 4)}%` }}
+                                />
+                                <span className="text-xs font-medium mt-2 text-gray-600">{score}</span>
+                            </div>
+                        );
+                    })}
+                </div>
+                <div className="flex justify-between mt-4 text-xs">
+                    <div className="flex items-center gap-1">
+                        <div className="w-3 h-3 bg-red-400 rounded" />
+                        <span className="text-gray-500">Detractors (1-6): {surveyData.analytics.nps.breakdown.detractors}</span>
+                    </div>
+                    <div className="flex items-center gap-1">
+                        <div className="w-3 h-3 bg-yellow-400 rounded" />
+                        <span className="text-gray-500">Passives (7-8): {surveyData.analytics.nps.breakdown.passives}</span>
+                    </div>
+                    <div className="flex items-center gap-1">
+                        <div className="w-3 h-3 bg-green-500 rounded" />
+                        <span className="text-gray-500">Promoters (9-10): {surveyData.analytics.nps.breakdown.promoters}</span>
+                    </div>
+                </div>
+            </div>
+
+            {/* Recent Feedback */}
+            <div className="bg-white rounded-xl border border-gray-200 p-6">
+                <h3 className="text-lg font-semibold text-gray-800 mb-4 flex items-center gap-2">
+                    <MessageSquare className="w-5 h-5 text-amber-500" />
+                    Recent User Feedback
+                </h3>
+                {surveyData.analytics.recentFeedback.length > 0 ? (
+                    <div className="space-y-4 max-h-96 overflow-y-auto">
+                        {surveyData.analytics.recentFeedback.map((feedback) => (
+                            <div key={feedback.id} className="border-l-4 border-amber-300 pl-4 py-2 bg-amber-50 rounded-r-lg">
+                                <p className="text-gray-700">{feedback.feedback}</p>
+                                <div className="flex items-center gap-4 mt-2 text-xs text-gray-500">
+                                    <span>{feedback.email || feedback.userId}</span>
+                                    {feedback.npsScore && (
+                                        <span className={`px-2 py-0.5 rounded ${
+                                            feedback.npsScore >= 9 ? 'bg-green-100 text-green-700' :
+                                            feedback.npsScore >= 7 ? 'bg-yellow-100 text-yellow-700' :
+                                            'bg-red-100 text-red-700'
+                                        }`}>
+                                            NPS: {feedback.npsScore}
+                                        </span>
+                                    )}
+                                    {feedback.platform && (
+                                        <span className="text-gray-400">{feedback.platform}</span>
+                                    )}
+                                    <span className="text-gray-400">
+                                        {new Date(feedback.createdAt).toLocaleDateString()}
+                                    </span>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                ) : (
+                    <p className="text-gray-500 text-center py-8">No feedback comments yet</p>
+                )}
+            </div>
+
+            {/* NPS Explanation */}
+            <div className="bg-amber-50 rounded-xl border border-amber-100 p-6">
+                <h3 className="text-lg font-semibold text-amber-800 mb-3 flex items-center gap-2">
+                    <Target className="w-5 h-5" />
+                    Understanding NPS Score
+                </h3>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
+                    <div className="bg-white rounded-lg p-4 border border-amber-100">
+                        <p className="font-medium text-green-700">Excellent: +50 to +100</p>
+                        <p className="text-gray-500 text-xs mt-1">World-class user satisfaction</p>
+                    </div>
+                    <div className="bg-white rounded-lg p-4 border border-amber-100">
+                        <p className="font-medium text-yellow-700">Good: 0 to +50</p>
+                        <p className="text-gray-500 text-xs mt-1">More promoters than detractors</p>
+                    </div>
+                    <div className="bg-white rounded-lg p-4 border border-amber-100">
+                        <p className="font-medium text-red-700">Needs Work: Below 0</p>
+                        <p className="text-gray-500 text-xs mt-1">More detractors than promoters</p>
+                    </div>
+                </div>
+            </div>
+            </>
+            )}
+
+            {activeTab === 'survey' && !surveyData && (
+                <div className="bg-gray-50 rounded-xl p-12 text-center">
+                    <MessageSquare className="w-12 h-12 text-gray-300 mx-auto mb-4" />
+                    <p className="text-gray-500">No survey data available yet</p>
+                    <p className="text-gray-400 text-sm mt-2">Survey responses will appear here after users complete the in-app survey (shown after 7 days of use)</p>
                 </div>
             )}
         </div>

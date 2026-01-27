@@ -14,6 +14,7 @@ const getAdminEmails = () => {
   return [
     'admin@godlykids.com',
     'support@godlykids.com',
+    'hello@kbpublish.org',
   ];
 };
 

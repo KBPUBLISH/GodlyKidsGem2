@@ -605,9 +605,14 @@ const DailySessionPage: React.FC = () => {
     const updatedSession = completeCurrentStep(coinsEarned);
     setSession(updatedSession);
     
-    // Check if session is now complete (shouldn't be, prayer is next)
+    // Check if session is now complete
     if (updatedSession?.completed) {
       setShowCelebration(true);
+    } else {
+      // Auto-start next step (prayer) after a brief delay
+      setTimeout(() => {
+        handleStartStep();
+      }, 500);
     }
   };
 
@@ -633,6 +638,13 @@ const DailySessionPage: React.FC = () => {
     // Complete step and update session
     const updatedSession = completeCurrentStep(coinsEarned);
     setSession(updatedSession);
+    
+    // Auto-start next step after a brief delay
+    if (updatedSession && !updatedSession.completed) {
+      setTimeout(() => {
+        handleStartStep();
+      }, 500);
+    }
   };
 
   // Handle scripture modal close (without completing)
@@ -670,6 +682,11 @@ const DailySessionPage: React.FC = () => {
     
     if (updatedSession?.completed) {
       setShowCelebration(true);
+    } else {
+      // Auto-start next step after a brief delay
+      setTimeout(() => {
+        handleStartStep();
+      }, 300);
     }
   };
 

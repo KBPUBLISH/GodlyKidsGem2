@@ -1238,7 +1238,7 @@ const DailySessionPage: React.FC = () => {
         isOpen={showDiscussionModal}
         onClose={handleDiscussionClose}
         onComplete={handleDiscussionComplete}
-        bookTitle={recommendedBook?.title || 'the story'}
+        bookTitle={session?.steps[0]?.contentTitle || recommendedBook?.title || 'the story'}
         bookDescription={recommendedBook?.description}
         bookContent={bookContent}
       />

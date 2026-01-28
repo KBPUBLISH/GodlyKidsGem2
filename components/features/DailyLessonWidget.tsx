@@ -141,11 +141,11 @@ const DailyLessonWidget: React.FC<DailyLessonWidgetProps> = ({ onStartLesson }) 
   if (isCompleted) {
     return (
       <div className="-mx-4 -mt-20 mb-6">
-        <div className="rounded-b-[2.5rem] pt-24 pb-10 px-8 shadow-lg bg-[#f5f0e8] relative overflow-hidden">
-          {/* Decorative wave at bottom */}
-          <div className="absolute bottom-0 left-0 right-0 h-20 opacity-40">
+        <div className="rounded-b-[2.5rem] pt-24 pb-10 px-8 shadow-xl bg-white relative overflow-hidden">
+          {/* Decorative cloud wave at bottom */}
+          <div className="absolute bottom-0 left-0 right-0 h-16 opacity-30">
             <svg viewBox="0 0 400 60" preserveAspectRatio="none" className="w-full h-full">
-              <path d="M0,30 Q100,60 200,30 T400,30 L400,60 L0,60 Z" fill="#6B9B8A" />
+              <path d="M0,30 Q100,60 200,30 T400,30 L400,60 L0,60 Z" fill="#E8F4F8" />
             </svg>
           </div>
           
@@ -185,11 +185,11 @@ const DailyLessonWidget: React.FC<DailyLessonWidgetProps> = ({ onStartLesson }) 
 
   return (
     <div className="-mx-4 -mt-20 mb-6">
-      <div className="rounded-b-[2.5rem] pt-24 pb-10 px-8 shadow-lg bg-[#f5f0e8] relative overflow-hidden">
-        {/* Decorative wave at bottom */}
-        <div className="absolute bottom-0 left-0 right-0 h-20 opacity-40">
+      <div className="rounded-b-[2.5rem] pt-24 pb-10 px-8 shadow-xl bg-white relative overflow-hidden">
+        {/* Decorative cloud wave at bottom */}
+        <div className="absolute bottom-0 left-0 right-0 h-16 opacity-30">
           <svg viewBox="0 0 400 60" preserveAspectRatio="none" className="w-full h-full">
-            <path d="M0,30 Q100,60 200,30 T400,30 L400,60 L0,60 Z" fill="#6B9B8A" />
+            <path d="M0,30 Q100,60 200,30 T400,30 L400,60 L0,60 Z" fill="#E8F4F8" />
           </svg>
         </div>
         

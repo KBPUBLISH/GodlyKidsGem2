@@ -1167,31 +1167,8 @@ const HomePage: React.FC = () => {
           );
         })()}
 
-        {/* Weekly Progress Tracker + Daily Lessons Section */}
+        {/* Daily Lessons Section - Weekly Tracker removed (streak now in DailyLessonWidget) */}
         <section id="devotional-section" data-tutorial="devotional-section" className="pb-2">
-          {/* Weekly Tracker - Compact Mon-Sat progress */}
-          <WeeklyLessonTracker
-            selectedDay={selectedDayIndex}
-            onDaySelect={(dayIndex) => {
-              setSelectedDayIndex(dayIndex);
-              setSelectedDay(dayIndex);
-              // In kid profile, load the selected day's plan immediately
-              if (currentProfileId) {
-                const weekDays = getWeekDays();
-                const selectedDate = weekDays[dayIndex] || new Date();
-                selectedDate.setHours(0, 0, 0, 0);
-                const dateKey = formatLocalDateKey(selectedDate);
-                loadDayPlan(dateKey).then((plan) => {
-                  const lessonsFromPlan = plan?.slots?.map((s: any) => s.lesson).filter(Boolean) || [];
-                  setLessons(lessonsFromPlan);
-                  cacheData('lessons', lessonsFromPlan);
-                });
-              }
-            }}
-            dayCompletions={[0, 1, 2, 3, 4, 5, 6].map(i => isDayComplete(lessons, i))}
-            todayIndex={todayIndex}
-          />
-
           {/* Daily Lessons Header */}
           <div className="flex items-center justify-between mb-2">
             <SectionTitle 

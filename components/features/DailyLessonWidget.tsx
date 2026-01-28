@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ChevronRight, Check, Clock } from 'lucide-react';
+import { ChevronRight, Check, Clock, Flame } from 'lucide-react';
 import { isSessionCompletedToday, getSessionStreak } from '../../services/dailySessionService';
 
 interface DailyLessonWidgetProps {
@@ -30,9 +30,9 @@ const DailyLessonWidget: React.FC<DailyLessonWidgetProps> = ({ onStartLesson }) 
   };
 
   const durations = [
-    { value: 5, label: '5 min', description: 'Quick' },
-    { value: 10, label: '10 min', description: 'Standard' },
-    { value: 15, label: '15 min', description: 'Full' },
+    { value: 5, label: '5 min' },
+    { value: 10, label: '10 min' },
+    { value: 15, label: '15 min' },
   ];
 
   // Completed state
@@ -46,17 +46,21 @@ const DailyLessonWidget: React.FC<DailyLessonWidgetProps> = ({ onStartLesson }) 
           </div>
           
           <div className="text-center">
-            <h2 className="text-[#5D4037] font-display font-bold text-xl mb-1">
+            <h2 className="text-[#5D4037] font-display font-bold text-xl mb-2">
               Today's Lesson Complete!
             </h2>
+            
+            {/* Streak Display - Prominent */}
             {streak > 0 && (
-              <p className="text-[#8B4513] text-sm">
-                🔥 {streak} day streak - Amazing!
-              </p>
+              <div className="inline-flex items-center gap-2 bg-gradient-to-r from-orange-400 to-red-500 text-white px-4 py-2 rounded-full mb-3">
+                <Flame className="w-5 h-5" />
+                <span className="font-bold text-lg">{streak} Day Streak!</span>
+              </div>
             )}
+            
             <button
               onClick={() => navigate('/daily-session')}
-              className="mt-3 text-[#8B4513] text-sm underline"
+              className="block mx-auto text-[#8B4513] text-sm underline"
             >
               Review today's lesson →
             </button>
@@ -69,19 +73,20 @@ const DailyLessonWidget: React.FC<DailyLessonWidgetProps> = ({ onStartLesson }) 
   return (
     <div className="mx-4 mb-6">
       <div className="bg-[#f5f0e1] rounded-2xl p-5 shadow-lg border-4 border-[#8B4513]/30 relative overflow-hidden">
-        {/* Decorative corner */}
-        <div className="absolute top-0 right-0 w-20 h-20 bg-[#8B4513]/5 rounded-bl-full" />
+        
+        {/* Streak Badge - Top Right */}
+        {streak > 0 && (
+          <div className="absolute top-3 right-3 flex items-center gap-1 bg-gradient-to-r from-orange-400 to-red-500 text-white px-3 py-1 rounded-full shadow-md">
+            <Flame className="w-4 h-4" />
+            <span className="font-bold text-sm">{streak}</span>
+          </div>
+        )}
         
         {/* Header */}
         <div className="text-center mb-4">
           <h2 className="text-[#5D4037] font-display font-bold text-2xl">
             Today's Godly Kids Lesson
           </h2>
-          {streak > 0 && (
-            <p className="text-[#8B4513]/70 text-sm mt-1">
-              🔥 {streak} day streak
-            </p>
-          )}
         </div>
 
         {/* Duration Selector */}

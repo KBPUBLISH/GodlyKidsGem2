@@ -266,8 +266,8 @@ const FeaturedCarousel: React.FC<FeaturedCarouselProps> = ({ books, onBookClick 
 
 
               {/* Cover */}
-              <div className="relative z-10 transform transition-transform active:scale-95 duration-200 px-4">
-                <div className="w-[19rem] md:w-[24rem] aspect-square rounded-lg shadow-2xl relative overflow-visible">
+              <div className="relative z-10 transform transition-transform active:scale-95 duration-200 px-6 py-4 w-full h-full flex items-center justify-center">
+                <div className="w-full max-w-[85%] sm:max-w-[75%] md:max-w-[70%] aspect-square rounded-lg shadow-2xl relative overflow-visible">
                   
                   {/* Use SimplePagePreview for books, static image for playlists and episodes */}
                   {(itemIsPlaylist || itemIsEpisode) ? (

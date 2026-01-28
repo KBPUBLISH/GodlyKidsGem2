@@ -289,16 +289,6 @@ const DailyVerseModal: React.FC<DailyVerseModalProps> = ({
 
   return (
     <div className="fixed inset-0 z-50 flex flex-col bg-gradient-to-b from-[#D4A574] via-[#C4956A] to-[#8B6914]">
-      {/* Wood texture overlay */}
-      <div className="absolute inset-0 opacity-20 pointer-events-none" style={{
-        backgroundImage: `repeating-linear-gradient(
-          90deg,
-          transparent,
-          transparent 2px,
-          rgba(139, 90, 43, 0.3) 2px,
-          rgba(139, 90, 43, 0.3) 4px
-        )`
-      }} />
       
       {/* Safe area top */}
       <div className="flex-shrink-0" style={{ height: 'var(--safe-area-top, 0px)' }} />

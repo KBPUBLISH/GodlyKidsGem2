@@ -471,10 +471,11 @@ const DailySessionPage: React.FC = () => {
     switch (step.type) {
       case 'book':
         // Try to use recommended book first
-        if (recommendedBook && recommendedBook._id) {
-          console.log('📚 Using recommended book:', recommendedBook.title);
-          setStepContent(session.currentStepIndex, recommendedBook._id, recommendedBook.title);
-          navigate(`/read/${recommendedBook._id}`, { 
+        const recBookId = recommendedBook?.id || recommendedBook?._id;
+        if (recommendedBook && recBookId) {
+          console.log('📚 Using recommended book:', recommendedBook.title, 'ID:', recBookId);
+          setStepContent(session.currentStepIndex, recBookId, recommendedBook.title);
+          navigate(`/read/${recBookId}`, { 
             state: { fromDailySession: true } 
           });
           return;
@@ -486,10 +487,11 @@ const DailySessionPage: React.FC = () => {
           const validBooks = books.filter((b: any) => b && (b.id || b._id));
           if (validBooks.length > 0) {
             const fallbackBook = validBooks[Math.floor(Math.random() * validBooks.length)];
-            console.log('📚 Selected fallback book:', fallbackBook.title);
+            const fbId = fallbackBook.id || fallbackBook._id;
+            console.log('📚 Selected fallback book:', fallbackBook.title, 'ID:', fbId);
             setRecommendedBook(fallbackBook);
-            setStepContent(session.currentStepIndex, fallbackBook._id, fallbackBook.title);
-            navigate(`/read/${fallbackBook._id}`, { 
+            setStepContent(session.currentStepIndex, fbId, fallbackBook.title);
+            navigate(`/read/${fbId}`, { 
               state: { fromDailySession: true } 
             });
             return;
@@ -519,11 +521,12 @@ const DailySessionPage: React.FC = () => {
             
             if (validBooks.length > 0) {
               const randomBook = validBooks[Math.floor(Math.random() * validBooks.length)];
-              console.log('📚 Selected random book:', randomBook.title, randomBook._id);
+              const rbId = randomBook.id || randomBook._id;
+              console.log('📚 Selected random book:', randomBook.title, 'ID:', rbId);
               setRecommendedBook(randomBook);
-              setStepContent(session.currentStepIndex, randomBook._id, randomBook.title);
+              setStepContent(session.currentStepIndex, rbId, randomBook.title);
               setIsLoadingBook(false);
-              navigate(`/read/${randomBook._id}`, { 
+              navigate(`/read/${rbId}`, { 
                 state: { fromDailySession: true } 
               });
               return;

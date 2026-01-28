@@ -135,9 +135,15 @@ const DailySessionPage: React.FC = () => {
 
   // Find a book matching user's selected subjects
   const findRecommendedBook = () => {
+    // Don't proceed if books aren't loaded yet
+    if (!books || books.length === 0) {
+      console.log('📚 Books not loaded yet, will retry when available');
+      return;
+    }
+    
     const filterTags = getRecommendedBookFilter();
     
-    if (filterTags.length === 0 || books.length === 0) {
+    if (filterTags.length === 0) {
       // No filters, pick random book
       const randomBook = books[Math.floor(Math.random() * books.length)];
       setRecommendedBook(randomBook);
@@ -165,6 +171,13 @@ const DailySessionPage: React.FC = () => {
       setRecommendedBook(randomBook);
     }
   };
+  
+  // Re-run book recommendation when books load
+  useEffect(() => {
+    if (books.length > 0 && !recommendedBook && session) {
+      findRecommendedBook();
+    }
+  }, [books, recommendedBook, session]);
 
   // Handle exit button
   const handleExit = () => {
@@ -258,13 +271,29 @@ const DailySessionPage: React.FC = () => {
         }
         break;
       case 'book':
-        if (recommendedBook) {
+        if (recommendedBook && recommendedBook._id) {
           // Set the book content
           setStepContent(session.currentStepIndex, recommendedBook._id, recommendedBook.title);
           // Navigate to book reader
           navigate(`/read/${recommendedBook._id}`, { 
             state: { fromDailySession: true } 
           });
+        } else if (books.length > 0) {
+          // Fallback: pick a random book if recommended book not set
+          const fallbackBook = books[Math.floor(Math.random() * books.length)];
+          if (fallbackBook && fallbackBook._id) {
+            setRecommendedBook(fallbackBook);
+            setStepContent(session.currentStepIndex, fallbackBook._id, fallbackBook.title);
+            navigate(`/read/${fallbackBook._id}`, { 
+              state: { fromDailySession: true } 
+            });
+          } else {
+            console.error('No valid book available');
+            alert('No books available. Please try again later.');
+          }
+        } else {
+          console.error('Books not loaded');
+          alert('Books are still loading. Please wait a moment and try again.');
         }
         break;
     }

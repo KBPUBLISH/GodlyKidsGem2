@@ -1723,12 +1723,30 @@ const LessonPlayerPage: React.FC = () => {
                                                             </p>
                                                         </div>
 
-                                                        <button
-                                                            onClick={() => navigate(-1)}
-                                                            className="w-full bg-[#8B4513] hover:bg-[#A0522D] text-white px-6 py-4 rounded-lg font-bold font-display text-xl shadow-lg border-2 border-[#5D4037] transition-transform active:scale-95"
-                                                        >
-                                                            Awesome!
-                                                        </button>
+                                                        {fromDailySession ? (
+                                                            <div className="space-y-3">
+                                                                <button
+                                                                    onClick={() => navigate('/daily-session', { state: { stepCompleted: 'devotional' } })}
+                                                                    className="w-full bg-[#FFD700] hover:bg-[#FFC700] text-[#5D4037] px-6 py-4 rounded-lg font-bold font-display text-xl shadow-lg border-2 border-[#D4A500] transition-transform active:scale-95 flex items-center justify-center gap-2"
+                                                                >
+                                                                    <ChevronRight size={24} />
+                                                                    Continue Session
+                                                                </button>
+                                                                <button
+                                                                    onClick={() => navigate('/home')}
+                                                                    className="w-full bg-white/20 hover:bg-white/30 text-[#5D4037] px-4 py-2 rounded-lg font-medium transition-all"
+                                                                >
+                                                                    Exit Session
+                                                                </button>
+                                                            </div>
+                                                        ) : (
+                                                            <button
+                                                                onClick={() => navigate(-1)}
+                                                                className="w-full bg-[#8B4513] hover:bg-[#A0522D] text-white px-6 py-4 rounded-lg font-bold font-display text-xl shadow-lg border-2 border-[#5D4037] transition-transform active:scale-95"
+                                                            >
+                                                                Awesome!
+                                                            </button>
+                                                        )}
                                                     </div>
                                                 </div>
                                             )}

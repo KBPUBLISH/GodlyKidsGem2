@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
+import { useParams, useNavigate, useSearchParams, useLocation } from 'react-router-dom';
 import { ChevronLeft, ChevronRight, X, Play, Pause, Volume2, Mic, Check, Music, Home, Heart, Star, RotateCcw, Lock, Sparkles, HelpCircle, Share2, Copy, Smartphone, Grid3X3, Loader2, Globe, BookOpen, SkipForward, FileText, RefreshCw, Crown } from 'lucide-react';
 import { ApiService } from '../services/apiService';
 import { voiceCloningService, ClonedVoice } from '../services/voiceCloningService';
@@ -154,6 +154,8 @@ const BOOK_PREVIEW_PAGES = 3; // Allow 3 page preview for premium books
 const BookReaderPage: React.FC = () => {
     const { bookId } = useParams<{ bookId: string }>();
     const navigate = useNavigate();
+    const location = useLocation();
+    const fromDailySession = (location.state as any)?.fromDailySession || false;
     const [searchParams] = useSearchParams();
     const { setGameMode, setMusicPaused, currentPlaylist, isPlaying, togglePlayPause } = useAudio();
     const { isVoiceUnlocked, isSubscribed } = useUser();
@@ -5054,31 +5056,60 @@ const BookReaderPage: React.FC = () => {
                                     Read Again
                                 </button>
 
-                                {/* Back to Book Details */}
-                                <button
-                                    onClick={(e) => {
-                                        e.stopPropagation();
-                                        navigate(`/book/${bookId}`);
-                                    }}
-                                    className="bg-[#8B4513] hover:bg-[#A0522D] text-white p-4 rounded-xl font-bold shadow-lg border-b-4 border-[#5D4037] active:border-b-0 active:translate-y-1 transition-all flex items-center justify-center gap-2 group"
-                                >
-                                    <BookOpen className="w-5 h-5 group-hover:scale-110 transition-transform" />
-                                    Back to Book
-                                </button>
+                                {fromDailySession ? (
+                                    <>
+                                        {/* Continue Daily Session */}
+                                        <button
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                navigate('/daily-session', { state: { stepCompleted: 'book' } });
+                                            }}
+                                            className="bg-[#FFD700] hover:bg-[#FFC700] text-[#5D4037] p-4 rounded-xl font-bold shadow-lg border-b-4 border-[#D4A500] active:border-b-0 active:translate-y-1 transition-all flex items-center justify-center gap-2 group col-span-2"
+                                        >
+                                            <ChevronRight className="w-6 h-6 group-hover:translate-x-1 transition-transform" />
+                                            <span>Continue Session</span>
+                                        </button>
+                                        
+                                        {/* Exit to Home */}
+                                        <button
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                navigate('/home');
+                                            }}
+                                            className="bg-white/10 hover:bg-white/20 text-white/80 p-3 rounded-xl font-medium transition-all flex items-center justify-center gap-2 col-span-2"
+                                        >
+                                            <span>Exit Session</span>
+                                        </button>
+                                    </>
+                                ) : (
+                                    <>
+                                        {/* Back to Book Details */}
+                                        <button
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                navigate(`/book/${bookId}`);
+                                            }}
+                                            className="bg-[#8B4513] hover:bg-[#A0522D] text-white p-4 rounded-xl font-bold shadow-lg border-b-4 border-[#5D4037] active:border-b-0 active:translate-y-1 transition-all flex items-center justify-center gap-2 group"
+                                        >
+                                            <BookOpen className="w-5 h-5 group-hover:scale-110 transition-transform" />
+                                            Back to Book
+                                        </button>
 
-                                {/* Go Home */}
-                                <button
-                                    onClick={(e) => {
-                                        e.stopPropagation();
-                                        // Restore music before navigating
-                                        // Background music toggle has been removed from Header. Nothing to restore here.
-                                        navigate('/home');
-                                    }}
-                                    className="bg-[#2196F3] hover:bg-[#1E88E5] text-white p-4 rounded-xl font-bold shadow-lg border-b-4 border-[#1565C0] active:border-b-0 active:translate-y-1 transition-all flex items-center justify-center gap-2 group"
-                                >
-                                    <Home className="w-6 h-6 group-hover:scale-110 transition-transform" />
-                                    <span>Home</span>
-                                </button>
+                                        {/* Go Home */}
+                                        <button
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                // Restore music before navigating
+                                                // Background music toggle has been removed from Header. Nothing to restore here.
+                                                navigate('/home');
+                                            }}
+                                            className="bg-[#2196F3] hover:bg-[#1E88E5] text-white p-4 rounded-xl font-bold shadow-lg border-b-4 border-[#5D4037] active:border-b-0 active:translate-y-1 transition-all flex items-center justify-center gap-2 group"
+                                        >
+                                            <Home className="w-6 h-6 group-hover:scale-110 transition-transform" />
+                                            <span>Home</span>
+                                        </button>
+                                    </>
+                                )}
                             </div>
 
                             {/* Social Actions */}

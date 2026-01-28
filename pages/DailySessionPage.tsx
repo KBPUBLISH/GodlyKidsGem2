@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { X, Check, ChevronRight, Play, BookOpen, Sparkles } from 'lucide-react';
 import WoodButton from '../components/ui/WoodButton';
 import PrayerGameModal from '../components/features/PrayerGameModal';
@@ -26,6 +26,7 @@ import { getSavedPreferences, SUBJECT_OPTIONS } from './InterestSelectionPage';
 
 const DailySessionPage: React.FC = () => {
   const navigate = useNavigate();
+  const location = useLocation();
   const { addCoins } = useUser();
   const { books } = useBooks();
   
@@ -82,6 +83,42 @@ const DailySessionPage: React.FC = () => {
     
     loadSession();
   }, []);
+
+  // Handle returning from a completed step (devotional or book)
+  useEffect(() => {
+    const stepCompleted = (location.state as any)?.stepCompleted;
+    if (stepCompleted && session) {
+      const currentStep = session.steps[session.currentStepIndex];
+      
+      // Check if the completed step matches the current in-progress step
+      if (currentStep && currentStep.type === stepCompleted && currentStep.status === 'in-progress') {
+        const coinsEarned = stepCompleted === 'devotional' ? 20 : 30;
+        
+        // Track step completion
+        activityTrackingService.trackOnboardingEvent(
+          stepCompleted === 'devotional' 
+            ? 'godly_kids_time_devotional_completed' 
+            : 'godly_kids_time_book_completed', 
+          { coinsEarned }
+        );
+        
+        // Add coins for completing the step
+        addCoins(coinsEarned);
+        
+        // Complete the step
+        const updatedSession = completeCurrentStep(coinsEarned);
+        setSession(updatedSession);
+        
+        // Clear the navigation state to prevent re-processing
+        navigate(location.pathname, { replace: true, state: {} });
+        
+        // Check if session is now complete
+        if (updatedSession?.completed) {
+          setShowCelebration(true);
+        }
+      }
+    }
+  }, [location.state, session, addCoins, navigate, location.pathname]);
 
   // Find a book matching user's selected subjects
   const findRecommendedBook = () => {

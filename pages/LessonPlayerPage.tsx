@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { ArrowLeft, Play, Pause, RotateCcw, Volume2, VolumeX, Check, ChevronRight, Star, Book, FlaskConical, Calculator, Hourglass, Languages, Palette, Cpu, Video, X, Lock, Loader2, Mic, ChevronLeft, Home, ShoppingBag } from 'lucide-react';
 import { ApiService } from '../services/apiService';
 import { markCompleted, getCompletion } from '../services/lessonService';
@@ -73,6 +73,8 @@ const getLessonIcon = (type: string) => {
 const LessonPlayerPage: React.FC = () => {
     const { lessonId } = useParams<{ lessonId: string }>();
     const navigate = useNavigate();
+    const location = useLocation();
+    const fromDailySession = (location.state as any)?.fromDailySession || false;
     const { addCoins, isOwned, purchaseItem, coins, isSubscribed, isVoiceUnlocked } = useUser();
     const { setMusicPaused, musicEnabled, currentPlaylist, isPlaying, togglePlayPause } = useAudio();
     const { translateText, translateTexts, currentLanguage, t } = useLanguage();
@@ -1784,27 +1786,53 @@ const LessonPlayerPage: React.FC = () => {
                                                 </p>
 
                                                 <div className="flex flex-col gap-4 w-full max-w-xs px-4 animate-in slide-in-from-bottom-8 duration-500">
-                                                    <button
-                                                        onClick={() => {
-                                                            setShowDrawingComplete(false);
-                                                            navigate('/home');
-                                                        }}
-                                                        className="bg-[#2196F3] hover:bg-[#1E88E5] text-white py-4 rounded-xl font-bold shadow-lg border-b-4 border-[#1565C0] active:border-b-0 active:translate-y-1 transition-all flex items-center justify-center gap-2"
-                                                    >
-                                                        <Home size={24} />
-                                                        Go Home
-                                                    </button>
+                                                    {fromDailySession ? (
+                                                        <>
+                                                            <button
+                                                                onClick={() => {
+                                                                    setShowDrawingComplete(false);
+                                                                    navigate('/daily-session', { state: { stepCompleted: 'devotional' } });
+                                                                }}
+                                                                className="bg-[#FFD700] hover:bg-[#FFC700] text-[#5D4037] py-4 rounded-xl font-bold shadow-lg border-b-4 border-[#D4A500] active:border-b-0 active:translate-y-1 transition-all flex items-center justify-center gap-2"
+                                                            >
+                                                                <ChevronRight size={24} />
+                                                                Continue Session
+                                                            </button>
+                                                            <button
+                                                                onClick={() => {
+                                                                    setShowDrawingComplete(false);
+                                                                    navigate('/home');
+                                                                }}
+                                                                className="bg-white/10 hover:bg-white/20 text-white py-3 rounded-xl font-medium transition-all flex items-center justify-center gap-2"
+                                                            >
+                                                                Exit Session
+                                                            </button>
+                                                        </>
+                                                    ) : (
+                                                        <>
+                                                            <button
+                                                                onClick={() => {
+                                                                    setShowDrawingComplete(false);
+                                                                    navigate('/home');
+                                                                }}
+                                                                className="bg-[#2196F3] hover:bg-[#1E88E5] text-white py-4 rounded-xl font-bold shadow-lg border-b-4 border-[#1565C0] active:border-b-0 active:translate-y-1 transition-all flex items-center justify-center gap-2"
+                                                            >
+                                                                <Home size={24} />
+                                                                Go Home
+                                                            </button>
 
-                                                    <button
-                                                        onClick={() => {
-                                                            setShowDrawingComplete(false);
-                                                            navigate('/home', { state: { openShop: true } });
-                                                        }}
-                                                        className="bg-[#8B4513] hover:bg-[#795548] text-white py-4 rounded-xl font-bold shadow-lg border-b-4 border-[#5D4037] active:border-b-0 active:translate-y-1 transition-all flex items-center justify-center gap-2"
-                                                    >
-                                                        <ShoppingBag size={24} />
-                                                        Go to Shop
-                                                    </button>
+                                                            <button
+                                                                onClick={() => {
+                                                                    setShowDrawingComplete(false);
+                                                                    navigate('/home', { state: { openShop: true } });
+                                                                }}
+                                                                className="bg-[#8B4513] hover:bg-[#795548] text-white py-4 rounded-xl font-bold shadow-lg border-b-4 border-[#5D4037] active:border-b-0 active:translate-y-1 transition-all flex items-center justify-center gap-2"
+                                                            >
+                                                                <ShoppingBag size={24} />
+                                                                Go to Shop
+                                                            </button>
+                                                        </>
+                                                    )}
                                                 </div>
                                             </div>
                                         )}

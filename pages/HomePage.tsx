@@ -1190,30 +1190,7 @@ const HomePage: React.FC = () => {
             })()}
           </div>
 
-          {/* Parent CTA - always show a single "Create Child Profile" card (clean white UI) */}
-          {currentProfileId === null && (
-            <div className="rounded-2xl p-6 mb-4 shadow-lg bg-white text-center border border-black/5">
-              <div className="flex justify-center gap-2 mb-3">
-                <span className="text-4xl">👦</span>
-                <span className="text-4xl">👧</span>
-              </div>
-
-              <h3 className="text-[#1a3a52] font-bold text-xl mb-2 font-display">
-                Create a Child Profile
-              </h3>
-              <p className="text-black/60 text-sm mb-4">
-                Daily Lessons are personalized for kids. Create a child profile to start watching.
-              </p>
-
-              <button
-                onClick={() => navigate('/profile')}
-                className="inline-flex items-center justify-center gap-2 bg-[#1a3a52] text-white font-bold px-6 py-3 rounded-full shadow-md hover:shadow-lg transition-all active:scale-95"
-              >
-                <span className="text-lg">+</span>
-                Create Child Profile
-              </button>
-            </div>
-          )}
+          {/* Create Child Profile card removed - users can access profiles from header */}
 
           {/* Lessons Path - Gamified Learning Path Style */}
           {currentProfileId === null ? null : lessonsLoading ? (

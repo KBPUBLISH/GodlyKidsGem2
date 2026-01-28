@@ -50,13 +50,11 @@ const DailyLessonWidget: React.FC<DailyLessonWidgetProps> = ({ onStartLesson }) 
               Today's Lesson Complete!
             </h2>
             
-            {/* Streak Display - Prominent */}
-            {streak > 0 && (
-              <div className="inline-flex items-center gap-2 bg-gradient-to-r from-orange-400 to-red-500 text-white px-4 py-2 rounded-full mb-3">
-                <Flame className="w-5 h-5" />
-                <span className="font-bold text-lg">{streak} Day Streak!</span>
-              </div>
-            )}
+            {/* Streak Display - Always show */}
+            <div className="inline-flex items-center gap-2 bg-gradient-to-r from-orange-400 to-red-500 text-white px-4 py-2 rounded-full mb-3">
+              <Flame className="w-5 h-5" />
+              <span className="font-bold text-lg">{streak} Day Streak</span>
+            </div>
             
             <button
               onClick={() => navigate('/daily-session')}
@@ -74,13 +72,11 @@ const DailyLessonWidget: React.FC<DailyLessonWidgetProps> = ({ onStartLesson }) 
     <div className="mx-4 mb-6">
       <div className="bg-[#f5f0e1] rounded-2xl p-5 shadow-lg border-4 border-[#8B4513]/30 relative overflow-hidden">
         
-        {/* Streak Badge - Top Right */}
-        {streak > 0 && (
-          <div className="absolute top-3 right-3 flex items-center gap-1 bg-gradient-to-r from-orange-400 to-red-500 text-white px-3 py-1 rounded-full shadow-md">
-            <Flame className="w-4 h-4" />
-            <span className="font-bold text-sm">{streak}</span>
-          </div>
-        )}
+        {/* Streak Badge - Top Right - Always show */}
+        <div className="absolute top-3 right-3 flex items-center gap-1 bg-gradient-to-r from-orange-400 to-red-500 text-white px-3 py-1 rounded-full shadow-md">
+          <Flame className="w-4 h-4" />
+          <span className="font-bold text-sm">{streak}</span>
+        </div>
         
         {/* Header */}
         <div className="text-center mb-4">

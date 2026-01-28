@@ -801,8 +801,8 @@ const DailySessionPage: React.FC = () => {
 
         {/* Goals Grid - Clicking a block auto-advances */}
         <div className="flex-1 px-4 pb-4 flex items-center justify-center">
-          <div className="w-full max-w-2xl">
-            <div className="grid grid-cols-2 md:grid-cols-3 gap-3 md:gap-4">
+          <div className="w-full max-w-md md:max-w-2xl px-2">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
               {LEARNING_GOALS.map((goal) => {
                 return (
                   <button
@@ -832,7 +832,7 @@ const DailySessionPage: React.FC = () => {
                         setTimeout(() => setIsLoadingBook(false), 3000);
                       }, 200);
                     }}
-                    className="relative rounded-2xl overflow-hidden transition-all transform hover:scale-[1.02] shadow-md active:scale-[0.98] max-w-[200px] mx-auto"
+                    className="relative overflow-hidden transition-all transform hover:scale-[1.02] active:scale-[0.98]"
                   >
                     {/* Character block image */}
                     <img 

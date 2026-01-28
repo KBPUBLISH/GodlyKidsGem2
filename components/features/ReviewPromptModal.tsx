@@ -12,6 +12,14 @@ const ReviewPromptModal: React.FC<ReviewPromptModalProps> = ({ isOpen, onReviewS
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showThankYou, setShowThankYou] = useState(false);
 
+  // Handle X button click - dismiss and don't show for 2 weeks
+  const handleDismiss = () => {
+    localStorage.setItem('godlykids_review_dismissed', 'true');
+    localStorage.setItem('godlykids_review_dismissed_date', new Date().toISOString());
+    console.log('🌟 Review prompt dismissed - will not show for 2 weeks');
+    onReviewSubmitted();
+  };
+
   const handleLeaveReview = async () => {
     setIsSubmitting(true);
     
@@ -78,7 +86,7 @@ const ReviewPromptModal: React.FC<ReviewPromptModalProps> = ({ isOpen, onReviewS
         
         {/* Close X Button - More visible */}
         <button
-          onClick={onReviewSubmitted}
+          onClick={handleDismiss}
           className="absolute top-2 right-2 w-8 h-8 flex items-center justify-center bg-black/30 rounded-full text-white/80 hover:bg-black/50 hover:text-white transition-all"
           aria-label="Close"
         >
@@ -169,7 +177,24 @@ export const shouldShowReviewPrompt = (): boolean => {
     return false;
   }
   
-  // Check if already prompted
+  // Check if user dismissed (clicked X) - don't show for 2 weeks
+  const dismissed = localStorage.getItem('godlykids_review_dismissed');
+  if (dismissed === 'true') {
+    const dismissedDate = localStorage.getItem('godlykids_review_dismissed_date');
+    if (dismissedDate) {
+      const daysSinceDismissed = (Date.now() - new Date(dismissedDate).getTime()) / (1000 * 60 * 60 * 24);
+      if (daysSinceDismissed < 14) {
+        console.log('🌟 Review prompt: Not showing (dismissed within 2 weeks)');
+        return false; // Don't show again within 2 weeks of dismissal
+      } else {
+        // 2 weeks have passed, clear the dismissed flag
+        localStorage.removeItem('godlykids_review_dismissed');
+        localStorage.removeItem('godlykids_review_dismissed_date');
+      }
+    }
+  }
+  
+  // Check if already reviewed/prompted
   const alreadyPrompted = localStorage.getItem('godlykids_review_prompted');
   if (alreadyPrompted === 'true') {
     // Check if it's been more than 30 days since last prompt

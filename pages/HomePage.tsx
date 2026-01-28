@@ -1086,7 +1086,6 @@ const HomePage: React.FC = () => {
                     const completed = isCompleted(lesson._id);
                     const locked = isLocked(lesson);
                     const thumbnailUrl = lesson.video?.thumbnail || lesson.thumbnailUrl;
-                    const seriesName = lesson.series || lesson.category || 'Daily Verse';
                     
                     return (
                       <div
@@ -1139,9 +1138,6 @@ const HomePage: React.FC = () => {
                           <h3 className="text-base font-bold text-white truncate">
                             {lesson.title}
                           </h3>
-                          <p className="text-sm text-white/60 truncate">
-                            {seriesName}
-                          </p>
                         </div>
                       </div>
                     );

@@ -20,16 +20,8 @@ import {
   setStepContent,
   getRecommendedBookFilter,
 } from '../services/dailySessionService';
-import { getSavedPreferences, SUBJECT_OPTIONS } from './InterestSelectionPage';
+import { getSavedPreferences } from './InterestSelectionPage';
 import AvatarCompositor from '../components/avatar/AvatarCompositor';
-
-// Subject card images mapping
-const SUBJECT_IMAGES: { [key: string]: string } = {
-  'bible-stories': '/daily-session/biblestory.png',
-  'history': '/daily-session/History.png',
-  'fantasy': '/daily-session/adventure.png',
-  'character': '/daily-session/character.png',
-};
 
 // Learning goals options with character block images
 const LEARNING_GOALS = [
@@ -108,9 +100,6 @@ const DailySessionPage: React.FC = () => {
   const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
   const [isLoadingBook, setIsLoadingBook] = useState(false);
   
-  // Subject selection state for users who haven't picked subjects yet
-  const [showSubjectSelection, setShowSubjectSelection] = useState(false);
-  const [tempSelectedSubjects, setTempSelectedSubjects] = useState<string[]>([]);
   
   // Goals selection state
   const [showGoalsSelection, setShowGoalsSelection] = useState(false);
@@ -154,15 +143,6 @@ const DailySessionPage: React.FC = () => {
       // Clear the navigation state so refresh doesn't keep triggering fresh start
       if (isFreshStart) {
         navigate(location.pathname, { replace: true, state: {} });
-      }
-      
-      // Check if user has selected subjects
-      const savedSubjects = getSavedPreferences();
-      if (savedSubjects.length === 0) {
-        // No subjects selected - show subject selection first
-        setShowSubjectSelection(true);
-        setIsLoading(false);
-        return;
       }
       
       // Check for existing session
@@ -454,34 +434,6 @@ const DailySessionPage: React.FC = () => {
   };
 
   // Handle subject toggle in selection screen
-  const handleSubjectToggle = (subjectId: string) => {
-    setTempSelectedSubjects(prev => {
-      if (prev.includes(subjectId)) {
-        return prev.filter(id => id !== subjectId);
-      }
-      // Max 3 subjects
-      if (prev.length >= 3) {
-        return prev;
-      }
-      return [...prev, subjectId];
-    });
-  };
-
-  // Handle subject selection confirmation
-  const handleSubjectConfirm = async () => {
-    // Save subjects to localStorage
-    localStorage.setItem('godlykids_content_preferences', JSON.stringify(tempSelectedSubjects));
-    
-    // Track subject selection
-    activityTrackingService.trackOnboardingEvent('subjects_selected', {
-      subjects: tempSelectedSubjects,
-    });
-    
-    // Hide subject selection and show goals selection
-    setShowSubjectSelection(false);
-    setShowGoalsSelection(true);
-  };
-
   // Handle goal selection confirmation
   const handleGoalConfirm = async () => {
     if (!selectedGoal) return;
@@ -735,15 +687,6 @@ const DailySessionPage: React.FC = () => {
     return <span className="text-lg opacity-50">{step.icon}</span>;
   };
 
-  // Get selected subjects display
-  const getSubjectsDisplay = () => {
-    const subjects = session?.subjects || getSavedPreferences();
-    return subjects.map(id => {
-      const subject = SUBJECT_OPTIONS.find(s => s.id === id);
-      return subject ? `${subject.icon} ${subject.label}` : id;
-    }).join(', ');
-  };
-
   // Wood plank background style - mobile vs desktop
   const woodBackground = {
     backgroundImage: isMobile 
@@ -781,165 +724,6 @@ const DailySessionPage: React.FC = () => {
             </div>
           )}
         </div>
-      </div>
-    );
-  }
-
-  // ============== SUBJECT SELECTION SCREEN ==============
-  if (showSubjectSelection) {
-    return (
-      <div className="fixed inset-0 flex flex-col z-50 overflow-auto" style={woodBackground}>
-        {/* Safe area top */}
-        <div className="flex-shrink-0" style={{ height: 'var(--safe-area-top, 0px)' }} />
-        
-        {/* Close button */}
-        <button
-          onClick={() => navigate('/home')}
-          className="absolute top-4 left-4 w-10 h-10 rounded-full bg-black/30 flex items-center justify-center z-10"
-          style={{ marginTop: 'var(--safe-area-top, 0px)' }}
-        >
-          <X className="w-6 h-6 text-white/80" />
-        </button>
-
-        {/* Header Banner */}
-        <div className="flex justify-center pt-4 pb-4">
-          <img 
-            src="/daily-session/dailysessiontitle.png" 
-            alt="Daily Session" 
-            className="h-24 md:h-28 object-contain"
-          />
-        </div>
-
-        {/* Subject Cards Grid */}
-        <div className="flex-1 px-4 pb-4">
-          <div className="grid grid-cols-2 gap-4">
-            {SUBJECT_OPTIONS.map((subject) => {
-              const isSelected = tempSelectedSubjects.includes(subject.id);
-              const isDisabled = !isSelected && tempSelectedSubjects.length >= 3;
-              const imageUrl = SUBJECT_IMAGES[subject.id] || '/daily-session/biblestory.png';
-              
-              return (
-                <button
-                  key={subject.id}
-                  onClick={() => handleSubjectToggle(subject.id)}
-                  disabled={isDisabled}
-                  className={`
-                    relative rounded-lg overflow-hidden transition-all transform
-                    ${isSelected 
-                      ? 'ring-4 ring-[#FFD700] scale-105 shadow-lg shadow-[#FFD700]/30' 
-                      : isDisabled
-                        ? 'opacity-40'
-                        : 'hover:scale-102 active:scale-95'
-                    }
-                  `}
-                  style={{
-                    boxShadow: isSelected 
-                      ? '0 0 20px rgba(255, 215, 0, 0.5), inset 0 0 0 3px #8B4513' 
-                      : 'inset 0 0 0 3px #8B4513',
-                  }}
-                >
-                  {/* Wooden frame effect */}
-                  <div className="absolute inset-0 border-4 border-[#8B4513] rounded-lg pointer-events-none z-10"
-                    style={{
-                      boxShadow: 'inset 2px 2px 4px rgba(0,0,0,0.3), inset -2px -2px 4px rgba(255,255,255,0.1)',
-                    }}
-                  />
-                  
-                  {/* Card image */}
-                  <div className="aspect-square">
-                    <img 
-                      src={imageUrl}
-                      alt={subject.label}
-                      className="w-full h-full object-cover"
-                    />
-                  </div>
-                  
-                  {/* Label */}
-                  <div className="bg-gradient-to-t from-[#5D4037] to-[#8B4513] py-2 px-1">
-                    <p className="text-[#f3e5ab] text-xs font-display font-bold text-center leading-tight">
-                      {subject.label}
-                    </p>
-                  </div>
-                  
-                  {/* Selection checkmark */}
-                  {isSelected && (
-                    <div className="absolute top-2 right-2 w-6 h-6 bg-[#FFD700] rounded-full flex items-center justify-center shadow-lg z-20">
-                      <Check className="w-4 h-4 text-[#5D4037]" />
-                    </div>
-                  )}
-                </button>
-              );
-            })}
-          </div>
-        </div>
-
-        {/* Selection Count */}
-        <p className="text-center text-[#f3e5ab]/60 text-sm font-display italic mb-4">
-          {tempSelectedSubjects.length} of 3 subjects selected
-        </p>
-
-        {/* Start Button */}
-        <div className="px-6 pb-4">
-          <button
-            onClick={handleSubjectConfirm}
-            disabled={tempSelectedSubjects.length === 0}
-            className={`
-              w-full relative transition-all transform active:scale-95
-              ${tempSelectedSubjects.length === 0 ? 'opacity-50' : 'hover:scale-102'}
-            `}
-          >
-            <img 
-              src="/daily-session/Startsession.png" 
-              alt="Start Today's Session"
-              className="w-full h-auto"
-            />
-          </button>
-          
-          {/* Skip link */}
-          <button
-            onClick={() => navigate('/home')}
-            className="w-full py-3 text-[#f3e5ab]/50 text-sm font-display hover:text-[#f3e5ab]/70 transition-colors italic"
-          >
-            Skip for now
-          </button>
-        </div>
-
-        {/* Avatar - Bottom Right */}
-        <div className="absolute bottom-20 right-4 avatar-float" style={{ marginBottom: 'var(--safe-area-bottom, 0px)' }}>
-          <style>{wingAnimationStyles}</style>
-          <div className="w-24 h-32">
-            <AvatarCompositor
-              headUrl={equippedAvatar || '/avatars/heads/head-1.png'}
-              body={equippedBody}
-              hat={equippedHat}
-              leftArm={equippedLeftArm}
-              rightArm={equippedRightArm}
-              legs={equippedLegs}
-              headOffset={{ x: headOffset?.x || 0, y: (headOffset?.y || 0) + 20 }}
-              bodyOffset={bodyOffset}
-              hatOffset={{ x: hatOffset?.x || 0, y: (hatOffset?.y || 0) + 20 }}
-              leftArmOffset={leftArmOffset}
-              rightArmOffset={rightArmOffset}
-              legsOffset={legsOffset}
-              headScale={headScale}
-              bodyScale={bodyScale}
-              hatScale={hatScale}
-              leftArmScale={leftArmScale}
-              rightArmScale={rightArmScale}
-              legsScale={legsScale}
-              leftArmRotation={equippedLeftArmRotation}
-              rightArmRotation={equippedRightArmRotation}
-              legsRotation={equippedLegsRotation}
-              hatRotation={equippedHatRotation}
-              isAnimating={true}
-              animationStyle="anim-float"
-              className="w-full h-full"
-            />
-          </div>
-        </div>
-
-        {/* Safe area bottom */}
-        <div className="flex-shrink-0" style={{ height: 'var(--safe-area-bottom, 0px)' }} />
       </div>
     );
   }
@@ -1236,14 +1020,6 @@ const DailySessionPage: React.FC = () => {
             </button>
           </div>
 
-          {/* Selected subjects reminder */}
-          {session.subjects.length > 0 && (
-            <div className="mt-4 pt-4 border-t border-[#8B4513]/50">
-              <p className="text-[#f3e5ab]/40 text-xs text-center font-display italic">
-                Today's subjects: {getSubjectsDisplay()}
-              </p>
-            </div>
-          )}
         </div>
       </div>
 

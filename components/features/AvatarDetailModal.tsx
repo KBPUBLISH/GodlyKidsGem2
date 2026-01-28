@@ -82,6 +82,24 @@ const AvatarDetailModal: React.FC<AvatarDetailModalProps> = ({ isOpen, onClose, 
 
           {/* Avatar Large View - Zoomed out */}
           <div className={`relative shrink-0 transition-all duration-700 ease-[cubic-bezier(0.34,1.56,0.64,1)] ${isPlaying ? 'w-48 h-48 md:w-56 md:h-56 mb-8' : 'w-40 h-40 md:w-48 md:h-48 mb-10 mt-10'}`}>
+              
+              {/* Speech bubble when no body equipped */}
+              {!equippedBody && !isPlaying && (
+                <button
+                  onClick={() => { onClose(); onEdit(); }}
+                  className="absolute -top-4 left-1/2 -translate-x-1/2 bg-white rounded-2xl px-4 py-2 shadow-lg border-2 border-[#FFD700] whitespace-nowrap animate-bounce z-20"
+                  style={{ animationDuration: '2s' }}
+                >
+                  <p className="text-[#5D4037] text-sm font-bold text-center leading-tight">
+                    "I sure wish I had a body!" 🥺
+                  </p>
+                  <p className="text-[#8B5A2B] text-xs text-center mt-1 opacity-70">Tap to customize!</p>
+                  {/* Speech bubble tail - pointing down toward avatar */}
+                  <div className="absolute -bottom-2 left-1/2 -translate-x-1/2 w-0 h-0 border-l-[8px] border-l-transparent border-r-[8px] border-r-transparent border-t-[8px] border-t-white"></div>
+                  <div className="absolute -bottom-[11px] left-1/2 -translate-x-1/2 w-0 h-0 border-l-[9px] border-l-transparent border-r-[9px] border-r-transparent border-t-[9px] border-t-[#FFD700]"></div>
+                </button>
+              )}
+              
               <div className="w-full h-full relative z-10 overflow-visible">
                    <AvatarCompositor 
                         headUrl={equippedAvatar}

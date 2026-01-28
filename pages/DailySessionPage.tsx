@@ -245,6 +245,9 @@ const DailySessionPage: React.FC = () => {
     // Don't proceed if books aren't loaded yet
     if (!books || books.length === 0) {
       console.log('📚 Books not loaded yet, will retry when available');
+      // Don't leave loading state stuck - turn it off so user can see session
+      // The useEffect will retry when books load
+      setIsLoadingBook(false);
       return;
     }
     
@@ -348,10 +351,11 @@ const DailySessionPage: React.FC = () => {
   
   // Re-run book recommendation when books load
   useEffect(() => {
-    if (books.length > 0 && !recommendedBook && session) {
+    if (books.length > 0 && !recommendedBook && session && !session.completed) {
+      console.log('📚 Books loaded, finding recommended book...');
       findRecommendedBook();
     }
-  }, [books, recommendedBook, session]);
+  }, [books.length, recommendedBook, session]);
 
   // Handle exit button
   const handleExit = () => {

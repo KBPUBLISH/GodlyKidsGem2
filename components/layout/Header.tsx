@@ -145,24 +145,46 @@ const Header: React.FC<HeaderProps> = ({ isVisible, title = "GODLY KIDS" }) => {
   return (
     <>
       <header
-        className={`fixed top-0 left-0 right-0 z-50 drop-shadow-2xl transition-transform duration-300 ease-in-out ${isVisible ? 'translate-y-0' : '-translate-y-full'
+        className={`fixed top-0 left-0 right-0 z-50 transition-transform duration-300 ease-in-out ${isVisible ? 'translate-y-0' : '-translate-y-full'
           }`}
+        style={{ filter: 'drop-shadow(0 4px 8px rgba(0,0,0,0.3))' }}
       >
-        {/* Safe Area Spacer for iOS notch/status bar - Despia provides var(--safe-area-top) */}
+        {/* Safe Area Spacer for iOS notch/status bar */}
         <div 
-          className="bg-[#CD853F]" 
+          className="bg-[#C4884A]" 
           style={{ height: 'var(--safe-area-top, 0px)' }}
         />
         
+        {/* Top Rough Edge SVG */}
+        <div className="relative w-full h-3 bg-[#C4884A]">
+          <svg viewBox="0 0 800 12" preserveAspectRatio="none" className="absolute bottom-0 w-full h-full">
+            <path 
+              d="M0,12 L0,4 C20,6 35,2 60,5 C90,8 110,3 140,4 C180,6 200,2 240,5 C280,8 320,3 360,4 C400,6 440,2 480,5 C520,8 560,3 600,4 C640,6 680,2 720,5 C760,8 780,4 800,5 L800,12 Z" 
+              fill="#A56B3A"
+            />
+          </svg>
+        </div>
+        
         {/* Main Plank Area */}
-        <div className="relative bg-[#CD853F] px-4 pt-5 pb-3 shadow-sm border-t border-[#eecaa0]">
-          {/* Wood Grain Texture Overlay */}
-          <div className="absolute inset-0 opacity-25 pointer-events-none mix-blend-color-burn"
-            style={{
-              backgroundImage: `url("data:image/svg+xml,%3Csvg width='200' height='40' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M0 20 Q 50 15 100 20 T 200 20' stroke='%238B4513' fill='none' opacity='0.5' stroke-width='2'/%3E%3Cpath d='M0 10 Q 80 5 160 10 T 320 10' stroke='%235C2E0B' fill='none' opacity='0.3'/%3E%3C/svg%3E")`,
-              backgroundSize: '200px 40px'
-            }}>
+        <div className="relative px-4 pt-4 pb-3" style={{
+          background: 'linear-gradient(180deg, #C4884A 0%, #D4975A 15%, #C4884A 50%, #A56B3A 85%, #8B5A2B 100%)'
+        }}>
+          {/* Subtle Wood Grain Lines */}
+          <div className="absolute inset-0 opacity-15 pointer-events-none overflow-hidden">
+            <svg width="100%" height="100%" preserveAspectRatio="none">
+              <defs>
+                <pattern id="woodGrain" x="0" y="0" width="300" height="100" patternUnits="userSpaceOnUse">
+                  <path d="M0,20 Q75,15 150,22 T300,18" stroke="#5C3D1E" fill="none" strokeWidth="1.5" opacity="0.6"/>
+                  <path d="M0,45 Q100,38 200,48 T400,42" stroke="#5C3D1E" fill="none" strokeWidth="1" opacity="0.4"/>
+                  <path d="M0,70 Q60,65 120,72 T240,68" stroke="#5C3D1E" fill="none" strokeWidth="1.5" opacity="0.5"/>
+                </pattern>
+              </defs>
+              <rect width="100%" height="100%" fill="url(#woodGrain)"/>
+            </svg>
           </div>
+          
+          {/* Edge Highlight (top inner glow) */}
+          <div className="absolute top-0 left-4 right-4 h-[2px] bg-gradient-to-r from-transparent via-[#E8B87A] to-transparent opacity-40"></div>
 
           {/* Content */}
           <div className="flex justify-between items-center relative z-10 mb-1">
@@ -286,11 +308,27 @@ const Header: React.FC<HeaderProps> = ({ isVisible, title = "GODLY KIDS" }) => {
           </div>
         </div>
 
-        {/* Jagged Bottom Edge SVG */}
-        <div className="relative w-full h-6 -mt-[1px]">
-          <svg viewBox="0 0 600 25" preserveAspectRatio="none" className="w-full h-full text-[#CD853F] fill-current drop-shadow-lg">
-            <path d="M0,0 L600,0 L600,8 C550,16 500,6 450,10 C350,16 250,4 150,12 C100,16 50,6 0,10 Z" />
-            <path d="M0,10 C50,6 100,16 150,12 C250,4 350,16 450,10 C500,6 550,16 600,8" fill="none" stroke="#5C2E0B" strokeWidth="2.5" strokeLinecap="round" opacity="0.8" />
+        {/* Carved Bottom Edge SVG */}
+        <div className="relative w-full h-5 -mt-[1px]">
+          <svg viewBox="0 0 800 20" preserveAspectRatio="none" className="w-full h-full">
+            {/* Main wood bottom with carved edge */}
+            <path 
+              d="M0,0 L800,0 L800,8 C780,10 760,6 740,9 C700,12 680,7 650,10 C600,14 560,8 520,11 C480,14 440,7 400,10 C360,13 320,8 280,11 C240,14 200,7 160,10 C120,13 80,8 40,11 C20,13 10,9 0,10 Z" 
+              fill="#8B5A2B"
+            />
+            {/* Lighter inner edge */}
+            <path 
+              d="M0,0 L800,0 L800,6 C780,8 760,4 740,7 C700,10 680,5 650,8 C600,12 560,6 520,9 C480,12 440,5 400,8 C360,11 320,6 280,9 C240,12 200,5 160,8 C120,11 80,6 40,9 C20,11 10,7 0,8 Z" 
+              fill="#A56B3A"
+            />
+            {/* Dark carved line detail */}
+            <path 
+              d="M0,8 C20,6 40,11 80,8 C120,5 160,10 200,7 C240,4 280,9 320,6 C360,3 400,8 440,5 C480,2 520,9 560,6 C600,3 650,8 680,5 C720,2 760,6 800,4" 
+              fill="none" 
+              stroke="#5C3D1E" 
+              strokeWidth="1.5" 
+              opacity="0.5"
+            />
           </svg>
         </div>
       </header>

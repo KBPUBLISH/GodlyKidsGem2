@@ -320,3 +320,15 @@ export const exitSession = (): void => {
 export const resetTodaySession = (): void => {
   localStorage.removeItem(SESSION_STORAGE_KEY);
 };
+
+// Check if user has ever completed at least one daily session
+export const hasCompletedAnySession = (): boolean => {
+  // Check session history for completed sessions
+  const history = getSessionHistory();
+  const hasCompletedHistory = history.some(session => session.completed);
+  if (hasCompletedHistory) return true;
+  
+  // Also check if current session is completed
+  const currentSession = getCurrentSession();
+  return currentSession?.completed ?? false;
+};

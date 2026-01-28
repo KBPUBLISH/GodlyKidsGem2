@@ -1,13 +1,23 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { activityTrackingService } from '../services/activityTrackingService';
+import { hasCompletedAnySession } from '../services/dailySessionService';
+import CreateAccountModal from '../components/modals/CreateAccountModal';
 
 const STORAGE_KEY = 'godly_kids_data_v6';
+
+// Check if user has an account
+const hasUserAccount = (): boolean => {
+  const token = localStorage.getItem('godlykids_auth_token');
+  const email = localStorage.getItem('godlykids_user_email');
+  return !!(token || email);
+};
 
 const LandingPage: React.FC = () => {
   const navigate = useNavigate();
   const [isChecking, setIsChecking] = useState(true);
   const [imageLoaded, setImageLoaded] = useState(false);
+  const [showAccountModal, setShowAccountModal] = useState(false);
 
   // Check if user has already completed onboarding
   useEffect(() => {
@@ -68,6 +78,18 @@ const LandingPage: React.FC = () => {
 
   const handleStartLesson = () => {
     activityTrackingService.trackOnboardingEvent('splash_start_lesson_clicked');
+    
+    // Check if user has completed at least one session but doesn't have an account
+    // If so, require account creation before starting another lesson
+    const hasCompletedFirstLesson = hasCompletedAnySession();
+    const hasAccount = hasUserAccount();
+    
+    if (hasCompletedFirstLesson && !hasAccount) {
+      // Show account creation modal
+      setShowAccountModal(true);
+      return;
+    }
+    
     // Go directly to daily session for the "10-minute daily routine" flow
     navigate('/daily-session', { state: { freshStart: true } });
   };
@@ -186,6 +208,25 @@ const LandingPage: React.FC = () => {
           Sign In
         </button>
       </div>
+      
+      {/* Account Creation Modal - shown after first lesson */}
+      {showAccountModal && (
+        <CreateAccountModal
+          isOpen={true}
+          navigateToOnboarding={false}
+          onClose={() => {
+            setShowAccountModal(false);
+          }}
+          onAccountCreated={() => {
+            setShowAccountModal(false);
+            // After creating account, go to daily session
+            navigate('/daily-session', { state: { freshStart: true } });
+          }}
+          onSignIn={() => {
+            navigate('/signin', { state: { returnTo: '/daily-session' } });
+          }}
+        />
+      )}
     </div>
   );
 };

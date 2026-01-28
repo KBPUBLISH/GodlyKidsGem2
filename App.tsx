@@ -549,15 +549,39 @@ const hasCompletedOnboarding = (): boolean => {
 };
 
 // Protected route wrapper - requires account AND completed onboarding for content access
-// Exception: allows full access during active tutorial for tutorial-first flow
+// Exceptions: 
+// 1. Allows full access during active tutorial
+// 2. Allows first daily session without account (first-time user experience)
 const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [hasAccount, setHasAccount] = useState(() => hasUserAccount());
   const navigate = useNavigate();
+  const location = useLocation();
   
   // Allow FULL access during ANY active tutorial (don't interrupt tutorial flow)
   const tutorialActive = isTutorialInProgress();
   if (tutorialActive) {
     return <>{children}</>;
+  }
+  
+  // Allow access during first daily session (user hasn't completed any session yet)
+  // Check if coming from daily session flow
+  const fromDailySession = (location.state as any)?.fromDailySession === true;
+  if (fromDailySession) {
+    // Import dynamically to avoid circular dependency
+    const sessionHistoryKey = 'godlykids_session_history';
+    const hasCompletedPreviousSession = (() => {
+      try {
+        const history = localStorage.getItem(sessionHistoryKey);
+        if (!history) return false;
+        const sessions = JSON.parse(history);
+        return sessions.some((s: any) => s.completed);
+      } catch { return false; }
+    })();
+    
+    // If this is user's first session (no completed sessions), allow access without account
+    if (!hasCompletedPreviousSession) {
+      return <>{children}</>;
+    }
   }
   
   // Check if user has completed onboarding

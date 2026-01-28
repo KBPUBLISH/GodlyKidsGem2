@@ -100,6 +100,9 @@ const DailySessionPage: React.FC = () => {
   const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
   const [isLoadingBook, setIsLoadingBook] = useState(false);
   
+  // Ready countdown state
+  const [showReadyScreen, setShowReadyScreen] = useState(true);
+  const [countdown, setCountdown] = useState<number | null>(null);
   
   // Goals selection state
   const [showGoalsSelection, setShowGoalsSelection] = useState(false);
@@ -763,22 +766,39 @@ const DailySessionPage: React.FC = () => {
           </p>
         </div>
 
-        {/* Goals Grid */}
+        {/* Goals Grid - Clicking a block auto-advances */}
         <div className="flex-1 px-4 pb-4">
           <div className="grid grid-cols-2 gap-3">
             {LEARNING_GOALS.map((goal) => {
-              const isSelected = selectedGoal === goal.id;
               return (
                 <button
                   key={goal.id}
-                  onClick={() => setSelectedGoal(goal.id)}
-                  className={`
-                    relative rounded-2xl overflow-hidden transition-all transform
-                    ${isSelected 
-                      ? 'scale-[1.02] ring-4 ring-[#FFD700] shadow-xl' 
-                      : 'hover:scale-[1.01] shadow-md'
-                    }
-                  `}
+                  onClick={() => {
+                    setSelectedGoal(goal.id);
+                    // Auto-advance after brief visual feedback
+                    setTimeout(() => {
+                      // Call handleGoalConfirm with the selected goal
+                      sessionStorage.setItem('godlykids_session_goal', goal.id);
+                      sessionStorage.setItem('godlykids_session_goal_date', new Date().toDateString());
+                      activityTrackingService.trackOnboardingEvent('learning_goal_selected', {
+                        goal: goal.id,
+                        duration: sessionDuration,
+                      });
+                      setShowGoalsSelection(false);
+                      setIsLoadingBook(true);
+                      const subjects = getSavedPreferences();
+                      const newSession = createDailySession(subjects);
+                      setSession(newSession);
+                      activityTrackingService.trackOnboardingEvent('godly_kids_time_started', {
+                        subjects: newSession.subjects,
+                        goal: goal.id,
+                        duration: sessionDuration,
+                      });
+                      findRecommendedBook();
+                      setTimeout(() => setIsLoadingBook(false), 3000);
+                    }, 200);
+                  }}
+                  className="relative rounded-2xl overflow-hidden transition-all transform hover:scale-[1.02] shadow-md active:scale-[0.98]"
                 >
                   {/* Character block image */}
                   <img 
@@ -786,43 +806,17 @@ const DailySessionPage: React.FC = () => {
                     alt={goal.label}
                     className="w-full h-auto"
                   />
-                  
-                  {/* Selection checkmark */}
-                  {isSelected && (
-                    <div className="absolute top-2 right-2 w-6 h-6 bg-[#FFD700] rounded-full flex items-center justify-center z-10 shadow-lg">
-                      <Check className="w-4 h-4 text-[#5D4037]" />
-                    </div>
-                  )}
                 </button>
               );
             })}
           </div>
         </div>
 
-        {/* Duration Info */}
-        <div className="px-6 mb-2">
-          <div className="bg-[#5D4037]/50 rounded-xl p-3 border-2 border-[#8B4513]/50">
-            <p className="text-[#f3e5ab]/80 text-xs text-center font-display">
-              📖 Your {sessionDuration} minute session will include a story tailored to this goal
-            </p>
-          </div>
-        </div>
-
-        {/* Confirm Button */}
-        <div className="px-6 pb-4">
-          <button
-            onClick={handleGoalConfirm}
-            disabled={!selectedGoal}
-            className={`
-              w-full py-4 rounded-xl font-display font-bold text-lg shadow-lg transition-all
-              ${selectedGoal
-                ? 'bg-[#FFD700] text-[#5D4037] active:scale-[0.98]'
-                : 'bg-[#5D4037]/50 text-[#f3e5ab]/50 cursor-not-allowed'
-              }
-            `}
-          >
-            Continue →
-          </button>
+        {/* Instruction */}
+        <div className="px-6 pb-6">
+          <p className="text-[#f3e5ab]/60 text-sm text-center font-display">
+            Tap a card to begin
+          </p>
         </div>
 
         {/* Safe area bottom */}
@@ -836,6 +830,116 @@ const DailySessionPage: React.FC = () => {
   }
 
   const currentStep = session.steps[session.currentStepIndex];
+
+  // ============== READY COUNTDOWN SCREEN ==============
+  // Show this before the first step starts (when all steps are still pending)
+  const allStepsPending = session.steps.every(s => s.status === 'pending');
+  
+  if (showReadyScreen && allStepsPending) {
+    const handleReadyClick = () => {
+      // Start countdown
+      setCountdown(3);
+      
+      // Countdown timer
+      let count = 3;
+      const countdownInterval = setInterval(() => {
+        count -= 1;
+        if (count > 0) {
+          setCountdown(count);
+        } else {
+          clearInterval(countdownInterval);
+          setCountdown(null);
+          setShowReadyScreen(false);
+          // Start the first step
+          startCurrentStep();
+        }
+      }, 800);
+    };
+    
+    return (
+      <div className="fixed inset-0 flex flex-col z-50" style={woodBackground}>
+        {/* Safe area top */}
+        <div className="flex-shrink-0" style={{ height: 'var(--safe-area-top, 0px)' }} />
+        
+        {/* Close button */}
+        <button
+          onClick={handleExit}
+          className="absolute top-4 left-4 w-10 h-10 rounded-full bg-black/30 flex items-center justify-center z-10"
+          style={{ marginTop: 'var(--safe-area-top, 0px)' }}
+        >
+          <X className="w-6 h-6 text-white/80" />
+        </button>
+
+        {/* Centered Content */}
+        <div className="flex-1 flex flex-col items-center justify-center px-8">
+          {countdown !== null ? (
+            // Countdown display
+            <div className="text-center animate-pulse">
+              <div className="text-[180px] font-display font-bold text-[#FFD700] drop-shadow-2xl leading-none"
+                style={{ textShadow: '0 0 40px rgba(255, 215, 0, 0.5), 0 4px 8px rgba(0,0,0,0.5)' }}
+              >
+                {countdown}
+              </div>
+            </div>
+          ) : (
+            // Ready button
+            <button
+              onClick={handleReadyClick}
+              className="group transition-all transform hover:scale-105 active:scale-95"
+            >
+              <div className="bg-[#FFD700] hover:bg-[#FFE44D] px-16 py-8 rounded-3xl shadow-2xl border-4 border-[#FFA000] transition-all"
+                style={{ boxShadow: '0 8px 32px rgba(255, 215, 0, 0.4), inset 0 -4px 8px rgba(0,0,0,0.1)' }}
+              >
+                <span className="text-[#5D4037] font-display font-bold text-4xl">
+                  Ready?
+                </span>
+              </div>
+              <p className="text-[#f3e5ab]/60 text-sm text-center mt-6 font-display">
+                Tap to start your adventure
+              </p>
+            </button>
+          )}
+        </div>
+
+        {/* Avatar - Bottom Right */}
+        <div className="absolute bottom-8 right-4" style={{ marginBottom: 'var(--safe-area-bottom, 0px)' }}>
+          <style>{wingAnimationStyles}</style>
+          <div className="w-24 h-32">
+            <AvatarCompositor
+              headUrl={equippedAvatar || '/avatars/heads/head-1.png'}
+              body={equippedBody}
+              hat={equippedHat}
+              leftArm={equippedLeftArm}
+              rightArm={equippedRightArm}
+              legs={equippedLegs}
+              headOffset={{ x: headOffset?.x || 0, y: (headOffset?.y || 0) + 20 }}
+              bodyOffset={bodyOffset}
+              hatOffset={{ x: hatOffset?.x || 0, y: (hatOffset?.y || 0) + 20 }}
+              leftArmOffset={leftArmOffset}
+              rightArmOffset={rightArmOffset}
+              legsOffset={legsOffset}
+              headScale={headScale}
+              bodyScale={bodyScale}
+              hatScale={hatScale}
+              leftArmScale={leftArmScale}
+              rightArmScale={rightArmScale}
+              legsScale={legsScale}
+              leftArmRotation={equippedLeftArmRotation}
+              rightArmRotation={equippedRightArmRotation}
+              legsRotation={equippedLegsRotation}
+              hatRotation={equippedHatRotation}
+              isAnimating={true}
+              animationStyle="anim-float"
+              className="w-full h-full"
+            />
+          </div>
+        </div>
+
+        {/* Safe area bottom */}
+        <div className="flex-shrink-0" style={{ height: 'var(--safe-area-bottom, 0px)' }} />
+      </div>
+    );
+  }
 
   // ============== MAIN SESSION SCREEN ==============
   return (

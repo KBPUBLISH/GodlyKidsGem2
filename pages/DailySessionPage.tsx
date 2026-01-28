@@ -1159,6 +1159,7 @@ const DailySessionPage: React.FC = () => {
               {currentStep.label}
             </h2>
             <p className="text-[#f3e5ab]/70 text-sm mt-2 font-display">
+              {currentStep.type === 'scripture' && 'Build today\'s Bible verse!'}
               {currentStep.type === 'book' && 'Read your recommended story'}
               {currentStep.type === 'discussion' && 'Talk about the story together'}
               {currentStep.type === 'prayer' && 'End your lesson with prayer'}
@@ -1167,6 +1168,19 @@ const DailySessionPage: React.FC = () => {
 
           {/* Step-specific content preview */}
           <div className="flex-1 flex flex-col justify-center">
+            {currentStep.type === 'scripture' && (
+              <div className="bg-[#8B4513]/50 rounded-xl p-4 text-center border-2 border-[#A0522D]">
+                <div className="text-4xl mb-3">🧩</div>
+                <h3 className="text-[#f3e5ab] font-bold font-display mb-2">Scripture Puzzle</h3>
+                <p className="text-[#f3e5ab]/60 text-sm font-display">
+                  Tap the words in the correct order to build today's Bible verse!
+                </p>
+                <p className="text-[#FFD700] font-bold mt-3 font-display text-lg">
+                  🪙 +10 coins
+                </p>
+              </div>
+            )}
+
             {currentStep.type === 'book' && recommendedBook && (
               <button 
                 onClick={handleStartStep}
@@ -1237,33 +1251,7 @@ const DailySessionPage: React.FC = () => {
         {/* Action Buttons */}
         <div className="mt-6">
           <button
-            onClick={() => {
-              console.log('🔥 BUTTON CLICKED!');
-              // Immediately navigate to the first book from the API
-              const apiBaseUrl = 'https://backendgk2-0.onrender.com/api/';
-              fetch(`${apiBaseUrl}books?limit=10`)
-                .then(res => res.json())
-                .then(data => {
-                  console.log('🔥 Got books:', data);
-                  const books = data.data || data;
-                  if (books && books.length > 0) {
-                    const book = books[Math.floor(Math.random() * books.length)];
-                    const bookId = book.id || book._id;
-                    console.log('🔥 Navigating to book:', book.title, bookId);
-                    if (session) {
-                      startCurrentStep();
-                      setStepContent(session.currentStepIndex, bookId, book.title);
-                    }
-                    navigate(`/read/${bookId}`, { state: { fromDailySession: true } });
-                  } else {
-                    alert('No books found!');
-                  }
-                })
-                .catch(err => {
-                  console.error('🔥 Error:', err);
-                  alert('Error loading books: ' + err.message);
-                });
-            }}
+            onClick={handleStartStep}
             className="w-full relative transition-all transform active:scale-95 hover:scale-102"
           >
             <img 

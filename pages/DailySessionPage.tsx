@@ -1130,7 +1130,32 @@ const DailySessionPage: React.FC = () => {
         {/* Action Buttons */}
         <div className="mt-6">
           <button
-            onClick={handleStartStep}
+            onClick={() => {
+              console.log('🔥 BUTTON CLICKED!');
+              // Immediately navigate to the first book from the API
+              const apiBaseUrl = 'https://backendgk2-0.onrender.com/api/';
+              fetch(`${apiBaseUrl}books?limit=10`)
+                .then(res => res.json())
+                .then(data => {
+                  console.log('🔥 Got books:', data);
+                  const books = data.data || data;
+                  if (books && books.length > 0) {
+                    const book = books[Math.floor(Math.random() * books.length)];
+                    console.log('🔥 Navigating to book:', book.title, book._id);
+                    if (session) {
+                      startCurrentStep();
+                      setStepContent(session.currentStepIndex, book._id, book.title);
+                    }
+                    navigate(`/read/${book._id}`, { state: { fromDailySession: true } });
+                  } else {
+                    alert('No books found!');
+                  }
+                })
+                .catch(err => {
+                  console.error('🔥 Error:', err);
+                  alert('Error loading books: ' + err.message);
+                });
+            }}
             className="w-full relative transition-all transform active:scale-95 hover:scale-102"
           >
             <img 

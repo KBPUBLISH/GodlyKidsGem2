@@ -942,7 +942,7 @@ const DailySessionPage: React.FC = () => {
           {!equippedBody && (
             <button
               onClick={() => navigate('/home', { state: { openShop: true } })}
-              className="absolute -top-16 -left-32 bg-white rounded-2xl px-3 py-2 shadow-lg border-2 border-[#FFD700] max-w-[140px] animate-bounce z-10"
+              className="absolute -top-20 left-1/2 -translate-x-1/2 bg-white rounded-2xl px-3 py-2 shadow-lg border-2 border-[#FFD700] whitespace-nowrap animate-bounce z-10"
               style={{ animationDuration: '2s' }}
             >
               <p className="text-[#5D4037] text-xs font-medium text-center leading-tight">
@@ -950,8 +950,8 @@ const DailySessionPage: React.FC = () => {
               </p>
               <p className="text-[#8B5A2B] text-[10px] text-center mt-1 opacity-70">Tap me!</p>
               {/* Speech bubble tail */}
-              <div className="absolute -bottom-2 right-6 w-0 h-0 border-l-[8px] border-l-transparent border-r-[8px] border-r-transparent border-t-[8px] border-t-white"></div>
-              <div className="absolute -bottom-[11px] right-[23px] w-0 h-0 border-l-[9px] border-l-transparent border-r-[9px] border-r-transparent border-t-[9px] border-t-[#FFD700]"></div>
+              <div className="absolute -bottom-2 left-1/2 -translate-x-1/2 w-0 h-0 border-l-[8px] border-l-transparent border-r-[8px] border-r-transparent border-t-[8px] border-t-white"></div>
+              <div className="absolute -bottom-[11px] left-1/2 -translate-x-1/2 w-0 h-0 border-l-[9px] border-l-transparent border-r-[9px] border-r-transparent border-t-[9px] border-t-[#FFD700]"></div>
             </button>
           )}
           
@@ -1104,7 +1104,7 @@ const DailySessionPage: React.FC = () => {
           {!equippedBody && (
             <button
               onClick={() => navigate('/home', { state: { openShop: true } })}
-              className="absolute -top-16 -left-32 bg-white rounded-2xl px-3 py-2 shadow-lg border-2 border-[#FFD700] max-w-[140px] animate-bounce z-10"
+              className="absolute -top-20 left-1/2 -translate-x-1/2 bg-white rounded-2xl px-3 py-2 shadow-lg border-2 border-[#FFD700] whitespace-nowrap animate-bounce z-10"
               style={{ animationDuration: '2s' }}
             >
               <p className="text-[#5D4037] text-xs font-medium text-center leading-tight">
@@ -1112,8 +1112,8 @@ const DailySessionPage: React.FC = () => {
               </p>
               <p className="text-[#8B5A2B] text-[10px] text-center mt-1 opacity-70">Tap me!</p>
               {/* Speech bubble tail */}
-              <div className="absolute -bottom-2 right-6 w-0 h-0 border-l-[8px] border-l-transparent border-r-[8px] border-r-transparent border-t-[8px] border-t-white"></div>
-              <div className="absolute -bottom-[11px] right-[23px] w-0 h-0 border-l-[9px] border-l-transparent border-r-[9px] border-r-transparent border-t-[9px] border-t-[#FFD700]"></div>
+              <div className="absolute -bottom-2 left-1/2 -translate-x-1/2 w-0 h-0 border-l-[8px] border-l-transparent border-r-[8px] border-r-transparent border-t-[8px] border-t-white"></div>
+              <div className="absolute -bottom-[11px] left-1/2 -translate-x-1/2 w-0 h-0 border-l-[9px] border-l-transparent border-r-[9px] border-r-transparent border-t-[9px] border-t-[#FFD700]"></div>
             </button>
           )}
           
@@ -1240,7 +1240,7 @@ const DailySessionPage: React.FC = () => {
           {!equippedBody && (
             <button
               onClick={() => navigate('/home', { state: { openShop: true } })}
-              className="absolute -top-16 -left-32 bg-white rounded-2xl px-3 py-2 shadow-lg border-2 border-[#FFD700] max-w-[140px] animate-bounce z-10"
+              className="absolute -top-20 left-1/2 -translate-x-1/2 bg-white rounded-2xl px-3 py-2 shadow-lg border-2 border-[#FFD700] whitespace-nowrap animate-bounce z-10"
               style={{ animationDuration: '2s' }}
             >
               <p className="text-[#5D4037] text-xs font-medium text-center leading-tight">
@@ -1248,8 +1248,8 @@ const DailySessionPage: React.FC = () => {
               </p>
               <p className="text-[#8B5A2B] text-[10px] text-center mt-1 opacity-70">Tap me!</p>
               {/* Speech bubble tail */}
-              <div className="absolute -bottom-2 right-6 w-0 h-0 border-l-[8px] border-l-transparent border-r-[8px] border-r-transparent border-t-[8px] border-t-white"></div>
-              <div className="absolute -bottom-[11px] right-[23px] w-0 h-0 border-l-[9px] border-l-transparent border-r-[9px] border-r-transparent border-t-[9px] border-t-[#FFD700]"></div>
+              <div className="absolute -bottom-2 left-1/2 -translate-x-1/2 w-0 h-0 border-l-[8px] border-l-transparent border-r-[8px] border-r-transparent border-t-[8px] border-t-white"></div>
+              <div className="absolute -bottom-[11px] left-1/2 -translate-x-1/2 w-0 h-0 border-l-[9px] border-l-transparent border-r-[9px] border-r-transparent border-t-[9px] border-t-[#FFD700]"></div>
             </button>
           )}
           

@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { X, Play, Pause, ChevronRight, Check, Star, Trophy } from 'lucide-react';
+import { X, Play, Pause, ChevronRight, ChevronLeft, Check, Star, Trophy } from 'lucide-react';
 
 // Types
 interface Caption {
@@ -178,6 +178,31 @@ const VideoLessonModal: React.FC<VideoLessonModalProps> = ({ isOpen, onClose, le
         onClose();
     };
 
+    // Handle back button to go to previous screen
+    const handleBack = () => {
+        switch (currentScreen) {
+            case 'devotional':
+                setCurrentScreen('video');
+                // Reset video to beginning if needed
+                if (videoRef.current) {
+                    videoRef.current.currentTime = 0;
+                    setVideoProgress(0);
+                }
+                break;
+            case 'activity':
+                setCurrentScreen('devotional');
+                break;
+            case 'complete':
+                setCurrentScreen('activity');
+                break;
+            default:
+                break;
+        }
+    };
+
+    // Check if back button should be shown
+    const showBackButton = currentScreen !== 'video';
+
     if (!isOpen || !lesson) return null;
 
     const getProgressSteps = () => {
@@ -216,10 +241,22 @@ const VideoLessonModal: React.FC<VideoLessonModalProps> = ({ isOpen, onClose, le
                 </div>
             </div>
 
+            {/* Back Button */}
+            {showBackButton && (
+                <button
+                    onClick={handleBack}
+                    className="absolute top-4 left-4 z-20 w-10 h-10 bg-black/50 backdrop-blur-sm rounded-full flex items-center justify-center text-white hover:bg-black/70 transition-colors"
+                    style={{ marginTop: 'var(--safe-area-top, 0px)' }}
+                >
+                    <ChevronLeft size={24} />
+                </button>
+            )}
+
             {/* Close Button */}
             <button
                 onClick={onClose}
                 className="absolute top-4 right-4 z-20 w-10 h-10 bg-black/50 backdrop-blur-sm rounded-full flex items-center justify-center text-white hover:bg-black/70 transition-colors"
+                style={{ marginTop: 'var(--safe-area-top, 0px)' }}
             >
                 <X size={24} />
             </button>

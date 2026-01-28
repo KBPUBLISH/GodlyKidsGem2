@@ -31,14 +31,14 @@ const SUBJECT_IMAGES: { [key: string]: string } = {
   'character': '/daily-session/character.png',
 };
 
-// Learning goals options
+// Learning goals options with character block images
 const LEARNING_GOALS = [
-  { id: 'self-esteem', label: 'Improve Self Esteem', emoji: '💪', color: 'from-pink-500 to-rose-600' },
-  { id: 'connected-to-god', label: 'Feel More Connected to God', emoji: '🙏', color: 'from-purple-500 to-indigo-600' },
-  { id: 'learn-bible', label: 'Learn More About the Bible', emoji: '📖', color: 'from-blue-500 to-cyan-600' },
-  { id: 'better-sleep', label: 'Get Better Sleep', emoji: '😴', color: 'from-indigo-500 to-purple-600' },
-  { id: 'theology', label: 'Become Stronger in Theology', emoji: '✝️', color: 'from-amber-500 to-orange-600' },
-  { id: 'life-skills', label: 'Improve Daily Life Skills', emoji: '⭐', color: 'from-green-500 to-emerald-600' },
+  { id: 'self-esteem', label: 'Improve Self Esteem', emoji: '💪', color: 'from-pink-500 to-rose-600', image: '/daily-session/blocks/selfesteem.png' },
+  { id: 'connected-to-god', label: 'Feel More Connected to God', emoji: '🙏', color: 'from-purple-500 to-indigo-600', image: '/daily-session/blocks/faith.png' },
+  { id: 'learn-bible', label: 'Learn More About the Bible', emoji: '📖', color: 'from-blue-500 to-cyan-600', image: '/daily-session/blocks/bible.png' },
+  { id: 'better-sleep', label: 'Get Better Sleep', emoji: '😴', color: 'from-indigo-500 to-purple-600', image: '/daily-session/blocks/sleep.png' },
+  { id: 'theology', label: 'Become Stronger in Theology', emoji: '✝️', color: 'from-amber-500 to-orange-600', image: '/daily-session/blocks/theology.png' },
+  { id: 'life-skills', label: 'Improve Daily Life Skills', emoji: '⭐', color: 'from-green-500 to-emerald-600', image: '/daily-session/blocks/lifeskills.png' },
 ];
 
 // Wing animation CSS
@@ -439,16 +439,17 @@ const DailySessionPage: React.FC = () => {
     }
   }, [books.length, recommendedBook, session]);
 
-  // Handle exit button
+  // Handle exit button - preserve session progress so user can return
   const handleExit = () => {
     if (session && !session.completed) {
-      // Track early exit
-      activityTrackingService.trackOnboardingEvent('godly_kids_time_exited', {
+      // Track early exit but DON'T delete the session - keep progress saved
+      activityTrackingService.trackOnboardingEvent('godly_kids_time_paused', {
         step: session.currentStepIndex,
         stepType: session.steps[session.currentStepIndex]?.type,
+        progress: `${session.currentStepIndex}/${session.steps.length}`,
       });
+      // Session is already saved in localStorage - user can return to continue
     }
-    exitSession();
     navigate('/home');
   };
 
@@ -988,30 +989,26 @@ const DailySessionPage: React.FC = () => {
                   key={goal.id}
                   onClick={() => setSelectedGoal(goal.id)}
                   className={`
-                    relative rounded-xl p-4 transition-all transform
+                    relative rounded-2xl overflow-hidden transition-all transform
                     ${isSelected 
                       ? 'scale-[1.02] ring-4 ring-[#FFD700] shadow-xl' 
                       : 'hover:scale-[1.01] shadow-md'
                     }
                   `}
                 >
-                  {/* Background gradient */}
-                  <div className={`absolute inset-0 rounded-xl bg-gradient-to-br ${goal.color} opacity-90`} />
+                  {/* Character block image */}
+                  <img 
+                    src={goal.image} 
+                    alt={goal.label}
+                    className="w-full h-auto"
+                  />
                   
                   {/* Selection checkmark */}
                   {isSelected && (
-                    <div className="absolute top-2 right-2 w-6 h-6 bg-[#FFD700] rounded-full flex items-center justify-center z-10">
+                    <div className="absolute top-2 right-2 w-6 h-6 bg-[#FFD700] rounded-full flex items-center justify-center z-10 shadow-lg">
                       <Check className="w-4 h-4 text-[#5D4037]" />
                     </div>
                   )}
-                  
-                  {/* Content */}
-                  <div className="relative z-10 text-center">
-                    <span className="text-3xl mb-2 block">{goal.emoji}</span>
-                    <span className="text-white font-display font-bold text-sm leading-tight block">
-                      {goal.label}
-                    </span>
-                  </div>
                 </button>
               );
             })}
@@ -1146,36 +1143,16 @@ const DailySessionPage: React.FC = () => {
             boxShadow: 'inset 2px 2px 4px rgba(0,0,0,0.3), inset -2px -2px 4px rgba(255,255,255,0.1)',
           }}
         >
-          {/* Step icon and title */}
-          <div className="text-center mb-6">
-            <div className="w-24 h-24 rounded-full bg-gradient-to-br from-[#FFD700] to-[#FFA500] mx-auto flex items-center justify-center mb-4 border-4 border-[#8B4513]"
-              style={{
-                boxShadow: '0 4px 15px rgba(255, 215, 0, 0.4)',
-              }}
-            >
-              <span className="text-5xl">{currentStep.icon}</span>
-            </div>
-            <h2 className="text-[#FFD700] font-display font-bold text-2xl drop-shadow-lg">
-              {currentStep.label}
-            </h2>
-            <p className="text-[#f3e5ab]/70 text-sm mt-2 font-display">
-              {currentStep.type === 'scripture' && 'Build today\'s Bible verse!'}
-              {currentStep.type === 'book' && 'Read your recommended story'}
-              {currentStep.type === 'discussion' && 'Talk about the story together'}
-              {currentStep.type === 'prayer' && 'End your lesson with prayer'}
-            </p>
-          </div>
-
           {/* Step-specific content preview */}
           <div className="flex-1 flex flex-col justify-center">
             {currentStep.type === 'scripture' && (
-              <div className="bg-[#8B4513]/50 rounded-xl p-4 text-center border-2 border-[#A0522D]">
-                <div className="text-4xl mb-3">🧩</div>
-                <h3 className="text-[#f3e5ab] font-bold font-display mb-2">Scripture Puzzle</h3>
-                <p className="text-[#f3e5ab]/60 text-sm font-display">
+              <div className="text-center">
+                <div className="text-6xl mb-4">🧩</div>
+                <h3 className="text-[#FFD700] font-bold font-display text-xl mb-2">Scripture Puzzle</h3>
+                <p className="text-[#f3e5ab]/70 text-sm font-display mb-4">
                   Tap the words in the correct order to build today's Bible verse!
                 </p>
-                <p className="text-[#FFD700] font-bold mt-3 font-display text-lg">
+                <p className="text-[#FFD700] font-bold font-display text-lg">
                   🪙 +10 coins
                 </p>
               </div>
@@ -1238,6 +1215,27 @@ const DailySessionPage: React.FC = () => {
             )}
           </div>
 
+          {/* Action Buttons - Inside the card */}
+          <div className="mt-6">
+            <button
+              onClick={handleStartStep}
+              className="w-full relative transition-all transform active:scale-95 hover:scale-102"
+            >
+              <img 
+                src="/daily-session/Startsession.png" 
+                alt="Start"
+                className="w-full h-auto"
+              />
+            </button>
+            
+            <button
+              onClick={handleSkipStep}
+              className="w-full py-3 text-[#f3e5ab]/50 text-sm font-display hover:text-[#f3e5ab]/70 transition-colors italic"
+            >
+              Skip this step
+            </button>
+          </div>
+
           {/* Selected subjects reminder */}
           {session.subjects.length > 0 && (
             <div className="mt-4 pt-4 border-t border-[#8B4513]/50">
@@ -1246,27 +1244,6 @@ const DailySessionPage: React.FC = () => {
               </p>
             </div>
           )}
-        </div>
-
-        {/* Action Buttons */}
-        <div className="mt-6">
-          <button
-            onClick={handleStartStep}
-            className="w-full relative transition-all transform active:scale-95 hover:scale-102"
-          >
-            <img 
-              src="/daily-session/Startsession.png" 
-              alt="Start"
-              className="w-full h-auto"
-            />
-          </button>
-          
-          <button
-            onClick={handleSkipStep}
-            className="w-full py-3 text-[#f3e5ab]/50 text-sm font-display hover:text-[#f3e5ab]/70 transition-colors italic"
-          >
-            Skip this step
-          </button>
         </div>
       </div>
 

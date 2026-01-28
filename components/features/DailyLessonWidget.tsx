@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ChevronRight, Check, Clock, Flame } from 'lucide-react';
-import { isSessionCompletedToday, getSessionStreak, getSessionHistory } from '../../services/dailySessionService';
+import { isSessionCompletedToday, getSessionStreak, getSessionHistory, hasSessionToday, getCurrentSession } from '../../services/dailySessionService';
 
 interface DailyLessonWidgetProps {
   onStartLesson?: (duration: number) => void;
@@ -33,13 +33,27 @@ const DailyLessonWidget: React.FC<DailyLessonWidgetProps> = ({ onStartLesson }) 
   const navigate = useNavigate();
   const [selectedDuration, setSelectedDuration] = useState(10); // Default 10 minutes
   const [isCompleted, setIsCompleted] = useState(false);
+  const [hasInProgress, setHasInProgress] = useState(false);
+  const [currentStep, setCurrentStep] = useState(0);
+  const [totalSteps, setTotalSteps] = useState(4);
   const [streak, setStreak] = useState(0);
   const [sessionHistory, setSessionHistory] = useState<any[]>([]);
 
   useEffect(() => {
-    setIsCompleted(isSessionCompletedToday());
+    const completed = isSessionCompletedToday();
+    setIsCompleted(completed);
     setStreak(getSessionStreak());
     setSessionHistory(getSessionHistory());
+    
+    // Check if there's an in-progress session
+    if (!completed && hasSessionToday()) {
+      const session = getCurrentSession();
+      if (session) {
+        setHasInProgress(true);
+        setCurrentStep(session.currentStepIndex);
+        setTotalSteps(session.steps.length);
+      }
+    }
   }, []);
 
   const handleStartLesson = () => {
@@ -50,8 +64,13 @@ const DailyLessonWidget: React.FC<DailyLessonWidgetProps> = ({ onStartLesson }) 
       onStartLesson(selectedDuration);
     }
     
-    // Navigate with freshStart flag to always show goal selection
-    navigate('/daily-session', { state: { freshStart: true } });
+    // If there's an in-progress session, continue it (no freshStart flag)
+    // Otherwise start a new one with freshStart flag to show goal selection
+    if (hasInProgress) {
+      navigate('/daily-session');
+    } else {
+      navigate('/daily-session', { state: { freshStart: true } });
+    }
   };
 
   const durations = [
@@ -121,90 +140,87 @@ const DailyLessonWidget: React.FC<DailyLessonWidgetProps> = ({ onStartLesson }) 
   // Completed state
   if (isCompleted) {
     return (
-      <div className="mx-4 mb-6">
-        <div className="rounded-2xl py-16 px-10 shadow-lg relative overflow-hidden min-h-[560px] flex flex-col justify-center" style={scrollBackground}>
-          {/* Completed badge */}
-          <div className="absolute top-6 right-6 bg-green-500 rounded-full p-2">
-            <Check className="w-6 h-6 text-white" />
+      <div className="-mx-4 -mt-20 mb-6">
+        <div className="rounded-b-[2.5rem] pt-24 pb-10 px-8 shadow-lg bg-[#f5f0e8] relative overflow-hidden">
+          {/* Decorative wave at bottom */}
+          <div className="absolute bottom-0 left-0 right-0 h-20 opacity-40">
+            <svg viewBox="0 0 400 60" preserveAspectRatio="none" className="w-full h-full">
+              <path d="M0,30 Q100,60 200,30 T400,30 L400,60 L0,60 Z" fill="#6B9B8A" />
+            </svg>
           </div>
           
-          <div className="text-center py-4">
-            <h2 className="text-[#5D4037] font-display font-bold text-3xl mb-4">
-              Today's Lesson Complete!
+          {/* Completed badge */}
+          <div className="flex items-center justify-center gap-2 mb-4 relative z-10">
+            <div className="bg-green-500 rounded-full p-1.5">
+              <Check className="w-4 h-4 text-white" />
+            </div>
+            <span className="text-green-600 font-medium">Complete!</span>
+          </div>
+          
+          <div className="text-center relative z-10">
+            <h2 className="text-[#2D2D2D] font-display font-bold text-3xl leading-tight mb-8">
+              Today's Godly Kids<br />Lesson
             </h2>
             
             <button
               onClick={() => navigate('/daily-session')}
-              className="text-[#8B4513] text-lg underline font-medium"
+              className="w-full bg-[#5A8A8A] hover:bg-[#4A7A7A] text-white font-display font-bold text-xl py-5 rounded-2xl shadow-md transition-all active:scale-[0.98]"
             >
-              Review today's lesson →
+              Review Lesson
             </button>
           </div>
 
-          {/* Weekly Streak */}
-          <WeeklyStreak />
+          {/* Lesson Flow Indicator */}
+          <div className="mt-8 flex items-center justify-center gap-4 text-[#5A5A5A] text-base relative z-10">
+            <span className="font-medium">Story</span>
+            <span>→</span>
+            <span className="font-medium">Discuss</span>
+            <span>→</span>
+            <span className="font-medium">Pray</span>
+          </div>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="mx-4 mb-6">
-      <div className="rounded-2xl py-16 px-10 shadow-lg relative overflow-hidden min-h-[560px]" style={scrollBackground}>
+    <div className="-mx-4 -mt-20 mb-6">
+      <div className="rounded-b-[2.5rem] pt-24 pb-10 px-8 shadow-lg bg-[#f5f0e8] relative overflow-hidden">
+        {/* Decorative wave at bottom */}
+        <div className="absolute bottom-0 left-0 right-0 h-20 opacity-40">
+          <svg viewBox="0 0 400 60" preserveAspectRatio="none" className="w-full h-full">
+            <path d="M0,30 Q100,60 200,30 T400,30 L400,60 L0,60 Z" fill="#6B9B8A" />
+          </svg>
+        </div>
         
         {/* Header */}
-        <div className="text-center mb-8 pt-2">
-          <h2 className="text-[#5D4037] font-display font-bold text-2xl">
-            Today's Godly Kids Lesson
+        <div className="text-center mb-8 relative z-10">
+          <h2 className="text-[#2D2D2D] font-display font-bold text-3xl leading-tight">
+            Today's Godly Kids<br />Lesson
           </h2>
+          {hasInProgress && (
+            <p className="text-[#5A8A8A] text-sm mt-2 font-medium">
+              Step {currentStep + 1} of {totalSteps} in progress
+            </p>
+          )}
         </div>
 
-        {/* Duration Selector */}
-        <div className="mb-8">
-          <div className="flex items-center justify-center gap-2 mb-4">
-            <Clock className="w-5 h-5 text-[#8B4513]/70" />
-            <span className="text-[#8B4513]/70 text-base font-medium">Select Duration</span>
-          </div>
-          
-          <div className="flex justify-center gap-4">
-            {durations.map((d) => (
-              <button
-                key={d.value}
-                onClick={() => setSelectedDuration(d.value)}
-                className={`
-                  px-7 py-3 rounded-xl font-display font-bold text-base transition-all
-                  ${selectedDuration === d.value
-                    ? 'bg-[#6B8E6B] text-white shadow-md scale-105'
-                    : 'bg-[#d4c9b0] text-[#5D4037] hover:bg-[#c4b9a0]'
-                  }
-                `}
-              >
-                {d.label}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {/* Start Button */}
+        {/* Start/Continue Button */}
         <button
           onClick={handleStartLesson}
-          className="w-full bg-[#6B8E6B] hover:bg-[#5A7D5A] text-white font-display font-bold text-xl py-5 rounded-xl shadow-lg transition-all active:scale-[0.98] flex items-center justify-center gap-2"
+          className="w-full bg-[#5A8A8A] hover:bg-[#4A7A7A] text-white font-display font-bold text-xl py-5 rounded-2xl shadow-md transition-all active:scale-[0.98] relative z-10"
         >
-          Start Lesson
-          <ChevronRight className="w-6 h-6" />
+          {hasInProgress ? 'Continue Adventure' : 'Start Adventure'}
         </button>
 
         {/* Lesson Flow Indicator */}
-        <div className="mt-5 flex items-center justify-center gap-3 text-[#8B4513]/70 text-base">
+        <div className="mt-8 flex items-center justify-center gap-4 text-[#5A5A5A] text-base relative z-10">
           <span className="font-medium">Story</span>
           <span>→</span>
           <span className="font-medium">Discuss</span>
           <span>→</span>
           <span className="font-medium">Pray</span>
         </div>
-
-        {/* Weekly Streak */}
-        <WeeklyStreak />
       </div>
     </div>
   );

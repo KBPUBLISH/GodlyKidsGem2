@@ -221,7 +221,7 @@ const FeaturedCarousel: React.FC<FeaturedCarouselProps> = ({ books, onBookClick 
   if (books.length === 0) return null;
 
   return (
-    <div className="relative w-full aspect-square max-h-[500px] md:max-h-[550px] rounded-2xl overflow-hidden shadow-[0_8px_16px_rgba(0,0,0,0.4)] mb-6 mx-auto border-b-4 border-[#5c2e0b] bg-[#3e1f07]">
+    <div className="relative w-full aspect-[4/3] max-h-[380px] md:max-h-[420px] rounded-2xl overflow-hidden shadow-[0_8px_16px_rgba(0,0,0,0.4)] mb-6 mx-auto border-b-4 border-[#5c2e0b] bg-[#3e1f07]">
 
       {/* Scroll Container */}
       <div
@@ -239,7 +239,7 @@ const FeaturedCarousel: React.FC<FeaturedCarouselProps> = ({ books, onBookClick 
           return (
             <div
               key={itemId}
-              className="flex-shrink-0 w-full h-full snap-center relative flex flex-col items-center justify-center pb-8"
+              className="flex-shrink-0 w-full h-full snap-center relative flex flex-col items-center justify-center"
               onClick={() => {
                 if (itemIsEpisode && item._playlistId !== undefined && item._itemIndex !== undefined) {
                   // For episodes, navigate to the specific track in the playlist
@@ -264,12 +264,6 @@ const FeaturedCarousel: React.FC<FeaturedCarouselProps> = ({ books, onBookClick 
               {/* Vignette */}
               <div className="absolute inset-0 bg-[radial-gradient(circle,transparent_40%,rgba(0,0,0,0.6)_100%)]" />
 
-              {/* Tap text */}
-              <div className="relative z-20 mb-2 px-4">
-                <p className="text-white font-display font-bold text-sm sm:text-base md:text-lg drop-shadow-lg text-center whitespace-nowrap">
-                  {(itemIsPlaylist || itemIsEpisode) ? '🎧 Tap to listen' : '📖 Tap to read'}
-                </p>
-              </div>
 
               {/* Cover */}
               <div className="relative z-10 transform transition-transform active:scale-95 duration-200 px-4">

@@ -1057,14 +1057,7 @@ const HomePage: React.FC = () => {
           </div>
         )}
 
-        {/* 📚 Daily Lessons Section Header + Widget */}
-        <div className="flex items-center justify-between mb-2 px-4">
-          <SectionTitle 
-            title="Daily Lessons" 
-            icon="📚"
-            color="#7c4dff"
-          />
-        </div>
+        {/* 📚 Daily Lessons Widget */}
         <DailyLessonWidget />
 
         {/* ✨ Verse of the Day - Hidden (absorbed into Daily Lesson Widget) */}

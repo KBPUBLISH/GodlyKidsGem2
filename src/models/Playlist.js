@@ -141,7 +141,7 @@ const playlistSchema = new mongoose.Schema({
     },
     
     // Learning goal tags for daily session matching
-    // Values: 'self-esteem', 'connected-to-god', 'learn-bible', 'better-sleep', 'theology', 'life-skills'
+    // Values: 'courage', 'faith', 'gratitude', 'love', 'obedience', 'self-control', 'theology', 'wisdom'
     goalTags: {
         type: [String],
         default: [],

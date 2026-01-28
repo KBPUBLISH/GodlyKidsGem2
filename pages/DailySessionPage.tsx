@@ -109,6 +109,10 @@ const DailySessionPage: React.FC = () => {
   const [bookCountdown, setBookCountdown] = useState<number | null>(null);
   const [pendingBookNavigation, setPendingBookNavigation] = useState<{id: string, title: string} | null>(null);
   
+  // Prayer ready countdown state
+  const [showPrayerReadyScreen, setShowPrayerReadyScreen] = useState(false);
+  const [prayerCountdown, setPrayerCountdown] = useState<number | null>(null);
+  
   // Goals selection state
   const [showGoalsSelection, setShowGoalsSelection] = useState(false);
   const [selectedGoal, setSelectedGoal] = useState<string | null>(null);
@@ -591,7 +595,7 @@ const DailySessionPage: React.FC = () => {
         setShowDiscussionModal(true);
         break;
       case 'prayer':
-        setShowPrayerModal(true);
+        setShowPrayerReadyScreen(true);
         break;
     }
   };
@@ -1045,6 +1049,124 @@ const DailySessionPage: React.FC = () => {
                 </div>
                 <p className="text-[#f3e5ab]/60 text-sm text-center mt-6 font-display">
                   Tap to start reading
+                </p>
+              </button>
+            </div>
+          )}
+        </div>
+
+        {/* Avatar - Bottom Right */}
+        <div className="absolute bottom-8 right-4" style={{ marginBottom: 'var(--safe-area-bottom, 0px)' }}>
+          <style>{wingAnimationStyles}</style>
+          <div className="w-24 h-32">
+            <AvatarCompositor
+              headUrl={equippedAvatar || '/avatars/heads/head-1.png'}
+              body={equippedBody}
+              hat={equippedHat}
+              leftArm={equippedLeftArm}
+              rightArm={equippedRightArm}
+              legs={equippedLegs}
+              headOffset={{ x: headOffset?.x || 0, y: (headOffset?.y || 0) + 20 }}
+              bodyOffset={bodyOffset}
+              hatOffset={{ x: hatOffset?.x || 0, y: (hatOffset?.y || 0) + 20 }}
+              leftArmOffset={leftArmOffset}
+              rightArmOffset={rightArmOffset}
+              legsOffset={legsOffset}
+              headScale={headScale}
+              bodyScale={bodyScale}
+              hatScale={hatScale}
+              leftArmScale={leftArmScale}
+              rightArmScale={rightArmScale}
+              legsScale={legsScale}
+              leftArmRotation={equippedLeftArmRotation}
+              rightArmRotation={equippedRightArmRotation}
+              legsRotation={equippedLegsRotation}
+              hatRotation={equippedHatRotation}
+              isAnimating={true}
+              animationStyle="anim-float"
+              className="w-full h-full"
+            />
+          </div>
+        </div>
+
+        {/* Safe area bottom */}
+        <div className="flex-shrink-0" style={{ height: 'var(--safe-area-bottom, 0px)' }} />
+      </div>
+    );
+  }
+
+  // ============== PRAYER READY COUNTDOWN SCREEN ==============
+  if (showPrayerReadyScreen) {
+    const handlePrayerReadyClick = () => {
+      // Start countdown
+      setPrayerCountdown(3);
+      
+      // Countdown timer
+      let count = 3;
+      const countdownInterval = setInterval(() => {
+        count -= 1;
+        if (count > 0) {
+          setPrayerCountdown(count);
+        } else {
+          clearInterval(countdownInterval);
+          setPrayerCountdown(null);
+          setShowPrayerReadyScreen(false);
+          // Show the prayer modal
+          setShowPrayerModal(true);
+        }
+      }, 800);
+    };
+    
+    return (
+      <div className="fixed inset-0 flex flex-col z-50" style={woodBackground}>
+        {/* Safe area top */}
+        <div className="flex-shrink-0" style={{ height: 'var(--safe-area-top, 0px)' }} />
+        
+        {/* Close button */}
+        <button
+          onClick={handleExit}
+          className="absolute top-4 left-4 w-10 h-10 rounded-full bg-black/30 flex items-center justify-center z-10"
+          style={{ marginTop: 'var(--safe-area-top, 0px)' }}
+        >
+          <X className="w-6 h-6 text-white/80" />
+        </button>
+
+        {/* Centered Content */}
+        <div className="flex-1 flex flex-col items-center justify-center px-8">
+          {prayerCountdown !== null ? (
+            // Countdown display
+            <div className="text-center animate-pulse">
+              <div className="text-[180px] font-display font-bold text-[#FFD700] drop-shadow-2xl leading-none"
+                style={{ textShadow: '0 0 40px rgba(255, 215, 0, 0.5), 0 4px 8px rgba(0,0,0,0.5)' }}
+              >
+                {prayerCountdown}
+              </div>
+            </div>
+          ) : (
+            // Ready button with prayer info
+            <div className="text-center">
+              {/* Prayer emoji and label */}
+              <div className="mb-6">
+                <div className="text-7xl mb-4">🙏</div>
+                <p className="text-[#f3e5ab] font-display text-lg mb-2">Prayer Time</p>
+                <p className="text-[#FFD700]/80 text-base max-w-xs mx-auto">
+                  Let's talk to God together
+                </p>
+              </div>
+              
+              <button
+                onClick={handlePrayerReadyClick}
+                className="group transition-all transform hover:scale-105 active:scale-95"
+              >
+                <div className="bg-[#FFD700] hover:bg-[#FFE44D] px-16 py-8 rounded-3xl shadow-2xl border-4 border-[#FFA000] transition-all"
+                  style={{ boxShadow: '0 8px 32px rgba(255, 215, 0, 0.4), inset 0 -4px 8px rgba(0,0,0,0.1)' }}
+                >
+                  <span className="text-[#5D4037] font-display font-bold text-4xl">
+                    Ready?
+                  </span>
+                </div>
+                <p className="text-[#f3e5ab]/60 text-sm text-center mt-6 font-display">
+                  Tap to start praying
                 </p>
               </button>
             </div>

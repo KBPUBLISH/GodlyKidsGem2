@@ -457,12 +457,8 @@ const DailySessionPage: React.FC = () => {
   const handleStartStep = async () => {
     console.log('📚 handleStartStep called, session:', !!session);
     
-    // Debug: Show we're in the function
-    alert('Button clicked! Loading book...');
-    
     if (!session) {
       console.log('📚 No session, returning');
-      alert('No session found!');
       return;
     }
     
@@ -511,7 +507,9 @@ const DailySessionPage: React.FC = () => {
           console.log('📚 Response status:', response.status);
           
           if (response.ok) {
-            const fetchedBooks = await response.json();
+            const responseData = await response.json();
+            // API returns { data: [...], pagination: {...} }
+            const fetchedBooks = responseData.data || responseData;
             console.log('📚 Fetched', fetchedBooks.length, 'books from API');
             
             const validBooks = fetchedBooks.filter((b: any) => b && b._id);

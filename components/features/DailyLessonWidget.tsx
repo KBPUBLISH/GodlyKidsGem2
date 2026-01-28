@@ -39,26 +39,26 @@ const DailyLessonWidget: React.FC<DailyLessonWidgetProps> = ({ onStartLesson }) 
   if (isCompleted) {
     return (
       <div className="mx-4 mb-6">
-        <div className="bg-[#f5f0e1] rounded-2xl p-5 shadow-lg border-4 border-[#8B4513]/30 relative overflow-hidden">
+        <div className="bg-[#f5f0e1] rounded-2xl p-8 shadow-lg border-4 border-[#8B4513]/30 relative overflow-hidden">
           {/* Completed badge */}
-          <div className="absolute top-3 right-3 bg-green-500 rounded-full p-1">
-            <Check className="w-4 h-4 text-white" />
+          <div className="absolute top-4 right-4 bg-green-500 rounded-full p-1.5">
+            <Check className="w-5 h-5 text-white" />
           </div>
           
-          <div className="text-center">
-            <h2 className="text-[#5D4037] font-display font-bold text-xl mb-2">
+          <div className="text-center py-4">
+            <h2 className="text-[#5D4037] font-display font-bold text-2xl mb-4">
               Today's Lesson Complete!
             </h2>
             
             {/* Streak Display - Always show */}
-            <div className="inline-flex items-center gap-2 bg-gradient-to-r from-orange-400 to-red-500 text-white px-4 py-2 rounded-full mb-3">
-              <Flame className="w-5 h-5" />
-              <span className="font-bold text-lg">{streak} Day Streak</span>
+            <div className="inline-flex items-center gap-2 bg-gradient-to-r from-orange-400 to-red-500 text-white px-5 py-3 rounded-full mb-4">
+              <Flame className="w-6 h-6" />
+              <span className="font-bold text-xl">{streak} Day Streak</span>
             </div>
             
             <button
               onClick={() => navigate('/daily-session')}
-              className="block mx-auto text-[#8B4513] text-sm underline"
+              className="block mx-auto text-[#8B4513] text-base underline mt-2"
             >
               Review today's lesson →
             </button>
@@ -70,35 +70,35 @@ const DailyLessonWidget: React.FC<DailyLessonWidgetProps> = ({ onStartLesson }) 
 
   return (
     <div className="mx-4 mb-6">
-      <div className="bg-[#f5f0e1] rounded-2xl p-5 shadow-lg border-4 border-[#8B4513]/30 relative overflow-hidden">
+      <div className="bg-[#f5f0e1] rounded-2xl p-8 shadow-lg border-4 border-[#8B4513]/30 relative overflow-hidden">
         
         {/* Streak Badge - Top Right - Always show */}
-        <div className="absolute top-3 right-3 flex items-center gap-1 bg-gradient-to-r from-orange-400 to-red-500 text-white px-3 py-1 rounded-full shadow-md">
-          <Flame className="w-4 h-4" />
-          <span className="font-bold text-sm">{streak}</span>
+        <div className="absolute top-4 right-4 flex items-center gap-1.5 bg-gradient-to-r from-orange-400 to-red-500 text-white px-4 py-2 rounded-full shadow-md">
+          <Flame className="w-5 h-5" />
+          <span className="font-bold text-base">{streak}</span>
         </div>
         
         {/* Header */}
-        <div className="text-center mb-4">
+        <div className="text-center mb-6 pt-2">
           <h2 className="text-[#5D4037] font-display font-bold text-2xl">
             Today's Godly Kids Lesson
           </h2>
         </div>
 
         {/* Duration Selector */}
-        <div className="mb-5">
-          <div className="flex items-center justify-center gap-1 mb-2">
-            <Clock className="w-4 h-4 text-[#8B4513]/60" />
-            <span className="text-[#8B4513]/60 text-xs font-medium">Select Duration</span>
+        <div className="mb-8">
+          <div className="flex items-center justify-center gap-2 mb-3">
+            <Clock className="w-5 h-5 text-[#8B4513]/60" />
+            <span className="text-[#8B4513]/60 text-sm font-medium">Select Duration</span>
           </div>
           
-          <div className="flex justify-center gap-2">
+          <div className="flex justify-center gap-3">
             {durations.map((d) => (
               <button
                 key={d.value}
                 onClick={() => setSelectedDuration(d.value)}
                 className={`
-                  px-4 py-2 rounded-xl font-display font-bold text-sm transition-all
+                  px-6 py-3 rounded-xl font-display font-bold text-base transition-all
                   ${selectedDuration === d.value
                     ? 'bg-[#6B8E6B] text-white shadow-md scale-105'
                     : 'bg-[#e8e0d0] text-[#5D4037] hover:bg-[#d8d0c0]'
@@ -114,14 +114,14 @@ const DailyLessonWidget: React.FC<DailyLessonWidgetProps> = ({ onStartLesson }) 
         {/* Start Button */}
         <button
           onClick={handleStartLesson}
-          className="w-full bg-[#6B8E6B] hover:bg-[#5A7D5A] text-white font-display font-bold text-lg py-4 rounded-xl shadow-md transition-all active:scale-[0.98] flex items-center justify-center gap-2"
+          className="w-full bg-[#6B8E6B] hover:bg-[#5A7D5A] text-white font-display font-bold text-xl py-5 rounded-xl shadow-md transition-all active:scale-[0.98] flex items-center justify-center gap-2"
         >
           Start Lesson
-          <ChevronRight className="w-5 h-5" />
+          <ChevronRight className="w-6 h-6" />
         </button>
 
         {/* Lesson Flow Indicator */}
-        <div className="mt-4 flex items-center justify-center gap-2 text-[#8B4513]/60 text-sm">
+        <div className="mt-6 flex items-center justify-center gap-3 text-[#8B4513]/60 text-base">
           <span className="font-medium">Story</span>
           <span>→</span>
           <span className="font-medium">Discuss</span>

@@ -767,48 +767,50 @@ const DailySessionPage: React.FC = () => {
         </div>
 
         {/* Goals Grid - Clicking a block auto-advances */}
-        <div className="flex-1 px-4 pb-4">
-          <div className="grid grid-cols-2 gap-3">
-            {LEARNING_GOALS.map((goal) => {
-              return (
-                <button
-                  key={goal.id}
-                  onClick={() => {
-                    setSelectedGoal(goal.id);
-                    // Auto-advance after brief visual feedback
-                    setTimeout(() => {
-                      // Call handleGoalConfirm with the selected goal
-                      sessionStorage.setItem('godlykids_session_goal', goal.id);
-                      sessionStorage.setItem('godlykids_session_goal_date', new Date().toDateString());
-                      activityTrackingService.trackOnboardingEvent('learning_goal_selected', {
-                        goal: goal.id,
-                        duration: sessionDuration,
-                      });
-                      setShowGoalsSelection(false);
-                      setIsLoadingBook(true);
-                      const subjects = getSavedPreferences();
-                      const newSession = createDailySession(subjects);
-                      setSession(newSession);
-                      activityTrackingService.trackOnboardingEvent('godly_kids_time_started', {
-                        subjects: newSession.subjects,
-                        goal: goal.id,
-                        duration: sessionDuration,
-                      });
-                      findRecommendedBook();
-                      setTimeout(() => setIsLoadingBook(false), 3000);
-                    }, 200);
-                  }}
-                  className="relative rounded-2xl overflow-hidden transition-all transform hover:scale-[1.02] shadow-md active:scale-[0.98]"
-                >
-                  {/* Character block image */}
-                  <img 
-                    src={goal.image} 
-                    alt={goal.label}
-                    className="w-full h-auto"
-                  />
-                </button>
-              );
-            })}
+        <div className="flex-1 px-4 pb-4 flex items-center justify-center">
+          <div className="w-full max-w-2xl">
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-3 md:gap-4">
+              {LEARNING_GOALS.map((goal) => {
+                return (
+                  <button
+                    key={goal.id}
+                    onClick={() => {
+                      setSelectedGoal(goal.id);
+                      // Auto-advance after brief visual feedback
+                      setTimeout(() => {
+                        // Call handleGoalConfirm with the selected goal
+                        sessionStorage.setItem('godlykids_session_goal', goal.id);
+                        sessionStorage.setItem('godlykids_session_goal_date', new Date().toDateString());
+                        activityTrackingService.trackOnboardingEvent('learning_goal_selected', {
+                          goal: goal.id,
+                          duration: sessionDuration,
+                        });
+                        setShowGoalsSelection(false);
+                        setIsLoadingBook(true);
+                        const subjects = getSavedPreferences();
+                        const newSession = createDailySession(subjects);
+                        setSession(newSession);
+                        activityTrackingService.trackOnboardingEvent('godly_kids_time_started', {
+                          subjects: newSession.subjects,
+                          goal: goal.id,
+                          duration: sessionDuration,
+                        });
+                        findRecommendedBook();
+                        setTimeout(() => setIsLoadingBook(false), 3000);
+                      }, 200);
+                    }}
+                    className="relative rounded-2xl overflow-hidden transition-all transform hover:scale-[1.02] shadow-md active:scale-[0.98] max-w-[200px] mx-auto"
+                  >
+                    {/* Character block image */}
+                    <img 
+                      src={goal.image} 
+                      alt={goal.label}
+                      className="w-full h-auto"
+                    />
+                  </button>
+                );
+              })}
+            </div>
           </div>
         </div>
 

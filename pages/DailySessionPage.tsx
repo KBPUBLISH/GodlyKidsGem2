@@ -20,6 +20,7 @@ import {
   getRecommendedBookFilter,
 } from '../services/dailySessionService';
 import { getSavedPreferences, SUBJECT_OPTIONS } from './InterestSelectionPage';
+import AvatarCompositor from '../components/avatar/AvatarCompositor';
 
 // Subject card images mapping
 const SUBJECT_IMAGES: { [key: string]: string } = {
@@ -29,10 +30,59 @@ const SUBJECT_IMAGES: { [key: string]: string } = {
   'character': '/daily-session/character.png',
 };
 
+// Wing animation CSS
+const wingAnimationStyles = `
+  @keyframes wingFlapLeft {
+    0%, 100% { transform: rotate(0deg) scaleX(-1); }
+    50% { transform: rotate(-25deg) scaleX(-1); }
+  }
+  @keyframes wingFlapRight {
+    0%, 100% { transform: rotate(0deg); }
+    50% { transform: rotate(25deg); }
+  }
+  @keyframes floatAvatar {
+    0%, 100% { transform: translateY(0px); }
+    50% { transform: translateY(-8px); }
+  }
+  .wing-flap-left {
+    animation: wingFlapLeft 0.4s ease-in-out infinite;
+  }
+  .wing-flap-right {
+    animation: wingFlapRight 0.4s ease-in-out infinite;
+  }
+  .avatar-float {
+    animation: floatAvatar 2s ease-in-out infinite;
+  }
+`;
+
 const DailySessionPage: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
-  const { addCoins } = useUser();
+  const { 
+    addCoins, 
+    equippedAvatar, 
+    equippedBody, 
+    equippedHat, 
+    equippedLeftArm, 
+    equippedRightArm, 
+    equippedLegs,
+    headOffset,
+    bodyOffset,
+    hatOffset,
+    leftArmOffset,
+    rightArmOffset,
+    legsOffset,
+    headScale,
+    bodyScale,
+    hatScale,
+    leftArmScale,
+    rightArmScale,
+    legsScale,
+    equippedLeftArmRotation,
+    equippedRightArmRotation,
+    equippedLegsRotation,
+    equippedHatRotation,
+  } = useUser();
   const { books } = useBooks();
   
   const [session, setSession] = useState<DailySession | null>(null);
@@ -505,6 +555,59 @@ const DailySessionPage: React.FC = () => {
           </button>
         </div>
 
+        {/* Flying Avatar with Wings */}
+        <div className="absolute bottom-20 right-4 avatar-float" style={{ marginBottom: 'var(--safe-area-bottom, 0px)' }}>
+          <style>{wingAnimationStyles}</style>
+          <div className="relative w-28 h-36">
+            {/* Left Wing */}
+            <div className="absolute left-0 top-8 w-10 h-16 wing-flap-left origin-right">
+              <img 
+                src="/avatars/wings-left/wing-left-11.png" 
+                alt="" 
+                className="w-full h-full object-contain"
+              />
+            </div>
+            
+            {/* Right Wing */}
+            <div className="absolute right-0 top-8 w-10 h-16 wing-flap-right origin-left">
+              <img 
+                src="/avatars/wings-right/wing-right-10.png" 
+                alt="" 
+                className="w-full h-full object-contain"
+              />
+            </div>
+            
+            {/* Avatar Body */}
+            <div className="absolute left-1/2 top-0 -translate-x-1/2 w-20 h-32">
+              <AvatarCompositor
+                headUrl={equippedAvatar || '/avatars/heads/head-1.png'}
+                body={equippedBody}
+                hat={equippedHat}
+                leftArm={equippedLeftArm}
+                rightArm={equippedRightArm}
+                legs={equippedLegs}
+                headOffset={headOffset}
+                bodyOffset={bodyOffset}
+                hatOffset={hatOffset}
+                leftArmOffset={leftArmOffset}
+                rightArmOffset={rightArmOffset}
+                legsOffset={legsOffset}
+                headScale={headScale}
+                bodyScale={bodyScale}
+                hatScale={hatScale}
+                leftArmScale={leftArmScale}
+                rightArmScale={rightArmScale}
+                legsScale={legsScale}
+                leftArmRotation={equippedLeftArmRotation}
+                rightArmRotation={equippedRightArmRotation}
+                legsRotation={equippedLegsRotation}
+                hatRotation={equippedHatRotation}
+                className="w-full h-full"
+              />
+            </div>
+          </div>
+        </div>
+
         {/* Safe area bottom */}
         <div className="flex-shrink-0" style={{ height: 'var(--safe-area-bottom, 0px)' }} />
       </div>
@@ -720,6 +823,59 @@ const DailySessionPage: React.FC = () => {
           >
             Skip this step
           </button>
+        </div>
+      </div>
+
+      {/* Flying Avatar with Wings */}
+      <div className="absolute bottom-24 right-4 avatar-float" style={{ marginBottom: 'var(--safe-area-bottom, 0px)' }}>
+        <style>{wingAnimationStyles}</style>
+        <div className="relative w-24 h-32">
+          {/* Left Wing */}
+          <div className="absolute -left-2 top-6 w-8 h-14 wing-flap-left origin-right">
+            <img 
+              src="/avatars/wings-left/wing-left-11.png" 
+              alt="" 
+              className="w-full h-full object-contain"
+            />
+          </div>
+          
+          {/* Right Wing */}
+          <div className="absolute -right-2 top-6 w-8 h-14 wing-flap-right origin-left">
+            <img 
+              src="/avatars/wings-right/wing-right-10.png" 
+              alt="" 
+              className="w-full h-full object-contain"
+            />
+          </div>
+          
+          {/* Avatar Body */}
+          <div className="absolute left-1/2 top-0 -translate-x-1/2 w-16 h-28">
+            <AvatarCompositor
+              headUrl={equippedAvatar || '/avatars/heads/head-1.png'}
+              body={equippedBody}
+              hat={equippedHat}
+              leftArm={equippedLeftArm}
+              rightArm={equippedRightArm}
+              legs={equippedLegs}
+              headOffset={headOffset}
+              bodyOffset={bodyOffset}
+              hatOffset={hatOffset}
+              leftArmOffset={leftArmOffset}
+              rightArmOffset={rightArmOffset}
+              legsOffset={legsOffset}
+              headScale={headScale}
+              bodyScale={bodyScale}
+              hatScale={hatScale}
+              leftArmScale={leftArmScale}
+              rightArmScale={rightArmScale}
+              legsScale={legsScale}
+              leftArmRotation={equippedLeftArmRotation}
+              rightArmRotation={equippedRightArmRotation}
+              legsRotation={equippedLegsRotation}
+              hatRotation={equippedHatRotation}
+              className="w-full h-full"
+            />
+          </div>
         </div>
       </div>
 

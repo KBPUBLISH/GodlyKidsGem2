@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { X, Check, ChevronRight, Play, BookOpen, Sparkles } from 'lucide-react';
-import WoodButton from '../components/ui/WoodButton';
+import { X, Check, ChevronRight, Play, BookOpen } from 'lucide-react';
 import PrayerGameModal from '../components/features/PrayerGameModal';
 import SessionCelebrationModal from '../components/modals/SessionCelebrationModal';
 import { useUser } from '../context/UserContext';
@@ -13,16 +12,24 @@ import {
   SessionStep,
   createDailySession,
   getCurrentSession,
-  getCurrentStep,
   startCurrentStep,
   completeCurrentStep,
   skipCurrentStep,
   exitSession,
   setStepContent,
   getRecommendedBookFilter,
-  isSessionCompletedToday,
 } from '../services/dailySessionService';
 import { getSavedPreferences, SUBJECT_OPTIONS } from './InterestSelectionPage';
+
+// Subject card images mapping
+const SUBJECT_IMAGES: { [key: string]: string } = {
+  'bible-stories': '/daily-session/biblestory.png',
+  'history': '/daily-session/History.png',
+  'documentary': '/daily-session/History.png', // Using history as fallback
+  'fantasy': '/daily-session/adventure.png',
+  'science': '/daily-session/character.png', // Using character as fallback
+  'character': '/daily-session/character.png',
+};
 
 const DailySessionPage: React.FC = () => {
   const navigate = useNavigate();
@@ -358,60 +365,61 @@ const DailySessionPage: React.FC = () => {
     }).join(', ');
   };
 
+  // Wood plank background style
+  const woodBackground = {
+    backgroundImage: 'url(/daily-session/Background-dailysession.jpg)',
+    backgroundSize: 'cover',
+    backgroundPosition: 'center',
+  };
+
   if (isLoading) {
     return (
-      <div className="fixed inset-0 bg-gradient-to-b from-[#1a1a2e] to-[#16213e] flex items-center justify-center z-50">
+      <div className="fixed inset-0 flex items-center justify-center z-50" style={woodBackground}>
         <div className="text-center">
           <div className="w-16 h-16 border-4 border-[#FFD700]/30 border-t-[#FFD700] rounded-full animate-spin mx-auto mb-4" />
-          <p className="text-white/70">Preparing your session...</p>
+          <p className="text-[#f3e5ab] font-display text-lg">Preparing your session...</p>
         </div>
       </div>
     );
   }
 
-  // Show subject selection screen for new users
+  // ============== SUBJECT SELECTION SCREEN ==============
   if (showSubjectSelection) {
     return (
-      <div className="fixed inset-0 bg-gradient-to-b from-[#1a1a2e] via-[#16213e] to-[#0f3460] flex flex-col z-50 overflow-auto">
+      <div className="fixed inset-0 flex flex-col z-50 overflow-auto" style={woodBackground}>
         {/* Safe area top */}
         <div className="flex-shrink-0" style={{ height: 'var(--safe-area-top, 0px)' }} />
         
-        {/* Header */}
-        <div className="flex items-center justify-between px-4 py-4">
-          <button
-            onClick={() => navigate('/home')}
-            className="w-10 h-10 rounded-full bg-white/10 flex items-center justify-center"
-          >
-            <X className="w-6 h-6 text-white/70" />
-          </button>
-          
-          <div className="text-center">
-            <h1 className="text-white font-display font-bold text-lg">Godly Kids Time</h1>
-            <p className="text-white/50 text-xs">Daily Learning Session</p>
-          </div>
-          
-          <div className="w-10" />
+        {/* Close button */}
+        <button
+          onClick={() => navigate('/home')}
+          className="absolute top-4 left-4 w-10 h-10 rounded-full bg-black/30 flex items-center justify-center z-10"
+          style={{ marginTop: 'var(--safe-area-top, 0px)' }}
+        >
+          <X className="w-6 h-6 text-white/80" />
+        </button>
+
+        {/* Header Banner */}
+        <div className="flex justify-center pt-4 pb-2">
+          <img 
+            src="/daily-session/dailysessiontitle.png" 
+            alt="Daily Session" 
+            className="h-16 object-contain"
+          />
         </div>
+        
+        {/* Subtitle */}
+        <p className="text-center text-[#f3e5ab]/80 text-sm font-display mb-4">
+          Daily Learning Session
+        </p>
 
-        {/* Subject Selection Content */}
-        <div className="flex-1 px-6 py-4 flex flex-col">
-          <div className="text-center mb-6">
-            <div className="w-20 h-20 rounded-full bg-gradient-to-br from-[#FFD700] to-[#FFA500] mx-auto flex items-center justify-center mb-4">
-              <span className="text-4xl">📚</span>
-            </div>
-            <h2 className="text-white font-display font-bold text-2xl mb-2">
-              Choose Your Subjects
-            </h2>
-            <p className="text-white/60 text-sm">
-              Pick up to 3 subjects for today's learning
-            </p>
-          </div>
-
-          {/* Subject Grid */}
-          <div className="grid grid-cols-2 gap-3 mb-6">
+        {/* Subject Cards Grid */}
+        <div className="flex-1 px-4 pb-4">
+          <div className="grid grid-cols-3 gap-3">
             {SUBJECT_OPTIONS.map((subject) => {
               const isSelected = tempSelectedSubjects.includes(subject.id);
               const isDisabled = !isSelected && tempSelectedSubjects.length >= 3;
+              const imageUrl = SUBJECT_IMAGES[subject.id] || '/daily-session/biblestory.png';
               
               return (
                 <button
@@ -419,52 +427,84 @@ const DailySessionPage: React.FC = () => {
                   onClick={() => handleSubjectToggle(subject.id)}
                   disabled={isDisabled}
                   className={`
-                    p-4 rounded-2xl transition-all text-left
+                    relative rounded-lg overflow-hidden transition-all transform
                     ${isSelected 
-                      ? 'bg-[#FFD700] text-[#5D4037] ring-4 ring-[#FFD700]/30' 
+                      ? 'ring-4 ring-[#FFD700] scale-105 shadow-lg shadow-[#FFD700]/30' 
                       : isDisabled
-                        ? 'bg-white/5 text-white/30'
-                        : 'bg-white/10 text-white hover:bg-white/20'
+                        ? 'opacity-40'
+                        : 'hover:scale-102 active:scale-95'
                     }
                   `}
+                  style={{
+                    boxShadow: isSelected 
+                      ? '0 0 20px rgba(255, 215, 0, 0.5), inset 0 0 0 3px #8B4513' 
+                      : 'inset 0 0 0 3px #8B4513',
+                  }}
                 >
-                  <span className="text-2xl block mb-1">{subject.icon}</span>
-                  <span className="font-bold text-sm">{subject.label}</span>
+                  {/* Wooden frame effect */}
+                  <div className="absolute inset-0 border-4 border-[#8B4513] rounded-lg pointer-events-none z-10"
+                    style={{
+                      boxShadow: 'inset 2px 2px 4px rgba(0,0,0,0.3), inset -2px -2px 4px rgba(255,255,255,0.1)',
+                    }}
+                  />
+                  
+                  {/* Card image */}
+                  <div className="aspect-square">
+                    <img 
+                      src={imageUrl}
+                      alt={subject.label}
+                      className="w-full h-full object-cover"
+                    />
+                  </div>
+                  
+                  {/* Label */}
+                  <div className="bg-gradient-to-t from-[#5D4037] to-[#8B4513] py-2 px-1">
+                    <p className="text-[#f3e5ab] text-xs font-display font-bold text-center leading-tight">
+                      {subject.label}
+                    </p>
+                  </div>
+                  
+                  {/* Selection checkmark */}
                   {isSelected && (
-                    <Check className="w-5 h-5 absolute top-2 right-2" />
+                    <div className="absolute top-2 right-2 w-6 h-6 bg-[#FFD700] rounded-full flex items-center justify-center shadow-lg z-20">
+                      <Check className="w-4 h-4 text-[#5D4037]" />
+                    </div>
                   )}
                 </button>
               );
             })}
           </div>
+        </div>
 
-          {/* Selection Count */}
-          <p className="text-center text-white/50 text-sm mb-4">
-            {tempSelectedSubjects.length} of 3 subjects selected
-          </p>
+        {/* Selection Count */}
+        <p className="text-center text-[#f3e5ab]/60 text-sm font-display italic mb-4">
+          {tempSelectedSubjects.length} of 3 subjects selected
+        </p>
 
-          {/* Action Buttons */}
-          <div className="mt-auto space-y-3">
-            <WoodButton
-              onClick={handleSubjectConfirm}
-              fullWidth
-              variant="gold"
-              className="py-4"
-              disabled={tempSelectedSubjects.length === 0}
-            >
-              <span className="flex items-center justify-center gap-2">
-                Start Today's Session
-                <ChevronRight className="w-5 h-5" />
-              </span>
-            </WoodButton>
-            
-            <button
-              onClick={() => navigate('/home')}
-              className="w-full py-3 text-white/50 text-sm hover:text-white/70 transition-colors"
-            >
-              Skip for now
-            </button>
-          </div>
+        {/* Start Button */}
+        <div className="px-6 pb-4">
+          <button
+            onClick={handleSubjectConfirm}
+            disabled={tempSelectedSubjects.length === 0}
+            className={`
+              w-full relative transition-all transform active:scale-95
+              ${tempSelectedSubjects.length === 0 ? 'opacity-50' : 'hover:scale-102'}
+            `}
+          >
+            <img 
+              src="/daily-session/Startsession.png" 
+              alt="Start Today's Session"
+              className="w-full h-auto"
+            />
+          </button>
+          
+          {/* Skip link */}
+          <button
+            onClick={() => navigate('/home')}
+            className="w-full py-3 text-[#f3e5ab]/50 text-sm font-display hover:text-[#f3e5ab]/70 transition-colors italic"
+          >
+            Skip for now
+          </button>
         </div>
 
         {/* Safe area bottom */}
@@ -479,87 +519,114 @@ const DailySessionPage: React.FC = () => {
 
   const currentStep = session.steps[session.currentStepIndex];
 
+  // ============== MAIN SESSION SCREEN ==============
   return (
-    <div className="fixed inset-0 bg-gradient-to-b from-[#1a1a2e] via-[#16213e] to-[#0f3460] flex flex-col z-50 overflow-auto">
+    <div className="fixed inset-0 flex flex-col z-50 overflow-auto" style={woodBackground}>
       {/* Safe area top */}
       <div className="flex-shrink-0" style={{ height: 'var(--safe-area-top, 0px)' }} />
       
-      {/* Header */}
-      <div className="flex items-center justify-between px-4 py-4">
-        <button
-          onClick={handleExit}
-          className="w-10 h-10 rounded-full bg-white/10 flex items-center justify-center"
-        >
-          <X className="w-6 h-6 text-white/70" />
-        </button>
-        
-        <div className="text-center">
-          <h1 className="text-white font-display font-bold text-lg">Godly Kids Time</h1>
-          <p className="text-white/50 text-xs">Daily Learning Session</p>
-        </div>
-        
-        <div className="w-10" /> {/* Spacer */}
+      {/* Close button */}
+      <button
+        onClick={handleExit}
+        className="absolute top-4 left-4 w-10 h-10 rounded-full bg-black/30 flex items-center justify-center z-10"
+        style={{ marginTop: 'var(--safe-area-top, 0px)' }}
+      >
+        <X className="w-6 h-6 text-white/80" />
+      </button>
+
+      {/* Header Banner */}
+      <div className="flex justify-center pt-4 pb-2">
+        <img 
+          src="/daily-session/dailysessiontitle.png" 
+          alt="Daily Session" 
+          className="h-16 object-contain"
+        />
       </div>
+      
+      {/* Subtitle */}
+      <p className="text-center text-[#f3e5ab]/80 text-sm font-display mb-4">
+        Daily Learning Session
+      </p>
 
       {/* Progress Steps */}
       <div className="px-6 py-4">
-        <div className="flex items-center justify-between">
-          {session.steps.map((step, index) => (
-            <React.Fragment key={step.type}>
-              {/* Step circle */}
-              <div className="flex flex-col items-center">
-                <div className={`
-                  w-12 h-12 rounded-full flex items-center justify-center transition-all
-                  ${step.status === 'completed' 
-                    ? 'bg-[#8BC34A]' 
-                    : session.currentStepIndex === index
-                      ? 'bg-[#FFD700] ring-4 ring-[#FFD700]/30'
-                      : 'bg-white/10'
-                  }
-                `}>
-                  {getStepStatusIcon(step, index)}
+        <div className="bg-[#5D4037]/80 rounded-2xl p-4 border-4 border-[#8B4513]"
+          style={{
+            boxShadow: 'inset 2px 2px 4px rgba(0,0,0,0.3), inset -2px -2px 4px rgba(255,255,255,0.1)',
+          }}
+        >
+          <div className="flex items-center justify-between">
+            {session.steps.map((step, index) => (
+              <React.Fragment key={step.type}>
+                {/* Step circle */}
+                <div className="flex flex-col items-center">
+                  <div className={`
+                    w-14 h-14 rounded-full flex items-center justify-center transition-all border-4
+                    ${step.status === 'completed' 
+                      ? 'bg-[#8BC34A] border-[#689F38]' 
+                      : session.currentStepIndex === index
+                        ? 'bg-[#FFD700] border-[#FFA000] ring-4 ring-[#FFD700]/40'
+                        : 'bg-[#8B4513]/50 border-[#5D4037]'
+                    }
+                  `}>
+                    {getStepStatusIcon(step, index)}
+                  </div>
+                  <span className={`
+                    text-xs mt-2 font-display font-bold
+                    ${session.currentStepIndex === index 
+                      ? 'text-[#FFD700]' 
+                      : step.status === 'completed'
+                        ? 'text-[#8BC34A]'
+                        : 'text-[#f3e5ab]/50'
+                    }
+                  `}>
+                    {step.label}
+                  </span>
                 </div>
-                <span className={`
-                  text-xs mt-2 font-medium
-                  ${session.currentStepIndex === index 
-                    ? 'text-[#FFD700]' 
-                    : step.status === 'completed'
-                      ? 'text-[#8BC34A]'
-                      : 'text-white/50'
-                  }
-                `}>
-                  {step.label}
-                </span>
-              </div>
-              
-              {/* Connector line */}
-              {index < session.steps.length - 1 && (
-                <div className={`
-                  flex-1 h-1 mx-2 rounded-full transition-all
-                  ${step.status === 'completed' 
-                    ? 'bg-[#8BC34A]' 
-                    : 'bg-white/10'
-                  }
-                `} />
-              )}
-            </React.Fragment>
-          ))}
+                
+                {/* Connector line */}
+                {index < session.steps.length - 1 && (
+                  <div className={`
+                    flex-1 h-2 mx-2 rounded-full transition-all
+                    ${step.status === 'completed' 
+                      ? 'bg-[#8BC34A]' 
+                      : 'bg-[#8B4513]/50'
+                    }
+                  `}
+                    style={{
+                      boxShadow: step.status === 'completed' 
+                        ? 'inset 0 -2px 4px rgba(0,0,0,0.2)' 
+                        : 'inset 0 2px 4px rgba(0,0,0,0.3)',
+                    }}
+                  />
+                )}
+              </React.Fragment>
+            ))}
+          </div>
         </div>
       </div>
 
       {/* Current Step Content */}
       <div className="flex-1 px-6 py-4 flex flex-col">
         {/* Step Card */}
-        <div className="bg-white/10 backdrop-blur-sm rounded-3xl p-6 flex-1 flex flex-col">
+        <div className="bg-[#5D4037]/80 rounded-2xl p-6 flex-1 flex flex-col border-4 border-[#8B4513]"
+          style={{
+            boxShadow: 'inset 2px 2px 4px rgba(0,0,0,0.3), inset -2px -2px 4px rgba(255,255,255,0.1)',
+          }}
+        >
           {/* Step icon and title */}
           <div className="text-center mb-6">
-            <div className="w-20 h-20 rounded-full bg-gradient-to-br from-[#FFD700] to-[#FFA500] mx-auto flex items-center justify-center mb-4">
-              <span className="text-4xl">{currentStep.icon}</span>
+            <div className="w-24 h-24 rounded-full bg-gradient-to-br from-[#FFD700] to-[#FFA500] mx-auto flex items-center justify-center mb-4 border-4 border-[#8B4513]"
+              style={{
+                boxShadow: '0 4px 15px rgba(255, 215, 0, 0.4)',
+              }}
+            >
+              <span className="text-5xl">{currentStep.icon}</span>
             </div>
-            <h2 className="text-white font-display font-bold text-2xl">
+            <h2 className="text-[#FFD700] font-display font-bold text-2xl drop-shadow-lg">
               {currentStep.label}
             </h2>
-            <p className="text-white/60 text-sm mt-2">
+            <p className="text-[#f3e5ab]/70 text-sm mt-2 font-display">
               {currentStep.type === 'prayer' && 'Start your learning with prayer'}
               {currentStep.type === 'devotional' && 'Watch today\'s video lesson'}
               {currentStep.type === 'book' && 'Read your recommended book'}
@@ -569,35 +636,35 @@ const DailySessionPage: React.FC = () => {
           {/* Step-specific content preview */}
           <div className="flex-1 flex flex-col justify-center">
             {currentStep.type === 'prayer' && (
-              <div className="bg-white/5 rounded-2xl p-4 text-center">
-                <p className="text-white/70 text-sm">
+              <div className="bg-[#8B4513]/50 rounded-xl p-4 text-center border-2 border-[#A0522D]">
+                <p className="text-[#f3e5ab]/80 text-sm font-display">
                   Select 3 prayer topics and pray together.
                 </p>
-                <p className="text-[#FFD700] font-bold mt-2">
-                  +30 coins
+                <p className="text-[#FFD700] font-bold mt-2 font-display text-lg">
+                  🪙 +30 coins
                 </p>
               </div>
             )}
             
             {currentStep.type === 'devotional' && selectedLesson && (
-              <div className="bg-white/5 rounded-2xl p-4">
+              <div className="bg-[#8B4513]/50 rounded-xl p-4 border-2 border-[#A0522D]">
                 <div className="flex items-center gap-4">
-                  <div className="w-20 h-20 rounded-xl bg-gradient-to-br from-purple-500 to-indigo-600 flex items-center justify-center">
+                  <div className="w-20 h-20 rounded-xl bg-gradient-to-br from-purple-500 to-indigo-600 flex items-center justify-center border-2 border-[#5D4037]">
                     <Play className="w-8 h-8 text-white" />
                   </div>
                   <div className="flex-1">
-                    <h3 className="text-white font-bold">{selectedLesson.title}</h3>
-                    <p className="text-white/60 text-sm">{selectedLesson.type}</p>
-                    <p className="text-[#FFD700] text-sm mt-1">+20 coins</p>
+                    <h3 className="text-[#f3e5ab] font-bold font-display">{selectedLesson.title}</h3>
+                    <p className="text-[#f3e5ab]/60 text-sm font-display">{selectedLesson.type}</p>
+                    <p className="text-[#FFD700] text-sm mt-1 font-display font-bold">🪙 +20 coins</p>
                   </div>
                 </div>
               </div>
             )}
             
             {currentStep.type === 'book' && recommendedBook && (
-              <div className="bg-white/5 rounded-2xl p-4">
+              <div className="bg-[#8B4513]/50 rounded-xl p-4 border-2 border-[#A0522D]">
                 <div className="flex items-center gap-4">
-                  <div className="w-20 h-28 rounded-xl overflow-hidden bg-white/10">
+                  <div className="w-20 h-28 rounded-xl overflow-hidden bg-[#5D4037]/50 border-2 border-[#8B4513]">
                     <img 
                       src={recommendedBook.coverUrl || recommendedBook.files?.coverImage} 
                       alt={recommendedBook.title}
@@ -605,12 +672,12 @@ const DailySessionPage: React.FC = () => {
                     />
                   </div>
                   <div className="flex-1">
-                    <h3 className="text-white font-bold">{recommendedBook.title}</h3>
-                    <p className="text-white/60 text-sm">{recommendedBook.author}</p>
-                    <p className="text-white/50 text-xs mt-1">
+                    <h3 className="text-[#f3e5ab] font-bold font-display">{recommendedBook.title}</h3>
+                    <p className="text-[#f3e5ab]/60 text-sm font-display">{recommendedBook.author}</p>
+                    <p className="text-[#f3e5ab]/40 text-xs mt-1 font-display">
                       {recommendedBook.category || recommendedBook.categories?.[0]}
                     </p>
-                    <p className="text-[#FFD700] text-sm mt-1">+30 coins</p>
+                    <p className="text-[#FFD700] text-sm mt-1 font-display font-bold">🪙 +30 coins</p>
                   </div>
                 </div>
               </div>
@@ -619,8 +686,8 @@ const DailySessionPage: React.FC = () => {
 
           {/* Selected subjects reminder */}
           {session.subjects.length > 0 && (
-            <div className="mt-4 pt-4 border-t border-white/10">
-              <p className="text-white/40 text-xs text-center">
+            <div className="mt-4 pt-4 border-t border-[#8B4513]/50">
+              <p className="text-[#f3e5ab]/40 text-xs text-center font-display italic">
                 Today's subjects: {getSubjectsDisplay()}
               </p>
             </div>
@@ -628,24 +695,30 @@ const DailySessionPage: React.FC = () => {
         </div>
 
         {/* Action Buttons */}
-        <div className="mt-6 space-y-3">
-          <WoodButton
+        <div className="mt-6">
+          <button
             onClick={handleStartStep}
-            fullWidth
-            variant="gold"
-            className="py-4"
+            className="w-full relative transition-all transform active:scale-95 hover:scale-102"
           >
-            <span className="flex items-center justify-center gap-2">
-              {currentStep.type === 'prayer' && 'Start Prayer'}
-              {currentStep.type === 'devotional' && 'Watch Video'}
-              {currentStep.type === 'book' && 'Start Reading'}
-              <ChevronRight className="w-5 h-5" />
-            </span>
-          </WoodButton>
+            <img 
+              src="/daily-session/Startsession.png" 
+              alt="Start"
+              className="w-full h-auto"
+            />
+            {/* Overlay text for specific action */}
+            <div className="absolute inset-0 flex items-center justify-center">
+              <span className="text-[#5D4037] font-display font-bold text-xl flex items-center gap-2">
+                {currentStep.type === 'prayer' && 'Start Prayer'}
+                {currentStep.type === 'devotional' && 'Watch Video'}
+                {currentStep.type === 'book' && 'Start Reading'}
+                <ChevronRight className="w-6 h-6" />
+              </span>
+            </div>
+          </button>
           
           <button
             onClick={handleSkipStep}
-            className="w-full py-3 text-white/50 text-sm hover:text-white/70 transition-colors"
+            className="w-full py-3 text-[#f3e5ab]/50 text-sm font-display hover:text-[#f3e5ab]/70 transition-colors italic"
           >
             Skip this step
           </button>
@@ -653,7 +726,7 @@ const DailySessionPage: React.FC = () => {
       </div>
 
       {/* Safe area bottom */}
-      <div style={{ height: 'var(--safe-area-bottom, 0px)' }} />
+      <div className="flex-shrink-0" style={{ height: 'var(--safe-area-bottom, 0px)' }} />
 
       {/* Prayer Modal */}
       <PrayerGameModal

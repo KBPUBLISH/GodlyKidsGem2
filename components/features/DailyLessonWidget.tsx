@@ -208,7 +208,7 @@ const DailyLessonWidget: React.FC<DailyLessonWidgetProps> = ({ onStartLesson }) 
         {/* Start/Continue Button */}
         <button
           onClick={handleStartLesson}
-          className="w-full bg-[#5A8A8A] hover:bg-[#4A7A7A] text-white font-display font-bold text-xl py-5 rounded-2xl shadow-md transition-all active:scale-[0.98] relative z-10"
+          className="w-full bg-[#1B8BB8] hover:bg-[#157A9E] text-white font-display font-bold text-lg py-4 rounded-full shadow-lg transition-all active:scale-[0.98] relative z-10"
         >
           {hasInProgress ? 'Continue Adventure' : 'Start Adventure'}
         </button>

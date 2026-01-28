@@ -3,7 +3,7 @@ import {
     TrendingUp, Users, UserPlus, Crown, XCircle, RefreshCw,
     ChevronRight, Calendar, BarChart3, ArrowDownRight, ArrowUpRight,
     BookOpen, AlertTriangle, CheckCircle, Target, Sparkles, MessageSquare,
-    ThumbsUp, ThumbsDown, Star, Gamepad2, Headphones, Music
+    ThumbsUp, ThumbsDown, Star, Gamepad2, Headphones, Music, PlayCircle, PauseCircle
 } from 'lucide-react';
 
 interface FunnelStep {
@@ -28,6 +28,19 @@ interface DailyTrend {
     skipped: number;
 }
 
+interface FirstLessonData {
+    summary: {
+        totalStarted: number;
+        totalCompleted: number;
+        totalPaused: number;
+        completionRate: number;
+        pauseRate: number;
+    };
+    funnel: FunnelStep[];
+    dropoffs: TutorialDropoff[];
+    dailyTrends: { date: string; started: number; completed: number; paused: number }[];
+}
+
 interface OnboardingData {
     success: boolean;
     period: { days: number; startDate: string };
@@ -42,6 +55,7 @@ interface OnboardingData {
     eventCounts: Record<string, number>;
     dailyTrends: DailyTrend[];
     planPreference: { annual: number; monthly: number };
+    firstLesson?: FirstLessonData;
 }
 
 interface GoalData {
@@ -175,7 +189,7 @@ const OnboardingAnalytics: React.FC = () => {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [days, setDays] = useState(7);
-    const [activeTab, setActiveTab] = useState<'onboarding' | 'tutorial' | 'retention' | 'survey'>('onboarding');
+    const [activeTab, setActiveTab] = useState<'onboarding' | 'tutorial' | 'firstLesson' | 'retention' | 'survey'>('onboarding');
 
     const fetchData = async () => {
         setLoading(true);
@@ -327,6 +341,24 @@ const OnboardingAnalytics: React.FC = () => {
                         {tutorialData && tutorialData.summary.totalUsers > 0 && (
                             <span className="bg-green-100 text-green-700 text-xs px-2 py-0.5 rounded-full">
                                 {tutorialData.summary.totalUsers}
+                            </span>
+                        )}
+                    </span>
+                </button>
+                <button
+                    onClick={() => setActiveTab('firstLesson')}
+                    className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                        activeTab === 'firstLesson'
+                            ? 'bg-white text-indigo-600 shadow-sm'
+                            : 'text-gray-600 hover:text-gray-800'
+                    }`}
+                >
+                    <span className="flex items-center gap-2">
+                        <PlayCircle className="w-4 h-4" />
+                        First Lesson
+                        {data?.firstLesson && data.firstLesson.summary.totalStarted > 0 && (
+                            <span className="bg-blue-100 text-blue-700 text-xs px-2 py-0.5 rounded-full">
+                                {data.firstLesson.summary.completionRate}%
                             </span>
                         )}
                     </span>
@@ -912,6 +944,241 @@ const OnboardingAnalytics: React.FC = () => {
                 </div>
             </div>
             </>
+            )}
+
+            {/* ============ FIRST LESSON TAB ============ */}
+            {activeTab === 'firstLesson' && data?.firstLesson && (
+            <>
+            {/* First Lesson Summary Cards */}
+            <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+                <div className="bg-white rounded-xl border border-gray-100 p-4 shadow-sm">
+                    <div className="flex items-center gap-2 text-gray-500 text-sm mb-1">
+                        <PlayCircle className="w-4 h-4 text-blue-500" />
+                        Lessons Started
+                    </div>
+                    <p className="text-2xl font-bold text-gray-900">{data.firstLesson.summary.totalStarted.toLocaleString()}</p>
+                </div>
+                <div className="bg-white rounded-xl border border-gray-100 p-4 shadow-sm">
+                    <div className="flex items-center gap-2 text-gray-500 text-sm mb-1">
+                        <CheckCircle className="w-4 h-4 text-green-500" />
+                        Completed
+                    </div>
+                    <p className="text-2xl font-bold text-green-600">{data.firstLesson.summary.totalCompleted.toLocaleString()}</p>
+                </div>
+                <div className="bg-white rounded-xl border border-gray-100 p-4 shadow-sm">
+                    <div className="flex items-center gap-2 text-gray-500 text-sm mb-1">
+                        <PauseCircle className="w-4 h-4 text-orange-500" />
+                        Paused/Exited
+                    </div>
+                    <p className="text-2xl font-bold text-orange-600">{data.firstLesson.summary.totalPaused.toLocaleString()}</p>
+                </div>
+                <div className="bg-white rounded-xl border border-gray-100 p-4 shadow-sm">
+                    <div className="flex items-center gap-2 text-gray-500 text-sm mb-1">
+                        <TrendingUp className="w-4 h-4 text-green-500" />
+                        Completion Rate
+                    </div>
+                    <p className="text-2xl font-bold text-green-600">{data.firstLesson.summary.completionRate}%</p>
+                </div>
+                <div className="bg-white rounded-xl border border-gray-100 p-4 shadow-sm">
+                    <div className="flex items-center gap-2 text-gray-500 text-sm mb-1">
+                        <XCircle className="w-4 h-4 text-red-500" />
+                        Pause Rate
+                    </div>
+                    <p className="text-2xl font-bold text-red-600">{data.firstLesson.summary.pauseRate}%</p>
+                </div>
+            </div>
+
+            {/* First Lesson Funnel */}
+            <div className="bg-white rounded-xl border border-gray-100 p-6 shadow-sm">
+                <h3 className="text-lg font-semibold text-gray-800 mb-4 flex items-center gap-2">
+                    <ChevronRight className="w-5 h-5 text-blue-600" />
+                    First Lesson Funnel (Daily Session Progress)
+                </h3>
+                <p className="text-sm text-gray-500 mb-4">
+                    Track how users progress through their first daily session: Learn → Read → Pray
+                </p>
+                <div className="space-y-3">
+                    {data.firstLesson.funnel.map((step, idx) => (
+                        <div key={step.stepKey} className="flex items-center gap-4">
+                            <div className="w-44 text-sm font-medium text-gray-700 flex items-center gap-2">
+                                <span className={`w-6 h-6 rounded-full text-xs flex items-center justify-center font-bold ${
+                                    step.stepKey === 'completed' 
+                                        ? 'bg-green-100 text-green-600' 
+                                        : 'bg-blue-100 text-blue-600'
+                                }`}>
+                                    {idx + 1}
+                                </span>
+                                <span className="truncate" title={step.step}>{step.step}</span>
+                            </div>
+                            <div className="flex-1 bg-gray-100 rounded-full h-8 overflow-hidden relative">
+                                <div 
+                                    className={`h-full rounded-full transition-all duration-500 ${
+                                        step.stepKey === 'completed'
+                                            ? 'bg-gradient-to-r from-green-500 to-green-600'
+                                            : 'bg-gradient-to-r from-blue-500 to-blue-600'
+                                    }`}
+                                    style={{ width: `${step.rate}%` }}
+                                />
+                                <div className="absolute inset-0 flex items-center justify-center">
+                                    <span className="text-sm font-semibold text-gray-700">
+                                        {step.count.toLocaleString()} ({step.rate}%)
+                                    </span>
+                                </div>
+                            </div>
+                            {idx > 0 && (
+                                <div className={`text-xs font-medium ${
+                                    step.rate >= data.firstLesson.funnel[idx - 1].rate * 0.8 ? 'text-green-600' : 'text-red-600'
+                                }`}>
+                                    {step.rate >= data.firstLesson.funnel[idx - 1].rate * 0.8 ? (
+                                        <ArrowUpRight className="w-4 h-4" />
+                                    ) : (
+                                        <ArrowDownRight className="w-4 h-4" />
+                                    )}
+                                </div>
+                            )}
+                        </div>
+                    ))}
+                </div>
+            </div>
+
+            {/* Drop-off Points & Daily Trends */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                {/* Drop-off Points */}
+                <div className="bg-white rounded-xl border border-gray-100 p-6 shadow-sm">
+                    <h3 className="text-lg font-semibold text-gray-800 mb-4 flex items-center gap-2">
+                        <AlertTriangle className="w-5 h-5 text-orange-500" />
+                        Biggest Drop-offs
+                    </h3>
+                    {data.firstLesson.dropoffs.length > 0 ? (
+                        <div className="space-y-3">
+                            {data.firstLesson.dropoffs.map((dropoff, idx) => (
+                                <div key={idx} className="bg-red-50 border border-red-100 rounded-lg p-3">
+                                    <div className="flex justify-between items-center mb-1">
+                                        <span className="text-xs text-gray-500">
+                                            {dropoff.from} → {dropoff.to}
+                                        </span>
+                                        <span className="text-red-600 font-bold text-sm">
+                                            -{dropoff.dropRate}%
+                                        </span>
+                                    </div>
+                                    <div className="bg-gray-200 rounded-full h-2 overflow-hidden">
+                                        <div 
+                                            className="h-full bg-red-500 rounded-full"
+                                            style={{ width: `${dropoff.dropRate}%` }}
+                                        />
+                                    </div>
+                                    <p className="text-xs text-gray-500 mt-1">
+                                        {dropoff.dropped} users dropped
+                                    </p>
+                                </div>
+                            ))}
+                        </div>
+                    ) : (
+                        <p className="text-gray-500 text-sm">No significant drop-offs detected</p>
+                    )}
+                </div>
+
+                {/* Daily Trends Chart */}
+                <div className="md:col-span-2 bg-white rounded-xl border border-gray-100 p-6 shadow-sm">
+                    <h3 className="text-lg font-semibold text-gray-800 mb-4 flex items-center gap-2">
+                        <Calendar className="w-5 h-5 text-blue-600" />
+                        Daily First Lesson Activity
+                    </h3>
+                    <div className="h-48 flex items-end gap-1">
+                        {data.firstLesson.dailyTrends.map((day, idx) => {
+                            const maxVal = Math.max(...data.firstLesson.dailyTrends.map(d => d.started), 1);
+                            return (
+                                <div 
+                                    key={idx}
+                                    className="flex-1 flex flex-col items-center justify-end group"
+                                    style={{ height: '100%' }}
+                                >
+                                    <div className="w-full flex flex-col gap-0.5">
+                                        {/* Completed */}
+                                        <div 
+                                            className="w-full bg-green-500 rounded-t"
+                                            style={{ 
+                                                height: day.completed > 0 ? `${Math.max((day.completed / maxVal) * 100, 8)}px` : '0px'
+                                            }}
+                                            title={`${day.completed} completed`}
+                                        />
+                                        {/* Paused */}
+                                        <div 
+                                            className="w-full bg-orange-400"
+                                            style={{ 
+                                                height: day.paused > 0 ? `${Math.max((day.paused / maxVal) * 100, 4)}px` : '0px'
+                                            }}
+                                            title={`${day.paused} paused`}
+                                        />
+                                        {/* Started (remainder) */}
+                                        <div 
+                                            className="w-full bg-blue-400 rounded-b"
+                                            style={{ 
+                                                height: day.started > 0 ? `${Math.max(((day.started - day.completed - day.paused) / maxVal) * 100, 4)}px` : '0px'
+                                            }}
+                                            title={`${day.started} started`}
+                                        />
+                                    </div>
+                                    {idx % 2 === 0 && (
+                                        <span className="text-[9px] text-gray-400 mt-1 -rotate-45 origin-left whitespace-nowrap">
+                                            {formatDate(day.date)}
+                                        </span>
+                                    )}
+                                </div>
+                            );
+                        })}
+                    </div>
+                    <div className="flex gap-4 mt-4 text-xs">
+                        <div className="flex items-center gap-1">
+                            <div className="w-3 h-3 bg-blue-400 rounded" />
+                            <span className="text-gray-600">Started</span>
+                        </div>
+                        <div className="flex items-center gap-1">
+                            <div className="w-3 h-3 bg-orange-400 rounded" />
+                            <span className="text-gray-600">Paused</span>
+                        </div>
+                        <div className="flex items-center gap-1">
+                            <div className="w-3 h-3 bg-green-500 rounded" />
+                            <span className="text-gray-600">Completed</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            {/* Lesson Flow Explanation */}
+            <div className="bg-blue-50 rounded-xl border border-blue-100 p-6">
+                <h3 className="text-lg font-semibold text-blue-800 mb-3 flex items-center gap-2">
+                    <Target className="w-5 h-5" />
+                    Understanding the First Lesson Flow
+                </h3>
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-4 text-sm">
+                    <div className="bg-white rounded-lg p-4 border border-blue-100">
+                        <p className="font-medium text-blue-800">1. Goal Selection</p>
+                        <p className="text-gray-500 text-xs mt-1">User picks a learning goal (self-esteem, faith, etc.)</p>
+                    </div>
+                    <div className="bg-white rounded-lg p-4 border border-blue-100">
+                        <p className="font-medium text-blue-800">2. Reading</p>
+                        <p className="text-gray-500 text-xs mt-1">User reads the recommended book</p>
+                    </div>
+                    <div className="bg-white rounded-lg p-4 border border-blue-100">
+                        <p className="font-medium text-blue-800">3. Discussion</p>
+                        <p className="text-gray-500 text-xs mt-1">AI-generated discussion questions</p>
+                    </div>
+                    <div className="bg-white rounded-lg p-4 border border-blue-100">
+                        <p className="font-medium text-blue-800">4. Prayer</p>
+                        <p className="text-gray-500 text-xs mt-1">Prayer time with selected intentions</p>
+                    </div>
+                </div>
+            </div>
+            </>
+            )}
+
+            {activeTab === 'firstLesson' && (!data?.firstLesson || data.firstLesson.summary.totalStarted === 0) && (
+                <div className="bg-gray-50 rounded-xl p-12 text-center">
+                    <PlayCircle className="w-12 h-12 text-gray-300 mx-auto mb-4" />
+                    <p className="text-gray-500">No first lesson data available yet</p>
+                    <p className="text-gray-400 text-sm mt-2">First lesson analytics will appear once users start the daily session flow</p>
+                </div>
             )}
 
             {/* No Data State */}

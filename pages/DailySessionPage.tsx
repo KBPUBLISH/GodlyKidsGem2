@@ -458,14 +458,17 @@ const DailySessionPage: React.FC = () => {
       duration: sessionDuration,
     });
     
-    // Minimum loading time for UX (shows "Creating your lesson" for at least 3 seconds)
-    const minLoadingTime = new Promise(resolve => setTimeout(resolve, 3000));
-    
-    // Find recommended book based on selected subjects
+    // Start finding the book in the background (don't await yet)
     const bookPromise = findRecommendedBook();
     
-    // Wait for both the book to load AND the minimum time to pass
-    await Promise.all([bookPromise, minLoadingTime]);
+    // Always show loading screen for exactly 3 seconds
+    await new Promise(resolve => setTimeout(resolve, 3000));
+    
+    // Make sure book loading is done
+    await bookPromise;
+    
+    // Now hide the loading screen
+    setIsLoadingBook(false);
   };
 
   // Handle starting current step

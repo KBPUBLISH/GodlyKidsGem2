@@ -107,7 +107,7 @@ const DailySessionPage: React.FC = () => {
   // Book ready countdown state
   const [showBookReadyScreen, setShowBookReadyScreen] = useState(false);
   const [bookCountdown, setBookCountdown] = useState<number | null>(null);
-  const [pendingBookNavigation, setPendingBookNavigation] = useState<{id: string, title: string} | null>(null);
+  const [pendingBookNavigation, setPendingBookNavigation] = useState<{id: string, title: string, coverUrl?: string, pageCount?: number} | null>(null);
   
   // Prayer ready countdown state
   const [showPrayerReadyScreen, setShowPrayerReadyScreen] = useState(false);
@@ -521,9 +521,9 @@ const DailySessionPage: React.FC = () => {
         
       case 'book':
         // Helper function to show book ready screen
-        const showBookReady = (bookId: string, bookTitle: string) => {
+        const showBookReady = (bookId: string, bookTitle: string, coverUrl?: string, pageCount?: number) => {
           setStepContent(currentSession.currentStepIndex, bookId, bookTitle);
-          setPendingBookNavigation({ id: bookId, title: bookTitle });
+          setPendingBookNavigation({ id: bookId, title: bookTitle, coverUrl, pageCount });
           setShowBookReadyScreen(true);
         };
         
@@ -531,7 +531,7 @@ const DailySessionPage: React.FC = () => {
         const recBookId = recommendedBook?.id || recommendedBook?._id;
         if (recommendedBook && recBookId) {
           console.log('📚 Using recommended book:', recommendedBook.title, 'ID:', recBookId);
-          showBookReady(recBookId, recommendedBook.title);
+          showBookReady(recBookId, recommendedBook.title, recommendedBook.coverUrl, recommendedBook.pages?.length || recommendedBook.pageCount);
           return;
         }
         
@@ -544,7 +544,7 @@ const DailySessionPage: React.FC = () => {
             const fbId = fallbackBook.id || fallbackBook._id;
             console.log('📚 Selected fallback book:', fallbackBook.title, 'ID:', fbId);
             setRecommendedBook(fallbackBook);
-            showBookReady(fbId, fallbackBook.title);
+            showBookReady(fbId, fallbackBook.title, fallbackBook.coverUrl, fallbackBook.pages?.length || fallbackBook.pageCount);
             return;
           }
         }
@@ -576,7 +576,7 @@ const DailySessionPage: React.FC = () => {
               console.log('📚 Selected random book:', randomBook.title, 'ID:', rbId);
               setRecommendedBook(randomBook);
               setIsLoadingBook(false);
-              showBookReady(rbId, randomBook.title);
+              showBookReady(rbId, randomBook.title, randomBook.coverUrl, randomBook.pages?.length || randomBook.pageCount);
               return;
             }
           } else {
@@ -1027,13 +1027,36 @@ const DailySessionPage: React.FC = () => {
           ) : (
             // Ready button with book info
             <div className="text-center">
-              {/* Book emoji and title preview */}
+              {/* Book cover and info */}
               <div className="mb-6">
-                <div className="text-7xl mb-4">📚</div>
-                <p className="text-[#f3e5ab] font-display text-lg mb-2">Story Time</p>
-                <p className="text-[#FFD700] font-bold text-xl max-w-xs mx-auto truncate">
+                <p className="text-[#f3e5ab] font-display text-lg mb-4">Story Time</p>
+                
+                {/* Book Cover */}
+                {pendingBookNavigation.coverUrl ? (
+                  <div className="relative mx-auto mb-4 w-32 h-44 rounded-lg overflow-hidden shadow-2xl border-4 border-[#8B5A2B]"
+                    style={{ boxShadow: '0 8px 24px rgba(0,0,0,0.4)' }}
+                  >
+                    <img 
+                      src={pendingBookNavigation.coverUrl} 
+                      alt={pendingBookNavigation.title}
+                      className="w-full h-full object-cover"
+                    />
+                  </div>
+                ) : (
+                  <div className="text-7xl mb-4">📚</div>
+                )}
+                
+                {/* Book Title */}
+                <p className="text-[#FFD700] font-bold text-xl max-w-xs mx-auto mb-2">
                   {pendingBookNavigation.title}
                 </p>
+                
+                {/* Reading Time Estimate */}
+                {pendingBookNavigation.pageCount && pendingBookNavigation.pageCount > 0 && (
+                  <p className="text-[#f3e5ab]/70 text-sm">
+                    ~{Math.max(1, Math.ceil(pendingBookNavigation.pageCount * 0.5))} min read • {pendingBookNavigation.pageCount} pages
+                  </p>
+                )}
               </div>
               
               <button

@@ -720,6 +720,198 @@ function getFallbackAudiobookComments() {
 }
 
 // ===========================
+// DISCUSSION QUESTIONS GENERATION
+// ===========================
+
+// POST /api/ai-generate/discussion-questions - Generate parent-child discussion questions
+router.post('/discussion-questions', async (req, res) => {
+    try {
+        const { bookTitle, bookDescription, bookContent, childAge = '7-12' } = req.body;
+        
+        if (!bookTitle) {
+            return res.status(400).json({ message: 'bookTitle is required' });
+        }
+        
+        const geminiKey = process.env.GEMINI_API_KEY;
+        
+        if (!geminiKey) {
+            console.log('⚠️ No Gemini API key, returning fallback discussion questions');
+            return res.json({ 
+                questions: getFallbackDiscussionQuestions(bookTitle), 
+                source: 'fallback' 
+            });
+        }
+        
+        // Build prompt with story content if available
+        const hasStoryContent = bookContent && bookContent.trim().length > 50;
+        
+        const prompt = hasStoryContent 
+            ? `You are helping a homeschool parent discuss a children's story with their child (age ${childAge}).
+
+STORY TITLE: "${bookTitle}"
+${bookDescription ? `DESCRIPTION: ${bookDescription}` : ''}
+
+FULL STORY TEXT:
+"""
+${bookContent.substring(0, 2500)}
+"""
+
+Based on the ACTUAL STORY TEXT above, create exactly 2 thoughtful discussion questions that:
+1. Reference SPECIFIC events, characters, or situations from this story
+2. Connect the story's themes to faith, values, or real-life lessons
+3. Are open-ended (not yes/no questions)
+4. Are appropriate for a child aged ${childAge}
+5. Help the child think about what they would do in similar situations
+
+IMPORTANT: Your questions MUST be directly related to what happens in the story above. Reference specific characters by name, specific events, or specific lessons from the text.
+
+For each question, also provide:
+- A brief "parent tip" to help guide the discussion (1 sentence)
+- A fun emoji that matches the question's theme
+
+Return ONLY a valid JSON array with exactly 2 objects:
+[
+  {
+    "question": "The question referencing the specific story?",
+    "parentTip": "Brief tip for the parent to guide discussion.",
+    "emoji": "🌟"
+  },
+  {
+    "question": "Second question about the story?",
+    "parentTip": "Brief tip for the parent.",
+    "emoji": "💡"
+  }
+]
+
+Return ONLY the JSON array, no other text.`
+            : `You are helping a homeschool parent discuss a children's book with their child (age ${childAge}).
+
+Book Title: "${bookTitle}"
+${bookDescription ? `Description: ${bookDescription}` : ''}
+
+Generate exactly 2 thoughtful discussion questions that:
+1. Help the parent and child connect over the story's themes
+2. Encourage the child to think about faith, values, or life lessons
+3. Are open-ended (not yes/no questions)
+4. Are appropriate for a child aged ${childAge}
+5. Help apply the story's message to real life
+
+For each question, also provide:
+- A brief "parent tip" to help guide the discussion (1 sentence)
+- A fun emoji that matches the question's theme
+
+Return ONLY a valid JSON array with exactly 2 objects:
+[
+  {
+    "question": "The question text here?",
+    "parentTip": "Brief tip for the parent to guide discussion.",
+    "emoji": "🌟"
+  },
+  {
+    "question": "Second question here?",
+    "parentTip": "Brief tip for the parent.",
+    "emoji": "💡"
+  }
+]
+
+Return ONLY the JSON array, no other text.`;
+
+        console.log(`💬 Generating discussion questions for book: "${bookTitle}"`);
+        
+        const response = await fetch(
+            `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${geminiKey}`,
+            {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    contents: [{ parts: [{ text: prompt }] }],
+                    generationConfig: {
+                        temperature: 0.8,
+                        maxOutputTokens: 1024,
+                    },
+                }),
+            }
+        );
+        
+        if (!response.ok) {
+            console.error('❌ Gemini API error:', await response.text());
+            return res.json({ 
+                questions: getFallbackDiscussionQuestions(bookTitle), 
+                source: 'fallback' 
+            });
+        }
+        
+        const data = await response.json();
+        const responseText = data.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || '';
+        
+        // Parse JSON from response (handle markdown code blocks)
+        let jsonString = responseText;
+        if (responseText.includes('```')) {
+            const match = responseText.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
+            if (match) {
+                jsonString = match[1];
+            }
+        }
+        
+        try {
+            const questions = JSON.parse(jsonString);
+            
+            // Validate the questions
+            const validatedQuestions = questions
+                .filter((q) => q && q.question && q.parentTip && q.emoji)
+                .slice(0, 2)
+                .map((q) => ({
+                    question: q.question.substring(0, 200),
+                    parentTip: q.parentTip.substring(0, 150),
+                    emoji: q.emoji,
+                }));
+            
+            if (validatedQuestions.length < 2) {
+                console.log('⚠️ Not enough valid AI questions, using fallback');
+                return res.json({ 
+                    questions: getFallbackDiscussionQuestions(bookTitle), 
+                    source: 'fallback' 
+                });
+            }
+            
+            console.log(`✅ Generated ${validatedQuestions.length} discussion questions for "${bookTitle}"`);
+            res.json({ questions: validatedQuestions, source: 'ai' });
+            
+        } catch (parseError) {
+            console.error('❌ Failed to parse AI response:', parseError.message);
+            console.log('Raw response:', responseText);
+            res.json({ 
+                questions: getFallbackDiscussionQuestions(bookTitle), 
+                source: 'fallback' 
+            });
+        }
+        
+    } catch (error) {
+        console.error('Generate discussion questions error:', error);
+        res.json({ 
+            questions: getFallbackDiscussionQuestions(req.body?.bookTitle || 'this story'), 
+            source: 'fallback' 
+        });
+    }
+});
+
+// Fallback discussion questions when AI generation fails
+function getFallbackDiscussionQuestions(bookTitle) {
+    return [
+        {
+            question: `What was your favorite part of "${bookTitle}" and why did it stand out to you?`,
+            parentTip: "Listen actively and ask follow-up questions about their feelings.",
+            emoji: "⭐"
+        },
+        {
+            question: "If you could be one character from this story, who would you choose and what would you do differently?",
+            parentTip: "Encourage creativity and connect their answer to real-life choices.",
+            emoji: "💭"
+        }
+    ];
+}
+
+// ===========================
 // RADIO SCRIPT GENERATION
 // ===========================
 

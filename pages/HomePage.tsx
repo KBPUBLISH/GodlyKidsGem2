@@ -1093,22 +1093,25 @@ const HomePage: React.FC = () => {
           
           return (
             <section className="mb-6 mt-4">
-              {/* Section Header */}
-              <div className="flex items-center gap-2 mb-4">
-                <Video className="w-5 h-5 text-[#8B4513]" />
-                <h2 className="text-lg font-bold text-[#5D4037] font-display">Video Devotional Activities</h2>
+              {/* Section Header - Trending Episodes Style */}
+              <div className="flex items-center gap-2 mb-3">
+                <span className="text-xl">📺</span>
+                <h2 className="text-lg font-bold text-[#FFD700] font-display">Video Devotional Activities</h2>
               </div>
               
-              {/* Horizontal Scrolling Thumbnails */}
-              <div className="flex gap-4 overflow-x-auto pb-2 -mx-4 px-4 scrollbar-hide" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
-                {videoDevotionals.map((lesson: any) => {
+              {/* Horizontal Scrolling Cards - Trending Episodes Style */}
+              <div className="flex gap-3 overflow-x-auto pb-3 -mx-4 px-4 scrollbar-hide" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
+                {videoDevotionals.map((lesson: any, index: number) => {
                   const completed = isCompleted(lesson._id);
+                  const locked = isLocked(lesson);
                   const thumbnailUrl = lesson.video?.thumbnail || lesson.thumbnailUrl;
+                  const seriesName = lesson.series || lesson.category || 'Daily Verse';
                   
                   return (
                     <button
                       key={lesson._id}
                       onClick={() => {
+                        if (locked) return; // Don't open if locked
                         // Format lesson data for VideoLessonModal
                         const formattedLesson = {
                           _id: lesson._id,
@@ -1127,10 +1130,10 @@ const HomePage: React.FC = () => {
                         setSelectedVideoLesson(formattedLesson);
                         setShowVideoDevotional(true);
                       }}
-                      className="flex-shrink-0 w-36 group"
+                      className="flex-shrink-0 w-32 group text-left"
                     >
-                      {/* Thumbnail */}
-                      <div className="relative aspect-video rounded-xl overflow-hidden shadow-md border-2 border-[#8B4513]/20 group-hover:border-[#FFD700] transition-all group-hover:scale-[1.02]">
+                      {/* Card with Thumbnail */}
+                      <div className="relative aspect-[3/4] rounded-xl overflow-hidden shadow-lg border-2 border-[#1a3a5c] group-hover:border-[#FFD700] transition-all group-hover:scale-[1.02]">
                         {thumbnailUrl ? (
                           <img
                             src={thumbnailUrl}
@@ -1138,29 +1141,48 @@ const HomePage: React.FC = () => {
                             className="w-full h-full object-cover"
                           />
                         ) : (
-                          <div className="w-full h-full bg-gradient-to-br from-[#8B4513] to-[#5D4037] flex items-center justify-center">
-                            <Video className="w-8 h-8 text-white/50" />
+                          <div className="w-full h-full bg-gradient-to-br from-[#2a5a8c] to-[#1a3a5c] flex items-center justify-center">
+                            <Video className="w-10 h-10 text-white/30" />
                           </div>
                         )}
                         
-                        {/* Play Button Overlay */}
-                        <div className="absolute inset-0 flex items-center justify-center bg-black/20 group-hover:bg-black/30 transition-all">
-                          <div className="w-10 h-10 rounded-full bg-white/90 flex items-center justify-center shadow-lg group-hover:scale-110 transition-transform">
-                            <Play className="w-5 h-5 text-[#8B4513] ml-0.5" fill="#8B4513" />
-                          </div>
+                        {/* Number Badge - Top Left */}
+                        <div className="absolute top-2 left-2 w-7 h-7 rounded-lg bg-gradient-to-br from-orange-400 to-orange-600 flex items-center justify-center shadow-md">
+                          <span className="text-white text-sm font-bold">{index + 1}</span>
                         </div>
                         
-                        {/* Completed Badge */}
-                        {completed && (
+                        {/* Lock Badge - Top Right (if locked) */}
+                        {locked && (
+                          <div className="absolute top-2 right-2 w-6 h-6 rounded-full bg-orange-500 flex items-center justify-center">
+                            <Lock className="w-3.5 h-3.5 text-white" />
+                          </div>
+                        )}
+                        
+                        {/* Completed Badge - Top Right (if completed and not locked) */}
+                        {completed && !locked && (
                           <div className="absolute top-2 right-2 w-6 h-6 rounded-full bg-green-500 flex items-center justify-center">
                             <Check className="w-4 h-4 text-white" />
+                          </div>
+                        )}
+                        
+                        {/* Play Button Overlay - Center */}
+                        {!locked && (
+                          <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                            <div className="w-12 h-12 rounded-full bg-white/90 flex items-center justify-center shadow-xl">
+                              <Play className="w-6 h-6 text-[#1a3a5c] ml-1" fill="#1a3a5c" />
+                            </div>
                           </div>
                         )}
                       </div>
                       
                       {/* Title */}
-                      <p className="mt-2 text-xs font-medium text-[#5D4037] text-center line-clamp-2 leading-tight">
+                      <p className="mt-2 text-sm font-semibold text-white line-clamp-1 leading-tight">
                         {lesson.title}
+                      </p>
+                      
+                      {/* Series/Category Subtitle */}
+                      <p className="text-xs text-sky-300 line-clamp-1">
+                        {seriesName}
                       </p>
                     </button>
                   );

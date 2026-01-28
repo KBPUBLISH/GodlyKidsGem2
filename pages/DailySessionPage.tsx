@@ -276,7 +276,9 @@ const DailySessionPage: React.FC = () => {
     // Filter to only books (not music/playlists) with valid IDs
     const maxPages = getMaxPages(sessionDuration);
     const validBooks = books.filter((book: any) => {
-      if (!book || !book._id) return false;
+      // Check for id OR _id (context transforms _id to id)
+      const bookId = book?.id || book?._id;
+      if (!book || !bookId) return false;
       // Exclude music/playlists - check type field or infer from category
       const type = book.type?.toLowerCase() || '';
       const category = (book.category || '').toLowerCase();
@@ -290,8 +292,8 @@ const DailySessionPage: React.FC = () => {
     
     if (validBooks.length === 0) {
       console.log('📚 No valid books found after filtering');
-      // Fallback to any book with _id
-      const anyBook = books.find((b: any) => b && b._id);
+      // Fallback to any book with id or _id
+      const anyBook = books.find((b: any) => b && (b.id || b._id));
       if (anyBook) setRecommendedBook(anyBook);
       setIsLoadingBook(false);
       return;
@@ -310,7 +312,7 @@ const DailySessionPage: React.FC = () => {
       
       // Prepare book summaries for AI
       const bookSummaries = validBooks.slice(0, 30).map((book: any) => ({
-        id: book._id,
+        id: book.id || book._id,
         title: book.title,
         description: book.description || '',
         category: book.category || book.categories?.[0] || '',
@@ -332,7 +334,7 @@ const DailySessionPage: React.FC = () => {
       if (response.ok) {
         const data = await response.json();
         if (data.recommendedBookId) {
-          const aiBook = validBooks.find((b: any) => b._id === data.recommendedBookId);
+          const aiBook = validBooks.find((b: any) => (b.id || b._id) === data.recommendedBookId);
           if (aiBook) {
             console.log('📚 AI recommended book:', aiBook.title, 'Reason:', data.reason);
             setRecommendedBook(aiBook);
@@ -481,7 +483,7 @@ const DailySessionPage: React.FC = () => {
         // Try to find a book from context first
         if (books && books.length > 0) {
           console.log('📚 Using book from context');
-          const validBooks = books.filter((b: any) => b && b._id);
+          const validBooks = books.filter((b: any) => b && (b.id || b._id));
           if (validBooks.length > 0) {
             const fallbackBook = validBooks[Math.floor(Math.random() * validBooks.length)];
             console.log('📚 Selected fallback book:', fallbackBook.title);
@@ -1141,12 +1143,13 @@ const DailySessionPage: React.FC = () => {
                   const books = data.data || data;
                   if (books && books.length > 0) {
                     const book = books[Math.floor(Math.random() * books.length)];
-                    console.log('🔥 Navigating to book:', book.title, book._id);
+                    const bookId = book.id || book._id;
+                    console.log('🔥 Navigating to book:', book.title, bookId);
                     if (session) {
                       startCurrentStep();
-                      setStepContent(session.currentStepIndex, book._id, book.title);
+                      setStepContent(session.currentStepIndex, bookId, book.title);
                     }
-                    navigate(`/read/${book._id}`, { state: { fromDailySession: true } });
+                    navigate(`/read/${bookId}`, { state: { fromDailySession: true } });
                   } else {
                     alert('No books found!');
                   }

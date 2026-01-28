@@ -22,6 +22,10 @@ const onboardingEventSchema = new mongoose.Schema({
             'splash_explore_clicked',
             'splash_signin_clicked',
             
+            // Interest selection events
+            'interests_selected',
+            'interests_skipped',
+            
             // Onboarding flow events
             'onboarding_started',
             'step_1_complete',      // Parent profile
@@ -70,6 +74,8 @@ const onboardingEventSchema = new mongoose.Schema({
         voiceSelected: String,
         priorities: [String],       // Discipleship goals selected
         features: [String],         // Feature interests selected
+        interests: [String],        // Interest categories selected (bedtime, bible-stories, etc)
+        count: Number,              // Count of selections
         email: String,              // Email for account creation
         platform: String,
         referrer: String,

@@ -187,6 +187,20 @@ const lessonSchema = new mongoose.Schema({
         default: 0,
     },
 
+    // Daily Session settings
+    // Whether this lesson is available for daily session recommendations
+    availableForDailySession: {
+        type: Boolean,
+        default: false,
+    },
+    
+    // Learning goal tags for daily session matching
+    // Values: 'self-esteem', 'connected-to-god', 'learn-bible', 'better-sleep', 'theology', 'life-skills'
+    goalTags: {
+        type: [String],
+        default: [],
+    },
+
     // Metadata
     createdAt: {
         type: Date,

@@ -67,6 +67,8 @@ interface LessonFormData {
     status: 'draft' | 'scheduled' | 'published' | 'archived';
     coinReward: number;
     order: number;
+    availableForDailySession: boolean;
+    goalTags: string[];
 }
 
 const LessonForm: React.FC = () => {
@@ -107,6 +109,8 @@ const LessonForm: React.FC = () => {
         status: 'draft',
         coinReward: 50,
         order: 0,
+        availableForDailySession: false,
+        goalTags: [],
     });
     
     const [uploadingEpisode, setUploadingEpisode] = useState<number | null>(null);
@@ -142,6 +146,8 @@ const LessonForm: React.FC = () => {
                 status: lesson.status || 'draft',
                 coinReward: lesson.coinReward || 50,
                 order: lesson.order || 0,
+                availableForDailySession: lesson.availableForDailySession || false,
+                goalTags: lesson.goalTags || [],
             });
 
             if (lesson.video?.thumbnail) {
@@ -1147,6 +1153,83 @@ const LessonForm: React.FC = () => {
                             />
                         </div>
                     </div>
+                </div>
+
+                {/* Daily Session Settings */}
+                <div className="space-y-4">
+                    <h3 className="text-lg font-semibold text-gray-800 flex items-center gap-2">
+                        📅 Daily Session Settings
+                    </h3>
+                    <p className="text-sm text-gray-500">
+                        Configure whether this lesson appears in Daily Sessions and which learning goals it relates to.
+                    </p>
+                    
+                    {/* Available for Daily Session Toggle */}
+                    <div 
+                        onClick={() => setFormData(prev => ({ ...prev, availableForDailySession: !prev.availableForDailySession }))}
+                        className={`w-full rounded-md border text-base px-4 py-3 transition cursor-pointer min-h-[44px] flex items-center justify-between ${
+                            formData.availableForDailySession 
+                                ? 'bg-green-50 border-green-300 text-green-800' 
+                                : 'bg-gray-50 border-gray-300 text-gray-600'
+                        }`}
+                    >
+                        <span className="font-medium">
+                            {formData.availableForDailySession ? '✅ Available for Daily Sessions' : '⏸️ Not in Daily Sessions'}
+                        </span>
+                        <div className={`w-12 h-6 rounded-full relative transition-colors ${
+                            formData.availableForDailySession ? 'bg-green-400' : 'bg-gray-300'
+                        }`}>
+                            <div className={`absolute top-1 w-4 h-4 rounded-full bg-white shadow transition-transform ${
+                                formData.availableForDailySession ? 'translate-x-7' : 'translate-x-1'
+                            }`} />
+                        </div>
+                    </div>
+                    
+                    {/* Goal Tags */}
+                    {formData.availableForDailySession && (
+                        <div className="bg-indigo-50 rounded-lg p-4 border border-indigo-200">
+                            <p className="text-sm font-medium text-indigo-900 mb-3">Learning Goal Tags</p>
+                            <p className="text-xs text-indigo-700 mb-3">
+                                Select which learning goals this lesson relates to. Users who select these goals in Daily Sessions will see this lesson.
+                            </p>
+                            <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+                                {[
+                                    { id: 'self-esteem', label: '💪 Self Esteem' },
+                                    { id: 'connected-to-god', label: '🙏 Connected to God' },
+                                    { id: 'learn-bible', label: '📖 Learn Bible' },
+                                    { id: 'better-sleep', label: '😴 Better Sleep' },
+                                    { id: 'theology', label: '✝️ Theology' },
+                                    { id: 'life-skills', label: '⭐ Life Skills' },
+                                ].map((goal) => (
+                                    <label
+                                        key={goal.id}
+                                        className={`flex items-center gap-2 p-2 rounded-lg cursor-pointer transition-colors ${
+                                            formData.goalTags.includes(goal.id)
+                                                ? 'bg-indigo-100 border-2 border-indigo-400'
+                                                : 'bg-white border-2 border-gray-200 hover:border-indigo-300'
+                                        }`}
+                                    >
+                                        <input
+                                            type="checkbox"
+                                            checked={formData.goalTags.includes(goal.id)}
+                                            onChange={(e) => {
+                                                if (e.target.checked) {
+                                                    setFormData(prev => ({ ...prev, goalTags: [...prev.goalTags, goal.id] }));
+                                                } else {
+                                                    setFormData(prev => ({ ...prev, goalTags: prev.goalTags.filter(t => t !== goal.id) }));
+                                                }
+                                            }}
+                                            className="w-4 h-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500"
+                                        />
+                                        <span className="text-sm text-gray-700">{goal.label}</span>
+                                    </label>
+                                ))}
+                            </div>
+                            {formData.goalTags.length === 0 && (
+                                <p className="text-xs text-amber-600 mt-2">⚠️ Select at least one goal tag for this lesson to appear in Daily Sessions.</p>
+                            )}
+                        </div>
+                    )}
                 </div>
 
                 {/* Submit Buttons */}

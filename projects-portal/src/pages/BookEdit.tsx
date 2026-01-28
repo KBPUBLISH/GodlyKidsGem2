@@ -71,6 +71,10 @@ const BookEdit: React.FC = () => {
     const [defaultNarratorVoiceId, setDefaultNarratorVoiceId] = useState<string>('');
     const [characterVoices, setCharacterVoices] = useState<Array<{ characterName: string; voiceId: string; color?: string }>>([]);
     const [newCharacterName, setNewCharacterName] = useState<string>('');
+    
+    // Daily Session settings
+    const [availableForDailySession, setAvailableForDailySession] = useState(false);
+    const [goalTags, setGoalTags] = useState<string[]>([]);
 
     // Load existing book data
     useEffect(() => {
@@ -140,6 +144,10 @@ const BookEdit: React.FC = () => {
                 } else {
                     setCharacterVoices([]);
                 }
+                
+                // Load daily session settings
+                setAvailableForDailySession(b.availableForDailySession || false);
+                setGoalTags(b.goalTags || []);
             } catch (err) {
                 console.error('Failed to fetch book:', err);
             } finally {
@@ -459,6 +467,8 @@ const BookEdit: React.FC = () => {
                 rewardVoiceId: rewardVoiceId || null, // Voice unlocked when completing book
                 defaultNarratorVoiceId: defaultNarratorVoiceId || null, // Narrator voice (used when no @Character tag)
                 characterVoices: characterVoices, // Character-to-voice mappings for @Character tags
+                availableForDailySession: availableForDailySession, // Whether this book shows in daily sessions
+                goalTags: goalTags, // Learning goal tags for daily session matching
             };
             console.log('Updating book with payload:', payload);
             await apiClient.put(`/api/books/${bookId}`, payload);
@@ -706,6 +716,85 @@ const BookEdit: React.FC = () => {
                                 ? 'Only subscribers can access this book' 
                                 : 'Everyone can access this book'}
                         </p>
+                    </div>
+                </div>
+                
+                {/* Daily Session Settings */}
+                <div className="border-t border-gray-200 pt-6">
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                        📅 Daily Session Settings
+                    </label>
+                    <p className="text-xs text-gray-500 mb-4">
+                        Configure whether this book appears in Daily Sessions and which learning goals it relates to.
+                    </p>
+                    
+                    <div className="space-y-4">
+                        {/* Available for Daily Session Toggle */}
+                        <div 
+                            onClick={() => setAvailableForDailySession(!availableForDailySession)}
+                            className={`w-full rounded-md border text-base px-4 py-3 transition cursor-pointer min-h-[44px] flex items-center justify-between ${
+                                availableForDailySession 
+                                    ? 'bg-green-50 border-green-300 text-green-800' 
+                                    : 'bg-gray-50 border-gray-300 text-gray-600'
+                            }`}
+                        >
+                            <span className="font-medium">
+                                {availableForDailySession ? '✅ Available for Daily Sessions' : '⏸️ Not in Daily Sessions'}
+                            </span>
+                            <div className={`w-12 h-6 rounded-full relative transition-colors ${
+                                availableForDailySession ? 'bg-green-400' : 'bg-gray-300'
+                            }`}>
+                                <div className={`absolute top-1 w-4 h-4 rounded-full bg-white shadow transition-transform ${
+                                    availableForDailySession ? 'translate-x-7' : 'translate-x-1'
+                                }`} />
+                            </div>
+                        </div>
+                        
+                        {/* Goal Tags */}
+                        {availableForDailySession && (
+                            <div className="bg-indigo-50 rounded-lg p-4 border border-indigo-200">
+                                <p className="text-sm font-medium text-indigo-900 mb-3">Learning Goal Tags</p>
+                                <p className="text-xs text-indigo-700 mb-3">
+                                    Select which learning goals this book relates to. Users who select these goals in Daily Sessions will see this book.
+                                </p>
+                                <div className="grid grid-cols-2 gap-2">
+                                    {[
+                                        { id: 'self-esteem', label: '💪 Self Esteem' },
+                                        { id: 'connected-to-god', label: '🙏 Connected to God' },
+                                        { id: 'learn-bible', label: '📖 Learn Bible' },
+                                        { id: 'better-sleep', label: '😴 Better Sleep' },
+                                        { id: 'theology', label: '✝️ Theology' },
+                                        { id: 'life-skills', label: '⭐ Life Skills' },
+                                    ].map((goal) => (
+                                        <label
+                                            key={goal.id}
+                                            className={`flex items-center gap-2 p-2 rounded-lg cursor-pointer transition-colors ${
+                                                goalTags.includes(goal.id)
+                                                    ? 'bg-indigo-100 border-2 border-indigo-400'
+                                                    : 'bg-white border-2 border-gray-200 hover:border-indigo-300'
+                                            }`}
+                                        >
+                                            <input
+                                                type="checkbox"
+                                                checked={goalTags.includes(goal.id)}
+                                                onChange={(e) => {
+                                                    if (e.target.checked) {
+                                                        setGoalTags([...goalTags, goal.id]);
+                                                    } else {
+                                                        setGoalTags(goalTags.filter(t => t !== goal.id));
+                                                    }
+                                                }}
+                                                className="w-4 h-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500"
+                                            />
+                                            <span className="text-sm text-gray-700">{goal.label}</span>
+                                        </label>
+                                    ))}
+                                </div>
+                                {goalTags.length === 0 && (
+                                    <p className="text-xs text-amber-600 mt-2">⚠️ Select at least one goal tag for this book to appear in Daily Sessions.</p>
+                                )}
+                            </div>
+                        )}
                     </div>
                 </div>
                 

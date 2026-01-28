@@ -1062,10 +1062,14 @@ const HomePage: React.FC = () => {
 
         {/* 🎬 Video Devotional Activities */}
         {(() => {
-          // Filter all lessons that have video content
+          // Filter lessons marked as "Daily Verse" type (case-insensitive)
           const videoDevotionals = lessons.filter((l: any) => 
-            l.video?.url || l.videoUrl || l.type?.toLowerCase().includes('verse') || l.type?.toLowerCase().includes('video')
+            l.type === 'Daily Verse' || l.type?.toLowerCase() === 'daily verse'
           );
+          
+          // Debug: log all lesson types to help identify the correct type name
+          console.log('📺 All lesson types:', [...new Set(lessons.map((l: any) => l.type))]);
+          console.log('📺 Daily Verse videos found:', videoDevotionals.length);
           
           if (videoDevotionals.length === 0) return null;
           
@@ -1078,7 +1082,7 @@ const HomePage: React.FC = () => {
               />
               <div className="w-screen overflow-x-auto no-scrollbar pb-2 -mx-4 snap-x snap-mandatory">
                 <div className="flex space-x-4 px-4">
-                  {videoDevotionals.map((lesson: any, index: number) => {
+                  {videoDevotionals.map((lesson: any) => {
                     const completed = isCompleted(lesson._id);
                     const locked = isLocked(lesson);
                     const thumbnailUrl = lesson.video?.thumbnail || lesson.thumbnailUrl;
@@ -1113,11 +1117,6 @@ const HomePage: React.FC = () => {
                           {/* Play overlay */}
                           <div className="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
                             <Play className="w-12 h-12 text-white fill-white" />
-                          </div>
-                          
-                          {/* Ranking badge - Top left */}
-                          <div className="absolute top-2 left-2 w-8 h-8 bg-gradient-to-br from-orange-500 to-red-600 rounded-full flex items-center justify-center text-white text-base font-black shadow-lg">
-                            {index + 1}
                           </div>
                           
                           {/* Lock badge - Top right (if locked and not subscribed) */}

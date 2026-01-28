@@ -35,7 +35,7 @@ import { bookCompletionService } from '../services/bookCompletionService';
 import { profileService } from '../services/profileService';
 import { activityTrackingService } from '../services/activityTrackingService';
 import { getPreferenceTags, getSavedPreferences } from './InterestSelectionPage';
-import { isSessionCompletedToday, getSessionStreak } from '../services/dailySessionService';
+import { isSessionCompletedToday, getSessionStreak, hasSessionToday } from '../services/dailySessionService';
 
 // Helper to format date as YYYY-MM-DD in local time
 const formatLocalDateKey = (d: Date): string => {
@@ -272,6 +272,25 @@ const HomePage: React.FC = () => {
       console.log(`🏠 HomePage UNMOUNT [${mountId}]`, new Date().toISOString());
     };
   }, []);
+
+  // Auto-redirect to Daily Session on first app open of the day
+  useEffect(() => {
+    const DAILY_SESSION_REDIRECT_KEY = 'godlykids_daily_session_redirect_shown';
+    const today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
+    const lastRedirectDate = sessionStorage.getItem(DAILY_SESSION_REDIRECT_KEY);
+    
+    // Only redirect if:
+    // 1. Haven't redirected today (this session)
+    // 2. Daily session not completed yet
+    // 3. User has selected subjects (completed interest selection)
+    const hasSubjects = getSavedPreferences().length > 0;
+    
+    if (lastRedirectDate !== today && !isSessionCompletedToday() && hasSubjects) {
+      console.log('📚 Auto-redirecting to Daily Session (first open of the day)');
+      sessionStorage.setItem(DAILY_SESSION_REDIRECT_KEY, today);
+      navigate('/daily-session');
+    }
+  }, [navigate]);
   
   // Track last fetch time to prevent excessive refetching (debounce)
   // Use sessionStorage so it persists across component remounts

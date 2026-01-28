@@ -150,9 +150,22 @@ const LandingPage: React.FC = () => {
         </h1>
         
         {/* Subtitle */}
-        <p className="text-[#5A7A8A] text-center text-base mb-6">
+        <p className="text-[#5A7A8A] text-center text-base mb-4">
           Today's Lesson – 10 minutes
         </p>
+        
+        {/* Rating and Social Proof */}
+        <div className="text-center mb-6">
+          {/* Star Rating */}
+          <div className="flex items-center justify-center gap-1 mb-2">
+            <span className="text-[#FFB800] text-lg">★★★★★</span>
+            <span className="text-[#2D3748] font-bold text-sm ml-1">4.9</span>
+          </div>
+          {/* Social Proof */}
+          <p className="text-[#5A7A8A] text-sm">
+            Over 1,000+ families use Godly Kids for daily faith lessons
+          </p>
+        </div>
         
         {/* Start Lesson Button - Wood Theme */}
         <button

@@ -206,13 +206,13 @@ const DiscussionQuestionsModal: React.FC<DiscussionQuestionsModalProps> = ({
                 Based on: <span className="font-medium">{bookTitle}</span>
               </p>
 
-              {/* Question card - scrollable for long questions */}
+              {/* Question card - expanded height for longer questions */}
               {currentQuestion && (
-                <div className="bg-white rounded-xl p-5 shadow-md border-2 border-[#8B4513]/20 mb-4 max-h-[200px] overflow-y-auto" style={{ WebkitOverflowScrolling: 'touch' }}>
+                <div className="bg-white rounded-xl p-5 shadow-md border-2 border-[#8B4513]/20 mb-4">
                   <div className="flex items-start gap-3">
                     <span className="text-3xl flex-shrink-0">{currentQuestion.emoji}</span>
                     <div className="flex-1 min-w-0">
-                      <p className="text-[#5D4037] font-medium text-lg leading-relaxed">
+                      <p className="text-[#5D4037] font-medium text-lg leading-relaxed break-words">
                         {currentQuestion.question}
                       </p>
                     </div>

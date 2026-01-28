@@ -1,7 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { activityTrackingService } from '../services/activityTrackingService';
-import { hasCompletedInterestSelection } from './InterestSelectionPage';
 
 const STORAGE_KEY = 'godly_kids_data_v6';
 
@@ -68,12 +67,9 @@ const LandingPage: React.FC = () => {
   }, [isChecking]);
 
   const handleStartLesson = () => {
-    activityTrackingService.trackOnboardingEvent('splash_explore_clicked');
-    if (hasCompletedInterestSelection()) {
-      navigate('/home');
-    } else {
-      navigate('/interests');
-    }
+    activityTrackingService.trackOnboardingEvent('splash_start_lesson_clicked');
+    // Go directly to daily session for the "10-minute daily routine" flow
+    navigate('/daily-session', { state: { freshStart: true } });
   };
 
   const handleSignIn = () => {

@@ -104,6 +104,11 @@ const DailySessionPage: React.FC = () => {
   const [showReadyScreen, setShowReadyScreen] = useState(true);
   const [countdown, setCountdown] = useState<number | null>(null);
   
+  // Book ready countdown state
+  const [showBookReadyScreen, setShowBookReadyScreen] = useState(false);
+  const [bookCountdown, setBookCountdown] = useState<number | null>(null);
+  const [pendingBookNavigation, setPendingBookNavigation] = useState<{id: string, title: string} | null>(null);
+  
   // Goals selection state
   const [showGoalsSelection, setShowGoalsSelection] = useState(false);
   const [selectedGoal, setSelectedGoal] = useState<string | null>(null);
@@ -511,14 +516,18 @@ const DailySessionPage: React.FC = () => {
         return;
         
       case 'book':
+        // Helper function to show book ready screen
+        const showBookReady = (bookId: string, bookTitle: string) => {
+          setStepContent(currentSession.currentStepIndex, bookId, bookTitle);
+          setPendingBookNavigation({ id: bookId, title: bookTitle });
+          setShowBookReadyScreen(true);
+        };
+        
         // Try to use recommended book first
         const recBookId = recommendedBook?.id || recommendedBook?._id;
         if (recommendedBook && recBookId) {
           console.log('📚 Using recommended book:', recommendedBook.title, 'ID:', recBookId);
-          setStepContent(currentSession.currentStepIndex, recBookId, recommendedBook.title);
-          navigate(`/read/${recBookId}`, { 
-            state: { fromDailySession: true } 
-          });
+          showBookReady(recBookId, recommendedBook.title);
           return;
         }
         
@@ -531,10 +540,7 @@ const DailySessionPage: React.FC = () => {
             const fbId = fallbackBook.id || fallbackBook._id;
             console.log('📚 Selected fallback book:', fallbackBook.title, 'ID:', fbId);
             setRecommendedBook(fallbackBook);
-            setStepContent(currentSession.currentStepIndex, fbId, fallbackBook.title);
-            navigate(`/read/${fbId}`, { 
-              state: { fromDailySession: true } 
-            });
+            showBookReady(fbId, fallbackBook.title);
             return;
           }
         }
@@ -565,11 +571,8 @@ const DailySessionPage: React.FC = () => {
               const rbId = randomBook.id || randomBook._id;
               console.log('📚 Selected random book:', randomBook.title, 'ID:', rbId);
               setRecommendedBook(randomBook);
-              setStepContent(currentSession.currentStepIndex, rbId, randomBook.title);
               setIsLoadingBook(false);
-              navigate(`/read/${rbId}`, { 
-                state: { fromDailySession: true } 
-              });
+              showBookReady(rbId, randomBook.title);
               return;
             }
           } else {
@@ -924,6 +927,127 @@ const DailySessionPage: React.FC = () => {
                 Tap to start your adventure
               </p>
             </button>
+          )}
+        </div>
+
+        {/* Avatar - Bottom Right */}
+        <div className="absolute bottom-8 right-4" style={{ marginBottom: 'var(--safe-area-bottom, 0px)' }}>
+          <style>{wingAnimationStyles}</style>
+          <div className="w-24 h-32">
+            <AvatarCompositor
+              headUrl={equippedAvatar || '/avatars/heads/head-1.png'}
+              body={equippedBody}
+              hat={equippedHat}
+              leftArm={equippedLeftArm}
+              rightArm={equippedRightArm}
+              legs={equippedLegs}
+              headOffset={{ x: headOffset?.x || 0, y: (headOffset?.y || 0) + 20 }}
+              bodyOffset={bodyOffset}
+              hatOffset={{ x: hatOffset?.x || 0, y: (hatOffset?.y || 0) + 20 }}
+              leftArmOffset={leftArmOffset}
+              rightArmOffset={rightArmOffset}
+              legsOffset={legsOffset}
+              headScale={headScale}
+              bodyScale={bodyScale}
+              hatScale={hatScale}
+              leftArmScale={leftArmScale}
+              rightArmScale={rightArmScale}
+              legsScale={legsScale}
+              leftArmRotation={equippedLeftArmRotation}
+              rightArmRotation={equippedRightArmRotation}
+              legsRotation={equippedLegsRotation}
+              hatRotation={equippedHatRotation}
+              isAnimating={true}
+              animationStyle="anim-float"
+              className="w-full h-full"
+            />
+          </div>
+        </div>
+
+        {/* Safe area bottom */}
+        <div className="flex-shrink-0" style={{ height: 'var(--safe-area-bottom, 0px)' }} />
+      </div>
+    );
+  }
+
+  // ============== BOOK READY COUNTDOWN SCREEN ==============
+  if (showBookReadyScreen && pendingBookNavigation) {
+    const handleBookReadyClick = () => {
+      // Start countdown
+      setBookCountdown(3);
+      
+      // Countdown timer
+      let count = 3;
+      const countdownInterval = setInterval(() => {
+        count -= 1;
+        if (count > 0) {
+          setBookCountdown(count);
+        } else {
+          clearInterval(countdownInterval);
+          setBookCountdown(null);
+          setShowBookReadyScreen(false);
+          // Navigate to the book
+          navigate(`/read/${pendingBookNavigation.id}`, { 
+            state: { fromDailySession: true } 
+          });
+          setPendingBookNavigation(null);
+        }
+      }, 800);
+    };
+    
+    return (
+      <div className="fixed inset-0 flex flex-col z-50" style={woodBackground}>
+        {/* Safe area top */}
+        <div className="flex-shrink-0" style={{ height: 'var(--safe-area-top, 0px)' }} />
+        
+        {/* Close button */}
+        <button
+          onClick={handleExit}
+          className="absolute top-4 left-4 w-10 h-10 rounded-full bg-black/30 flex items-center justify-center z-10"
+          style={{ marginTop: 'var(--safe-area-top, 0px)' }}
+        >
+          <X className="w-6 h-6 text-white/80" />
+        </button>
+
+        {/* Centered Content */}
+        <div className="flex-1 flex flex-col items-center justify-center px-8">
+          {bookCountdown !== null ? (
+            // Countdown display
+            <div className="text-center animate-pulse">
+              <div className="text-[180px] font-display font-bold text-[#FFD700] drop-shadow-2xl leading-none"
+                style={{ textShadow: '0 0 40px rgba(255, 215, 0, 0.5), 0 4px 8px rgba(0,0,0,0.5)' }}
+              >
+                {bookCountdown}
+              </div>
+            </div>
+          ) : (
+            // Ready button with book info
+            <div className="text-center">
+              {/* Book emoji and title preview */}
+              <div className="mb-6">
+                <div className="text-7xl mb-4">📚</div>
+                <p className="text-[#f3e5ab] font-display text-lg mb-2">Story Time</p>
+                <p className="text-[#FFD700] font-bold text-xl max-w-xs mx-auto truncate">
+                  {pendingBookNavigation.title}
+                </p>
+              </div>
+              
+              <button
+                onClick={handleBookReadyClick}
+                className="group transition-all transform hover:scale-105 active:scale-95"
+              >
+                <div className="bg-[#FFD700] hover:bg-[#FFE44D] px-16 py-8 rounded-3xl shadow-2xl border-4 border-[#FFA000] transition-all"
+                  style={{ boxShadow: '0 8px 32px rgba(255, 215, 0, 0.4), inset 0 -4px 8px rgba(0,0,0,0.1)' }}
+                >
+                  <span className="text-[#5D4037] font-display font-bold text-4xl">
+                    Ready?
+                  </span>
+                </div>
+                <p className="text-[#f3e5ab]/60 text-sm text-center mt-6 font-display">
+                  Tap to start reading
+                </p>
+              </button>
+            </div>
           )}
         </div>
 

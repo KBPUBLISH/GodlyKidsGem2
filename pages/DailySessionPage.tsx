@@ -471,19 +471,8 @@ const DailySessionPage: React.FC = () => {
           return;
         }
         
-        // If books are still loading, show loading and wait
-        if (booksLoading || books.length === 0) {
-          setIsLoadingBook(true);
-          console.log('📚 Books still loading, refreshing...');
-          await refreshBooks();
-          // Small delay to let state update
-          await new Promise(resolve => setTimeout(resolve, 500));
-          setIsLoadingBook(false);
-        }
-        
-        // Fallback: find any valid book from the loaded books
+        // Try to find a book from context first
         if (books && books.length > 0) {
-          // Find a book with a valid _id
           const validBooks = books.filter((b: any) => b && b._id);
           if (validBooks.length > 0) {
             const fallbackBook = validBooks[Math.floor(Math.random() * validBooks.length)];
@@ -496,6 +485,36 @@ const DailySessionPage: React.FC = () => {
           }
         }
         
+        // If no books available, fetch directly from API
+        setIsLoadingBook(true);
+        console.log('📚 No books in context, fetching from API...');
+        try {
+          const apiBaseUrl = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
+            ? 'http://localhost:3001/api/'
+            : 'https://backendgk2-0.onrender.com/api/';
+          
+          const response = await fetch(`${apiBaseUrl}books`);
+          if (response.ok) {
+            const fetchedBooks = await response.json();
+            console.log('📚 Fetched', fetchedBooks.length, 'books from API');
+            
+            const validBooks = fetchedBooks.filter((b: any) => b && b._id);
+            if (validBooks.length > 0) {
+              const randomBook = validBooks[Math.floor(Math.random() * validBooks.length)];
+              setRecommendedBook(randomBook);
+              setStepContent(session.currentStepIndex, randomBook._id, randomBook.title);
+              setIsLoadingBook(false);
+              navigate(`/read/${randomBook._id}`, { 
+                state: { fromDailySession: true } 
+              });
+              return;
+            }
+          }
+        } catch (error) {
+          console.error('📚 Failed to fetch books:', error);
+        }
+        
+        setIsLoadingBook(false);
         // No books available - show error
         console.error('No books available. Books loaded:', books?.length, 'booksLoading:', booksLoading);
         alert('Unable to load books. Please check your connection and try again.');

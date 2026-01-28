@@ -4,6 +4,7 @@ import { X, Check, ChevronRight, Play, BookOpen, MessageCircle } from 'lucide-re
 import PrayerGameModal from '../components/features/PrayerGameModal';
 import SessionCelebrationModal from '../components/modals/SessionCelebrationModal';
 import DiscussionQuestionsModal from '../components/modals/DiscussionQuestionsModal';
+import DailyVerseModal from '../components/modals/DailyVerseModal';
 import { useUser } from '../context/UserContext';
 import { useBooks } from '../context/BooksContext';
 import { activityTrackingService } from '../services/activityTrackingService';
@@ -96,6 +97,7 @@ const DailySessionPage: React.FC = () => {
   const { books, loading: booksLoading, refreshBooks } = useBooks();
   
   const [session, setSession] = useState<DailySession | null>(null);
+  const [showScriptureModal, setShowScriptureModal] = useState(false);
   const [showPrayerModal, setShowPrayerModal] = useState(false);
   const [showDiscussionModal, setShowDiscussionModal] = useState(false);
   const [showCelebration, setShowCelebration] = useState(false);
@@ -210,7 +212,8 @@ const DailySessionPage: React.FC = () => {
       
       // Find recommended book based on subjects (shows its own loading state)
       // Only if book step doesn't already have content assigned (avoid re-selecting on back navigation)
-      const bookStep = currentSession.steps[0];
+      // Book step is now at index 1 (index 0 is scripture)
+      const bookStep = currentSession.steps[1];
       if (bookStep?.status !== 'completed' && !bookStep?.contentId) {
         findRecommendedBook();
       } else if (bookStep?.contentId) {
@@ -241,7 +244,7 @@ const DailySessionPage: React.FC = () => {
         
         // Capture the book content for discussion questions
         const content = state.bookContent || '';
-        const title = state.bookTitle || session.steps[0]?.contentTitle || recommendedBook?.title || 'the story';
+        const title = state.bookTitle || session.steps[1]?.contentTitle || recommendedBook?.title || 'the story';
         
         if (content) {
           setBookContent(content);
@@ -539,6 +542,11 @@ const DailySessionPage: React.FC = () => {
     startCurrentStep();
     
     switch (step.type) {
+      case 'scripture':
+        // Show Scripture of the Day modal
+        setShowScriptureModal(true);
+        return;
+        
       case 'book':
         // Try to use recommended book first
         const recBookId = recommendedBook?.id || recommendedBook?._id;
@@ -650,6 +658,30 @@ const DailySessionPage: React.FC = () => {
   // Handle discussion modal close (without completing)
   const handleDiscussionClose = () => {
     setShowDiscussionModal(false);
+  };
+
+  // Handle scripture modal completion
+  const handleScriptureComplete = () => {
+    setShowScriptureModal(false);
+    
+    const coinsEarned = 10;
+    
+    // Track step completion
+    activityTrackingService.trackOnboardingEvent('godly_kids_time_scripture_completed', {
+      coinsEarned,
+    });
+    
+    // Add coins
+    addCoins(coinsEarned);
+    
+    // Complete step and update session
+    const updatedSession = completeCurrentStep(coinsEarned);
+    setSession(updatedSession);
+  };
+
+  // Handle scripture modal close (without completing)
+  const handleScriptureClose = () => {
+    setShowScriptureModal(false);
   };
 
   // Handle prayer modal close (prayer completed or cancelled)
@@ -1287,12 +1319,19 @@ const DailySessionPage: React.FC = () => {
       {/* Safe area bottom */}
       <div className="flex-shrink-0" style={{ height: 'var(--safe-area-bottom, 0px)' }} />
 
+      {/* Scripture of the Day Modal */}
+      <DailyVerseModal
+        isOpen={showScriptureModal}
+        onClose={handleScriptureClose}
+        onComplete={handleScriptureComplete}
+      />
+
       {/* Discussion Questions Modal */}
       <DiscussionQuestionsModal
         isOpen={showDiscussionModal}
         onClose={handleDiscussionClose}
         onComplete={handleDiscussionComplete}
-        bookTitle={session?.steps[0]?.contentTitle || recommendedBook?.title || 'the story'}
+        bookTitle={session?.steps[1]?.contentTitle || recommendedBook?.title || 'the story'}
         bookDescription={recommendedBook?.description}
         bookContent={bookContent}
         preGeneratedQuestions={discussionQuestions}

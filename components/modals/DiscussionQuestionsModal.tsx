@@ -145,9 +145,9 @@ const DiscussionQuestionsModal: React.FC<DiscussionQuestionsModalProps> = ({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-      <div className="bg-gradient-to-b from-[#f5f0e1] to-[#e8dcc8] rounded-2xl w-full max-w-md shadow-2xl border-4 border-[#8B4513]/30 overflow-hidden">
+      <div className="bg-gradient-to-b from-[#f5f0e1] to-[#e8dcc8] rounded-2xl w-full max-w-md shadow-2xl border-4 border-[#8B4513]/30 overflow-hidden max-h-[90vh] flex flex-col">
         {/* Header */}
-        <div className="bg-[#6B8E6B] px-6 py-4 flex items-center justify-between">
+        <div className="bg-[#6B8E6B] px-6 py-4 flex items-center justify-between flex-shrink-0">
           <div className="flex items-center gap-3">
             <MessageCircle className="w-6 h-6 text-white" />
             <h2 className="text-white font-display font-bold text-xl">
@@ -162,8 +162,8 @@ const DiscussionQuestionsModal: React.FC<DiscussionQuestionsModalProps> = ({
           </button>
         </div>
 
-        {/* Content */}
-        <div className="p-6">
+        {/* Content - scrollable */}
+        <div className="p-6 overflow-y-auto flex-1" style={{ WebkitOverflowScrolling: 'touch' }}>
           {isLoading ? (
             <div className="flex flex-col items-center justify-center py-12">
               <Loader2 className="w-12 h-12 text-[#6B8E6B] animate-spin mb-4" />
@@ -263,7 +263,7 @@ const DiscussionQuestionsModal: React.FC<DiscussionQuestionsModalProps> = ({
 
         {/* Footer instruction */}
         {!isLoading && !allCompleted && (
-          <div className="px-6 pb-4">
+          <div className="px-6 pb-4 flex-shrink-0">
             <p className="text-[#8B4513]/50 text-xs text-center">
               Take your time! These questions help you connect with your child.
             </p>

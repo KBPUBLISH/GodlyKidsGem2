@@ -486,12 +486,14 @@ const PlaylistForm: React.FC = () => {
                             </p>
                             <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
                                 {[
-                                    { id: 'self-esteem', label: '💪 Self Esteem' },
-                                    { id: 'connected-to-god', label: '🙏 Connected to God' },
-                                    { id: 'learn-bible', label: '📖 Learn Bible' },
-                                    { id: 'better-sleep', label: '😴 Better Sleep' },
+                                    { id: 'courage', label: '🦁 Courage' },
+                                    { id: 'faith', label: '🙏 Faith' },
+                                    { id: 'gratitude', label: '💝 Gratitude' },
+                                    { id: 'love', label: '❤️ Love' },
+                                    { id: 'obedience', label: '👂 Obedience' },
+                                    { id: 'self-control', label: '🎯 Self-Control' },
                                     { id: 'theology', label: '✝️ Theology' },
-                                    { id: 'life-skills', label: '⭐ Life Skills' },
+                                    { id: 'wisdom', label: '🦉 Wisdom' },
                                 ].map((goal) => (
                                     <label
                                         key={goal.id}

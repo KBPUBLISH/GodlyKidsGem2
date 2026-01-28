@@ -1154,7 +1154,7 @@ const OnboardingAnalytics: React.FC = () => {
                 <div className="grid grid-cols-1 md:grid-cols-4 gap-4 text-sm">
                     <div className="bg-white rounded-lg p-4 border border-blue-100">
                         <p className="font-medium text-blue-800">1. Goal Selection</p>
-                        <p className="text-gray-500 text-xs mt-1">User picks a learning goal (self-esteem, faith, etc.)</p>
+                        <p className="text-gray-500 text-xs mt-1">User picks a character trait (courage, faith, love, etc.)</p>
                     </div>
                     <div className="bg-white rounded-lg p-4 border border-blue-100">
                         <p className="font-medium text-blue-800">2. Reading</p>

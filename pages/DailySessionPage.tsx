@@ -25,12 +25,14 @@ import AvatarCompositor from '../components/avatar/AvatarCompositor';
 
 // Learning goals options with character block images
 const LEARNING_GOALS = [
-  { id: 'self-esteem', label: 'Improve Self Esteem', emoji: '💪', color: 'from-pink-500 to-rose-600', image: '/daily-session/blocks/selfesteem.png' },
-  { id: 'connected-to-god', label: 'Feel More Connected to God', emoji: '🙏', color: 'from-purple-500 to-indigo-600', image: '/daily-session/blocks/faith.png' },
-  { id: 'learn-bible', label: 'Learn More About the Bible', emoji: '📖', color: 'from-blue-500 to-cyan-600', image: '/daily-session/blocks/bible.png' },
-  { id: 'better-sleep', label: 'Get Better Sleep', emoji: '😴', color: 'from-indigo-500 to-purple-600', image: '/daily-session/blocks/sleep.png' },
-  { id: 'theology', label: 'Become Stronger in Theology', emoji: '✝️', color: 'from-amber-500 to-orange-600', image: '/daily-session/blocks/theology.png' },
-  { id: 'life-skills', label: 'Improve Daily Life Skills', emoji: '⭐', color: 'from-green-500 to-emerald-600', image: '/daily-session/blocks/lifeskills.png' },
+  { id: 'courage', label: 'Build Courage', emoji: '🦁', color: 'from-orange-500 to-red-600', image: '/daily-session/blocks/courage.jpeg' },
+  { id: 'faith', label: 'Strengthen Faith', emoji: '🙏', color: 'from-purple-500 to-indigo-600', image: '/daily-session/blocks/faith.jpeg' },
+  { id: 'gratitude', label: 'Practice Gratitude', emoji: '💝', color: 'from-pink-500 to-rose-600', image: '/daily-session/blocks/gratitude.jpeg' },
+  { id: 'love', label: 'Learn About Love', emoji: '❤️', color: 'from-red-500 to-pink-600', image: '/daily-session/blocks/love.jpeg' },
+  { id: 'obedience', label: 'Understand Obedience', emoji: '👂', color: 'from-blue-500 to-cyan-600', image: '/daily-session/blocks/obedience.jpeg' },
+  { id: 'self-control', label: 'Develop Self-Control', emoji: '🎯', color: 'from-green-500 to-emerald-600', image: '/daily-session/blocks/selfcontrol.jpeg' },
+  { id: 'theology', label: 'Explore Theology', emoji: '✝️', color: 'from-amber-500 to-orange-600', image: '/daily-session/blocks/theology.jpeg' },
+  { id: 'wisdom', label: 'Gain Wisdom', emoji: '🦉', color: 'from-indigo-500 to-purple-600', image: '/daily-session/blocks/wisdom.jpeg' },
 ];
 
 // Wing animation CSS
@@ -354,7 +356,7 @@ const DailySessionPage: React.FC = () => {
     console.log('📚 Finding book for goal:', selectedGoal, 'duration:', sessionDuration, 'from', validBooks.length, 'valid books');
     
     // Try AI recommendation
-    const goal = selectedGoal || 'learn-bible';
+    const goal = selectedGoal || 'faith';
     const goalLabel = LEARNING_GOALS.find(g => g.id === goal)?.label || goal;
     
     try {

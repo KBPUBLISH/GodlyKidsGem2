@@ -113,54 +113,68 @@ const LandingPage: React.FC = () => {
           onLoad={() => setImageLoaded(true)}
         />
         
-        {/* Gradient fade to white at bottom */}
-        <div className="absolute bottom-0 left-0 right-0 h-32 bg-gradient-to-t from-white via-white/90 to-transparent" />
-        
-        {/* Wavy edge transition */}
-        <svg 
-          className="absolute bottom-0 left-0 right-0 w-full" 
-          viewBox="0 0 1440 120" 
-          preserveAspectRatio="none"
-          style={{ height: '60px' }}
-        >
-          <path 
-            d="M0,60 C360,120 1080,0 1440,60 L1440,120 L0,120 Z" 
-            fill="white"
-          />
-        </svg>
+        {/* Ocean wave overlay */}
+        <div className="absolute bottom-0 left-0 right-0">
+          {/* Gradient fade */}
+          <div className="h-24 bg-gradient-to-t from-[#E8F4F6] to-transparent" />
+          
+          {/* Multiple wave layers for depth */}
+          <svg 
+            className="absolute bottom-0 left-0 right-0 w-full" 
+            viewBox="0 0 1440 180" 
+            preserveAspectRatio="none"
+            style={{ height: '90px' }}
+          >
+            {/* Back wave - lighter */}
+            <path 
+              d="M0,100 C120,120 240,80 360,100 C480,120 600,80 720,100 C840,120 960,80 1080,100 C1200,120 1320,80 1440,100 L1440,180 L0,180 Z" 
+              fill="#B8D4E3"
+              opacity="0.6"
+            />
+            {/* Middle wave */}
+            <path 
+              d="M0,120 C180,150 360,100 540,130 C720,160 900,110 1080,140 C1200,160 1320,120 1440,140 L1440,180 L0,180 Z" 
+              fill="#9CC5D8"
+              opacity="0.7"
+            />
+            {/* Front wave - main */}
+            <path 
+              d="M0,140 C240,170 480,130 720,155 C960,180 1200,140 1440,160 L1440,180 L0,180 Z" 
+              fill="#E8F4F6"
+            />
+          </svg>
+        </div>
       </div>
       
-      {/* Content Section - White Background */}
-      <div className="bg-white px-6 pb-8 flex-shrink-0" style={{ paddingBottom: 'calc(var(--safe-area-bottom, 0px) + 2rem)' }}>
+      {/* Content Section - Light Blue Background */}
+      <div className="bg-[#E8F4F6] px-6 pb-8 flex-shrink-0" style={{ paddingBottom: 'calc(var(--safe-area-bottom, 0px) + 2rem)' }}>
         {/* Main Headline */}
         <h1 className="text-[#2D3748] font-display font-bold text-3xl md:text-4xl text-center leading-tight mb-3">
           A 10-Minute Daily{'\n'}Faith Routine for Kids
         </h1>
         
         {/* Subtitle */}
-        <p className="text-[#718096] text-center text-base mb-6">
+        <p className="text-[#5A7A8A] text-center text-base mb-6">
           Today's Lesson – 10 minutes
         </p>
         
-        {/* Start Lesson Button */}
+        {/* Start Lesson Button - Wood Theme */}
         <button
           onClick={handleStartLesson}
-          className="w-full max-w-sm mx-auto block bg-[#3D8B8B] hover:bg-[#357878] text-white font-semibold text-lg py-4 px-8 rounded-full shadow-lg transition-all active:scale-[0.98]"
+          className="w-full max-w-sm mx-auto block bg-gradient-to-b from-[#C4884A] via-[#A56B3A] to-[#8B5A2B] hover:from-[#D4975A] hover:via-[#B57A4A] hover:to-[#9B6A3B] text-white font-display font-bold text-lg py-4 px-8 rounded-full shadow-lg transition-all active:scale-[0.98] border-2 border-[#8B5A2B]"
+          style={{
+            boxShadow: '0 4px 0 #5C3D1E, 0 6px 12px rgba(0,0,0,0.2)'
+          }}
         >
           Start Lesson
         </button>
         
-        {/* No clutter text */}
-        <p className="text-[#A0AEC0] text-center text-sm mt-4">
-          No clutter
-        </p>
-        
         {/* Sign in link */}
         <button
           onClick={handleSignIn}
-          className="w-full text-center text-[#3D8B8B] text-sm mt-4 hover:underline"
+          className="w-full text-center text-[#8B5A2B] font-medium text-base mt-5 hover:underline active:opacity-70 transition-all"
         >
-          I already have an account
+          Sign In
         </button>
       </div>
     </div>

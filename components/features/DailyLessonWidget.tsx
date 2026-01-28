@@ -178,6 +178,11 @@ const DailyLessonWidget: React.FC<DailyLessonWidgetProps> = ({ onStartLesson }) 
             <span>→</span>
             <span className="font-medium">Pray</span>
           </div>
+          
+          {/* Weekly Streak */}
+          <div className="relative z-10">
+            <WeeklyStreak />
+          </div>
         </div>
       </div>
     );
@@ -220,6 +225,11 @@ const DailyLessonWidget: React.FC<DailyLessonWidgetProps> = ({ onStartLesson }) 
           <span className="font-medium">Discuss</span>
           <span>→</span>
           <span className="font-medium">Pray</span>
+        </div>
+        
+        {/* Weekly Streak */}
+        <div className="relative z-10">
+          <WeeklyStreak />
         </div>
       </div>
     </div>

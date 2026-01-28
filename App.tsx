@@ -467,6 +467,7 @@ import ShareBookPage from './pages/ShareBookPage';
 import ParentQuizPage from './pages/ParentQuizPage';
 import GivingPage from './pages/GivingPage';
 import InterestSelectionPage from './pages/InterestSelectionPage';
+import DailySessionPage from './pages/DailySessionPage';
 
 // Check if user has an account (auth token or email stored)
 const hasUserAccount = (): boolean => {
@@ -1104,6 +1105,7 @@ const App: React.FC = () => {
                   <Route path="/welcome" element={<NewUserWelcomePage />} />
                   <Route path="/payment-success" element={<PaymentSuccessPage />} />
                   <Route path="/interests" element={<InterestSelectionPage />} />
+                  <Route path="/daily-session" element={<DailySessionPage />} />
                   {/* BROWSING PAGES - No account required, users can explore freely */}
                   <Route path="/home" element={<HomePageWithWelcomeCheck />} />
                   <Route path="/listen" element={<ListenPage />} />

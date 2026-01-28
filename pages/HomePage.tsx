@@ -16,7 +16,7 @@ import EmailSignupModal from '../components/features/EmailSignupModal';
 import SurveyPopup, { shouldShowSurvey } from '../components/features/SurveyPopup';
 import TutorialPromptModal, { shouldShowTutorialPrompt, markTutorialPromptShown } from '../components/modals/TutorialPromptModal';
 import { useTutorial } from '../context/TutorialContext';
-import { Key, Brain, Heart, Video, Lock, Check, Play, CheckCircle, Clock, Coins, BookOpen, Sparkles } from 'lucide-react';
+import { Key, Brain, Heart, Video, Lock, Check, Play, CheckCircle, Clock, Coins, BookOpen, Sparkles, ChevronRight } from 'lucide-react';
 import { ApiService } from '../services/apiService';
 import { 
   isCompleted, 
@@ -35,6 +35,7 @@ import { bookCompletionService } from '../services/bookCompletionService';
 import { profileService } from '../services/profileService';
 import { activityTrackingService } from '../services/activityTrackingService';
 import { getPreferenceTags, getSavedPreferences } from './InterestSelectionPage';
+import { isSessionCompletedToday, getSessionStreak } from '../services/dailySessionService';
 
 // Helper to format date as YYYY-MM-DD in local time
 const formatLocalDateKey = (d: Date): string => {
@@ -1488,6 +1489,59 @@ const HomePage: React.FC = () => {
             message="Something rocked the boat!"
             isLoading={isRetrying}
           />
+        )}
+
+        {/* Start Godly Kids Time Card - Daily Session CTA */}
+        {!isSessionCompletedToday() && (
+          <section className="px-4 mb-4">
+            <button
+              onClick={() => navigate('/daily-session')}
+              className="w-full bg-gradient-to-r from-amber-500 via-orange-500 to-amber-600 rounded-2xl p-5 text-left shadow-lg hover:shadow-xl transition-all active:scale-[0.98] relative overflow-hidden"
+            >
+              {/* Decorative elements */}
+              <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full -translate-y-1/2 translate-x-1/2" />
+              <div className="absolute bottom-0 left-0 w-20 h-20 bg-white/10 rounded-full translate-y-1/2 -translate-x-1/2" />
+              
+              <div className="relative flex items-center gap-4">
+                <div className="w-14 h-14 rounded-full bg-white/20 flex items-center justify-center">
+                  <span className="text-3xl">📚</span>
+                </div>
+                <div className="flex-1">
+                  <h3 className="text-white font-display font-bold text-xl">
+                    Start Godly Kids Time
+                  </h3>
+                  <p className="text-white/80 text-sm mt-0.5">
+                    Prayer + Devotional + Book
+                  </p>
+                  {getSessionStreak() > 0 && (
+                    <p className="text-white/60 text-xs mt-1">
+                      🔥 {getSessionStreak()} day streak!
+                    </p>
+                  )}
+                </div>
+                <div className="w-10 h-10 rounded-full bg-white/20 flex items-center justify-center">
+                  <ChevronRight className="w-6 h-6 text-white" />
+                </div>
+              </div>
+            </button>
+          </section>
+        )}
+
+        {/* Session Completed Badge */}
+        {isSessionCompletedToday() && (
+          <section className="px-4 mb-4">
+            <div className="w-full bg-gradient-to-r from-green-500 to-emerald-600 rounded-2xl p-4 text-center">
+              <div className="flex items-center justify-center gap-2">
+                <Check className="w-5 h-5 text-white" />
+                <span className="text-white font-bold">Today's Godly Kids Time Complete!</span>
+              </div>
+              {getSessionStreak() > 0 && (
+                <p className="text-white/80 text-sm mt-1">
+                  🔥 {getSessionStreak()} day streak - Keep it up!
+                </p>
+              )}
+            </div>
+          </section>
         )}
 
         {/* Featured Carousel */}

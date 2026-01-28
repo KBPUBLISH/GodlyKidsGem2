@@ -22,9 +22,19 @@ const onboardingEventSchema = new mongoose.Schema({
             'splash_explore_clicked',
             'splash_signin_clicked',
             
-            // Interest selection events
+            // Interest/Subject selection events
             'interests_selected',
             'interests_skipped',
+            'subjects_selected',
+            'subjects_skipped',
+            
+            // Godly Kids Time (Daily Session) events
+            'godly_kids_time_started',
+            'godly_kids_time_prayer_completed',
+            'godly_kids_time_devotional_completed',
+            'godly_kids_time_book_completed',
+            'godly_kids_time_completed',
+            'godly_kids_time_exited',
             
             // Onboarding flow events
             'onboarding_started',
@@ -75,11 +85,18 @@ const onboardingEventSchema = new mongoose.Schema({
         priorities: [String],       // Discipleship goals selected
         features: [String],         // Feature interests selected
         interests: [String],        // Interest categories selected (bedtime, bible-stories, etc)
+        subjects: [String],         // Curriculum subjects selected (bible, history, etc)
         count: Number,              // Count of selections
         email: String,              // Email for account creation
         platform: String,
         referrer: String,
         error: String,              // Error message for purchase errors
+        // Godly Kids Time session data
+        totalCoins: Number,         // Total coins earned in session
+        stepsCompleted: Number,     // Number of steps completed
+        duration: Number,           // Session duration in seconds
+        coinsEarned: Number,        // Coins earned for a specific step
+        stepType: String,           // Type of step (prayer, devotional, book)
     },
     
     createdAt: {

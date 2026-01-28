@@ -1,0 +1,307 @@
+/**
+ * Daily Session Service - "Godly Kids Time"
+ * 
+ * Manages the daily learning session flow:
+ * 1. Daily Prayer
+ * 2. Video Devotional
+ * 3. Recommended Book (based on selected subjects)
+ * 4. Celebration with coins
+ */
+
+import { getSavedPreferences, getPreferenceTags, SUBJECT_OPTIONS } from '../pages/InterestSelectionPage';
+
+// Storage keys
+const SESSION_STORAGE_KEY = 'godlykids_daily_session';
+const SESSION_HISTORY_KEY = 'godlykids_session_history';
+
+// Session step types
+export type SessionStepType = 'prayer' | 'devotional' | 'book';
+
+export interface SessionStep {
+  type: SessionStepType;
+  label: string;
+  icon: string;
+  status: 'pending' | 'in-progress' | 'completed' | 'skipped';
+  contentId?: string; // ID of the specific content (lesson/book)
+  contentTitle?: string;
+  coinsEarned: number;
+}
+
+export interface DailySession {
+  date: string; // YYYY-MM-DD
+  subjects: string[]; // Selected subject IDs for this session
+  steps: SessionStep[];
+  currentStepIndex: number;
+  totalCoinsEarned: number;
+  completed: boolean;
+  startedAt?: number;
+  completedAt?: number;
+}
+
+// Coin rewards for each step
+const STEP_REWARDS = {
+  prayer: 30,
+  devotional: 20,
+  book: 30, // Base reward, can be higher for longer books
+};
+
+// Get today's date as YYYY-MM-DD
+const getTodayDateKey = (): string => {
+  const now = new Date();
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+};
+
+// Create a new daily session
+export const createDailySession = (selectedSubjects?: string[]): DailySession => {
+  const subjects = selectedSubjects || getSavedPreferences();
+  
+  const session: DailySession = {
+    date: getTodayDateKey(),
+    subjects,
+    steps: [
+      {
+        type: 'prayer',
+        label: 'Daily Prayer',
+        icon: '🙏',
+        status: 'pending',
+        coinsEarned: 0,
+      },
+      {
+        type: 'devotional',
+        label: 'Video Devotional',
+        icon: '🎬',
+        status: 'pending',
+        coinsEarned: 0,
+      },
+      {
+        type: 'book',
+        label: 'Reading Time',
+        icon: '📚',
+        status: 'pending',
+        coinsEarned: 0,
+      },
+    ],
+    currentStepIndex: 0,
+    totalCoinsEarned: 0,
+    completed: false,
+    startedAt: Date.now(),
+  };
+  
+  // Save to localStorage
+  localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(session));
+  
+  return session;
+};
+
+// Get current session (or null if none exists for today)
+export const getCurrentSession = (): DailySession | null => {
+  try {
+    const saved = localStorage.getItem(SESSION_STORAGE_KEY);
+    if (!saved) return null;
+    
+    const session: DailySession = JSON.parse(saved);
+    
+    // Check if session is from today
+    if (session.date !== getTodayDateKey()) {
+      // Archive old session and return null
+      archiveSession(session);
+      localStorage.removeItem(SESSION_STORAGE_KEY);
+      return null;
+    }
+    
+    return session;
+  } catch (e) {
+    console.error('Error reading session:', e);
+    return null;
+  }
+};
+
+// Check if today's session is completed
+export const isSessionCompletedToday = (): boolean => {
+  const session = getCurrentSession();
+  return session?.completed ?? false;
+};
+
+// Check if a session exists for today (started but maybe not completed)
+export const hasSessionToday = (): boolean => {
+  const session = getCurrentSession();
+  return session !== null;
+};
+
+// Get current step
+export const getCurrentStep = (): SessionStep | null => {
+  const session = getCurrentSession();
+  if (!session) return null;
+  return session.steps[session.currentStepIndex] || null;
+};
+
+// Mark current step as in-progress
+export const startCurrentStep = (): void => {
+  const session = getCurrentSession();
+  if (!session) return;
+  
+  session.steps[session.currentStepIndex].status = 'in-progress';
+  localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(session));
+};
+
+// Complete current step and advance to next
+export const completeCurrentStep = (coinsEarned?: number): DailySession | null => {
+  const session = getCurrentSession();
+  if (!session) return null;
+  
+  const step = session.steps[session.currentStepIndex];
+  const reward = coinsEarned ?? STEP_REWARDS[step.type];
+  
+  // Update step
+  step.status = 'completed';
+  step.coinsEarned = reward;
+  
+  // Update session totals
+  session.totalCoinsEarned += reward;
+  
+  // Check if this was the last step
+  if (session.currentStepIndex >= session.steps.length - 1) {
+    session.completed = true;
+    session.completedAt = Date.now();
+    archiveSession(session);
+  } else {
+    // Advance to next step
+    session.currentStepIndex += 1;
+  }
+  
+  // Save
+  localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(session));
+  
+  return session;
+};
+
+// Skip current step and advance to next
+export const skipCurrentStep = (): DailySession | null => {
+  const session = getCurrentSession();
+  if (!session) return null;
+  
+  const step = session.steps[session.currentStepIndex];
+  step.status = 'skipped';
+  step.coinsEarned = 0;
+  
+  // Check if this was the last step
+  if (session.currentStepIndex >= session.steps.length - 1) {
+    session.completed = true;
+    session.completedAt = Date.now();
+    archiveSession(session);
+  } else {
+    session.currentStepIndex += 1;
+  }
+  
+  localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(session));
+  
+  return session;
+};
+
+// Set content for a step (e.g., which book was selected)
+export const setStepContent = (stepIndex: number, contentId: string, contentTitle: string): void => {
+  const session = getCurrentSession();
+  if (!session || !session.steps[stepIndex]) return;
+  
+  session.steps[stepIndex].contentId = contentId;
+  session.steps[stepIndex].contentTitle = contentTitle;
+  
+  localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(session));
+};
+
+// Archive completed session to history
+const archiveSession = (session: DailySession): void => {
+  try {
+    const historyJson = localStorage.getItem(SESSION_HISTORY_KEY);
+    const history: DailySession[] = historyJson ? JSON.parse(historyJson) : [];
+    
+    // Add session to history (keep last 30 days)
+    history.unshift(session);
+    if (history.length > 30) {
+      history.pop();
+    }
+    
+    localStorage.setItem(SESSION_HISTORY_KEY, JSON.stringify(history));
+  } catch (e) {
+    console.error('Error archiving session:', e);
+  }
+};
+
+// Get session history
+export const getSessionHistory = (): DailySession[] => {
+  try {
+    const historyJson = localStorage.getItem(SESSION_HISTORY_KEY);
+    return historyJson ? JSON.parse(historyJson) : [];
+  } catch (e) {
+    console.error('Error reading session history:', e);
+    return [];
+  }
+};
+
+// Get current streak (consecutive days with completed sessions)
+export const getSessionStreak = (): number => {
+  const history = getSessionHistory();
+  if (history.length === 0) return 0;
+  
+  let streak = 0;
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  
+  // Check if today's session is completed
+  const currentSession = getCurrentSession();
+  if (currentSession?.completed) {
+    streak = 1;
+  }
+  
+  // Count consecutive completed sessions going backwards
+  for (let i = 0; i < history.length; i++) {
+    const session = history[i];
+    if (!session.completed) continue;
+    
+    const sessionDate = new Date(session.date);
+    sessionDate.setHours(0, 0, 0, 0);
+    
+    const dayDiff = Math.floor((today.getTime() - sessionDate.getTime()) / (1000 * 60 * 60 * 24));
+    
+    if (dayDiff === streak) {
+      streak++;
+    } else if (dayDiff > streak) {
+      break;
+    }
+  }
+  
+  return streak;
+};
+
+// Get recommended book based on selected subjects
+export const getRecommendedBookFilter = (): string[] => {
+  const session = getCurrentSession();
+  const subjects = session?.subjects || getSavedPreferences();
+  
+  // Get all tags from selected subjects
+  const tags: string[] = [];
+  subjects.forEach(subjectId => {
+    const subject = SUBJECT_OPTIONS.find(s => s.id === subjectId);
+    if (subject) {
+      tags.push(...subject.tags);
+    }
+  });
+  
+  return [...new Set(tags)]; // Remove duplicates
+};
+
+// Exit/cancel the current session
+export const exitSession = (): void => {
+  const session = getCurrentSession();
+  if (session) {
+    // Mark session as incomplete but archive it
+    session.completedAt = Date.now();
+    archiveSession(session);
+  }
+  localStorage.removeItem(SESSION_STORAGE_KEY);
+};
+
+// Reset session for today (for testing or retry)
+export const resetTodaySession = (): void => {
+  localStorage.removeItem(SESSION_STORAGE_KEY);
+};

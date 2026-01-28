@@ -4,49 +4,57 @@ import { ChevronLeft, Check } from 'lucide-react';
 import WoodButton from '../components/ui/WoodButton';
 import { activityTrackingService } from '../services/activityTrackingService';
 
-// Storage key for user preferences
+// Storage key for user preferences (curriculum subjects)
 const PREFERENCES_STORAGE_KEY = 'godlykids_content_preferences';
 
-// Interest options with images and category tags
-const INTEREST_OPTIONS = [
+// Curriculum subject options - for homeschool families (ages 7-12)
+// These tags match content categories in the portal
+export const SUBJECT_OPTIONS = [
   {
-    id: 'bedtime',
-    label: 'Bedtime & calm',
-    description: 'Relaxing stories for peaceful nights',
-    image: '/interests/bedtime.png',
-    tags: ['Bedtime', 'Calm', 'Sleep', 'Relaxing', 'Peaceful'],
+    id: 'bible',
+    label: 'Bible Stories',
+    icon: '📖',
+    image: '/subjects/bible.png',
+    tags: ['Bible', 'Bible Stories', 'Scripture', 'Faith', 'Jesus', 'God', 'Old Testament', 'New Testament'],
   },
   {
-    id: 'bible-stories',
-    label: 'Learning Bible stories',
-    description: 'Explore God\'s Word through stories',
-    image: '/interests/bible-stories.png',
-    tags: ['Bible', 'Bible Stories', 'Scripture', 'Faith', 'Jesus', 'God'],
+    id: 'history',
+    label: 'History',
+    icon: '🏛️',
+    image: '/subjects/history.png',
+    tags: ['History', 'Historical', 'Ancient', 'Timeline', 'Past'],
   },
   {
-    id: 'homeschool',
-    label: 'Homeschool faith learning',
-    description: 'Curriculum-ready faith education',
-    image: '/interests/homeschool.png',
-    tags: ['Homeschool', 'Education', 'Learning', 'Curriculum', 'Teaching'],
+    id: 'documentary',
+    label: 'Documentary',
+    icon: '🎬',
+    image: '/subjects/documentary.png',
+    tags: ['Documentary', 'True Story', 'Real Life', 'Biography', 'Missions'],
   },
   {
-    id: 'music',
-    label: 'Scripture songs & worship',
-    description: 'Sing and memorize through music',
-    image: '/interests/music.png',
-    tags: ['Music', 'Songs', 'Worship', 'Praise', 'Scripture Songs'],
+    id: 'fantasy',
+    label: 'Fantasy & Adventure',
+    icon: '🐉',
+    image: '/subjects/fantasy.png',
+    tags: ['Fantasy', 'Adventure', 'Fiction', 'Imagination', 'Quest'],
   },
   {
-    id: 'interactive',
-    label: 'Interactive quizzes & games',
-    description: 'Fun learning through play',
-    image: '/interests/games.png',
-    tags: ['Games', 'Quizzes', 'Interactive', 'Fun', 'Play'],
+    id: 'science',
+    label: 'Science & Nature',
+    icon: '🔬',
+    image: '/subjects/science.png',
+    tags: ['Science', 'Nature', 'Creation', 'Animals', 'Discovery', 'Earth'],
+  },
+  {
+    id: 'character',
+    label: 'Character & Virtues',
+    icon: '💪',
+    image: '/subjects/character.png',
+    tags: ['Character', 'Virtues', 'Values', 'Morals', 'Courage', 'Kindness', 'Honesty'],
   },
 ];
 
-// Helper to get saved preferences
+// Helper to get saved subject preferences
 export const getSavedPreferences = (): string[] => {
   try {
     const saved = localStorage.getItem(PREFERENCES_STORAGE_KEY);
@@ -65,7 +73,7 @@ export const getPreferenceTags = (): string[] => {
   const tags: string[] = [];
   
   selectedIds.forEach(id => {
-    const option = INTEREST_OPTIONS.find(o => o.id === id);
+    const option = SUBJECT_OPTIONS.find(o => o.id === id);
     if (option) {
       tags.push(...option.tags);
     }
@@ -74,19 +82,28 @@ export const getPreferenceTags = (): string[] => {
   return [...new Set(tags)]; // Remove duplicates
 };
 
-// Check if user has completed interest selection
+// Check if user has completed subject selection
 export const hasCompletedInterestSelection = (): boolean => {
   return localStorage.getItem(PREFERENCES_STORAGE_KEY) !== null;
 };
 
+// Get subject option by ID
+export const getSubjectById = (id: string) => {
+  return SUBJECT_OPTIONS.find(o => o.id === id);
+};
+
 const InterestSelectionPage: React.FC = () => {
   const navigate = useNavigate();
-  const [selectedInterests, setSelectedInterests] = useState<string[]>([]);
+  const [selectedSubjects, setSelectedSubjects] = useState<string[]>([]);
 
-  const toggleInterest = (id: string) => {
-    setSelectedInterests(prev => {
+  const toggleSubject = (id: string) => {
+    setSelectedSubjects(prev => {
       if (prev.includes(id)) {
         return prev.filter(i => i !== id);
+      }
+      // Limit to 3 subjects max
+      if (prev.length >= 3) {
+        return prev;
       }
       return [...prev, id];
     });
@@ -94,12 +111,12 @@ const InterestSelectionPage: React.FC = () => {
 
   const handleContinue = () => {
     // Save preferences to localStorage
-    localStorage.setItem(PREFERENCES_STORAGE_KEY, JSON.stringify(selectedInterests));
+    localStorage.setItem(PREFERENCES_STORAGE_KEY, JSON.stringify(selectedSubjects));
     
     // Track the selection
-    activityTrackingService.trackOnboardingEvent('interests_selected', {
-      interests: selectedInterests,
-      count: selectedInterests.length,
+    activityTrackingService.trackOnboardingEvent('subjects_selected', {
+      subjects: selectedSubjects,
+      count: selectedSubjects.length,
     });
     
     // Navigate to the explore page
@@ -115,7 +132,7 @@ const InterestSelectionPage: React.FC = () => {
     localStorage.setItem(PREFERENCES_STORAGE_KEY, JSON.stringify([]));
     
     // Track skip
-    activityTrackingService.trackOnboardingEvent('interests_skipped');
+    activityTrackingService.trackOnboardingEvent('subjects_skipped');
     
     navigate('/home');
   };
@@ -148,74 +165,81 @@ const InterestSelectionPage: React.FC = () => {
         <img 
           src="/logo-full.png" 
           alt="Godly Kids" 
-          className="h-20 w-auto object-contain mb-4"
+          className="h-16 w-auto object-contain mb-3"
           onError={(e) => {
-            // Fallback if logo doesn't exist
             e.currentTarget.style.display = 'none';
           }}
         />
         
         <h1 className="text-2xl font-display font-bold text-[#5c2e0b] text-center">
-          What's most helpful
+          Choose Your Subjects
         </h1>
-        <h2 className="text-2xl font-display font-bold text-[#5c2e0b] text-center mb-2">
-          for your family right now?
-        </h2>
-        <p className="text-sm text-[#8B4513]/70 text-center">
-          Select all that apply
+        <p className="text-sm text-[#8B4513]/70 text-center mt-2">
+          Pick up to 3 subjects for today's learning
         </p>
+        
+        {/* Selection counter */}
+        <div className="mt-3 flex items-center gap-2">
+          {[0, 1, 2].map((i) => (
+            <div
+              key={i}
+              className={`w-3 h-3 rounded-full transition-all ${
+                i < selectedSubjects.length 
+                  ? 'bg-[#8BC34A]' 
+                  : 'bg-[#D4B896]/50'
+              }`}
+            />
+          ))}
+          <span className="text-xs text-[#8B4513]/60 ml-1">
+            {selectedSubjects.length}/3 selected
+          </span>
+        </div>
       </div>
 
-      {/* Interest Options */}
+      {/* Subject Options */}
       <div className="flex-1 overflow-y-auto px-4 pb-4">
-        <div className="space-y-3 max-w-md mx-auto">
-          {INTEREST_OPTIONS.map((option) => {
-            const isSelected = selectedInterests.includes(option.id);
+        <div className="grid grid-cols-2 gap-3 max-w-md mx-auto">
+          {SUBJECT_OPTIONS.map((option) => {
+            const isSelected = selectedSubjects.includes(option.id);
+            const isDisabled = !isSelected && selectedSubjects.length >= 3;
             
             return (
               <button
                 key={option.id}
-                onClick={() => toggleInterest(option.id)}
+                onClick={() => toggleSubject(option.id)}
+                disabled={isDisabled}
                 className={`
-                  w-full flex items-center gap-4 p-3 rounded-2xl transition-all
+                  relative flex flex-col items-center p-4 rounded-2xl transition-all
                   ${isSelected 
-                    ? 'bg-white ring-3 ring-[#8BC34A] shadow-lg' 
-                    : 'bg-white/80 shadow-md hover:shadow-lg hover:bg-white'
+                    ? 'bg-white ring-3 ring-[#8BC34A] shadow-lg scale-[1.02]' 
+                    : isDisabled
+                      ? 'bg-white/40 opacity-50'
+                      : 'bg-white/80 shadow-md hover:shadow-lg hover:bg-white'
                   }
                 `}
               >
-                {/* Image */}
-                <div className="w-20 h-16 rounded-xl overflow-hidden flex-shrink-0 bg-gradient-to-br from-[#E8D5B7] to-[#D4B896]">
-                  <img
-                    src={option.image}
-                    alt={option.label}
-                    className="w-full h-full object-cover"
-                    onError={(e) => {
-                      // Show placeholder gradient on error
-                      e.currentTarget.style.display = 'none';
-                    }}
-                  />
+                {/* Icon */}
+                <div className={`
+                  w-14 h-14 rounded-xl flex items-center justify-center text-3xl mb-2
+                  ${isSelected 
+                    ? 'bg-[#8BC34A]/20' 
+                    : 'bg-gradient-to-br from-[#E8D5B7] to-[#D4B896]'
+                  }
+                `}>
+                  {option.icon}
                 </div>
                 
                 {/* Label */}
-                <div className="flex-1 text-left">
-                  <h3 className="font-display font-bold text-[#5c2e0b] text-lg leading-tight">
-                    {option.label}
-                  </h3>
-                </div>
+                <h3 className="font-display font-bold text-[#5c2e0b] text-sm text-center leading-tight">
+                  {option.label}
+                </h3>
                 
-                {/* Selection indicator */}
-                <div className={`
-                  w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0 transition-all
-                  ${isSelected 
-                    ? 'bg-[#8BC34A]' 
-                    : 'border-2 border-[#D4B896]'
-                  }
-                `}>
-                  {isSelected && (
-                    <Check className="w-5 h-5 text-white" strokeWidth={3} />
-                  )}
-                </div>
+                {/* Selection checkmark */}
+                {isSelected && (
+                  <div className="absolute top-2 right-2 w-6 h-6 rounded-full bg-[#8BC34A] flex items-center justify-center">
+                    <Check className="w-4 h-4 text-white" strokeWidth={3} />
+                  </div>
+                )}
               </button>
             );
           })}
@@ -228,10 +252,13 @@ const InterestSelectionPage: React.FC = () => {
           onClick={handleContinue}
           fullWidth
           variant="gold"
-          disabled={selectedInterests.length === 0}
-          className={`py-4 text-lg ${selectedInterests.length === 0 ? 'opacity-50' : ''}`}
+          disabled={selectedSubjects.length === 0}
+          className={`py-4 text-lg ${selectedSubjects.length === 0 ? 'opacity-50' : ''}`}
         >
-          Continue
+          {selectedSubjects.length === 0 
+            ? 'Select at least 1 subject' 
+            : `Continue with ${selectedSubjects.length} subject${selectedSubjects.length > 1 ? 's' : ''}`
+          }
         </WoodButton>
       </div>
     </div>

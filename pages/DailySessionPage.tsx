@@ -828,9 +828,9 @@ const DailySessionPage: React.FC = () => {
               leftArm={equippedLeftArm}
               rightArm={equippedRightArm}
               legs={equippedLegs}
-              headOffset={headOffset}
+              headOffset={{ x: headOffset?.x || 0, y: (headOffset?.y || 0) + 20 }}
               bodyOffset={bodyOffset}
-              hatOffset={hatOffset}
+              hatOffset={{ x: hatOffset?.x || 0, y: (hatOffset?.y || 0) + 20 }}
               leftArmOffset={leftArmOffset}
               rightArmOffset={rightArmOffset}
               legsOffset={legsOffset}
@@ -1207,9 +1207,9 @@ const DailySessionPage: React.FC = () => {
             leftArm={equippedLeftArm}
             rightArm={equippedRightArm}
             legs={equippedLegs}
-            headOffset={headOffset}
+            headOffset={{ x: headOffset?.x || 0, y: (headOffset?.y || 0) + 20 }}
             bodyOffset={bodyOffset}
-            hatOffset={hatOffset}
+            hatOffset={{ x: hatOffset?.x || 0, y: (hatOffset?.y || 0) + 20 }}
             leftArmOffset={leftArmOffset}
             rightArmOffset={rightArmOffset}
             legsOffset={legsOffset}

@@ -131,6 +131,17 @@ const LandingPage: React.FC = () => {
           onLoad={() => setImageLoaded(true)}
         />
         
+        {/* Rating Badge - Top of Image */}
+        <div className="absolute top-4 left-1/2 -translate-x-1/2 bg-white/95 backdrop-blur-sm rounded-full px-5 py-2.5 shadow-lg z-10">
+          <div className="flex items-center gap-2">
+            <span className="text-[#FFB800] text-2xl tracking-tight">★★★★★</span>
+            <span className="text-[#2D3748] font-bold text-lg">4.9</span>
+          </div>
+          <p className="text-[#5A7A8A] text-xs text-center mt-0.5">
+            200+ reviews on Apple & Google Play
+          </p>
+        </div>
+        
         {/* Ocean wave overlay */}
         <div className="absolute bottom-0 left-0 right-0 overflow-hidden">
           {/* Gradient fade */}
@@ -204,18 +215,10 @@ const LandingPage: React.FC = () => {
           Today's Lesson – 10 minutes
         </p>
         
-        {/* Rating and Social Proof */}
-        <div className="text-center mb-6">
-          {/* Star Rating */}
-          <div className="flex items-center justify-center gap-1 mb-2">
-            <span className="text-[#FFB800] text-lg">★★★★★</span>
-            <span className="text-[#2D3748] font-bold text-sm ml-1">4.9</span>
-          </div>
-          {/* Social Proof */}
-          <p className="text-[#5A7A8A] text-sm">
-            Over 1,000+ families use Godly Kids for daily faith lessons
-          </p>
-        </div>
+        {/* Social Proof */}
+        <p className="text-[#5A7A8A] text-sm text-center mb-6">
+          Over 1,000+ families use Godly Kids for daily faith lessons
+        </p>
         
         {/* Start Lesson Button - Wood Theme */}
         <button

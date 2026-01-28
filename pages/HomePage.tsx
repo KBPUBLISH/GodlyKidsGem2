@@ -1167,7 +1167,7 @@ const HomePage: React.FC = () => {
           );
         })()}
 
-        {/* Daily Lessons Section - Weekly Tracker removed (streak now in DailyLessonWidget) */}
+        {/* Daily Lessons Section */}
         <section id="devotional-section" data-tutorial="devotional-section" className="pb-2">
           {/* Daily Lessons Header */}
           <div className="flex items-center justify-between mb-2">
@@ -1176,18 +1176,6 @@ const HomePage: React.FC = () => {
               icon="📚"
               color="#7c4dff"
             />
-            {(() => {
-              // In kid profile we already loaded the selected day's planner lessons into `lessons`.
-              // Exclude Daily Verse lessons - they have their own featured section
-              const allLessons = currentProfileId ? lessons : getLessonsForDay(lessons, selectedDayIndex);
-              const dayLessons = allLessons.filter((l: any) => l.type !== 'Daily Verse');
-              const completedCount = dayLessons.filter((l: any) => isCompleted(l._id || l.id)).length;
-              return dayLessons.length > 0 ? (
-                <span className="text-white/60 text-xs font-semibold">
-                  {completedCount}/{dayLessons.length} Complete
-                </span>
-              ) : null;
-            })()}
           </div>
 
           {/* Create Child Profile card removed - users can access profiles from header */}

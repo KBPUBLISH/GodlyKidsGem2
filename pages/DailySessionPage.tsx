@@ -25,9 +25,7 @@ import { getSavedPreferences, SUBJECT_OPTIONS } from './InterestSelectionPage';
 const SUBJECT_IMAGES: { [key: string]: string } = {
   'bible-stories': '/daily-session/biblestory.png',
   'history': '/daily-session/History.png',
-  'documentary': '/daily-session/History.png', // Using history as fallback
   'fantasy': '/daily-session/adventure.png',
-  'science': '/daily-session/character.png', // Using character as fallback
   'character': '/daily-session/character.png',
 };
 
@@ -415,7 +413,7 @@ const DailySessionPage: React.FC = () => {
 
         {/* Subject Cards Grid */}
         <div className="flex-1 px-4 pb-4">
-          <div className="grid grid-cols-3 gap-3">
+          <div className="grid grid-cols-2 gap-4">
             {SUBJECT_OPTIONS.map((subject) => {
               const isSelected = tempSelectedSubjects.includes(subject.id);
               const isDisabled = !isSelected && tempSelectedSubjects.length >= 3;

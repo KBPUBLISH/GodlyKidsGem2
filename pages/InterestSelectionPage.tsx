@@ -11,45 +11,31 @@ const PREFERENCES_STORAGE_KEY = 'godlykids_content_preferences';
 // These tags match content categories in the portal
 export const SUBJECT_OPTIONS = [
   {
-    id: 'bible',
+    id: 'bible-stories',
     label: 'Bible Stories',
     icon: '📖',
-    image: '/subjects/bible.png',
+    image: '/daily-session/biblestory.png',
     tags: ['Bible', 'Bible Stories', 'Scripture', 'Faith', 'Jesus', 'God', 'Old Testament', 'New Testament'],
   },
   {
     id: 'history',
     label: 'History',
     icon: '🏛️',
-    image: '/subjects/history.png',
+    image: '/daily-session/History.png',
     tags: ['History', 'Historical', 'Ancient', 'Timeline', 'Past'],
-  },
-  {
-    id: 'documentary',
-    label: 'Documentary',
-    icon: '🎬',
-    image: '/subjects/documentary.png',
-    tags: ['Documentary', 'True Story', 'Real Life', 'Biography', 'Missions'],
   },
   {
     id: 'fantasy',
     label: 'Fantasy & Adventure',
     icon: '🐉',
-    image: '/subjects/fantasy.png',
+    image: '/daily-session/adventure.png',
     tags: ['Fantasy', 'Adventure', 'Fiction', 'Imagination', 'Quest'],
-  },
-  {
-    id: 'science',
-    label: 'Science & Nature',
-    icon: '🔬',
-    image: '/subjects/science.png',
-    tags: ['Science', 'Nature', 'Creation', 'Animals', 'Discovery', 'Earth'],
   },
   {
     id: 'character',
     label: 'Character & Virtues',
     icon: '💪',
-    image: '/subjects/character.png',
+    image: '/daily-session/character.png',
     tags: ['Character', 'Virtues', 'Values', 'Morals', 'Courage', 'Kindness', 'Honesty'],
   },
 ];

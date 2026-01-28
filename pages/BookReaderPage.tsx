@@ -5077,6 +5077,11 @@ const BookReaderPage: React.FC = () => {
                                                     .filter(text => text.trim())
                                                     .join('\n\n');
                                                 
+                                                console.log('📖 Returning from book to daily session');
+                                                console.log('📖 Book title:', bookTitle);
+                                                console.log('📖 Book content length:', bookContent.length);
+                                                console.log('📖 Book content preview:', bookContent.substring(0, 200));
+                                                
                                                 navigate('/daily-session', { 
                                                     state: { 
                                                         stepCompleted: 'book',

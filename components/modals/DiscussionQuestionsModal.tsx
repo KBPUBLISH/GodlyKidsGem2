@@ -15,6 +15,7 @@ interface DiscussionQuestionsModalProps {
   bookTitle: string;
   bookDescription?: string;
   bookContent?: string;
+  preGeneratedQuestions?: DiscussionQuestion[]; // Pre-generated questions from parent
 }
 
 const DiscussionQuestionsModal: React.FC<DiscussionQuestionsModalProps> = ({
@@ -24,6 +25,7 @@ const DiscussionQuestionsModal: React.FC<DiscussionQuestionsModalProps> = ({
   bookTitle,
   bookDescription,
   bookContent,
+  preGeneratedQuestions,
 }) => {
   const [questions, setQuestions] = useState<DiscussionQuestion[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -33,13 +35,21 @@ const DiscussionQuestionsModal: React.FC<DiscussionQuestionsModalProps> = ({
 
   useEffect(() => {
     if (isOpen && bookTitle) {
-      fetchQuestions();
+      // Use pre-generated questions if available, otherwise fetch
+      if (preGeneratedQuestions && preGeneratedQuestions.length > 0) {
+        console.log('📝 Using pre-generated questions:', preGeneratedQuestions.length);
+        setQuestions(preGeneratedQuestions);
+        setIsLoading(false);
+      } else {
+        fetchQuestions();
+      }
     }
-  }, [isOpen, bookTitle]);
+  }, [isOpen, bookTitle, preGeneratedQuestions]);
 
   const fetchQuestions = async () => {
     setIsLoading(true);
     try {
+      console.log('📝 Fetching questions for:', bookTitle, 'Content length:', bookContent?.length || 0);
       const response = await fetch(`${getApiBaseUrl()}ai-generate/discussion-questions`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -53,8 +63,15 @@ const DiscussionQuestionsModal: React.FC<DiscussionQuestionsModalProps> = ({
 
       if (response.ok) {
         const data = await response.json();
+        console.log('📝 Received questions:', data.questions?.length || 0, 'Source:', data.source || 'unknown');
+        if (data.source === 'ai') {
+          console.log('📝 AI-generated questions:', data.questions?.map((q: any) => q.question.substring(0, 50)));
+        } else {
+          console.log('📝 Using fallback questions (AI not available)');
+        }
         setQuestions(data.questions || getFallbackQuestions());
       } else {
+        console.log('📝 Failed to fetch, status:', response.status);
         setQuestions(getFallbackQuestions());
       }
     } catch (error) {

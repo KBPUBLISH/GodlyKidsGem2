@@ -817,6 +817,8 @@ Return ONLY a valid JSON array with exactly 2 objects:
 Return ONLY the JSON array, no other text.`;
 
         console.log(`💬 Generating discussion questions for book: "${bookTitle}"`);
+        console.log(`💬 Book content received: ${hasStoryContent ? bookContent.substring(0, 100) + '...' : 'NO CONTENT'}`);
+        console.log(`💬 Content length: ${bookContent?.length || 0} chars`);
         
         const response = await fetch(
             `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${geminiKey}`,

@@ -101,6 +101,7 @@ const DailySessionPage: React.FC = () => {
   const [showCelebration, setShowCelebration] = useState(false);
   const [recommendedBook, setRecommendedBook] = useState<any>(null);
   const [bookContent, setBookContent] = useState<string>(''); // Story text for discussion questions
+  const [discussionQuestions, setDiscussionQuestions] = useState<any[]>([]); // Pre-generated questions
   const [isLoading, setIsLoading] = useState(true);
   const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
   const [isLoadingBook, setIsLoadingBook] = useState(false);
@@ -230,8 +231,11 @@ const DailySessionPage: React.FC = () => {
         const coinsEarned = 30;
         
         // Capture the book content for discussion questions
-        if (state.bookContent) {
-          setBookContent(state.bookContent);
+        const content = state.bookContent || '';
+        const title = state.bookTitle || session.steps[0]?.contentTitle || recommendedBook?.title || 'the story';
+        
+        if (content) {
+          setBookContent(content);
         }
         // Update book title if provided
         if (state.bookTitle && !recommendedBook?.title) {
@@ -251,14 +255,51 @@ const DailySessionPage: React.FC = () => {
         // Clear the navigation state to prevent re-processing
         navigate(location.pathname, { replace: true, state: {} });
         
-        // After book completion, automatically show discussion modal
-        // (Next step in flow is discussion)
-        setTimeout(() => {
+        // Pre-generate discussion questions using AI before showing modal
+        const generateQuestions = async () => {
+          try {
+            const apiBaseUrl = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
+              ? 'http://localhost:3001/api/'
+              : 'https://backendgk2-0.onrender.com/api/';
+            
+            console.log('📝 Generating discussion questions for:', title);
+            console.log('📝 Book content length:', content.length);
+            
+            const response = await fetch(`${apiBaseUrl}ai-generate/discussion-questions`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                bookTitle: title,
+                bookContent: content,
+                childAge: '7-12',
+                goal: selectedGoal,
+              }),
+            });
+            
+            if (response.ok) {
+              const data = await response.json();
+              console.log('📝 Generated questions:', data.questions?.length || 0);
+              if (data.questions && data.questions.length > 0) {
+                setDiscussionQuestions(data.questions);
+              }
+            } else {
+              console.log('📝 Failed to generate questions, status:', response.status);
+            }
+          } catch (error) {
+            console.error('📝 Error generating discussion questions:', error);
+          }
+          
+          // Show discussion modal after attempting to generate questions
           setShowDiscussionModal(true);
-        }, 500);
+        };
+        
+        // Small delay then generate questions
+        setTimeout(() => {
+          generateQuestions();
+        }, 300);
       }
     }
-  }, [location.state, session, addCoins, navigate, location.pathname, recommendedBook]);
+  }, [location.state, session, addCoins, navigate, location.pathname, recommendedBook, selectedGoal]);
 
   // Get max pages based on session duration
   const getMaxPages = (duration: number): number => {
@@ -431,6 +472,10 @@ const DailySessionPage: React.FC = () => {
   // Handle goal selection confirmation
   const handleGoalConfirm = async () => {
     if (!selectedGoal) return;
+    
+    // Reset previous session states for fresh start
+    setBookContent('');
+    setDiscussionQuestions([]);
     
     // Save goal to session storage with today's date
     sessionStorage.setItem('godlykids_session_goal', selectedGoal);
@@ -1241,6 +1286,7 @@ const DailySessionPage: React.FC = () => {
         bookTitle={session?.steps[0]?.contentTitle || recommendedBook?.title || 'the story'}
         bookDescription={recommendedBook?.description}
         bookContent={bookContent}
+        preGeneratedQuestions={discussionQuestions}
       />
 
       {/* Prayer Modal */}

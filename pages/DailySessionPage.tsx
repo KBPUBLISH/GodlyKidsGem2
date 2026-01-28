@@ -555,56 +555,35 @@ const DailySessionPage: React.FC = () => {
           </button>
         </div>
 
-        {/* Flying Avatar with Wings */}
+        {/* Avatar - Bottom Right */}
         <div className="absolute bottom-20 right-4 avatar-float" style={{ marginBottom: 'var(--safe-area-bottom, 0px)' }}>
           <style>{wingAnimationStyles}</style>
-          <div className="relative w-28 h-36">
-            {/* Left Wing */}
-            <div className="absolute left-0 top-8 w-10 h-16 wing-flap-left origin-right">
-              <img 
-                src="/avatars/wings-left/wing-left-11.png" 
-                alt="" 
-                className="w-full h-full object-contain"
-              />
-            </div>
-            
-            {/* Right Wing */}
-            <div className="absolute right-0 top-8 w-10 h-16 wing-flap-right origin-left">
-              <img 
-                src="/avatars/wings-right/wing-right-10.png" 
-                alt="" 
-                className="w-full h-full object-contain"
-              />
-            </div>
-            
-            {/* Avatar Body */}
-            <div className="absolute left-1/2 top-0 -translate-x-1/2 w-20 h-32">
-              <AvatarCompositor
-                headUrl={equippedAvatar || '/avatars/heads/head-1.png'}
-                body={equippedBody}
-                hat={equippedHat}
-                leftArm={equippedLeftArm}
-                rightArm={equippedRightArm}
-                legs={equippedLegs}
-                headOffset={headOffset}
-                bodyOffset={bodyOffset}
-                hatOffset={hatOffset}
-                leftArmOffset={leftArmOffset}
-                rightArmOffset={rightArmOffset}
-                legsOffset={legsOffset}
-                headScale={headScale}
-                bodyScale={bodyScale}
-                hatScale={hatScale}
-                leftArmScale={leftArmScale}
-                rightArmScale={rightArmScale}
-                legsScale={legsScale}
-                leftArmRotation={equippedLeftArmRotation}
-                rightArmRotation={equippedRightArmRotation}
-                legsRotation={equippedLegsRotation}
-                hatRotation={equippedHatRotation}
-                className="w-full h-full"
-              />
-            </div>
+          <div className="w-20 h-28">
+            <AvatarCompositor
+              headUrl={equippedAvatar || '/avatars/heads/head-1.png'}
+              body={equippedBody}
+              hat={equippedHat}
+              leftArm={equippedLeftArm}
+              rightArm={equippedRightArm}
+              legs={equippedLegs}
+              headOffset={headOffset}
+              bodyOffset={bodyOffset}
+              hatOffset={hatOffset}
+              leftArmOffset={leftArmOffset}
+              rightArmOffset={rightArmOffset}
+              legsOffset={legsOffset}
+              headScale={headScale}
+              bodyScale={bodyScale}
+              hatScale={hatScale}
+              leftArmScale={leftArmScale}
+              rightArmScale={rightArmScale}
+              legsScale={legsScale}
+              leftArmRotation={equippedLeftArmRotation}
+              rightArmRotation={equippedRightArmRotation}
+              legsRotation={equippedLegsRotation}
+              hatRotation={equippedHatRotation}
+              className="w-full h-full"
+            />
           </div>
         </div>
 
@@ -806,15 +785,6 @@ const DailySessionPage: React.FC = () => {
               alt="Start"
               className="w-full h-auto"
             />
-            {/* Overlay text for specific action */}
-            <div className="absolute inset-0 flex items-center justify-center">
-              <span className="text-[#5D4037] font-display font-bold text-xl flex items-center gap-2">
-                {currentStep.type === 'prayer' && 'Start Prayer'}
-                {currentStep.type === 'devotional' && 'Watch Video'}
-                {currentStep.type === 'book' && 'Start Reading'}
-                <ChevronRight className="w-6 h-6" />
-              </span>
-            </div>
           </button>
           
           <button
@@ -826,56 +796,35 @@ const DailySessionPage: React.FC = () => {
         </div>
       </div>
 
-      {/* Flying Avatar with Wings */}
+      {/* Avatar - Bottom Right */}
       <div className="absolute bottom-24 right-4 avatar-float" style={{ marginBottom: 'var(--safe-area-bottom, 0px)' }}>
         <style>{wingAnimationStyles}</style>
-        <div className="relative w-24 h-32">
-          {/* Left Wing */}
-          <div className="absolute -left-2 top-6 w-8 h-14 wing-flap-left origin-right">
-            <img 
-              src="/avatars/wings-left/wing-left-11.png" 
-              alt="" 
-              className="w-full h-full object-contain"
-            />
-          </div>
-          
-          {/* Right Wing */}
-          <div className="absolute -right-2 top-6 w-8 h-14 wing-flap-right origin-left">
-            <img 
-              src="/avatars/wings-right/wing-right-10.png" 
-              alt="" 
-              className="w-full h-full object-contain"
-            />
-          </div>
-          
-          {/* Avatar Body */}
-          <div className="absolute left-1/2 top-0 -translate-x-1/2 w-16 h-28">
-            <AvatarCompositor
-              headUrl={equippedAvatar || '/avatars/heads/head-1.png'}
-              body={equippedBody}
-              hat={equippedHat}
-              leftArm={equippedLeftArm}
-              rightArm={equippedRightArm}
-              legs={equippedLegs}
-              headOffset={headOffset}
-              bodyOffset={bodyOffset}
-              hatOffset={hatOffset}
-              leftArmOffset={leftArmOffset}
-              rightArmOffset={rightArmOffset}
-              legsOffset={legsOffset}
-              headScale={headScale}
-              bodyScale={bodyScale}
-              hatScale={hatScale}
-              leftArmScale={leftArmScale}
-              rightArmScale={rightArmScale}
-              legsScale={legsScale}
-              leftArmRotation={equippedLeftArmRotation}
-              rightArmRotation={equippedRightArmRotation}
-              legsRotation={equippedLegsRotation}
-              hatRotation={equippedHatRotation}
-              className="w-full h-full"
-            />
-          </div>
+        <div className="w-16 h-24">
+          <AvatarCompositor
+            headUrl={equippedAvatar || '/avatars/heads/head-1.png'}
+            body={equippedBody}
+            hat={equippedHat}
+            leftArm={equippedLeftArm}
+            rightArm={equippedRightArm}
+            legs={equippedLegs}
+            headOffset={headOffset}
+            bodyOffset={bodyOffset}
+            hatOffset={hatOffset}
+            leftArmOffset={leftArmOffset}
+            rightArmOffset={rightArmOffset}
+            legsOffset={legsOffset}
+            headScale={headScale}
+            bodyScale={bodyScale}
+            hatScale={hatScale}
+            leftArmScale={leftArmScale}
+            rightArmScale={rightArmScale}
+            legsScale={legsScale}
+            leftArmRotation={equippedLeftArmRotation}
+            rightArmRotation={equippedRightArmRotation}
+            legsRotation={equippedLegsRotation}
+            hatRotation={equippedHatRotation}
+            className="w-full h-full"
+          />
         </div>
       </div>
 

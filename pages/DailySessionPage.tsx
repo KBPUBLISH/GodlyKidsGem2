@@ -93,7 +93,7 @@ const DailySessionPage: React.FC = () => {
     equippedLegsRotation,
     equippedHatRotation,
   } = useUser();
-  const { books } = useBooks();
+  const { books, loading: booksLoading, refreshBooks } = useBooks();
   
   const [session, setSession] = useState<DailySession | null>(null);
   const [showPrayerModal, setShowPrayerModal] = useState(false);
@@ -131,6 +131,14 @@ const DailySessionPage: React.FC = () => {
     }
   }, []);
 
+  // Ensure books are loaded when entering Daily Session page
+  useEffect(() => {
+    if (books.length === 0 && !booksLoading) {
+      console.log('📚 DailySession: Books not loaded, refreshing...');
+      refreshBooks();
+    }
+  }, [books.length, booksLoading, refreshBooks]);
+
   // Initialize or load session
   useEffect(() => {
     const loadSession = async () => {
@@ -148,11 +156,23 @@ const DailySessionPage: React.FC = () => {
       // Check for existing session
       let currentSession = getCurrentSession();
       
-      // If no active session exists OR the session was completed, show goal selection for a new session
-      if (!currentSession || currentSession.completed) {
+      // Check if session has made real progress (at least one step started or completed)
+      const hasProgress = currentSession?.steps.some(
+        (step: any) => step.status === 'in-progress' || step.status === 'completed'
+      );
+      
+      // Show goal selection if:
+      // - No session exists, OR
+      // - Session is completed, OR  
+      // - Session has no real progress (all steps still pending)
+      if (!currentSession || currentSession.completed || !hasProgress) {
         // Clear any previous session data to start fresh
         sessionStorage.removeItem('godlykids_session_goal');
         sessionStorage.removeItem('godlykids_session_goal_date');
+        if (currentSession && !currentSession.completed) {
+          // Clear the incomplete session with no progress
+          localStorage.removeItem('godlykids_daily_session');
+        }
         
         // Show goal selection for new session
         setShowGoalsSelection(true);
@@ -434,7 +454,7 @@ const DailySessionPage: React.FC = () => {
   };
 
   // Handle starting current step
-  const handleStartStep = () => {
+  const handleStartStep = async () => {
     if (!session) return;
     
     const step = session.steps[session.currentStepIndex];
@@ -449,6 +469,16 @@ const DailySessionPage: React.FC = () => {
             state: { fromDailySession: true } 
           });
           return;
+        }
+        
+        // If books are still loading, show loading and wait
+        if (booksLoading || books.length === 0) {
+          setIsLoadingBook(true);
+          console.log('📚 Books still loading, refreshing...');
+          await refreshBooks();
+          // Small delay to let state update
+          await new Promise(resolve => setTimeout(resolve, 500));
+          setIsLoadingBook(false);
         }
         
         // Fallback: find any valid book from the loaded books
@@ -467,8 +497,8 @@ const DailySessionPage: React.FC = () => {
         }
         
         // No books available - show error
-        console.error('No books available. Books loaded:', books?.length);
-        alert('No books available yet. Please wait a moment and try again.');
+        console.error('No books available. Books loaded:', books?.length, 'booksLoading:', booksLoading);
+        alert('Unable to load books. Please check your connection and try again.');
         break;
       case 'discussion':
         setShowDiscussionModal(true);

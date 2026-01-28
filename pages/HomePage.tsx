@@ -279,13 +279,13 @@ const HomePage: React.FC = () => {
     const today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
     const lastRedirectDate = sessionStorage.getItem(DAILY_SESSION_REDIRECT_KEY);
     
-    // Only redirect if:
+    // Redirect if:
     // 1. Haven't redirected today (this session)
     // 2. Daily session not completed yet
-    // 3. User has selected subjects (completed interest selection)
-    const hasSubjects = getSavedPreferences().length > 0;
+    // Note: We redirect ALL users, even without subject selection
+    // The daily session page will handle prompting for subjects if needed
     
-    if (lastRedirectDate !== today && !isSessionCompletedToday() && hasSubjects) {
+    if (lastRedirectDate !== today && !isSessionCompletedToday()) {
       console.log('📚 Auto-redirecting to Daily Session (first open of the day)');
       sessionStorage.setItem(DAILY_SESSION_REDIRECT_KEY, today);
       navigate('/daily-session');

@@ -37,11 +37,24 @@ const DailySessionPage: React.FC = () => {
   const [lessons, setLessons] = useState<any[]>([]);
   const [selectedLesson, setSelectedLesson] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(true);
+  
+  // Subject selection state for users who haven't picked subjects yet
+  const [showSubjectSelection, setShowSubjectSelection] = useState(false);
+  const [tempSelectedSubjects, setTempSelectedSubjects] = useState<string[]>([]);
 
   // Initialize or load session
   useEffect(() => {
     const loadSession = async () => {
       setIsLoading(true);
+      
+      // Check if user has selected subjects
+      const savedSubjects = getSavedPreferences();
+      if (savedSubjects.length === 0) {
+        // No subjects selected - show subject selection first
+        setShowSubjectSelection(true);
+        setIsLoading(false);
+        return;
+      }
       
       let currentSession = getCurrentSession();
       
@@ -166,6 +179,65 @@ const DailySessionPage: React.FC = () => {
     navigate('/home');
   };
 
+  // Handle subject toggle in selection screen
+  const handleSubjectToggle = (subjectId: string) => {
+    setTempSelectedSubjects(prev => {
+      if (prev.includes(subjectId)) {
+        return prev.filter(id => id !== subjectId);
+      }
+      // Max 3 subjects
+      if (prev.length >= 3) {
+        return prev;
+      }
+      return [...prev, subjectId];
+    });
+  };
+
+  // Handle subject selection confirmation
+  const handleSubjectConfirm = async () => {
+    // Save subjects to localStorage
+    localStorage.setItem('godlykids_content_preferences', JSON.stringify(tempSelectedSubjects));
+    
+    // Track subject selection
+    activityTrackingService.trackOnboardingEvent('subjects_selected', {
+      subjects: tempSelectedSubjects,
+    });
+    
+    // Hide selection screen and create session
+    setShowSubjectSelection(false);
+    setIsLoading(true);
+    
+    // Create a new session with the selected subjects
+    const newSession = createDailySession(tempSelectedSubjects);
+    setSession(newSession);
+    
+    // Track session start
+    activityTrackingService.trackOnboardingEvent('godly_kids_time_started', {
+      subjects: newSession.subjects,
+    });
+    
+    // Load lessons for devotional step
+    try {
+      const lessonsData = await ApiService.getLessons();
+      const devotionalLessons = lessonsData.filter(
+        (l: any) => l.type === 'Daily Verse' || l.type === 'Bible Study'
+      );
+      setLessons(devotionalLessons);
+      
+      if (devotionalLessons.length > 0) {
+        const randomIndex = Math.floor(Math.random() * devotionalLessons.length);
+        setSelectedLesson(devotionalLessons[randomIndex]);
+      }
+    } catch (e) {
+      console.error('Error loading lessons:', e);
+    }
+    
+    // Find recommended book
+    findRecommendedBook();
+    
+    setIsLoading(false);
+  };
+
   // Handle starting current step
   const handleStartStep = () => {
     if (!session) return;
@@ -264,6 +336,110 @@ const DailySessionPage: React.FC = () => {
           <div className="w-16 h-16 border-4 border-[#FFD700]/30 border-t-[#FFD700] rounded-full animate-spin mx-auto mb-4" />
           <p className="text-white/70">Preparing your session...</p>
         </div>
+      </div>
+    );
+  }
+
+  // Show subject selection screen for new users
+  if (showSubjectSelection) {
+    return (
+      <div className="fixed inset-0 bg-gradient-to-b from-[#1a1a2e] via-[#16213e] to-[#0f3460] flex flex-col z-50 overflow-auto">
+        {/* Safe area top */}
+        <div className="flex-shrink-0" style={{ height: 'var(--safe-area-top, 0px)' }} />
+        
+        {/* Header */}
+        <div className="flex items-center justify-between px-4 py-4">
+          <button
+            onClick={() => navigate('/home')}
+            className="w-10 h-10 rounded-full bg-white/10 flex items-center justify-center"
+          >
+            <X className="w-6 h-6 text-white/70" />
+          </button>
+          
+          <div className="text-center">
+            <h1 className="text-white font-display font-bold text-lg">Godly Kids Time</h1>
+            <p className="text-white/50 text-xs">Daily Learning Session</p>
+          </div>
+          
+          <div className="w-10" />
+        </div>
+
+        {/* Subject Selection Content */}
+        <div className="flex-1 px-6 py-4 flex flex-col">
+          <div className="text-center mb-6">
+            <div className="w-20 h-20 rounded-full bg-gradient-to-br from-[#FFD700] to-[#FFA500] mx-auto flex items-center justify-center mb-4">
+              <span className="text-4xl">📚</span>
+            </div>
+            <h2 className="text-white font-display font-bold text-2xl mb-2">
+              Choose Your Subjects
+            </h2>
+            <p className="text-white/60 text-sm">
+              Pick up to 3 subjects for today's learning
+            </p>
+          </div>
+
+          {/* Subject Grid */}
+          <div className="grid grid-cols-2 gap-3 mb-6">
+            {SUBJECT_OPTIONS.map((subject) => {
+              const isSelected = tempSelectedSubjects.includes(subject.id);
+              const isDisabled = !isSelected && tempSelectedSubjects.length >= 3;
+              
+              return (
+                <button
+                  key={subject.id}
+                  onClick={() => handleSubjectToggle(subject.id)}
+                  disabled={isDisabled}
+                  className={`
+                    p-4 rounded-2xl transition-all text-left
+                    ${isSelected 
+                      ? 'bg-[#FFD700] text-[#5D4037] ring-4 ring-[#FFD700]/30' 
+                      : isDisabled
+                        ? 'bg-white/5 text-white/30'
+                        : 'bg-white/10 text-white hover:bg-white/20'
+                    }
+                  `}
+                >
+                  <span className="text-2xl block mb-1">{subject.icon}</span>
+                  <span className="font-bold text-sm">{subject.label}</span>
+                  {isSelected && (
+                    <Check className="w-5 h-5 absolute top-2 right-2" />
+                  )}
+                </button>
+              );
+            })}
+          </div>
+
+          {/* Selection Count */}
+          <p className="text-center text-white/50 text-sm mb-4">
+            {tempSelectedSubjects.length} of 3 subjects selected
+          </p>
+
+          {/* Action Buttons */}
+          <div className="mt-auto space-y-3">
+            <WoodButton
+              onClick={handleSubjectConfirm}
+              fullWidth
+              variant="gold"
+              className="py-4"
+              disabled={tempSelectedSubjects.length === 0}
+            >
+              <span className="flex items-center justify-center gap-2">
+                Start Today's Session
+                <ChevronRight className="w-5 h-5" />
+              </span>
+            </WoodButton>
+            
+            <button
+              onClick={() => navigate('/home')}
+              className="w-full py-3 text-white/50 text-sm hover:text-white/70 transition-colors"
+            >
+              Skip for now
+            </button>
+          </div>
+        </div>
+
+        {/* Safe area bottom */}
+        <div className="flex-shrink-0" style={{ height: 'var(--safe-area-bottom, 0px)' }} />
       </div>
     );
   }

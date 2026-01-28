@@ -1479,6 +1479,21 @@ const DailySessionPage: React.FC = () => {
       {/* Avatar - Bottom Right */}
       <div className="absolute bottom-24 right-4 avatar-float" style={{ marginBottom: 'var(--safe-area-bottom, 0px)' }}>
         <style>{wingAnimationStyles}</style>
+        
+        {/* Speech bubble when no body equipped */}
+        {!equippedBody && (
+          <button
+            onClick={() => navigate('/home', { state: { openShop: true } })}
+            className="absolute -top-16 left-1/2 -translate-x-1/2 bg-white rounded-2xl px-3 py-2 shadow-lg border-2 border-[#FFD700] whitespace-nowrap animate-bounce z-10"
+          >
+            <p className="text-xs font-bold text-[#5D4037]">"Geeze I feel weird without a body" 😅</p>
+            <p className="text-[10px] text-[#8B4513]/70 text-center">Tap me!</p>
+            {/* Speech bubble tail */}
+            <div className="absolute -bottom-2 left-1/2 -translate-x-1/2 w-0 h-0 border-l-[8px] border-l-transparent border-r-[8px] border-r-transparent border-t-[8px] border-t-white"></div>
+            <div className="absolute -bottom-[11px] left-1/2 -translate-x-1/2 w-0 h-0 border-l-[9px] border-l-transparent border-r-[9px] border-r-transparent border-t-[9px] border-t-[#FFD700]"></div>
+          </button>
+        )}
+        
         <div className="w-20 h-28">
           <AvatarCompositor
             headUrl={equippedAvatar || '/avatars/heads/head-1.png'}

@@ -937,6 +937,24 @@ const DailySessionPage: React.FC = () => {
         {/* Avatar - Bottom Right */}
         <div className="absolute bottom-8 right-4" style={{ marginBottom: 'var(--safe-area-bottom, 0px)' }}>
           <style>{wingAnimationStyles}</style>
+          
+          {/* Speech bubble when no body equipped */}
+          {!equippedBody && (
+            <button
+              onClick={() => navigate('/home', { state: { openShop: true } })}
+              className="absolute -top-16 -left-32 bg-white rounded-2xl px-3 py-2 shadow-lg border-2 border-[#FFD700] max-w-[140px] animate-bounce z-10"
+              style={{ animationDuration: '2s' }}
+            >
+              <p className="text-[#5D4037] text-xs font-medium text-center leading-tight">
+                "I sure wish I had a body!" 🥺
+              </p>
+              <p className="text-[#8B5A2B] text-[10px] text-center mt-1 opacity-70">Tap me!</p>
+              {/* Speech bubble tail */}
+              <div className="absolute -bottom-2 right-6 w-0 h-0 border-l-[8px] border-l-transparent border-r-[8px] border-r-transparent border-t-[8px] border-t-white"></div>
+              <div className="absolute -bottom-[11px] right-[23px] w-0 h-0 border-l-[9px] border-l-transparent border-r-[9px] border-r-transparent border-t-[9px] border-t-[#FFD700]"></div>
+            </button>
+          )}
+          
           <div className="w-24 h-32">
             <AvatarCompositor
               headUrl={equippedAvatar || '/avatars/heads/head-1.png'}
@@ -1081,6 +1099,24 @@ const DailySessionPage: React.FC = () => {
         {/* Avatar - Bottom Right */}
         <div className="absolute bottom-8 right-4" style={{ marginBottom: 'var(--safe-area-bottom, 0px)' }}>
           <style>{wingAnimationStyles}</style>
+          
+          {/* Speech bubble when no body equipped */}
+          {!equippedBody && (
+            <button
+              onClick={() => navigate('/home', { state: { openShop: true } })}
+              className="absolute -top-16 -left-32 bg-white rounded-2xl px-3 py-2 shadow-lg border-2 border-[#FFD700] max-w-[140px] animate-bounce z-10"
+              style={{ animationDuration: '2s' }}
+            >
+              <p className="text-[#5D4037] text-xs font-medium text-center leading-tight">
+                "I sure wish I had a body!" 🥺
+              </p>
+              <p className="text-[#8B5A2B] text-[10px] text-center mt-1 opacity-70">Tap me!</p>
+              {/* Speech bubble tail */}
+              <div className="absolute -bottom-2 right-6 w-0 h-0 border-l-[8px] border-l-transparent border-r-[8px] border-r-transparent border-t-[8px] border-t-white"></div>
+              <div className="absolute -bottom-[11px] right-[23px] w-0 h-0 border-l-[9px] border-l-transparent border-r-[9px] border-r-transparent border-t-[9px] border-t-[#FFD700]"></div>
+            </button>
+          )}
+          
           <div className="w-24 h-32">
             <AvatarCompositor
               headUrl={equippedAvatar || '/avatars/heads/head-1.png'}
@@ -1199,6 +1235,24 @@ const DailySessionPage: React.FC = () => {
         {/* Avatar - Bottom Right */}
         <div className="absolute bottom-8 right-4" style={{ marginBottom: 'var(--safe-area-bottom, 0px)' }}>
           <style>{wingAnimationStyles}</style>
+          
+          {/* Speech bubble when no body equipped */}
+          {!equippedBody && (
+            <button
+              onClick={() => navigate('/home', { state: { openShop: true } })}
+              className="absolute -top-16 -left-32 bg-white rounded-2xl px-3 py-2 shadow-lg border-2 border-[#FFD700] max-w-[140px] animate-bounce z-10"
+              style={{ animationDuration: '2s' }}
+            >
+              <p className="text-[#5D4037] text-xs font-medium text-center leading-tight">
+                "I sure wish I had a body!" 🥺
+              </p>
+              <p className="text-[#8B5A2B] text-[10px] text-center mt-1 opacity-70">Tap me!</p>
+              {/* Speech bubble tail */}
+              <div className="absolute -bottom-2 right-6 w-0 h-0 border-l-[8px] border-l-transparent border-r-[8px] border-r-transparent border-t-[8px] border-t-white"></div>
+              <div className="absolute -bottom-[11px] right-[23px] w-0 h-0 border-l-[9px] border-l-transparent border-r-[9px] border-r-transparent border-t-[9px] border-t-[#FFD700]"></div>
+            </button>
+          )}
+          
           <div className="w-24 h-32">
             <AvatarCompositor
               headUrl={equippedAvatar || '/avatars/heads/head-1.png'}

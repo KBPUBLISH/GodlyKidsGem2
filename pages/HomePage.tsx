@@ -37,7 +37,6 @@ import { activityTrackingService } from '../services/activityTrackingService';
 import { getPreferenceTags, getSavedPreferences } from './InterestSelectionPage';
 import { isSessionCompletedToday, getSessionStreak, hasSessionToday } from '../services/dailySessionService';
 import DailyLessonWidget from '../components/features/DailyLessonWidget';
-import VideoLessonModal from '../components/features/VideoLessonModal';
 
 // Helper to format date as YYYY-MM-DD in local time
 const formatLocalDateKey = (d: Date): string => {
@@ -101,10 +100,6 @@ const HomePage: React.FC = () => {
   const [showEmailSignup, setShowEmailSignup] = useState(false);
   const [showSurvey, setShowSurvey] = useState(false);
   const [showTutorialPrompt, setShowTutorialPrompt] = useState(false);
-  
-  // Video Devotional Modal state
-  const [showVideoDevotional, setShowVideoDevotional] = useState(false);
-  const [selectedVideoLesson, setSelectedVideoLesson] = useState<any>(null);
   
   // Tutorial context
   const { startTutorial, isTutorialActive } = useTutorial();
@@ -1007,25 +1002,6 @@ const HomePage: React.FC = () => {
         onClose={() => setShowPrayerGame(false)}
       />
 
-      <VideoLessonModal
-        isOpen={showVideoDevotional}
-        onClose={() => {
-          setShowVideoDevotional(false);
-          setSelectedVideoLesson(null);
-        }}
-        lesson={selectedVideoLesson}
-        onComplete={(coinsEarned) => {
-          // Mark lesson as completed
-          if (selectedVideoLesson?._id) {
-            localStorage.setItem(`lesson_${selectedVideoLesson._id}_completed`, 'true');
-          }
-          // Add coins
-          addCoins(coinsEarned);
-          setShowVideoDevotional(false);
-          setSelectedVideoLesson(null);
-        }}
-      />
-
       <ReviewPromptModal
         isOpen={showReviewPrompt}
         onReviewSubmitted={() => setShowReviewPrompt(false)}
@@ -1086,107 +1062,92 @@ const HomePage: React.FC = () => {
 
         {/* 🎬 Video Devotional Activities */}
         {(() => {
-          // Filter lessons that are Daily Verse type
-          const videoDevotionals = lessons.filter((l: any) => l.type === 'Daily Verse');
+          // Filter all lessons that have video content
+          const videoDevotionals = lessons.filter((l: any) => 
+            l.video?.url || l.videoUrl || l.type?.toLowerCase().includes('verse') || l.type?.toLowerCase().includes('video')
+          );
           
           if (videoDevotionals.length === 0) return null;
           
           return (
-            <section className="mb-6 mt-4">
-              {/* Section Header - Trending Episodes Style */}
-              <div className="flex items-center gap-2 mb-3">
-                <span className="text-xl">📺</span>
-                <h2 className="text-lg font-bold text-[#FFD700] font-display">Video Devotional Activities</h2>
-              </div>
-              
-              {/* Horizontal Scrolling Cards - Trending Episodes Style */}
-              <div className="flex gap-3 overflow-x-auto pb-3 -mx-4 px-4 scrollbar-hide" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
-                {videoDevotionals.map((lesson: any, index: number) => {
-                  const completed = isCompleted(lesson._id);
-                  const locked = isLocked(lesson);
-                  const thumbnailUrl = lesson.video?.thumbnail || lesson.thumbnailUrl;
-                  const seriesName = lesson.series || lesson.category || 'Daily Verse';
-                  
-                  return (
-                    <button
-                      key={lesson._id}
-                      onClick={() => {
-                        if (locked) return; // Don't open if locked
-                        // Format lesson data for VideoLessonModal
-                        const formattedLesson = {
-                          _id: lesson._id,
-                          title: lesson.title,
-                          description: lesson.description || '',
-                          thumbnailUrl: thumbnailUrl || '',
-                          videoUrl: lesson.video?.url || lesson.videoUrl || '',
-                          videoDuration: lesson.video?.duration || lesson.videoDuration || 0,
-                          captions: lesson.video?.captions || [],
-                          devotionalText: lesson.devotionalText || lesson.description || '',
-                          activityType: lesson.activityType || 'reflection',
-                          activityData: lesson.activityData || { prompts: [{ prompt: 'What did you learn from this video?', type: 'text' }] },
-                          scheduledDate: lesson.scheduledDate || new Date().toISOString(),
-                          coinReward: lesson.coinReward || 50,
-                        };
-                        setSelectedVideoLesson(formattedLesson);
-                        setShowVideoDevotional(true);
-                      }}
-                      className="flex-shrink-0 w-32 group text-left"
-                    >
-                      {/* Card with Thumbnail */}
-                      <div className="relative aspect-[3/4] rounded-xl overflow-hidden shadow-lg border-2 border-[#1a3a5c] group-hover:border-[#FFD700] transition-all group-hover:scale-[1.02]">
-                        {thumbnailUrl ? (
-                          <img
-                            src={thumbnailUrl}
-                            alt={lesson.title}
-                            className="w-full h-full object-cover"
-                          />
-                        ) : (
-                          <div className="w-full h-full bg-gradient-to-br from-[#2a5a8c] to-[#1a3a5c] flex items-center justify-center">
-                            <Video className="w-10 h-10 text-white/30" />
+            <section className="mt-6">
+              <SectionTitle 
+                title="Video Devotional Activities" 
+                icon="📺"
+                color="#9C27B0"
+              />
+              <div className="w-screen overflow-x-auto no-scrollbar pb-2 -mx-4 snap-x snap-mandatory">
+                <div className="flex space-x-4 px-4">
+                  {videoDevotionals.map((lesson: any, index: number) => {
+                    const completed = isCompleted(lesson._id);
+                    const locked = isLocked(lesson);
+                    const thumbnailUrl = lesson.video?.thumbnail || lesson.thumbnailUrl;
+                    const seriesName = lesson.series || lesson.category || 'Daily Verse';
+                    
+                    return (
+                      <div
+                        key={lesson._id}
+                        onClick={() => {
+                          if (locked) return; // Don't navigate if locked
+                          navigate(`/lesson/${lesson._id}`);
+                        }}
+                        className="relative flex-shrink-0 w-44 snap-center cursor-pointer group"
+                      >
+                        {/* Cover Image - Same 3:4 aspect ratio as other sections */}
+                        <div className="relative aspect-[3/4] rounded-2xl overflow-hidden shadow-lg border-2 border-white/20 group-hover:border-purple-400/50 transition-all">
+                          {thumbnailUrl ? (
+                            <img
+                              src={thumbnailUrl}
+                              alt={lesson.title}
+                              className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                              onError={(e) => {
+                                (e.target as HTMLImageElement).src = 'https://via.placeholder.com/150x200/9C27B0/FFFFFF?text=📺';
+                              }}
+                            />
+                          ) : (
+                            <div className="w-full h-full bg-gradient-to-br from-purple-600 to-purple-900 flex items-center justify-center">
+                              <Video className="w-12 h-12 text-white/30" />
+                            </div>
+                          )}
+                          
+                          {/* Play overlay */}
+                          <div className="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                            <Play className="w-12 h-12 text-white fill-white" />
                           </div>
-                        )}
-                        
-                        {/* Number Badge - Top Left */}
-                        <div className="absolute top-2 left-2 w-7 h-7 rounded-lg bg-gradient-to-br from-orange-400 to-orange-600 flex items-center justify-center shadow-md">
-                          <span className="text-white text-sm font-bold">{index + 1}</span>
+                          
+                          {/* Ranking badge - Top left */}
+                          <div className="absolute top-2 left-2 w-8 h-8 bg-gradient-to-br from-orange-500 to-red-600 rounded-full flex items-center justify-center text-white text-base font-black shadow-lg">
+                            {index + 1}
+                          </div>
+                          
+                          {/* Lock badge - Top right (if locked and not subscribed) */}
+                          {locked && !isSubscribed && (
+                            <div className="absolute top-2 right-2 px-2 py-1 bg-amber-500/90 rounded-full text-xs font-bold text-white flex items-center gap-0.5">
+                              <Lock className="w-3 h-3" />
+                            </div>
+                          )}
+                          
+                          {/* Completed badge - Top right (if completed) */}
+                          {completed && !locked && (
+                            <div className="absolute top-2 right-2 w-6 h-6 rounded-full bg-green-500 flex items-center justify-center">
+                              <Check className="w-4 h-4 text-white" />
+                            </div>
+                          )}
                         </div>
                         
-                        {/* Lock Badge - Top Right (if locked) */}
-                        {locked && (
-                          <div className="absolute top-2 right-2 w-6 h-6 rounded-full bg-orange-500 flex items-center justify-center">
-                            <Lock className="w-3.5 h-3.5 text-white" />
-                          </div>
-                        )}
-                        
-                        {/* Completed Badge - Top Right (if completed and not locked) */}
-                        {completed && !locked && (
-                          <div className="absolute top-2 right-2 w-6 h-6 rounded-full bg-green-500 flex items-center justify-center">
-                            <Check className="w-4 h-4 text-white" />
-                          </div>
-                        )}
-                        
-                        {/* Play Button Overlay - Center */}
-                        {!locked && (
-                          <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                            <div className="w-12 h-12 rounded-full bg-white/90 flex items-center justify-center shadow-xl">
-                              <Play className="w-6 h-6 text-[#1a3a5c] ml-1" fill="#1a3a5c" />
-                            </div>
-                          </div>
-                        )}
+                        {/* Title */}
+                        <div className="mt-2 px-1">
+                          <h3 className="text-base font-bold text-white truncate">
+                            {lesson.title}
+                          </h3>
+                          <p className="text-sm text-white/60 truncate">
+                            {seriesName}
+                          </p>
+                        </div>
                       </div>
-                      
-                      {/* Title */}
-                      <p className="mt-2 text-sm font-semibold text-white line-clamp-1 leading-tight">
-                        {lesson.title}
-                      </p>
-                      
-                      {/* Series/Category Subtitle */}
-                      <p className="text-xs text-sky-300 line-clamp-1">
-                        {seriesName}
-                      </p>
-                    </button>
-                  );
-                })}
+                    );
+                  })}
+                </div>
               </div>
             </section>
           );

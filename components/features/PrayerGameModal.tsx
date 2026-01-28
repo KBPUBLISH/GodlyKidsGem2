@@ -429,7 +429,7 @@ const PrayerGameModal: React.FC<PrayerGameModalProps> = ({ isOpen, onClose }) =>
               {(gameState === 'intro' || gameState === 'selection') && (
                   <div className="flex flex-col items-center w-full h-full flex-1 animate-in fade-in slide-in-from-bottom-4">
                       <p className="text-[#e1bee7]/80 text-sm mb-6 font-medium">
-                          Pick <span className="text-white font-bold">3 things</span> to pray for today.
+                          Pick <span className="text-white font-bold">up to 3 things</span> to pray for today.
                       </p>
 
                       {/* Bubbles Grid */}

@@ -5062,7 +5062,23 @@ const BookReaderPage: React.FC = () => {
                                         <button
                                             onClick={(e) => {
                                                 e.stopPropagation();
-                                                navigate('/daily-session', { state: { stepCompleted: 'book' } });
+                                                // Extract all text from book pages for discussion questions
+                                                const bookContent = pages
+                                                    .filter(page => page.id !== 'the-end-page')
+                                                    .map(page => {
+                                                        const textBoxes = page.content?.textBoxes || page.textBoxes || [];
+                                                        return textBoxes.map((tb: any) => tb.text).join(' ');
+                                                    })
+                                                    .filter(text => text.trim())
+                                                    .join('\n\n');
+                                                
+                                                navigate('/daily-session', { 
+                                                    state: { 
+                                                        stepCompleted: 'book',
+                                                        bookContent: bookContent.substring(0, 3000), // Limit to ~3000 chars for API
+                                                        bookTitle: bookTitle,
+                                                    } 
+                                                });
                                             }}
                                             className="bg-[#FFD700] hover:bg-[#FFC700] text-[#5D4037] p-4 rounded-xl font-bold shadow-lg border-b-4 border-[#D4A500] active:border-b-0 active:translate-y-1 transition-all flex items-center justify-center gap-2 group col-span-2"
                                         >

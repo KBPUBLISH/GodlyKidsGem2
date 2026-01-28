@@ -1,12 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { X, Check, ChevronRight, Play, BookOpen } from 'lucide-react';
+import { X, Check, ChevronRight, Play, BookOpen, MessageCircle } from 'lucide-react';
 import PrayerGameModal from '../components/features/PrayerGameModal';
 import SessionCelebrationModal from '../components/modals/SessionCelebrationModal';
+import DiscussionQuestionsModal from '../components/modals/DiscussionQuestionsModal';
 import { useUser } from '../context/UserContext';
 import { useBooks } from '../context/BooksContext';
 import { activityTrackingService } from '../services/activityTrackingService';
-import { ApiService } from '../services/apiService';
 import {
   DailySession,
   SessionStep,
@@ -87,10 +87,10 @@ const DailySessionPage: React.FC = () => {
   
   const [session, setSession] = useState<DailySession | null>(null);
   const [showPrayerModal, setShowPrayerModal] = useState(false);
+  const [showDiscussionModal, setShowDiscussionModal] = useState(false);
   const [showCelebration, setShowCelebration] = useState(false);
   const [recommendedBook, setRecommendedBook] = useState<any>(null);
-  const [lessons, setLessons] = useState<any[]>([]);
-  const [selectedLesson, setSelectedLesson] = useState<any>(null);
+  const [bookContent, setBookContent] = useState<string>(''); // Story text for discussion questions
   const [isLoading, setIsLoading] = useState(true);
   
   // Subject selection state for users who haven't picked subjects yet
@@ -125,24 +125,6 @@ const DailySessionPage: React.FC = () => {
       
       setSession(currentSession);
       
-      // Load lessons for devotional step
-      try {
-        const lessonsData = await ApiService.getLessons();
-        // Filter to Daily Verse / devotional type lessons
-        const devotionalLessons = lessonsData.filter(
-          (l: any) => l.type === 'Daily Verse' || l.type === 'Bible Study'
-        );
-        setLessons(devotionalLessons);
-        
-        // Select a random devotional if we have any
-        if (devotionalLessons.length > 0) {
-          const randomIndex = Math.floor(Math.random() * devotionalLessons.length);
-          setSelectedLesson(devotionalLessons[randomIndex]);
-        }
-      } catch (e) {
-        console.error('Error loading lessons:', e);
-      }
-      
       // Find recommended book based on subjects
       findRecommendedBook();
       
@@ -152,41 +134,48 @@ const DailySessionPage: React.FC = () => {
     loadSession();
   }, []);
 
-  // Handle returning from a completed step (devotional or book)
+  // Handle returning from completed book reading
   useEffect(() => {
-    const stepCompleted = (location.state as any)?.stepCompleted;
-    if (stepCompleted && session) {
+    const state = location.state as any;
+    const stepCompleted = state?.stepCompleted;
+    
+    if (stepCompleted === 'book' && session) {
       const currentStep = session.steps[session.currentStepIndex];
       
       // Check if the completed step matches the current in-progress step
-      if (currentStep && currentStep.type === stepCompleted && currentStep.status === 'in-progress') {
-        const coinsEarned = stepCompleted === 'devotional' ? 20 : 30;
+      if (currentStep && currentStep.type === 'book' && currentStep.status === 'in-progress') {
+        const coinsEarned = 30;
+        
+        // Capture the book content for discussion questions
+        if (state.bookContent) {
+          setBookContent(state.bookContent);
+        }
+        // Update book title if provided
+        if (state.bookTitle && !recommendedBook?.title) {
+          setRecommendedBook((prev: any) => prev ? { ...prev, title: state.bookTitle } : { title: state.bookTitle });
+        }
         
         // Track step completion
-        activityTrackingService.trackOnboardingEvent(
-          stepCompleted === 'devotional' 
-            ? 'godly_kids_time_devotional_completed' 
-            : 'godly_kids_time_book_completed', 
-          { coinsEarned }
-        );
+        activityTrackingService.trackOnboardingEvent('godly_kids_time_book_completed', { coinsEarned });
         
         // Add coins for completing the step
         addCoins(coinsEarned);
         
-        // Complete the step
+        // Complete the book step
         const updatedSession = completeCurrentStep(coinsEarned);
         setSession(updatedSession);
         
         // Clear the navigation state to prevent re-processing
         navigate(location.pathname, { replace: true, state: {} });
         
-        // Check if session is now complete
-        if (updatedSession?.completed) {
-          setShowCelebration(true);
-        }
+        // After book completion, automatically show discussion modal
+        // (Next step in flow is discussion)
+        setTimeout(() => {
+          setShowDiscussionModal(true);
+        }, 500);
       }
     }
-  }, [location.state, session, addCoins, navigate, location.pathname]);
+  }, [location.state, session, addCoins, navigate, location.pathname, recommendedBook]);
 
   // Find a book matching user's selected subjects
   const findRecommendedBook = () => {
@@ -284,23 +273,7 @@ const DailySessionPage: React.FC = () => {
       subjects: newSession.subjects,
     });
     
-    // Load lessons for devotional step
-    try {
-      const lessonsData = await ApiService.getLessons();
-      const devotionalLessons = lessonsData.filter(
-        (l: any) => l.type === 'Daily Verse' || l.type === 'Bible Study'
-      );
-      setLessons(devotionalLessons);
-      
-      if (devotionalLessons.length > 0) {
-        const randomIndex = Math.floor(Math.random() * devotionalLessons.length);
-        setSelectedLesson(devotionalLessons[randomIndex]);
-      }
-    } catch (e) {
-      console.error('Error loading lessons:', e);
-    }
-    
-    // Find recommended book
+    // Find recommended book based on selected subjects
     findRecommendedBook();
     
     setIsLoading(false);
@@ -314,17 +287,6 @@ const DailySessionPage: React.FC = () => {
     startCurrentStep();
     
     switch (step.type) {
-      case 'prayer':
-        setShowPrayerModal(true);
-        break;
-      case 'devotional':
-        if (selectedLesson) {
-          // Navigate to lesson player
-          navigate(`/lesson/${selectedLesson._id}`, { 
-            state: { fromDailySession: true } 
-          });
-        }
-        break;
       case 'book':
         if (recommendedBook && recommendedBook._id) {
           // Set the book content
@@ -351,7 +313,43 @@ const DailySessionPage: React.FC = () => {
           alert('Books are still loading. Please wait a moment and try again.');
         }
         break;
+      case 'discussion':
+        setShowDiscussionModal(true);
+        break;
+      case 'prayer':
+        setShowPrayerModal(true);
+        break;
     }
+  };
+
+  // Handle discussion modal completion
+  const handleDiscussionComplete = () => {
+    setShowDiscussionModal(false);
+    
+    const coinsEarned = 20;
+    
+    // Track step completion
+    activityTrackingService.trackOnboardingEvent('godly_kids_time_discussion_completed', {
+      coinsEarned,
+      bookTitle: recommendedBook?.title,
+    });
+    
+    // Add coins for completing the step
+    addCoins(coinsEarned);
+    
+    // Complete the discussion step
+    const updatedSession = completeCurrentStep(coinsEarned);
+    setSession(updatedSession);
+    
+    // Check if session is now complete (shouldn't be, prayer is next)
+    if (updatedSession?.completed) {
+      setShowCelebration(true);
+    }
+  };
+
+  // Handle discussion modal close (without completing)
+  const handleDiscussionClose = () => {
+    setShowDiscussionModal(false);
   };
 
   // Handle prayer modal close (prayer completed or cancelled)
@@ -707,40 +705,14 @@ const DailySessionPage: React.FC = () => {
               {currentStep.label}
             </h2>
             <p className="text-[#f3e5ab]/70 text-sm mt-2 font-display">
-              {currentStep.type === 'prayer' && 'Start your learning with prayer'}
-              {currentStep.type === 'devotional' && 'Watch today\'s video lesson'}
-              {currentStep.type === 'book' && 'Read your recommended book'}
+              {currentStep.type === 'book' && 'Read your recommended story'}
+              {currentStep.type === 'discussion' && 'Talk about the story together'}
+              {currentStep.type === 'prayer' && 'End your lesson with prayer'}
             </p>
           </div>
 
           {/* Step-specific content preview */}
           <div className="flex-1 flex flex-col justify-center">
-            {currentStep.type === 'prayer' && (
-              <div className="bg-[#8B4513]/50 rounded-xl p-4 text-center border-2 border-[#A0522D]">
-                <p className="text-[#f3e5ab]/80 text-sm font-display">
-                  Select 3 prayer topics and pray together.
-                </p>
-                <p className="text-[#FFD700] font-bold mt-2 font-display text-lg">
-                  🪙 +30 coins
-                </p>
-              </div>
-            )}
-            
-            {currentStep.type === 'devotional' && selectedLesson && (
-              <div className="bg-[#8B4513]/50 rounded-xl p-4 border-2 border-[#A0522D]">
-                <div className="flex items-center gap-4">
-                  <div className="w-20 h-20 rounded-xl bg-gradient-to-br from-purple-500 to-indigo-600 flex items-center justify-center border-2 border-[#5D4037]">
-                    <Play className="w-8 h-8 text-white" />
-                  </div>
-                  <div className="flex-1">
-                    <h3 className="text-[#f3e5ab] font-bold font-display">{selectedLesson.title}</h3>
-                    <p className="text-[#f3e5ab]/60 text-sm font-display">{selectedLesson.type}</p>
-                    <p className="text-[#FFD700] text-sm mt-1 font-display font-bold">🪙 +20 coins</p>
-                  </div>
-                </div>
-              </div>
-            )}
-            
             {currentStep.type === 'book' && recommendedBook && (
               <div className="bg-[#8B4513]/50 rounded-xl p-4 border-2 border-[#A0522D]">
                 <div className="flex items-center gap-4">
@@ -760,6 +732,37 @@ const DailySessionPage: React.FC = () => {
                     <p className="text-[#FFD700] text-sm mt-1 font-display font-bold">🪙 +30 coins</p>
                   </div>
                 </div>
+              </div>
+            )}
+
+            {currentStep.type === 'discussion' && (
+              <div className="bg-[#8B4513]/50 rounded-xl p-4 border-2 border-[#A0522D]">
+                <div className="flex items-center gap-4">
+                  <div className="w-20 h-20 rounded-xl bg-gradient-to-br from-green-500 to-teal-600 flex items-center justify-center border-2 border-[#5D4037]">
+                    <MessageCircle className="w-8 h-8 text-white" />
+                  </div>
+                  <div className="flex-1">
+                    <h3 className="text-[#f3e5ab] font-bold font-display">Discussion Time</h3>
+                    <p className="text-[#f3e5ab]/60 text-sm font-display">
+                      {recommendedBook ? `About "${recommendedBook.title}"` : 'About the story'}
+                    </p>
+                    <p className="text-[#f3e5ab]/40 text-xs mt-1 font-display">
+                      Answer 2 questions together
+                    </p>
+                    <p className="text-[#FFD700] text-sm mt-1 font-display font-bold">🪙 +20 coins</p>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {currentStep.type === 'prayer' && (
+              <div className="bg-[#8B4513]/50 rounded-xl p-4 text-center border-2 border-[#A0522D]">
+                <p className="text-[#f3e5ab]/80 text-sm font-display">
+                  Select 3 prayer topics and pray together.
+                </p>
+                <p className="text-[#FFD700] font-bold mt-2 font-display text-lg">
+                  🪙 +30 coins
+                </p>
               </div>
             )}
           </div>
@@ -830,6 +833,16 @@ const DailySessionPage: React.FC = () => {
 
       {/* Safe area bottom */}
       <div className="flex-shrink-0" style={{ height: 'var(--safe-area-bottom, 0px)' }} />
+
+      {/* Discussion Questions Modal */}
+      <DiscussionQuestionsModal
+        isOpen={showDiscussionModal}
+        onClose={handleDiscussionClose}
+        onComplete={handleDiscussionComplete}
+        bookTitle={recommendedBook?.title || 'the story'}
+        bookDescription={recommendedBook?.description}
+        bookContent={bookContent}
+      />
 
       {/* Prayer Modal */}
       <PrayerGameModal

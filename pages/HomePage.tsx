@@ -1057,7 +1057,14 @@ const HomePage: React.FC = () => {
           </div>
         )}
 
-        {/* 📚 Today's Godly Kids Lesson - Main Daily Widget */}
+        {/* 📚 Daily Lessons Section Header + Widget */}
+        <div className="flex items-center justify-between mb-2 px-4">
+          <SectionTitle 
+            title="Daily Lessons" 
+            icon="📚"
+            color="#7c4dff"
+          />
+        </div>
         <DailyLessonWidget />
 
         {/* ✨ Verse of the Day - Hidden (absorbed into Daily Lesson Widget) */}
@@ -1169,15 +1176,6 @@ const HomePage: React.FC = () => {
 
         {/* Daily Lessons Section */}
         <section id="devotional-section" data-tutorial="devotional-section" className="pb-2">
-          {/* Daily Lessons Header */}
-          <div className="flex items-center justify-between mb-2">
-            <SectionTitle 
-              title="Daily Lessons" 
-              icon="📚"
-              color="#7c4dff"
-            />
-          </div>
-
           {/* Create Child Profile card removed - users can access profiles from header */}
 
           {/* Lessons Path - Gamified Learning Path Style */}

@@ -15,7 +15,7 @@ const SESSION_STORAGE_KEY = 'godlykids_daily_session';
 const SESSION_HISTORY_KEY = 'godlykids_session_history';
 
 // Session step types
-export type SessionStepType = 'prayer' | 'devotional' | 'book';
+export type SessionStepType = 'book' | 'discussion' | 'prayer';
 
 export interface SessionStep {
   type: SessionStepType;
@@ -40,9 +40,9 @@ export interface DailySession {
 
 // Coin rewards for each step
 const STEP_REWARDS = {
-  prayer: 30,
-  devotional: 20,
-  book: 30, // Base reward, can be higher for longer books
+  book: 30, // Reading time
+  discussion: 20, // Parent-child discussion
+  prayer: 30, // Daily prayer
 };
 
 // Get today's date as YYYY-MM-DD
@@ -60,23 +60,23 @@ export const createDailySession = (selectedSubjects?: string[]): DailySession =>
     subjects,
     steps: [
       {
-        type: 'prayer',
-        label: 'Daily Prayer',
-        icon: '🙏',
-        status: 'pending',
-        coinsEarned: 0,
-      },
-      {
-        type: 'devotional',
-        label: 'Video Devotional',
-        icon: '🎬',
-        status: 'pending',
-        coinsEarned: 0,
-      },
-      {
         type: 'book',
-        label: 'Reading Time',
+        label: 'Story Time',
         icon: '📚',
+        status: 'pending',
+        coinsEarned: 0,
+      },
+      {
+        type: 'discussion',
+        label: 'Discuss Together',
+        icon: '💬',
+        status: 'pending',
+        coinsEarned: 0,
+      },
+      {
+        type: 'prayer',
+        label: 'Prayer Time',
+        icon: '🙏',
         status: 'pending',
         coinsEarned: 0,
       },

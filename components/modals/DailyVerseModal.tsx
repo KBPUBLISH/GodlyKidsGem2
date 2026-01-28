@@ -288,7 +288,18 @@ const DailyVerseModal: React.FC<DailyVerseModalProps> = ({
   const placedWords = wordChunks.filter(w => w.isPlaced).sort((a, b) => a.id - b.id);
 
   return (
-    <div className="fixed inset-0 z-50 flex flex-col bg-gradient-to-b from-[#1a1a2e] to-[#16213e]">
+    <div className="fixed inset-0 z-50 flex flex-col bg-gradient-to-b from-[#D4A574] via-[#C4956A] to-[#8B6914]">
+      {/* Wood texture overlay */}
+      <div className="absolute inset-0 opacity-20 pointer-events-none" style={{
+        backgroundImage: `repeating-linear-gradient(
+          90deg,
+          transparent,
+          transparent 2px,
+          rgba(139, 90, 43, 0.3) 2px,
+          rgba(139, 90, 43, 0.3) 4px
+        )`
+      }} />
+      
       {/* Safe area top */}
       <div className="flex-shrink-0" style={{ height: 'var(--safe-area-top, 0px)' }} />
       
@@ -314,7 +325,7 @@ const DailyVerseModal: React.FC<DailyVerseModalProps> = ({
       {/* Close button */}
       <button
         onClick={onClose}
-        className="absolute top-4 left-4 z-20 w-10 h-10 bg-black/30 rounded-full flex items-center justify-center text-white/80 hover:text-white transition-colors"
+        className="absolute top-4 left-4 z-20 w-10 h-10 bg-[#5D4E37]/80 rounded-full flex items-center justify-center text-[#F5E6D3] hover:bg-[#5D4E37] transition-colors border-2 border-[#8B6914]"
         style={{ marginTop: 'var(--safe-area-top, 0px)' }}
       >
         <X className="w-6 h-6" />
@@ -322,11 +333,11 @@ const DailyVerseModal: React.FC<DailyVerseModalProps> = ({
 
       {/* Header */}
       <div className="text-center pt-8 pb-4 px-6">
-        <div className="inline-flex items-center gap-2 bg-gradient-to-r from-[#e94560] to-[#ff6b6b] px-4 py-2 rounded-full mb-2">
-          <BookOpen className="w-5 h-5 text-white" />
-          <span className="text-white font-display font-bold">Scripture Puzzle</span>
+        <div className="inline-flex items-center gap-2 bg-gradient-to-r from-[#5D4E37] to-[#8B6914] px-4 py-2 rounded-full mb-2 border-2 border-[#D4A574] shadow-lg">
+          <BookOpen className="w-5 h-5 text-[#F5E6D3]" />
+          <span className="text-[#F5E6D3] font-display font-bold">Scripture Puzzle</span>
         </div>
-        <p className="text-white/50 text-sm">{verse.theme}</p>
+        <p className="text-[#5D4E37] text-sm font-medium">{verse.theme}</p>
       </div>
 
       {/* Content - Full screen */}
@@ -335,20 +346,20 @@ const DailyVerseModal: React.FC<DailyVerseModalProps> = ({
           {/* INTRO STATE */}
           {gameState === 'intro' && (
             <div className="text-center py-8">
-              <div className="text-8xl mb-6">📖</div>
-              <h3 className="text-white font-bold text-3xl mb-3">Today's Verse</h3>
-              <p className="text-white/60 text-lg mb-8">
+              <div className="text-8xl mb-6">📜</div>
+              <h3 className="text-[#3D2914] font-bold text-3xl mb-3">Today's Verse</h3>
+              <p className="text-[#5D4E37] text-lg mb-8">
                 Tap the words in the correct order to build the verse!
               </p>
               
-              {/* Preview the verse reference */}
-              <div className="bg-[#0f3460]/50 rounded-2xl p-6 mb-8">
-                <p className="text-[#ff6b6b] font-medium text-xl">{verse.ref}</p>
+              {/* Preview the verse reference - scroll/parchment style */}
+              <div className="bg-[#F5E6D3] rounded-2xl p-6 mb-8 shadow-inner border-2 border-[#C4956A]">
+                <p className="text-[#8B4513] font-medium text-xl">{verse.ref}</p>
               </div>
               
               <button
                 onClick={startGame}
-                className="w-full py-5 rounded-2xl font-bold text-xl bg-gradient-to-r from-[#e94560] to-[#ff6b6b] text-white hover:brightness-110 active:scale-[0.98] transition-all shadow-lg"
+                className="w-full py-5 rounded-2xl font-bold text-xl bg-gradient-to-r from-[#5D4E37] to-[#8B6914] text-[#F5E6D3] hover:brightness-110 active:scale-[0.98] transition-all shadow-lg border-2 border-[#D4A574]"
               >
                 Start Puzzle! 🧩
               </button>
@@ -358,37 +369,37 @@ const DailyVerseModal: React.FC<DailyVerseModalProps> = ({
           {/* PLAYING STATE */}
           {gameState === 'playing' && (
             <>
-              {/* Sentence being built */}
-              <div className="bg-[#0f3460]/50 rounded-2xl p-5 mb-6 min-h-[100px]">
-                <p className="text-white/40 text-sm mb-3 uppercase tracking-wide">Building verse...</p>
+              {/* Sentence being built - parchment style */}
+              <div className="bg-[#F5E6D3] rounded-2xl p-5 mb-6 min-h-[100px] shadow-inner border-2 border-[#C4956A]">
+                <p className="text-[#8B4513]/60 text-sm mb-3 uppercase tracking-wide">Building verse...</p>
                 <div className="flex flex-wrap gap-2">
                   {placedWords.map((word) => (
                     <span
                       key={word.id}
-                      className="bg-[#e94560] text-white px-4 py-2 rounded-xl font-medium text-base animate-in fade-in zoom-in duration-200"
+                      className="bg-[#5D4E37] text-[#F5E6D3] px-4 py-2 rounded-xl font-medium text-base animate-in fade-in zoom-in duration-200 shadow-md"
                     >
                       {word.text}
                     </span>
                   ))}
                   {placedWords.length < wordChunks.length && (
-                    <span className="text-white/30 px-4 py-2">...</span>
+                    <span className="text-[#8B4513]/30 px-4 py-2">...</span>
                   )}
                 </div>
               </div>
 
               {/* Progress indicator */}
               <div className="flex items-center justify-between mb-6 px-1">
-                <p className="text-white/50 text-sm">
+                <p className="text-[#3D2914] text-sm font-medium">
                   {nextTargetIndex} / {wordChunks.length} words
                 </p>
                 {mistakes > 0 && (
-                  <p className="text-red-400/70 text-sm">
+                  <p className="text-red-700 text-sm font-medium">
                     {mistakes} mistake{mistakes !== 1 ? 's' : ''}
                   </p>
                 )}
               </div>
 
-              {/* Word choices */}
+              {/* Word choices - wooden plank style */}
               <div className="flex flex-wrap gap-3 justify-center">
                 {shuffledIndices.map((idx) => {
                   const chunk = wordChunks[idx];
@@ -400,11 +411,11 @@ const DailyVerseModal: React.FC<DailyVerseModalProps> = ({
                       onClick={() => handleWordClick(chunk.id)}
                       className={`
                         px-5 py-3 rounded-xl font-medium text-lg
-                        bg-gradient-to-b from-[#2a2a4a] to-[#1a1a3a]
-                        border-2 border-[#3a3a5a] text-white
-                        hover:border-[#e94560] hover:scale-105
-                        active:scale-95 transition-all duration-150
-                        ${shakeItem === chunk.id ? 'animate-shake border-red-500 bg-red-500/20' : ''}
+                        bg-gradient-to-b from-[#8B6914] to-[#5D4E37]
+                        border-2 border-[#D4A574] text-[#F5E6D3]
+                        hover:border-[#F5E6D3] hover:scale-105
+                        active:scale-95 transition-all duration-150 shadow-md
+                        ${shakeItem === chunk.id ? 'animate-shake border-red-500 bg-red-700/50' : ''}
                       `}
                     >
                       {chunk.text}
@@ -416,7 +427,7 @@ const DailyVerseModal: React.FC<DailyVerseModalProps> = ({
               {/* Restart button */}
               <button
                 onClick={handleRestart}
-                className="mt-8 mx-auto flex items-center gap-2 text-white/50 hover:text-white/80 transition-colors text-base"
+                className="mt-8 mx-auto flex items-center gap-2 text-[#3D2914] hover:text-[#5D4E37] transition-colors text-base"
               >
                 <RotateCcw className="w-5 h-5" />
                 Restart
@@ -434,8 +445,8 @@ const DailyVerseModal: React.FC<DailyVerseModalProps> = ({
                     key={star}
                     className={`w-14 h-14 transition-all duration-300 ${
                       star <= earnedStars
-                        ? 'text-yellow-400 fill-yellow-400 scale-110'
-                        : 'text-gray-600'
+                        ? 'text-yellow-500 fill-yellow-500 scale-110 drop-shadow-lg'
+                        : 'text-[#8B6914]/40'
                     }`}
                     style={{
                       animationDelay: `${star * 0.1}s`,
@@ -444,17 +455,17 @@ const DailyVerseModal: React.FC<DailyVerseModalProps> = ({
                 ))}
               </div>
               
-              <h3 className="text-white font-bold text-3xl mb-4">
+              <h3 className="text-[#3D2914] font-bold text-3xl mb-4">
                 {earnedStars === 3 ? 'Perfect!' : earnedStars === 2 ? 'Great Job!' : 'Well Done!'}
               </h3>
               
-              {/* Show completed verse */}
-              <div className="bg-[#0f3460]/50 rounded-2xl p-6 mb-6">
-                <p className="text-white font-medium text-lg mb-3">"{verse.text}"</p>
-                <p className="text-[#ff6b6b] text-base">{verse.ref}</p>
+              {/* Show completed verse - scroll style */}
+              <div className="bg-[#F5E6D3] rounded-2xl p-6 mb-6 shadow-inner border-2 border-[#C4956A]">
+                <p className="text-[#3D2914] font-medium text-lg mb-3">"{verse.text}"</p>
+                <p className="text-[#8B4513] text-base">{verse.ref}</p>
               </div>
               
-              <p className="text-white/60 text-xl mb-8">
+              <p className="text-[#5D4E37] text-xl mb-8">
                 +10 coins earned! 🪙
               </p>
               
@@ -463,7 +474,7 @@ const DailyVerseModal: React.FC<DailyVerseModalProps> = ({
                   playClick?.();
                   setGameState('discussion');
                 }}
-                className="w-full py-5 rounded-2xl font-bold text-xl bg-gradient-to-r from-[#e94560] to-[#ff6b6b] text-white hover:brightness-110 active:scale-[0.98] transition-all flex items-center justify-center gap-2 shadow-lg"
+                className="w-full py-5 rounded-2xl font-bold text-xl bg-gradient-to-r from-[#5D4E37] to-[#8B6914] text-[#F5E6D3] hover:brightness-110 active:scale-[0.98] transition-all flex items-center justify-center gap-2 shadow-lg border-2 border-[#D4A574]"
               >
                 💬 Discuss Together
               </button>
@@ -476,23 +487,23 @@ const DailyVerseModal: React.FC<DailyVerseModalProps> = ({
               {/* Header */}
               <div className="text-center mb-4">
                 <div className="text-5xl mb-3">💬</div>
-                <h3 className="text-white font-bold text-2xl mb-1">Let's Talk About It!</h3>
-                <p className="text-white/50 text-sm">Parent & Child Discussion</p>
+                <h3 className="text-[#3D2914] font-bold text-2xl mb-1">Let's Talk About It!</h3>
+                <p className="text-[#5D4E37] text-sm">Parent & Child Discussion</p>
               </div>
               
-              {/* Verse reminder */}
-              <div className="bg-[#0f3460]/30 rounded-xl p-4 mb-4">
-                <p className="text-white/70 text-base italic">"{verse.text}"</p>
-                <p className="text-[#ff6b6b]/70 text-sm mt-2">{verse.ref}</p>
+              {/* Verse reminder - parchment style */}
+              <div className="bg-[#F5E6D3]/70 rounded-xl p-4 mb-4 border border-[#C4956A]">
+                <p className="text-[#5D4E37] text-base italic">"{verse.text}"</p>
+                <p className="text-[#8B4513] text-sm mt-2">{verse.ref}</p>
               </div>
               
-              {/* Discussion question */}
-              <div className="bg-gradient-to-br from-[#2a2a4a] to-[#1a1a3a] rounded-2xl p-6 mb-6 border-2 border-[#e94560]/30">
+              {/* Discussion question - wooden frame style */}
+              <div className="bg-gradient-to-br from-[#5D4E37] to-[#3D2914] rounded-2xl p-6 mb-6 border-2 border-[#D4A574] shadow-lg">
                 <div className="flex items-start gap-3">
                   <span className="text-3xl">🤔</span>
                   <div>
-                    <p className="text-white/40 text-xs uppercase tracking-wide mb-2">Discussion Question</p>
-                    <p className="text-white font-medium text-xl leading-relaxed">
+                    <p className="text-[#D4A574] text-xs uppercase tracking-wide mb-2">Discussion Question</p>
+                    <p className="text-[#F5E6D3] font-medium text-xl leading-relaxed">
                       {verse.question}
                     </p>
                   </div>
@@ -500,8 +511,8 @@ const DailyVerseModal: React.FC<DailyVerseModalProps> = ({
               </div>
               
               {/* Tip for parents */}
-              <div className="bg-[#6B8E6B]/20 rounded-xl p-4 mb-6 border border-[#6B8E6B]/30">
-                <p className="text-[#6B8E6B] text-sm flex items-start gap-2">
+              <div className="bg-[#6B8E6B]/30 rounded-xl p-4 mb-6 border border-[#6B8E6B]/50">
+                <p className="text-[#3D5A3D] text-sm flex items-start gap-2">
                   <span>💡</span>
                   <span>Take your time! Let your child share their thoughts. There are no wrong answers.</span>
                 </p>
@@ -509,7 +520,7 @@ const DailyVerseModal: React.FC<DailyVerseModalProps> = ({
               
               <button
                 onClick={handleContinue}
-                className="w-full py-5 rounded-2xl font-bold text-xl bg-gradient-to-r from-[#e94560] to-[#ff6b6b] text-white hover:brightness-110 active:scale-[0.98] transition-all flex items-center justify-center gap-2 shadow-lg"
+                className="w-full py-5 rounded-2xl font-bold text-xl bg-gradient-to-r from-[#5D4E37] to-[#8B6914] text-[#F5E6D3] hover:brightness-110 active:scale-[0.98] transition-all flex items-center justify-center gap-2 shadow-lg border-2 border-[#D4A574]"
               >
                 <Check className="w-6 h-6" />
                 Continue to Story

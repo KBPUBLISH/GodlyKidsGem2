@@ -852,8 +852,8 @@ const DailySessionPage: React.FC = () => {
           clearInterval(countdownInterval);
           setCountdown(null);
           setShowReadyScreen(false);
-          // Start the first step
-          startCurrentStep();
+          // Start the first step - call handleStartStep to show the modal
+          handleStartStep();
         }
       }, 800);
     };

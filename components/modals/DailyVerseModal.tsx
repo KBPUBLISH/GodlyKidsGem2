@@ -8,31 +8,131 @@ interface DailyVerseModalProps {
   onComplete: () => void;
 }
 
-// Collection of kid-friendly Bible verses (short enough for puzzle game)
+// Collection of kid-friendly Bible verses with discussion questions
 const DAILY_VERSES = [
-  { text: "I am with you always", ref: "Matthew 28:20", theme: "God's Presence" },
-  { text: "Love one another as I have loved you", ref: "John 13:34", theme: "Love" },
-  { text: "Be strong and courageous do not be afraid", ref: "Joshua 1:9", theme: "Courage" },
-  { text: "Trust in the Lord with all your heart", ref: "Proverbs 3:5", theme: "Trust" },
-  { text: "The Lord is my shepherd I shall not want", ref: "Psalm 23:1", theme: "God's Care" },
-  { text: "Let your light shine before others", ref: "Matthew 5:16", theme: "Being a Light" },
-  { text: "God is love", ref: "1 John 4:8", theme: "God's Love" },
-  { text: "Rejoice in the Lord always", ref: "Philippians 4:4", theme: "Joy" },
-  { text: "For God so loved the world", ref: "John 3:16", theme: "Salvation" },
-  { text: "I can do all things through Christ", ref: "Philippians 4:13", theme: "Strength" },
-  { text: "The joy of the Lord is your strength", ref: "Nehemiah 8:10", theme: "Joy" },
-  { text: "Be kind to one another", ref: "Ephesians 4:32", theme: "Kindness" },
-  { text: "Cast all your worries on him", ref: "1 Peter 5:7", theme: "Trust" },
-  { text: "Give thanks to the Lord for he is good", ref: "Psalm 107:1", theme: "Gratitude" },
-  { text: "The Lord is my light and my salvation", ref: "Psalm 27:1", theme: "Light" },
-  { text: "Do to others as you would have them do", ref: "Luke 6:31", theme: "Golden Rule" },
-  { text: "Jesus loves the little children", ref: "Matthew 19:14", theme: "Jesus' Love" },
-  { text: "Create in me a clean heart O God", ref: "Psalm 51:10", theme: "Purity" },
-  { text: "This is the day the Lord has made", ref: "Psalm 118:24", theme: "Gratitude" },
-  { text: "God will never leave you nor forsake you", ref: "Hebrews 13:5", theme: "Faithfulness" },
+  { 
+    text: "I am with you always even to the end of the age", 
+    ref: "Matthew 28:20", 
+    theme: "God's Presence",
+    question: "When do you feel like you need God to be with you the most?"
+  },
+  { 
+    text: "Love one another just as I have loved you", 
+    ref: "John 13:34", 
+    theme: "Love",
+    question: "How can you show love to someone in your family today?"
+  },
+  { 
+    text: "Be strong and courageous for the Lord your God is with you", 
+    ref: "Joshua 1:9", 
+    theme: "Courage",
+    question: "What is something that feels scary but you could try with God's help?"
+  },
+  { 
+    text: "Trust in the Lord with all your heart and lean not on your own understanding", 
+    ref: "Proverbs 3:5", 
+    theme: "Trust",
+    question: "What does it mean to trust God even when we don't understand everything?"
+  },
+  { 
+    text: "The Lord is my shepherd I lack nothing He makes me lie down in green pastures", 
+    ref: "Psalm 23:1-2", 
+    theme: "God's Care",
+    question: "How does God take care of you like a shepherd takes care of sheep?"
+  },
+  { 
+    text: "Let your light shine before others that they may see your good deeds", 
+    ref: "Matthew 5:16", 
+    theme: "Being a Light",
+    question: "What is one good deed you can do to let your light shine this week?"
+  },
+  { 
+    text: "God is love and whoever lives in love lives in God", 
+    ref: "1 John 4:16", 
+    theme: "God's Love",
+    question: "How do you know that God loves you?"
+  },
+  { 
+    text: "Rejoice in the Lord always and again I say rejoice", 
+    ref: "Philippians 4:4", 
+    theme: "Joy",
+    question: "What are three things you are thankful for that make you joyful?"
+  },
+  { 
+    text: "For God so loved the world that he gave his only Son", 
+    ref: "John 3:16", 
+    theme: "Salvation",
+    question: "Why do you think God loves us so much that He gave us Jesus?"
+  },
+  { 
+    text: "I can do all things through Christ who gives me strength", 
+    ref: "Philippians 4:13", 
+    theme: "Strength",
+    question: "What is something hard that you could ask Jesus to help you with?"
+  },
+  { 
+    text: "The joy of the Lord is your strength today and always", 
+    ref: "Nehemiah 8:10", 
+    theme: "Joy",
+    question: "How does feeling happy about God help you feel stronger?"
+  },
+  { 
+    text: "Be kind to one another tenderhearted forgiving each other", 
+    ref: "Ephesians 4:32", 
+    theme: "Kindness",
+    question: "Is there someone you need to forgive or be kinder to?"
+  },
+  { 
+    text: "Cast all your worries on Him because He cares for you", 
+    ref: "1 Peter 5:7", 
+    theme: "Trust",
+    question: "What worries can you give to God in prayer right now?"
+  },
+  { 
+    text: "Give thanks to the Lord for He is good and His love endures forever", 
+    ref: "Psalm 107:1", 
+    theme: "Gratitude",
+    question: "What is something good that God has done for your family?"
+  },
+  { 
+    text: "The Lord is my light and my salvation whom shall I fear", 
+    ref: "Psalm 27:1", 
+    theme: "Light",
+    question: "When you feel afraid what can you remember about God?"
+  },
+  { 
+    text: "Do to others as you would have them do to you", 
+    ref: "Luke 6:31", 
+    theme: "Golden Rule",
+    question: "How would you like your friends to treat you? How can you treat them that way?"
+  },
+  { 
+    text: "Jesus said let the little children come to me for the kingdom belongs to them", 
+    ref: "Matthew 19:14", 
+    theme: "Jesus' Love",
+    question: "How does it feel to know that Jesus wants you to come to Him?"
+  },
+  { 
+    text: "Create in me a clean heart O God and renew a right spirit within me", 
+    ref: "Psalm 51:10", 
+    theme: "Purity",
+    question: "What can we ask God to help us change in our hearts?"
+  },
+  { 
+    text: "This is the day the Lord has made let us rejoice and be glad in it", 
+    ref: "Psalm 118:24", 
+    theme: "Gratitude",
+    question: "What is one special thing about today that God made for you?"
+  },
+  { 
+    text: "God will never leave you He will never forsake you so do not be afraid", 
+    ref: "Hebrews 13:5", 
+    theme: "Faithfulness",
+    question: "How does it make you feel knowing God will never leave you?"
+  },
 ];
 
-type GameState = 'intro' | 'playing' | 'success';
+type GameState = 'intro' | 'playing' | 'success' | 'discussion';
 
 // Get verse based on day of year
 const getDailyVerse = () => {
@@ -328,6 +428,55 @@ const DailyVerseModal: React.FC<DailyVerseModalProps> = ({
               <p className="text-white/60 text-sm mb-6">
                 +10 coins earned! 🪙
               </p>
+              
+              <button
+                onClick={() => {
+                  playClick?.();
+                  setGameState('discussion');
+                }}
+                className="w-full py-4 rounded-xl font-bold text-lg bg-gradient-to-r from-[#e94560] to-[#ff6b6b] text-white hover:brightness-110 active:scale-[0.98] transition-all flex items-center justify-center gap-2"
+              >
+                💬 Discuss Together
+              </button>
+            </div>
+          )}
+
+          {/* DISCUSSION STATE */}
+          {gameState === 'discussion' && (
+            <div className="py-4">
+              {/* Header */}
+              <div className="text-center mb-4">
+                <div className="text-4xl mb-2">💬</div>
+                <h3 className="text-white font-bold text-xl">Let's Talk About It!</h3>
+                <p className="text-white/50 text-xs mt-1">Parent & Child Discussion</p>
+              </div>
+              
+              {/* Verse reminder */}
+              <div className="bg-[#0f3460]/30 rounded-lg p-3 mb-4">
+                <p className="text-white/70 text-sm italic">"{verse.text}"</p>
+                <p className="text-[#ff6b6b]/70 text-xs mt-1">{verse.ref}</p>
+              </div>
+              
+              {/* Discussion question */}
+              <div className="bg-gradient-to-br from-[#2a2a4a] to-[#1a1a3a] rounded-xl p-5 mb-6 border-2 border-[#e94560]/30">
+                <div className="flex items-start gap-3">
+                  <span className="text-2xl">🤔</span>
+                  <div>
+                    <p className="text-white/40 text-xs uppercase tracking-wide mb-2">Discussion Question</p>
+                    <p className="text-white font-medium text-lg leading-relaxed">
+                      {verse.question}
+                    </p>
+                  </div>
+                </div>
+              </div>
+              
+              {/* Tip for parents */}
+              <div className="bg-[#6B8E6B]/20 rounded-lg p-3 mb-6 border border-[#6B8E6B]/30">
+                <p className="text-[#6B8E6B] text-xs flex items-start gap-2">
+                  <span>💡</span>
+                  <span>Take your time! Let your child share their thoughts. There are no wrong answers.</span>
+                </p>
+              </div>
               
               <button
                 onClick={handleContinue}

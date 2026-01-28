@@ -281,10 +281,6 @@ export const DespiaService = {
       
       despia(`sendlocalpushmsg://push.send?s=${secondsUntil9am}=msg!${encodeURIComponent(message)}&!#${encodeURIComponent(title)}&!#${encodeURIComponent(url)}`);
       
-      // Store that we've scheduled for today to avoid duplicates
-      const today = new Date().toDateString();
-      localStorage.setItem('gk_daily_verse_notif_scheduled', today);
-      
       console.log('✅ Daily Verse notification scheduled successfully');
     } catch (error) {
       console.error('Failed to schedule daily verse notification:', error);
@@ -303,6 +299,8 @@ export const DespiaService = {
     
     // Schedule if we haven't scheduled today
     if (lastScheduled !== today) {
+      // SET THE FLAG FIRST to prevent race conditions (multiple calls scheduling duplicates)
+      localStorage.setItem('gk_daily_verse_notif_scheduled', today);
       console.log('📱 Scheduling daily verse notification (new day or first time)');
       DespiaService.scheduleDailyVerseNotification();
     } else {

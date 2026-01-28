@@ -132,32 +132,60 @@ const LandingPage: React.FC = () => {
         />
         
         {/* Ocean wave overlay */}
-        <div className="absolute bottom-0 left-0 right-0">
+        <div className="absolute bottom-0 left-0 right-0 overflow-hidden">
           {/* Gradient fade */}
           <div className="h-24 bg-gradient-to-t from-[#E8F4F6] to-transparent" />
           
-          {/* Multiple wave layers for depth */}
+          {/* Wave animation styles */}
+          <style>{`
+            @keyframes wave-slow {
+              0% { transform: translateX(0); }
+              100% { transform: translateX(-50%); }
+            }
+            @keyframes wave-medium {
+              0% { transform: translateX(0); }
+              100% { transform: translateX(-50%); }
+            }
+            @keyframes wave-fast {
+              0% { transform: translateX(0); }
+              100% { transform: translateX(-50%); }
+            }
+            .wave-back {
+              animation: wave-slow 8s linear infinite;
+            }
+            .wave-middle {
+              animation: wave-medium 6s linear infinite;
+            }
+            .wave-front {
+              animation: wave-fast 4s linear infinite;
+            }
+          `}</style>
+          
+          {/* Multiple wave layers for depth - doubled width for seamless loop */}
           <svg 
-            className="absolute bottom-0 left-0 right-0 w-full" 
-            viewBox="0 0 1440 180" 
+            className="absolute bottom-0 left-0 w-[200%]" 
+            viewBox="0 0 2880 180" 
             preserveAspectRatio="none"
             style={{ height: '90px' }}
           >
-            {/* Back wave - lighter */}
+            {/* Back wave - lighter (doubled for seamless animation) */}
             <path 
-              d="M0,100 C120,120 240,80 360,100 C480,120 600,80 720,100 C840,120 960,80 1080,100 C1200,120 1320,80 1440,100 L1440,180 L0,180 Z" 
+              className="wave-back"
+              d="M0,100 C120,120 240,80 360,100 C480,120 600,80 720,100 C840,120 960,80 1080,100 C1200,120 1320,80 1440,100 C1560,120 1680,80 1800,100 C1920,120 2040,80 2160,100 C2280,120 2400,80 2520,100 C2640,120 2760,80 2880,100 L2880,180 L0,180 Z" 
               fill="#B8D4E3"
               opacity="0.6"
             />
-            {/* Middle wave */}
+            {/* Middle wave (doubled for seamless animation) */}
             <path 
-              d="M0,120 C180,150 360,100 540,130 C720,160 900,110 1080,140 C1200,160 1320,120 1440,140 L1440,180 L0,180 Z" 
+              className="wave-middle"
+              d="M0,120 C180,150 360,100 540,130 C720,160 900,110 1080,140 C1260,160 1440,120 1620,140 C1800,160 1980,110 2160,140 C2340,160 2520,120 2700,140 C2880,160 2880,180 2880,180 L0,180 Z" 
               fill="#9CC5D8"
               opacity="0.7"
             />
-            {/* Front wave - main */}
+            {/* Front wave - main (doubled for seamless animation) */}
             <path 
-              d="M0,140 C240,170 480,130 720,155 C960,180 1200,140 1440,160 L1440,180 L0,180 Z" 
+              className="wave-front"
+              d="M0,140 C240,170 480,130 720,155 C960,180 1200,140 1440,160 C1680,180 1920,140 2160,165 C2400,180 2640,150 2880,170 L2880,180 L0,180 Z" 
               fill="#E8F4F6"
             />
           </svg>

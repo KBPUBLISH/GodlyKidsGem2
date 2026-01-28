@@ -456,8 +456,13 @@ const DailySessionPage: React.FC = () => {
   // Handle starting current step
   const handleStartStep = async () => {
     console.log('📚 handleStartStep called, session:', !!session);
+    
+    // Debug: Show we're in the function
+    alert('Button clicked! Loading book...');
+    
     if (!session) {
       console.log('📚 No session, returning');
+      alert('No session found!');
       return;
     }
     

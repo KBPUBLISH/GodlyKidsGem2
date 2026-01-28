@@ -302,51 +302,185 @@ const BottomNavigation: React.FC = () => {
         >
           {/* SVG Wheel */}
           <svg viewBox="0 0 400 400" className="w-full h-full relative z-10 pointer-events-none">
+            <defs>
+              {/* Wood grain gradient for rim */}
+              <linearGradient id="woodGrainRim" x1="0%" y1="0%" x2="100%" y2="0%">
+                <stop offset="0%" stopColor="#8B5A2B" />
+                <stop offset="20%" stopColor="#A56B3A" />
+                <stop offset="40%" stopColor="#C4884A" />
+                <stop offset="60%" stopColor="#A56B3A" />
+                <stop offset="80%" stopColor="#8B5A2B" />
+                <stop offset="100%" stopColor="#6B4423" />
+              </linearGradient>
+              
+              {/* Radial gradient for depth on rim */}
+              <radialGradient id="rimDepth" cx="50%" cy="30%" r="70%">
+                <stop offset="0%" stopColor="#D4975A" />
+                <stop offset="50%" stopColor="#A56B3A" />
+                <stop offset="100%" stopColor="#5C3D1E" />
+              </radialGradient>
+              
+              {/* Wood gradient for spokes */}
+              <linearGradient id="spokeWood" x1="0%" y1="0%" x2="100%" y2="0%">
+                <stop offset="0%" stopColor="#5C3D1E" />
+                <stop offset="30%" stopColor="#8B5A2B" />
+                <stop offset="50%" stopColor="#A56B3A" />
+                <stop offset="70%" stopColor="#8B5A2B" />
+                <stop offset="100%" stopColor="#5C3D1E" />
+              </linearGradient>
+              
+              {/* Hub gradient */}
+              <radialGradient id="hubWood" cx="30%" cy="30%" r="80%">
+                <stop offset="0%" stopColor="#C4884A" />
+                <stop offset="50%" stopColor="#8B5A2B" />
+                <stop offset="100%" stopColor="#4A2810" />
+              </radialGradient>
+              
+              {/* Gold center gradient */}
+              <radialGradient id="goldCenter" cx="30%" cy="30%" r="70%">
+                <stop offset="0%" stopColor="#FFE55C" />
+                <stop offset="50%" stopColor="#FFD700" />
+                <stop offset="100%" stopColor="#B8860B" />
+              </radialGradient>
+              
+              {/* Handle gradient */}
+              <linearGradient id="handleWood" x1="0%" y1="0%" x2="100%" y2="0%">
+                <stop offset="0%" stopColor="#5C3D1E" />
+                <stop offset="25%" stopColor="#8B5A2B" />
+                <stop offset="50%" stopColor="#A56B3A" />
+                <stop offset="75%" stopColor="#8B5A2B" />
+                <stop offset="100%" stopColor="#5C3D1E" />
+              </linearGradient>
+            </defs>
+            
             <g transform="translate(200, 200)">
 
-              {/* --- 1. HANDLES --- */}
+              {/* --- 1. HANDLES with carved detail --- */}
               {[...Array(8)].map((_, i) => (
                 <g key={`handle-${i}`} transform={`rotate(${i * 45})`}>
+                  {/* Handle shadow */}
                   <path
-                    d="M-6,-130 L-6,-145 C-8,-146 -12,-150 -12,-160 C-12,-170 -5,-175 0,-175 C5,-175 12,-170 12,-160 C12,-150 8,-146 6,-145 L6,-130 Z"
-                    fill="#5e3006"
-                    stroke="#3d1e03"
-                    strokeWidth="1"
+                    d="M-7,-129 L-7,-145 C-9,-147 -14,-152 -14,-162 C-14,-174 -6,-180 0,-180 C6,-180 14,-174 14,-162 C14,-152 9,-147 7,-145 L7,-129 Z"
+                    fill="#2A1201"
+                    opacity="0.5"
                   />
+                  {/* Main handle body */}
+                  <path
+                    d="M-6,-130 L-6,-145 C-8,-147 -12,-151 -12,-161 C-12,-172 -5,-177 0,-177 C5,-177 12,-172 12,-161 C12,-151 8,-147 6,-145 L6,-130 Z"
+                    fill="url(#handleWood)"
+                    stroke="#3d1e03"
+                    strokeWidth="1.5"
+                  />
+                  {/* Handle highlight */}
+                  <path
+                    d="M-3,-145 C-5,-147 -8,-151 -8,-161 C-8,-168 -4,-172 0,-172"
+                    fill="none"
+                    stroke="#C4884A"
+                    strokeWidth="1"
+                    opacity="0.6"
+                  />
+                  {/* Handle ring detail */}
+                  <ellipse cx="0" cy="-161" rx="8" ry="10" fill="none" stroke="#4A2810" strokeWidth="1" />
                 </g>
               ))}
 
-              {/* --- 2. SPOKES --- */}
+              {/* --- 2. SPOKES with wood grain --- */}
               {[...Array(8)].map((_, i) => (
-                <path
-                  key={`spoke-${i}`}
-                  d="M-7,-40 L-5,-130 L5,-130 L7,-40 Z"
-                  fill="#5e3006"
-                  stroke="#2a1201"
-                  strokeWidth="0.5"
-                  transform={`rotate(${i * 45})`}
-                />
+                <g key={`spoke-${i}`} transform={`rotate(${i * 45})`}>
+                  {/* Spoke shadow */}
+                  <path
+                    d="M-8,-40 L-6,-129 L6,-129 L8,-40 Z"
+                    fill="#2A1201"
+                    opacity="0.4"
+                  />
+                  {/* Main spoke */}
+                  <path
+                    d="M-6,-42 L-5,-128 L5,-128 L6,-42 Z"
+                    fill="url(#spokeWood)"
+                    stroke="#3d1e03"
+                    strokeWidth="1"
+                  />
+                  {/* Spoke highlight line */}
+                  <path
+                    d="M0,-45 L0,-125"
+                    stroke="#C4884A"
+                    strokeWidth="1.5"
+                    opacity="0.4"
+                  />
+                  {/* Spoke carved edge lines */}
+                  <path d="M-4,-50 L-4,-120" stroke="#4A2810" strokeWidth="0.5" opacity="0.6" />
+                  <path d="M4,-50 L4,-120" stroke="#4A2810" strokeWidth="0.5" opacity="0.6" />
+                </g>
               ))}
 
-              {/* --- 3. OUTER RIM --- */}
-              <circle r="125" fill="none" stroke="#5e3006" strokeWidth="28" />
-              <circle r="138" fill="none" stroke="#4A2810" strokeWidth="2" />
+              {/* --- 3. OUTER RIM with carved detail --- */}
+              {/* Outer shadow ring */}
+              <circle r="142" fill="none" stroke="#2A1201" strokeWidth="4" opacity="0.4" />
+              
+              {/* Main rim - outer edge */}
+              <circle r="139" fill="none" stroke="#4A2810" strokeWidth="3" />
+              
+              {/* Main rim body with gradient */}
+              <circle r="125" fill="none" stroke="url(#rimDepth)" strokeWidth="26" />
+              
+              {/* Rim carved groove - outer */}
+              <circle r="136" fill="none" stroke="#5C3D1E" strokeWidth="1.5" />
+              
+              {/* Rim highlight - inner edge */}
+              <circle r="113" fill="none" stroke="#C4884A" strokeWidth="1" opacity="0.5" />
+              
+              {/* Rim carved groove - inner */}
               <circle r="112" fill="none" stroke="#4A2810" strokeWidth="2" />
-
-              {/* Gold Studs */}
-              {[...Array(16)].map((_, i) => (
-                <circle
-                  key={`stud-${i}`}
-                  cx="0" cy="-125" r="3"
-                  fill="#FFD700"
-                  stroke="#5e3006" strokeWidth="0.5"
-                  transform={`rotate(${i * 22.5 + 22.5})`}
+              
+              {/* Wood grain texture lines on rim */}
+              {[...Array(24)].map((_, i) => (
+                <path
+                  key={`grain-${i}`}
+                  d={`M0,-137 Q${2 + (i % 3)},-125 0,-113`}
+                  fill="none"
+                  stroke="#5C3D1E"
+                  strokeWidth="0.5"
+                  opacity="0.3"
+                  transform={`rotate(${i * 15})`}
                 />
               ))}
 
-              {/* --- 4. HUB --- */}
-              <circle r="45" fill="#5e3006" stroke="#3d1e03" strokeWidth="2" />
-              <circle r="18" fill="#FFD700" stroke="#B8860B" strokeWidth="1" />
+              {/* Gold Studs with depth */}
+              {[...Array(16)].map((_, i) => (
+                <g key={`stud-${i}`} transform={`rotate(${i * 22.5 + 11.25})`}>
+                  {/* Stud shadow */}
+                  <circle cx="1" cy="-124" r="4" fill="#3d1e03" opacity="0.5" />
+                  {/* Stud body */}
+                  <circle cx="0" cy="-125" r="4" fill="url(#goldCenter)" />
+                  {/* Stud highlight */}
+                  <circle cx="-1" cy="-126" r="1.5" fill="#FFF8DC" opacity="0.6" />
+                </g>
+              ))}
+
+              {/* --- 4. HUB with carved detail --- */}
+              {/* Hub shadow */}
+              <circle r="48" fill="#2A1201" opacity="0.4" cx="2" cy="2" />
+              
+              {/* Hub outer ring */}
+              <circle r="47" fill="#4A2810" />
+              
+              {/* Hub main body */}
+              <circle r="44" fill="url(#hubWood)" stroke="#3d1e03" strokeWidth="2" />
+              
+              {/* Hub carved rings */}
+              <circle r="38" fill="none" stroke="#5C3D1E" strokeWidth="1.5" />
+              <circle r="32" fill="none" stroke="#4A2810" strokeWidth="1" />
+              <circle r="26" fill="none" stroke="#5C3D1E" strokeWidth="1" />
+              
+              {/* Hub highlight */}
+              <circle r="40" fill="none" stroke="#C4884A" strokeWidth="1" opacity="0.3" />
+              
+              {/* Gold center medallion */}
+              <circle r="20" fill="url(#goldCenter)" stroke="#B8860B" strokeWidth="2" />
+              
+              {/* Gold center highlight */}
+              <circle r="14" fill="none" stroke="#FFE55C" strokeWidth="1" opacity="0.5" />
+              <circle cx="-5" cy="-5" r="6" fill="#FFF8DC" opacity="0.3" />
 
             </g>
           </svg>

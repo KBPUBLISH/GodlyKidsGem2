@@ -50,7 +50,7 @@ const DiscussionQuestionsModal: React.FC<DiscussionQuestionsModalProps> = ({
     setIsLoading(true);
     try {
       console.log('📝 Fetching questions for:', bookTitle, 'Content length:', bookContent?.length || 0);
-      const response = await fetch(`${getApiBaseUrl()}ai-generate/discussion-questions`, {
+      const response = await fetch(`${getApiBaseUrl()}ai/discussion-questions`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

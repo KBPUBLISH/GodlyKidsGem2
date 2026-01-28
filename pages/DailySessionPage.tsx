@@ -209,14 +209,23 @@ const DailySessionPage: React.FC = () => {
       setIsLoading(false);
       
       // Find recommended book based on subjects (shows its own loading state)
-      // Only if book step is not yet completed
-      if (currentSession.steps[0]?.status !== 'completed') {
+      // Only if book step doesn't already have content assigned (avoid re-selecting on back navigation)
+      const bookStep = currentSession.steps[0];
+      if (bookStep?.status !== 'completed' && !bookStep?.contentId) {
         findRecommendedBook();
+      } else if (bookStep?.contentId) {
+        // Book already assigned - restore it from context or fetch it
+        console.log('📚 Restoring previously assigned book:', bookStep.contentId, bookStep.contentTitle);
+        // Try to find the book in context first
+        const existingBook = books.find(b => (b.id || b._id) === bookStep.contentId);
+        if (existingBook) {
+          setRecommendedBook(existingBook);
+        }
       }
     };
     
     loadSession();
-  }, []);
+  }, [books]);
 
   // Handle returning from completed book reading
   useEffect(() => {
@@ -265,7 +274,7 @@ const DailySessionPage: React.FC = () => {
             console.log('📝 Generating discussion questions for:', title);
             console.log('📝 Book content length:', content.length);
             
-            const response = await fetch(`${apiBaseUrl}ai-generate/discussion-questions`, {
+            const response = await fetch(`${apiBaseUrl}ai/discussion-questions`, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({
@@ -368,7 +377,7 @@ const DailySessionPage: React.FC = () => {
         pageCount: book.pageCount || book.pages?.length || 0,
       }));
       
-      const response = await fetch(`${apiBaseUrl}ai-generate/recommend-book`, {
+      const response = await fetch(`${apiBaseUrl}ai/recommend-book`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

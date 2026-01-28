@@ -5,6 +5,7 @@ import WoodButton from '../components/ui/WoodButton';
 import { useLanguage } from '../context/LanguageContext';
 import { ApiService } from '../services/apiService';
 import { activityTrackingService } from '../services/activityTrackingService';
+import { hasCompletedInterestSelection } from './InterestSelectionPage';
 
 const STORAGE_KEY = 'godly_kids_data_v6';
 const TERMS_URL = 'https://www.godlykids.com/end-user-license-agreement';
@@ -362,13 +363,19 @@ const LandingPage: React.FC = () => {
 
           {/* Sign In and Guest Buttons */}
           <div className="w-full max-w-sm space-y-3">
-              {/* Let's Explore Button - Main CTA (Gold) - Goes to explore page, tutorial prompt shows later */}
+              {/* Let's Explore Button - Main CTA (Gold) - Goes to interest selection for new users */}
               <WoodButton 
                 onClick={() => {
                   // Track the explore button click
                   activityTrackingService.trackOnboardingEvent('splash_explore_clicked');
-                  // Go directly to explore page - tutorial prompt will show after a delay
-                  navigate('/home');
+                  // Check if user has already completed interest selection
+                  if (hasCompletedInterestSelection()) {
+                    // Already selected interests, go directly to explore
+                    navigate('/home');
+                  } else {
+                    // First time - show interest selection screen
+                    navigate('/interests');
+                  }
                 }}
                 fullWidth 
                 variant="gold"

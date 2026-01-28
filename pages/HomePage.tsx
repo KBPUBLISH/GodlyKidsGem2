@@ -34,6 +34,7 @@ import { playHistoryService } from '../services/playHistoryService';
 import { bookCompletionService } from '../services/bookCompletionService';
 import { profileService } from '../services/profileService';
 import { activityTrackingService } from '../services/activityTrackingService';
+import { getPreferenceTags, getSavedPreferences } from './InterestSelectionPage';
 
 // Helper to format date as YYYY-MM-DD in local time
 const formatLocalDateKey = (d: Date): string => {
@@ -870,6 +871,78 @@ const HomePage: React.FC = () => {
       }));
   };
 
+  // Get content recommended based on user's interest preferences
+  const getRecommendedContent = () => {
+    const preferenceTags = getPreferenceTags();
+    const selectedInterests = getSavedPreferences();
+    
+    // If no preferences selected, return empty
+    if (preferenceTags.length === 0) {
+      return [];
+    }
+    
+    // Combine books and playlists
+    const allContent: any[] = [];
+    
+    // Score books based on matching categories/tags
+    books.forEach((book: any) => {
+      const bookCategories = (book as any).categories && Array.isArray((book as any).categories)
+        ? (book as any).categories
+        : ((book as any).category ? [(book as any).category] : []);
+      
+      // Count matching tags
+      const matchCount = preferenceTags.filter(tag =>
+        bookCategories.some((cat: string) => 
+          cat.toLowerCase().includes(tag.toLowerCase()) ||
+          tag.toLowerCase().includes(cat.toLowerCase())
+        )
+      ).length;
+      
+      if (matchCount > 0) {
+        allContent.push({
+          ...book,
+          id: book._id || book.id,
+          matchScore: matchCount,
+          isAudio: false,
+        });
+      }
+    });
+    
+    // Score playlists based on matching categories/tags
+    playlists.forEach((playlist: any) => {
+      const playlistCategories = (playlist as any).categories && Array.isArray((playlist as any).categories)
+        ? (playlist as any).categories
+        : (playlist.category ? [playlist.category] : []);
+      
+      // Count matching tags
+      const matchCount = preferenceTags.filter(tag =>
+        playlistCategories.some((cat: string) => 
+          cat.toLowerCase().includes(tag.toLowerCase()) ||
+          tag.toLowerCase().includes(cat.toLowerCase())
+        )
+      ).length;
+      
+      if (matchCount > 0) {
+        allContent.push({
+          ...playlist,
+          id: playlist._id || playlist.id,
+          coverUrl: playlist.coverImage,
+          matchScore: matchCount,
+          isAudio: true,
+        });
+      }
+    });
+    
+    // Sort by match score (highest first) and limit to 10
+    return allContent
+      .sort((a, b) => b.matchScore - a.matchScore)
+      .slice(0, 10);
+  };
+
+  // Get the recommended content
+  const recommendedContent = getRecommendedContent();
+  const hasPreferences = getSavedPreferences().length > 0;
+
   // Use manually selected featured content, or fallback to first 5 books
   const featuredBooks = featuredContent.length > 0 
     ? featuredContent.map(item => ({
@@ -1436,6 +1509,71 @@ const HomePage: React.FC = () => {
               }} 
             />
           </>
+        )}
+
+        {/* Recommended For You Section - Based on interest preferences */}
+        {hasPreferences && recommendedContent.length > 0 && (
+          <section className="mt-6">
+            <SectionTitle 
+              title="Recommended For You" 
+              icon="💝"
+              color="#E91E63"
+            />
+            <div className="w-screen overflow-x-auto no-scrollbar pb-2 -mx-4 snap-x snap-mandatory">
+              <div className="flex space-x-4 px-4">
+                {recommendedContent.map((item: any) => (
+                  <div
+                    key={item._id || item.id}
+                    onClick={() => {
+                      if (item.isAudio) {
+                        navigate(`/audio/playlist/${item._id || item.id}`);
+                      } else {
+                        handleBookClick(item._id || item.id);
+                      }
+                    }}
+                    className="relative flex-shrink-0 w-44 snap-center cursor-pointer group"
+                  >
+                    {/* Cover Image */}
+                    <div className="relative aspect-[3/4] rounded-2xl overflow-hidden shadow-lg border-2 border-white/20 group-hover:border-pink-400/50 transition-all">
+                      <img
+                        src={item.coverUrl || item.coverImage || item.files?.coverImage}
+                        alt={item.title}
+                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                        onError={(e) => {
+                          (e.target as HTMLImageElement).src = 'https://via.placeholder.com/150x200/E91E63/FFFFFF?text=💝';
+                        }}
+                      />
+                      {/* Play overlay for audio */}
+                      {item.isAudio && (
+                        <div className="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                          <Play className="w-12 h-12 text-white fill-white" />
+                        </div>
+                      )}
+                      {/* Premium badge - Only show if user is NOT subscribed */}
+                      {item.isMembersOnly && !isSubscribed && (
+                        <div className="absolute top-2 right-2 px-2 py-1 bg-amber-500/90 rounded-full text-xs font-bold text-white flex items-center gap-0.5">
+                          <Lock className="w-3 h-3" />
+                        </div>
+                      )}
+                      {/* Type badge */}
+                      <div className="absolute bottom-2 left-2 px-2 py-1 bg-black/60 rounded-full text-xs font-semibold text-white">
+                        {item.isAudio ? '🎵 Audio' : '📖 Book'}
+                      </div>
+                    </div>
+                    {/* Title */}
+                    <div className="mt-2 px-1">
+                      <h3 className="text-base font-bold text-white truncate">
+                        {item.title}
+                      </h3>
+                      <p className="text-sm text-white/60 truncate">
+                        {item.author || 'Kingdom Builders Publishing'}
+                      </p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </section>
         )}
 
         {/* Trending Episodes Section - Top 10 by play count */}

@@ -832,7 +832,8 @@ const DailySessionPage: React.FC = () => {
                         setTimeout(() => setIsLoadingBook(false), 3000);
                       }, 200);
                     }}
-                    className="relative overflow-hidden transition-all transform hover:scale-[1.02] active:scale-[0.98]"
+                    className="relative overflow-hidden transition-all transform hover:scale-[1.05] active:scale-[0.98] rounded-xl"
+                    style={{ boxShadow: '0 0 15px rgba(255, 255, 255, 0.5), 0 0 30px rgba(255, 255, 255, 0.3)' }}
                   >
                     {/* Character block image */}
                     <img 

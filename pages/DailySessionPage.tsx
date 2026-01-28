@@ -458,8 +458,8 @@ const DailySessionPage: React.FC = () => {
       duration: sessionDuration,
     });
     
-    // Minimum loading time for UX (shows "Creating your lesson" for at least 2 seconds)
-    const minLoadingTime = new Promise(resolve => setTimeout(resolve, 2000));
+    // Minimum loading time for UX (shows "Creating your lesson" for at least 3 seconds)
+    const minLoadingTime = new Promise(resolve => setTimeout(resolve, 3000));
     
     // Find recommended book based on selected subjects
     const bookPromise = findRecommendedBook();

@@ -109,11 +109,19 @@ const DailyLessonWidget: React.FC<DailyLessonWidgetProps> = ({ onStartLesson }) 
     </div>
   );
 
+  // Scroll background style
+  const scrollBackground = {
+    backgroundImage: 'url(/daily-session/scroll-bg.png)',
+    backgroundSize: 'cover',
+    backgroundPosition: 'center',
+    backgroundRepeat: 'no-repeat',
+  };
+
   // Completed state
   if (isCompleted) {
     return (
       <div className="mx-4 mb-6">
-        <div className="bg-[#f5f0e1] rounded-2xl p-8 shadow-lg border-4 border-[#8B4513]/30 relative overflow-hidden">
+        <div className="rounded-2xl p-8 shadow-lg relative overflow-hidden" style={scrollBackground}>
           {/* Completed badge */}
           <div className="absolute top-4 right-4 bg-green-500 rounded-full p-1.5">
             <Check className="w-5 h-5 text-white" />
@@ -141,7 +149,7 @@ const DailyLessonWidget: React.FC<DailyLessonWidgetProps> = ({ onStartLesson }) 
 
   return (
     <div className="mx-4 mb-6">
-      <div className="bg-[#f5f0e1] rounded-2xl p-8 shadow-lg border-4 border-[#8B4513]/30 relative overflow-hidden">
+      <div className="rounded-2xl p-8 shadow-lg relative overflow-hidden" style={scrollBackground}>
         
         {/* Header */}
         <div className="text-center mb-6">

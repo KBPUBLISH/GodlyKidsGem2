@@ -168,11 +168,13 @@ const DailySessionPage: React.FC = () => {
       }
       
       setSession(currentSession);
-      
-      // Find recommended book based on subjects
-      findRecommendedBook();
-      
       setIsLoading(false);
+      
+      // Find recommended book based on subjects (shows its own loading state)
+      // Only if book step is not yet completed
+      if (currentSession.steps[0]?.status !== 'completed') {
+        findRecommendedBook();
+      }
     };
     
     loadSession();
@@ -398,7 +400,7 @@ const DailySessionPage: React.FC = () => {
     
     // Hide goals screen and show loading
     setShowGoalsSelection(false);
-    setIsLoading(true);
+    setIsLoadingBook(true); // Show "Creating Perfect Lesson" loading screen
     
     // Create a new session with the selected subjects
     const subjects = getSavedPreferences();
@@ -412,10 +414,8 @@ const DailySessionPage: React.FC = () => {
       duration: sessionDuration,
     });
     
-    // Find recommended book based on selected subjects
-    findRecommendedBook();
-    
-    setIsLoading(false);
+    // Find recommended book based on selected subjects (async - will set isLoadingBook to false when done)
+    await findRecommendedBook();
   };
 
   // Handle starting current step
@@ -562,12 +562,33 @@ const DailySessionPage: React.FC = () => {
     backgroundPosition: 'center',
   };
 
-  if (isLoading) {
+  if (isLoading || isLoadingBook) {
     return (
       <div className="fixed inset-0 flex items-center justify-center z-50" style={woodBackground}>
-        <div className="text-center">
-          <div className="w-16 h-16 border-4 border-[#FFD700]/30 border-t-[#FFD700] rounded-full animate-spin mx-auto mb-4" />
-          <p className="text-[#f3e5ab] font-display text-lg">Preparing your session...</p>
+        <div className="text-center px-8">
+          {/* Animated book icon */}
+          <div className="relative w-24 h-24 mx-auto mb-6">
+            <div className="absolute inset-0 flex items-center justify-center">
+              <span className="text-6xl animate-bounce">📚</span>
+            </div>
+            <div className="absolute inset-0 border-4 border-[#FFD700]/30 border-t-[#FFD700] rounded-full animate-spin" />
+          </div>
+          
+          <h2 className="text-[#FFD700] font-display font-bold text-2xl mb-2 drop-shadow-lg">
+            Creating Perfect Lesson
+          </h2>
+          <p className="text-[#f3e5ab]/80 font-display text-sm">
+            Finding the best story for your child...
+          </p>
+          
+          {/* Goal reminder */}
+          {selectedGoal && (
+            <div className="mt-4 bg-[#5D4037]/50 rounded-xl px-4 py-2 inline-block">
+              <p className="text-[#f3e5ab]/60 text-xs font-display">
+                Goal: {LEARNING_GOALS.find(g => g.id === selectedGoal)?.label}
+              </p>
+            </div>
+          )}
         </div>
       </div>
     );

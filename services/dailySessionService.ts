@@ -256,31 +256,41 @@ export const getSessionHistory = (): DailySession[] => {
 // Get current streak (consecutive days with completed sessions)
 export const getSessionStreak = (): number => {
   const history = getSessionHistory();
-  if (history.length === 0) return 0;
+  const todayKey = getTodayDateKey();
   
   let streak = 0;
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
   
-  // Check if today's session is completed
+  // Check if today's session is completed (either in current session or history)
   const currentSession = getCurrentSession();
-  if (currentSession?.completed) {
+  const todayInHistory = history.find(s => s.date === todayKey && s.completed);
+  
+  if (currentSession?.completed || todayInHistory) {
     streak = 1;
+  } else {
+    // If today isn't completed, no streak from today
+    return 0;
   }
   
-  // Count consecutive completed sessions going backwards
-  for (let i = 0; i < history.length; i++) {
-    const session = history[i];
-    if (!session.completed) continue;
+  // Count consecutive completed sessions going backwards from yesterday
+  // Use Set to avoid counting same day twice
+  const countedDates = new Set<string>([todayKey]);
+  
+  for (let daysBack = 1; daysBack <= 30; daysBack++) {
+    const checkDate = new Date();
+    checkDate.setDate(checkDate.getDate() - daysBack);
+    const checkDateKey = `${checkDate.getFullYear()}-${String(checkDate.getMonth() + 1).padStart(2, '0')}-${String(checkDate.getDate()).padStart(2, '0')}`;
     
-    const sessionDate = new Date(session.date);
-    sessionDate.setHours(0, 0, 0, 0);
+    // Skip if already counted
+    if (countedDates.has(checkDateKey)) continue;
     
-    const dayDiff = Math.floor((today.getTime() - sessionDate.getTime()) / (1000 * 60 * 60 * 24));
+    // Find completed session for this date
+    const sessionForDay = history.find(s => s.date === checkDateKey && s.completed);
     
-    if (dayDiff === streak) {
+    if (sessionForDay) {
       streak++;
-    } else if (dayDiff > streak) {
+      countedDates.add(checkDateKey);
+    } else {
+      // Chain broken
       break;
     }
   }

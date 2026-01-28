@@ -30,6 +30,16 @@ const SUBJECT_IMAGES: { [key: string]: string } = {
   'character': '/daily-session/character.png',
 };
 
+// Learning goals options
+const LEARNING_GOALS = [
+  { id: 'self-esteem', label: 'Improve Self Esteem', emoji: '💪', color: 'from-pink-500 to-rose-600' },
+  { id: 'connected-to-god', label: 'Feel More Connected to God', emoji: '🙏', color: 'from-purple-500 to-indigo-600' },
+  { id: 'learn-bible', label: 'Learn More About the Bible', emoji: '📖', color: 'from-blue-500 to-cyan-600' },
+  { id: 'better-sleep', label: 'Get Better Sleep', emoji: '😴', color: 'from-indigo-500 to-purple-600' },
+  { id: 'theology', label: 'Become Stronger in Theology', emoji: '✝️', color: 'from-amber-500 to-orange-600' },
+  { id: 'life-skills', label: 'Improve Daily Life Skills', emoji: '⭐', color: 'from-green-500 to-emerald-600' },
+];
+
 // Wing animation CSS
 const wingAnimationStyles = `
   @keyframes wingFlapLeft {
@@ -92,10 +102,34 @@ const DailySessionPage: React.FC = () => {
   const [recommendedBook, setRecommendedBook] = useState<any>(null);
   const [bookContent, setBookContent] = useState<string>(''); // Story text for discussion questions
   const [isLoading, setIsLoading] = useState(true);
+  const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
+  const [isLoadingBook, setIsLoadingBook] = useState(false);
   
   // Subject selection state for users who haven't picked subjects yet
   const [showSubjectSelection, setShowSubjectSelection] = useState(false);
   const [tempSelectedSubjects, setTempSelectedSubjects] = useState<string[]>([]);
+  
+  // Goals selection state
+  const [showGoalsSelection, setShowGoalsSelection] = useState(false);
+  const [selectedGoal, setSelectedGoal] = useState<string | null>(null);
+  const [sessionDuration, setSessionDuration] = useState<number>(10); // Minutes from widget
+
+  // Track screen size for responsive background
+  useEffect(() => {
+    const handleResize = () => {
+      setIsMobile(window.innerWidth < 768);
+    };
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
+  // Load session duration from localStorage (set by DailyLessonWidget)
+  useEffect(() => {
+    const savedDuration = localStorage.getItem('godlykids_session_duration');
+    if (savedDuration) {
+      setSessionDuration(parseInt(savedDuration, 10) || 10);
+    }
+  }, []);
 
   // Initialize or load session
   useEffect(() => {
@@ -110,6 +144,16 @@ const DailySessionPage: React.FC = () => {
         setIsLoading(false);
         return;
       }
+      
+      // Check if goal was selected for today's session
+      const savedGoal = sessionStorage.getItem('godlykids_session_goal');
+      if (!savedGoal) {
+        // No goal selected - show goal selection
+        setShowGoalsSelection(true);
+        setIsLoading(false);
+        return;
+      }
+      setSelectedGoal(savedGoal);
       
       let currentSession = getCurrentSession();
       
@@ -177,25 +221,98 @@ const DailySessionPage: React.FC = () => {
     }
   }, [location.state, session, addCoins, navigate, location.pathname, recommendedBook]);
 
-  // Find a book matching user's selected subjects
-  const findRecommendedBook = () => {
+  // Get max pages based on session duration
+  const getMaxPages = (duration: number): number => {
+    if (duration <= 5) return 15;
+    if (duration <= 10) return 25;
+    return 40; // 15 minutes
+  };
+
+  // Find a book using AI recommendation based on goal and filters
+  const findRecommendedBook = async () => {
     // Don't proceed if books aren't loaded yet
     if (!books || books.length === 0) {
       console.log('📚 Books not loaded yet, will retry when available');
       return;
     }
     
-    const filterTags = getRecommendedBookFilter();
+    setIsLoadingBook(true);
     
-    if (filterTags.length === 0) {
-      // No filters, pick random book
-      const randomBook = books[Math.floor(Math.random() * books.length)];
-      setRecommendedBook(randomBook);
+    // Filter to only books (not music/playlists) with valid IDs
+    const maxPages = getMaxPages(sessionDuration);
+    const validBooks = books.filter((book: any) => {
+      if (!book || !book._id) return false;
+      // Exclude music/playlists - check type field or infer from category
+      const type = book.type?.toLowerCase() || '';
+      const category = (book.category || '').toLowerCase();
+      if (type.includes('music') || type.includes('playlist') || type.includes('song')) return false;
+      if (category.includes('music') || category.includes('worship songs')) return false;
+      // Filter by page count if available
+      const pageCount = book.pageCount || book.pages?.length || 0;
+      if (pageCount > 0 && pageCount > maxPages) return false;
+      return true;
+    });
+    
+    if (validBooks.length === 0) {
+      console.log('📚 No valid books found after filtering');
+      // Fallback to any book with _id
+      const anyBook = books.find((b: any) => b && b._id);
+      if (anyBook) setRecommendedBook(anyBook);
+      setIsLoadingBook(false);
       return;
     }
     
-    // Find books matching any tag
-    const matchingBooks = books.filter((book: any) => {
+    console.log('📚 Finding book for goal:', selectedGoal, 'duration:', sessionDuration, 'from', validBooks.length, 'valid books');
+    
+    // Try AI recommendation
+    const goal = selectedGoal || 'learn-bible';
+    const goalLabel = LEARNING_GOALS.find(g => g.id === goal)?.label || goal;
+    
+    try {
+      const apiBaseUrl = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
+        ? 'http://localhost:3001/api/'
+        : 'https://backendgk2-0.onrender.com/api/';
+      
+      // Prepare book summaries for AI
+      const bookSummaries = validBooks.slice(0, 30).map((book: any) => ({
+        id: book._id,
+        title: book.title,
+        description: book.description || '',
+        category: book.category || book.categories?.[0] || '',
+        tags: book.tags?.join(', ') || '',
+        pageCount: book.pageCount || book.pages?.length || 0,
+      }));
+      
+      const response = await fetch(`${apiBaseUrl}ai-generate/recommend-book`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          goal: goalLabel,
+          books: bookSummaries,
+          maxDuration: sessionDuration,
+          subjects: getSavedPreferences(),
+        }),
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        if (data.recommendedBookId) {
+          const aiBook = validBooks.find((b: any) => b._id === data.recommendedBookId);
+          if (aiBook) {
+            console.log('📚 AI recommended book:', aiBook.title, 'Reason:', data.reason);
+            setRecommendedBook(aiBook);
+            setIsLoadingBook(false);
+            return;
+          }
+        }
+      }
+    } catch (error) {
+      console.log('📚 AI recommendation failed, using fallback:', error);
+    }
+    
+    // Fallback: Simple tag/category matching
+    const filterTags = getRecommendedBookFilter();
+    const matchingBooks = validBooks.filter((book: any) => {
       const bookCategories = book.categories || [book.category];
       return bookCategories.some((cat: string) =>
         filterTags.some(tag => 
@@ -206,14 +323,15 @@ const DailySessionPage: React.FC = () => {
     });
     
     if (matchingBooks.length > 0) {
-      // Pick random from matching
       const randomBook = matchingBooks[Math.floor(Math.random() * matchingBooks.length)];
+      console.log('📚 Fallback selected matching book:', randomBook?.title);
       setRecommendedBook(randomBook);
     } else {
-      // Fallback to any book
-      const randomBook = books[Math.floor(Math.random() * books.length)];
+      const randomBook = validBooks[Math.floor(Math.random() * validBooks.length)];
+      console.log('📚 Fallback selected random book:', randomBook?.title);
       setRecommendedBook(randomBook);
     }
+    setIsLoadingBook(false);
   };
   
   // Re-run book recommendation when books load
@@ -260,17 +378,38 @@ const DailySessionPage: React.FC = () => {
       subjects: tempSelectedSubjects,
     });
     
-    // Hide selection screen and create session
+    // Hide subject selection and show goals selection
     setShowSubjectSelection(false);
+    setShowGoalsSelection(true);
+  };
+
+  // Handle goal selection confirmation
+  const handleGoalConfirm = async () => {
+    if (!selectedGoal) return;
+    
+    // Save goal to session storage (resets each day)
+    sessionStorage.setItem('godlykids_session_goal', selectedGoal);
+    
+    // Track goal selection
+    activityTrackingService.trackOnboardingEvent('learning_goal_selected', {
+      goal: selectedGoal,
+      duration: sessionDuration,
+    });
+    
+    // Hide goals screen and show loading
+    setShowGoalsSelection(false);
     setIsLoading(true);
     
     // Create a new session with the selected subjects
-    const newSession = createDailySession(tempSelectedSubjects);
+    const subjects = getSavedPreferences();
+    const newSession = createDailySession(subjects);
     setSession(newSession);
     
     // Track session start
     activityTrackingService.trackOnboardingEvent('godly_kids_time_started', {
       subjects: newSession.subjects,
+      goal: selectedGoal,
+      duration: sessionDuration,
     });
     
     // Find recommended book based on selected subjects
@@ -288,30 +427,33 @@ const DailySessionPage: React.FC = () => {
     
     switch (step.type) {
       case 'book':
+        // Try to use recommended book first
         if (recommendedBook && recommendedBook._id) {
-          // Set the book content
           setStepContent(session.currentStepIndex, recommendedBook._id, recommendedBook.title);
-          // Navigate to book reader
           navigate(`/read/${recommendedBook._id}`, { 
             state: { fromDailySession: true } 
           });
-        } else if (books.length > 0) {
-          // Fallback: pick a random book if recommended book not set
-          const fallbackBook = books[Math.floor(Math.random() * books.length)];
-          if (fallbackBook && fallbackBook._id) {
+          return;
+        }
+        
+        // Fallback: find any valid book from the loaded books
+        if (books && books.length > 0) {
+          // Find a book with a valid _id
+          const validBooks = books.filter((b: any) => b && b._id);
+          if (validBooks.length > 0) {
+            const fallbackBook = validBooks[Math.floor(Math.random() * validBooks.length)];
             setRecommendedBook(fallbackBook);
             setStepContent(session.currentStepIndex, fallbackBook._id, fallbackBook.title);
             navigate(`/read/${fallbackBook._id}`, { 
               state: { fromDailySession: true } 
             });
-          } else {
-            console.error('No valid book available');
-            alert('No books available. Please try again later.');
+            return;
           }
-        } else {
-          console.error('Books not loaded');
-          alert('Books are still loading. Please wait a moment and try again.');
         }
+        
+        // No books available - show error
+        console.error('No books available. Books loaded:', books?.length);
+        alert('No books available yet. Please wait a moment and try again.');
         break;
       case 'discussion':
         setShowDiscussionModal(true);
@@ -411,9 +553,11 @@ const DailySessionPage: React.FC = () => {
     }).join(', ');
   };
 
-  // Wood plank background style
+  // Wood plank background style - mobile vs desktop
   const woodBackground = {
-    backgroundImage: 'url(/daily-session/Background-dailysession.jpg)',
+    backgroundImage: isMobile 
+      ? 'url(/daily-session/Background-dailysession-mobile.png)' 
+      : 'url(/daily-session/Background-dailysession.jpg)',
     backgroundSize: 'cover',
     backgroundPosition: 'center',
   };
@@ -446,18 +590,13 @@ const DailySessionPage: React.FC = () => {
         </button>
 
         {/* Header Banner */}
-        <div className="flex justify-center pt-4 pb-2">
+        <div className="flex justify-center pt-4 pb-4">
           <img 
             src="/daily-session/dailysessiontitle.png" 
             alt="Daily Session" 
-            className="h-16 object-contain"
+            className="h-24 md:h-28 object-contain"
           />
         </div>
-        
-        {/* Subtitle */}
-        <p className="text-center text-[#f3e5ab]/80 text-sm font-display mb-4">
-          Daily Learning Session
-        </p>
 
         {/* Subject Cards Grid */}
         <div className="flex-1 px-4 pb-4">
@@ -556,7 +695,7 @@ const DailySessionPage: React.FC = () => {
         {/* Avatar - Bottom Right */}
         <div className="absolute bottom-20 right-4 avatar-float" style={{ marginBottom: 'var(--safe-area-bottom, 0px)' }}>
           <style>{wingAnimationStyles}</style>
-          <div className="w-20 h-28">
+          <div className="w-24 h-32">
             <AvatarCompositor
               headUrl={equippedAvatar || '/avatars/heads/head-1.png'}
               body={equippedBody}
@@ -580,9 +719,118 @@ const DailySessionPage: React.FC = () => {
               rightArmRotation={equippedRightArmRotation}
               legsRotation={equippedLegsRotation}
               hatRotation={equippedHatRotation}
+              isAnimating={true}
+              animationStyle="anim-float"
               className="w-full h-full"
             />
           </div>
+        </div>
+
+        {/* Safe area bottom */}
+        <div className="flex-shrink-0" style={{ height: 'var(--safe-area-bottom, 0px)' }} />
+      </div>
+    );
+  }
+
+  // ============== GOALS SELECTION SCREEN ==============
+  if (showGoalsSelection) {
+    return (
+      <div className="fixed inset-0 flex flex-col z-50 overflow-auto" style={woodBackground}>
+        {/* Safe area top */}
+        <div className="flex-shrink-0" style={{ height: 'var(--safe-area-top, 0px)' }} />
+        
+        {/* Close button */}
+        <button
+          onClick={handleExit}
+          className="absolute top-4 left-4 w-10 h-10 rounded-full bg-black/30 flex items-center justify-center z-10"
+          style={{ marginTop: 'var(--safe-area-top, 0px)' }}
+        >
+          <X className="w-6 h-6 text-white/80" />
+        </button>
+
+        {/* Header Banner */}
+        <div className="flex justify-center pt-4 pb-4">
+          <img 
+            src="/daily-session/dailysessiontitle.png" 
+            alt="Daily Session" 
+            className="h-24 md:h-28 object-contain"
+          />
+        </div>
+        
+        {/* Question */}
+        <div className="text-center px-6 mb-4">
+          <h2 className="text-[#FFD700] font-display font-bold text-xl drop-shadow-lg">
+            What would you like to help your child with today?
+          </h2>
+          <p className="text-[#f3e5ab]/70 text-sm mt-2 font-display">
+            Select a learning focus for this session
+          </p>
+        </div>
+
+        {/* Goals Grid */}
+        <div className="flex-1 px-4 pb-4">
+          <div className="grid grid-cols-2 gap-3">
+            {LEARNING_GOALS.map((goal) => {
+              const isSelected = selectedGoal === goal.id;
+              return (
+                <button
+                  key={goal.id}
+                  onClick={() => setSelectedGoal(goal.id)}
+                  className={`
+                    relative rounded-xl p-4 transition-all transform
+                    ${isSelected 
+                      ? 'scale-[1.02] ring-4 ring-[#FFD700] shadow-xl' 
+                      : 'hover:scale-[1.01] shadow-md'
+                    }
+                  `}
+                >
+                  {/* Background gradient */}
+                  <div className={`absolute inset-0 rounded-xl bg-gradient-to-br ${goal.color} opacity-90`} />
+                  
+                  {/* Selection checkmark */}
+                  {isSelected && (
+                    <div className="absolute top-2 right-2 w-6 h-6 bg-[#FFD700] rounded-full flex items-center justify-center z-10">
+                      <Check className="w-4 h-4 text-[#5D4037]" />
+                    </div>
+                  )}
+                  
+                  {/* Content */}
+                  <div className="relative z-10 text-center">
+                    <span className="text-3xl mb-2 block">{goal.emoji}</span>
+                    <span className="text-white font-display font-bold text-sm leading-tight block">
+                      {goal.label}
+                    </span>
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Duration Info */}
+        <div className="px-6 mb-2">
+          <div className="bg-[#5D4037]/50 rounded-xl p-3 border-2 border-[#8B4513]/50">
+            <p className="text-[#f3e5ab]/80 text-xs text-center font-display">
+              📖 Your {sessionDuration} minute session will include a story tailored to this goal
+            </p>
+          </div>
+        </div>
+
+        {/* Confirm Button */}
+        <div className="px-6 pb-4">
+          <button
+            onClick={handleGoalConfirm}
+            disabled={!selectedGoal}
+            className={`
+              w-full py-4 rounded-xl font-display font-bold text-lg shadow-lg transition-all
+              ${selectedGoal
+                ? 'bg-[#FFD700] text-[#5D4037] active:scale-[0.98]'
+                : 'bg-[#5D4037]/50 text-[#f3e5ab]/50 cursor-not-allowed'
+              }
+            `}
+          >
+            Continue →
+          </button>
         </div>
 
         {/* Safe area bottom */}
@@ -613,18 +861,13 @@ const DailySessionPage: React.FC = () => {
       </button>
 
       {/* Header Banner */}
-      <div className="flex justify-center pt-4 pb-2">
+      <div className="flex justify-center pt-4 pb-4">
         <img 
           src="/daily-session/dailysessiontitle.png" 
           alt="Daily Session" 
-          className="h-16 object-contain"
+          className="h-24 md:h-28 object-contain"
         />
       </div>
-      
-      {/* Subtitle */}
-      <p className="text-center text-[#f3e5ab]/80 text-sm font-display mb-4">
-        Daily Learning Session
-      </p>
 
       {/* Progress Steps */}
       <div className="px-6 py-4">
@@ -714,16 +957,19 @@ const DailySessionPage: React.FC = () => {
           {/* Step-specific content preview */}
           <div className="flex-1 flex flex-col justify-center">
             {currentStep.type === 'book' && recommendedBook && (
-              <div className="bg-[#8B4513]/50 rounded-xl p-4 border-2 border-[#A0522D]">
+              <button 
+                onClick={handleStartStep}
+                className="w-full bg-[#8B4513]/50 rounded-xl p-4 border-2 border-[#A0522D] hover:bg-[#8B4513]/70 transition-all active:scale-[0.98] cursor-pointer"
+              >
                 <div className="flex items-center gap-4">
-                  <div className="w-20 h-28 rounded-xl overflow-hidden bg-[#5D4037]/50 border-2 border-[#8B4513]">
+                  <div className="w-20 h-28 rounded-xl overflow-hidden bg-[#5D4037]/50 border-2 border-[#8B4513] shadow-lg">
                     <img 
                       src={recommendedBook.coverUrl || recommendedBook.files?.coverImage} 
                       alt={recommendedBook.title}
                       className="w-full h-full object-cover"
                     />
                   </div>
-                  <div className="flex-1">
+                  <div className="flex-1 text-left">
                     <h3 className="text-[#f3e5ab] font-bold font-display">{recommendedBook.title}</h3>
                     <p className="text-[#f3e5ab]/60 text-sm font-display">{recommendedBook.author}</p>
                     <p className="text-[#f3e5ab]/40 text-xs mt-1 font-display">
@@ -732,7 +978,7 @@ const DailySessionPage: React.FC = () => {
                     <p className="text-[#FFD700] text-sm mt-1 font-display font-bold">🪙 +30 coins</p>
                   </div>
                 </div>
-              </div>
+              </button>
             )}
 
             {currentStep.type === 'discussion' && (
@@ -802,7 +1048,7 @@ const DailySessionPage: React.FC = () => {
       {/* Avatar - Bottom Right */}
       <div className="absolute bottom-24 right-4 avatar-float" style={{ marginBottom: 'var(--safe-area-bottom, 0px)' }}>
         <style>{wingAnimationStyles}</style>
-        <div className="w-16 h-24">
+        <div className="w-20 h-28">
           <AvatarCompositor
             headUrl={equippedAvatar || '/avatars/heads/head-1.png'}
             body={equippedBody}
@@ -826,6 +1072,8 @@ const DailySessionPage: React.FC = () => {
             rightArmRotation={equippedRightArmRotation}
             legsRotation={equippedLegsRotation}
             hatRotation={equippedHatRotation}
+            isAnimating={true}
+            animationStyle="anim-float"
             className="w-full h-full"
           />
         </div>

@@ -145,17 +145,27 @@ const DailySessionPage: React.FC = () => {
         return;
       }
       
-      // Check if goal was selected for today's session
-      const savedGoal = sessionStorage.getItem('godlykids_session_goal');
-      if (!savedGoal) {
-        // No goal selected - show goal selection
+      // Check for existing session
+      let currentSession = getCurrentSession();
+      
+      // If no active session exists OR the session was completed, show goal selection for a new session
+      if (!currentSession || currentSession.completed) {
+        // Clear any previous session data to start fresh
+        sessionStorage.removeItem('godlykids_session_goal');
+        sessionStorage.removeItem('godlykids_session_goal_date');
+        
+        // Show goal selection for new session
         setShowGoalsSelection(true);
         setIsLoading(false);
         return;
       }
-      setSelectedGoal(savedGoal);
       
-      let currentSession = getCurrentSession();
+      // Load the saved goal for the current in-progress session
+      const savedGoal = sessionStorage.getItem('godlykids_session_goal');
+      if (savedGoal) {
+        setSelectedGoal(savedGoal);
+      }
+      
       
       // If no session exists, create one
       if (!currentSession) {
@@ -389,8 +399,9 @@ const DailySessionPage: React.FC = () => {
   const handleGoalConfirm = async () => {
     if (!selectedGoal) return;
     
-    // Save goal to session storage (resets each day)
+    // Save goal to session storage with today's date
     sessionStorage.setItem('godlykids_session_goal', selectedGoal);
+    sessionStorage.setItem('godlykids_session_goal_date', new Date().toDateString());
     
     // Track goal selection
     activityTrackingService.trackOnboardingEvent('learning_goal_selected', {

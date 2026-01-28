@@ -53,6 +53,13 @@ const getTodayDateKey = (): string => {
 
 // Create a new daily session
 export const createDailySession = (selectedSubjects?: string[]): DailySession => {
+  // Archive any existing completed session before creating a new one
+  const existingSession = getCurrentSession();
+  if (existingSession?.completed) {
+    archiveSession(existingSession);
+    localStorage.removeItem(SESSION_STORAGE_KEY);
+  }
+  
   const subjects = selectedSubjects || getSavedPreferences();
   
   const session: DailySession = {

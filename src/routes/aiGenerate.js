@@ -912,6 +912,146 @@ function getFallbackDiscussionQuestions(bookTitle) {
 }
 
 // ===========================
+// BOOK RECOMMENDATION
+// ===========================
+
+// POST /api/ai-generate/recommend-book - AI-powered book recommendation for daily lessons
+router.post('/recommend-book', async (req, res) => {
+    try {
+        const { goal, books, maxDuration, subjects } = req.body;
+        
+        if (!books || books.length === 0) {
+            return res.status(400).json({ message: 'books array is required' });
+        }
+        
+        const geminiKey = process.env.GEMINI_API_KEY;
+        
+        if (!geminiKey) {
+            console.log('⚠️ No Gemini API key, using random selection');
+            // Return random book from the list
+            const randomBook = books[Math.floor(Math.random() * books.length)];
+            return res.json({ 
+                recommendedBookId: randomBook.id, 
+                reason: 'Random selection (no AI available)',
+                source: 'fallback' 
+            });
+        }
+        
+        // Build book list for AI
+        const bookList = books.map((book, idx) => 
+            `${idx + 1}. "${book.title}" - ${book.description?.substring(0, 100) || 'No description'}... | Category: ${book.category || 'General'} | Tags: ${book.tags || 'None'} | Pages: ${book.pageCount || 'Unknown'}`
+        ).join('\n');
+        
+        const prompt = `You are helping a homeschool parent select the best children's book/audiobook for their child's daily learning session.
+
+PARENT'S LEARNING GOAL: "${goal}"
+SESSION DURATION: ${maxDuration} minutes
+PREFERRED SUBJECTS: ${subjects?.join(', ') || 'None specified'}
+
+AVAILABLE BOOKS:
+${bookList}
+
+Your task: Select THE SINGLE BEST book from the list that:
+1. Best matches the parent's learning goal "${goal}"
+2. Has content appropriate for the session duration (shorter books for shorter sessions)
+3. Will engage children aged 7-12 while teaching the desired lesson
+
+Analyze each book's title, description, category, and tags to find the BEST match for "${goal}".
+
+IMPORTANT: 
+- DO NOT select music or worship songs - only books/stories/audiobooks
+- Consider the description carefully - a book about "self esteem" should be selected for "Improve Self Esteem"
+- A book about prayer/God should be selected for "Feel More Connected to God"
+- A book with Bible stories should be selected for "Learn More About the Bible"
+- A calming bedtime story should be selected for "Get Better Sleep"
+
+Return ONLY a valid JSON object with:
+{
+  "bookNumber": <the number of the book from the list>,
+  "bookTitle": "<exact title of the selected book>",
+  "reason": "<1 sentence explaining why this book best matches the goal>"
+}
+
+Return ONLY the JSON object, no other text.`;
+
+        console.log(`📚 AI selecting book for goal: "${goal}" from ${books.length} books`);
+        
+        const response = await fetch(
+            `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${geminiKey}`,
+            {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    contents: [{ parts: [{ text: prompt }] }],
+                    generationConfig: {
+                        temperature: 0.3, // Lower temperature for more consistent selection
+                        maxOutputTokens: 256,
+                    },
+                }),
+            }
+        );
+        
+        if (!response.ok) {
+            console.error('❌ Gemini API error:', await response.text());
+            const randomBook = books[Math.floor(Math.random() * books.length)];
+            return res.json({ 
+                recommendedBookId: randomBook.id, 
+                reason: 'Random selection (API error)',
+                source: 'fallback' 
+            });
+        }
+        
+        const data = await response.json();
+        const responseText = data.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || '';
+        
+        // Parse JSON from response
+        let jsonString = responseText;
+        if (responseText.includes('```')) {
+            const match = responseText.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
+            if (match) {
+                jsonString = match[1];
+            }
+        }
+        
+        try {
+            const recommendation = JSON.parse(jsonString);
+            const bookIndex = (recommendation.bookNumber || 1) - 1;
+            
+            if (bookIndex >= 0 && bookIndex < books.length) {
+                const selectedBook = books[bookIndex];
+                console.log(`✅ AI selected: "${selectedBook.title}" - ${recommendation.reason}`);
+                return res.json({
+                    recommendedBookId: selectedBook.id,
+                    bookTitle: selectedBook.title,
+                    reason: recommendation.reason,
+                    source: 'ai'
+                });
+            }
+        } catch (parseError) {
+            console.error('❌ Failed to parse AI response:', parseError.message);
+            console.log('Raw response:', responseText);
+        }
+        
+        // Fallback: return first book
+        const fallbackBook = books[0];
+        res.json({ 
+            recommendedBookId: fallbackBook.id, 
+            reason: 'First available book (parse error)',
+            source: 'fallback' 
+        });
+        
+    } catch (error) {
+        console.error('Recommend book error:', error);
+        const fallbackBook = req.body?.books?.[0];
+        res.json({ 
+            recommendedBookId: fallbackBook?.id, 
+            reason: 'Error occurred',
+            source: 'fallback' 
+        });
+    }
+});
+
+// ===========================
 // RADIO SCRIPT GENERATION
 // ===========================
 

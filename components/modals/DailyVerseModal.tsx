@@ -134,13 +134,42 @@ const DAILY_VERSES = [
 
 type GameState = 'intro' | 'playing' | 'success' | 'discussion';
 
-// Get verse based on day of year
+// Storage key for tracking used verses
+const USED_VERSES_KEY = 'godlykids_used_verse_indices';
+
+// Get a random verse, avoiding recently used ones
 const getDailyVerse = () => {
-  const now = new Date();
-  const start = new Date(now.getFullYear(), 0, 0);
-  const diff = now.getTime() - start.getTime();
-  const dayOfYear = Math.floor(diff / (1000 * 60 * 60 * 24));
-  return DAILY_VERSES[dayOfYear % DAILY_VERSES.length];
+  // Get list of recently used verse indices (last 5)
+  let usedIndices: number[] = [];
+  try {
+    const saved = localStorage.getItem(USED_VERSES_KEY);
+    if (saved) {
+      usedIndices = JSON.parse(saved);
+    }
+  } catch (e) {
+    usedIndices = [];
+  }
+  
+  // Get available indices (not recently used)
+  let availableIndices = DAILY_VERSES.map((_, i) => i).filter(i => !usedIndices.includes(i));
+  
+  // If all verses have been used recently, reset and use all
+  if (availableIndices.length === 0) {
+    availableIndices = DAILY_VERSES.map((_, i) => i);
+    usedIndices = [];
+  }
+  
+  // Pick a random verse from available ones
+  const randomIndex = availableIndices[Math.floor(Math.random() * availableIndices.length)];
+  
+  // Update used indices (keep last 5)
+  usedIndices.push(randomIndex);
+  if (usedIndices.length > 5) {
+    usedIndices = usedIndices.slice(-5);
+  }
+  localStorage.setItem(USED_VERSES_KEY, JSON.stringify(usedIndices));
+  
+  return DAILY_VERSES[randomIndex];
 };
 
 const DailyVerseModal: React.FC<DailyVerseModalProps> = ({

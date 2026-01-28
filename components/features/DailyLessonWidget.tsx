@@ -171,7 +171,9 @@ const DailyLessonWidget: React.FC<DailyLessonWidgetProps> = ({ onStartLesson }) 
           </div>
 
           {/* Lesson Flow Indicator */}
-          <div className="mt-8 flex items-center justify-center gap-4 text-[#5A5A5A] text-base relative z-10">
+          <div className="mt-8 flex items-center justify-center gap-3 text-[#5A5A5A] text-sm relative z-10">
+            <span className="font-medium">Scripture</span>
+            <span>→</span>
             <span className="font-medium">Story</span>
             <span>→</span>
             <span className="font-medium">Discuss</span>
@@ -219,7 +221,9 @@ const DailyLessonWidget: React.FC<DailyLessonWidgetProps> = ({ onStartLesson }) 
         </button>
 
         {/* Lesson Flow Indicator */}
-        <div className="mt-8 flex items-center justify-center gap-4 text-[#5A5A5A] text-base relative z-10">
+        <div className="mt-8 flex items-center justify-center gap-3 text-[#5A5A5A] text-sm relative z-10">
+          <span className="font-medium">Scripture</span>
+          <span>→</span>
           <span className="font-medium">Story</span>
           <span>→</span>
           <span className="font-medium">Discuss</span>

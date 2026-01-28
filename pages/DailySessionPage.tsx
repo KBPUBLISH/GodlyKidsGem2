@@ -25,14 +25,14 @@ import AvatarCompositor from '../components/avatar/AvatarCompositor';
 
 // Learning goals options with character block images
 const LEARNING_GOALS = [
-  { id: 'courage', label: 'Build Courage', emoji: '🦁', color: 'from-orange-500 to-red-600', image: '/daily-session/blocks/courage.jpeg' },
-  { id: 'faith', label: 'Strengthen Faith', emoji: '🙏', color: 'from-purple-500 to-indigo-600', image: '/daily-session/blocks/faith.jpeg' },
-  { id: 'gratitude', label: 'Practice Gratitude', emoji: '💝', color: 'from-pink-500 to-rose-600', image: '/daily-session/blocks/gratitude.jpeg' },
-  { id: 'love', label: 'Learn About Love', emoji: '❤️', color: 'from-red-500 to-pink-600', image: '/daily-session/blocks/love.jpeg' },
-  { id: 'obedience', label: 'Understand Obedience', emoji: '👂', color: 'from-blue-500 to-cyan-600', image: '/daily-session/blocks/obedience.jpeg' },
-  { id: 'self-control', label: 'Develop Self-Control', emoji: '🎯', color: 'from-green-500 to-emerald-600', image: '/daily-session/blocks/selfcontrol.jpeg' },
-  { id: 'theology', label: 'Explore Theology', emoji: '✝️', color: 'from-amber-500 to-orange-600', image: '/daily-session/blocks/theology.jpeg' },
-  { id: 'wisdom', label: 'Gain Wisdom', emoji: '🦉', color: 'from-indigo-500 to-purple-600', image: '/daily-session/blocks/wisdom.jpeg' },
+  { id: 'courage', label: 'Build Courage', emoji: '🦁', color: 'from-orange-500 to-red-600', image: '/daily-session/blocks/courage.png' },
+  { id: 'faith', label: 'Strengthen Faith', emoji: '🙏', color: 'from-purple-500 to-indigo-600', image: '/daily-session/blocks/faith.png' },
+  { id: 'gratitude', label: 'Practice Gratitude', emoji: '💝', color: 'from-pink-500 to-rose-600', image: '/daily-session/blocks/gratitude.png' },
+  { id: 'love', label: 'Learn About Love', emoji: '❤️', color: 'from-red-500 to-pink-600', image: '/daily-session/blocks/love.png' },
+  { id: 'obedience', label: 'Understand Obedience', emoji: '👂', color: 'from-blue-500 to-cyan-600', image: '/daily-session/blocks/obedience.png' },
+  { id: 'self-control', label: 'Develop Self-Control', emoji: '🎯', color: 'from-green-500 to-emerald-600', image: '/daily-session/blocks/selfcontrol.png' },
+  { id: 'theology', label: 'Explore Theology', emoji: '✝️', color: 'from-amber-500 to-orange-600', image: '/daily-session/blocks/theology.png' },
+  { id: 'wisdom', label: 'Gain Wisdom', emoji: '🦉', color: 'from-indigo-500 to-purple-600', image: '/daily-session/blocks/wisdom.png' },
 ];
 
 // Wing animation CSS

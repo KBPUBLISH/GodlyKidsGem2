@@ -50,7 +50,8 @@ const DailyLessonWidget: React.FC<DailyLessonWidgetProps> = ({ onStartLesson }) 
       onStartLesson(selectedDuration);
     }
     
-    navigate('/daily-session');
+    // Navigate with freshStart flag to always show goal selection
+    navigate('/daily-session', { state: { freshStart: true } });
   };
 
   const durations = [

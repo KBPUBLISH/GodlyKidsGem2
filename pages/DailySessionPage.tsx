@@ -144,6 +144,15 @@ const DailySessionPage: React.FC = () => {
     const loadSession = async () => {
       setIsLoading(true);
       
+      // Check if coming from widget with freshStart flag
+      const state = location.state as any;
+      const isFreshStart = state?.freshStart === true;
+      
+      // Clear the navigation state so refresh doesn't keep triggering fresh start
+      if (isFreshStart) {
+        navigate(location.pathname, { replace: true, state: {} });
+      }
+      
       // Check if user has selected subjects
       const savedSubjects = getSavedPreferences();
       if (savedSubjects.length === 0) {
@@ -162,17 +171,15 @@ const DailySessionPage: React.FC = () => {
       );
       
       // Show goal selection if:
+      // - Fresh start from widget (always show goal selection), OR
       // - No session exists, OR
       // - Session is completed, OR  
       // - Session has no real progress (all steps still pending)
-      if (!currentSession || currentSession.completed || !hasProgress) {
+      if (isFreshStart || !currentSession || currentSession.completed || !hasProgress) {
         // Clear any previous session data to start fresh
         sessionStorage.removeItem('godlykids_session_goal');
         sessionStorage.removeItem('godlykids_session_goal_date');
-        if (currentSession && !currentSession.completed) {
-          // Clear the incomplete session with no progress
-          localStorage.removeItem('godlykids_daily_session');
-        }
+        localStorage.removeItem('godlykids_daily_session');
         
         // Show goal selection for new session
         setShowGoalsSelection(true);
@@ -451,8 +458,14 @@ const DailySessionPage: React.FC = () => {
       duration: sessionDuration,
     });
     
-    // Find recommended book based on selected subjects (async - will set isLoadingBook to false when done)
-    await findRecommendedBook();
+    // Minimum loading time for UX (shows "Creating your lesson" for at least 2 seconds)
+    const minLoadingTime = new Promise(resolve => setTimeout(resolve, 2000));
+    
+    // Find recommended book based on selected subjects
+    const bookPromise = findRecommendedBook();
+    
+    // Wait for both the book to load AND the minimum time to pass
+    await Promise.all([bookPromise, minLoadingTime]);
   };
 
   // Handle starting current step

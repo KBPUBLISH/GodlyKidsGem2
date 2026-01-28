@@ -893,7 +893,7 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const isDailySession = location.pathname === '/daily-session';
 
   // Standalone pages that don't need the app chrome (background, navigation, etc.)
-  const isStandalonePage = isParentQuiz || isSharePage || isReadyToJumpIn;
+  const isStandalonePage = isParentQuiz || isSharePage || isReadyToJumpIn || isDailySession;
 
   // For standalone pages, render just the children without app styling
   if (isStandalonePage) {

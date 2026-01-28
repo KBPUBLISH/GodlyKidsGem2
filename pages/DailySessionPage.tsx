@@ -259,7 +259,7 @@ const DailySessionPage: React.FC = () => {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-gradient-to-b from-[#1a1a2e] to-[#16213e] flex items-center justify-center">
+      <div className="fixed inset-0 bg-gradient-to-b from-[#1a1a2e] to-[#16213e] flex items-center justify-center z-50">
         <div className="text-center">
           <div className="w-16 h-16 border-4 border-[#FFD700]/30 border-t-[#FFD700] rounded-full animate-spin mx-auto mb-4" />
           <p className="text-white/70">Preparing your session...</p>
@@ -275,9 +275,9 @@ const DailySessionPage: React.FC = () => {
   const currentStep = session.steps[session.currentStepIndex];
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-[#1a1a2e] via-[#16213e] to-[#0f3460] flex flex-col">
+    <div className="fixed inset-0 bg-gradient-to-b from-[#1a1a2e] via-[#16213e] to-[#0f3460] flex flex-col z-50 overflow-auto">
       {/* Safe area top */}
-      <div style={{ height: 'var(--safe-area-top, 0px)' }} />
+      <div className="flex-shrink-0" style={{ height: 'var(--safe-area-top, 0px)' }} />
       
       {/* Header */}
       <div className="flex items-center justify-between px-4 py-4">

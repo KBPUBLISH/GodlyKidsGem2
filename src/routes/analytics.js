@@ -715,6 +715,71 @@ router.get('/onboarding', async (req, res) => {
             }
         });
         
+        // ============================================
+        // FIRST LESSON (Daily Session) FUNNEL
+        // ============================================
+        const firstLessonStarted = eventCounts['godly_kids_time_started'] || 0;
+        const goalSelected = eventCounts['learning_goal_selected'] || 0;
+        const bookCompleted = eventCounts['godly_kids_time_book_completed'] || 0;
+        const discussionCompleted = eventCounts['godly_kids_time_discussion_completed'] || 0;
+        const scriptureCompleted = eventCounts['godly_kids_time_scripture_completed'] || 0;
+        const prayerCompleted = eventCounts['godly_kids_time_prayer_completed'] || 0;
+        const lessonCompleted = eventCounts['godly_kids_time_completed'] || 0;
+        const lessonPaused = eventCounts['godly_kids_time_paused'] || 0;
+        
+        // Build first lesson funnel
+        const firstLessonFunnel = [
+            { step: 'Started Lesson', stepKey: 'started', count: firstLessonStarted, rate: 100 },
+            { step: 'Selected Goal', stepKey: 'goal_selected', count: goalSelected, rate: firstLessonStarted > 0 ? Math.round((goalSelected / firstLessonStarted) * 100) : 0 },
+            { step: 'Completed Reading', stepKey: 'book_completed', count: bookCompleted, rate: firstLessonStarted > 0 ? Math.round((bookCompleted / firstLessonStarted) * 100) : 0 },
+            { step: 'Completed Discussion', stepKey: 'discussion_completed', count: discussionCompleted, rate: firstLessonStarted > 0 ? Math.round((discussionCompleted / firstLessonStarted) * 100) : 0 },
+            { step: 'Completed Scripture', stepKey: 'scripture_completed', count: scriptureCompleted, rate: firstLessonStarted > 0 ? Math.round((scriptureCompleted / firstLessonStarted) * 100) : 0 },
+            { step: 'Completed Prayer', stepKey: 'prayer_completed', count: prayerCompleted, rate: firstLessonStarted > 0 ? Math.round((prayerCompleted / firstLessonStarted) * 100) : 0 },
+            { step: 'Lesson Complete', stepKey: 'completed', count: lessonCompleted, rate: firstLessonStarted > 0 ? Math.round((lessonCompleted / firstLessonStarted) * 100) : 0 },
+        ];
+        
+        // Calculate first lesson drop-offs
+        const firstLessonDropoffs = [];
+        for (let i = 1; i < firstLessonFunnel.length; i++) {
+            const prevStep = firstLessonFunnel[i - 1];
+            const currStep = firstLessonFunnel[i];
+            const dropped = prevStep.count - currStep.count;
+            if (dropped > 0 && prevStep.count > 0) {
+                firstLessonDropoffs.push({
+                    from: prevStep.step,
+                    to: currStep.step,
+                    dropped,
+                    dropRate: Math.round((dropped / prevStep.count) * 100),
+                });
+            }
+        }
+        firstLessonDropoffs.sort((a, b) => b.dropRate - a.dropRate);
+        
+        // Daily first lesson trends
+        const firstLessonDailyTrends = [];
+        for (let i = 13; i >= 0; i--) {
+            const date = new Date();
+            date.setDate(date.getDate() - i);
+            const dayStr = date.toISOString().split('T')[0];
+            const dayData = eventsByDay[dayStr] || {};
+            
+            firstLessonDailyTrends.push({
+                date: dayStr,
+                started: dayData['godly_kids_time_started'] || 0,
+                completed: dayData['godly_kids_time_completed'] || 0,
+                paused: dayData['godly_kids_time_paused'] || 0,
+            });
+        }
+        
+        // First lesson summary
+        const firstLessonSummary = {
+            totalStarted: firstLessonStarted,
+            totalCompleted: lessonCompleted,
+            totalPaused: lessonPaused,
+            completionRate: firstLessonStarted > 0 ? Math.round((lessonCompleted / firstLessonStarted) * 100) : 0,
+            pauseRate: firstLessonStarted > 0 ? Math.round((lessonPaused / firstLessonStarted) * 100) : 0,
+        };
+        
         res.json({
             success: true,
             period: { days, startDate: startDate.toISOString() },
@@ -730,6 +795,13 @@ router.get('/onboarding', async (req, res) => {
             eventCounts,
             dailyTrends,
             planPreference: planCounts,
+            // First Lesson (Daily Session) Analytics
+            firstLesson: {
+                summary: firstLessonSummary,
+                funnel: firstLessonFunnel,
+                dropoffs: firstLessonDropoffs.slice(0, 5),
+                dailyTrends: firstLessonDailyTrends,
+            },
         });
     } catch (error) {
         console.error('Onboarding analytics error:', error);

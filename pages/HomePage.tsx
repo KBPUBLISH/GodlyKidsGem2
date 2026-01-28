@@ -1063,9 +1063,18 @@ const HomePage: React.FC = () => {
         {/* 🎬 Video Devotional Activities */}
         {(() => {
           // Filter lessons marked as "Daily Verse" type (case-insensitive)
-          const videoDevotionals = lessons.filter((l: any) => 
+          const videoDevotionalsRaw = lessons.filter((l: any) => 
             l.type === 'Daily Verse' || l.type?.toLowerCase() === 'daily verse'
           );
+          
+          // Sort: unwatched videos first, completed videos at the back
+          const videoDevotionals = [...videoDevotionalsRaw].sort((a: any, b: any) => {
+            const aCompleted = isCompleted(a._id);
+            const bCompleted = isCompleted(b._id);
+            if (aCompleted && !bCompleted) return 1;  // a goes to back
+            if (!aCompleted && bCompleted) return -1; // b goes to back
+            return 0; // keep original order
+          });
           
           // Debug: log all lesson types to help identify the correct type name
           console.log('📺 All lesson types:', [...new Set(lessons.map((l: any) => l.type))]);

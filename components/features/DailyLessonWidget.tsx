@@ -121,20 +121,20 @@ const DailyLessonWidget: React.FC<DailyLessonWidgetProps> = ({ onStartLesson }) 
   if (isCompleted) {
     return (
       <div className="mx-4 mb-6">
-        <div className="rounded-2xl p-8 shadow-lg relative overflow-hidden" style={scrollBackground}>
+        <div className="rounded-2xl py-12 px-8 shadow-lg relative overflow-hidden min-h-[420px] flex flex-col justify-center" style={scrollBackground}>
           {/* Completed badge */}
-          <div className="absolute top-4 right-4 bg-green-500 rounded-full p-1.5">
-            <Check className="w-5 h-5 text-white" />
+          <div className="absolute top-6 right-6 bg-green-500 rounded-full p-2">
+            <Check className="w-6 h-6 text-white" />
           </div>
           
-          <div className="text-center py-2">
-            <h2 className="text-[#5D4037] font-display font-bold text-2xl mb-2">
+          <div className="text-center py-4">
+            <h2 className="text-[#5D4037] font-display font-bold text-3xl mb-4">
               Today's Lesson Complete!
             </h2>
             
             <button
               onClick={() => navigate('/daily-session')}
-              className="text-[#8B4513] text-base underline"
+              className="text-[#8B4513] text-lg underline font-medium"
             >
               Review today's lesson →
             </button>
@@ -149,32 +149,32 @@ const DailyLessonWidget: React.FC<DailyLessonWidgetProps> = ({ onStartLesson }) 
 
   return (
     <div className="mx-4 mb-6">
-      <div className="rounded-2xl p-8 shadow-lg relative overflow-hidden" style={scrollBackground}>
+      <div className="rounded-2xl py-10 px-8 shadow-lg relative overflow-hidden min-h-[420px]" style={scrollBackground}>
         
         {/* Header */}
-        <div className="text-center mb-6">
+        <div className="text-center mb-8 pt-2">
           <h2 className="text-[#5D4037] font-display font-bold text-2xl">
             Today's Godly Kids Lesson
           </h2>
         </div>
 
         {/* Duration Selector */}
-        <div className="mb-6">
-          <div className="flex items-center justify-center gap-2 mb-3">
-            <Clock className="w-5 h-5 text-[#8B4513]/60" />
-            <span className="text-[#8B4513]/60 text-sm font-medium">Select Duration</span>
+        <div className="mb-8">
+          <div className="flex items-center justify-center gap-2 mb-4">
+            <Clock className="w-5 h-5 text-[#8B4513]/70" />
+            <span className="text-[#8B4513]/70 text-base font-medium">Select Duration</span>
           </div>
           
-          <div className="flex justify-center gap-3">
+          <div className="flex justify-center gap-4">
             {durations.map((d) => (
               <button
                 key={d.value}
                 onClick={() => setSelectedDuration(d.value)}
                 className={`
-                  px-6 py-3 rounded-xl font-display font-bold text-base transition-all
+                  px-7 py-3 rounded-xl font-display font-bold text-base transition-all
                   ${selectedDuration === d.value
                     ? 'bg-[#6B8E6B] text-white shadow-md scale-105'
-                    : 'bg-[#e8e0d0] text-[#5D4037] hover:bg-[#d8d0c0]'
+                    : 'bg-[#d4c9b0] text-[#5D4037] hover:bg-[#c4b9a0]'
                   }
                 `}
               >
@@ -187,14 +187,14 @@ const DailyLessonWidget: React.FC<DailyLessonWidgetProps> = ({ onStartLesson }) 
         {/* Start Button */}
         <button
           onClick={handleStartLesson}
-          className="w-full bg-[#6B8E6B] hover:bg-[#5A7D5A] text-white font-display font-bold text-xl py-5 rounded-xl shadow-md transition-all active:scale-[0.98] flex items-center justify-center gap-2"
+          className="w-full bg-[#6B8E6B] hover:bg-[#5A7D5A] text-white font-display font-bold text-xl py-5 rounded-xl shadow-lg transition-all active:scale-[0.98] flex items-center justify-center gap-2"
         >
           Start Lesson
           <ChevronRight className="w-6 h-6" />
         </button>
 
         {/* Lesson Flow Indicator */}
-        <div className="mt-4 flex items-center justify-center gap-3 text-[#8B4513]/60 text-base">
+        <div className="mt-5 flex items-center justify-center gap-3 text-[#8B4513]/70 text-base">
           <span className="font-medium">Story</span>
           <span>→</span>
           <span className="font-medium">Discuss</span>

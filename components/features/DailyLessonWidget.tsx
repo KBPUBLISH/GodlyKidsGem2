@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import React, { useState, useEffect, useCallback } from 'react';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { ChevronRight, Check, Clock, Flame } from 'lucide-react';
 import { isSessionCompletedToday, getSessionStreak, getSessionHistory, hasSessionToday, getCurrentSession } from '../../services/dailySessionService';
 
@@ -31,6 +31,7 @@ const isDateCompleted = (date: Date, history: any[]): boolean => {
 
 const DailyLessonWidget: React.FC<DailyLessonWidgetProps> = ({ onStartLesson }) => {
   const navigate = useNavigate();
+  const location = useLocation();
   const [selectedDuration, setSelectedDuration] = useState(10); // Default 10 minutes
   const [isCompleted, setIsCompleted] = useState(false);
   const [hasInProgress, setHasInProgress] = useState(false);
@@ -39,7 +40,8 @@ const DailyLessonWidget: React.FC<DailyLessonWidgetProps> = ({ onStartLesson }) 
   const [streak, setStreak] = useState(0);
   const [sessionHistory, setSessionHistory] = useState<any[]>([]);
 
-  useEffect(() => {
+  // Refresh session data whenever component mounts or route changes
+  const refreshSessionData = useCallback(() => {
     const completed = isSessionCompletedToday();
     setIsCompleted(completed);
     setStreak(getSessionStreak());
@@ -53,8 +55,15 @@ const DailyLessonWidget: React.FC<DailyLessonWidgetProps> = ({ onStartLesson }) 
         setCurrentStep(session.currentStepIndex);
         setTotalSteps(session.steps.length);
       }
+    } else {
+      setHasInProgress(false);
     }
   }, []);
+
+  // Run on mount and whenever location changes (user navigates back)
+  useEffect(() => {
+    refreshSessionData();
+  }, [location.pathname, refreshSessionData]);
 
   const handleStartLesson = () => {
     // Save selected duration for the session
@@ -217,7 +226,7 @@ const DailyLessonWidget: React.FC<DailyLessonWidgetProps> = ({ onStartLesson }) 
           onClick={handleStartLesson}
           className="w-full bg-[#1B8BB8] hover:bg-[#157A9E] text-white font-display font-bold text-lg py-4 rounded-full shadow-lg transition-all active:scale-[0.98] relative z-10"
         >
-          {hasInProgress ? 'Continue Adventure' : 'Start Adventure'}
+          {hasInProgress ? 'Continue Adventure' : 'Start Lesson Adventure'}
         </button>
 
         {/* Lesson Flow Indicator */}

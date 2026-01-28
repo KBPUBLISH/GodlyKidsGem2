@@ -3867,7 +3867,9 @@ const BookReaderPage: React.FC = () => {
                 <h2 className="text-2xl font-bold mb-4">No pages found</h2>
                 <button
                     onClick={() => {
-                        if (bookId) {
+                        if (fromDailySession) {
+                            navigate('/daily-session');
+                        } else if (bookId) {
                             navigate(`/book/${bookId}`);
                         } else {
                             navigate(-1);
@@ -4004,6 +4006,9 @@ const BookReaderPage: React.FC = () => {
                         // For web view pages, go to previous page in the book
                         if (currentPage?.isWebViewPage && currentPageIndex > 0) {
                             handlePrev(e as unknown as React.MouseEvent);
+                        } else if (fromDailySession) {
+                            // Return to Daily Session if accessed from lesson (without completing)
+                            navigate('/daily-session');
                         } else {
                             // Navigate back to book detail page explicitly
                             if (bookId) {

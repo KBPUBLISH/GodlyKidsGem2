@@ -486,15 +486,22 @@ const DailySessionPage: React.FC = () => {
 
   // Handle starting current step
   const handleStartStep = async () => {
-    console.log('📚 handleStartStep called, session:', !!session);
+    // Always get fresh session from localStorage to avoid stale state issues
+    const currentSession = getCurrentSession();
+    console.log('📚 handleStartStep called, session:', !!currentSession);
     
-    if (!session) {
+    if (!currentSession) {
       console.log('📚 No session, returning');
       return;
     }
     
-    const step = session.steps[session.currentStepIndex];
-    console.log('📚 Current step:', step?.type, 'recommendedBook:', !!recommendedBook, 'books count:', books?.length);
+    // Update React state if it's out of sync
+    if (!session || session.currentStepIndex !== currentSession.currentStepIndex) {
+      setSession(currentSession);
+    }
+    
+    const step = currentSession.steps[currentSession.currentStepIndex];
+    console.log('📚 Current step:', step?.type, 'index:', currentSession.currentStepIndex, 'recommendedBook:', !!recommendedBook, 'books count:', books?.length);
     startCurrentStep();
     
     switch (step.type) {
@@ -508,7 +515,7 @@ const DailySessionPage: React.FC = () => {
         const recBookId = recommendedBook?.id || recommendedBook?._id;
         if (recommendedBook && recBookId) {
           console.log('📚 Using recommended book:', recommendedBook.title, 'ID:', recBookId);
-          setStepContent(session.currentStepIndex, recBookId, recommendedBook.title);
+          setStepContent(currentSession.currentStepIndex, recBookId, recommendedBook.title);
           navigate(`/read/${recBookId}`, { 
             state: { fromDailySession: true } 
           });
@@ -524,7 +531,7 @@ const DailySessionPage: React.FC = () => {
             const fbId = fallbackBook.id || fallbackBook._id;
             console.log('📚 Selected fallback book:', fallbackBook.title, 'ID:', fbId);
             setRecommendedBook(fallbackBook);
-            setStepContent(session.currentStepIndex, fbId, fallbackBook.title);
+            setStepContent(currentSession.currentStepIndex, fbId, fallbackBook.title);
             navigate(`/read/${fbId}`, { 
               state: { fromDailySession: true } 
             });
@@ -558,7 +565,7 @@ const DailySessionPage: React.FC = () => {
               const rbId = randomBook.id || randomBook._id;
               console.log('📚 Selected random book:', randomBook.title, 'ID:', rbId);
               setRecommendedBook(randomBook);
-              setStepContent(session.currentStepIndex, rbId, randomBook.title);
+              setStepContent(currentSession.currentStepIndex, rbId, randomBook.title);
               setIsLoadingBook(false);
               navigate(`/read/${rbId}`, { 
                 state: { fromDailySession: true } 

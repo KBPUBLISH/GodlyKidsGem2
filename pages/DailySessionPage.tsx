@@ -455,15 +455,21 @@ const DailySessionPage: React.FC = () => {
 
   // Handle starting current step
   const handleStartStep = async () => {
-    if (!session) return;
+    console.log('📚 handleStartStep called, session:', !!session);
+    if (!session) {
+      console.log('📚 No session, returning');
+      return;
+    }
     
     const step = session.steps[session.currentStepIndex];
+    console.log('📚 Current step:', step?.type, 'recommendedBook:', !!recommendedBook, 'books count:', books?.length);
     startCurrentStep();
     
     switch (step.type) {
       case 'book':
         // Try to use recommended book first
         if (recommendedBook && recommendedBook._id) {
+          console.log('📚 Using recommended book:', recommendedBook.title);
           setStepContent(session.currentStepIndex, recommendedBook._id, recommendedBook.title);
           navigate(`/read/${recommendedBook._id}`, { 
             state: { fromDailySession: true } 
@@ -473,9 +479,11 @@ const DailySessionPage: React.FC = () => {
         
         // Try to find a book from context first
         if (books && books.length > 0) {
+          console.log('📚 Using book from context');
           const validBooks = books.filter((b: any) => b && b._id);
           if (validBooks.length > 0) {
             const fallbackBook = validBooks[Math.floor(Math.random() * validBooks.length)];
+            console.log('📚 Selected fallback book:', fallbackBook.title);
             setRecommendedBook(fallbackBook);
             setStepContent(session.currentStepIndex, fallbackBook._id, fallbackBook.title);
             navigate(`/read/${fallbackBook._id}`, { 
@@ -493,14 +501,20 @@ const DailySessionPage: React.FC = () => {
             ? 'http://localhost:3001/api/'
             : 'https://backendgk2-0.onrender.com/api/';
           
+          console.log('📚 Fetching from:', `${apiBaseUrl}books`);
           const response = await fetch(`${apiBaseUrl}books`);
+          console.log('📚 Response status:', response.status);
+          
           if (response.ok) {
             const fetchedBooks = await response.json();
             console.log('📚 Fetched', fetchedBooks.length, 'books from API');
             
             const validBooks = fetchedBooks.filter((b: any) => b && b._id);
+            console.log('📚 Valid books:', validBooks.length);
+            
             if (validBooks.length > 0) {
               const randomBook = validBooks[Math.floor(Math.random() * validBooks.length)];
+              console.log('📚 Selected random book:', randomBook.title, randomBook._id);
               setRecommendedBook(randomBook);
               setStepContent(session.currentStepIndex, randomBook._id, randomBook.title);
               setIsLoadingBook(false);
@@ -509,6 +523,8 @@ const DailySessionPage: React.FC = () => {
               });
               return;
             }
+          } else {
+            console.error('📚 API response not ok:', response.status, response.statusText);
           }
         } catch (error) {
           console.error('📚 Failed to fetch books:', error);
@@ -516,7 +532,7 @@ const DailySessionPage: React.FC = () => {
         
         setIsLoadingBook(false);
         // No books available - show error
-        console.error('No books available. Books loaded:', books?.length, 'booksLoading:', booksLoading);
+        console.error('📚 No books available. Books loaded:', books?.length, 'booksLoading:', booksLoading);
         alert('Unable to load books. Please check your connection and try again.');
         break;
       case 'discussion':

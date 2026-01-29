@@ -3,28 +3,51 @@ import { useNavigate } from 'react-router-dom';
 import { activityTrackingService } from '../services/activityTrackingService';
 import { hasCompletedAnySession } from '../services/dailySessionService';
 import CreateAccountModal from '../components/modals/CreateAccountModal';
-import { useBooks } from '../context/BooksContext';
+import { ApiService } from '../services/apiService';
 
 const STORAGE_KEY = 'godly_kids_data_v6';
 
-// Auto-scrolling carousel component
-const ContentCarousel: React.FC<{ bookCovers: string[] }> = ({ bookCovers }) => {
+// Auto-scrolling carousel component that fetches its own data
+const ContentCarousel: React.FC = () => {
   const scrollRef = useRef<HTMLDivElement>(null);
+  const [covers, setCovers] = useState<string[]>([]);
   
-  // Default covers if no books loaded
-  const defaultCovers = [
-    '/assets/images/books/david-goliath.jpg',
-    '/assets/images/books/noahs-ark.jpg',
-    '/assets/images/books/daniel-lions.jpg',
-    '/assets/images/books/jonah-whale.jpg',
-    '/assets/images/books/moses-red-sea.jpg',
-    '/assets/images/books/joseph-dreams.jpg',
-  ];
+  // Fetch book covers on mount
+  useEffect(() => {
+    const fetchCovers = async () => {
+      try {
+        const books = await ApiService.getBooks();
+        const bookCovers = books
+          .filter(b => b.coverUrl && b.coverUrl.length > 10)
+          .slice(0, 12)
+          .map(b => b.coverUrl);
+        
+        if (bookCovers.length > 0) {
+          setCovers(bookCovers);
+        }
+      } catch (error) {
+        console.log('Could not load book covers for carousel');
+      }
+    };
+    
+    fetchCovers();
+  }, []);
   
-  const covers = bookCovers.length > 0 ? bookCovers : defaultCovers;
+  // Don't render until we have covers
+  if (covers.length === 0) {
+    return null;
+  }
+  
   // Triple the covers for seamless infinite scroll
   const tripleCovers = [...covers, ...covers, ...covers];
   
+  return (
+    <CarouselScroller covers={tripleCovers} scrollRef={scrollRef} />
+  );
+};
+
+// Separated scroll logic for cleaner code
+const CarouselScroller: React.FC<{ covers: string[]; scrollRef: React.RefObject<HTMLDivElement> }> = ({ covers, scrollRef }) => {
   useEffect(() => {
     const scrollContainer = scrollRef.current;
     if (!scrollContainer) return;
@@ -49,7 +72,7 @@ const ContentCarousel: React.FC<{ bookCovers: string[] }> = ({ bookCovers }) => 
     animationId = requestAnimationFrame(animate);
     
     return () => cancelAnimationFrame(animationId);
-  }, [covers.length]);
+  }, [covers.length, scrollRef]);
   
   return (
     <div className="w-full overflow-hidden">
@@ -58,19 +81,19 @@ const ContentCarousel: React.FC<{ bookCovers: string[] }> = ({ bookCovers }) => 
         className="flex gap-2 overflow-x-hidden"
         style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
       >
-        {tripleCovers.map((cover, i) => (
+        {covers.map((cover, i) => (
           <div 
             key={i}
-            className="flex-shrink-0 w-16 h-20 rounded-lg overflow-hidden shadow-md bg-gradient-to-br from-[#7C3AED]/30 to-[#3D8B8B]/30"
+            className="flex-shrink-0 w-16 h-20 rounded-lg overflow-hidden shadow-md bg-white/80"
           >
             <img 
               src={cover} 
               alt=""
               className="w-full h-full object-cover"
-              loading="lazy"
+              loading="eager"
               onError={(e) => {
-                // Hide broken image, gradient background shows through
-                (e.target as HTMLImageElement).style.display = 'none';
+                // Hide broken image container entirely
+                (e.target as HTMLImageElement).parentElement!.style.display = 'none';
               }}
             />
           </div>
@@ -92,13 +115,6 @@ const LandingPage: React.FC = () => {
   const [isChecking, setIsChecking] = useState(true);
   const [imageLoaded, setImageLoaded] = useState(false);
   const [showAccountModal, setShowAccountModal] = useState(false);
-  const { books } = useBooks();
-  
-  // Get book covers for carousel
-  const bookCovers = books
-    .filter(b => b.coverImage)
-    .slice(0, 12)
-    .map(b => b.coverImage);
 
   // Check if user has already completed onboarding
   useEffect(() => {
@@ -214,7 +230,7 @@ const LandingPage: React.FC = () => {
         
         {/* Content Carousel - Top of Image */}
         <div className="absolute top-3 left-0 right-0 z-10 px-2">
-          <ContentCarousel bookCovers={bookCovers} />
+          <ContentCarousel />
         </div>
         
         {/* Rating Badge - Below carousel */}

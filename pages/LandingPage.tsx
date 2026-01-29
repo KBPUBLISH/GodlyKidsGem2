@@ -187,6 +187,8 @@ const LandingPage: React.FC = () => {
       return;
     }
     
+    // Skip welcome page - go directly to explore
+    localStorage.setItem('godlykids_welcome_seen', 'true');
     // Go to the explore/home page
     navigate('/home');
   };

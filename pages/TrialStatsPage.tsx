@@ -15,7 +15,7 @@ import {
 } from 'lucide-react';
 import { useSubscription } from '../context/SubscriptionContext';
 import { activityTrackingService, ActivityStats } from '../services/activityTrackingService';
-import ParentGateModal from '../components/modals/ParentGateModal';
+import ParentGateModal from '../components/features/ParentGateModal';
 
 const TrialStatsPage: React.FC = () => {
   const navigate = useNavigate();

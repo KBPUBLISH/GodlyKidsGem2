@@ -277,4 +277,259 @@ router.post('/complete-onboarding', async (req, res) => {
     }
 });
 
+/**
+ * POST /api/app-user/start-reverse-trial
+ * Start a 7-day reverse trial when user closes paywall
+ */
+router.post('/start-reverse-trial', async (req, res) => {
+    try {
+        const { deviceId, email } = req.body;
+        
+        if (!deviceId && !email) {
+            return res.status(400).json({ 
+                success: false, 
+                error: 'Either deviceId or email is required' 
+            });
+        }
+        
+        // Find user
+        let query = {};
+        if (email) {
+            query = { $or: [{ email: email.toLowerCase().trim() }, { deviceId }] };
+        } else {
+            query = { deviceId };
+        }
+        
+        let user = await AppUser.findOne(query);
+        
+        if (!user) {
+            // Create user if doesn't exist
+            user = new AppUser({
+                deviceId,
+                email: email ? email.toLowerCase().trim() : undefined,
+            });
+        }
+        
+        // Check eligibility: not already on reverse trial, not premium, never had reverse trial
+        if (user.reverseTrialStartDate) {
+            return res.json({ 
+                success: false, 
+                error: 'User has already had a reverse trial',
+                alreadyTrialed: true
+            });
+        }
+        
+        if (user.subscriptionStatus === 'active') {
+            return res.json({ 
+                success: false, 
+                error: 'User is already premium',
+                alreadyPremium: true
+            });
+        }
+        
+        // Start the reverse trial
+        user.reverseTrialStartDate = new Date();
+        user.reverseTrialActive = true;
+        user.reverseTrialConverted = false;
+        user.reverseTrialNudgeSent = false;
+        user.subscriptionStatus = 'reverse_trial';
+        user.lastActiveAt = new Date();
+        
+        await user.save();
+        
+        console.log('🎁 Reverse trial started for user:', user._id);
+        
+        res.json({ 
+            success: true,
+            userId: user._id,
+            trialStartDate: user.reverseTrialStartDate,
+            trialEndDate: new Date(user.reverseTrialStartDate.getTime() + 7 * 24 * 60 * 60 * 1000),
+            message: 'Reverse trial started! Enjoy 7 days of premium.'
+        });
+        
+    } catch (error) {
+        console.error('Error starting reverse trial:', error);
+        res.status(500).json({ 
+            success: false, 
+            error: 'Failed to start reverse trial' 
+        });
+    }
+});
+
+/**
+ * GET /api/app-user/reverse-trial-status/:identifier
+ * Check reverse trial status
+ */
+router.get('/reverse-trial-status/:identifier', async (req, res) => {
+    try {
+        const { identifier } = req.params;
+        
+        // Try to find by email first, then deviceId
+        const user = await AppUser.findOne({ 
+            $or: [
+                { email: identifier.toLowerCase() },
+                { deviceId: identifier }
+            ]
+        });
+        
+        if (!user) {
+            return res.json({ 
+                success: true,
+                hasReverseTrial: false,
+                isActive: false,
+                eligible: true // No user = eligible for trial
+            });
+        }
+        
+        // Check if user has/had a reverse trial
+        if (!user.reverseTrialStartDate) {
+            return res.json({ 
+                success: true,
+                hasReverseTrial: false,
+                isActive: false,
+                eligible: user.subscriptionStatus !== 'active'
+            });
+        }
+        
+        // Calculate trial status
+        const now = new Date();
+        const trialEndDate = new Date(user.reverseTrialStartDate.getTime() + 7 * 24 * 60 * 60 * 1000);
+        const daysRemaining = Math.max(0, Math.ceil((trialEndDate - now) / (24 * 60 * 60 * 1000)));
+        const isActive = user.reverseTrialActive && now < trialEndDate;
+        
+        // If trial has expired but still marked active, update it
+        if (user.reverseTrialActive && now >= trialEndDate) {
+            user.reverseTrialActive = false;
+            if (user.subscriptionStatus === 'reverse_trial') {
+                user.subscriptionStatus = 'expired';
+            }
+            await user.save();
+        }
+        
+        res.json({ 
+            success: true,
+            hasReverseTrial: true,
+            isActive,
+            trialStartDate: user.reverseTrialStartDate,
+            trialEndDate,
+            daysRemaining,
+            converted: user.reverseTrialConverted,
+            eligible: false // Already had trial
+        });
+        
+    } catch (error) {
+        console.error('Error checking reverse trial status:', error);
+        res.status(500).json({ 
+            success: false, 
+            error: 'Failed to check reverse trial status' 
+        });
+    }
+});
+
+/**
+ * POST /api/app-user/reverse-trial-converted
+ * Mark reverse trial as converted (user subscribed)
+ */
+router.post('/reverse-trial-converted', async (req, res) => {
+    try {
+        const { deviceId, email } = req.body;
+        
+        if (!deviceId && !email) {
+            return res.status(400).json({ 
+                success: false, 
+                error: 'Either deviceId or email is required' 
+            });
+        }
+        
+        let query = {};
+        if (email) {
+            query = { $or: [{ email: email.toLowerCase().trim() }, { deviceId }] };
+        } else {
+            query = { deviceId };
+        }
+        
+        const user = await AppUser.findOneAndUpdate(
+            query,
+            {
+                $set: {
+                    reverseTrialConverted: true,
+                    reverseTrialActive: false,
+                    lastActiveAt: new Date(),
+                }
+            },
+            { new: true }
+        );
+        
+        if (!user) {
+            return res.status(404).json({ 
+                success: false, 
+                error: 'User not found' 
+            });
+        }
+        
+        console.log('🎉 Reverse trial converted for user:', user._id);
+        
+        res.json({ 
+            success: true,
+            userId: user._id,
+            message: 'Reverse trial marked as converted'
+        });
+        
+    } catch (error) {
+        console.error('Error marking reverse trial converted:', error);
+        res.status(500).json({ 
+            success: false, 
+            error: 'Failed to mark reverse trial converted' 
+        });
+    }
+});
+
+/**
+ * GET /api/app-user/stats/:identifier
+ * Get user stats for reverse trial expiry modal
+ */
+router.get('/stats/:identifier', async (req, res) => {
+    try {
+        const { identifier } = req.params;
+        
+        const user = await AppUser.findOne({ 
+            $or: [
+                { email: identifier.toLowerCase() },
+                { deviceId: identifier }
+            ]
+        });
+        
+        if (!user) {
+            return res.json({ 
+                success: true,
+                stats: {
+                    booksRead: 0,
+                    quizzesCompleted: 0,
+                    coinsEarned: 0,
+                    lessonsCompleted: 0,
+                }
+            });
+        }
+        
+        res.json({ 
+            success: true,
+            stats: {
+                booksRead: user.stats?.booksRead || 0,
+                quizzesCompleted: user.stats?.quizzesCompleted || 0,
+                coinsEarned: user.coins || 0,
+                lessonsCompleted: user.stats?.lessonsCompleted || 0,
+                totalSessions: user.stats?.totalSessions || 0,
+            },
+            kidProfiles: user.kidProfiles || [],
+        });
+        
+    } catch (error) {
+        console.error('Error getting user stats:', error);
+        res.status(500).json({ 
+            success: false, 
+            error: 'Failed to get user stats' 
+        });
+    }
+});
+
 module.exports = router;

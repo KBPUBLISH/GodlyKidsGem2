@@ -43,7 +43,7 @@ const appUserSchema = new mongoose.Schema({
     // Subscription status
     subscriptionStatus: {
         type: String,
-        enum: ['free', 'trial', 'active', 'cancelled', 'expired'],
+        enum: ['free', 'trial', 'active', 'cancelled', 'expired', 'reverse_trial'],
         default: 'free',
         index: true,
     },
@@ -56,6 +56,23 @@ const appUserSchema = new mongoose.Schema({
     subscriptionPlan: {
         type: String,
         enum: ['monthly', 'annual', null],
+    },
+    
+    // Reverse Trial (7-day free premium when closing paywall)
+    reverseTrialStartDate: {
+        type: Date,
+    },
+    reverseTrialActive: {
+        type: Boolean,
+        default: false,
+    },
+    reverseTrialConverted: {
+        type: Boolean,
+        default: false,
+    },
+    reverseTrialNudgeSent: {
+        type: Boolean,
+        default: false,
     },
     
     // Onboarding tracking

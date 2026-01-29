@@ -127,11 +127,18 @@ const TrialStatsPage: React.FC = () => {
 
   return (
     <div 
-      className="min-h-screen bg-gradient-to-b from-[#7C3AED]/10 via-white to-amber-50/50"
+      className="min-h-screen relative"
       style={{ paddingTop: 'var(--safe-area-top, 0px)', paddingBottom: 'var(--safe-area-bottom, 0px)' }}
     >
+      {/* Sun & Sky Background */}
+      <div 
+        className="absolute inset-0 bg-cover bg-center bg-no-repeat"
+        style={{ backgroundImage: 'url(/assets/images/bg-sunrise.jpg)' }}
+      />
+      {/* Overlay for readability */}
+      <div className="absolute inset-0 bg-gradient-to-b from-white/60 via-white/80 to-white/95" />
       {/* Header */}
-      <div className="sticky top-0 z-10 bg-white/80 backdrop-blur-md border-b border-gray-100">
+      <div className="sticky top-0 z-10 bg-white/70 backdrop-blur-md border-b border-gray-100 relative">
         <div className="flex items-center px-4 py-3" style={{ paddingTop: 'calc(var(--safe-area-top, 0px) + 12px)' }}>
           <button 
             onClick={() => navigate(-1)}
@@ -143,7 +150,7 @@ const TrialStatsPage: React.FC = () => {
         </div>
       </div>
 
-      <div className="px-4 py-6 space-y-6">
+      <div className="px-4 py-6 space-y-6 relative z-[1]">
         {/* Trial Status Card */}
         <div className="bg-gradient-to-r from-amber-400 to-amber-500 rounded-2xl p-5 shadow-lg shadow-amber-500/20">
           <div className="flex items-center justify-between mb-3">

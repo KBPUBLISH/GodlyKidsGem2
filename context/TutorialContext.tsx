@@ -2,9 +2,10 @@ import React, { createContext, useContext, useState, useCallback, useEffect, use
 import { activityTrackingService } from '../services/activityTrackingService';
 
 // Tutorial step definitions
-// FLOW: Welcome book → Swipe pages → Quiz → Coins → Report Card → Shop → Explore → Books → Audio → Complete
+// FLOW: Lesson button → Welcome book → Swipe pages → Quiz → Coins → Report Card → Shop → Explore → Books → Audio → Complete
 export type TutorialStep = 
   | 'idle'
+  | 'lesson_button_highlight' // On explore page, highlight the Start Lesson button
   | 'welcome_book_tap'    // On welcome page, finger points to a book
   | 'book_controls_intro' // Quick overview of reader controls
   | 'book_swipe_intro'    // In book reader, show swipe gesture hint
@@ -39,6 +40,12 @@ export const TUTORIAL_STEP_CONFIG: Record<TutorialStep, {
   autoAdvanceDelay?: number;
 }> = {
   idle: { title: '', description: '' },
+  lesson_button_highlight: {
+    title: 'Start Your Daily Lesson!',
+    description: 'Tap here to begin your faith adventure with Scripture, stories, and more!',
+    targetElement: 'lesson-button',
+    requiresClick: true,
+  },
   welcome_book_tap: {
     title: 'Tap to Start!',
     description: 'Choose any story to begin your adventure!',
@@ -167,9 +174,10 @@ export const TUTORIAL_STEP_CONFIG: Record<TutorialStep, {
 };
 
 // Step order for progression
-// FLOW: Welcome book → Swipe 3 pages → Quiz → Coins → Report Card → Shop → Explore → Books → Audio → Review → Complete
+// FLOW: Lesson button → Welcome book → Swipe 3 pages → Quiz → Coins → Report Card → Shop → Explore → Books → Audio → Review → Complete
 const STEP_ORDER: TutorialStep[] = [
-  'welcome_book_tap',     // 1. On welcome page, tap a book
+  'lesson_button_highlight', // 1. On explore page, highlight lesson button
+  'welcome_book_tap',     // 2. On welcome page, tap a book
   'book_controls_intro',  // 2. Quick controls overview
   'book_swipe_intro',     // 3. In reader, show swipe hint
   'book_swipe_1',         // 4. First page turn
@@ -259,9 +267,9 @@ export const TutorialProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     // Reset complete state so tutorial can start fresh
     setIsComplete(false);
     localStorage.removeItem(TUTORIAL_STORAGE_KEY);
-    // Start at the first tutorial step
-    setCurrentStep('welcome_book_tap');
-    localStorage.setItem(TUTORIAL_STEP_KEY, 'welcome_book_tap');
+    // Start at the first tutorial step - highlight the lesson button
+    setCurrentStep('lesson_button_highlight');
+    localStorage.setItem(TUTORIAL_STEP_KEY, 'lesson_button_highlight');
   }, []);
 
   // Called when user swipes a page in book reader

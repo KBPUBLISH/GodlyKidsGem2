@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { ChevronRight, Check, Clock, Flame } from 'lucide-react';
 import { isSessionCompletedToday, getSessionStreak, getSessionHistory, hasSessionToday, getCurrentSession } from '../../services/dailySessionService';
+import { useTutorial } from '../../context/TutorialContext';
 
 interface DailyLessonWidgetProps {
   onStartLesson?: (duration: number) => void;
@@ -32,6 +33,7 @@ const isDateCompleted = (date: Date, history: any[]): boolean => {
 const DailyLessonWidget: React.FC<DailyLessonWidgetProps> = ({ onStartLesson }) => {
   const navigate = useNavigate();
   const location = useLocation();
+  const { isStepActive, nextStep } = useTutorial();
   const [selectedDuration, setSelectedDuration] = useState(10); // Default 10 minutes
   const [isCompleted, setIsCompleted] = useState(false);
   const [hasInProgress, setHasInProgress] = useState(false);
@@ -39,6 +41,8 @@ const DailyLessonWidget: React.FC<DailyLessonWidgetProps> = ({ onStartLesson }) 
   const [totalSteps, setTotalSteps] = useState(4);
   const [streak, setStreak] = useState(0);
   const [sessionHistory, setSessionHistory] = useState<any[]>([]);
+  
+  const isLessonButtonHighlighted = isStepActive('lesson_button_highlight');
 
   // Refresh session data whenever component mounts or route changes
   const refreshSessionData = useCallback(() => {
@@ -66,6 +70,11 @@ const DailyLessonWidget: React.FC<DailyLessonWidgetProps> = ({ onStartLesson }) 
   }, [location.pathname, refreshSessionData]);
 
   const handleStartLesson = () => {
+    // Advance tutorial if on lesson button highlight step
+    if (isLessonButtonHighlighted) {
+      nextStep();
+    }
+    
     // Save selected duration for the session
     localStorage.setItem('godlykids_session_duration', selectedDuration.toString());
     
@@ -223,8 +232,10 @@ const DailyLessonWidget: React.FC<DailyLessonWidgetProps> = ({ onStartLesson }) 
 
         {/* Start/Continue Button */}
         <button
+          id="lesson-button"
           onClick={handleStartLesson}
-          className="w-full bg-[#1B8BB8] hover:bg-[#157A9E] text-white font-display font-bold text-lg py-4 rounded-full shadow-lg transition-all active:scale-[0.98] relative z-10"
+          className={`w-full bg-[#1B8BB8] hover:bg-[#157A9E] text-white font-display font-bold text-lg py-4 rounded-full shadow-lg transition-all active:scale-[0.98] relative z-10
+            ${isLessonButtonHighlighted ? 'ring-4 ring-yellow-400 ring-offset-2 animate-pulse shadow-[0_0_20px_rgba(250,204,21,0.6)]' : ''}`}
         >
           {hasInProgress ? 'Continue Adventure' : 'Start Lesson Adventure'}
         </button>

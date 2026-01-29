@@ -249,8 +249,8 @@ const OnboardingTutorial: React.FC = () => {
     return null;
   }
 
-  // Home-based steps (coins, report card, shop) should only show on home page
-  const homeSteps: TutorialStep[] = ['coins_highlight', 'coins_popup_open', 'report_card_highlight', 'report_card_open', 'shop_highlight', 'shop_open', 'devotional_highlight'];
+  // Home-based steps (lesson button, coins, report card, shop) should only show on home page
+  const homeSteps: TutorialStep[] = ['lesson_button_highlight', 'coins_highlight', 'coins_popup_open', 'report_card_highlight', 'report_card_open', 'shop_highlight', 'shop_open', 'devotional_highlight'];
   if (homeSteps.includes(currentStep) && !isOnHomePage) {
     return null;
   }
@@ -271,7 +271,22 @@ const OnboardingTutorial: React.FC = () => {
   // Render appropriate spotlight based on current step
   const renderSpotlight = () => {
     switch (currentStep) {
-      // STEP 1: On welcome page, let user choose any book
+      // STEP 1: On explore/home page, highlight the lesson button
+      case 'lesson_button_highlight':
+        return (
+          <TutorialSpotlight
+            targetElement="lesson-button"
+            title={config.title}
+            description={config.description}
+            isVisible={true}
+            fingerPosition="top"
+            popupPosition="bottom-screen"
+            compactPopup={true}
+            requiresElementClick={true}
+          />
+        );
+
+      // STEP 2: On welcome page, let user choose any book
       case 'welcome_book_tap':
         return (
           <TutorialSpotlight

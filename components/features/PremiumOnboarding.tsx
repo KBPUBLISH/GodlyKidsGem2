@@ -200,11 +200,11 @@ const VoiceAvatarGrid: React.FC<{ voices: VoiceCharacter[] }> = ({ voices }) => 
   }
   
   return (
-    <div className="grid grid-cols-4 gap-3 my-4 px-2">
-      {voices.slice(0, 8).map((voice, i) => (
+    <div className="grid grid-cols-5 gap-2 my-4 px-2">
+      {voices.slice(0, 20).map((voice, i) => (
         <div key={i} className="flex flex-col items-center">
           <div
-            className="w-14 h-14 rounded-xl bg-white shadow-md flex items-center justify-center border-2 border-gray-100 overflow-hidden"
+            className="w-12 h-12 rounded-xl bg-white shadow-md flex items-center justify-center border-2 border-gray-100 overflow-hidden"
           >
             {voice.image ? (
               <img 
@@ -217,7 +217,7 @@ const VoiceAvatarGrid: React.FC<{ voices: VoiceCharacter[] }> = ({ voices }) => 
               <span className="text-2xl">{fallbackEmojis[i % fallbackEmojis.length]}</span>
             )}
           </div>
-          <span className="text-[10px] text-gray-600 mt-1 truncate w-14 text-center">
+          <span className="text-[9px] text-gray-600 mt-0.5 truncate w-12 text-center">
             {voice.name}
           </span>
         </div>
@@ -446,7 +446,7 @@ const createScreens = (bookCovers: string[], voiceCharacters: VoiceCharacter[]) 
         
         {/* Subtext */}
         <p className="text-gray-600 mb-4 max-w-xs">
-          Choose from <span className="font-semibold">{voiceCharacters.length > 0 ? `${voiceCharacters.length}+` : '10+'} narration voices</span>. Find the perfect storyteller for your family.
+          Choose from <span className="font-semibold text-purple-600">20+ unique narration voices</span>. Find the perfect storyteller for your family.
         </p>
         
         {/* Voice avatars grid with real characters */}
@@ -577,7 +577,7 @@ const PremiumOnboarding: React.FC<PremiumOnboardingProps> = ({ isOpen, onComplet
         const voices = await ApiService.getVoices();
         const characters: VoiceCharacter[] = voices
           .filter((v: any) => v.characterImage || v.name)
-          .slice(0, 8)
+          .slice(0, 20)
           .map((v: any) => ({
             name: v.customName || v.name || 'Voice',
             image: v.characterImage || null,

@@ -76,11 +76,11 @@ const LandingPage: React.FC = () => {
     }
   }, [isChecking]);
 
-  const handleStartLesson = () => {
-    activityTrackingService.trackOnboardingEvent('splash_start_lesson_clicked');
+  const handleStartExplore = () => {
+    activityTrackingService.trackOnboardingEvent('splash_explore_clicked');
     
     // Check if user has completed at least one session but doesn't have an account
-    // If so, require account creation before starting another lesson
+    // If so, require account creation before continuing
     const hasCompletedFirstLesson = hasCompletedAnySession();
     const hasAccount = hasUserAccount();
     
@@ -90,8 +90,8 @@ const LandingPage: React.FC = () => {
       return;
     }
     
-    // Go directly to daily session for the "10-minute daily routine" flow
-    navigate('/daily-session', { state: { freshStart: true } });
+    // Go to the explore/home page
+    navigate('/home');
   };
 
   const handleSignIn = () => {
@@ -212,7 +212,7 @@ const LandingPage: React.FC = () => {
         
         {/* Subtitle */}
         <p className="text-[#5A7A8A] text-center text-base mb-4">
-          Today's Lesson – 10 minutes
+          Stories, Videos, Games & More
         </p>
         
         {/* Social Proof */}
@@ -220,15 +220,15 @@ const LandingPage: React.FC = () => {
           Over 1,000+ families use Godly Kids for daily faith lessons
         </p>
         
-        {/* Start Lesson Button - Wood Theme */}
+        {/* Start to Explore Button - Wood Theme */}
         <button
-          onClick={handleStartLesson}
+          onClick={handleStartExplore}
           className="w-full max-w-sm mx-auto block bg-gradient-to-b from-[#C4884A] via-[#A56B3A] to-[#8B5A2B] hover:from-[#D4975A] hover:via-[#B57A4A] hover:to-[#9B6A3B] text-white font-display font-bold text-lg py-4 px-8 rounded-full shadow-lg transition-all active:scale-[0.98] border-2 border-[#8B5A2B]"
           style={{
             boxShadow: '0 4px 0 #5C3D1E, 0 6px 12px rgba(0,0,0,0.2)'
           }}
         >
-          Start Lesson
+          Start to Explore
         </button>
         
         {/* Sign in link */}
@@ -250,11 +250,11 @@ const LandingPage: React.FC = () => {
           }}
           onAccountCreated={() => {
             setShowAccountModal(false);
-            // After creating account, go to daily session
-            navigate('/daily-session', { state: { freshStart: true } });
+            // After creating account, go to explore page
+            navigate('/home');
           }}
           onSignIn={() => {
-            navigate('/signin', { state: { returnTo: '/daily-session' } });
+            navigate('/signin', { state: { returnTo: '/home' } });
           }}
         />
       )}

@@ -4,6 +4,7 @@ import { ChevronRight, BookOpen, Volume2, Gamepad2, Sparkles, Check, X } from 'l
 import { activityTrackingService } from '../../services/activityTrackingService';
 import { useSubscription } from '../../context/SubscriptionContext';
 import { useBooks } from '../../context/BooksContext';
+import { ApiService } from '../../services/apiService';
 
 interface PremiumOnboardingProps {
   isOpen: boolean;
@@ -159,18 +160,53 @@ const BookCoverCarousel: React.FC<{ covers: string[] }> = ({ covers }) => {
   );
 };
 
-// Voice avatar grid component
-const VoiceAvatarGrid: React.FC = () => {
-  const voices = ['👨', '👩', '🧒', '👴', '👵', '🧑', '😊', '😄'];
+// Voice character data type
+interface VoiceCharacter {
+  name: string;
+  image: string | null;
+}
+
+// Voice avatar grid component with real character images
+const VoiceAvatarGrid: React.FC<{ voices: VoiceCharacter[] }> = ({ voices }) => {
+  // Fallback emojis if no voices
+  const fallbackEmojis = ['👨', '👩', '🧒', '👴', '👵', '🧑', '😊', '😄'];
+  
+  if (voices.length === 0) {
+    return (
+      <div className="grid grid-cols-4 gap-3 my-4 px-4">
+        {fallbackEmojis.map((emoji, i) => (
+          <div
+            key={i}
+            className="w-14 h-14 rounded-xl bg-white shadow-md flex items-center justify-center text-2xl border-2 border-gray-100"
+          >
+            {emoji}
+          </div>
+        ))}
+      </div>
+    );
+  }
   
   return (
-    <div className="grid grid-cols-4 gap-2 my-4 px-4">
-      {voices.map((emoji, i) => (
-        <div
-          key={i}
-          className="w-12 h-12 rounded-xl bg-white shadow-md flex items-center justify-center text-2xl border-2 border-gray-100 hover:border-[#7C3AED] transition-all"
-        >
-          {emoji}
+    <div className="grid grid-cols-4 gap-3 my-4 px-2">
+      {voices.slice(0, 8).map((voice, i) => (
+        <div key={i} className="flex flex-col items-center">
+          <div
+            className="w-14 h-14 rounded-xl bg-white shadow-md flex items-center justify-center border-2 border-gray-100 overflow-hidden"
+          >
+            {voice.image ? (
+              <img 
+                src={voice.image} 
+                alt={voice.name}
+                className="w-full h-full object-cover"
+                loading="lazy"
+              />
+            ) : (
+              <span className="text-2xl">{fallbackEmojis[i % fallbackEmojis.length]}</span>
+            )}
+          </div>
+          <span className="text-[10px] text-gray-600 mt-1 truncate w-14 text-center">
+            {voice.name}
+          </span>
         </div>
       ))}
     </div>
@@ -178,7 +214,7 @@ const VoiceAvatarGrid: React.FC = () => {
 };
 
 // Screen content components - function to create screens with dynamic data
-const createScreens = (bookCovers: string[]) => [
+const createScreens = (bookCovers: string[], voiceCharacters: VoiceCharacter[]) => [
   // Screen 1: Welcome to Premium
   {
     id: 'welcome',
@@ -270,11 +306,11 @@ const createScreens = (bookCovers: string[]) => [
         
         {/* Subtext */}
         <p className="text-gray-600 mb-4 max-w-xs">
-          Choose from <span className="font-semibold">10+ narration voices</span>. Find the perfect storyteller for your family.
+          Choose from <span className="font-semibold">{voiceCharacters.length > 0 ? `${voiceCharacters.length}+` : '10+'} narration voices</span>. Find the perfect storyteller for your family.
         </p>
         
-        {/* Voice avatars grid */}
-        <VoiceAvatarGrid />
+        {/* Voice avatars grid with real characters */}
+        <VoiceAvatarGrid voices={voiceCharacters} />
         
         {/* Button */}
         <button
@@ -401,6 +437,30 @@ const PremiumOnboarding: React.FC<PremiumOnboardingProps> = ({ isOpen, onComplet
   const [currentScreen, setCurrentScreen] = useState(0);
   const { reverseTrial } = useSubscription();
   const { books } = useBooks();
+  const [voiceCharacters, setVoiceCharacters] = useState<VoiceCharacter[]>([]);
+  
+  // Fetch voices on mount
+  useEffect(() => {
+    const fetchVoices = async () => {
+      try {
+        const voices = await ApiService.getVoices();
+        const characters: VoiceCharacter[] = voices
+          .filter((v: any) => v.characterImage || v.name)
+          .slice(0, 8)
+          .map((v: any) => ({
+            name: v.customName || v.name || 'Voice',
+            image: v.characterImage || null,
+          }));
+        setVoiceCharacters(characters);
+      } catch (error) {
+        console.error('Error fetching voices for onboarding:', error);
+      }
+    };
+    
+    if (isOpen) {
+      fetchVoices();
+    }
+  }, [isOpen]);
   
   // Get book covers for the carousel (up to 12 books)
   const bookCovers = React.useMemo(() => {
@@ -410,8 +470,8 @@ const PremiumOnboarding: React.FC<PremiumOnboardingProps> = ({ isOpen, onComplet
       .map(book => book.coverUrl);
   }, [books]);
   
-  // Create screens with dynamic book covers
-  const screens = React.useMemo(() => createScreens(bookCovers), [bookCovers]);
+  // Create screens with dynamic book covers and voice characters
+  const screens = React.useMemo(() => createScreens(bookCovers, voiceCharacters), [bookCovers, voiceCharacters]);
   
   // Track screen views
   useEffect(() => {

@@ -1337,17 +1337,34 @@ const DailySessionPage: React.FC = () => {
               
               return (
                 <div key={step.type} className="flex flex-col items-center">
-                  {/* Step icon - circular with border */}
-                  <div className={`
-                    w-14 h-14 rounded-full flex items-center justify-center transition-all
-                    ${isCompleted 
-                      ? 'bg-[#8BC34A] border-4 border-[#689F38]' 
-                      : isActive
-                        ? 'bg-[#D4A574] border-4 border-[#FFD700] shadow-lg'
-                        : 'bg-[#6D4C41] border-4 border-[#5D4037]'
-                    }
-                  `}>
-                    <span className={`text-2xl ${isCompleted ? '' : isActive ? '' : 'opacity-60'}`}>
+                  {/* Step icon - circular with gradient */}
+                  <div 
+                    className={`
+                      w-14 h-14 rounded-full flex items-center justify-center transition-all relative
+                      ${isCompleted 
+                        ? 'shadow-lg' 
+                        : isActive
+                          ? 'shadow-[0_0_20px_rgba(255,215,0,0.5)]'
+                          : ''
+                      }
+                    `}
+                    style={{
+                      background: isCompleted 
+                        ? 'linear-gradient(180deg, #8BC34A 0%, #689F38 100%)'
+                        : isActive
+                          ? 'linear-gradient(180deg, #FFD54F 0%, #F9A825 50%, #E65100 100%)'
+                          : 'linear-gradient(180deg, #8D6E63 0%, #5D4037 50%, #3E2723 100%)',
+                      border: isCompleted
+                        ? '4px solid #558B2F'
+                        : isActive
+                          ? '4px solid #FFB300'
+                          : '4px solid #4E342E',
+                      boxShadow: isActive 
+                        ? 'inset 0 2px 4px rgba(255,255,255,0.3), 0 4px 12px rgba(255,165,0,0.4)'
+                        : 'inset 0 2px 4px rgba(255,255,255,0.1), inset 0 -2px 4px rgba(0,0,0,0.2)',
+                    }}
+                  >
+                    <span className={`text-2xl ${isCompleted ? '' : isActive ? '' : 'opacity-70'}`}>
                       {isCompleted ? <Check className="w-7 h-7 text-white" /> : step.icon}
                     </span>
                   </div>

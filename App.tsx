@@ -295,7 +295,16 @@ if (!(window as any).__GK_APP_BOOTED__) {
   } catch {}
   
   // GLOBAL ERROR HANDLERS - catch ALL JS errors, not just React ones
+  // Re-entrancy guard to prevent infinite loops when error handler itself causes errors
+  let isHandlingError = false;
+  
   window.onerror = (message, source, lineno, colno, error) => {
+    // Prevent re-entrancy - if we're already handling an error, don't recurse
+    if (isHandlingError) {
+      console.warn('⚠️ Prevented recursive error handler');
+      return true;
+    }
+    isHandlingError = true;
     // Opaque "Script error." with no details (lineno=0, colno=0) are cross-origin errors
     // that provide NO useful debugging information
     const isOpaqueScriptError = 
@@ -334,7 +343,23 @@ if (!(window as any).__GK_APP_BOOTED__) {
     let featureTrace: any[] = [];
     try {
       featureTrace = JSON.parse(localStorage.getItem('gk_feature_trace') || '[]');
+      // Limit featureTrace to prevent huge error payloads
+      if (featureTrace.length > 20) {
+        featureTrace = featureTrace.slice(-20);
+      }
     } catch {}
+    
+    // Safe JSON.stringify that handles circular references
+    const safeStringify = (obj: any, maxDepth = 5): string => {
+      const seen = new WeakSet();
+      return JSON.stringify(obj, (key, value) => {
+        if (typeof value === 'object' && value !== null) {
+          if (seen.has(value)) return '[Circular]';
+          seen.add(value);
+        }
+        return value;
+      }, 2);
+    };
 
     const details = {
       name: error?.name || 'Error',
@@ -356,6 +381,8 @@ if (!(window as any).__GK_APP_BOOTED__) {
     console.error('💥 GLOBAL ERROR:', details);
     try {
       (window as any).__GK_LAST_ERROR_DETAILS__ = details;
+      // Also store the safe stringify function globally for the copy button
+      (window as any).__GK_SAFE_STRINGIFY__ = safeStringify;
     } catch {}
 
     // Record crash timestamp for crash loop detection
@@ -375,7 +402,7 @@ if (!(window as any).__GK_APP_BOOTED__) {
     try {
       const existing = JSON.parse(localStorage.getItem('gk_last_errors') || '[]');
       existing.push(details);
-      localStorage.setItem('gk_last_errors', JSON.stringify(existing.slice(-5)));
+      localStorage.setItem('gk_last_errors', safeStringify(existing.slice(-5)));
     } catch {}
 
     // Prevent white screen - show overlay so user knows what happened
@@ -390,7 +417,7 @@ if (!(window as any).__GK_APP_BOOTED__) {
           <p style="color:rgba(255,255,255,0.7);margin-bottom:12px;max-width:340px;">Tap “Copy details” and paste it into chat (or tap “Show details”).</p>
 
           <div style="display:flex;gap:10px;flex-wrap:wrap;justify-content:center;margin-bottom:10px;">
-            <button onclick="(function(){try{var t=JSON.stringify(window.__GK_LAST_ERROR_DETAILS__||{}, null, 2); var done=false; try{navigator.clipboard&&navigator.clipboard.writeText&&navigator.clipboard.writeText(t).then(function(){done=true; alert('Copied! Paste it into chat.');}).catch(function(){});}catch(e){} try{if(done) return; var ta=document.createElement('textarea'); ta.value=t; ta.style.position='fixed'; ta.style.left='-9999px'; document.body.appendChild(ta); ta.focus(); ta.select(); var ok=false; try{ok=document.execCommand('copy');}catch(e){} document.body.removeChild(ta); if(ok){alert('Copied! Paste it into chat.'); return;} }catch(e){} try{prompt('Copy the crash details below:', t);}catch(e){} }catch(e){}})()"
+            <button onclick="(function(){try{var fn=window.__GK_SAFE_STRINGIFY__||JSON.stringify; var t=fn(window.__GK_LAST_ERROR_DETAILS__||{}); var done=false; try{navigator.clipboard&&navigator.clipboard.writeText&&navigator.clipboard.writeText(t).then(function(){done=true; alert('Copied! Paste it into chat.');}).catch(function(){});}catch(e){} try{if(done) return; var ta=document.createElement('textarea'); ta.value=t; ta.style.position='fixed'; ta.style.left='-9999px'; document.body.appendChild(ta); ta.focus(); ta.select(); var ok=false; try{ok=document.execCommand('copy');}catch(e){} document.body.removeChild(ta); if(ok){alert('Copied! Paste it into chat.'); return;} }catch(e){} try{prompt('Copy the crash details below:', t);}catch(e){} }catch(e){}})()"
               style="background:rgba(255,255,255,0.25);color:white;font-weight:bold;padding:10px 18px;border-radius:9999px;border:none;">
               Copy details
             </button>
@@ -400,7 +427,7 @@ if (!(window as any).__GK_APP_BOOTED__) {
             </button>
           </div>
 
-          <pre id="gk_err" style="display:none;white-space:pre-wrap;text-align:left;max-width:380px;max-height:240px;overflow:auto;background:rgba(0,0,0,0.35);color:rgba(255,255,255,0.85);padding:12px;border-radius:12px;font-size:12px;">${escapeHtml(JSON.stringify(details, null, 2))}</pre>
+          <pre id="gk_err" style="display:none;white-space:pre-wrap;text-align:left;max-width:380px;max-height:240px;overflow:auto;background:rgba(0,0,0,0.35);color:rgba(255,255,255,0.85);padding:12px;border-radius:12px;font-size:12px;">${escapeHtml(safeStringify(details))}</pre>
 
           <div style="display:flex;gap:10px;margin-top:12px;flex-wrap:wrap;justify-content:center;">
             <button onclick="try{localStorage.removeItem('gk_api_lessons');}catch(e){}; try{sessionStorage.clear();}catch(e){}; location.reload();"
@@ -413,6 +440,9 @@ if (!(window as any).__GK_APP_BOOTED__) {
       `;
       document.body.appendChild(errorDiv);
     } catch {}
+    
+    // Reset re-entrancy guard
+    setTimeout(() => { isHandlingError = false; }, 100);
     return true; // Prevent default error handling
   };
   

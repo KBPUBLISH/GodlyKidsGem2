@@ -1,8 +1,9 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ChevronRight, BookOpen, Volume2, Gamepad2, Sparkles, Check, X } from 'lucide-react';
 import { activityTrackingService } from '../../services/activityTrackingService';
 import { useSubscription } from '../../context/SubscriptionContext';
+import { useBooks } from '../../context/BooksContext';
 
 interface PremiumOnboardingProps {
   isOpen: boolean;
@@ -81,27 +82,82 @@ const ProgressDots: React.FC<{ current: number; total: number }> = ({ current, t
   </div>
 );
 
-// Book cover preview component
-const BookCoverPreview: React.FC = () => (
-  <div className="flex justify-center gap-3 my-4">
-    {['Noah', 'David', 'Moses', 'Ruth'].map((name, i) => (
-      <div
-        key={name}
-        className="w-16 h-20 rounded-lg shadow-md flex items-end justify-center pb-1 text-white text-xs font-bold"
-        style={{
-          background: [
-            'linear-gradient(135deg, #3B82F6, #1D4ED8)',
-            'linear-gradient(135deg, #10B981, #047857)',
-            'linear-gradient(135deg, #F59E0B, #D97706)',
-            'linear-gradient(135deg, #EC4899, #BE185D)',
-          ][i],
-        }}
-      >
-        {name}
+// Auto-scrolling book cover carousel component
+const BookCoverCarousel: React.FC<{ covers: string[] }> = ({ covers }) => {
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const [isHovered, setIsHovered] = useState(false);
+  
+  // Auto-scroll effect
+  useEffect(() => {
+    if (!scrollRef.current || covers.length === 0 || isHovered) return;
+    
+    const scroll = scrollRef.current;
+    let animationId: number;
+    let scrollPos = 0;
+    const speed = 0.5; // pixels per frame
+    
+    const animate = () => {
+      scrollPos += speed;
+      // Reset when we've scrolled half (since we duplicate the content)
+      if (scrollPos >= scroll.scrollWidth / 2) {
+        scrollPos = 0;
+      }
+      scroll.scrollLeft = scrollPos;
+      animationId = requestAnimationFrame(animate);
+    };
+    
+    animationId = requestAnimationFrame(animate);
+    
+    return () => cancelAnimationFrame(animationId);
+  }, [covers, isHovered]);
+
+  if (covers.length === 0) {
+    // Fallback to placeholder if no covers
+    return (
+      <div className="flex justify-center gap-3 my-4">
+        {['📖', '📚', '📕', '📗'].map((emoji, i) => (
+          <div
+            key={i}
+            className="w-16 h-20 rounded-lg shadow-md flex items-center justify-center text-3xl bg-gradient-to-br from-blue-100 to-purple-100"
+          >
+            {emoji}
+          </div>
+        ))}
       </div>
-    ))}
-  </div>
-);
+    );
+  }
+
+  // Duplicate covers for seamless loop
+  const duplicatedCovers = [...covers, ...covers];
+
+  return (
+    <div 
+      className="w-full overflow-hidden my-4"
+      onMouseEnter={() => setIsHovered(true)}
+      onMouseLeave={() => setIsHovered(false)}
+    >
+      <div 
+        ref={scrollRef}
+        className="flex gap-3 overflow-x-hidden"
+        style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
+      >
+        {duplicatedCovers.map((cover, i) => (
+          <div
+            key={i}
+            className="flex-shrink-0 w-20 h-28 rounded-xl shadow-lg overflow-hidden bg-gradient-to-br from-purple-100 to-blue-100"
+          >
+            <img 
+              src={cover} 
+              alt="Book cover" 
+              className="w-full h-full object-cover"
+              loading="lazy"
+            />
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+};
 
 // Voice avatar grid component
 const VoiceAvatarGrid: React.FC = () => {
@@ -121,8 +177,8 @@ const VoiceAvatarGrid: React.FC = () => {
   );
 };
 
-// Screen content components
-const screens = [
+// Screen content components - function to create screens with dynamic data
+const createScreens = (bookCovers: string[]) => [
   // Screen 1: Welcome to Premium
   {
     id: 'welcome',
@@ -182,8 +238,8 @@ const screens = [
           Access our entire library of <span className="font-semibold">100+ illustrated Bible stories</span>. New stories added weekly!
         </p>
         
-        {/* Book covers preview */}
-        <BookCoverPreview />
+        {/* Book covers carousel - real covers */}
+        <BookCoverCarousel covers={bookCovers} />
         
         {/* Button */}
         <button
@@ -385,14 +441,26 @@ const PremiumOnboarding: React.FC<PremiumOnboardingProps> = ({ isOpen, onComplet
   const navigate = useNavigate();
   const [currentScreen, setCurrentScreen] = useState(0);
   const { reverseTrial } = useSubscription();
+  const { books } = useBooks();
+  
+  // Get book covers for the carousel (up to 12 books)
+  const bookCovers = React.useMemo(() => {
+    return books
+      .filter(book => book.coverUrl && book.coverUrl.trim() !== '')
+      .slice(0, 12)
+      .map(book => book.coverUrl);
+  }, [books]);
+  
+  // Create screens with dynamic book covers
+  const screens = React.useMemo(() => createScreens(bookCovers), [bookCovers]);
   
   // Track screen views
   useEffect(() => {
-    if (isOpen) {
+    if (isOpen && screens[currentScreen]) {
       const screenId = screens[currentScreen].id;
       activityTrackingService.trackOnboardingEvent(`reverse_trial_screen_${currentScreen + 1}_viewed`).catch(() => {});
     }
-  }, [currentScreen, isOpen]);
+  }, [currentScreen, isOpen, screens]);
 
   const handleNext = useCallback(() => {
     if (currentScreen < screens.length - 1) {
@@ -403,7 +471,7 @@ const PremiumOnboarding: React.FC<PremiumOnboardingProps> = ({ isOpen, onComplet
       onComplete();
       navigate('/home');
     }
-  }, [currentScreen, navigate, onComplete]);
+  }, [currentScreen, screens.length, navigate, onComplete]);
 
   const handleSkip = useCallback(() => {
     activityTrackingService.trackOnboardingEvent('reverse_trial_onboarding_skipped').catch(() => {});
@@ -442,7 +510,7 @@ const PremiumOnboarding: React.FC<PremiumOnboardingProps> = ({ isOpen, onComplet
 
   if (!isOpen) return null;
 
-  const CurrentScreenContent = screens[currentScreen].content;
+  const CurrentScreenContent = screens[currentScreen]?.content;
 
   return (
     <div className="fixed inset-0 z-[200] bg-gradient-to-b from-white via-[#F5F3FF] to-white">

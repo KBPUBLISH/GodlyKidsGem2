@@ -938,7 +938,7 @@ const DailySessionPage: React.FC = () => {
         </div>
 
         {/* Avatar - Bottom Right */}
-        <div className="absolute bottom-8 right-4" style={{ marginBottom: 'var(--safe-area-bottom, 0px)' }}>
+        <div className="absolute bottom-20 right-4" style={{ marginBottom: 'var(--safe-area-bottom, 0px)' }}>
           <style>{wingAnimationStyles}</style>
           
           {/* Speech bubble when no body equipped - positioned to LEFT of avatar */}
@@ -1100,7 +1100,7 @@ const DailySessionPage: React.FC = () => {
         </div>
 
         {/* Avatar - Bottom Right */}
-        <div className="absolute bottom-8 right-4" style={{ marginBottom: 'var(--safe-area-bottom, 0px)' }}>
+        <div className="absolute bottom-20 right-4" style={{ marginBottom: 'var(--safe-area-bottom, 0px)' }}>
           <style>{wingAnimationStyles}</style>
           
           {/* Speech bubble when no body equipped - positioned to LEFT of avatar */}
@@ -1236,7 +1236,7 @@ const DailySessionPage: React.FC = () => {
         </div>
 
         {/* Avatar - Bottom Right */}
-        <div className="absolute bottom-8 right-4" style={{ marginBottom: 'var(--safe-area-bottom, 0px)' }}>
+        <div className="absolute bottom-20 right-4" style={{ marginBottom: 'var(--safe-area-bottom, 0px)' }}>
           <style>{wingAnimationStyles}</style>
           
           {/* Speech bubble when no body equipped - positioned to LEFT of avatar */}

@@ -37,7 +37,6 @@ import { activityTrackingService } from '../services/activityTrackingService';
 import { getPreferenceTags, getSavedPreferences } from './InterestSelectionPage';
 import { isSessionCompletedToday, getSessionStreak, hasSessionToday } from '../services/dailySessionService';
 import DailyLessonWidget from '../components/features/DailyLessonWidget';
-import ProBadge from '../components/ui/ProBadge';
 import PremiumBadge from '../components/ui/PremiumBadge';
 
 // Helper to format date as YYYY-MM-DD in local time
@@ -988,9 +987,6 @@ const HomePage: React.FC = () => {
       }}
     >
       <Header isVisible={isHeaderVisible} />
-
-      {/* Floating PRO badge for reverse trial users */}
-      <ProBadge />
 
       <DailyRewardModal
         isOpen={showDailyReward}

@@ -1,10 +1,10 @@
 
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import WoodButton from '../ui/WoodButton';
 import { 
   X, Star, Home, Users, Globe, HeartPulse, 
-  CloudRain, Book, Send, Sparkles, Heart, Check, Mic, MicOff, ArrowRight
+  CloudRain, Book, Send, Sparkles, Heart, Check, Mic, MicOff, ArrowRight, HelpCircle, RotateCcw
 } from 'lucide-react';
 import { useUser } from '../../context/UserContext';
 import { useAudio } from '../../context/AudioContext';
@@ -15,7 +15,7 @@ interface PrayerGameModalProps {
   onClose: () => void;
 }
 
-type GameState = 'intro' | 'selection' | 'instruction' | 'focus' | 'success';
+type GameState = 'intro' | 'selection' | 'instruction' | 'preview' | 'scramble' | 'focus' | 'success';
 
 // --- DATA COLLECTIONS ---
 
@@ -140,6 +140,13 @@ const PrayerGameModal: React.FC<PrayerGameModalProps> = ({ isOpen, onClose }) =>
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [volume, setVolume] = useState(0);
   
+  // Word Scramble Game State
+  const [scrambledWords, setScrambledWords] = useState<{word: string, id: number}[]>([]);
+  const [selectedWords, setSelectedWords] = useState<{word: string, id: number}[]>([]);
+  const [originalWords, setOriginalWords] = useState<string[]>([]);
+  const [showHint, setShowHint] = useState(false);
+  const [isScrambling, setIsScrambling] = useState(false);
+  
   const audioContextRef = useRef<AudioContext | null>(null);
   const analyserRef = useRef<AnalyserNode | null>(null);
   const microphoneStreamRef = useRef<MediaStream | null>(null);
@@ -249,6 +256,52 @@ const PrayerGameModal: React.FC<PrayerGameModalProps> = ({ isOpen, onClose }) =>
              playSuccess();
       }
   };
+  
+  // Word Scramble Game Functions
+  const handleWordSelect = (wordObj: {word: string, id: number}) => {
+      // Check if this is the correct next word
+      const nextIndex = selectedWords.length;
+      if (wordObj.id === nextIndex) {
+          // Correct word!
+          playTab();
+          setSelectedWords(prev => [...prev, wordObj]);
+          setScrambledWords(prev => prev.filter(w => w.id !== wordObj.id));
+          setShowHint(false);
+          
+          // Check if complete
+          if (selectedWords.length + 1 === originalWords.length) {
+              // Prayer complete!
+              setTimeout(() => {
+                  isPrayerFilledRef.current = true;
+                  setIsPrayerFilled(true);
+                  playSuccess();
+              }, 300);
+          }
+      } else {
+          // Wrong word - shake animation handled by CSS
+          playClick();
+      }
+  };
+  
+  const handleHint = () => {
+      setShowHint(true);
+      // Auto-hide hint after 2 seconds
+      setTimeout(() => setShowHint(false), 2000);
+  };
+  
+  const resetScramble = () => {
+      const topic = selectedTopics[currentTopicIndex];
+      if (topic) {
+          const words = topic.text.split(/\s+/).filter(w => w.length > 0);
+          const wordObjects = words.map((word, idx) => ({ word, id: idx }));
+          const shuffled = [...wordObjects].sort(() => Math.random() - 0.5);
+          setScrambledWords(shuffled);
+          setSelectedWords([]);
+          setShowHint(false);
+          setIsPrayerFilled(false);
+          isPrayerFilledRef.current = false;
+      }
+  };
 
   const startListening = async () => {
       try {
@@ -312,12 +365,38 @@ const PrayerGameModal: React.FC<PrayerGameModalProps> = ({ isOpen, onClose }) =>
   const beginPrayingFocus = async () => {
       playClick();
       
-      // Initialize Mic if needed
-      if (!audioContextRef.current) {
-          await startListening();
+      // Start with preview - show complete verse for 3 seconds
+      setGameState('preview');
+      
+      // Prepare the words for scrambling
+      const topic = selectedTopics[currentTopicIndex];
+      if (topic) {
+          const words = topic.text.split(/\s+/).filter(w => w.length > 0);
+          setOriginalWords(words);
+          setSelectedWords([]);
+          setShowHint(false);
       }
       
-      setGameState('focus');
+      // After 3 seconds, scramble the words
+      setTimeout(() => {
+          setIsScrambling(true);
+          setGameState('scramble');
+          
+          // Scramble animation duration
+          setTimeout(() => {
+              const topic = selectedTopics[currentTopicIndex];
+              if (topic) {
+                  const words = topic.text.split(/\s+/).filter(w => w.length > 0);
+                  // Create word objects with unique IDs
+                  const wordObjects = words.map((word, idx) => ({ word, id: idx }));
+                  // Shuffle the array
+                  const shuffled = [...wordObjects].sort(() => Math.random() - 0.5);
+                  setScrambledWords(shuffled);
+              }
+              setIsScrambling(false);
+              setGameState('focus');
+          }, 800);
+      }, 3000);
   };
 
   // Restart loop when we enter focus mode or switch topics
@@ -346,11 +425,46 @@ const PrayerGameModal: React.FC<PrayerGameModalProps> = ({ isOpen, onClose }) =>
   const nextPrayer = () => {
       playClick();
       
+      // Reset word scramble state
+      setSelectedWords([]);
+      setScrambledWords([]);
+      setShowHint(false);
+      setIsPrayerFilled(false);
+      isPrayerFilledRef.current = false;
+      
       // Delay slightly for transition effect
       setTimeout(() => {
           if (currentTopicIndex < selectedTopics.length - 1) {
-              setCurrentTopicIndex(prev => prev + 1);
-              // Effect hook will reset progress and restart loop
+              const nextIndex = currentTopicIndex + 1;
+              setCurrentTopicIndex(nextIndex);
+              
+              // Start preview for next prayer
+              setGameState('preview');
+              
+              // Prepare words for next prayer
+              const topic = selectedTopics[nextIndex];
+              if (topic) {
+                  const words = topic.text.split(/\s+/).filter(w => w.length > 0);
+                  setOriginalWords(words);
+              }
+              
+              // After 3 seconds, scramble
+              setTimeout(() => {
+                  setIsScrambling(true);
+                  setGameState('scramble');
+                  
+                  setTimeout(() => {
+                      const topic = selectedTopics[nextIndex];
+                      if (topic) {
+                          const words = topic.text.split(/\s+/).filter(w => w.length > 0);
+                          const wordObjects = words.map((word, idx) => ({ word, id: idx }));
+                          const shuffled = [...wordObjects].sort(() => Math.random() - 0.5);
+                          setScrambledWords(shuffled);
+                      }
+                      setIsScrambling(false);
+                      setGameState('focus');
+                  }, 800);
+              }, 3000);
           } else {
               setGameState('success');
               cleanup();
@@ -488,10 +602,10 @@ const PrayerGameModal: React.FC<PrayerGameModalProps> = ({ isOpen, onClose }) =>
               {gameState === 'instruction' && (
                   <div className="flex flex-col items-center justify-center w-full h-full flex-1 animate-in fade-in zoom-in duration-500">
                       
-                      {/* Praying Hands / Mic Icon */}
+                      {/* Puzzle Icon */}
                       <div className="relative mb-8">
                           <div className="w-32 h-32 rounded-full bg-gradient-to-br from-[#7b1fa2] to-[#4a148c] flex items-center justify-center shadow-2xl border-4 border-[#ab47bc]">
-                              <Mic size={56} className="text-white drop-shadow-lg" />
+                              <span className="text-5xl">🧩</span>
                           </div>
                           <div className="absolute -top-2 -right-2 bg-[#FFD700] rounded-full p-2 shadow-lg animate-bounce">
                               <Sparkles size={20} className="text-[#B8860B]" />
@@ -499,17 +613,20 @@ const PrayerGameModal: React.FC<PrayerGameModalProps> = ({ isOpen, onClose }) =>
                       </div>
 
                       <h3 className="font-display font-bold text-2xl text-white mb-4 text-center">
-                          Read the Prayer<br/>Out Loud!
+                          Prayer Puzzle!
                       </h3>
                       
                       <div className="bg-black/30 rounded-2xl p-5 mb-8 border border-white/20 max-w-[280px]">
                           <p className="text-[#e1bee7] text-center leading-relaxed">
-                              When the prayer appears, <span className="text-white font-bold">speak it with your voice</span>. God loves to hear you pray!
+                              You'll see a prayer for <span className="text-white font-bold">3 seconds</span>, then the words will scramble!
                           </p>
-                          <div className="flex items-center justify-center gap-2 mt-4 text-[#ab47bc]">
-                              <div className="w-2 h-2 rounded-full bg-[#ab47bc] animate-pulse"></div>
-                              <span className="text-xs font-bold uppercase tracking-wide">Microphone will listen</span>
+                          <div className="flex items-center justify-center gap-2 mt-4 text-[#FFD700]">
+                              <span className="text-2xl">👆</span>
+                              <span className="text-xs font-bold uppercase tracking-wide">Tap words in the right order</span>
                           </div>
+                          <p className="text-[#e1bee7]/70 text-xs text-center mt-3">
+                              Need help? Tap the <HelpCircle size={12} className="inline text-[#FFD700]" /> button!
+                          </p>
                       </div>
 
                       <div className="w-full px-4">
@@ -525,63 +642,159 @@ const PrayerGameModal: React.FC<PrayerGameModalProps> = ({ isOpen, onClose }) =>
                   </div>
               )}
 
-              {/* --- FOCUS / PRAYING --- */}
-              {gameState === 'focus' && activeTopic && (
-                  <div className="flex flex-col items-center w-full h-full flex-1 animate-in zoom-in duration-500 overflow-y-auto">
-                      
+              {/* --- PREVIEW - Show verse for 3 seconds --- */}
+              {gameState === 'preview' && activeTopic && (
+                  <div className="flex flex-col items-center w-full h-full flex-1 animate-in fade-in duration-500">
                       {/* Progress Header */}
+                      <div className="text-[#e1bee7]/50 text-xs font-bold uppercase tracking-widest mb-4">
+                          Prayer {currentTopicIndex + 1} of {selectedTopics.length}
+                      </div>
+                      
+                      <div className={`w-20 h-20 rounded-full flex items-center justify-center shadow-xl mb-4 ${activeTopic.color}`}>
+                          <activeTopic.icon size={40} className="text-white drop-shadow-lg" />
+                      </div>
+                      
+                      <h3 className="text-2xl font-display font-bold text-white mb-2">
+                          {activeTopic.label}
+                      </h3>
+                      
+                      <div className="bg-black/30 rounded-2xl p-4 mb-4 border border-white/20 max-w-[320px]">
+                          <p className="text-white text-center text-sm font-medium mb-3 opacity-70">
+                              Memorize this prayer...
+                          </p>
+                          <p className="text-white text-lg text-center leading-relaxed font-medium">
+                              {activeTopic.text}
+                          </p>
+                      </div>
+                      
+                      {/* Countdown indicator */}
+                      <div className="flex items-center gap-2 text-[#FFD700]">
+                          <div className="w-2 h-2 rounded-full bg-[#FFD700] animate-ping"></div>
+                          <span className="text-sm font-bold">Get ready to put it back together!</span>
+                      </div>
+                  </div>
+              )}
+              
+              {/* --- SCRAMBLE ANIMATION --- */}
+              {gameState === 'scramble' && activeTopic && (
+                  <div className="flex flex-col items-center justify-center w-full h-full flex-1">
                       <div className="text-[#e1bee7]/50 text-xs font-bold uppercase tracking-widest mb-8">
                           Prayer {currentTopicIndex + 1} of {selectedTopics.length}
                       </div>
+                      
+                      <div className="relative">
+                          <div className="text-6xl animate-spin">🔀</div>
+                      </div>
+                      
+                      <p className="text-white text-xl font-bold mt-4 animate-pulse">Scrambling...</p>
+                  </div>
+              )}
 
-                      {/* Active Bubble with Voice Reactivity */}
-                      <div className="relative mb-8">
-                          {/* Voice Glowing Ring */}
+              {/* --- FOCUS / WORD SCRAMBLE GAME --- */}
+              {gameState === 'focus' && activeTopic && (
+                  <div className="flex flex-col items-center w-full h-full flex-1 animate-in zoom-in duration-500 overflow-y-auto">
+                      
+                      {/* Header with Help Button */}
+                      <div className="w-full flex items-center justify-between mb-3">
+                          <div className="text-[#e1bee7]/50 text-xs font-bold uppercase tracking-widest">
+                              Prayer {currentTopicIndex + 1} of {selectedTopics.length}
+                          </div>
+                          {!isPrayerFilled && (
+                              <div className="flex gap-2">
+                                  <button
+                                      onClick={resetScramble}
+                                      className="bg-black/30 hover:bg-black/50 text-white/70 hover:text-white rounded-full p-2 transition-colors"
+                                      title="Reset"
+                                  >
+                                      <RotateCcw size={16} />
+                                  </button>
+                                  <button
+                                      onClick={handleHint}
+                                      className="bg-[#FFD700]/20 hover:bg-[#FFD700]/40 text-[#FFD700] rounded-full p-2 transition-colors"
+                                      title="Show Hint"
+                                  >
+                                      <HelpCircle size={16} />
+                                  </button>
+                              </div>
+                          )}
+                      </div>
+
+                      {/* Topic Icon */}
+                      <div className={`w-16 h-16 rounded-full flex items-center justify-center shadow-xl mb-3 ${activeTopic.color} ${isPrayerFilled ? 'ring-4 ring-[#FFD700]' : ''}`}>
+                          {isPrayerFilled ? (
+                              <Check size={32} className="text-white" strokeWidth={4} />
+                          ) : (
+                              <activeTopic.icon size={32} className="text-white drop-shadow-lg" />
+                          )}
+                      </div>
+
+                      <h3 className="text-xl font-display font-bold text-white mb-3">
+                          {activeTopic.label}
+                      </h3>
+                      
+                      {/* Progress Bar */}
+                      <div className="w-full max-w-[280px] h-2 bg-black/30 rounded-full mb-4 overflow-hidden">
                           <div 
-                            className="absolute inset-0 rounded-full blur-xl transition-all duration-100"
-                            style={{ 
-                                backgroundColor: isSpeaking ? '#ab47bc' : (isHoldingRef.current ? 'white' : 'transparent'),
-                                opacity: isSpeaking ? Math.min(0.8, volume / 30) : (isHoldingRef.current ? 0.4 : 0),
-                                transform: isSpeaking ? `scale(${1 + volume/80})` : 'scale(1.5)'
-                            }}
-                          ></div>
+                              className="h-full bg-gradient-to-r from-[#ab47bc] to-[#FFD700] transition-all duration-300"
+                              style={{ width: `${(selectedWords.length / originalWords.length) * 100}%` }}
+                          />
+                      </div>
 
-                          {/* The Bubble - Animates out when filled */}
-                          <div className={`
-                              w-40 h-40 rounded-full flex items-center justify-center shadow-2xl z-10 relative
-                              transition-all duration-1000 ease-in-out
-                              ${isPrayerFilled ? 'scale-110 ring-8 ring-[#FFD700] ring-offset-4 ring-offset-[#4a148c]' : ''}
-                              ${activeTopic.color}
-                          `}>
-                              {isPrayerFilled ? (
-                                  <Check size={80} className="text-white animate-in zoom-in" strokeWidth={4} />
-                              ) : (
-                                  <activeTopic.icon size={64} className="text-white drop-shadow-lg" />
+                      {/* Selected Words (Built Sentence) */}
+                      <div className="bg-black/30 rounded-xl p-3 mb-4 min-h-[80px] w-full border border-white/10">
+                          <p className="text-[#e1bee7]/60 text-[10px] uppercase tracking-wider mb-2 font-bold">Your Prayer:</p>
+                          <div className="flex flex-wrap gap-1">
+                              {selectedWords.map((wordObj, idx) => (
+                                  <span 
+                                      key={`selected-${wordObj.id}`}
+                                      className="bg-[#7b1fa2] text-white px-2 py-1 rounded-lg text-sm font-medium animate-in slide-in-from-bottom-2"
+                                  >
+                                      {wordObj.word}
+                                  </span>
+                              ))}
+                              {!isPrayerFilled && selectedWords.length < originalWords.length && (
+                                  <span className="text-white/30 px-2 py-1 text-sm">...</span>
                               )}
                           </div>
                       </div>
 
-                      <h3 className="text-3xl font-display font-bold text-white mb-3 animate-pulse">
-                          {activeTopic.label}
-                      </h3>
-                      <p className="text-white text-xl text-center mb-4 px-2 leading-relaxed font-medium">
-                          {activeTopic.text}
-                      </p>
-
-                      {/* Voice Instruction (Hide when filled) */}
-                      {micPermission !== false && !isPrayerFilled && (
-                          <div className="flex items-center gap-2 mb-6 bg-black/20 px-4 py-2 rounded-full border border-white/10">
-                              <div className={`w-2 h-2 rounded-full ${isSpeaking ? 'bg-green-400 animate-pulse' : 'bg-white/50'}`}></div>
-                              <span className="text-xs font-bold text-white/80 uppercase tracking-wide">
-                                  {isSpeaking ? "Listening..." : "Read out loud"}
-                              </span>
-                              <Mic size={14} className="text-white/60" />
+                      {/* Scrambled Words to Select */}
+                      {!isPrayerFilled && (
+                          <div className="w-full mb-4">
+                              <p className="text-[#e1bee7]/60 text-[10px] uppercase tracking-wider mb-2 font-bold text-center">Tap words in order:</p>
+                              <div className="flex flex-wrap gap-2 justify-center">
+                                  {scrambledWords.map((wordObj) => {
+                                      const isNextWord = wordObj.id === selectedWords.length;
+                                      const isHinted = showHint && isNextWord;
+                                      
+                                      return (
+                                          <button
+                                              key={`scrambled-${wordObj.id}`}
+                                              onClick={() => handleWordSelect(wordObj)}
+                                              className={`
+                                                  px-3 py-2 rounded-xl text-sm font-bold transition-all
+                                                  ${isHinted 
+                                                      ? 'bg-[#FFD700] text-[#4a148c] scale-110 shadow-[0_0_15px_#FFD700] animate-pulse' 
+                                                      : 'bg-[#311b92] text-white hover:bg-[#4a148c] hover:scale-105'
+                                                  }
+                                                  active:scale-95 border-2 border-[#7b1fa2]
+                                              `}
+                                          >
+                                              {wordObj.word}
+                                          </button>
+                                      );
+                                  })}
+                              </div>
                           </div>
                       )}
 
-                      {/* Controls: Hold Button OR Amen Button */}
-                      {isPrayerFilled ? (
+                      {/* Amen Button when complete */}
+                      {isPrayerFilled && (
                           <div className="w-full animate-in slide-in-from-bottom-4 fade-in duration-500 mt-4">
+                              <div className="text-center mb-4">
+                                  <p className="text-[#FFD700] font-bold text-lg">Perfect! 🙏</p>
+                                  <p className="text-white/70 text-sm">You completed the prayer!</p>
+                              </div>
                               <WoodButton 
                                   onClick={nextPrayer}
                                   variant="gold"
@@ -591,40 +804,16 @@ const PrayerGameModal: React.FC<PrayerGameModalProps> = ({ isOpen, onClose }) =>
                                   AMEN!
                               </WoodButton>
                           </div>
-                      ) : (
-                          <div className="flex flex-col items-center w-full">
-                              <div className="relative w-full max-w-[200px] h-16 select-none mt-2">
-                                  <button
-                                      onMouseDown={() => setHolding(true)}
-                                      onMouseUp={() => setHolding(false)}
-                                      onMouseLeave={() => setHolding(false)}
-                                      onTouchStart={() => setHolding(true)}
-                                      onTouchEnd={() => setHolding(false)}
-                                      className="absolute inset-0 w-full h-full bg-[#311b92] rounded-full border-2 border-[#7b1fa2] flex items-center justify-center overflow-hidden active:scale-95 transition-transform"
-                                  >
-                                      {/* Fill Bar */}
-                                      <div 
-                                        className="absolute inset-0 bg-[#ab47bc] origin-left transition-all duration-100 linear"
-                                        style={{ width: `${holdProgress}%` }}
-                                      ></div>
-                                      
-                                      <span className="relative z-10 font-display font-bold text-white tracking-wide flex items-center gap-2 text-sm">
-                                          {micPermission === false ? "HOLD TO PRAY" : "SPEAK OR HOLD"}
-                                          <Mic size={16} />
-                                      </span>
-                                  </button>
-                                  {micPermission === false && (
-                                      <p className="text-[10px] text-red-300 mt-2 font-bold text-center">Mic disabled. Press button.</p>
-                                  )}
-                              </div>
-                              {/* Manual Amen Button */}
-                              <button 
-                                onClick={forceCompletePrayer}
-                                className="mt-4 text-[#e1bee7]/60 hover:text-white text-xs font-bold uppercase tracking-wider border-b border-transparent hover:border-white/50 transition-all"
-                              >
-                                Manual Amen
-                              </button>
-                          </div>
+                      )}
+                      
+                      {/* Skip Button */}
+                      {!isPrayerFilled && (
+                          <button 
+                              onClick={forceCompletePrayer}
+                              className="mt-2 text-[#e1bee7]/40 hover:text-white/60 text-xs font-bold uppercase tracking-wider transition-all"
+                          >
+                              Skip this prayer
+                          </button>
                       )}
                       
                   </div>

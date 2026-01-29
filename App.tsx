@@ -480,6 +480,7 @@ import EditProfilePage from './pages/EditProfilePage';
 import AudioPlayerPage from './pages/AudioPlayerPage';
 import PaywallPage from './pages/PaywallPage';
 import PremiumOnboardingPage from './pages/PremiumOnboardingPage';
+import TrialStatsPage from './pages/TrialStatsPage';
 import SettingsPage from './pages/SettingsPage';
 import BookReaderPage from './pages/BookReaderPage';
 import AudioPage from './pages/AudioPage';
@@ -1237,6 +1238,7 @@ const App: React.FC = () => {
                   <Route path="/edit-profile" element={<EditProfilePage />} />
                   <Route path="/paywall" element={<PaywallPage />} />
                   <Route path="/premium-onboarding" element={<PremiumOnboardingPage />} />
+                  <Route path="/trial-stats" element={<TrialStatsPage />} />
                   <Route path="/settings" element={<ProtectedRoute><SettingsPage /></ProtectedRoute>} />
                   <Route path="/demo/video-lesson" element={<VideoLessonDemo />} />
                   <Route path="/game" element={<ProtectedRoute><GameWebViewPage /></ProtectedRoute>} />

@@ -618,17 +618,15 @@ class ActivityTrackingService {
         body: JSON.stringify(payload),
       });
       
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        console.error(`📊 Onboarding event FAILED: ${event}`, response.status, errorData);
-      } else {
-        console.log(`📊 Onboarding event tracked: ${event}`, metadata);
+      // Silent failure for analytics - don't spam console with backend validation errors
+      if (response.ok) {
+        console.log(`📊 Onboarding event tracked: ${event}`);
       }
       
       // Trigger a stats sync to update the user's onboarding step in the database
       setTimeout(() => this.syncStatsToBackend(), 1000);
-    } catch (error) {
-      console.error('Failed to track onboarding event:', error);
+    } catch {
+      // Silent failure - analytics errors shouldn't affect user experience
     }
   }
   

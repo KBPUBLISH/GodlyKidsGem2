@@ -23,6 +23,7 @@ interface AvatarCompositorProps {
   leftArmScale?: number;
   rightArmScale?: number;
   legsScale?: number;
+  legsSpread?: number;
   headScale?: number;
   bodyScale?: number;
   hatScale?: number;
@@ -58,6 +59,7 @@ const AvatarCompositor: React.FC<AvatarCompositorProps> = ({
       leftArmScale = 1,
       rightArmScale = 1,
       legsScale = 1,
+      legsSpread = 1,
       headScale = 1,
       bodyScale = 1,
       hatScale = 1,
@@ -210,7 +212,7 @@ const AvatarCompositor: React.FC<AvatarCompositorProps> = ({
                   width: `calc(95% * 0.7 * ${bodyScale})`, 
                   height: `calc(90% * 0.7 * ${bodyScale})`,
                   transformOrigin: 'top center',
-                  transform: `translate(-50%, 0) rotate(${legsRotation}deg) scale(${legsScale})`
+                  transform: `translate(-50%, 0) rotate(${legsRotation}deg) scale(${legsScale}) scaleX(${legsSpread})`
               }}
           >
               {/* Inner wrapper for animation - anchored at top for squish effect */}

@@ -301,6 +301,8 @@ const ShopModal: React.FC<ShopModalProps> = ({ isOpen, onClose, initialTab, hide
         setPartOffset,
         leftArmScale, rightArmScale, legsScale, headScale, bodyScale, hatScale,
         setPartScale,
+        legsSpread,
+        setLegsSpread,
         swapArms,
         savedCharacters,
         saveCurrentCharacter,
@@ -817,6 +819,7 @@ const ShopModal: React.FC<ShopModalProps> = ({ isOpen, onClose, initialTab, hide
                                 leftArmScale={leftArmScale}
                                 rightArmScale={rightArmScale}
                                 legsScale={legsScale}
+                                legsSpread={legsSpread}
                                 headScale={headScale}
                                 bodyScale={bodyScale}
                                 hatScale={hatScale}
@@ -1038,6 +1041,37 @@ const ShopModal: React.FC<ShopModalProps> = ({ isOpen, onClose, initialTab, hide
                                     })()}
                                 </span>
                             </div>
+
+                            {/* Spread Controls (Legs Only) */}
+                            {selectedPart === 'legs' && (
+                                <>
+                                    <div className="w-px h-20 bg-white/10 flex-shrink-0"></div>
+
+                                    <div className="flex flex-col gap-1 items-center flex-shrink-0">
+                                        <span className="text-[10px] text-[#eecaa0]/60 font-bold uppercase tracking-wider">Spread</span>
+                                        <div className="flex gap-1 items-center">
+                                            <button 
+                                                onClick={() => setLegsSpread(Math.max(0.7, legsSpread - 0.05))} 
+                                                className="w-11 h-11 bg-[#3E1F07] rounded-lg text-[#eecaa0] hover:bg-[#5c2e0b] active:scale-95 border-b-2 border-[#2a1505] flex items-center justify-center" 
+                                                title="Closer Together"
+                                            >
+                                                <ArrowLeftRight size={18} className="scale-x-75" />
+                                            </button>
+                                            <button 
+                                                onClick={() => setLegsSpread(Math.min(1.5, legsSpread + 0.05))} 
+                                                className="w-11 h-11 bg-[#3E1F07] rounded-lg text-[#eecaa0] hover:bg-[#5c2e0b] active:scale-95 border-b-2 border-[#2a1505] flex items-center justify-center" 
+                                                title="Further Apart"
+                                            >
+                                                <ArrowLeftRight size={18} className="scale-x-125" />
+                                            </button>
+                                        </div>
+                                        {/* Display current spread percentage */}
+                                        <span className="text-[10px] text-[#eecaa0] font-bold">
+                                            {Math.round(legsSpread * 100)}%
+                                        </span>
+                                    </div>
+                                </>
+                            )}
                         </div>
                     </div>
                 )}

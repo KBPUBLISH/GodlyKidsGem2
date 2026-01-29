@@ -122,6 +122,10 @@ interface UserContextType {
   hatScale: number;
   setPartScale: (part: 'leftArm' | 'rightArm' | 'legs' | 'head' | 'body' | 'hat', scale: number) => void;
   
+  // Legs Spread (horizontal spacing)
+  legsSpread: number;
+  setLegsSpread: (spread: number) => void;
+  
   swapArms: () => void;
 
   setEquippedAvatar: (url: string) => void; // Exposed for onboarding
@@ -195,6 +199,8 @@ const UserContext = createContext<UserContextType>({
   bodyScale: 1,
   hatScale: 1,
   setPartScale: () => {},
+  legsSpread: 1,
+  setLegsSpread: () => {},
   swapArms: () => {},
   setEquippedAvatar: () => {},
   purchaseItem: () => false,
@@ -354,6 +360,9 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [headScale, setHeadScale] = useState<number>(saved?.headScale ?? 1);
   const [bodyScale, setBodyScale] = useState<number>(saved?.bodyScale ?? 1);
   const [hatScale, setHatScale] = useState<number>(saved?.hatScale ?? 1);
+  
+  // Legs Spread (horizontal spacing, 1.0 = normal, >1 = wider, <1 = narrower)
+  const [legsSpread, setLegsSpread] = useState<number>(saved?.legsSpread ?? 1);
 
   const [savedCharacters, setSavedCharacters] = useState<SavedCharacter[]>(saved?.savedCharacters ?? []);
 
@@ -695,6 +704,7 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
     equippedLeftArmRotation, equippedRightArmRotation, equippedLegsRotation, equippedHatRotation,
     leftArmOffset, rightArmOffset, legsOffset, headOffset, bodyOffset, hatOffset,
     leftArmScale, rightArmScale, legsScale, headScale, bodyScale, hatScale,
+    legsSpread,
     savedCharacters,
     isSubscribed,
     parentAvatarData,
@@ -1020,7 +1030,7 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
       equippedLeftArm, equippedRightArm, equippedLegs, equippedAnimation,
       equippedLeftArmRotation, equippedRightArmRotation, equippedLegsRotation, equippedHatRotation,
       leftArmOffset, rightArmOffset, legsOffset, headOffset, bodyOffset, hatOffset,
-      leftArmScale, rightArmScale, legsScale, headScale, bodyScale, hatScale]);
+      leftArmScale, rightArmScale, legsScale, headScale, bodyScale, hatScale, legsSpread]);
 
   // Track if this is the initial mount to avoid unnecessary saves
   const isInitialMount = useRef(true);
@@ -1047,7 +1057,7 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
     equippedLeftArm, equippedRightArm, equippedLegs, equippedAnimation,
     equippedLeftArmRotation, equippedRightArmRotation, equippedLegsRotation, equippedHatRotation,
     leftArmOffset, rightArmOffset, legsOffset, headOffset, bodyOffset, hatOffset,
-    leftArmScale, rightArmScale, legsScale, headScale, bodyScale, hatScale,
+    leftArmScale, rightArmScale, legsScale, headScale, bodyScale, hatScale, legsSpread,
     currentProfileId,
     saveCurrentProfileAvatar
   ]);
@@ -1457,6 +1467,8 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
       bodyScale,
       hatScale,
       setPartScale,
+      legsSpread,
+      setLegsSpread,
       swapArms,
       setEquippedAvatar,
       currentProfileId,

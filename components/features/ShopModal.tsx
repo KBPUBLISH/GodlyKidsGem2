@@ -123,13 +123,13 @@ const SHOP_BACKGROUNDS: ShopItem[] = [
     // Default (free - already owned by everyone)
     { id: 'bg1', name: 'Ocean Paradise', price: 0, type: 'background', value: '/assets/images/panorama-background.jpg' },
     // Purchasable backgrounds (non-premium - anyone can buy with coins)
-    { id: 'bg6', name: 'Tropical Beach', price: 250, type: 'background', value: '/assets/images/bg-beach.png' },
-    { id: 'bg7', name: 'Golden Sunrise', price: 300, type: 'background', value: '/assets/images/bg-sunrise.png' },
-    { id: 'bg8', name: 'Under the Sea', price: 350, type: 'background', value: '/assets/images/bg-underwater.png' },
+    { id: 'bg6', name: 'Tropical Beach', price: 250, type: 'background', value: '/assets/images/bg-beach.jpg' },
+    { id: 'bg7', name: 'Golden Sunrise', price: 300, type: 'background', value: '/assets/images/bg-sunrise.jpg' },
+    { id: 'bg8', name: 'Under the Sea', price: 350, type: 'background', value: '/assets/images/bg-underwater.jpg' },
     // Premium backgrounds (subscribers only)
-    { id: 'bg9', name: 'Enchanted Forest', price: 400, type: 'background', value: '/assets/images/bg-enchanted-forest.png', isPremium: true },
-    { id: 'bg10', name: 'Outer Space', price: 450, type: 'background', value: '/assets/images/bg-space.png', isPremium: true },
-    { id: 'bg11', name: 'Volcano Island', price: 500, type: 'background', value: '/assets/images/bg-volcano.png', isPremium: true },
+    { id: 'bg9', name: 'Enchanted Forest', price: 400, type: 'background', value: '/assets/images/bg-enchanted-forest.jpg', isPremium: true },
+    { id: 'bg10', name: 'Outer Space', price: 450, type: 'background', value: '/assets/images/bg-space.jpg', isPremium: true },
+    { id: 'bg11', name: 'Volcano Island', price: 500, type: 'background', value: '/assets/images/bg-volcano.jpg', isPremium: true },
 ];
 
 type ShopTab = 'head' | 'hat' | 'body' | 'arms' | 'legs' | 'moves' | 'voices' | 'backgrounds' | 'saves';

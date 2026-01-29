@@ -22,6 +22,8 @@ const PremiumOnboardingPage: React.FC = () => {
   const handleComplete = () => {
     // Mark onboarding as shown so we don't show it again
     localStorage.setItem('godlykids_premium_onboarding_shown', 'true');
+    // Skip the welcome page - go directly to explore
+    localStorage.setItem('godlykids_welcome_seen', 'true');
     navigate('/home', { replace: true });
   };
 

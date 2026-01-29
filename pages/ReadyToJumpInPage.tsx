@@ -50,10 +50,12 @@ const ReadyToJumpInPage: React.FC = () => {
 
   const handleStart = () => {
     setIsAnimating(true);
-    // Start the tutorial and navigate to welcome page (book selection)
+    // Start the tutorial and navigate to explore page (lesson button highlight)
     startTutorial();
+    // Skip welcome page - go directly to explore
+    localStorage.setItem('godlykids_welcome_seen', 'true');
     setTimeout(() => {
-      navigate('/welcome');
+      navigate('/home');
     }, 400);
   };
 

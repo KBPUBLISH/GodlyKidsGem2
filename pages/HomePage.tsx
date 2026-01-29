@@ -1059,7 +1059,7 @@ const HomePage: React.FC = () => {
         onStartTutorial={() => {
           setShowTutorialPrompt(false);
           startTutorial();
-          navigate('/welcome');
+          // Stay on explore page - tutorial starts with lesson button highlight
         }}
         onSkip={() => {
           setShowTutorialPrompt(false);

@@ -1,10 +1,83 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { activityTrackingService } from '../services/activityTrackingService';
 import { hasCompletedAnySession } from '../services/dailySessionService';
 import CreateAccountModal from '../components/modals/CreateAccountModal';
+import { useBooks } from '../context/BooksContext';
 
 const STORAGE_KEY = 'godly_kids_data_v6';
+
+// Auto-scrolling carousel component
+const ContentCarousel: React.FC<{ bookCovers: string[] }> = ({ bookCovers }) => {
+  const scrollRef = useRef<HTMLDivElement>(null);
+  
+  // Default covers if no books loaded
+  const defaultCovers = [
+    '/assets/images/books/david-goliath.jpg',
+    '/assets/images/books/noahs-ark.jpg',
+    '/assets/images/books/daniel-lions.jpg',
+    '/assets/images/books/jonah-whale.jpg',
+    '/assets/images/books/moses-red-sea.jpg',
+    '/assets/images/books/joseph-dreams.jpg',
+  ];
+  
+  const covers = bookCovers.length > 0 ? bookCovers : defaultCovers;
+  // Triple the covers for seamless infinite scroll
+  const tripleCovers = [...covers, ...covers, ...covers];
+  
+  useEffect(() => {
+    const scrollContainer = scrollRef.current;
+    if (!scrollContainer) return;
+    
+    let animationId: number;
+    let scrollPos = 0;
+    const scrollSpeed = 0.5; // pixels per frame
+    
+    const animate = () => {
+      scrollPos += scrollSpeed;
+      
+      // Reset to middle section when we've scrolled past the first set
+      const singleSetWidth = scrollContainer.scrollWidth / 3;
+      if (scrollPos >= singleSetWidth) {
+        scrollPos = 0;
+      }
+      
+      scrollContainer.scrollLeft = scrollPos;
+      animationId = requestAnimationFrame(animate);
+    };
+    
+    animationId = requestAnimationFrame(animate);
+    
+    return () => cancelAnimationFrame(animationId);
+  }, [covers.length]);
+  
+  return (
+    <div className="w-full overflow-hidden">
+      <div 
+        ref={scrollRef}
+        className="flex gap-2 overflow-x-hidden"
+        style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
+      >
+        {tripleCovers.map((cover, i) => (
+          <div 
+            key={i}
+            className="flex-shrink-0 w-16 h-20 rounded-lg overflow-hidden shadow-md bg-white/20"
+          >
+            <img 
+              src={cover} 
+              alt=""
+              className="w-full h-full object-cover"
+              loading="lazy"
+              onError={(e) => {
+                (e.target as HTMLImageElement).src = '/assets/images/placeholder-book.png';
+              }}
+            />
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+};
 
 // Check if user has an account
 const hasUserAccount = (): boolean => {
@@ -18,6 +91,13 @@ const LandingPage: React.FC = () => {
   const [isChecking, setIsChecking] = useState(true);
   const [imageLoaded, setImageLoaded] = useState(false);
   const [showAccountModal, setShowAccountModal] = useState(false);
+  const { books } = useBooks();
+  
+  // Get book covers for carousel
+  const bookCovers = books
+    .filter(b => b.coverImage)
+    .slice(0, 12)
+    .map(b => b.coverImage);
 
   // Check if user has already completed onboarding
   useEffect(() => {
@@ -131,8 +211,13 @@ const LandingPage: React.FC = () => {
           onLoad={() => setImageLoaded(true)}
         />
         
-        {/* Rating Badge - Top of Image */}
-        <div className="absolute top-4 left-1/2 -translate-x-1/2 bg-white/95 backdrop-blur-sm rounded-full px-5 py-2.5 shadow-lg z-10">
+        {/* Content Carousel - Top of Image */}
+        <div className="absolute top-3 left-0 right-0 z-10 px-2">
+          <ContentCarousel bookCovers={bookCovers} />
+        </div>
+        
+        {/* Rating Badge - Below carousel */}
+        <div className="absolute top-28 left-1/2 -translate-x-1/2 bg-white/95 backdrop-blur-sm rounded-full px-5 py-2.5 shadow-lg z-10">
           <div className="flex items-center gap-2">
             <span className="text-[#FFB800] text-2xl tracking-tight">★★★★★</span>
             <span className="text-[#2D3748] font-bold text-lg">4.9</span>

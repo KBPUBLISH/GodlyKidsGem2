@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ChevronRight, BookOpen, Volume2, Gamepad2, Sparkles, Check, X } from 'lucide-react';
+import { ChevronRight, BookOpen, Volume2, Gamepad2, Sparkles, Check, X, Heart, Star, Zap, Sun, Shield, Gift, Music } from 'lucide-react';
 import { activityTrackingService } from '../../services/activityTrackingService';
 import { useSubscription } from '../../context/SubscriptionContext';
 import { useBooks } from '../../context/BooksContext';
@@ -8,6 +8,16 @@ import { ApiService } from '../../services/apiService';
 import { NotificationService } from '../../services/notificationService';
 import { DespiaService } from '../../services/despiaService';
 import { Bell, BellOff } from 'lucide-react';
+
+// Fruits of the Spirit for character building
+const FRUITS_OF_SPIRIT = [
+  { name: 'Love', color: 'from-pink-400 to-rose-500', icon: Heart },
+  { name: 'Peace', color: 'from-sky-400 to-blue-500', icon: Sun },
+  { name: 'Patience', color: 'from-amber-400 to-orange-500', icon: Shield },
+  { name: 'Kindness', color: 'from-green-400 to-emerald-500', icon: Gift },
+  { name: 'Faith', color: 'from-purple-400 to-violet-500', icon: Star },
+  { name: 'Self-Control', color: 'from-indigo-400 to-blue-500', icon: Zap },
+];
 
 interface PremiumOnboardingProps {
   isOpen: boolean;
@@ -309,6 +319,20 @@ const NotificationToggle: React.FC = () => {
   );
 };
 
+// Character trait pill component
+const TraitPill: React.FC<{ fruit: typeof FRUITS_OF_SPIRIT[0]; delay: number }> = ({ fruit, delay }) => {
+  const Icon = fruit.icon;
+  return (
+    <div 
+      className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-gradient-to-r ${fruit.color} text-white text-sm font-medium shadow-md`}
+      style={{ animationDelay: `${delay}ms` }}
+    >
+      <Icon size={14} />
+      <span>{fruit.name}</span>
+    </div>
+  );
+};
+
 // Screen content components - function to create screens with dynamic data
 const createScreens = (bookCovers: string[], voiceCharacters: VoiceCharacter[]) => [
   // Screen 1: Welcome to Premium
@@ -318,8 +342,10 @@ const createScreens = (bookCovers: string[], voiceCharacters: VoiceCharacter[]) 
       <div className="flex flex-col items-center justify-center min-h-[70vh] text-center px-6 relative">
         <Confetti />
         
-        {/* Celebration emoji */}
-        <div className="text-7xl mb-6 animate-bounce">🎉</div>
+        {/* Premium badge icon */}
+        <div className="w-24 h-24 bg-gradient-to-br from-amber-400 to-amber-500 rounded-full flex items-center justify-center mb-6 shadow-xl">
+          <Star className="w-12 h-12 text-white fill-white" />
+        </div>
         
         {/* Headline */}
         <h1 className="text-3xl font-bold text-gray-800 mb-3">
@@ -332,9 +358,18 @@ const createScreens = (bookCovers: string[], voiceCharacters: VoiceCharacter[]) 
           <span className="font-semibold text-[#7C3AED]">No credit card needed.</span>
         </p>
         
-        {/* Happy kids illustration placeholder */}
-        <div className="w-48 h-32 bg-gradient-to-br from-[#E9D5FF] to-[#DDD6FE] rounded-2xl flex items-center justify-center mb-8">
-          <span className="text-5xl">📖👧👦</span>
+        {/* Feature preview grid */}
+        <div className="grid grid-cols-3 gap-3 mb-8 w-full max-w-xs">
+          {[
+            { icon: BookOpen, label: 'Stories', color: 'bg-blue-100 text-blue-600' },
+            { icon: Music, label: 'Audio', color: 'bg-purple-100 text-purple-600' },
+            { icon: Gamepad2, label: 'Games', color: 'bg-amber-100 text-amber-600' },
+          ].map((item, i) => (
+            <div key={i} className={`flex flex-col items-center gap-2 p-3 rounded-xl ${item.color.split(' ')[0]}`}>
+              <item.icon className={`w-8 h-8 ${item.color.split(' ')[1]}`} />
+              <span className="text-xs font-medium text-gray-700">{item.label}</span>
+            </div>
+          ))}
         </div>
         
         {/* Button */}
@@ -342,33 +377,42 @@ const createScreens = (bookCovers: string[], voiceCharacters: VoiceCharacter[]) 
           onClick={props.onNext}
           className="w-full max-w-xs bg-gradient-to-r from-[#7C3AED] to-[#6D28D9] text-white font-bold py-4 px-8 rounded-full shadow-lg hover:shadow-xl transition-all active:scale-[0.98] flex items-center justify-center gap-2"
         >
-          <span>Let's See What You Unlocked</span>
+          <span>See What You Unlocked</span>
           <ChevronRight size={20} />
         </button>
       </div>
     ),
   },
   
-  // Screen 2: Unlimited Bible Stories
+  // Screen 2: Character Building Stories
   {
     id: 'stories',
     content: (props: { onNext: () => void }) => (
       <div className="flex flex-col items-center justify-center min-h-[70vh] text-center px-6">
         {/* Icon */}
-        <div className="w-24 h-24 bg-gradient-to-br from-blue-100 to-blue-200 rounded-full flex items-center justify-center mb-6">
-          <BookOpen className="w-12 h-12 text-blue-600" />
-          <Sparkles className="w-6 h-6 text-yellow-500 absolute ml-16 -mt-8" />
+        <div className="w-24 h-24 bg-gradient-to-br from-[#7C3AED] to-[#6D28D9] rounded-full flex items-center justify-center mb-6 shadow-lg relative">
+          <BookOpen className="w-12 h-12 text-white" />
+          <div className="absolute -right-1 -top-1 w-8 h-8 bg-gradient-to-br from-amber-400 to-amber-500 rounded-full flex items-center justify-center shadow">
+            <Heart className="w-4 h-4 text-white fill-white" />
+          </div>
         </div>
         
         {/* Headline */}
         <h2 className="text-2xl font-bold text-gray-800 mb-3">
-          Unlimited Bible Stories
+          Character-Building Stories
         </h2>
         
         {/* Subtext */}
         <p className="text-gray-600 mb-4 max-w-xs">
-          Access our entire library of <span className="font-semibold">100+ illustrated Bible stories</span>. New stories added weekly!
+          Stories that nurture the <span className="font-semibold text-[#7C3AED]">Fruits of the Spirit</span> and build strong character.
         </p>
+        
+        {/* Fruits of Spirit pills */}
+        <div className="flex flex-wrap justify-center gap-2 mb-5 max-w-sm">
+          {FRUITS_OF_SPIRIT.map((fruit, i) => (
+            <TraitPill key={fruit.name} fruit={fruit} delay={i * 100} />
+          ))}
+        </div>
         
         {/* Book covers carousel - real covers */}
         <BookCoverCarousel covers={bookCovers} />
@@ -420,15 +464,17 @@ const createScreens = (bookCovers: string[], voiceCharacters: VoiceCharacter[]) 
     ),
   },
   
-  // Screen 5: Unlimited Quizzes & Games
+  // Screen 4: Interactive Learning Games
   {
     id: 'games',
     content: (props: { onNext: () => void }) => (
       <div className="flex flex-col items-center justify-center min-h-[70vh] text-center px-6">
         {/* Icon */}
-        <div className="w-24 h-24 bg-gradient-to-br from-amber-100 to-amber-200 rounded-full flex items-center justify-center mb-6">
-          <Gamepad2 className="w-10 h-10 text-amber-600" />
-          <Check className="w-6 h-6 text-green-500 absolute ml-14 -mt-6" />
+        <div className="w-24 h-24 bg-gradient-to-br from-amber-400 to-orange-500 rounded-full flex items-center justify-center mb-6 shadow-lg relative">
+          <Gamepad2 className="w-12 h-12 text-white" />
+          <div className="absolute -right-1 -top-1 w-8 h-8 bg-gradient-to-br from-green-400 to-green-500 rounded-full flex items-center justify-center shadow">
+            <Check className="w-4 h-4 text-white" />
+          </div>
         </div>
         
         {/* Headline */}
@@ -438,26 +484,28 @@ const createScreens = (bookCovers: string[], voiceCharacters: VoiceCharacter[]) 
         
         {/* Subtext */}
         <p className="text-gray-600 mb-6 max-w-xs">
-          Unlimited access to <span className="font-semibold">quizzes, memory games, and coloring pages</span>. Make Bible learning fun!
+          Unlimited <span className="font-semibold text-amber-600">quizzes, memory games, and coloring activities</span> that reinforce character lessons.
         </p>
         
-        {/* Quiz preview */}
+        {/* Quiz preview - no emojis */}
         <div className="w-full max-w-xs bg-white rounded-2xl shadow-lg p-4 mb-6 border border-gray-100">
           <div className="flex items-center gap-2 mb-3">
-            <span className="text-xl">❓</span>
-            <span className="font-semibold text-gray-700">Who built the ark?</span>
+            <div className="w-7 h-7 rounded-full bg-purple-100 flex items-center justify-center">
+              <Sparkles className="w-4 h-4 text-purple-600" />
+            </div>
+            <span className="font-semibold text-gray-700">Who showed great faith?</span>
           </div>
           <div className="space-y-2">
             <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-gray-50">
               <div className="w-4 h-4 rounded-full border-2 border-gray-300" />
-              <span className="text-gray-600">Moses</span>
+              <span className="text-gray-600">Pharaoh</span>
             </div>
             <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-green-50 border border-green-300">
               <div className="w-4 h-4 rounded-full bg-green-500 flex items-center justify-center">
                 <Check className="w-3 h-3 text-white" />
               </div>
-              <span className="text-green-700 font-medium">Noah</span>
-              <span className="ml-auto text-green-600">✓</span>
+              <span className="text-green-700 font-medium">David</span>
+              <Check className="w-4 h-4 ml-auto text-green-500" />
             </div>
           </div>
         </div>

@@ -1062,9 +1062,12 @@ const HomePage: React.FC = () => {
 
         {/* 🎬 Video Devotional Activities */}
         {(() => {
-          // Filter lessons marked as "Daily Verse" type (case-insensitive)
+          // Filter lessons marked as "Daily Verse" - check type AND title (case-insensitive)
           const videoDevotionalsRaw = lessons.filter((l: any) => 
-            l.type === 'Daily Verse' || l.type?.toLowerCase() === 'daily verse'
+            l.type === 'Daily Verse' || 
+            l.type?.toLowerCase() === 'daily verse' ||
+            l.title?.toLowerCase().includes('daily verse') ||
+            l.seriesName?.toLowerCase().includes('daily verse')
           );
           
           // Sort: unwatched videos first, completed videos at the back
@@ -1273,8 +1276,13 @@ const HomePage: React.FC = () => {
             <div className="text-white/70 text-center py-8 px-4">Loading lessons...</div>
           ) : (() => {
             // In kid profile we already loaded the selected day's planner lessons into `lessons`.
-            // Exclude Daily Verse lessons - they have their own featured section
-            const dayLessons = lessons.filter((l: any) => l.type !== 'Daily Verse');
+            // Exclude Daily Verse lessons - they have their own featured section (match the devotional filter)
+            const isDailyVerse = (l: any) => 
+              l.type === 'Daily Verse' || 
+              l.type?.toLowerCase() === 'daily verse' ||
+              l.title?.toLowerCase().includes('daily verse') ||
+              l.seriesName?.toLowerCase().includes('daily verse');
+            const dayLessons = lessons.filter((l: any) => !isDailyVerse(l));
             const isFutureDay = selectedDayIndex > todayIndex && todayIndex !== -1;
 
             if (dayLessons.length === 0) {

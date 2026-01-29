@@ -5,6 +5,9 @@ import { activityTrackingService } from '../../services/activityTrackingService'
 import { useSubscription } from '../../context/SubscriptionContext';
 import { useBooks } from '../../context/BooksContext';
 import { ApiService } from '../../services/apiService';
+import { NotificationService } from '../../services/notificationService';
+import { DespiaService } from '../../services/despiaService';
+import { Bell, BellOff } from 'lucide-react';
 
 interface PremiumOnboardingProps {
   isOpen: boolean;
@@ -213,6 +216,99 @@ const VoiceAvatarGrid: React.FC<{ voices: VoiceCharacter[] }> = ({ voices }) => 
   );
 };
 
+// Notification toggle component for the final screen
+const NotificationToggle: React.FC = () => {
+  const [isEnabled, setIsEnabled] = useState<boolean | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
+  
+  // Check if running in native app
+  const isNative = DespiaService.isNative();
+  
+  // Check notification status on mount
+  useEffect(() => {
+    const checkStatus = async () => {
+      if (isNative) {
+        // In native app, we can't directly check - assume not enabled unless user acts
+        // Check if user previously enabled in this session
+        const enabled = sessionStorage.getItem('godlykids_notifications_enabled') === 'true';
+        setIsEnabled(enabled);
+      } else {
+        // Web - check via Notification API
+        if ('Notification' in window) {
+          setIsEnabled(Notification.permission === 'granted');
+        } else {
+          setIsEnabled(false);
+        }
+      }
+    };
+    checkStatus();
+  }, [isNative]);
+
+  const handleToggle = async () => {
+    setIsLoading(true);
+    
+    try {
+      if (isNative) {
+        // Open app settings for user to enable notifications
+        DespiaService.openSettings();
+        // Optimistically assume they'll enable
+        sessionStorage.setItem('godlykids_notifications_enabled', 'true');
+        setIsEnabled(true);
+      } else {
+        // Web - prompt for permission
+        if ('Notification' in window) {
+          if (Notification.permission === 'denied') {
+            // Can't re-prompt if denied - show alert
+            alert('Notifications are blocked. Please enable them in your browser settings.');
+          } else {
+            await NotificationService.promptForPermission();
+            setIsEnabled(Notification.permission === 'granted');
+          }
+        }
+      }
+    } catch (error) {
+      console.error('Error toggling notifications:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  return (
+    <div className="w-full max-w-xs bg-white rounded-2xl p-4 mb-4 border border-gray-200 shadow-sm">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <div className={`w-10 h-10 rounded-full flex items-center justify-center ${isEnabled ? 'bg-[#7C3AED]/10' : 'bg-gray-100'}`}>
+            {isEnabled ? (
+              <Bell className="w-5 h-5 text-[#7C3AED]" />
+            ) : (
+              <BellOff className="w-5 h-5 text-gray-400" />
+            )}
+          </div>
+          <div className="text-left">
+            <p className="font-semibold text-gray-800 text-sm">Trial Reminders</p>
+            <p className="text-xs text-gray-500">Get notified before trial ends</p>
+          </div>
+        </div>
+        
+        {/* Toggle Switch */}
+        <button
+          onClick={handleToggle}
+          disabled={isLoading}
+          className={`relative w-12 h-7 rounded-full transition-colors ${
+            isEnabled ? 'bg-[#7C3AED]' : 'bg-gray-300'
+          } ${isLoading ? 'opacity-50' : ''}`}
+        >
+          <div
+            className={`absolute top-1 w-5 h-5 rounded-full bg-white shadow-md transition-transform ${
+              isEnabled ? 'translate-x-6' : 'translate-x-1'
+            }`}
+          />
+        </button>
+      </div>
+    </div>
+  );
+};
+
 // Screen content components - function to create screens with dynamic data
 const createScreens = (bookCovers: string[], voiceCharacters: VoiceCharacter[]) => [
   // Screen 1: Welcome to Premium
@@ -398,21 +494,8 @@ const createScreens = (bookCovers: string[], voiceCharacters: VoiceCharacter[]) 
           Your <span className="font-semibold text-[#7C3AED]">7-day premium trial</span> is now active. Explore everything Godly Kids has to offer!
         </p>
         
-        {/* App preview mockup */}
-        <div className="w-full max-w-xs bg-gradient-to-br from-gray-50 to-gray-100 rounded-2xl p-4 mb-6 border border-gray-200 shadow-inner">
-          <div className="flex gap-2 mb-3">
-            <div className="flex-1 bg-[#7C3AED] text-white text-xs font-bold py-2 rounded-lg text-center">Explore</div>
-            <div className="flex-1 bg-white text-gray-600 text-xs font-medium py-2 rounded-lg text-center border">Books</div>
-            <div className="flex-1 bg-white text-gray-600 text-xs font-medium py-2 rounded-lg text-center border">Audio</div>
-          </div>
-          <div className="grid grid-cols-4 gap-2">
-            {['📖', '📚', '🎧', '🎮'].map((emoji, i) => (
-              <div key={i} className="aspect-square bg-white rounded-lg flex items-center justify-center text-2xl shadow-sm">
-                {emoji}
-              </div>
-            ))}
-          </div>
-        </div>
+        {/* Notification Toggle */}
+        <NotificationToggle />
         
         {/* Button */}
         <button

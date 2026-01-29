@@ -31,10 +31,13 @@ const onboardingEventSchema = new mongoose.Schema({
             // Godly Kids Time (Daily Session) events
             'learning_goal_selected',
             'godly_kids_time_started',
+            'godly_kids_time_book_completed',
+            'godly_kids_time_discussion_completed',
+            'godly_kids_time_scripture_completed',
             'godly_kids_time_prayer_completed',
             'godly_kids_time_devotional_completed',
-            'godly_kids_time_book_completed',
             'godly_kids_time_completed',
+            'godly_kids_time_paused',
             'godly_kids_time_exited',
             
             // Onboarding flow events

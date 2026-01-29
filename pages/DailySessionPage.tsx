@@ -1318,59 +1318,55 @@ const DailySessionPage: React.FC = () => {
       </div>
 
       {/* Progress Steps */}
-      <div className="px-6 py-4">
-        <div className="bg-[#5D4037]/80 rounded-2xl p-4 border-4 border-[#8B4513]"
+      <div className="px-4 py-3">
+        <div className="bg-[#5D4037]/90 rounded-2xl p-3 border-4 border-[#8B4513]"
           style={{
             boxShadow: 'inset 2px 2px 4px rgba(0,0,0,0.3), inset -2px -2px 4px rgba(255,255,255,0.1)',
           }}
         >
-          <div className="flex items-center justify-between">
-            {session.steps.map((step, index) => (
-              <React.Fragment key={step.type}>
-                {/* Step circle */}
-                <div className="flex flex-col items-center">
+          <div className="grid grid-cols-4 gap-2">
+            {session.steps.map((step, index) => {
+              const isActive = session.currentStepIndex === index;
+              const isCompleted = step.status === 'completed';
+              
+              // Split label into two lines
+              const labelParts = step.label.split(' ');
+              const firstLine = labelParts.slice(0, Math.ceil(labelParts.length / 2)).join(' ');
+              const secondLine = labelParts.slice(Math.ceil(labelParts.length / 2)).join(' ');
+              
+              return (
+                <div key={step.type} className="flex flex-col items-center">
+                  {/* Step icon - rounded square */}
                   <div className={`
-                    w-14 h-14 rounded-full flex items-center justify-center transition-all border-4
-                    ${step.status === 'completed' 
-                      ? 'bg-[#8BC34A] border-[#689F38]' 
-                      : session.currentStepIndex === index
-                        ? 'bg-[#FFD700] border-[#FFA000] ring-4 ring-[#FFD700]/40'
-                        : 'bg-[#8B4513]/50 border-[#5D4037]'
+                    w-12 h-12 rounded-xl flex items-center justify-center transition-all
+                    ${isCompleted 
+                      ? 'bg-[#8BC34A] shadow-lg' 
+                      : isActive
+                        ? 'bg-[#D4A574] ring-2 ring-[#FFD700] shadow-lg'
+                        : 'bg-[#8B6914]/60'
                     }
                   `}>
-                    {getStepStatusIcon(step, index)}
+                    <span className={`text-xl ${isCompleted ? '' : isActive ? '' : 'opacity-70'}`}>
+                      {isCompleted ? <Check className="w-6 h-6 text-white" /> : step.icon}
+                    </span>
                   </div>
-                  <span className={`
-                    text-xs mt-2 font-display font-bold
-                    ${session.currentStepIndex === index 
+                  
+                  {/* Two-line label */}
+                  <div className={`
+                    text-center mt-1.5 leading-tight
+                    ${isActive 
                       ? 'text-[#FFD700]' 
-                      : step.status === 'completed'
+                      : isCompleted
                         ? 'text-[#8BC34A]'
-                        : 'text-[#f3e5ab]/50'
+                        : 'text-[#C4956A]/70'
                     }
                   `}>
-                    {step.label}
-                  </span>
+                    <p className="text-[10px] font-display font-semibold">{firstLine}</p>
+                    {secondLine && <p className="text-[10px] font-display font-semibold">{secondLine}</p>}
+                  </div>
                 </div>
-                
-                {/* Connector line */}
-                {index < session.steps.length - 1 && (
-                  <div className={`
-                    flex-1 h-2 mx-2 rounded-full transition-all
-                    ${step.status === 'completed' 
-                      ? 'bg-[#8BC34A]' 
-                      : 'bg-[#8B4513]/50'
-                    }
-                  `}
-                    style={{
-                      boxShadow: step.status === 'completed' 
-                        ? 'inset 0 -2px 4px rgba(0,0,0,0.2)' 
-                        : 'inset 0 2px 4px rgba(0,0,0,0.3)',
-                    }}
-                  />
-                )}
-              </React.Fragment>
-            ))}
+              );
+            })}
           </div>
         </div>
       </div>

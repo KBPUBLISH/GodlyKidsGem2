@@ -996,9 +996,10 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const isParentQuiz = location.pathname === '/parentquiz';
   const isSharePage = location.pathname.startsWith('/share/') || location.pathname.startsWith('/s/') || (location.pathname.startsWith('/playlist/') && !location.pathname.startsWith('/playlist-detail'));
   const isDailySession = location.pathname === '/daily-session';
+  const isPremiumOnboarding = location.pathname === '/premium-onboarding';
 
   // Standalone pages that don't need the app chrome (background, navigation, etc.)
-  const isStandalonePage = isParentQuiz || isSharePage || isReadyToJumpIn || isDailySession;
+  const isStandalonePage = isParentQuiz || isSharePage || isReadyToJumpIn || isDailySession || isPremiumOnboarding;
 
   // For standalone pages, render just the children without app styling
   if (isStandalonePage) {
@@ -1025,7 +1026,7 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
       <MiniPlayer />
 
       {/* Only show BottomNavigation on main tab pages */}
-      {!isLanding && !isSignIn && !isOnboarding && !isWelcome && !isReadyToJumpIn && !isBookDetail && !isPlayer && !isProfile && !isCreateProfile && !isEditProfile && !isPaywall && !isSettings && !isBookReader && !isAudioPage && !isLessonPage && !isGamePage && !isResetPassword && !isBookSeries && !isCreatePlaylist && !isMyPlaylist && !isDailySession && <BottomNavigation />}
+      {!isLanding && !isSignIn && !isOnboarding && !isWelcome && !isReadyToJumpIn && !isBookDetail && !isPlayer && !isProfile && !isCreateProfile && !isEditProfile && !isPaywall && !isSettings && !isBookReader && !isAudioPage && !isLessonPage && !isGamePage && !isResetPassword && !isBookSeries && !isCreatePlaylist && !isMyPlaylist && !isDailySession && !isPremiumOnboarding && <BottomNavigation />}
 
       {/* Onboarding Tutorial Overlay */}
       <OnboardingTutorial />

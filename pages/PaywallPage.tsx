@@ -272,21 +272,34 @@ const PaywallPage: React.FC = () => {
       console.log('💳 Purchase result:', result);
 
       if (result.success) {
-        // Facebook Pixel - Track successful purchase
-        facebookPixelService.trackPurchase(selectedPlan, price);
-        facebookPixelService.trackSubscribe(selectedPlan, price);
+        // Wrap all tracking in try-catch to prevent crashes
+        try {
+          // Facebook Pixel - Track successful purchase
+          facebookPixelService.trackPurchase(selectedPlan, price);
+          facebookPixelService.trackSubscribe(selectedPlan, price);
+        } catch (fbError) {
+          console.warn('⚠️ Facebook Pixel tracking error:', fbError);
+        }
         
-        // Meta Conversions API - Server-side purchase tracking
-        const userEmail = localStorage.getItem('godlykids_user_email') || authService.getUser()?.email;
-        metaAttributionService.trackPurchase({
-          email: userEmail || undefined,
-          value: price,
-          currency: 'USD',
-          plan: selectedPlan,
-        });
+        try {
+          // Meta Conversions API - Server-side purchase tracking
+          const userEmail = localStorage.getItem('godlykids_user_email') || authService.getUser()?.email;
+          metaAttributionService.trackPurchase({
+            email: userEmail || undefined,
+            value: price,
+            currency: 'USD',
+            plan: selectedPlan,
+          });
+        } catch (metaError) {
+          console.warn('⚠️ Meta Conversions API tracking error:', metaError);
+        }
         
-        // Track successful subscription
-        activityTrackingService.trackOnboardingEvent('subscribed', { planType: selectedPlan });
+        try {
+          // Track successful subscription
+          activityTrackingService.trackOnboardingEvent('subscribed', { planType: selectedPlan });
+        } catch (trackError) {
+          console.warn('⚠️ Activity tracking error:', trackError);
+        }
         
         // Update local state
         subscribe();

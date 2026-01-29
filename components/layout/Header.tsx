@@ -235,7 +235,7 @@ const Header: React.FC<HeaderProps> = ({ isVisible, title = "GODLY KIDS" }) => {
             </div>
             
             {/* Reverse Trial PRO Badge - Show next to avatar */}
-            {reverseTrial.isActive && !isPremium && (
+            {reverseTrial.isActive && (
               <button
                 onClick={() => navigate('/trial-stats')}
                 className="ml-2 bg-gradient-to-r from-amber-400 to-amber-500 px-2.5 py-1 rounded-lg border border-amber-600 shadow-md flex items-center gap-1.5 hover:shadow-lg active:scale-95 transition-all"

@@ -544,6 +544,13 @@ const ShopModal: React.FC<ShopModalProps> = ({ isOpen, onClose, initialTab, hide
                             </svg>
                         ) : null
                     )}
+                    {item.type === 'background' && (
+                        <img 
+                            src={item.value} 
+                            alt={item.name} 
+                            className="w-full h-full object-cover rounded-lg"
+                        />
+                    )}
                     {isDisabled && !isLocked && (
                         <div className="absolute inset-0 bg-black/50 flex items-center justify-center backdrop-blur-[1px]">
                             <span className="text-white font-bold text-[8px] uppercase text-center px-1">{t('needBody')}</span>

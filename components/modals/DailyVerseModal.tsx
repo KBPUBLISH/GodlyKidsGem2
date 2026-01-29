@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { X, BookOpen, Sparkles, Star, RotateCcw, Check } from 'lucide-react';
+import { X, BookOpen, Sparkles, Star, RotateCcw, Check, HelpCircle, Lightbulb } from 'lucide-react';
 import { useAudio } from '../../context/AudioContext';
 
 interface DailyVerseModalProps {
@@ -132,7 +132,7 @@ const DAILY_VERSES = [
   },
 ];
 
-type GameState = 'intro' | 'playing' | 'success' | 'discussion';
+type GameState = 'intro' | 'preview' | 'scrambling' | 'playing' | 'success' | 'discussion';
 
 // Storage key for tracking used verses
 const USED_VERSES_KEY = 'godlykids_used_verse_indices';
@@ -188,6 +188,9 @@ const DailyVerseModal: React.FC<DailyVerseModalProps> = ({
   const [earnedStars, setEarnedStars] = useState(0);
   const [mistakes, setMistakes] = useState(0);
   const [showSparkles, setShowSparkles] = useState(false);
+  const [hintWordId, setHintWordId] = useState<number | null>(null);
+  const [hintsUsed, setHintsUsed] = useState(0);
+  const [previewCountdown, setPreviewCountdown] = useState(3);
 
   useEffect(() => {
     if (isOpen) {
@@ -205,6 +208,9 @@ const DailyVerseModal: React.FC<DailyVerseModalProps> = ({
     setMistakes(0);
     setEarnedStars(0);
     setShowSparkles(false);
+    setHintWordId(null);
+    setHintsUsed(0);
+    setPreviewCountdown(3);
     
     // Split into words
     const chunks = dailyVerse.text.split(' ').map((text, i) => ({
@@ -226,7 +232,36 @@ const DailyVerseModal: React.FC<DailyVerseModalProps> = ({
 
   const startGame = () => {
     playClick?.();
-    setGameState('playing');
+    setPreviewCountdown(3);
+    setGameState('preview');
+    
+    // Start countdown
+    let count = 3;
+    const countdownInterval = setInterval(() => {
+      count--;
+      setPreviewCountdown(count);
+      if (count <= 0) {
+        clearInterval(countdownInterval);
+        // Trigger scramble animation
+        setGameState('scrambling');
+        setTimeout(() => {
+          setGameState('playing');
+        }, 800); // Scramble animation duration
+      }
+    }, 1000);
+  };
+
+  const useHint = () => {
+    if (hintWordId !== null) return; // Already showing hint
+    
+    playTab?.();
+    setHintWordId(nextTargetIndex);
+    setHintsUsed(prev => prev + 1);
+    
+    // Remove hint highlight after 2 seconds
+    setTimeout(() => {
+      setHintWordId(null);
+    }, 2000);
   };
 
   const handleWordClick = (chunkId: number) => {
@@ -257,10 +292,11 @@ const DailyVerseModal: React.FC<DailyVerseModalProps> = ({
   };
 
   const handleWin = () => {
-    // Calculate stars based on mistakes
+    // Calculate stars based on mistakes and hints used
     let stars = 3;
-    if (mistakes > 3) stars = 1;
-    else if (mistakes > 1) stars = 2;
+    const totalPenalties = mistakes + hintsUsed;
+    if (totalPenalties > 3) stars = 1;
+    else if (totalPenalties > 1) stars = 2;
     
     setEarnedStars(stars);
     setShowSparkles(true);
@@ -356,6 +392,68 @@ const DailyVerseModal: React.FC<DailyVerseModalProps> = ({
             </div>
           )}
 
+          {/* PREVIEW STATE - Show verse for 3 seconds */}
+          {gameState === 'preview' && (
+            <div className="text-center py-6">
+              <div className="text-6xl mb-4">📖</div>
+              <h3 className="text-[#3D2914] font-bold text-2xl mb-2">Memorize the Verse!</h3>
+              <p className="text-[#5D4E37] text-base mb-6">
+                Read it carefully before it scrambles...
+              </p>
+              
+              {/* Full verse display */}
+              <div className="bg-[#F5E6D3] rounded-2xl p-6 mb-6 shadow-inner border-2 border-[#C4956A]">
+                <div className="flex flex-wrap gap-2 justify-center mb-4">
+                  {wordChunks.map((word) => (
+                    <span
+                      key={word.id}
+                      className="bg-[#5D4E37] text-[#F5E6D3] px-4 py-2 rounded-xl font-medium text-lg shadow-md"
+                    >
+                      {word.text}
+                    </span>
+                  ))}
+                </div>
+                <p className="text-[#8B4513] font-medium text-base mt-4">— {verse.ref}</p>
+              </div>
+              
+              {/* Countdown */}
+              <div className="flex items-center justify-center gap-2">
+                <div className="w-16 h-16 rounded-full bg-gradient-to-br from-[#5D4E37] to-[#8B6914] flex items-center justify-center border-4 border-[#D4A574] shadow-lg">
+                  <span className="text-[#F5E6D3] font-bold text-3xl">{previewCountdown}</span>
+                </div>
+              </div>
+              <p className="text-[#5D4E37] text-sm mt-2">Scrambling in {previewCountdown}...</p>
+            </div>
+          )}
+
+          {/* SCRAMBLING STATE - Animation transition */}
+          {gameState === 'scrambling' && (
+            <div className="text-center py-6">
+              <div className="text-6xl mb-4 animate-bounce">🔀</div>
+              <h3 className="text-[#3D2914] font-bold text-2xl mb-4">Scrambling!</h3>
+              
+              {/* Scrambling animation */}
+              <div className="bg-[#F5E6D3] rounded-2xl p-6 shadow-inner border-2 border-[#C4956A] overflow-hidden">
+                <div className="flex flex-wrap gap-2 justify-center">
+                  {shuffledIndices.map((idx, i) => {
+                    const word = wordChunks[idx];
+                    return (
+                      <span
+                        key={word.id}
+                        className="bg-gradient-to-b from-[#8B6914] to-[#5D4E37] text-[#F5E6D3] px-4 py-2 rounded-xl font-medium text-lg shadow-md animate-scramble"
+                        style={{
+                          animationDelay: `${i * 50}ms`,
+                        }}
+                      >
+                        {word.text}
+                      </span>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* PLAYING STATE */}
           {gameState === 'playing' && (
             <>
@@ -378,15 +476,33 @@ const DailyVerseModal: React.FC<DailyVerseModalProps> = ({
               </div>
 
               {/* Progress indicator */}
-              <div className="flex items-center justify-between mb-6 px-1">
+              <div className="flex items-center justify-between mb-4 px-1">
                 <p className="text-[#3D2914] text-sm font-medium">
                   {nextTargetIndex} / {wordChunks.length} words
                 </p>
-                {mistakes > 0 && (
-                  <p className="text-red-700 text-sm font-medium">
-                    {mistakes} mistake{mistakes !== 1 ? 's' : ''}
-                  </p>
-                )}
+                <div className="flex items-center gap-3">
+                  {mistakes > 0 && (
+                    <p className="text-red-700 text-sm font-medium">
+                      {mistakes} mistake{mistakes !== 1 ? 's' : ''}
+                    </p>
+                  )}
+                  {/* Help button */}
+                  <button
+                    onClick={useHint}
+                    disabled={hintWordId !== null}
+                    className={`
+                      flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium
+                      transition-all duration-200
+                      ${hintWordId !== null 
+                        ? 'bg-yellow-400/50 text-yellow-800 cursor-not-allowed' 
+                        : 'bg-yellow-400 text-yellow-900 hover:bg-yellow-300 active:scale-95 shadow-md'
+                      }
+                    `}
+                  >
+                    <Lightbulb className="w-4 h-4" />
+                    Hint
+                  </button>
+                </div>
               </div>
 
               {/* Word choices - wooden plank style */}
@@ -395,17 +511,21 @@ const DailyVerseModal: React.FC<DailyVerseModalProps> = ({
                   const chunk = wordChunks[idx];
                   if (chunk.isPlaced) return null;
                   
+                  const isHinted = hintWordId === chunk.id;
+                  
                   return (
                     <button
                       key={chunk.id}
                       onClick={() => handleWordClick(chunk.id)}
                       className={`
                         px-5 py-3 rounded-xl font-medium text-lg
-                        bg-gradient-to-b from-[#8B6914] to-[#5D4E37]
-                        border-2 border-[#D4A574] text-[#F5E6D3]
-                        hover:border-[#F5E6D3] hover:scale-105
-                        active:scale-95 transition-all duration-150 shadow-md
-                        ${shakeItem === chunk.id ? 'animate-shake border-red-500 bg-red-700/50' : ''}
+                        transition-all duration-150 shadow-md
+                        ${isHinted 
+                          ? 'bg-gradient-to-b from-yellow-400 to-yellow-500 border-2 border-yellow-300 text-yellow-900 scale-110 animate-pulse ring-4 ring-yellow-300/50' 
+                          : 'bg-gradient-to-b from-[#8B6914] to-[#5D4E37] border-2 border-[#D4A574] text-[#F5E6D3] hover:border-[#F5E6D3] hover:scale-105'
+                        }
+                        active:scale-95
+                        ${shakeItem === chunk.id ? 'animate-shake border-red-500 !bg-red-700/50' : ''}
                       `}
                     >
                       {chunk.text}
@@ -537,6 +657,16 @@ const DailyVerseModal: React.FC<DailyVerseModalProps> = ({
           0% { opacity: 0; transform: scale(0) rotate(0deg); }
           50% { opacity: 1; transform: scale(1.2) rotate(180deg); }
           100% { opacity: 0; transform: scale(0) rotate(360deg); }
+        }
+        @keyframes scramble {
+          0% { transform: translateY(0) rotate(0deg); opacity: 1; }
+          25% { transform: translateY(-20px) rotate(-10deg); opacity: 0.7; }
+          50% { transform: translateY(10px) rotate(5deg); opacity: 0.8; }
+          75% { transform: translateY(-10px) rotate(-3deg); opacity: 0.9; }
+          100% { transform: translateY(0) rotate(0deg); opacity: 1; }
+        }
+        .animate-scramble {
+          animation: scramble 0.6s ease-in-out forwards;
         }
       `}</style>
     </div>

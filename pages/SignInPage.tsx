@@ -116,6 +116,8 @@ const SignInPage: React.FC = () => {
         
         console.log('✅ Legacy user migrated:', data);
         
+        // Skip welcome page for returning users
+        localStorage.setItem('godlykids_welcome_seen', 'true');
         // Navigate to home
         window.dispatchEvent(new Event('authTokenUpdated'));
         setTimeout(() => navigate('/home'), 100);
@@ -201,6 +203,8 @@ const SignInPage: React.FC = () => {
           console.log('⚠️ Email confirmation needed, navigating to onboarding');
           navigate('/onboarding');
         } else {
+          // Skip welcome page for returning users who sign in
+          localStorage.setItem('godlykids_welcome_seen', 'true');
           // Force books to reload by dispatching event and then navigating
           window.dispatchEvent(new Event('authTokenUpdated'));
           // Small delay to ensure token is stored before navigation

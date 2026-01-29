@@ -575,9 +575,12 @@ const DailyVerseModal: React.FC<DailyVerseModalProps> = ({
                 <p className="text-[#8B4513] text-base">{verse.ref}</p>
               </div>
               
-              <p className="text-[#5D4E37] text-xl mb-8">
-                +10 coins earned! 🪙
-              </p>
+              <div className="flex items-center justify-center gap-2 text-xl mb-8">
+                <span className="text-[#5D4E37]">+10 coins earned!</span>
+                <div className="w-7 h-7 bg-gradient-to-br from-[#FFD700] to-[#FFA000] rounded-full flex items-center justify-center shadow-md border-2 border-[#FF8F00]">
+                  <span className="text-[#8B4513] font-bold text-sm">$</span>
+                </div>
+              </div>
               
               <button
                 onClick={() => {

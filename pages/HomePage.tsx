@@ -574,8 +574,29 @@ const HomePage: React.FC = () => {
 
         const plan = await loadDayPlan(dateKey);
         const lessonsFromPlan = plan?.slots?.map((s: any) => s.lesson).filter(Boolean) || [];
-        setLessons(lessonsFromPlan);
-        cacheData('lessons', lessonsFromPlan);
+        
+        // Also fetch all lessons to get Daily Verse videos (for Video Devotional section)
+        try {
+          const allLessons = await ApiService.getLessons();
+          // Filter to only get Daily Verse lessons
+          const dailyVerseVideos = allLessons.filter((l: any) => 
+            l.type === 'Daily Verse' || 
+            l.type?.toLowerCase() === 'daily verse' ||
+            l.title?.toLowerCase().includes('daily verse') ||
+            l.seriesName?.toLowerCase().includes('daily verse')
+          );
+          // Combine planner lessons with Daily Verse videos (avoid duplicates)
+          const plannerIds = new Set(lessonsFromPlan.map((l: any) => l._id));
+          const uniqueDailyVerses = dailyVerseVideos.filter((l: any) => !plannerIds.has(l._id));
+          const combinedLessons = [...lessonsFromPlan, ...uniqueDailyVerses];
+          setLessons(combinedLessons);
+          cacheData('lessons', combinedLessons);
+        } catch (e) {
+          // If fetching all lessons fails, at least show planner lessons
+          setLessons(lessonsFromPlan);
+          cacheData('lessons', lessonsFromPlan);
+        }
+        
         setWeekLessons(new Map()); // not used in planner mode
         return;
       }

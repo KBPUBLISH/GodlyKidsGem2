@@ -61,7 +61,7 @@ const ContentCarousel: React.FC<{ bookCovers: string[] }> = ({ bookCovers }) => 
         {tripleCovers.map((cover, i) => (
           <div 
             key={i}
-            className="flex-shrink-0 w-16 h-20 rounded-lg overflow-hidden shadow-md bg-white/20"
+            className="flex-shrink-0 w-16 h-20 rounded-lg overflow-hidden shadow-md bg-gradient-to-br from-[#7C3AED]/30 to-[#3D8B8B]/30"
           >
             <img 
               src={cover} 
@@ -69,7 +69,8 @@ const ContentCarousel: React.FC<{ bookCovers: string[] }> = ({ bookCovers }) => 
               className="w-full h-full object-cover"
               loading="lazy"
               onError={(e) => {
-                (e.target as HTMLImageElement).src = '/assets/images/placeholder-book.png';
+                // Hide broken image, gradient background shows through
+                (e.target as HTMLImageElement).style.display = 'none';
               }}
             />
           </div>

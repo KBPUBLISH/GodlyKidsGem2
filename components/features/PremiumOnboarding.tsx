@@ -253,48 +253,7 @@ const createScreens = (bookCovers: string[]) => [
     ),
   },
   
-  // Screen 3: Ad-Free Experience
-  {
-    id: 'adfree',
-    content: (props: { onNext: () => void }) => (
-      <div className="flex flex-col items-center justify-center min-h-[70vh] text-center px-6">
-        {/* Icon */}
-        <div className="w-24 h-24 bg-gradient-to-br from-green-100 to-green-200 rounded-full flex items-center justify-center mb-6 relative">
-          <div className="text-4xl">🚫📺</div>
-          <div className="absolute -right-2 -bottom-1 text-3xl">😊</div>
-        </div>
-        
-        {/* Headline */}
-        <h2 className="text-2xl font-bold text-gray-800 mb-3">
-          No More Interruptions
-        </h2>
-        
-        {/* Subtext */}
-        <p className="text-gray-600 mb-6 max-w-xs">
-          Enjoy completely <span className="font-semibold">ad-free reading and learning</span>. Just you and your kids, focused on faith.
-        </p>
-        
-        {/* Peaceful scene illustration */}
-        <div className="w-64 h-40 bg-gradient-to-br from-[#D1FAE5] to-[#A7F3D0] rounded-2xl flex items-center justify-center mb-6 shadow-inner">
-          <div className="text-center">
-            <span className="text-5xl">🌿📖✨</span>
-            <p className="text-green-700 text-sm mt-2 font-medium">Pure, peaceful reading</p>
-          </div>
-        </div>
-        
-        {/* Button */}
-        <button
-          onClick={props.onNext}
-          className="w-full max-w-xs bg-gradient-to-r from-[#7C3AED] to-[#6D28D9] text-white font-bold py-4 px-8 rounded-full shadow-lg hover:shadow-xl transition-all active:scale-[0.98] flex items-center justify-center gap-2"
-        >
-          <span>Next</span>
-          <ChevronRight size={20} />
-        </button>
-      </div>
-    ),
-  },
-  
-  // Screen 4: All Voices Unlocked
+  // Screen 3: All Voices Unlocked
   {
     id: 'voices',
     content: (props: { onNext: () => void }) => (

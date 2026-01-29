@@ -118,7 +118,19 @@ const SHOP_ANIMATIONS: ShopItem[] = [
     { id: 'anim6', name: 'Spin', price: 600, type: 'animation', value: 'anim-spin', isPremium: true },
 ];
 
-type ShopTab = 'head' | 'hat' | 'body' | 'arms' | 'legs' | 'moves' | 'voices' | 'saves';
+// Background themes - purchasable with gold coins
+const SHOP_BACKGROUNDS: ShopItem[] = [
+    // Default (free - already owned by everyone)
+    { id: 'bg1', name: 'Ocean Paradise', price: 0, type: 'background', value: '/assets/images/panorama-background.jpg' },
+    // Purchasable backgrounds
+    { id: 'bg2', name: 'Sunset Island', price: 300, type: 'background', value: '/assets/images/islandbackground.jpg' },
+    { id: 'bg3', name: 'Ship Deck', price: 400, type: 'background', value: '/assets/images/ship-deck.jpg' },
+    { id: 'bg4', name: 'Dressing Room', price: 500, type: 'background', value: '/assets/images/dressing-room.jpg' },
+    // Premium backgrounds (subscribers only)
+    { id: 'bg5', name: 'Pirate Ship', price: 600, type: 'background', value: '/assets/images/ship.jpg', isPremium: true },
+];
+
+type ShopTab = 'head' | 'hat' | 'body' | 'arms' | 'legs' | 'moves' | 'voices' | 'backgrounds' | 'saves';
 
 const ShopModal: React.FC<ShopModalProps> = ({ isOpen, onClose, initialTab, hideCloseButton = false }) => {
     const navigate = useNavigate();
@@ -277,6 +289,7 @@ const ShopModal: React.FC<ShopModalProps> = ({ isOpen, onClose, initialTab, hide
         equippedRightArm,
         equippedLegs,
         equippedAnimation,
+        equippedBackground,
         equippedLeftArmRotation,
         equippedRightArmRotation,
         equippedLegsRotation,
@@ -389,6 +402,7 @@ const ShopModal: React.FC<ShopModalProps> = ({ isOpen, onClose, initialTab, hide
             case 'legs': return SHOP_LEGS;
             case 'moves': return SHOP_ANIMATIONS;
             case 'voices': return availableVoices;
+            case 'backgrounds': return SHOP_BACKGROUNDS;
             case 'saves': return []; // Handled separately
             default: return [];
         }
@@ -404,6 +418,7 @@ const ShopModal: React.FC<ShopModalProps> = ({ isOpen, onClose, initialTab, hide
             case 'legs': return equippedLegs === item.value;
             case 'animation': return equippedAnimation === item.value;
             case 'voice': return false; // Voices don't have an "equipped" state
+            case 'background': return equippedBackground === item.value;
             default: return false;
         }
     };
@@ -865,6 +880,7 @@ const ShopModal: React.FC<ShopModalProps> = ({ isOpen, onClose, initialTab, hide
                             {renderTab('legs', 'LEGS')}
                             {renderTab('moves', 'MOVES')}
                             {renderTab('voices', 'VOICES')}
+                            {renderTab('backgrounds', '🌅 SCENES')}
                             {renderTab('saves', 'MY SAVES')}
                         </div>
 

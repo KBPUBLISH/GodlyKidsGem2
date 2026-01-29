@@ -8,8 +8,8 @@ export interface ShopItem {
   id: string;
   name: string;
   price: number;
-  type: 'avatar' | 'frame' | 'hat' | 'body' | 'leftArm' | 'rightArm' | 'legs' | 'animation' | 'voice';
-  value: string; // URL for avatar, Color Class/Hex for frame, Asset ID for parts, Animation Class, or Voice ID
+  type: 'avatar' | 'frame' | 'hat' | 'body' | 'leftArm' | 'rightArm' | 'legs' | 'animation' | 'voice' | 'background';
+  value: string; // URL for avatar, Color Class/Hex for frame, Asset ID for parts, Animation Class, Voice ID, or Background URL
   previewColor?: string; // For displaying frame colors in shop
   isPremium?: boolean; // Locked for non-subscribers
 }
@@ -93,6 +93,10 @@ interface UserContextType {
   equippedLegs: string | null;
   equippedAnimation: string; // New: Animation Style
   
+  // Background customization
+  equippedBackground: string;
+  setEquippedBackground: (url: string) => void;
+  
   // Rotation (Pose)
   equippedLeftArmRotation: number;
   equippedRightArmRotation: number;
@@ -170,6 +174,8 @@ const UserContext = createContext<UserContextType>({
   equippedRightArm: null,
   equippedLegs: null,
   equippedAnimation: 'anim-breathe',
+  equippedBackground: '/assets/images/panorama-background.jpg',
+  setEquippedBackground: () => {},
   equippedLeftArmRotation: 0,
   equippedRightArmRotation: 0,
   equippedLegsRotation: 0,
@@ -241,7 +247,7 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [coinTransactions, setCoinTransactions] = useState<CoinTransaction[]>(saved?.coinTransactions ?? []);
   const [referralCode] = useState<string>(saved?.referralCode ?? generateReferralCode());
   const [redeemedCodes, setRedeemedCodes] = useState<string[]>(saved?.redeemedCodes ?? []);
-  const [ownedItems, setOwnedItems] = useState<string[]>(saved?.ownedItems ?? ['f1', 'anim1']); // anim1 is default breathe
+  const [ownedItems, setOwnedItems] = useState<string[]>(saved?.ownedItems ?? ['f1', 'anim1', 'bg1']); // anim1 is default breathe, bg1 is default background
   const [unlockedVoices, setUnlockedVoices] = useState<string[]>(saved?.unlockedVoices ?? []); // Voices unlocked by user
   
   // Profile Data
@@ -323,6 +329,9 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [equippedShip, setEquippedShip] = useState<string | null>(saved?.equippedShip ?? null);
   const [equippedWheel, setEquippedWheel] = useState<string | null>(saved?.equippedWheel ?? null);
   const [equippedPet, setEquippedPet] = useState<string | null>(saved?.equippedPet ?? null);
+  
+  // Background customization
+  const [equippedBackground, setEquippedBackground] = useState<string>(saved?.equippedBackground ?? '/assets/images/panorama-background.jpg');
   
   // Rotation State (Defaults to 0)
   const [equippedLeftArmRotation, setEquippedLeftArmRotation] = useState<number>(saved?.equippedLeftArmRotation ?? 0);
@@ -631,6 +640,7 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
       equippedShip,
       equippedWheel,
       equippedPet,
+      equippedBackground,
       equippedLeftArmRotation,
       equippedRightArmRotation,
       equippedLegsRotation,
@@ -691,7 +701,8 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
     hasLoadedFromCloud,
     equippedShip,
     equippedWheel,
-    equippedPet
+    equippedPet,
+    equippedBackground
   ]);
 
   // Sync subscription status from godlykids_premium (RevenueCat source of truth)
@@ -1064,7 +1075,7 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
         applyEconomyState({
           coins: kid.coins ?? 500, // New kids start with 500 coins
           coinTransactions: kid.coinTransactions ?? [],
-          ownedItems: kid.ownedItems ?? ['f1', 'anim1'],
+          ownedItems: kid.ownedItems ?? ['f1', 'anim1', 'bg1'],
           unlockedVoices: kid.unlockedVoices ?? [],
           redeemedCodes: kid.redeemedCodes ?? [],
         });
@@ -1185,6 +1196,7 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
       case 'rightArm': setEquippedRightArm(value); break;
       case 'legs': setEquippedLegs(value); break;
       case 'animation': setEquippedAnimation(value); break;
+      case 'background': setEquippedBackground(value); break;
     }
   };
 
@@ -1349,7 +1361,7 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setCoins(500); // New users start with 500 gold coins
     setCoinTransactions([]);
     setRedeemedCodes([]);
-    setOwnedItems(['f1', 'anim1']);
+    setOwnedItems(['f1', 'anim1', 'bg1']);
     setUnlockedVoices([]);
     setParentName(''); // Empty string signals no user data
     setKids([]);
@@ -1424,6 +1436,8 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
       equippedRightArm,
       equippedLegs,
       equippedAnimation,
+      equippedBackground,
+      setEquippedBackground,
       equippedLeftArmRotation,
       equippedRightArmRotation,
       equippedLegsRotation,

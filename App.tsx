@@ -779,6 +779,7 @@ const CloudSVG: React.FC<{ width: number; opacity?: number; flip?: boolean }> = 
 // The Panorama Background Component
 const PanoramaBackground: React.FC = () => {
   const location = useLocation();
+  const { equippedBackground } = useUser();
 
   // active index logic remains same
   const activeIndex = useMemo(() => {
@@ -825,12 +826,12 @@ const PanoramaBackground: React.FC = () => {
       >
         {/* ==============================================
              BACKGROUND IMAGE LAYER
-             Replace the gradient-based panorama with an image
+             Customizable via shop - users can purchase different backgrounds
          ============================================== */}
         <div
-          className="absolute inset-0 w-[600vw] h-full"
+          className="absolute inset-0 w-[600vw] h-full transition-opacity duration-500"
           style={{
-            backgroundImage: 'url(/assets/images/panorama-background.jpg)',
+            backgroundImage: `url(${equippedBackground})`,
             backgroundSize: 'cover',
             backgroundPosition: 'center bottom',
             backgroundRepeat: 'no-repeat'

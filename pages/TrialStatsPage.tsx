@@ -9,16 +9,28 @@ import {
   GraduationCap,
   Clock,
   Sparkles,
-  ChevronRight,
-  Star
+  Star,
+  Check,
+  Loader2
 } from 'lucide-react';
 import { useSubscription } from '../context/SubscriptionContext';
 import { activityTrackingService, ActivityStats } from '../services/activityTrackingService';
+import ParentGateModal from '../components/modals/ParentGateModal';
 
 const TrialStatsPage: React.FC = () => {
   const navigate = useNavigate();
-  const { reverseTrial, isPremium } = useSubscription();
+  const { reverseTrial, isPremium, purchase, isLoading } = useSubscription();
   const [stats, setStats] = useState<ActivityStats | null>(null);
+  const [selectedPlan, setSelectedPlan] = useState<'annual' | 'monthly'>('annual');
+  const [showParentGate, setShowParentGate] = useState(false);
+  const [isPurchasing, setIsPurchasing] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  
+  // Pricing
+  const monthlyPrice = 5.99;
+  const annualPrice = 39.99;
+  const annualMonthly = (annualPrice / 12).toFixed(2);
+  const savings = Math.round(((monthlyPrice * 12 - annualPrice) / (monthlyPrice * 12)) * 100);
   
   useEffect(() => {
     // Get stats for the trial period (7 days)
@@ -44,6 +56,34 @@ const TrialStatsPage: React.FC = () => {
     if (!reverseTrial.endDate) return '';
     const date = new Date(reverseTrial.endDate);
     return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  };
+
+  const handleSubscribeClick = () => {
+    setError(null);
+    activityTrackingService.trackOnboardingEvent('trial_stats_subscribe_clicked', { planType: selectedPlan });
+    setShowParentGate(true);
+  };
+
+  const handleGateSuccess = async () => {
+    setShowParentGate(false);
+    setIsPurchasing(true);
+    setError(null);
+    
+    try {
+      const result = await purchase(selectedPlan);
+      
+      if (result.success) {
+        activityTrackingService.trackOnboardingEvent('trial_stats_purchase_success', { planType: selectedPlan });
+        navigate('/home', { replace: true });
+      } else {
+        setError(result.error || 'Purchase failed. Please try again.');
+        activityTrackingService.trackOnboardingEvent('trial_stats_purchase_failed', { planType: selectedPlan, error: result.error });
+      }
+    } catch (err: any) {
+      setError(err.message || 'An error occurred. Please try again.');
+    } finally {
+      setIsPurchasing(false);
+    }
   };
 
   // Feature stats cards configuration
@@ -131,7 +171,7 @@ const TrialStatsPage: React.FC = () => {
         </div>
 
         {/* Stats Summary */}
-        <div className="text-center py-4">
+        <div className="text-center py-2">
           <div className="inline-flex items-center gap-2 bg-gradient-to-r from-[#7C3AED]/10 to-purple-100 px-4 py-2 rounded-full mb-2">
             <Sparkles className="w-5 h-5 text-[#7C3AED]" />
             <span className="font-semibold text-[#7C3AED]">
@@ -168,43 +208,124 @@ const TrialStatsPage: React.FC = () => {
             <Star className="w-5 h-5 text-amber-500" />
             Premium Features You're Enjoying
           </h3>
-          <div className="space-y-3">
+          <div className="grid grid-cols-2 gap-2">
             {[
-              { label: 'Unlimited Books & Stories', active: true },
-              { label: 'All Audio Playlists', active: true },
-              { label: 'Daily Lessons & Activities', active: true },
-              { label: 'Voice Selection & Cloning', active: true },
-              { label: 'All Educational Games', active: true },
-              { label: 'Offline Downloads', active: true },
+              'Unlimited Books & Stories',
+              'All Audio Playlists',
+              'Daily Lessons',
+              'Voice Selection',
+              'Educational Games',
+              '100% Ad-Free',
             ].map((feature, i) => (
-              <div key={i} className="flex items-center gap-3">
-                <div className="w-5 h-5 rounded-full bg-green-100 flex items-center justify-center">
-                  <div className="w-2 h-2 rounded-full bg-green-500" />
+              <div key={i} className="flex items-center gap-2">
+                <div className="w-4 h-4 rounded-full bg-green-100 flex items-center justify-center flex-shrink-0">
+                  <Check className="w-2.5 h-2.5 text-green-600" />
                 </div>
-                <span className="text-gray-700">{feature.label}</span>
+                <span className="text-gray-700 text-sm">{feature}</span>
               </div>
             ))}
           </div>
         </div>
 
-        {/* CTA Section */}
-        <div className="bg-gradient-to-br from-[#7C3AED] to-[#6D28D9] rounded-2xl p-6 text-center shadow-lg">
-          <h3 className="text-white font-bold text-xl mb-2">
+        {/* Pricing Section */}
+        <div className="bg-gradient-to-br from-[#7C3AED] to-[#6D28D9] rounded-2xl p-5 shadow-lg">
+          <h3 className="text-white font-bold text-xl mb-1 text-center">
             Keep the magic going!
           </h3>
-          <p className="text-white/80 text-sm mb-5">
-            Subscribe now to continue unlimited access to all premium content
+          <p className="text-white/80 text-sm mb-4 text-center">
+            Subscribe now to continue unlimited access
           </p>
           
+          {/* Plan Options */}
+          <div className="space-y-3 mb-4">
+            {/* Annual Option */}
+            <div 
+              onClick={() => setSelectedPlan('annual')}
+              className={`relative w-full rounded-xl border-2 overflow-hidden cursor-pointer transition-all ${
+                selectedPlan === 'annual' 
+                ? 'bg-white border-white shadow-lg' 
+                : 'bg-white/10 border-white/30'
+              }`}
+            >
+              {/* Best Value Badge */}
+              <div className="absolute -top-0 -right-0">
+                <div className="bg-gradient-to-r from-[#f59e0b] to-[#fbbf24] text-white text-[10px] font-bold px-2 py-0.5 rounded-bl-lg">
+                  SAVE {savings}%
+                </div>
+              </div>
+              
+              <div className="p-3 flex items-center gap-3">
+                <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0 ${
+                  selectedPlan === 'annual' ? 'bg-[#7C3AED] border-[#7C3AED]' : 'border-white/50'
+                }`}>
+                  {selectedPlan === 'annual' && <Check size={12} className="text-white" strokeWidth={3} />}
+                </div>
+                
+                <div className="flex-1">
+                  <p className={`font-bold ${selectedPlan === 'annual' ? 'text-gray-800' : 'text-white'}`}>Annual</p>
+                  <p className={`text-xs ${selectedPlan === 'annual' ? 'text-gray-500' : 'text-white/70'}`}>${annualMonthly}/month</p>
+                </div>
+                
+                <div className="text-right">
+                  <p className={`font-extrabold text-lg ${selectedPlan === 'annual' ? 'text-gray-800' : 'text-white'}`}>${annualPrice}</p>
+                  <p className={`text-xs ${selectedPlan === 'annual' ? 'text-gray-400 line-through' : 'text-white/50 line-through'}`}>${(monthlyPrice * 12).toFixed(2)}</p>
+                </div>
+              </div>
+            </div>
+
+            {/* Monthly Option */}
+            <div 
+              onClick={() => setSelectedPlan('monthly')}
+              className={`relative w-full rounded-xl border-2 overflow-hidden cursor-pointer transition-all ${
+                selectedPlan === 'monthly' 
+                ? 'bg-white border-white shadow-lg' 
+                : 'bg-white/10 border-white/30'
+              }`}
+            >
+              <div className="p-3 flex items-center gap-3">
+                <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0 ${
+                  selectedPlan === 'monthly' ? 'bg-[#7C3AED] border-[#7C3AED]' : 'border-white/50'
+                }`}>
+                  {selectedPlan === 'monthly' && <Check size={12} className="text-white" strokeWidth={3} />}
+                </div>
+                
+                <div className="flex-1">
+                  <p className={`font-bold ${selectedPlan === 'monthly' ? 'text-gray-800' : 'text-white'}`}>Monthly</p>
+                  <p className={`text-xs ${selectedPlan === 'monthly' ? 'text-gray-500' : 'text-white/70'}`}>Cancel anytime</p>
+                </div>
+                
+                <div className="text-right">
+                  <p className={`font-extrabold text-lg ${selectedPlan === 'monthly' ? 'text-gray-800' : 'text-white'}`}>${monthlyPrice}</p>
+                  <p className={`text-xs ${selectedPlan === 'monthly' ? 'text-gray-400' : 'text-white/50'}`}>/month</p>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Error Message */}
+          {error && (
+            <div className="bg-red-100 border border-red-300 text-red-700 px-3 py-2 rounded-lg mb-3 text-sm">
+              {error}
+            </div>
+          )}
+          
+          {/* Subscribe Button */}
           <button
-            onClick={() => navigate('/paywall')}
-            className="w-full bg-white text-[#7C3AED] font-bold py-4 rounded-xl shadow-lg hover:shadow-xl active:scale-[0.98] transition-all flex items-center justify-center gap-2"
+            onClick={handleSubscribeClick}
+            disabled={isPurchasing || isLoading}
+            className="w-full bg-gradient-to-r from-[#fbbf24] to-[#f59e0b] text-[#1e1b4b] font-bold py-4 rounded-xl shadow-lg hover:shadow-xl active:scale-[0.98] transition-all disabled:opacity-70"
           >
-            <span>View Plans & Pricing</span>
-            <ChevronRight className="w-5 h-5" />
+            {isPurchasing ? (
+              <span className="flex items-center justify-center gap-2">
+                <Loader2 className="w-5 h-5 animate-spin" />
+                Processing...
+              </span>
+            ) : (
+              <span>Subscribe Now • ${selectedPlan === 'annual' ? annualPrice : monthlyPrice}/{selectedPlan === 'annual' ? 'year' : 'month'}</span>
+            )}
           </button>
           
-          <p className="text-white/60 text-xs mt-3">
+          <p className="text-white/60 text-xs mt-3 text-center">
             Cancel anytime • No commitment required
           </p>
         </div>
@@ -212,6 +333,13 @@ const TrialStatsPage: React.FC = () => {
         {/* Bottom spacing */}
         <div className="h-8" />
       </div>
+
+      {/* Parent Gate Modal */}
+      <ParentGateModal 
+        isOpen={showParentGate} 
+        onClose={() => setShowParentGate(false)} 
+        onSuccess={handleGateSuccess} 
+      />
     </div>
   );
 };

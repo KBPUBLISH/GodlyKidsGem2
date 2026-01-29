@@ -2,6 +2,14 @@ import React, { createContext, useContext, useState, useEffect, useCallback, Rea
 import RevenueCatService, { PREMIUM_ENTITLEMENT_ID } from '../services/revenueCatService';
 import { authService } from '../services/authService';
 
+interface ReverseTrialStatus {
+  hasReverseTrial: boolean;
+  isActive: boolean;
+  daysRemaining: number;
+  trialEndDate: Date | null;
+  eligible: boolean;
+}
+
 interface SubscriptionContextType {
   // State
   isInitialized: boolean;
@@ -9,10 +17,16 @@ interface SubscriptionContextType {
   isPremium: boolean;
   isNativeApp: boolean;
   
+  // Reverse Trial State
+  reverseTrial: ReverseTrialStatus;
+  
   // Actions
   checkPremiumStatus: () => Promise<boolean>;
   purchase: (plan: 'annual' | 'monthly' | 'lifetime') => Promise<{ success: boolean; error?: string }>;
   restorePurchases: () => Promise<{ success: boolean; error?: string }>;
+  startReverseTrial: () => Promise<{ success: boolean; error?: string }>;
+  checkReverseTrialStatus: () => Promise<ReverseTrialStatus>;
+  markReverseTrialConverted: () => Promise<void>;
   
   // For testing in web browser
   setTestPremium: (isPremium: boolean) => void;
@@ -79,6 +93,15 @@ export const SubscriptionProvider: React.FC<SubscriptionProviderProps> = ({ chil
   const [isLoading, setIsLoading] = useState(true);
   const [isPremium, setIsPremium] = useState(false);
   const [isNativeApp, setIsNativeApp] = useState(false);
+  
+  // Reverse Trial State
+  const [reverseTrial, setReverseTrial] = useState<ReverseTrialStatus>({
+    hasReverseTrial: false,
+    isActive: false,
+    daysRemaining: 0,
+    trialEndDate: null,
+    eligible: true,
+  });
 
   // Check subscription status from localStorage and backend (NO automatic restore - that shows UI)
   const checkSubscriptionFromAllSources = useCallback(async (): Promise<boolean> => {
@@ -89,6 +112,12 @@ export const SubscriptionProvider: React.FC<SubscriptionProviderProps> = ({ chil
     if (localPremium) {
       console.log('✅ Premium found in localStorage');
       return true;
+    }
+    
+    // 1.5. Check for active reverse trial in localStorage
+    const localReverseTrial = localStorage.getItem('godlykids_reverse_trial') === 'true';
+    if (localReverseTrial) {
+      console.log('🎁 Reverse trial found in localStorage - will verify with backend');
     }
     
     // 2. Check backend webhook status using ALL possible identifiers
@@ -271,14 +300,126 @@ export const SubscriptionProvider: React.FC<SubscriptionProviderProps> = ({ chil
     setIsPremium(premium);
   }, []);
 
+  // Check reverse trial status from backend
+  const checkReverseTrialStatus = useCallback(async (): Promise<ReverseTrialStatus> => {
+    try {
+      const userIds = getAllUserIds();
+      const apiBaseUrl = getApiBaseUrl();
+      
+      for (const userId of userIds) {
+        try {
+          const response = await fetch(`${apiBaseUrl}/api/app-user/reverse-trial-status/${encodeURIComponent(userId)}`);
+          if (response.ok) {
+            const data = await response.json();
+            if (data.success) {
+              const status: ReverseTrialStatus = {
+                hasReverseTrial: data.hasReverseTrial,
+                isActive: data.isActive,
+                daysRemaining: data.daysRemaining || 0,
+                trialEndDate: data.trialEndDate ? new Date(data.trialEndDate) : null,
+                eligible: data.eligible,
+              };
+              setReverseTrial(status);
+              
+              // If reverse trial is active, grant premium access locally
+              if (status.isActive) {
+                localStorage.setItem('godlykids_reverse_trial', 'true');
+                localStorage.setItem('godlykids_premium', 'true');
+                setIsPremium(true);
+              } else if (status.hasReverseTrial && !status.isActive) {
+                // Trial expired
+                localStorage.removeItem('godlykids_reverse_trial');
+              }
+              
+              return status;
+            }
+          }
+        } catch (error) {
+          console.log(`⚠️ Reverse trial check failed for ${userId}`);
+        }
+      }
+      
+      return { hasReverseTrial: false, isActive: false, daysRemaining: 0, trialEndDate: null, eligible: true };
+    } catch (error) {
+      console.error('Error checking reverse trial:', error);
+      return { hasReverseTrial: false, isActive: false, daysRemaining: 0, trialEndDate: null, eligible: true };
+    }
+  }, []);
+
+  // Start a reverse trial
+  const startReverseTrial = useCallback(async (): Promise<{ success: boolean; error?: string }> => {
+    try {
+      const userIds = getAllUserIds();
+      const apiBaseUrl = getApiBaseUrl();
+      const deviceId = localStorage.getItem('godlykids_device_id') || localStorage.getItem('device_id');
+      const email = userIds.find(id => id.includes('@'));
+      
+      const response = await fetch(`${apiBaseUrl}/api/app-user/start-reverse-trial`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ deviceId, email }),
+      });
+      
+      const data = await response.json();
+      
+      if (data.success) {
+        // Update local state
+        localStorage.setItem('godlykids_reverse_trial', 'true');
+        localStorage.setItem('godlykids_premium', 'true');
+        setIsPremium(true);
+        
+        setReverseTrial({
+          hasReverseTrial: true,
+          isActive: true,
+          daysRemaining: 7,
+          trialEndDate: new Date(data.trialEndDate),
+          eligible: false,
+        });
+        
+        console.log('🎁 Reverse trial started successfully');
+        return { success: true };
+      }
+      
+      return { success: false, error: data.error || 'Failed to start trial' };
+    } catch (error: any) {
+      console.error('Error starting reverse trial:', error);
+      return { success: false, error: error.message || 'Failed to start trial' };
+    }
+  }, []);
+
+  // Mark reverse trial as converted (user subscribed)
+  const markReverseTrialConverted = useCallback(async (): Promise<void> => {
+    try {
+      const userIds = getAllUserIds();
+      const apiBaseUrl = getApiBaseUrl();
+      const deviceId = localStorage.getItem('godlykids_device_id') || localStorage.getItem('device_id');
+      const email = userIds.find(id => id.includes('@'));
+      
+      await fetch(`${apiBaseUrl}/api/app-user/reverse-trial-converted`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ deviceId, email }),
+      });
+      
+      localStorage.removeItem('godlykids_reverse_trial');
+      console.log('🎉 Reverse trial marked as converted');
+    } catch (error) {
+      console.error('Error marking reverse trial converted:', error);
+    }
+  }, []);
+
   const value: SubscriptionContextType = {
     isInitialized,
     isLoading,
     isPremium,
     isNativeApp,
+    reverseTrial,
     checkPremiumStatus,
     purchase,
     restorePurchases,
+    startReverseTrial,
+    checkReverseTrialStatus,
+    markReverseTrialConverted,
     setTestPremium,
   };
 

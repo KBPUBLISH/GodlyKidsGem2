@@ -62,6 +62,8 @@ const PaywallPage: React.FC = () => {
     isNativeApp,
     purchase, 
     restorePurchases,
+    reverseTrial,
+    startReverseTrial,
   } = useSubscription();
   
   const [selectedPlan, setSelectedPlan] = useState<'annual' | 'monthly' | 'lifetime'>('annual');
@@ -73,6 +75,9 @@ const PaywallPage: React.FC = () => {
     type: 'success' | 'info';
     message: string;
   } | null>(null);
+  
+  // Reverse trial state
+  const [showReverseTrialToast, setShowReverseTrialToast] = useState(false);
   
   // Trial reminder toggle state - check notification permission
   const [trialReminderEnabled, setTrialReminderEnabled] = useState(false);
@@ -466,6 +471,33 @@ const PaywallPage: React.FC = () => {
     return () => clearInterval(interval);
   }, []);
 
+  // Handle paywall close - offer reverse trial if eligible
+  const handlePaywallClose = async () => {
+    activityTrackingService.trackOnboardingEvent('paywall_closed');
+    
+    // Check if user is eligible for reverse trial (first-time close, not premium)
+    if (reverseTrial.eligible && !isPremium) {
+      console.log('🎁 User eligible for reverse trial - starting...');
+      activityTrackingService.trackOnboardingEvent('reverse_trial_offered');
+      
+      const result = await startReverseTrial();
+      
+      if (result.success) {
+        activityTrackingService.trackOnboardingEvent('reverse_trial_started');
+        setShowReverseTrialToast(true);
+        
+        // Navigate home after short delay to show toast
+        setTimeout(() => {
+          navigate('/home');
+        }, 2500);
+        return;
+      }
+    }
+    
+    // If not eligible or trial start failed, just navigate home
+    navigate('/home');
+  };
+
   return (
     <div className="relative h-full w-full bg-gradient-to-b from-[#f8faff] via-[#eef2ff] to-[#e0e7ff] overflow-y-auto no-scrollbar flex flex-col">
         {/* Decorative clouds/shapes */}
@@ -480,10 +512,7 @@ const PaywallPage: React.FC = () => {
         <div className="relative z-20 flex items-center justify-between px-4 pt-6 pb-2" style={{ paddingTop: 'calc(var(--safe-area-top, 0px) + 24px)' }}>
           {!hideCloseButton ? (
             <button 
-              onClick={() => {
-                activityTrackingService.trackOnboardingEvent('paywall_closed');
-                navigate('/home');
-              }} 
+              onClick={handlePaywallClose} 
               className="p-2 text-gray-400 hover:text-gray-600 transition-colors"
             >
               <X size={24} strokeWidth={2.5} />
@@ -940,6 +969,28 @@ const PaywallPage: React.FC = () => {
                   </>
                 )}
               </button>
+            </div>
+          </div>
+        )}
+
+        {/* Reverse Trial Toast */}
+        {showReverseTrialToast && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 animate-in fade-in duration-300">
+            <div className="bg-white rounded-3xl p-8 mx-6 shadow-2xl animate-in zoom-in-95 duration-300 max-w-sm">
+              <div className="text-center">
+                <div className="text-6xl mb-4">🎁</div>
+                <h3 className="text-2xl font-bold text-gray-800 mb-2">You've Got a Gift!</h3>
+                <p className="text-gray-600 mb-4">
+                  Enjoy <span className="font-bold text-[#6366f1]">7 days of Premium</span> on us!
+                </p>
+                <p className="text-sm text-gray-500">
+                  Full access to all stories, lessons, and features. No payment required.
+                </p>
+                <div className="mt-6 flex items-center justify-center gap-2 text-[#10b981]">
+                  <CheckCircle size={20} />
+                  <span className="font-medium">Premium activated!</span>
+                </div>
+              </div>
             </div>
           </div>
         )}

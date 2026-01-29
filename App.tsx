@@ -8,6 +8,7 @@ import OnboardingPage from './pages/OnboardingPage';
 import HomePage from './pages/HomePage';
 import ReferralPromptModal from './components/features/ReferralPromptModal';
 import CreateAccountModal from './components/modals/CreateAccountModal';
+import ReverseTrialExpiredModal from './components/modals/ReverseTrialExpiredModal';
 import { useUser } from './context/UserContext';
 
 // Diagnostic: Log when the entire app JS module is evaluated (WebView recreation)
@@ -651,6 +652,7 @@ const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) =
 const HomePageWithWelcomeCheck: React.FC = () => {
   const navigate = useNavigate();
   const [showAccountModal, setShowAccountModal] = useState(false);
+  const [showTrialExpiredModal, setShowTrialExpiredModal] = useState(false);
   const [hasAccount, setHasAccount] = useState(() => hasUserAccount());
   
   // Check if user completed onboarding
@@ -666,6 +668,47 @@ const HomePageWithWelcomeCheck: React.FC = () => {
   
   // Check if tutorial is still in progress
   const tutorialActive = isTutorialInProgress();
+  
+  // Check for expired reverse trial on mount
+  useEffect(() => {
+    const checkReverseTrial = async () => {
+      const hadReverseTrial = localStorage.getItem('godlykids_reverse_trial') === 'true';
+      const isPremium = localStorage.getItem('godlykids_premium') === 'true';
+      
+      // Only check if they had a reverse trial
+      if (!hadReverseTrial) return;
+      
+      // Check trial status from backend
+      try {
+        const deviceId = localStorage.getItem('godlykids_device_id') || localStorage.getItem('device_id');
+        if (!deviceId) return;
+        
+        const apiBaseUrl = localStorage.getItem('godlykids_api_url') || 
+          (window.location.hostname === 'localhost' ? 'http://localhost:5001' : 'https://backendgk2-0.onrender.com');
+        
+        const response = await fetch(`${apiBaseUrl}/api/app-user/reverse-trial-status/${encodeURIComponent(deviceId)}`);
+        if (response.ok) {
+          const data = await response.json();
+          
+          // If trial has expired (had trial but no longer active), show modal
+          if (data.hasReverseTrial && !data.isActive && !data.converted) {
+            // Check if we already showed this modal in this session
+            const shownKey = 'godlykids_trial_expired_shown';
+            if (!sessionStorage.getItem(shownKey)) {
+              sessionStorage.setItem(shownKey, 'true');
+              localStorage.removeItem('godlykids_reverse_trial');
+              localStorage.removeItem('godlykids_premium');
+              setShowTrialExpiredModal(true);
+            }
+          }
+        }
+      } catch (error) {
+        console.log('Error checking reverse trial:', error);
+      }
+    };
+    
+    checkReverseTrial();
+  }, []);
   
   // Show account modal if: tutorial is done/skipped AND no account AND not completed onboarding
   useEffect(() => {
@@ -699,6 +742,12 @@ const HomePageWithWelcomeCheck: React.FC = () => {
           onSignIn={() => {
             navigate('/signin', { state: { returnTo: '/home' } });
           }}
+        />
+      )}
+      {showTrialExpiredModal && (
+        <ReverseTrialExpiredModal
+          isOpen={true}
+          onClose={() => setShowTrialExpiredModal(false)}
         />
       )}
     </>

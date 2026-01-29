@@ -1319,51 +1319,51 @@ const DailySessionPage: React.FC = () => {
 
       {/* Progress Steps */}
       <div className="px-4 py-3">
-        <div className="bg-[#5D4037]/90 rounded-2xl p-3 border-4 border-[#8B4513]"
+        <div className="bg-[#5D4037]/90 rounded-2xl p-4 border-4 border-[#8B4513]"
           style={{
             boxShadow: 'inset 2px 2px 4px rgba(0,0,0,0.3), inset -2px -2px 4px rgba(255,255,255,0.1)',
           }}
         >
-          <div className="grid grid-cols-4 gap-2">
+          <div className="flex items-center justify-around max-w-sm mx-auto">
             {session.steps.map((step, index) => {
               const isActive = session.currentStepIndex === index;
               const isCompleted = step.status === 'completed';
               
-              // Split label into two lines
-              const labelParts = step.label.split(' ');
-              const firstLine = labelParts.slice(0, Math.ceil(labelParts.length / 2)).join(' ');
-              const secondLine = labelParts.slice(Math.ceil(labelParts.length / 2)).join(' ');
+              // Get short label (first word only)
+              const shortLabel = step.type === 'scripture' ? 'Scripture' 
+                : step.type === 'book' ? 'Story'
+                : step.type === 'discussion' ? 'Discuss'
+                : 'Prayer';
               
               return (
                 <div key={step.type} className="flex flex-col items-center">
-                  {/* Step icon - rounded square */}
+                  {/* Step icon - circular with border */}
                   <div className={`
-                    w-12 h-12 rounded-xl flex items-center justify-center transition-all
+                    w-14 h-14 rounded-full flex items-center justify-center transition-all
                     ${isCompleted 
-                      ? 'bg-[#8BC34A] shadow-lg' 
+                      ? 'bg-[#8BC34A] border-4 border-[#689F38]' 
                       : isActive
-                        ? 'bg-[#D4A574] ring-2 ring-[#FFD700] shadow-lg'
-                        : 'bg-[#8B6914]/60'
+                        ? 'bg-[#D4A574] border-4 border-[#FFD700] shadow-lg'
+                        : 'bg-[#6D4C41] border-4 border-[#5D4037]'
                     }
                   `}>
-                    <span className={`text-xl ${isCompleted ? '' : isActive ? '' : 'opacity-70'}`}>
-                      {isCompleted ? <Check className="w-6 h-6 text-white" /> : step.icon}
+                    <span className={`text-2xl ${isCompleted ? '' : isActive ? '' : 'opacity-60'}`}>
+                      {isCompleted ? <Check className="w-7 h-7 text-white" /> : step.icon}
                     </span>
                   </div>
                   
-                  {/* Two-line label */}
-                  <div className={`
-                    text-center mt-1.5 leading-tight
+                  {/* Single word label */}
+                  <span className={`
+                    text-xs mt-2 font-display font-bold
                     ${isActive 
                       ? 'text-[#FFD700]' 
                       : isCompleted
                         ? 'text-[#8BC34A]'
-                        : 'text-[#C4956A]/70'
+                        : 'text-[#f3e5ab]/50'
                     }
                   `}>
-                    <p className="text-[10px] font-display font-semibold">{firstLine}</p>
-                    {secondLine && <p className="text-[10px] font-display font-semibold">{secondLine}</p>}
-                  </div>
+                    {shortLabel}
+                  </span>
                 </div>
               );
             })}

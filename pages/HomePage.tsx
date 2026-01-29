@@ -103,7 +103,7 @@ const HomePage: React.FC = () => {
   const [showTutorialPrompt, setShowTutorialPrompt] = useState(false);
   
   // Tutorial context
-  const { startTutorial, isTutorialActive } = useTutorial();
+  const { startTutorial, isTutorialActive, onReturnToExplore, currentStep } = useTutorial();
   
   // Coin reward animation state (triggered when returning from lessons)
   const [showCoinReward, setShowCoinReward] = useState(false);
@@ -117,6 +117,17 @@ const HomePage: React.FC = () => {
     localStorage.removeItem('strength_game_engaged');
     localStorage.removeItem('prayer_game_engaged');
   }, []);
+
+  // Continue tutorial when returning to explore page (e.g., from daily session)
+  useEffect(() => {
+    if (isTutorialActive && (currentStep === 'daily_session_active' || currentStep === 'welcome_book_tap')) {
+      // Small delay to let page render, then continue tutorial
+      const timer = setTimeout(() => {
+        onReturnToExplore();
+      }, 500);
+      return () => clearTimeout(timer);
+    }
+  }, [isTutorialActive, currentStep, onReturnToExplore]);
 
   // Fix scroll lock: Reset body overflow when page mounts (in case modal left it stuck)
   useEffect(() => {

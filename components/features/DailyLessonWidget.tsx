@@ -33,7 +33,7 @@ const isDateCompleted = (date: Date, history: any[]): boolean => {
 const DailyLessonWidget: React.FC<DailyLessonWidgetProps> = ({ onStartLesson }) => {
   const navigate = useNavigate();
   const location = useLocation();
-  const { isStepActive, nextStep } = useTutorial();
+  const { isStepActive, nextStep, onDailySessionStart } = useTutorial();
   const [selectedDuration, setSelectedDuration] = useState(10); // Default 10 minutes
   const [isCompleted, setIsCompleted] = useState(false);
   const [hasInProgress, setHasInProgress] = useState(false);
@@ -72,7 +72,7 @@ const DailyLessonWidget: React.FC<DailyLessonWidgetProps> = ({ onStartLesson }) 
   const handleStartLesson = () => {
     // Advance tutorial if on lesson button highlight step
     if (isLessonButtonHighlighted) {
-      nextStep();
+      onDailySessionStart();
     }
     
     // Save selected duration for the session

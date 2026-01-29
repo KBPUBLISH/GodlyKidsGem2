@@ -2,11 +2,12 @@ import React, { createContext, useContext, useState, useCallback, useEffect, use
 import { activityTrackingService } from '../services/activityTrackingService';
 
 // Tutorial step definitions
-// FLOW: Lesson button → Welcome book → Swipe pages → Quiz → Coins → Report Card → Shop → Explore → Books → Audio → Complete
+// FLOW: Lesson button → Daily Session → Return to Explore → Coins → Report Card → Shop → Explore → Books → Audio → Complete
 export type TutorialStep = 
   | 'idle'
   | 'lesson_button_highlight' // On explore page, highlight the Start Lesson button
-  | 'welcome_book_tap'    // On welcome page, finger points to a book
+  | 'daily_session_active'    // User is in the daily session (guided experience)
+  | 'welcome_book_tap'    // On welcome page, finger points to a book (legacy, kept for compatibility)
   | 'book_controls_intro' // Quick overview of reader controls
   | 'book_swipe_intro'    // In book reader, show swipe gesture hint
   | 'book_swipe_1'        // First page turn
@@ -14,7 +15,7 @@ export type TutorialStep =
   | 'book_swipe_3'        // Third page turn - then auto-skip to end
   | 'book_end_quiz'       // End modal with quiz button highlighted
   | 'quiz_in_progress'    // User is taking the quiz
-  | 'coins_highlight'     // After quiz, highlight coins earned
+  | 'coins_highlight'     // After daily session, highlight coins earned
   | 'coins_popup_open'
   | 'report_card_highlight'
   | 'report_card_open'
@@ -45,6 +46,11 @@ export const TUTORIAL_STEP_CONFIG: Record<TutorialStep, {
     description: 'Tap here to begin your faith adventure with Scripture, stories, and more!',
     targetElement: 'lesson-button',
     requiresClick: true,
+  },
+  daily_session_active: {
+    title: 'Complete Your Daily Lesson',
+    description: 'Follow the guided lesson to earn coins!',
+    requiresClick: false,
   },
   welcome_book_tap: {
     title: 'Tap to Start!',
@@ -174,33 +180,38 @@ export const TUTORIAL_STEP_CONFIG: Record<TutorialStep, {
 };
 
 // Step order for progression
-// FLOW: Lesson button → Welcome book → Swipe 3 pages → Quiz → Coins → Report Card → Shop → Explore → Books → Audio → Review → Complete
+// FLOW: Lesson button → Daily Session → Coins → Report Card → Shop → Explore → Books → Audio → Review → Complete
 const STEP_ORDER: TutorialStep[] = [
   'lesson_button_highlight', // 1. On explore page, highlight lesson button
-  'welcome_book_tap',     // 2. On welcome page, tap a book
-  'book_controls_intro',  // 2. Quick controls overview
-  'book_swipe_intro',     // 3. In reader, show swipe hint
-  'book_swipe_1',         // 4. First page turn
-  'book_swipe_2',         // 5. Second page turn
-  'book_swipe_3',         // 6. Third page turn - auto advances
-  'book_end_quiz',        // 7. End modal, quiz highlighted
-  'quiz_in_progress',     // 8. Taking the quiz
-  'coins_highlight',      // 9. Show coins earned
-  'coins_popup_open',     // 10. Coin history modal
-  'report_card_highlight',// 11. Highlight report card
-  'report_card_open',     // 12. Report card modal
-  'shop_highlight',       // 13. Highlight shop
-  'shop_open',            // 14. Shop modal
-  'navigate_to_explore',  // 15. Navigate to explore/home
-  'devotional_highlight', // 16. Highlight devotionals
-  'navigate_to_books',    // 17. Navigate to books
-  'navigate_to_audio',    // 18. Navigate to audio
-  'audiobook_highlight',  // 19. Highlight audiobook (user clicks → navigates away)
-  'review_prompt',        // 20. Show review when returning to listen page
-  'tutorial_complete',    // 21. Confetti celebration on explore page
-  'explore_pause',        // 22. Let user explore for 10 seconds
-  'paywall',              // 23. Show subscription
+  'daily_session_active',    // 2. User is in daily session (guided experience)
+  'coins_highlight',         // 3. After session, show coins earned
+  'coins_popup_open',        // 4. Coin history modal
+  'report_card_highlight',   // 5. Highlight report card
+  'report_card_open',        // 6. Report card modal
+  'shop_highlight',          // 7. Highlight shop
+  'shop_open',               // 8. Shop modal
+  'navigate_to_explore',     // 9. Navigate to explore/home
+  'devotional_highlight',    // 10. Highlight devotionals
+  'navigate_to_books',       // 11. Navigate to books
+  'navigate_to_audio',       // 12. Navigate to audio
+  'audiobook_highlight',     // 13. Highlight audiobook
+  'review_prompt',           // 14. Show review
+  'tutorial_complete',       // 15. Confetti celebration
+  'explore_pause',           // 16. Let user explore
+  'paywall',                 // 17. Show subscription
   'complete',
+];
+
+// Legacy steps kept for backwards compatibility (users mid-tutorial)
+const LEGACY_BOOK_STEPS: TutorialStep[] = [
+  'welcome_book_tap',
+  'book_controls_intro',
+  'book_swipe_intro',
+  'book_swipe_1',
+  'book_swipe_2',
+  'book_swipe_3',
+  'book_end_quiz',
+  'quiz_in_progress',
 ];
 
 interface TutorialContextType {
@@ -216,6 +227,9 @@ interface TutorialContextType {
   onBookEndModalOpen: () => void;   // Called when book end modal opens
   onQuizStart: () => void;          // Called when user taps quiz button
   onBookQuizComplete: () => void;   // Called when user finishes book quiz
+  onDailySessionStart: () => void;  // Called when user starts daily session
+  onDailySessionComplete: () => void; // Called when daily session finishes
+  onReturnToExplore: () => void;    // Called when user returns to explore page
   getStepConfig: () => typeof TUTORIAL_STEP_CONFIG[TutorialStep];
   donatedCoins: number;
   setDonatedCoins: (amount: number) => void;
@@ -307,6 +321,36 @@ export const TutorialProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     if (currentStep === 'book_end_quiz') {
       setCurrentStep('quiz_in_progress');
       localStorage.setItem(TUTORIAL_STEP_KEY, 'quiz_in_progress');
+    }
+  }, [currentStep]);
+
+  // Called when user starts the daily session (from lesson button)
+  const onDailySessionStart = useCallback(() => {
+    if (currentStep === 'lesson_button_highlight') {
+      setCurrentStep('daily_session_active');
+      localStorage.setItem(TUTORIAL_STEP_KEY, 'daily_session_active');
+    }
+  }, [currentStep]);
+
+  // Called when daily session completes
+  const onDailySessionComplete = useCallback(() => {
+    if (currentStep === 'daily_session_active') {
+      setCurrentStep('coins_highlight');
+      localStorage.setItem(TUTORIAL_STEP_KEY, 'coins_highlight');
+    }
+  }, [currentStep]);
+
+  // Called when user returns to explore page - continue tutorial if active
+  const onReturnToExplore = useCallback(() => {
+    // If user was in daily session step and returns to explore, advance to coins
+    if (currentStep === 'daily_session_active') {
+      setCurrentStep('coins_highlight');
+      localStorage.setItem(TUTORIAL_STEP_KEY, 'coins_highlight');
+    }
+    // If user was in any legacy book step and returns, skip to coins
+    if (LEGACY_BOOK_STEPS.includes(currentStep)) {
+      setCurrentStep('coins_highlight');
+      localStorage.setItem(TUTORIAL_STEP_KEY, 'coins_highlight');
     }
   }, [currentStep]);
 
@@ -412,6 +456,9 @@ export const TutorialProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         onBookEndModalOpen,
         onQuizStart,
         onBookQuizComplete,
+        onDailySessionStart,
+        onDailySessionComplete,
+        onReturnToExplore,
         getStepConfig,
         donatedCoins,
         setDonatedCoins,

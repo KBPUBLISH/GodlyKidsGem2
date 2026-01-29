@@ -1319,9 +1319,9 @@ const DailySessionPage: React.FC = () => {
 
       {/* Progress Steps */}
       <div className="px-4 py-3">
-        <div className="bg-[#5D4037]/90 rounded-2xl p-4 border-4 border-[#8B4513]"
+        <div className="bg-[#3D2914] rounded-2xl p-4 border-4 border-[#5D4037]"
           style={{
-            boxShadow: 'inset 2px 2px 4px rgba(0,0,0,0.3), inset -2px -2px 4px rgba(255,255,255,0.1)',
+            boxShadow: 'inset 2px 2px 4px rgba(0,0,0,0.5), inset -2px -2px 4px rgba(255,255,255,0.05)',
           }}
         >
           <div className="flex items-center justify-around max-w-sm mx-auto">

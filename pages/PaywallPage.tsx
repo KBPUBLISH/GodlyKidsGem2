@@ -478,6 +478,12 @@ const PaywallPage: React.FC = () => {
     // Prevent auto-navigation from useEffect while we handle the close
     setIsClosing(true);
     
+    console.log('🚪 Paywall close clicked', { 
+      reverseTrial, 
+      isPremium,
+      eligible: reverseTrial?.eligible 
+    });
+    
     try {
       // Track paywall closed (don't await to prevent blocking)
       activityTrackingService.trackOnboardingEvent('paywall_closed').catch(() => {});
@@ -490,8 +496,10 @@ const PaywallPage: React.FC = () => {
         
         try {
           const result = await startReverseTrial();
+          console.log('🎁 Reverse trial result:', result);
           
           if (result?.success) {
+            console.log('✅ Reverse trial started! Showing toast...');
             activityTrackingService.trackOnboardingEvent('reverse_trial_started').catch(() => {});
             setShowReverseTrialToast(true);
             
@@ -500,6 +508,8 @@ const PaywallPage: React.FC = () => {
               navigate('/home');
             }, 2500);
             return;
+          } else {
+            console.log('❌ Reverse trial failed:', result?.error);
           }
         } catch (trialError) {
           console.error('Error starting reverse trial:', trialError);

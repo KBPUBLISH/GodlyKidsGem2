@@ -351,8 +351,18 @@ export const SubscriptionProvider: React.FC<SubscriptionProviderProps> = ({ chil
     try {
       const userIds = getAllUserIds();
       const apiBaseUrl = getApiBaseUrl();
-      const deviceId = localStorage.getItem('godlykids_device_id') || localStorage.getItem('device_id');
+      
+      // Ensure we have a device ID - generate one if needed
+      let deviceId = localStorage.getItem('godlykids_device_id') || localStorage.getItem('device_id');
+      if (!deviceId) {
+        deviceId = `device_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
+        localStorage.setItem('godlykids_device_id', deviceId);
+        console.log('🔑 Generated device ID for reverse trial:', deviceId);
+      }
+      
       const email = userIds.find(id => id.includes('@'));
+      
+      console.log('🎁 Starting reverse trial with:', { deviceId, email: email || 'none' });
       
       const response = await fetch(`${apiBaseUrl}/api/app-user/start-reverse-trial`, {
         method: 'POST',

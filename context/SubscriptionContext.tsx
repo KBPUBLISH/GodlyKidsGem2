@@ -218,6 +218,82 @@ export const SubscriptionProvider: React.FC<SubscriptionProviderProps> = ({ chil
     };
   }, [checkSubscriptionFromAllSources]);
 
+  // Check reverse trial status on mount and when localStorage indicates we have one
+  useEffect(() => {
+    const checkTrialOnMount = async () => {
+      // Check if we might have a reverse trial
+      const hasLocalTrial = localStorage.getItem('godlykids_reverse_trial') === 'true';
+      const localTrialEndDate = localStorage.getItem('godlykids_reverse_trial_end');
+      const deviceId = localStorage.getItem('godlykids_device_id') || localStorage.getItem('device_id');
+      const email = localStorage.getItem('godlykids_user_email');
+      
+      // If we have a cached trial, show it immediately while we verify with backend
+      if (hasLocalTrial && localTrialEndDate) {
+        const endDate = new Date(localTrialEndDate);
+        const now = new Date();
+        const daysRemaining = Math.max(0, Math.ceil((endDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)));
+        const isActive = daysRemaining > 0;
+        
+        if (isActive) {
+          console.log('📦 Loading cached reverse trial:', { daysRemaining });
+          setReverseTrial({
+            hasReverseTrial: true,
+            isActive: true,
+            daysRemaining,
+            trialEndDate: endDate,
+            eligible: false,
+          });
+          setIsPremium(true);
+        }
+      }
+      
+      // If we have indicators of a trial, verify with backend
+      if (hasLocalTrial || deviceId || email) {
+        console.log('🔍 Checking reverse trial status on mount...');
+        const userIds = getAllUserIds();
+        const apiBaseUrl = getApiBaseUrl();
+        
+        for (const userId of userIds) {
+          try {
+            const response = await fetch(`${apiBaseUrl}/api/app-user/reverse-trial-status/${encodeURIComponent(userId)}`);
+            if (response.ok) {
+              const data = await response.json();
+              if (data.success && data.hasReverseTrial) {
+                console.log('✅ Found reverse trial:', data);
+                const trialEndDate = data.trialEndDate ? new Date(data.trialEndDate) : null;
+                const status: ReverseTrialStatus = {
+                  hasReverseTrial: data.hasReverseTrial,
+                  isActive: data.isActive,
+                  daysRemaining: data.daysRemaining || 0,
+                  trialEndDate,
+                  eligible: data.eligible,
+                };
+                setReverseTrial(status);
+                
+                if (status.isActive) {
+                  localStorage.setItem('godlykids_reverse_trial', 'true');
+                  localStorage.setItem('godlykids_premium', 'true');
+                  if (trialEndDate) {
+                    localStorage.setItem('godlykids_reverse_trial_end', trialEndDate.toISOString());
+                  }
+                  setIsPremium(true);
+                } else {
+                  localStorage.removeItem('godlykids_reverse_trial');
+                  localStorage.removeItem('godlykids_reverse_trial_end');
+                }
+                return; // Found trial, stop checking
+              }
+            }
+          } catch (error) {
+            console.log(`⚠️ Reverse trial check failed for ${userId}`);
+          }
+        }
+      }
+    };
+    
+    checkTrialOnMount();
+  }, []); // Run once on mount
+
   // Re-check subscription when app becomes visible (returns from background)
   useEffect(() => {
     const handleVisibilityChange = async () => {
@@ -373,12 +449,7 @@ export const SubscriptionProvider: React.FC<SubscriptionProviderProps> = ({ chil
       const data = await response.json();
       
       if (data.success) {
-        // Update local state
-        localStorage.setItem('godlykids_reverse_trial', 'true');
-        localStorage.setItem('godlykids_premium', 'true');
-        setIsPremium(true);
-        
-        // Safely parse trial end date
+        // Safely parse trial end date first
         let trialEndDate: Date | null = null;
         try {
           if (data.trialEndDate) {
@@ -393,6 +464,14 @@ export const SubscriptionProvider: React.FC<SubscriptionProviderProps> = ({ chil
         } catch {
           trialEndDate = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // Fallback on error
         }
+        
+        // Update local state and localStorage
+        localStorage.setItem('godlykids_reverse_trial', 'true');
+        localStorage.setItem('godlykids_premium', 'true');
+        if (trialEndDate) {
+          localStorage.setItem('godlykids_reverse_trial_end', trialEndDate.toISOString());
+        }
+        setIsPremium(true);
         
         setReverseTrial({
           hasReverseTrial: true,
@@ -428,6 +507,7 @@ export const SubscriptionProvider: React.FC<SubscriptionProviderProps> = ({ chil
       });
       
       localStorage.removeItem('godlykids_reverse_trial');
+      localStorage.removeItem('godlykids_reverse_trial_end');
       console.log('🎉 Reverse trial marked as converted');
     } catch (error) {
       console.error('Error marking reverse trial converted:', error);

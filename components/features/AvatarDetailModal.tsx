@@ -58,7 +58,7 @@ const AvatarDetailModal: React.FC<AvatarDetailModalProps> = ({ isOpen, onClose, 
           </div>
 
           {/* Avatar Large View - Always animating */}
-          <div className="relative shrink-0 w-48 h-48 md:w-56 md:h-56 mb-8">
+          <div className="relative shrink-0 w-48 h-48 md:w-56 md:h-56 mb-32">
               
               {/* Speech bubble when no body equipped */}
               {!equippedBody && (
@@ -110,7 +110,7 @@ const AvatarDetailModal: React.FC<AvatarDetailModalProps> = ({ isOpen, onClose, 
           {/* Bottom UI Container */}
           <div className="w-full relative z-20">
               <div className="w-full flex flex-col items-center">
-                  <div className="w-full max-w-xs space-y-3 pb-6 mt-8">
+                  <div className="w-full max-w-xs space-y-3 pb-6">
                       <WoodButton variant="gold" onClick={() => { onClose(); onEdit(); }} className="w-full py-4 text-xl shadow-xl">
                         BUILDER SHOP
                       </WoodButton>

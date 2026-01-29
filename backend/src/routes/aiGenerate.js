@@ -863,8 +863,8 @@ Return ONLY the JSON array, no other text.`;
                 .filter((q) => q && q.question && q.parentTip && q.emoji)
                 .slice(0, 2)
                 .map((q) => ({
-                    question: q.question.substring(0, 200),
-                    parentTip: q.parentTip.substring(0, 150),
+                    question: q.question.substring(0, 500),
+                    parentTip: q.parentTip.substring(0, 250),
                     emoji: q.emoji,
                 }));
             

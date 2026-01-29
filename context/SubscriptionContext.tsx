@@ -368,11 +368,27 @@ export const SubscriptionProvider: React.FC<SubscriptionProviderProps> = ({ chil
         localStorage.setItem('godlykids_premium', 'true');
         setIsPremium(true);
         
+        // Safely parse trial end date
+        let trialEndDate: Date | null = null;
+        try {
+          if (data.trialEndDate) {
+            trialEndDate = new Date(data.trialEndDate);
+            // Check for Invalid Date
+            if (isNaN(trialEndDate.getTime())) {
+              trialEndDate = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // Fallback: 7 days from now
+            }
+          } else {
+            trialEndDate = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // Default: 7 days from now
+          }
+        } catch {
+          trialEndDate = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // Fallback on error
+        }
+        
         setReverseTrial({
           hasReverseTrial: true,
           isActive: true,
           daysRemaining: 7,
-          trialEndDate: new Date(data.trialEndDate),
+          trialEndDate,
           eligible: false,
         });
         

@@ -137,6 +137,9 @@ const LessonPlayerPage: React.FC = () => {
     const [showCoinReward, setShowCoinReward] = useState(false);
     const [coinRewardAmount, setCoinRewardAmount] = useState(0);
     const dailyVerseCoinsGivenRef = useRef(false);
+    
+    // First lesson completion tracking for paywall
+    const [isFirstLessonCompletion, setIsFirstLessonCompletion] = useState(false);
 
     // Pause audiobook playlist when entering lesson player to prevent audio overlap
     useEffect(() => {
@@ -838,6 +841,18 @@ const LessonPlayerPage: React.FC = () => {
         
         // Track for Report Card
         activityTrackingService.trackLessonCompleted(lessonId!, lesson?.title || 'Video Lesson');
+        
+        // Check if this is user's first lesson completion (for paywall prompt)
+        const previouslyCompletedLessons = localStorage.getItem('godlykids_completed_lessons');
+        const completedLessons = previouslyCompletedLessons ? JSON.parse(previouslyCompletedLessons) : [];
+        if (completedLessons.length === 0) {
+            setIsFirstLessonCompletion(true);
+        }
+        // Track this lesson as completed
+        if (!completedLessons.includes(lessonId)) {
+            completedLessons.push(lessonId);
+            localStorage.setItem('godlykids_completed_lessons', JSON.stringify(completedLessons));
+        }
 
         // Save to backend
         const userId = 'local-user'; // TODO: Get from auth context
@@ -1741,7 +1756,15 @@ const LessonPlayerPage: React.FC = () => {
                                                             </div>
                                                         ) : (
                                                             <button
-                                                                onClick={() => navigate(-1)}
+                                                                onClick={() => {
+                                                                    // Show paywall after first lesson if not subscribed
+                                                                    if (isFirstLessonCompletion && !isSubscribed) {
+                                                                        analyticsService.track('first_lesson_paywall_shown', { lessonId, lessonTitle: lesson?.title });
+                                                                        navigate('/paywall', { state: { from: 'first_lesson' } });
+                                                                    } else {
+                                                                        navigate(-1);
+                                                                    }
+                                                                }}
                                                                 className="w-full bg-[#8B4513] hover:bg-[#A0522D] text-white px-6 py-4 rounded-lg font-bold font-display text-xl shadow-lg border-2 border-[#5D4037] transition-transform active:scale-95"
                                                             >
                                                                 Awesome!
@@ -1767,6 +1790,18 @@ const LessonPlayerPage: React.FC = () => {
                                                 
                                                 // Track for Report Card
                                                 activityTrackingService.trackLessonCompleted(lessonId!, lesson?.title || 'Video Lesson');
+                                                
+                                                // Check if this is user's first lesson completion (for paywall prompt)
+                                                const previouslyCompletedLessons = localStorage.getItem('godlykids_completed_lessons');
+                                                const completedLessons = previouslyCompletedLessons ? JSON.parse(previouslyCompletedLessons) : [];
+                                                if (completedLessons.length === 0) {
+                                                    setIsFirstLessonCompletion(true);
+                                                }
+                                                // Track this lesson as completed
+                                                if (!completedLessons.includes(lessonId)) {
+                                                    completedLessons.push(lessonId);
+                                                    localStorage.setItem('godlykids_completed_lessons', JSON.stringify(completedLessons));
+                                                }
 
                                                 // Save to backend
                                                 const userId = 'local-user'; // TODO: Get from auth context
@@ -1831,7 +1866,13 @@ const LessonPlayerPage: React.FC = () => {
                                                             <button
                                                                 onClick={() => {
                                                                     setShowDrawingComplete(false);
-                                                                    navigate('/home');
+                                                                    // Show paywall after first lesson if not subscribed
+                                                                    if (isFirstLessonCompletion && !isSubscribed) {
+                                                                        analyticsService.track('first_lesson_paywall_shown', { lessonId, lessonTitle: lesson?.title });
+                                                                        navigate('/paywall', { state: { from: 'first_lesson' } });
+                                                                    } else {
+                                                                        navigate('/home');
+                                                                    }
                                                                 }}
                                                                 className="bg-[#2196F3] hover:bg-[#1E88E5] text-white py-4 rounded-xl font-bold shadow-lg border-b-4 border-[#1565C0] active:border-b-0 active:translate-y-1 transition-all flex items-center justify-center gap-2"
                                                             >
@@ -1842,7 +1883,13 @@ const LessonPlayerPage: React.FC = () => {
                                                             <button
                                                                 onClick={() => {
                                                                     setShowDrawingComplete(false);
-                                                                    navigate('/home', { state: { openShop: true } });
+                                                                    // Show paywall after first lesson if not subscribed
+                                                                    if (isFirstLessonCompletion && !isSubscribed) {
+                                                                        analyticsService.track('first_lesson_paywall_shown', { lessonId, lessonTitle: lesson?.title });
+                                                                        navigate('/paywall', { state: { from: 'first_lesson' } });
+                                                                    } else {
+                                                                        navigate('/home', { state: { openShop: true } });
+                                                                    }
                                                                 }}
                                                                 className="bg-[#8B4513] hover:bg-[#795548] text-white py-4 rounded-xl font-bold shadow-lg border-b-4 border-[#5D4037] active:border-b-0 active:translate-y-1 transition-all flex items-center justify-center gap-2"
                                                             >

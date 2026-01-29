@@ -77,6 +77,17 @@ const onboardingEventSchema = new mongoose.Schema({
             'restore_clicked',
             'restore_success',
             'skip_clicked',         // User skipped paywall
+            
+            // Reverse trial events
+            'reverse_trial_offered',    // User was offered reverse trial
+            'reverse_trial_started',    // Reverse trial activated
+            'reverse_trial_expired',    // Reverse trial ended
+            'reverse_trial_converted',  // User subscribed during/after reverse trial
+            'reverse_trial_churned',    // User declined after reverse trial
+            'reverse_trial_expired_subscribe_clicked', // User clicked subscribe on expired trial modal
+            
+            // First lesson paywall
+            'first_lesson_paywall_shown', // Paywall shown after first lesson
         ],
     },
     

@@ -78,6 +78,7 @@ const PaywallPage: React.FC = () => {
   
   // Reverse trial state
   const [showReverseTrialToast, setShowReverseTrialToast] = useState(false);
+  const [isClosing, setIsClosing] = useState(false); // Prevent auto-navigation during close
   
   // Trial reminder toggle state - check notification permission
   const [trialReminderEnabled, setTrialReminderEnabled] = useState(false);
@@ -169,12 +170,13 @@ const PaywallPage: React.FC = () => {
   }, []);
 
   // If user already has premium, redirect to home
+  // But don't auto-redirect if we're already handling the close flow
   useEffect(() => {
-    if (isPremium) {
+    if (isPremium && !isClosing) {
       subscribe(); // Update local state
       navigate('/home');
     }
-  }, [isPremium, navigate, subscribe]);
+  }, [isPremium, navigate, subscribe, isClosing]);
   
   // Listen for premium status changes (from webhook confirmation after purchase)
   useEffect(() => {
@@ -473,29 +475,45 @@ const PaywallPage: React.FC = () => {
 
   // Handle paywall close - offer reverse trial if eligible
   const handlePaywallClose = async () => {
-    activityTrackingService.trackOnboardingEvent('paywall_closed');
+    // Prevent auto-navigation from useEffect while we handle the close
+    setIsClosing(true);
     
-    // Check if user is eligible for reverse trial (first-time close, not premium)
-    if (reverseTrial.eligible && !isPremium) {
-      console.log('🎁 User eligible for reverse trial - starting...');
-      activityTrackingService.trackOnboardingEvent('reverse_trial_offered');
+    try {
+      // Track paywall closed (don't await to prevent blocking)
+      activityTrackingService.trackOnboardingEvent('paywall_closed').catch(() => {});
       
-      const result = await startReverseTrial();
-      
-      if (result.success) {
-        activityTrackingService.trackOnboardingEvent('reverse_trial_started');
-        setShowReverseTrialToast(true);
+      // Check if user is eligible for reverse trial (first-time close, not premium)
+      // Add safety check for reverseTrial object
+      if (reverseTrial?.eligible && !isPremium) {
+        console.log('🎁 User eligible for reverse trial - starting...');
+        activityTrackingService.trackOnboardingEvent('reverse_trial_offered').catch(() => {});
         
-        // Navigate home after short delay to show toast
-        setTimeout(() => {
-          navigate('/home');
-        }, 2500);
-        return;
+        try {
+          const result = await startReverseTrial();
+          
+          if (result?.success) {
+            activityTrackingService.trackOnboardingEvent('reverse_trial_started').catch(() => {});
+            setShowReverseTrialToast(true);
+            
+            // Navigate home after short delay to show toast
+            setTimeout(() => {
+              navigate('/home');
+            }, 2500);
+            return;
+          }
+        } catch (trialError) {
+          console.error('Error starting reverse trial:', trialError);
+          // Continue to navigate home even if trial fails
+        }
       }
+      
+      // If not eligible or trial start failed, just navigate home
+      navigate('/home');
+    } catch (error) {
+      console.error('Error in handlePaywallClose:', error);
+      // Ensure navigation happens even if there's an error
+      navigate('/home');
     }
-    
-    // If not eligible or trial start failed, just navigate home
-    navigate('/home');
   };
 
   return (

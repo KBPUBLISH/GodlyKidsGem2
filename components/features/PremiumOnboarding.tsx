@@ -470,44 +470,42 @@ const createScreens = (bookCovers: string[], voiceCharacters: VoiceCharacter[]) 
     content: (props: { onNext: () => void }) => (
       <div className="flex flex-col items-center justify-center min-h-[70vh] text-center px-6">
         {/* Icon */}
-        <div className="w-24 h-24 bg-gradient-to-br from-amber-400 to-orange-500 rounded-full flex items-center justify-center mb-6 shadow-lg relative">
-          <Gamepad2 className="w-12 h-12 text-white" />
-          <div className="absolute -right-1 -top-1 w-8 h-8 bg-gradient-to-br from-green-400 to-green-500 rounded-full flex items-center justify-center shadow">
-            <Check className="w-4 h-4 text-white" />
+        <div className="w-20 h-20 bg-gradient-to-br from-amber-400 to-orange-500 rounded-full flex items-center justify-center mb-5 shadow-lg relative">
+          <Gamepad2 className="w-10 h-10 text-white" />
+          <div className="absolute -right-1 -top-1 w-7 h-7 bg-gradient-to-br from-green-400 to-green-500 rounded-full flex items-center justify-center shadow">
+            <Check className="w-3.5 h-3.5 text-white" />
           </div>
         </div>
         
         {/* Headline */}
-        <h2 className="text-2xl font-bold text-gray-800 mb-3">
+        <h2 className="text-2xl font-bold text-gray-800 mb-2">
           Learn Through Play
         </h2>
         
         {/* Subtext */}
-        <p className="text-gray-600 mb-6 max-w-xs">
-          Unlimited <span className="font-semibold text-amber-600">quizzes, memory games, and coloring activities</span> that reinforce character lessons.
+        <p className="text-gray-600 mb-5 max-w-xs text-sm">
+          Unlimited access to fun games that reinforce <span className="font-semibold text-amber-600">character & faith lessons</span>
         </p>
         
-        {/* Quiz preview - no emojis */}
-        <div className="w-full max-w-xs bg-white rounded-2xl shadow-lg p-4 mb-6 border border-gray-100">
-          <div className="flex items-center gap-2 mb-3">
-            <div className="w-7 h-7 rounded-full bg-purple-100 flex items-center justify-center">
-              <Sparkles className="w-4 h-4 text-purple-600" />
-            </div>
-            <span className="font-semibold text-gray-700">Who showed great faith?</span>
-          </div>
-          <div className="space-y-2">
-            <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-gray-50">
-              <div className="w-4 h-4 rounded-full border-2 border-gray-300" />
-              <span className="text-gray-600">Pharaoh</span>
-            </div>
-            <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-green-50 border border-green-300">
-              <div className="w-4 h-4 rounded-full bg-green-500 flex items-center justify-center">
-                <Check className="w-3 h-3 text-white" />
+        {/* Game Icons Grid */}
+        <div className="grid grid-cols-3 gap-3 w-full max-w-xs mb-6">
+          {[
+            { name: 'Bible Quiz', icon: Sparkles, gradient: 'from-purple-500 to-violet-600', iconBg: 'bg-purple-400' },
+            { name: 'Memory Match', icon: BookOpen, gradient: 'from-blue-500 to-cyan-600', iconBg: 'bg-blue-400' },
+            { name: 'Verse Puzzle', icon: Zap, gradient: 'from-amber-500 to-orange-600', iconBg: 'bg-amber-400' },
+            { name: 'Daily Key', icon: Star, gradient: 'from-emerald-500 to-green-600', iconBg: 'bg-emerald-400' },
+            { name: 'Coloring', icon: Heart, gradient: 'from-pink-500 to-rose-600', iconBg: 'bg-pink-400' },
+            { name: 'Prayer Time', icon: Sun, gradient: 'from-sky-500 to-blue-600', iconBg: 'bg-sky-400' },
+          ].map((game, i) => (
+            <div key={i} className="flex flex-col items-center">
+              <div className={`w-16 h-16 rounded-2xl bg-gradient-to-br ${game.gradient} shadow-lg flex items-center justify-center mb-1.5 relative overflow-hidden`}>
+                {/* Shine effect */}
+                <div className="absolute top-0 left-0 w-full h-1/2 bg-gradient-to-b from-white/20 to-transparent" />
+                <game.icon className="w-8 h-8 text-white drop-shadow-md" />
               </div>
-              <span className="text-green-700 font-medium">David</span>
-              <Check className="w-4 h-4 ml-auto text-green-500" />
+              <span className="text-[10px] font-medium text-gray-700">{game.name}</span>
             </div>
-          </div>
+          ))}
         </div>
         
         {/* Button */}

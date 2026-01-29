@@ -1374,16 +1374,19 @@ const DailySessionPage: React.FC = () => {
       {/* Current Step Content */}
       <div className="flex-1 px-6 py-4 flex flex-col">
         {/* Step Card */}
-        <div className="bg-[#5D4037]/80 rounded-2xl p-6 flex-1 flex flex-col border-4 border-[#8B4513]"
+        <div className="bg-[#3D2914] rounded-2xl p-6 flex-1 flex flex-col border-4 border-[#5D4037]"
           style={{
-            boxShadow: 'inset 2px 2px 4px rgba(0,0,0,0.3), inset -2px -2px 4px rgba(255,255,255,0.1)',
+            boxShadow: 'inset 2px 2px 4px rgba(0,0,0,0.5), inset -2px -2px 4px rgba(255,255,255,0.05)',
           }}
         >
           {/* Step-specific content preview */}
           <div className="flex-1 flex flex-col justify-center">
             {currentStep.type === 'scripture' && (
               <div className="text-center">
-                <div className="text-6xl mb-4">🧩</div>
+                <div className="relative inline-block mb-4">
+                  <div className="absolute inset-0 blur-xl bg-[#7CB342] opacity-60 rounded-full scale-150"></div>
+                  <span className="relative text-6xl">🧩</span>
+                </div>
                 <h3 className="text-[#FFD700] font-bold font-display text-xl mb-2">Scripture Puzzle</h3>
                 <p className="text-[#f3e5ab]/70 text-sm font-display mb-4">
                   Tap the words in the correct order to build today's Bible verse!

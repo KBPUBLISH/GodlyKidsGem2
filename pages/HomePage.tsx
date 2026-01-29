@@ -37,6 +37,8 @@ import { activityTrackingService } from '../services/activityTrackingService';
 import { getPreferenceTags, getSavedPreferences } from './InterestSelectionPage';
 import { isSessionCompletedToday, getSessionStreak, hasSessionToday } from '../services/dailySessionService';
 import DailyLessonWidget from '../components/features/DailyLessonWidget';
+import ProBadge from '../components/ui/ProBadge';
+import PremiumBadge from '../components/ui/PremiumBadge';
 
 // Helper to format date as YYYY-MM-DD in local time
 const formatLocalDateKey = (d: Date): string => {
@@ -987,6 +989,9 @@ const HomePage: React.FC = () => {
     >
       <Header isVisible={isHeaderVisible} />
 
+      {/* Floating PRO badge for reverse trial users */}
+      <ProBadge />
+
       <DailyRewardModal
         isOpen={showDailyReward}
         onClose={() => setShowDailyReward(false)}
@@ -1615,9 +1620,7 @@ const HomePage: React.FC = () => {
                       )}
                       {/* Premium badge - Only show if user is NOT subscribed */}
                       {item.isMembersOnly && !isSubscribed && (
-                        <div className="absolute top-2 right-2 px-2 py-1 bg-amber-500/90 rounded-full text-xs font-bold text-white flex items-center gap-0.5">
-                          <Lock className="w-3 h-3" />
-                        </div>
+                        <PremiumBadge className="absolute top-2 right-2 z-20" />
                       )}
                       {/* Type badge */}
                       <div className="absolute bottom-2 left-2 px-2 py-1 bg-black/60 rounded-full text-xs font-semibold text-white">
@@ -1676,9 +1679,7 @@ const HomePage: React.FC = () => {
                       </div>
                       {/* Premium badge - Only show if user is NOT subscribed */}
                       {episode.isMembersOnly && !isSubscribed && (
-                        <div className="absolute top-2 right-2 px-2 py-1 bg-amber-500/90 rounded-full text-xs font-bold text-white flex items-center gap-0.5">
-                          <Lock className="w-3 h-3" />
-                        </div>
+                        <PremiumBadge className="absolute top-2 right-2 z-20" />
                       )}
                     </div>
                     {/* Title */}
@@ -1733,9 +1734,7 @@ const HomePage: React.FC = () => {
                       </div>
                       {/* Premium badge - Only show if user is NOT subscribed */}
                       {book.isMembersOnly && !isSubscribed && (
-                        <div className="absolute top-2 right-2 px-2 py-1 bg-amber-500/90 rounded-full text-xs font-bold text-white flex items-center gap-0.5">
-                          <Lock className="w-3 h-3" />
-                        </div>
+                        <PremiumBadge className="absolute top-2 right-2 z-20" />
                       )}
                     </div>
                     {/* Title */}
@@ -2195,9 +2194,7 @@ const HomePage: React.FC = () => {
                         </div>
                         {/* Premium badge - Only show if user is NOT subscribed */}
                         {series.isMembersOnly && !isSubscribed && (
-                          <div className="absolute top-2 right-2 bg-gradient-to-r from-[#FFD700] to-[#FFA500] text-[#5c2e0b] text-[10px] font-bold px-2 py-1 rounded-full">
-                            👑 PREMIUM
-                          </div>
+                          <PremiumBadge className="absolute top-2 right-2 z-20" />
                         )}
                       </div>
                       <div className="p-2">

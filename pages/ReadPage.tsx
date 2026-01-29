@@ -8,6 +8,7 @@ import { useBooks } from '../context/BooksContext';
 import { useUser } from '../context/UserContext';
 import { ApiService } from '../services/apiService';
 import { Search, ChevronDown, BookOpen } from 'lucide-react';
+import PremiumBadge from '../components/ui/PremiumBadge';
 
 const ageOptions = ['All Ages', '3+', '4+', '5+', '6+', '7+', '8+', '9+', '10+'];
 
@@ -42,9 +43,7 @@ const SeriesCard: React.FC<{ series: any; onClick: () => void; isSubscribed?: bo
         </div>
         {/* Premium badge - Only show if user is NOT subscribed */}
         {series.isMembersOnly && !isSubscribed && (
-          <div className="absolute top-2 right-2 bg-gradient-to-r from-[#FFD700] to-[#FFA500] text-[#5c2e0b] text-[10px] font-bold px-2 py-1 rounded-full">
-            👑
-          </div>
+          <PremiumBadge className="absolute top-2 right-2 z-20" />
         )}
       </div>
       <div className="p-3">

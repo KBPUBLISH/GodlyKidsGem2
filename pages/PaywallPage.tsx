@@ -499,14 +499,11 @@ const PaywallPage: React.FC = () => {
           console.log('🎁 Reverse trial result:', result);
           
           if (result?.success) {
-            console.log('✅ Reverse trial started! Showing toast...');
+            console.log('✅ Reverse trial started! Navigating to premium onboarding...');
             activityTrackingService.trackOnboardingEvent('reverse_trial_started').catch(() => {});
-            setShowReverseTrialToast(true);
             
-            // Navigate home after short delay to show toast
-            setTimeout(() => {
-              navigate('/home');
-            }, 2500);
+            // Navigate to premium onboarding flow to show what they've unlocked
+            navigate('/premium-onboarding', { replace: true });
             return;
           } else {
             console.log('❌ Reverse trial failed:', result?.error);

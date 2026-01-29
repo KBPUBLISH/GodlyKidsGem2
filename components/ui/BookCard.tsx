@@ -1,6 +1,7 @@
 import React, { useState, useCallback, useEffect } from 'react';
 import { Book } from '../../types';
-import { BookOpen, Headphones, Heart, Lock, Crown } from 'lucide-react';
+import { BookOpen, Headphones, Heart, Lock } from 'lucide-react';
+import PremiumBadge from './PremiumBadge';
 import { useUser } from '../../context/UserContext';
 import { useLanguage } from '../../context/LanguageContext';
 
@@ -82,10 +83,7 @@ const BookCard: React.FC<BookCardProps> = ({ book, onClick }) => {
         
         {/* Members Only Badge - Only show if user is NOT subscribed */}
         {isMembersOnly && !isSubscribed && (
-          <div className="absolute top-2 right-2 bg-gradient-to-r from-[#FFD700] to-[#FFA500] text-[#5c2e0b] text-[10px] font-bold px-2 py-1 rounded-full flex items-center gap-1 shadow-lg z-20">
-            <Crown size={10} />
-            <span>PREMIUM</span>
-          </div>
+          <PremiumBadge className="absolute top-2 right-2 z-20" />
         )}
         
         {/* Gradient overlay at bottom */}

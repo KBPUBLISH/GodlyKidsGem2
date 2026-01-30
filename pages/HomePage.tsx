@@ -286,24 +286,17 @@ const HomePage: React.FC = () => {
     };
   }, []);
 
-  // Auto-redirect to Daily Session on first app open of the day
-  useEffect(() => {
-    const DAILY_SESSION_REDIRECT_KEY = 'godlykids_daily_session_redirect_shown';
-    const today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
-    const lastRedirectDate = sessionStorage.getItem(DAILY_SESSION_REDIRECT_KEY);
-    
-    // Redirect if:
-    // 1. Haven't redirected today (this session)
-    // 2. Daily session not completed yet
-    // Note: We redirect ALL users, even without subject selection
-    // The daily session page will handle prompting for subjects if needed
-    
-    if (lastRedirectDate !== today && !isSessionCompletedToday()) {
-      console.log('📚 Auto-redirecting to Daily Session (first open of the day)');
-      sessionStorage.setItem(DAILY_SESSION_REDIRECT_KEY, today);
-      navigate('/daily-session');
-    }
-  }, [navigate]);
+  // Auto-redirect to Daily Session disabled per product decision (Jan 29)
+  // Users should tap "Start Lesson Adventure" button to begin daily session
+  // useEffect(() => {
+  //   const DAILY_SESSION_REDIRECT_KEY = 'godlykids_daily_session_redirect_shown';
+  //   const today = new Date().toISOString().split('T')[0];
+  //   const lastRedirectDate = sessionStorage.getItem(DAILY_SESSION_REDIRECT_KEY);
+  //   if (lastRedirectDate !== today && !isSessionCompletedToday()) {
+  //     sessionStorage.setItem(DAILY_SESSION_REDIRECT_KEY, today);
+  //     navigate('/daily-session');
+  //   }
+  // }, [navigate]);
   
   // Track last fetch time to prevent excessive refetching (debounce)
   // Use sessionStorage so it persists across component remounts

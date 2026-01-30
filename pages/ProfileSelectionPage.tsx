@@ -4,12 +4,11 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { Plus, User as UserIcon, Settings, ChevronLeft, ShoppingBag, Crown, Lock } from 'lucide-react';
 import WoodButton from '../components/ui/WoodButton';
 import ShopModal from '../components/features/ShopModal';
-import AvatarCompositor from '../components/avatar/AvatarCompositor';
 import { useUser } from '../context/UserContext';
 import { useLanguage } from '../context/LanguageContext';
 import { AVATAR_ASSETS } from '../components/avatar/AvatarAssets';
 
-// Helper for random color backgrounds if needed, though we mainly use #f3e5ab or consistent logic
+// Helper for random color backgrounds for kid profiles
 const PROFILE_BG_COLORS = ['bg-[#F8BBD0]', 'bg-[#4FC3F7]', 'bg-[#C5E1A5]', 'bg-[#FFF59D]', 'bg-[#E1BEE7]'];
 
 const ProfileSelectionPage: React.FC = () => {
@@ -17,38 +16,10 @@ const ProfileSelectionPage: React.FC = () => {
   const location = useLocation();
   const { 
     isSubscribed, 
-    parentName,
     kids,
-    currentProfileId,
     switchProfile,
-    equippedAvatar, 
-    equippedFrame, 
-    equippedHat,
-    equippedBody,
-    equippedLeftArm,
-    equippedRightArm,
-    equippedLegs,
-    equippedAnimation,
-    equippedLeftArmRotation,
-    equippedRightArmRotation,
-    equippedLegsRotation,
-    leftArmOffset,
-    rightArmOffset,
-    legsOffset,
-    headOffset,
-    bodyOffset,
-    hatOffset,
-    leftArmScale,
-    rightArmScale,
-    legsScale,
-    headScale,
-    bodyScale,
-    hatScale,
-    getParentAvatar
   } = useUser();
   
-  // Get the correct parent avatar (works even when viewing as kid profile)
-  const parentAvatar = getParentAvatar();
   const [isShopOpen, setIsShopOpen] = useState(false);
   const { t } = useLanguage();
   
@@ -113,80 +84,10 @@ const ProfileSelectionPage: React.FC = () => {
              </div>
           </div>
 
-          {/* Grid */}
+          {/* Grid - Only show kid profiles */}
           <div className="grid grid-cols-2 gap-x-10 gap-y-8 w-full max-w-[300px] mb-8">
             
-            {/* PARENT PROFILE (Main User) - Full Avatar */}
-             <div 
-                onClick={() => {
-                  switchProfile(null); // Switch to parent profile
-                  navigate('/home');
-                }}
-                className="flex flex-col items-center gap-3 cursor-pointer group"
-              >
-                <div className="relative mb-1">
-                    {/* Full Avatar with Animation - Contained in Circle */}
-                    <div className="w-32 h-32 rounded-full bg-[#f3e5ab] border-4 border-white shadow-[0_8px_15px_rgba(0,0,0,0.3)] overflow-hidden flex items-center justify-center relative z-10 transition-transform duration-200 group-active:scale-95 group-hover:scale-105">
-                        <div className="w-full h-full flex items-center justify-center relative">
-                            {/* Use parent's saved avatar when viewing as kid profile */}
-                            {currentProfileId === null ? (
-                              <AvatarCompositor
-                                headUrl={equippedAvatar}
-                                hat={equippedHat}
-                                body={equippedBody}
-                                leftArm={equippedLeftArm}
-                                rightArm={equippedRightArm}
-                                legs={equippedLegs}
-                                animationStyle={equippedAnimation}
-                                leftArmRotation={equippedLeftArmRotation}
-                                rightArmRotation={equippedRightArmRotation}
-                                legsRotation={equippedLegsRotation}
-                                leftArmOffset={leftArmOffset}
-                                rightArmOffset={rightArmOffset}
-                                legsOffset={legsOffset}
-                                headOffset={headOffset}
-                                bodyOffset={bodyOffset}
-                                hatOffset={hatOffset}
-                                leftArmScale={leftArmScale}
-                                rightArmScale={rightArmScale}
-                                legsScale={legsScale}
-                                headScale={headScale}
-                                bodyScale={bodyScale}
-                                hatScale={hatScale}
-                                isAnimating={true}
-                                className="w-full h-full"
-                              />
-                            ) : (
-                              /* Show just head when viewing as kid profile (simplified) */
-                              <div className="w-[90%] h-[90%]">
-                                {AVATAR_ASSETS[parentAvatar] ? (
-                                  <svg viewBox="0 0 100 100" className="w-full h-full overflow-visible">
-                                    {AVATAR_ASSETS[parentAvatar]}
-                                  </svg>
-                                ) : (
-                                  <img src={parentAvatar} alt="Parent" className="w-full h-full object-cover rounded-full" />
-                                )}
-                              </div>
-                            )}
-                        </div>
-                    </div>
-                    {/* Crown Badge */}
-                    <div className={`absolute top-0 right-0 bg-white rounded-full p-1.5 shadow-md border-2 z-20 ${isSubscribed ? 'border-[#FFD700]' : 'border-gray-200'}`}>
-                        <Crown 
-                            size={18} 
-                            className={isSubscribed ? "text-[#B8860B]" : "text-gray-400"} 
-                            fill={isSubscribed ? "#FFD700" : "#E5E7EB"} 
-                        />
-                    </div>
-                </div>
-
-                {/* User Name - Below Avatar */}
-                <span className="font-display font-bold text-white text-lg tracking-wide drop-shadow-[0_2px_4px_rgba(0,0,0,0.8)] text-center leading-tight break-words w-32 mt-1">
-                  {parentName || "Parent"}
-                </span>
-              </div>
-
-            {/* KIDS PROFILES */}
+            {/* KIDS PROFILES ONLY - Parent profile removed from selection */}
             {kids.map((profile, index) => {
               // Use the kid's current avatar (updated in shop) or fall back to initial avatarSeed
               const kidAvatar = profile.avatar || profile.avatarSeed;

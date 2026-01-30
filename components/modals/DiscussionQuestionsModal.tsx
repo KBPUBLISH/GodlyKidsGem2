@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { X, MessageCircle, Lightbulb, ChevronRight, Loader2, Check } from 'lucide-react';
 import { ApiService } from '../../services/apiService';
+import { useUser } from '../../context/UserContext';
 
 interface DiscussionQuestion {
   question: string;
@@ -16,6 +17,7 @@ interface DiscussionQuestionsModalProps {
   bookDescription?: string;
   bookContent?: string;
   preGeneratedQuestions?: DiscussionQuestion[]; // Pre-generated questions from parent
+  childAge?: number | string; // Age passed from parent (optional)
 }
 
 const DiscussionQuestionsModal: React.FC<DiscussionQuestionsModalProps> = ({
@@ -26,7 +28,12 @@ const DiscussionQuestionsModal: React.FC<DiscussionQuestionsModalProps> = ({
   bookDescription,
   bookContent,
   preGeneratedQuestions,
+  childAge: propChildAge,
 }) => {
+  // Get current kid's age from context as fallback
+  const { kids, currentProfileId } = useUser();
+  const currentKid = kids.find(k => k.id === currentProfileId);
+  const childAge = propChildAge || currentKid?.age || 7; // Use prop, then context, then default to 7
   const [questions, setQuestions] = useState<DiscussionQuestion[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
@@ -49,7 +56,7 @@ const DiscussionQuestionsModal: React.FC<DiscussionQuestionsModalProps> = ({
   const fetchQuestions = async () => {
     setIsLoading(true);
     try {
-      console.log('📝 Fetching questions for:', bookTitle, 'Content length:', bookContent?.length || 0);
+      console.log('📝 Fetching questions for:', bookTitle, 'Content length:', bookContent?.length || 0, 'Child age:', childAge);
       const response = await fetch(`${getApiBaseUrl()}ai/discussion-questions`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -57,7 +64,7 @@ const DiscussionQuestionsModal: React.FC<DiscussionQuestionsModalProps> = ({
           bookTitle,
           bookDescription,
           bookContent,
-          childAge: '7-12',
+          childAge: childAge, // Use actual child's age for age-appropriate questions
         }),
       });
 

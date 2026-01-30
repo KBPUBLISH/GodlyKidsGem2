@@ -87,7 +87,13 @@ const DailySessionPage: React.FC = () => {
     equippedRightArmRotation,
     equippedLegsRotation,
     equippedHatRotation,
+    kids,
+    currentProfileId,
   } = useUser();
+  
+  // Get current kid's age for age-aware AI content
+  const currentKid = kids.find(k => k.id === currentProfileId);
+  const childAge = currentKid?.age || 7; // Default to 7 if not set
   const { books, loading: booksLoading, refreshBooks } = useBooks();
   
   const [session, setSession] = useState<DailySession | null>(null);
@@ -277,7 +283,7 @@ const DailySessionPage: React.FC = () => {
               body: JSON.stringify({
                 bookTitle: title,
                 bookContent: content,
-                childAge: '7-12',
+                childAge: childAge, // Use actual kid's age
                 goal: selectedGoal,
               }),
             });
@@ -382,6 +388,7 @@ const DailySessionPage: React.FC = () => {
           books: bookSummaries,
           maxDuration: sessionDuration,
           subjects: getSavedPreferences(),
+          childAge: childAge, // Pass actual kid's age for age-appropriate recommendations
         }),
       });
       
@@ -1563,6 +1570,7 @@ const DailySessionPage: React.FC = () => {
         bookDescription={recommendedBook?.description}
         bookContent={bookContent}
         preGeneratedQuestions={discussionQuestions}
+        childAge={childAge}
       />
 
       {/* Prayer Modal */}

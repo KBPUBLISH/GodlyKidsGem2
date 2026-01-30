@@ -326,8 +326,8 @@ router.post('/run', verifyAdminKey, async (req, res) => {
                 const subject = template.subject.replace('${firstName}', firstName);
                 
                 await resend.emails.send({
-                    from: 'Michael from Godly Kids <michael@godlykids.app>',
-                    replyTo: 'michael@godlykids.app',
+                    from: 'Michael from Godly Kids <hello@kbpublish.org>',
+                    replyTo: 'hello@kbpublish.org',
                     to: user.email,
                     subject: subject,
                     html: html

@@ -259,8 +259,8 @@ router.post('/send-trial-welcome', verifyAdminKey, async (req, res) => {
                 const firstName = user.parentName?.split(' ')[0] || 'friend';
                 
                 await resend.emails.send({
-                    from: 'Michael from Godly Kids <michael@godlykids.app>',
-                    replyTo: 'michael@godlykids.app',
+                    from: 'Michael from Godly Kids <hello@kbpublish.org>',
+                    replyTo: 'hello@kbpublish.org',
                     to: user.email,
                     subject: `Thank you for trying Godly Kids! 🙏`,
                     html: `

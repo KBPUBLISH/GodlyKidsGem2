@@ -16,6 +16,16 @@ if (!(window as any).__GK_APP_BOOTED__) {
   (window as any).__GK_APP_BOOTED__ = true;
   console.log('🚀 APP BOOT (WebView created)', new Date().toISOString());
 
+  // Generate deviceId immediately on app boot (before any React renders)
+  // This ensures deviceId exists for link-email during signup
+  try {
+    if (!localStorage.getItem('godlykids_device_id')) {
+      const deviceId = `device_${Date.now()}_${Math.random().toString(36).slice(2)}`;
+      localStorage.setItem('godlykids_device_id', deviceId);
+      console.log('🔑 Generated device ID on boot:', deviceId);
+    }
+  } catch {}
+
   // Detect Despia early - we need this for crash detection logic
   const ua = navigator.userAgent || '';
   const isDespia = /despia/i.test(ua);

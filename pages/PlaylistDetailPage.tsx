@@ -701,7 +701,7 @@ const PlaylistDetailPage: React.FC = () => {
                                 {/* Connecting path line */}
                                 {index < playlist.items.length - 1 && (
                                     <div 
-                                        className="absolute left-1/2 top-[90px] w-1 h-24 -translate-x-1/2 z-0"
+                                        className="absolute left-1/2 top-[110px] md:top-[120px] w-1 h-24 -translate-x-1/2 z-0"
                                         style={{
                                             background: 'linear-gradient(180deg, #5DADE2 0%, #85C1E9 50%, #5DADE2 100%)',
                                             opacity: 0.6
@@ -714,28 +714,37 @@ const PlaylistDetailPage: React.FC = () => {
                                     className={`flex items-center gap-4 mb-8 ${isEven ? 'flex-row' : 'flex-row-reverse'}`}
                                     style={{ marginLeft: isEven ? '0' : 'auto', marginRight: isEven ? 'auto' : '0' }}
                                 >
-                                    {/* Circle with cover image */}
+                                    {/* Album-style cover image */}
                                     <div 
                                         onClick={() => handleItemClick(index)}
-                                        className={`relative cursor-pointer transition-all duration-300 hover:scale-110 active:scale-95 ${
-                                            isCurrent ? 'scale-110' : ''
+                                        className={`relative cursor-pointer transition-all duration-300 hover:scale-105 active:scale-95 ${
+                                            isCurrent ? 'scale-105' : ''
                                         }`}
                                     >
-                                        {/* Outer glow ring for current */}
+                                        {/* Outer glow for current */}
                                         {isCurrent && (
-                                            <div className="absolute -inset-3 rounded-full bg-[#FFD700]/40 animate-pulse" />
+                                            <div className="absolute -inset-2 rounded-xl bg-[#FFD700]/40 animate-pulse" />
                                         )}
                                         
-                                        {/* Main circle */}
-                                        <div className={`relative w-24 h-24 rounded-full overflow-hidden border-4 shadow-xl ${
-                                            itemIsLocked 
-                                                ? 'border-gray-400' 
-                                                : isCurrent 
-                                                    ? 'border-[#FFD700] ring-4 ring-[#FFD700]/50' 
-                                                    : isCompleted 
-                                                        ? 'border-green-500' 
-                                                        : 'border-white'
-                                        }`}>
+                                        {/* Album cover container */}
+                                        <div className={`relative w-20 h-28 md:w-24 md:h-32 rounded-xl overflow-hidden shadow-xl ${
+                                            isCompleted
+                                                ? 'ring-4 ring-green-500/50'
+                                                : itemIsLocked
+                                                    ? 'grayscale opacity-60'
+                                                    : isCurrent
+                                                        ? 'ring-4 ring-[#FFD700]/50'
+                                                        : ''
+                                        }`}
+                                        style={{
+                                            boxShadow: isCompleted
+                                                ? '0 8px 20px rgba(34, 197, 94, 0.4), 4px 0 0 #16a34a inset'
+                                                : itemIsLocked
+                                                    ? '0 8px 20px rgba(0,0,0,0.3), 4px 0 0 rgba(100,100,100,0.5) inset'
+                                                    : isCurrent
+                                                        ? '0 8px 20px rgba(255, 215, 0, 0.5), 4px 0 0 #B8860B inset'
+                                                        : '0 8px 20px rgba(0,0,0,0.3), 4px 0 0 rgba(139, 69, 19, 0.3) inset'
+                                        }}>
                                             {/* Cover image */}
                                             {item.coverImage ? (
                                                 <img
@@ -762,11 +771,11 @@ const PlaylistDetailPage: React.FC = () => {
                                                 </div>
                                             )}
                                             
-                                            {/* Play button overlay for unlocked items */}
-                                            {!itemIsLocked && !trackPlaying && (
-                                                <div className="absolute inset-0 bg-black/20 flex items-center justify-center opacity-0 hover:opacity-100 transition-opacity">
-                                                    <div className="w-10 h-10 rounded-full bg-white/90 flex items-center justify-center shadow-lg">
-                                                        <Play className="w-5 h-5 text-[#3E1F07] ml-0.5" fill="#3E1F07" />
+                                            {/* Completed overlay */}
+                                            {isCompleted && !itemIsLocked && (
+                                                <div className="absolute inset-0 bg-green-500/20 flex items-center justify-center">
+                                                    <div className="w-10 h-10 rounded-full bg-green-500 flex items-center justify-center shadow-lg">
+                                                        <Check className="w-6 h-6 text-white" strokeWidth={3} />
                                                     </div>
                                                 </div>
                                             )}
@@ -783,16 +792,9 @@ const PlaylistDetailPage: React.FC = () => {
                                             )}
                                         </div>
                                         
-                                        {/* Completion checkmark badge */}
-                                        {isCompleted && !itemIsLocked && (
-                                            <div className="absolute -bottom-1 -right-1 w-8 h-8 rounded-full bg-green-500 border-3 border-white flex items-center justify-center shadow-lg">
-                                                <Check className="w-5 h-5 text-white" strokeWidth={3} />
-                                            </div>
-                                        )}
-                                        
                                         {/* Premium crown badge - shows for all premium items */}
                                         {itemIsPremium && (
-                                            <div className={`absolute -top-1 -right-1 w-8 h-8 rounded-full border-2 border-white flex items-center justify-center shadow-lg ${
+                                            <div className={`absolute -top-2 -right-2 w-8 h-8 rounded-full border-2 border-white flex items-center justify-center shadow-lg ${
                                                 itemIsLocked 
                                                     ? 'bg-gradient-to-br from-[#FFD700] to-[#FFA500]' 
                                                     : 'bg-gradient-to-br from-[#FFD700] to-[#FFC107]'

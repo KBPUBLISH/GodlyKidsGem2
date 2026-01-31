@@ -318,8 +318,8 @@ const ReadPage: React.FC = () => {
         </div>
 
         {/* Category Buttons - Horizontal Scrollable */}
-        <div className="my-4 -mx-4 px-4">
-          <div className="flex gap-2 overflow-x-auto no-scrollbar pb-2">
+        <div className="my-4 -mx-4">
+          <div className="flex gap-2 overflow-x-auto no-scrollbar pb-2 px-4">
             {categories.map((category) => {
               const config = CATEGORY_CONFIG[category] || CATEGORY_CONFIG['default'];
               const IconComponent = config.icon;

@@ -392,44 +392,21 @@ const Categories: React.FC = () => {
                                         </div>
                                     </div>
                                 </div>
-                                {/* Preview */}
-                                <div 
-                                    className="mt-3 h-12 rounded-lg flex items-center px-4"
-                                    style={{ background: `linear-gradient(to right, ${formData.gradientFrom}, ${formData.gradientTo})` }}
-                                >
-                                    <span className="text-white font-bold drop-shadow">{formData.name || 'Preview'}</span>
-                                </div>
                             </div>
                             
                             {/* Category Image Upload */}
                             <div>
                                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                                    Category Image <span className="text-gray-400 font-normal">(for app display)</span>
+                                    Category Image <span className="text-gray-400 font-normal">(ultra-wide format recommended)</span>
                                 </label>
                                 <div className="flex gap-4 items-start">
-                                    {formData.image ? (
-                                        <div className="relative">
-                                            <img 
-                                                src={formData.image} 
-                                                alt="Category" 
-                                                className="w-24 h-24 object-cover rounded-lg border border-gray-300"
-                                            />
-                                            <button
-                                                type="button"
-                                                onClick={() => setFormData({ ...formData, image: '' })}
-                                                className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1 hover:bg-red-600"
-                                            >
-                                                <X className="w-3 h-3" />
-                                            </button>
-                                        </div>
-                                    ) : null}
                                     <label className={`flex-1 flex flex-col items-center justify-center border-2 border-dashed border-gray-300 rounded-lg p-4 cursor-pointer hover:border-indigo-500 transition-colors ${uploading ? 'opacity-50' : ''}`}>
                                         {uploading ? (
                                             <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-indigo-600" />
                                         ) : (
                                             <>
                                                 <Upload className="w-6 h-6 text-gray-400 mb-1" />
-                                                <span className="text-xs text-gray-600">Upload image</span>
+                                                <span className="text-xs text-gray-600">{formData.image ? 'Change image' : 'Upload image'}</span>
                                             </>
                                         )}
                                         <input
@@ -440,6 +417,60 @@ const Categories: React.FC = () => {
                                             disabled={uploading}
                                         />
                                     </label>
+                                    {formData.image && (
+                                        <button
+                                            type="button"
+                                            onClick={() => setFormData({ ...formData, image: '' })}
+                                            className="text-red-500 hover:text-red-600 text-sm"
+                                        >
+                                            Remove
+                                        </button>
+                                    )}
+                                </div>
+                            </div>
+                            
+                            {/* APP PREVIEW - Full width card preview */}
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-2">
+                                    📱 App Preview
+                                </label>
+                                <div className="bg-gradient-to-b from-blue-900 to-blue-800 p-4 rounded-xl">
+                                    {/* Category Card Preview */}
+                                    <div 
+                                        className="relative overflow-hidden rounded-2xl h-20"
+                                        style={{ background: `linear-gradient(to right, ${formData.gradientFrom}, ${formData.gradientTo})` }}
+                                    >
+                                        {/* Image on right side */}
+                                        {formData.image && (
+                                            <>
+                                                <img 
+                                                    src={formData.image} 
+                                                    alt="" 
+                                                    className="absolute right-0 top-0 h-full w-2/3 object-cover object-center"
+                                                />
+                                                {/* Gradient overlay - solid on left, transparent on right */}
+                                                <div 
+                                                    className="absolute inset-0"
+                                                    style={{ background: `linear-gradient(to right, ${formData.gradientFrom} 0%, ${formData.gradientFrom} 30%, transparent 70%)` }}
+                                                />
+                                            </>
+                                        )}
+                                        
+                                        {/* Category name */}
+                                        <div className="relative z-10 h-full flex items-center px-4">
+                                            <h3 className="text-white text-xl font-bold drop-shadow-lg">
+                                                {formData.name || 'Category Name'}
+                                            </h3>
+                                        </div>
+                                        
+                                        {/* Fallback icon if no image */}
+                                        {!formData.image && (
+                                            <div className="absolute right-4 top-1/2 -translate-y-1/2 text-white/20 text-5xl">
+                                                {formData.icon || '📚'}
+                                            </div>
+                                        )}
+                                    </div>
+                                    <p className="text-white/50 text-xs text-center mt-2">This is how it will appear in the app</p>
                                 </div>
                             </div>
                             

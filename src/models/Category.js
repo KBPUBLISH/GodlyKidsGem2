@@ -14,8 +14,21 @@ const categorySchema = new mongoose.Schema({
         type: String,
         default: '#6366f1', // Default indigo color
     },
+    // Gradient color option (from-to format for Tailwind)
+    gradientFrom: {
+        type: String,
+        default: '#6366f1', // Start color
+    },
+    gradientTo: {
+        type: String,
+        default: '#8b5cf6', // End color
+    },
     icon: {
         type: String, // Icon name or emoji
+    },
+    // Category cover image for the app cards
+    image: {
+        type: String, // URL to GCS
     },
     // Category type: determines where this category appears in the app
     // 'Book' = Read page, 'Audio' = Listen page

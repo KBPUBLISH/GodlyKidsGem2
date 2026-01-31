@@ -689,10 +689,11 @@ const PlaylistDetailPage: React.FC = () => {
                 {/* Path Items */}
                 <div className="relative z-10 pt-12 pb-8 px-4 flex flex-col items-center">
                     {playlist.items.map((item, index) => {
-                        const trackPlaying = isTrackPlaying(index);
-                        const isCurrent = isCurrentTrack(index);
-                        const itemIsLocked = (item as any).isMembersOnly && !isSubscribed;
-                        const isCompleted = false; // TODO: Track completed episodes
+                                    const trackPlaying = isTrackPlaying(index);
+                                        const isCurrent = isCurrentTrack(index);
+                                        const itemIsPremium = (item as any).isMembersOnly === true;
+                                        const itemIsLocked = itemIsPremium && !isSubscribed;
+                                        const isCompleted = false; // TODO: Track completed episodes
                         const isEven = index % 2 === 0;
                         
                         return (
@@ -789,9 +790,13 @@ const PlaylistDetailPage: React.FC = () => {
                                             </div>
                                         )}
                                         
-                                        {/* Premium crown badge for locked */}
-                                        {itemIsLocked && (
-                                            <div className="absolute -top-1 -right-1 w-8 h-8 rounded-full bg-gradient-to-br from-[#FFD700] to-[#FFA500] border-2 border-white flex items-center justify-center shadow-lg">
+                                        {/* Premium crown badge - shows for all premium items */}
+                                        {itemIsPremium && (
+                                            <div className={`absolute -top-1 -right-1 w-8 h-8 rounded-full border-2 border-white flex items-center justify-center shadow-lg ${
+                                                itemIsLocked 
+                                                    ? 'bg-gradient-to-br from-[#FFD700] to-[#FFA500]' 
+                                                    : 'bg-gradient-to-br from-[#FFD700] to-[#FFC107]'
+                                            }`}>
                                                 <Crown className="w-4 h-4 text-[#5c2e0b]" />
                                             </div>
                                         )}

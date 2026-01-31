@@ -6,12 +6,27 @@ import SectionTitle from '../components/ui/SectionTitle';
 import { useBooks } from '../context/BooksContext';
 import { useUser } from '../context/UserContext';
 import { useTutorial } from '../context/TutorialContext';
-import { Search, Music, ChevronDown, Lock, BookOpen } from 'lucide-react';
+import { Search, Music, ChevronDown, Lock, BookOpen, Heart, Sparkles, TreePine, Sword, Star, Book, Users, Crown, Compass, Smile } from 'lucide-react';
 import PremiumBadge from '../components/ui/PremiumBadge';
 import { getApiBaseUrl, ApiService } from '../services/apiService';
 import StormySeaError from '../components/ui/StormySeaError';
 
 const ageOptions = ['All Ages', '3+', '4+', '5+', '6+', '7+', '8+', '9+', '10+'];
+
+// Category button configuration with icons and colors for audio page
+const CATEGORY_CONFIG: Record<string, { icon: any; activeColor: string; activeBg: string }> = {
+  'All': { icon: Sparkles, activeColor: 'text-white', activeBg: 'bg-gradient-to-r from-purple-500 to-pink-500' },
+  'Bible Stories': { icon: Book, activeColor: 'text-white', activeBg: 'bg-gradient-to-r from-blue-500 to-blue-600' },
+  'Nature Tales': { icon: TreePine, activeColor: 'text-white', activeBg: 'bg-gradient-to-r from-green-500 to-emerald-600' },
+  'Character Building': { icon: Users, activeColor: 'text-white', activeBg: 'bg-gradient-to-r from-amber-500 to-orange-500' },
+  'Adventures': { icon: Compass, activeColor: 'text-white', activeBg: 'bg-gradient-to-r from-red-500 to-rose-600' },
+  'Favorites': { icon: Heart, activeColor: 'text-white', activeBg: 'bg-gradient-to-r from-pink-500 to-rose-500' },
+  'Music': { icon: Music, activeColor: 'text-white', activeBg: 'bg-gradient-to-r from-violet-500 to-purple-600' },
+  'Worship': { icon: Star, activeColor: 'text-white', activeBg: 'bg-gradient-to-r from-yellow-500 to-amber-500' },
+  'Lullabies': { icon: Smile, activeColor: 'text-white', activeBg: 'bg-gradient-to-r from-indigo-400 to-blue-500' },
+  'Stories': { icon: BookOpen, activeColor: 'text-white', activeBg: 'bg-gradient-to-r from-teal-500 to-cyan-600' },
+  'default': { icon: Crown, activeColor: 'text-white', activeBg: 'bg-gradient-to-r from-slate-500 to-slate-600' },
+};
 
 interface Playlist {
   _id: string;
@@ -40,13 +55,13 @@ const ListenPage: React.FC = () => {
   const [showAgeDropdown, setShowAgeDropdown] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState<string>('All');
   const [categories, setCategories] = useState<string[]>(['All']);
-  const [showCategoryDropdown, setShowCategoryDropdown] = useState(false);
+  // Category dropdown removed - using horizontal buttons instead
   const [playlists, setPlaylists] = useState<Playlist[]>([]);
   const [playlistsLoading, setPlaylistsLoading] = useState(true);
   const [playlistsError, setPlaylistsError] = useState<string | null>(null);
   const [isRetrying, setIsRetrying] = useState(false);
   const ageDropdownRef = useRef<HTMLDivElement>(null);
-  const categoryDropdownRef = useRef<HTMLDivElement>(null);
+  // categoryDropdownRef removed - using horizontal buttons
   const scrollRef = useRef<HTMLDivElement>(null);
   const lastScrollY = useRef(0);
 
@@ -133,24 +148,21 @@ const ListenPage: React.FC = () => {
     fetchCategories();
   }, [books, playlists]);
 
-  // Close dropdowns when clicking outside
+  // Close age dropdown when clicking outside
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (ageDropdownRef.current && !ageDropdownRef.current.contains(event.target as Node)) {
         setShowAgeDropdown(false);
       }
-      if (categoryDropdownRef.current && !categoryDropdownRef.current.contains(event.target as Node)) {
-        setShowCategoryDropdown(false);
-      }
     };
     
-    if (showAgeDropdown || showCategoryDropdown) {
+    if (showAgeDropdown) {
       document.addEventListener('mousedown', handleClickOutside);
       return () => {
         document.removeEventListener('mousedown', handleClickOutside);
       };
     }
-  }, [showAgeDropdown, showCategoryDropdown]);
+  }, [showAgeDropdown]);
 
   // Filter for audio books
   const audioBooks = books.filter(b => b.isAudio);
@@ -292,60 +304,34 @@ const ListenPage: React.FC = () => {
           </div>
         </div>
 
-        {/* Category Header with Dropdown */}
-        <div className="relative py-2 my-4 mx-[-10px]">
-          {/* Wood Texture Background */}
-          <div 
-            className="absolute inset-0 bg-[#8B4513] rounded-r-xl shadow-lg transform -skew-x-6 origin-bottom-left border-t-2 border-[#A0522D] border-b-4 border-[#5c2e0b]"
-            style={{
-                backgroundImage: `repeating-linear-gradient(90deg, transparent, transparent 50px, rgba(0,0,0,0.1) 50px, rgba(0,0,0,0.1) 53px), 
-                              linear-gradient(to bottom, #8B5A2B, #654321)`
-            }}
-          ></div>
-          
-          {/* Content */}
-          <div className="relative z-10 flex items-center justify-between px-6">
-            <h2 className="text-white font-display text-lg tracking-wide drop-shadow-md text-shadow">
-              {selectedCategory === 'All' ? 'Audio Adventures' : selectedCategory}
-            </h2>
-            
-            {/* Category Dropdown Button */}
-            <div className="relative" ref={categoryDropdownRef}>
-              <button
-                onClick={() => setShowCategoryDropdown(!showCategoryDropdown)}
-                className="flex items-center gap-1 text-white hover:text-[#FFD700] transition-colors"
-              >
-                <span className="text-sm font-semibold">Category</span>
-                <ChevronDown className={`w-4 h-4 transition-transform ${showCategoryDropdown ? 'rotate-180' : ''}`} />
-              </button>
+        {/* Category Buttons - Horizontal Scrollable */}
+        <div className="my-4 -mx-4 px-4">
+          <div className="flex gap-2 overflow-x-auto no-scrollbar pb-2">
+            {categories.map((category) => {
+              const config = CATEGORY_CONFIG[category] || CATEGORY_CONFIG['default'];
+              const IconComponent = config.icon;
+              const isSelected = selectedCategory === category;
               
-              {/* Dropdown Menu */}
-              {showCategoryDropdown && (
-                <div className="absolute top-full right-0 mt-2 bg-black/95 backdrop-blur-md rounded-xl border border-white/20 shadow-2xl z-50 min-w-[180px] max-h-[300px] overflow-y-auto">
-                  <div className="py-2">
-                    {categories.map((category) => (
-                      <button
-                        key={category}
-                        onClick={() => {
-                          setSelectedCategory(category);
-                          setShowCategoryDropdown(false);
-                        }}
-                        className={`w-full text-left px-4 py-2 text-sm text-white hover:bg-white/10 transition-colors ${
-                          selectedCategory === category ? 'bg-white/20 font-bold' : ''
-                        }`}
-                      >
-                        {category}
-                      </button>
-                    ))}
+              return (
+                <button
+                  key={category}
+                  onClick={() => setSelectedCategory(category)}
+                  className={`flex items-center gap-2 px-4 py-2.5 rounded-full font-display text-sm font-semibold whitespace-nowrap transition-all duration-300 transform active:scale-95 shadow-lg ${
+                    isSelected
+                      ? `${config.activeBg} ${config.activeColor} scale-105 ring-2 ring-white/30`
+                      : 'bg-white/90 text-gray-700 hover:bg-white hover:scale-105'
+                  }`}
+                >
+                  <div className={`w-6 h-6 rounded-full flex items-center justify-center ${
+                    isSelected ? 'bg-white/20' : 'bg-gray-100'
+                  }`}>
+                    <IconComponent className={`w-3.5 h-3.5 ${isSelected ? 'text-white' : 'text-gray-600'}`} />
                   </div>
-                </div>
-              )}
-            </div>
+                  <span>{category}</span>
+                </button>
+              );
+            })}
           </div>
-          
-          {/* Nail details */}
-          <div className="absolute top-1/2 left-2 w-2 h-2 bg-[#4a3728] rounded-full shadow-inner transform -translate-y-1/2 opacity-80"></div>
-          <div className="absolute top-1/2 right-2 w-2 h-2 bg-[#4a3728] rounded-full shadow-inner transform -translate-y-1/2 opacity-80"></div>
         </div>
 
         {(loading || playlistsLoading) ? (

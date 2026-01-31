@@ -419,7 +419,7 @@ const GivingPage: React.FC = () => {
             <Header isVisible={headerVisible} />
             
             {/* Main Content with top padding to clear header */}
-            <div className="px-4 pt-24 pb-32 space-y-4">
+            <div className="px-4 pt-32 pb-32 space-y-4">
                 
                 {/* Page Title */}
                 <div className="text-center">

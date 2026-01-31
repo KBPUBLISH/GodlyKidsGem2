@@ -12,6 +12,15 @@ import PremiumBadge from '../components/ui/PremiumBadge';
 
 const ageOptions = ['All Ages', '3+', '4+', '5+', '6+', '7+', '8+', '9+', '10+'];
 
+interface CategoryData {
+  _id: string;
+  name: string;
+  gradientFrom?: string;
+  gradientTo?: string;
+  image?: string;
+  icon?: string;
+}
+
 // Category card configuration with colors for books page
 const CATEGORY_CONFIG: Record<string, { icon: any; bgColor: string }> = {
   'All': { icon: Sparkles, bgColor: 'from-indigo-500 to-purple-600' },
@@ -88,6 +97,7 @@ const ReadPage: React.FC = () => {
   const [showAgeDropdown, setShowAgeDropdown] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState<string>('All');
   const [categories, setCategories] = useState<string[]>(['All']);
+  const [categoryData, setCategoryData] = useState<Record<string, CategoryData>>({});
   const [isCategoriesExpanded, setIsCategoriesExpanded] = useState(false);
   const [bookSeries, setBookSeries] = useState<any[]>([]);
   // categoryDropdownRef removed - using horizontal buttons
@@ -118,13 +128,29 @@ const ReadPage: React.FC = () => {
     const fetchCategories = async () => {
       try {
         const cats = await ApiService.getCategories('book');
-        const categoryNames = ['All', ...cats.map(c => c.name).filter(Boolean)];
+        const categoryNames = ['All', ...cats.map((c: any) => c.name).filter(Boolean)];
         setCategories(categoryNames);
+        
+        // Store full category data for images and gradients
+        const dataMap: Record<string, CategoryData> = {};
+        cats.forEach((c: any) => {
+          if (c.name) {
+            dataMap[c.name] = {
+              _id: c._id,
+              name: c.name,
+              gradientFrom: c.gradientFrom,
+              gradientTo: c.gradientTo,
+              image: c.image,
+              icon: c.icon,
+            };
+          }
+        });
+        setCategoryData(dataMap);
       } catch (error) {
         console.error('Error fetching categories:', error);
         // Extract categories from books as fallback
         const uniqueCategories = ['All', ...new Set(books.map(b => b.category).filter(Boolean))];
-        setCategories(uniqueCategories);
+        setCategories(uniqueCategories as string[]);
       }
     };
     
@@ -325,32 +351,48 @@ const ReadPage: React.FC = () => {
         {/* Collapsible Category Section */}
         <div className="my-4">
           {/* Category Header - Always visible */}
-          <button
-            onClick={() => setIsCategoriesExpanded(!isCategoriesExpanded)}
-            className={`w-full flex items-center justify-between px-4 py-3 rounded-2xl transition-all duration-300 ${
-              isCategoriesExpanded 
-                ? 'bg-white/20 backdrop-blur-sm' 
-                : `bg-gradient-to-r ${CATEGORY_CONFIG[selectedCategory]?.bgColor || CATEGORY_CONFIG['default'].bgColor}`
-            }`}
-          >
-            <div className="flex items-center gap-3">
-              {(() => {
-                const config = CATEGORY_CONFIG[selectedCategory] || CATEGORY_CONFIG['default'];
-                const IconComponent = config.icon;
-                return (
+          {(() => {
+            const catData = categoryData[selectedCategory];
+            const config = CATEGORY_CONFIG[selectedCategory] || CATEGORY_CONFIG['default'];
+            const IconComponent = config.icon;
+            const gradientFrom = catData?.gradientFrom || '#6366f1';
+            const gradientTo = catData?.gradientTo || '#8b5cf6';
+            
+            return (
+              <button
+                onClick={() => setIsCategoriesExpanded(!isCategoriesExpanded)}
+                className={`w-full relative overflow-hidden flex items-center justify-between px-4 py-3 rounded-2xl transition-all duration-300 ${
+                  isCategoriesExpanded ? 'bg-white/20 backdrop-blur-sm' : ''
+                }`}
+                style={!isCategoriesExpanded ? { background: `linear-gradient(to right, ${gradientFrom}, ${gradientTo})` } : undefined}
+              >
+                {/* Category image on right with gradient overlay */}
+                {!isCategoriesExpanded && catData?.image && (
                   <>
-                    <div className="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center">
-                      <IconComponent className="w-5 h-5 text-white" />
-                    </div>
-                    <span className="text-white font-display text-lg font-bold">
-                      {selectedCategory === 'All' ? 'All Categories' : selectedCategory}
-                    </span>
+                    <img 
+                      src={catData.image} 
+                      alt="" 
+                      className="absolute right-0 top-0 h-full w-2/3 object-cover object-center"
+                    />
+                    {/* Gradient overlay - solid on left, transparent on right */}
+                    <div 
+                      className="absolute inset-0"
+                      style={{ background: `linear-gradient(to right, ${gradientFrom} 0%, ${gradientFrom} 30%, transparent 70%)` }}
+                    />
                   </>
-                );
-              })()}
-            </div>
-            <ChevronDown className={`w-6 h-6 text-white transition-transform duration-300 ${isCategoriesExpanded ? 'rotate-180' : ''}`} />
-          </button>
+                )}
+                <div className="relative z-10 flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center">
+                    <IconComponent className="w-5 h-5 text-white" />
+                  </div>
+                  <span className="text-white font-display text-lg font-bold drop-shadow-md">
+                    {selectedCategory === 'All' ? 'All Categories' : selectedCategory}
+                  </span>
+                </div>
+                <ChevronDown className={`relative z-10 w-6 h-6 text-white transition-transform duration-300 ${isCategoriesExpanded ? 'rotate-180' : ''}`} />
+              </button>
+            );
+          })()}
 
           {/* Expandable Category Cards */}
           <div className={`overflow-hidden transition-all duration-500 ease-in-out ${
@@ -361,6 +403,9 @@ const ReadPage: React.FC = () => {
                 const config = CATEGORY_CONFIG[category] || CATEGORY_CONFIG['default'];
                 const IconComponent = config.icon;
                 const isSelected = selectedCategory === category;
+                const catData = categoryData[category];
+                const gradientFrom = catData?.gradientFrom || '#6366f1';
+                const gradientTo = catData?.gradientTo || '#8b5cf6';
                 
                 return (
                   <button
@@ -373,31 +418,47 @@ const ReadPage: React.FC = () => {
                       isSelected ? 'ring-4 ring-white/50 scale-[1.02]' : 'hover:scale-[1.01]'
                     }`}
                   >
-                    {/* Gradient Background */}
-                    <div className={`bg-gradient-to-r ${config.bgColor} p-4 min-h-[80px] flex items-center`}>
-                      {/* Left side - Icon and Text */}
-                      <div className="flex items-center gap-4 flex-1">
-                        <div className="w-12 h-12 rounded-xl bg-white/20 flex items-center justify-center shadow-lg">
-                          <IconComponent className="w-6 h-6 text-white" />
-                        </div>
-                        <div className="text-left">
-                          <h3 className="text-white font-display text-xl font-bold drop-shadow-md">
-                            {category === 'All' ? 'All Categories' : category}
-                          </h3>
-                          {isSelected && (
-                            <span className="text-white/80 text-sm">Currently viewing</span>
-                          )}
-                        </div>
+                    {/* Base gradient background */}
+                    <div 
+                      className="p-4 min-h-[80px] flex items-center relative"
+                      style={{ background: `linear-gradient(to right, ${gradientFrom}, ${gradientTo})` }}
+                    >
+                      {/* Category image on right with gradient overlay */}
+                      {catData?.image && (
+                        <>
+                          <img 
+                            src={catData.image} 
+                            alt="" 
+                            className="absolute right-0 top-0 h-full w-2/3 object-cover object-center"
+                          />
+                          {/* Gradient overlay - solid on left, transparent on right */}
+                          <div 
+                            className="absolute inset-0"
+                            style={{ background: `linear-gradient(to right, ${gradientFrom} 0%, ${gradientFrom} 30%, transparent 70%)` }}
+                          />
+                        </>
+                      )}
+                      
+                      {/* Left side - Text */}
+                      <div className="relative z-10 text-left flex-1">
+                        <h3 className="text-white font-display text-xl font-bold drop-shadow-md">
+                          {category === 'All' ? 'All Categories' : category}
+                        </h3>
+                        {isSelected && (
+                          <span className="text-white/80 text-sm">Currently viewing</span>
+                        )}
                       </div>
                       
-                      {/* Right side - Decorative elements */}
-                      <div className="absolute right-4 top-1/2 -translate-y-1/2 opacity-30">
-                        <IconComponent className="w-20 h-20 text-white" />
-                      </div>
+                      {/* Fallback decorative icon if no image */}
+                      {!catData?.image && (
+                        <div className="absolute right-4 top-1/2 -translate-y-1/2 opacity-30">
+                          <IconComponent className="w-16 h-16 text-white" />
+                        </div>
+                      )}
                       
                       {/* Selected indicator */}
                       {isSelected && (
-                        <div className="absolute top-2 right-2 w-6 h-6 rounded-full bg-white flex items-center justify-center">
+                        <div className="absolute top-2 right-2 w-6 h-6 rounded-full bg-white flex items-center justify-center z-20">
                           <div className="w-3 h-3 rounded-full bg-green-500" />
                         </div>
                       )}

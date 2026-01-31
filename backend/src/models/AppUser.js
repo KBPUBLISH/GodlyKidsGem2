@@ -70,9 +70,18 @@ const appUserSchema = new mongoose.Schema({
         type: Boolean,
         default: false,
     },
+    reverseTrialConvertedAt: {
+        type: Date,
+    },
     reverseTrialNudgeSent: {
         type: Boolean,
         default: false,
+    },
+    // Track which reminder notifications have been sent
+    reverseTrialNotificationsSent: {
+        threeDays: { type: Boolean, default: false },
+        twoDays: { type: Boolean, default: false },
+        oneDay: { type: Boolean, default: false },
     },
     
     // Onboarding tracking

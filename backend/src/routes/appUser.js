@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const AppUser = require('../models/AppUser');
+const ReverseTrialDevice = require('../models/ReverseTrialDevice');
 
 /**
  * POST /api/app-user/preferences
@@ -280,16 +281,36 @@ router.post('/complete-onboarding', async (req, res) => {
 /**
  * POST /api/app-user/start-reverse-trial
  * Start a 7-day reverse trial when user closes paywall
+ * 
+ * IMPORTANT: Checks both user history AND device history to prevent:
+ * - Same user starting multiple trials
+ * - Same device being used with different accounts to get multiple trials
  */
 router.post('/start-reverse-trial', async (req, res) => {
     try {
-        const { deviceId, email } = req.body;
+        const { deviceId, email, platform } = req.body;
         
         if (!deviceId && !email) {
             return res.status(400).json({ 
                 success: false, 
                 error: 'Either deviceId or email is required' 
             });
+        }
+        
+        // CRITICAL: Check if this DEVICE has ever used a reverse trial
+        // This prevents users from signing out and creating new accounts to get more trials
+        if (deviceId) {
+            const deviceUsedTrial = await ReverseTrialDevice.findOne({ deviceId });
+            if (deviceUsedTrial) {
+                console.log(`🚫 Device ${deviceId} already used reverse trial on ${deviceUsedTrial.trialStartedAt}`);
+                return res.json({ 
+                    success: false, 
+                    error: 'This device has already used a reverse trial',
+                    alreadyTrialed: true,
+                    deviceBlocked: true,
+                    previousTrialDate: deviceUsedTrial.trialStartedAt
+                });
+            }
         }
         
         // Find user
@@ -307,6 +328,7 @@ router.post('/start-reverse-trial', async (req, res) => {
             user = new AppUser({
                 deviceId,
                 email: email ? email.toLowerCase().trim() : undefined,
+                platform: platform || 'unknown',
             });
         }
         
@@ -327,23 +349,47 @@ router.post('/start-reverse-trial', async (req, res) => {
             });
         }
         
+        const trialStartDate = new Date();
+        const trialEndDate = new Date(trialStartDate.getTime() + 7 * 24 * 60 * 60 * 1000);
+        
         // Start the reverse trial
-        user.reverseTrialStartDate = new Date();
+        user.reverseTrialStartDate = trialStartDate;
         user.reverseTrialActive = true;
         user.reverseTrialConverted = false;
         user.reverseTrialNudgeSent = false;
+        user.reverseTrialNotificationsSent = {
+            threeDays: false,
+            twoDays: false,
+            oneDay: false,
+        };
         user.subscriptionStatus = 'reverse_trial';
         user.lastActiveAt = new Date();
         
         await user.save();
         
-        console.log('🎁 Reverse trial started for user:', user._id);
+        // CRITICAL: Record this device as having used a reverse trial
+        // This prevents the device from ever getting another trial
+        if (deviceId) {
+            await ReverseTrialDevice.create({
+                deviceId,
+                userId: user._id,
+                email: user.email || null,
+                trialStartedAt: trialStartDate,
+                trialEndedAt: trialEndDate,
+                platform: platform || user.platform || 'unknown',
+                converted: false,
+            });
+            console.log(`📱 Recorded device ${deviceId} as having used reverse trial`);
+        }
+        
+        console.log('🎁 Reverse trial started for user:', user._id, '- Device:', deviceId);
         
         res.json({ 
             success: true,
             userId: user._id,
-            trialStartDate: user.reverseTrialStartDate,
-            trialEndDate: new Date(user.reverseTrialStartDate.getTime() + 7 * 24 * 60 * 60 * 1000),
+            trialStartDate: trialStartDate,
+            trialEndDate: trialEndDate,
+            daysRemaining: 7,
             message: 'Reverse trial started! Enjoy 7 days of premium.'
         });
         
@@ -448,13 +494,16 @@ router.post('/reverse-trial-converted', async (req, res) => {
             query = { deviceId };
         }
         
+        const convertedAt = new Date();
+        
         const user = await AppUser.findOneAndUpdate(
             query,
             {
                 $set: {
                     reverseTrialConverted: true,
+                    reverseTrialConvertedAt: convertedAt,
                     reverseTrialActive: false,
-                    lastActiveAt: new Date(),
+                    lastActiveAt: convertedAt,
                 }
             },
             { new: true }
@@ -467,11 +516,25 @@ router.post('/reverse-trial-converted', async (req, res) => {
             });
         }
         
+        // Also update the device record to track conversion
+        if (deviceId) {
+            await ReverseTrialDevice.findOneAndUpdate(
+                { deviceId },
+                { 
+                    $set: { 
+                        converted: true, 
+                        convertedAt: convertedAt 
+                    } 
+                }
+            );
+        }
+        
         console.log('🎉 Reverse trial converted for user:', user._id);
         
         res.json({ 
             success: true,
             userId: user._id,
+            convertedAt: convertedAt,
             message: 'Reverse trial marked as converted'
         });
         

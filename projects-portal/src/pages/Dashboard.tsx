@@ -35,6 +35,15 @@ interface UserData {
     subscriberEmail?: string;
     emailBonusAwarded?: boolean;
     emailOptIn?: boolean;
+    // Reverse trial fields
+    reverseTrialStartDate?: string;
+    reverseTrialActive?: boolean;
+    reverseTrialConverted?: boolean;
+    reverseTrialConvertedAt?: string;
+    reverseTrialDaysRemaining?: number | null;
+    // Onboarding fields
+    onboardingStatus?: string;
+    onboardingCompletedAt?: string;
 }
 
 type TimeRange = '1d' | '1w' | '1m' | '3m' | 'all';
@@ -68,6 +77,7 @@ interface AnalyticsData {
     subscriptionStats: {
         free: number;
         trial: number;
+        reverse_trial: number;
         active: number;
         cancelled: number;
         expired: number;
@@ -158,6 +168,7 @@ const Dashboard: React.FC = () => {
         switch (status) {
             case 'active': return 'bg-green-100 text-green-700';
             case 'trial': return 'bg-blue-100 text-blue-700';
+            case 'reverse_trial': return 'bg-purple-100 text-purple-700';
             case 'cancelled': return 'bg-red-100 text-red-700';
             case 'expired': return 'bg-gray-100 text-gray-700';
             default: return 'bg-yellow-100 text-yellow-700';
@@ -438,6 +449,7 @@ const Dashboard: React.FC = () => {
                                         className={`h-full rounded-full ${
                                             status === 'active' ? 'bg-green-500' :
                                             status === 'trial' ? 'bg-blue-500' :
+                                            status === 'reverse_trial' ? 'bg-purple-500' :
                                             status === 'cancelled' ? 'bg-red-500' :
                                             status === 'expired' ? 'bg-gray-500' :
                                             'bg-yellow-500'
@@ -659,9 +671,23 @@ const Dashboard: React.FC = () => {
                                         </td>
                                         <td className="px-4 py-3 text-center text-gray-600">{user.sessions}</td>
                                         <td className="px-4 py-3 text-center">
-                                            <span className={`px-2 py-1 rounded text-xs font-medium capitalize ${getSubscriptionBadgeColor(user.subscriptionStatus)}`}>
-                                                {user.subscriptionStatus}
-                                            </span>
+                                            <div className="flex flex-col items-center gap-0.5">
+                                                <span className={`px-2 py-1 rounded text-xs font-medium capitalize ${getSubscriptionBadgeColor(user.subscriptionStatus)}`}>
+                                                    {user.subscriptionStatus === 'reverse_trial' ? 'Reverse Trial' : user.subscriptionStatus}
+                                                </span>
+                                                {user.subscriptionStatus === 'reverse_trial' && user.reverseTrialDaysRemaining !== null && (
+                                                    <span className={`text-[10px] font-medium ${
+                                                        user.reverseTrialDaysRemaining <= 1 ? 'text-red-600' :
+                                                        user.reverseTrialDaysRemaining <= 3 ? 'text-orange-600' :
+                                                        'text-purple-600'
+                                                    }`}>
+                                                        {user.reverseTrialDaysRemaining}d left
+                                                    </span>
+                                                )}
+                                                {user.reverseTrialConverted && (
+                                                    <span className="text-[10px] text-green-600 font-medium">✓ Converted</span>
+                                                )}
+                                            </div>
                                         </td>
                                         <td className="px-4 py-3 text-center">
                                             {getPlatformIcon(user.platform)}
@@ -706,10 +732,32 @@ const Dashboard: React.FC = () => {
                                                     <div>
                                                         <p className="text-xs text-gray-500 mb-1">Engagement</p>
                                                         <p className="text-sm">⏱️ {user.timeSpentMinutes} min total</p>
-                                                        <p className="text-sm">📍 Step {user.onboardingStep} onboarding</p>
+                                                        <p className="text-sm">📍 {user.onboardingStatus || 'not_started'}</p>
                                                         <p className="text-sm">🎓 Step {user.tutorialStep || 0} tutorial</p>
                                                         <p className="text-sm text-xs truncate" title={user.farthestPage}>🚀 {user.farthestPage || '/'}</p>
                                                     </div>
+                                                    {user.reverseTrialStartDate && (
+                                                    <div>
+                                                        <p className="text-xs text-gray-500 mb-1">Reverse Trial</p>
+                                                        <p className="text-sm">🎁 Started: {new Date(user.reverseTrialStartDate).toLocaleDateString()}</p>
+                                                        {user.reverseTrialActive && user.reverseTrialDaysRemaining !== null && (
+                                                            <p className={`text-sm font-medium ${
+                                                                user.reverseTrialDaysRemaining <= 1 ? 'text-red-600' :
+                                                                user.reverseTrialDaysRemaining <= 3 ? 'text-orange-600' :
+                                                                'text-purple-600'
+                                                            }`}>
+                                                                ⏰ {user.reverseTrialDaysRemaining} days left
+                                                            </p>
+                                                        )}
+                                                        {user.reverseTrialConverted ? (
+                                                            <p className="text-sm text-green-600 font-medium">
+                                                                ✅ Converted {user.reverseTrialConvertedAt ? new Date(user.reverseTrialConvertedAt).toLocaleDateString() : ''}
+                                                            </p>
+                                                        ) : !user.reverseTrialActive && (
+                                                            <p className="text-sm text-gray-500">❌ Expired (not converted)</p>
+                                                        )}
+                                                    </div>
+                                                    )}
                                                     <div>
                                                         <p className="text-xs text-gray-500 mb-1">Referral</p>
                                                         <p className="text-sm font-mono">{user.referralCode || 'N/A'}</p>

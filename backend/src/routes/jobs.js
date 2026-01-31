@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const { Resend } = require('resend');
 const { runSubscriptionCheck } = require('../jobs/subscriptionChecker');
+const { runReverseTrialNotifications, expireEndedTrials, getReverseTrialAnalytics } = require('../jobs/reverseTrialNotifier');
 const AppUser = require('../models/AppUser');
 
 // Admin API key for protected job endpoints
@@ -348,6 +349,55 @@ router.post('/send-trial-welcome', verifyAdminKey, async (req, res) => {
 });
 
 /**
+ * POST /api/jobs/reverse-trial-notifications
+ * Send reminder notifications to users whose reverse trial is about to expire
+ * Sends at 3 days, 2 days, and 1 day remaining
+ * Requires X-Admin-API-Key header
+ */
+router.post('/reverse-trial-notifications', verifyAdminKey, async (req, res) => {
+    console.log('🔔 Reverse trial notification job triggered manually');
+
+    try {
+        // First, expire any trials that have ended
+        const expireResult = await expireEndedTrials();
+        
+        // Then send reminder notifications
+        const notifyResult = await runReverseTrialNotifications();
+        
+        res.json({
+            success: notifyResult.success,
+            message: 'Reverse trial notification job completed',
+            expired: expireResult,
+            notifications: notifyResult,
+        });
+    } catch (error) {
+        console.error('Error running reverse trial notifications:', error);
+        res.status(500).json({
+            success: false,
+            error: error.message,
+        });
+    }
+});
+
+/**
+ * GET /api/jobs/reverse-trial-stats
+ * Get reverse trial analytics and conversion stats
+ * Requires X-Admin-API-Key header
+ */
+router.get('/reverse-trial-stats', verifyAdminKey, async (req, res) => {
+    try {
+        const stats = await getReverseTrialAnalytics();
+        res.json(stats);
+    } catch (error) {
+        console.error('Error getting reverse trial stats:', error);
+        res.status(500).json({
+            success: false,
+            error: error.message,
+        });
+    }
+});
+
+/**
  * GET /api/jobs/status
  * Check if job routes are working
  */
@@ -383,6 +433,20 @@ router.get('/status', (req, res) => {
                     hoursAgo: 'number (default 24) - find trials within this window',
                     limit: 'number (default 50)',
                 },
+            },
+            {
+                name: 'reverse-trial-notifications',
+                method: 'POST',
+                path: '/api/jobs/reverse-trial-notifications',
+                description: 'Send reminder notifications for expiring reverse trials (3, 2, 1 day warnings)',
+                requiresAuth: true,
+            },
+            {
+                name: 'reverse-trial-stats',
+                method: 'GET',
+                path: '/api/jobs/reverse-trial-stats',
+                description: 'Get reverse trial analytics and conversion stats',
+                requiresAuth: true,
             }
         ],
     });

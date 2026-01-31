@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Plus, Edit, Trash2, Tag, BookOpen, Headphones, Upload, Image, X } from 'lucide-react';
+import { Plus, Edit, Trash2, Tag, BookOpen, Headphones, Upload } from 'lucide-react';
 import apiClient from '../services/apiClient';
 
 interface Category {

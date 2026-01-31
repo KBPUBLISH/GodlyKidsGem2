@@ -878,10 +878,10 @@ const Dashboard: React.FC = () => {
                                                 <span className={`px-2 py-1 rounded text-xs font-medium capitalize ${getSubscriptionBadgeColor(user.subscriptionStatus)}`}>
                                                     {user.subscriptionStatus === 'reverse_trial' ? 'Reverse Trial' : user.subscriptionStatus}
                                                 </span>
-                                                {user.subscriptionStatus === 'reverse_trial' && user.reverseTrialDaysRemaining !== null && (
+                                                {user.subscriptionStatus === 'reverse_trial' && user.reverseTrialDaysRemaining != null && (
                                                     <span className={`text-[10px] font-medium ${
-                                                        user.reverseTrialDaysRemaining <= 1 ? 'text-red-600' :
-                                                        user.reverseTrialDaysRemaining <= 3 ? 'text-orange-600' :
+                                                        (user.reverseTrialDaysRemaining ?? 0) <= 1 ? 'text-red-600' :
+                                                        (user.reverseTrialDaysRemaining ?? 0) <= 3 ? 'text-orange-600' :
                                                         'text-purple-600'
                                                     }`}>
                                                         {user.reverseTrialDaysRemaining}d left
@@ -943,10 +943,10 @@ const Dashboard: React.FC = () => {
                                                     <div>
                                                         <p className="text-xs text-gray-500 mb-1">Reverse Trial</p>
                                                         <p className="text-sm">🎁 Started: {new Date(user.reverseTrialStartDate).toLocaleDateString()}</p>
-                                                        {user.reverseTrialActive && user.reverseTrialDaysRemaining !== null && (
+                                                        {user.reverseTrialActive && user.reverseTrialDaysRemaining != null && (
                                                             <p className={`text-sm font-medium ${
-                                                                user.reverseTrialDaysRemaining <= 1 ? 'text-red-600' :
-                                                                user.reverseTrialDaysRemaining <= 3 ? 'text-orange-600' :
+                                                                (user.reverseTrialDaysRemaining ?? 0) <= 1 ? 'text-red-600' :
+                                                                (user.reverseTrialDaysRemaining ?? 0) <= 3 ? 'text-orange-600' :
                                                                 'text-purple-600'
                                                             }`}>
                                                                 ⏰ {user.reverseTrialDaysRemaining} days left

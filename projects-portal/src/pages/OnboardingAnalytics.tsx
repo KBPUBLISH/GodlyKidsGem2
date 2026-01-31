@@ -1025,7 +1025,7 @@ const OnboardingAnalytics: React.FC = () => {
                                     </span>
                                 </div>
                             </div>
-                            {idx > 0 && (
+                            {idx > 0 && data.firstLesson && (
                                 <div className={`text-xs font-medium ${
                                     step.rate >= data.firstLesson.funnel[idx - 1].rate * 0.8 ? 'text-green-600' : 'text-red-600'
                                 }`}>
@@ -1085,8 +1085,8 @@ const OnboardingAnalytics: React.FC = () => {
                         Daily First Lesson Activity
                     </h3>
                     <div className="h-48 flex items-end gap-1">
-                        {data.firstLesson.dailyTrends.map((day, idx) => {
-                            const maxVal = Math.max(...data.firstLesson.dailyTrends.map(d => d.started), 1);
+                        {data.firstLesson?.dailyTrends.map((day, idx) => {
+                            const maxVal = Math.max(...(data.firstLesson?.dailyTrends.map(d => d.started) ?? [1]), 1);
                             return (
                                 <div 
                                     key={idx}

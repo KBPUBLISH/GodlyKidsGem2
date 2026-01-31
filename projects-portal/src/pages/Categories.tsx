@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Plus, Edit, Trash2, Tag, BookOpen, Headphones } from 'lucide-react';
+import { Plus, Edit, Trash2, Tag, BookOpen, Headphones, Upload, Image, X } from 'lucide-react';
 import apiClient from '../services/apiClient';
 
 interface Category {
@@ -7,9 +7,28 @@ interface Category {
     name: string;
     description?: string;
     color: string;
+    gradientFrom?: string;
+    gradientTo?: string;
     icon?: string;
+    image?: string;
     contentType: 'Book' | 'Audio';
 }
+
+// Preset gradient options
+const GRADIENT_PRESETS = [
+    { name: 'Purple', from: '#8b5cf6', to: '#6366f1' },
+    { name: 'Blue', from: '#3b82f6', to: '#1d4ed8' },
+    { name: 'Sky', from: '#38bdf8', to: '#0284c7' },
+    { name: 'Green', from: '#22c55e', to: '#16a34a' },
+    { name: 'Emerald', from: '#10b981', to: '#059669' },
+    { name: 'Yellow', from: '#facc15', to: '#eab308' },
+    { name: 'Orange', from: '#f97316', to: '#ea580c' },
+    { name: 'Red', from: '#ef4444', to: '#dc2626' },
+    { name: 'Pink', from: '#ec4899', to: '#db2777' },
+    { name: 'Indigo', from: '#6366f1', to: '#4f46e5' },
+    { name: 'Teal', from: '#14b8a6', to: '#0d9488' },
+    { name: 'Amber', from: '#f59e0b', to: '#d97706' },
+];
 
 const Categories: React.FC = () => {
     const [categories, setCategories] = useState<Category[]>([]);
@@ -20,11 +39,15 @@ const Categories: React.FC = () => {
         name: '',
         description: '',
         color: '#6366f1',
+        gradientFrom: '#6366f1',
+        gradientTo: '#8b5cf6',
         icon: '',
+        image: '',
         contentType: 'Book' as 'Book' | 'Audio',
     });
     const [saving, setSaving] = useState(false);
     const [deleting, setDeleting] = useState<string | null>(null);
+    const [uploading, setUploading] = useState(false);
 
     useEffect(() => {
         fetchCategories();
@@ -48,7 +71,10 @@ const Categories: React.FC = () => {
                 name: category.name,
                 description: category.description || '',
                 color: category.color,
+                gradientFrom: category.gradientFrom || category.color || '#6366f1',
+                gradientTo: category.gradientTo || '#8b5cf6',
                 icon: category.icon || '',
+                image: category.image || '',
                 contentType: category.contentType || 'Book',
             });
         } else {
@@ -57,7 +83,10 @@ const Categories: React.FC = () => {
                 name: '',
                 description: '',
                 color: '#6366f1',
+                gradientFrom: '#6366f1',
+                gradientTo: '#8b5cf6',
                 icon: '',
+                image: '',
                 contentType: 'Book',
             });
         }
@@ -71,9 +100,31 @@ const Categories: React.FC = () => {
             name: '',
             description: '',
             color: '#6366f1',
+            gradientFrom: '#6366f1',
+            gradientTo: '#8b5cf6',
             icon: '',
+            image: '',
             contentType: 'Book',
         });
+    };
+
+    // Handle image upload
+    const handleImageUpload = async (file: File) => {
+        setUploading(true);
+        const formDataUpload = new FormData();
+        formDataUpload.append('file', file);
+
+        try {
+            const response = await apiClient.post('/api/upload/image?bookId=categories&type=cover', formDataUpload, {
+                headers: { 'Content-Type': 'multipart/form-data' },
+            });
+            setFormData(prev => ({ ...prev, image: response.data.url }));
+        } catch (error) {
+            console.error('Error uploading image:', error);
+            alert('Failed to upload image');
+        } finally {
+            setUploading(false);
+        }
     };
 
     const handleSubmit = async (e: React.FormEvent) => {
@@ -138,52 +189,69 @@ const Categories: React.FC = () => {
                     {categories.map((category) => (
                         <div
                             key={category._id}
-                            className="bg-white p-6 rounded-lg shadow-sm border border-gray-200"
+                            className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden"
                         >
-                            <div className="flex items-start justify-between mb-4">
-                                <div className="flex items-center gap-3">
-                                    <div
-                                        className="w-12 h-12 rounded-lg flex items-center justify-center text-white text-xl"
-                                        style={{ backgroundColor: category.color }}
-                                    >
-                                        {category.icon || <Tag className="w-6 h-6" />}
-                                    </div>
-                                    <div>
-                                        <h3 className="text-xl font-semibold text-gray-800">{category.name}</h3>
-                                        {category.description && (
-                                            <p className="text-sm text-gray-600 mt-1">{category.description}</p>
-                                        )}
-                                    </div>
-                                </div>
-                            </div>
-                            {/* Type Badge */}
-                            <div className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold mb-3 ${
-                                category.contentType === 'Audio' 
-                                    ? 'bg-green-100 text-green-700' 
-                                    : 'bg-indigo-100 text-indigo-700'
-                            }`}>
-                                {category.contentType === 'Audio' ? (
-                                    <><Headphones className="w-3.5 h-3.5" /> Listen Page</>
+                            {/* Category Preview Card */}
+                            <div 
+                                className="relative h-24 flex items-center px-4 overflow-hidden"
+                                style={{ 
+                                    background: `linear-gradient(to right, ${category.gradientFrom || category.color}, ${category.gradientTo || category.color})` 
+                                }}
+                            >
+                                {/* Category Name */}
+                                <h3 className="text-xl font-bold text-white drop-shadow-md z-10">{category.name}</h3>
+                                
+                                {/* Category Image or Icon */}
+                                {category.image ? (
+                                    <img 
+                                        src={category.image} 
+                                        alt={category.name}
+                                        className="absolute right-0 top-0 h-full w-1/2 object-cover object-left"
+                                        style={{ maskImage: 'linear-gradient(to right, transparent, black 30%)' }}
+                                    />
                                 ) : (
-                                    <><BookOpen className="w-3.5 h-3.5" /> Read Page</>
+                                    <div className="absolute right-4 top-1/2 -translate-y-1/2 text-white/30 text-5xl">
+                                        {category.icon || <Tag className="w-12 h-12" />}
+                                    </div>
                                 )}
                             </div>
-                            <div className="flex gap-2 mt-4">
-                                <button
-                                    onClick={() => handleOpenModal(category)}
-                                    className="flex-1 bg-indigo-600 text-white px-3 py-2 rounded hover:bg-indigo-700 transition flex items-center justify-center gap-2"
-                                >
-                                    <Edit className="w-4 h-4" />
-                                    Edit
-                                </button>
-                                <button
-                                    onClick={() => handleDelete(category._id)}
-                                    disabled={deleting === category._id}
-                                    className="flex-1 bg-red-600 text-white px-3 py-2 rounded hover:bg-red-700 transition disabled:opacity-50 flex items-center justify-center gap-2"
-                                >
-                                    <Trash2 className="w-4 h-4" />
-                                    {deleting === category._id ? 'Deleting...' : 'Delete'}
-                                </button>
+                            
+                            {/* Card Content */}
+                            <div className="p-4">
+                                {category.description && (
+                                    <p className="text-sm text-gray-600 mb-3">{category.description}</p>
+                                )}
+                                
+                                {/* Type Badge */}
+                                <div className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold mb-3 ${
+                                    category.contentType === 'Audio' 
+                                        ? 'bg-green-100 text-green-700' 
+                                        : 'bg-indigo-100 text-indigo-700'
+                                }`}>
+                                    {category.contentType === 'Audio' ? (
+                                        <><Headphones className="w-3.5 h-3.5" /> Listen Page</>
+                                    ) : (
+                                        <><BookOpen className="w-3.5 h-3.5" /> Read Page</>
+                                    )}
+                                </div>
+                                
+                                <div className="flex gap-2">
+                                    <button
+                                        onClick={() => handleOpenModal(category)}
+                                        className="flex-1 bg-indigo-600 text-white px-3 py-2 rounded-lg hover:bg-indigo-700 transition flex items-center justify-center gap-2"
+                                    >
+                                        <Edit className="w-4 h-4" />
+                                        Edit
+                                    </button>
+                                    <button
+                                        onClick={() => handleDelete(category._id)}
+                                        disabled={deleting === category._id}
+                                        className="flex-1 bg-red-600 text-white px-3 py-2 rounded-lg hover:bg-red-700 transition disabled:opacity-50 flex items-center justify-center gap-2"
+                                    >
+                                        <Trash2 className="w-4 h-4" />
+                                        {deleting === category._id ? '...' : 'Delete'}
+                                    </button>
+                                </div>
                             </div>
                         </div>
                     ))}
@@ -192,8 +260,8 @@ const Categories: React.FC = () => {
 
             {/* Modal */}
             {showModal && (
-                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-                    <div className="bg-white rounded-lg shadow-xl max-w-md w-full p-6">
+                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4 overflow-y-auto">
+                    <div className="bg-white rounded-xl shadow-xl max-w-lg w-full p-6 my-8">
                         <h2 className="text-2xl font-bold text-gray-800 mb-4">
                             {editingCategory ? 'Edit Category' : 'Create Category'}
                         </h2>
@@ -258,37 +326,134 @@ const Categories: React.FC = () => {
                                     rows={3}
                                 />
                             </div>
+                            {/* Gradient Color Picker */}
                             <div>
                                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                                    Color
+                                    Gradient Color
                                 </label>
-                                <div className="flex gap-2">
-                                    <input
-                                        type="color"
-                                        value={formData.color}
-                                        onChange={(e) => setFormData({ ...formData, color: e.target.value })}
-                                        className="w-16 h-10 border border-gray-300 rounded cursor-pointer"
-                                    />
-                                    <input
-                                        type="text"
-                                        value={formData.color}
-                                        onChange={(e) => setFormData({ ...formData, color: e.target.value })}
-                                        className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
-                                        placeholder="#6366f1"
-                                    />
+                                {/* Preset Gradients */}
+                                <div className="grid grid-cols-6 gap-2 mb-3">
+                                    {GRADIENT_PRESETS.map((preset) => (
+                                        <button
+                                            key={preset.name}
+                                            type="button"
+                                            onClick={() => setFormData({ 
+                                                ...formData, 
+                                                gradientFrom: preset.from, 
+                                                gradientTo: preset.to,
+                                                color: preset.from 
+                                            })}
+                                            className={`h-8 rounded-lg transition-all ${
+                                                formData.gradientFrom === preset.from && formData.gradientTo === preset.to
+                                                    ? 'ring-2 ring-offset-2 ring-indigo-500 scale-110'
+                                                    : 'hover:scale-105'
+                                            }`}
+                                            style={{ background: `linear-gradient(to right, ${preset.from}, ${preset.to})` }}
+                                            title={preset.name}
+                                        />
+                                    ))}
+                                </div>
+                                {/* Custom Color Pickers */}
+                                <div className="flex gap-3">
+                                    <div className="flex-1">
+                                        <label className="text-xs text-gray-500 mb-1 block">From</label>
+                                        <div className="flex gap-2">
+                                            <input
+                                                type="color"
+                                                value={formData.gradientFrom}
+                                                onChange={(e) => setFormData({ ...formData, gradientFrom: e.target.value, color: e.target.value })}
+                                                className="w-10 h-10 border border-gray-300 rounded cursor-pointer"
+                                            />
+                                            <input
+                                                type="text"
+                                                value={formData.gradientFrom}
+                                                onChange={(e) => setFormData({ ...formData, gradientFrom: e.target.value, color: e.target.value })}
+                                                className="flex-1 px-2 py-1 text-sm border border-gray-300 rounded focus:ring-2 focus:ring-indigo-500"
+                                                placeholder="#6366f1"
+                                            />
+                                        </div>
+                                    </div>
+                                    <div className="flex-1">
+                                        <label className="text-xs text-gray-500 mb-1 block">To</label>
+                                        <div className="flex gap-2">
+                                            <input
+                                                type="color"
+                                                value={formData.gradientTo}
+                                                onChange={(e) => setFormData({ ...formData, gradientTo: e.target.value })}
+                                                className="w-10 h-10 border border-gray-300 rounded cursor-pointer"
+                                            />
+                                            <input
+                                                type="text"
+                                                value={formData.gradientTo}
+                                                onChange={(e) => setFormData({ ...formData, gradientTo: e.target.value })}
+                                                className="flex-1 px-2 py-1 text-sm border border-gray-300 rounded focus:ring-2 focus:ring-indigo-500"
+                                                placeholder="#8b5cf6"
+                                            />
+                                        </div>
+                                    </div>
+                                </div>
+                                {/* Preview */}
+                                <div 
+                                    className="mt-3 h-12 rounded-lg flex items-center px-4"
+                                    style={{ background: `linear-gradient(to right, ${formData.gradientFrom}, ${formData.gradientTo})` }}
+                                >
+                                    <span className="text-white font-bold drop-shadow">{formData.name || 'Preview'}</span>
                                 </div>
                             </div>
+                            
+                            {/* Category Image Upload */}
                             <div>
                                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                                    Icon (emoji or text)
+                                    Category Image <span className="text-gray-400 font-normal">(for app display)</span>
+                                </label>
+                                <div className="flex gap-4 items-start">
+                                    {formData.image ? (
+                                        <div className="relative">
+                                            <img 
+                                                src={formData.image} 
+                                                alt="Category" 
+                                                className="w-24 h-24 object-cover rounded-lg border border-gray-300"
+                                            />
+                                            <button
+                                                type="button"
+                                                onClick={() => setFormData({ ...formData, image: '' })}
+                                                className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1 hover:bg-red-600"
+                                            >
+                                                <X className="w-3 h-3" />
+                                            </button>
+                                        </div>
+                                    ) : null}
+                                    <label className={`flex-1 flex flex-col items-center justify-center border-2 border-dashed border-gray-300 rounded-lg p-4 cursor-pointer hover:border-indigo-500 transition-colors ${uploading ? 'opacity-50' : ''}`}>
+                                        {uploading ? (
+                                            <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-indigo-600" />
+                                        ) : (
+                                            <>
+                                                <Upload className="w-6 h-6 text-gray-400 mb-1" />
+                                                <span className="text-xs text-gray-600">Upload image</span>
+                                            </>
+                                        )}
+                                        <input
+                                            type="file"
+                                            accept="image/*"
+                                            onChange={(e) => e.target.files?.[0] && handleImageUpload(e.target.files[0])}
+                                            className="hidden"
+                                            disabled={uploading}
+                                        />
+                                    </label>
+                                </div>
+                            </div>
+                            
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-2">
+                                    Icon (emoji)
                                 </label>
                                 <input
                                     type="text"
                                     value={formData.icon}
                                     onChange={(e) => setFormData({ ...formData, icon: e.target.value })}
                                     className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
-                                    placeholder="📖 or book"
-                                    maxLength={2}
+                                    placeholder="📖 🎵 🌿"
+                                    maxLength={4}
                                 />
                             </div>
                             <div className="flex gap-4 pt-4">

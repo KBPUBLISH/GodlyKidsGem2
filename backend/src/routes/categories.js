@@ -69,7 +69,7 @@ router.get('/:id', async (req, res) => {
 // Create category
 router.post('/', async (req, res) => {
     try {
-        const { name, description, color, icon, contentType } = req.body;
+        const { name, description, color, gradientFrom, gradientTo, icon, image, contentType } = req.body;
         
         // Check if category already exists
         const existing = await Category.findOne({ name: name.trim() });
@@ -81,7 +81,10 @@ router.post('/', async (req, res) => {
             name: name.trim(),
             description,
             color: color || '#6366f1',
+            gradientFrom: gradientFrom || color || '#6366f1',
+            gradientTo: gradientTo || '#8b5cf6',
             icon,
+            image,
             contentType: contentType || 'Book', // Default to Book if not specified
         });
 
@@ -99,7 +102,7 @@ router.post('/', async (req, res) => {
 // Update category
 router.put('/:id', async (req, res) => {
     try {
-        const { name, description, color, icon, contentType } = req.body;
+        const { name, description, color, gradientFrom, gradientTo, icon, image, contentType } = req.body;
         
         const category = await Category.findById(req.params.id);
         if (!category) {
@@ -117,7 +120,10 @@ router.put('/:id', async (req, res) => {
         category.name = name ? name.trim() : category.name;
         category.description = description !== undefined ? description : category.description;
         category.color = color || category.color;
+        category.gradientFrom = gradientFrom !== undefined ? gradientFrom : category.gradientFrom;
+        category.gradientTo = gradientTo !== undefined ? gradientTo : category.gradientTo;
         category.icon = icon !== undefined ? icon : category.icon;
+        category.image = image !== undefined ? image : category.image;
         category.contentType = contentType || category.contentType;
         category.updatedAt = Date.now();
 

@@ -270,18 +270,28 @@ router.post('/generate', async (req, res) => {
             console.error('❌ ElevenLabs API Error:', error.response?.status, error.response?.data);
             console.error('❌ Failed voice ID:', voiceId);
             
-            // If 404, the voice doesn't exist - try a default fallback voice
+            // Check for voice_not_found error - can be in status code OR response body
             const FALLBACK_VOICE_ID = 'EXAVITQu4vr4xnSDxMaL'; // Sarah - a reliable ElevenLabs premade voice
-            const shouldUseFallback = error.response?.status === 404 && voiceId !== FALLBACK_VOICE_ID;
+            const isVoiceNotFound = 
+                error.response?.status === 404 || 
+                error.response?.data?.detail?.status === 'voice_not_found' ||
+                (typeof error.response?.data === 'string' && error.response?.data.includes('voice_not_found'));
+            
+            const shouldUseFallback = isVoiceNotFound && voiceId !== FALLBACK_VOICE_ID;
             
             if (shouldUseFallback) {
                 console.log(`⚠️ Voice ${voiceId} not found, trying fallback voice ${FALLBACK_VOICE_ID}...`);
+            } else if (isVoiceNotFound && voiceId === FALLBACK_VOICE_ID) {
+                console.log('❌ Even the fallback voice is not accessible - check your ElevenLabs API key');
+                throw new Error('Voice not found and fallback voice also not accessible');
             } else {
-                console.log('⚠️ Falling back to TTS without timestamps...');
+                console.log('⚠️ Falling back to TTS without timestamps (same voice)...');
             }
             
             try {
                 const fallbackVoice = shouldUseFallback ? FALLBACK_VOICE_ID : voiceId;
+                console.log(`🔄 Attempting TTS with voice: ${fallbackVoice}`);
+                
                 const fallbackResponse = await axios.post(
                     `https://api.elevenlabs.io/v1/text-to-speech/${fallbackVoice}`,
                     {
@@ -318,11 +328,58 @@ router.post('/generate', async (req, res) => {
                 };
                 
                 if (shouldUseFallback) {
-                    console.log('✅ Fallback voice worked!');
+                    console.log('✅ Fallback voice (Sarah) worked!');
+                } else {
+                    console.log('✅ TTS without timestamps succeeded');
                 }
             } catch (fallbackError) {
-                console.error('❌ Fallback TTS also failed:', fallbackError.response?.status, fallbackError.message);
-                throw fallbackError;
+                console.error('❌ Fallback TTS also failed:', fallbackError.response?.status, fallbackError.response?.data || fallbackError.message);
+                
+                // If we haven't tried the fallback voice yet, try it now
+                if (!shouldUseFallback && voiceId !== FALLBACK_VOICE_ID) {
+                    console.log(`⚠️ Original voice failed, trying fallback voice ${FALLBACK_VOICE_ID} as last resort...`);
+                    try {
+                        const lastResortResponse = await axios.post(
+                            `https://api.elevenlabs.io/v1/text-to-speech/${FALLBACK_VOICE_ID}`,
+                            {
+                                text: processedText,
+                                model_id: modelId,
+                                voice_settings: {
+                                    stability: 0.5,
+                                    similarity_boost: 0.75
+                                }
+                            },
+                            {
+                                headers: {
+                                    'xi-api-key': apiKey,
+                                    'Content-Type': 'application/json'
+                                },
+                                responseType: 'arraybuffer',
+                                params: {
+                                    output_format: 'mp3_44100_128'
+                                }
+                            }
+                        );
+                        audioBuffer = lastResortResponse.data;
+                        
+                        const words = processedText.split(/\s+/).filter(w => w.length > 0);
+                        const estimatedDurationPerWord = 0.4;
+                        alignmentData = {
+                            words: words.map((word, index) => ({
+                                word,
+                                start: index * estimatedDurationPerWord,
+                                end: (index + 1) * estimatedDurationPerWord
+                            })),
+                            isEstimated: true
+                        };
+                        console.log('✅ Last resort fallback voice worked!');
+                    } catch (lastResortError) {
+                        console.error('❌ Last resort fallback also failed:', lastResortError.response?.status, lastResortError.message);
+                        throw lastResortError;
+                    }
+                } else {
+                    throw fallbackError;
+                }
             }
         }
 

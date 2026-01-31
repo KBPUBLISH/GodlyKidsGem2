@@ -536,7 +536,7 @@ const BookSeriesDetailPage: React.FC = () => {
                                 {/* Connecting path line */}
                                 {index < series.books.length - 1 && (
                                     <div 
-                                        className="absolute left-1/2 top-[90px] -translate-x-1/2 z-0 animate-[pathDraw_0.3s_ease-out_forwards]"
+                                        className="absolute left-1/2 top-[110px] md:top-[120px] -translate-x-1/2 z-0 animate-[pathDraw_0.3s_ease-out_forwards]"
                                         style={{ 
                                             opacity: 0,
                                             animationDelay: `${(index * 0.15) + 0.3}s`
@@ -560,24 +560,31 @@ const BookSeriesDetailPage: React.FC = () => {
                                     className={`flex items-center gap-4 mb-8 ${isEven ? 'flex-row' : 'flex-row-reverse'}`}
                                     style={{ marginLeft: isEven ? '10%' : '0', marginRight: isEven ? '0' : '10%' }}
                                 >
-                                    {/* Circle with cover image */}
+                                    {/* Book thumbnail */}
                                     <div 
                                         onClick={() => handleBookClick(book)}
-                                        className={`relative cursor-pointer transition-all duration-300 hover:scale-110 active:scale-95`}
+                                        className={`relative cursor-pointer transition-all duration-300 hover:scale-105 active:scale-95`}
                                     >
                                         {/* Glow effect for available */}
                                         {!bookIsLocked && !isCompleted && (
-                                            <div className="absolute -inset-2 rounded-full bg-[#FFD700]/30 animate-pulse" />
+                                            <div className="absolute -inset-2 rounded-2xl bg-[#FFD700]/30 animate-pulse" />
                                         )}
 
-                                        {/* Main circle */}
-                                        <div className={`relative w-20 h-20 md:w-24 md:h-24 rounded-full overflow-hidden border-4 shadow-xl ${
+                                        {/* Book-style container */}
+                                        <div className={`relative w-20 h-28 md:w-24 md:h-32 rounded-xl overflow-hidden shadow-xl ${
                                             isCompleted 
-                                                ? 'border-green-500 ring-4 ring-green-500/30' 
+                                                ? 'ring-4 ring-green-500/50' 
                                                 : bookIsLocked
-                                                    ? 'border-gray-500/50 grayscale opacity-60' 
-                                                    : 'border-[#FFD700] ring-4 ring-[#FFD700]/30'
-                                        }`}>
+                                                    ? 'grayscale opacity-60' 
+                                                    : 'ring-4 ring-[#FFD700]/50'
+                                        }`}
+                                        style={{
+                                            boxShadow: isCompleted 
+                                                ? '0 8px 20px rgba(34, 197, 94, 0.4), 4px 0 0 #16a34a inset' 
+                                                : bookIsLocked 
+                                                    ? '0 8px 20px rgba(0,0,0,0.3), 4px 0 0 rgba(100,100,100,0.5) inset'
+                                                    : '0 8px 20px rgba(255, 215, 0, 0.4), 4px 0 0 #B8860B inset'
+                                        }}>
                                             {getBookCoverUrl(book) ? (
                                                 <img
                                                     src={getBookCoverUrl(book)!}
@@ -605,19 +612,10 @@ const BookSeriesDetailPage: React.FC = () => {
                                                     <Lock className="w-6 h-6 text-white/70" />
                                                 </div>
                                             )}
-
-                                            {/* Read icon for available */}
-                                            {!bookIsLocked && !isCompleted && (
-                                                <div className="absolute inset-0 flex items-center justify-center bg-black/20">
-                                                    <div className="bg-white/90 rounded-full p-2 shadow-lg">
-                                                        <BookOpen className="w-5 h-5 text-[#3E1F07]" />
-                                                    </div>
-                                                </div>
-                                            )}
                                         </div>
 
                                         {/* Book number badge */}
-                                        <div className={`absolute -top-1 -left-1 w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold shadow-md border-2 border-white ${
+                                        <div className={`absolute -top-2 -left-2 w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold shadow-md border-2 border-white ${
                                             isCompleted 
                                                 ? 'bg-green-500 text-white' 
                                                 : bookIsLocked

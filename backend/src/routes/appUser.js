@@ -596,3 +596,24 @@ router.get('/stats/:identifier', async (req, res) => {
 });
 
 module.exports = router;
+
+/**
+ * DELETE /api/app-user/by-email/:email
+ * Delete an AppUser by email (for cleanup)
+ */
+router.delete('/by-email/:email', async (req, res) => {
+    try {
+        const email = req.params.email.toLowerCase().trim();
+        const result = await AppUser.deleteOne({ email });
+        
+        if (result.deletedCount === 0) {
+            return res.status(404).json({ success: false, message: 'AppUser not found' });
+        }
+        
+        console.log(`🗑️ AppUser deleted: ${email}`);
+        res.json({ success: true, message: 'AppUser deleted' });
+    } catch (error) {
+        console.error('Error deleting AppUser:', error);
+        res.status(500).json({ success: false, error: 'Failed to delete' });
+    }
+});

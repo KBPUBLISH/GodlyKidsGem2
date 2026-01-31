@@ -5,6 +5,7 @@ const User = require('../models/User');
 const OnboardingEvent = require('../models/OnboardingEvent');
 const TutorialEvent = require('../models/TutorialEvent');
 const EmailSubscriber = require('../models/EmailSubscriber');
+const GamePlayEvent = require('../models/GamePlayEvent');
 
 /**
  * GET /api/analytics/users
@@ -1543,6 +1544,209 @@ router.get('/onboarding/preferences', async (req, res) => {
         res.status(500).json({
             success: false,
             error: error.message
+        });
+    }
+});
+
+/**
+ * GET /api/analytics/games
+ * Get comprehensive game analytics for the dashboard
+ * 
+ * Query params:
+ *   timeRange: 'day' | 'week' | 'month' | 'all' (default: 'all')
+ */
+router.get('/games', async (req, res) => {
+    try {
+        const { timeRange = 'all' } = req.query;
+        
+        // Calculate time range start date
+        const now = new Date();
+        let startDate = null;
+        
+        switch (timeRange) {
+            case 'day':
+                startDate = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+                break;
+            case 'week':
+                startDate = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+                break;
+            case 'month':
+                startDate = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+                break;
+            case 'all':
+            default:
+                startDate = null;
+                break;
+        }
+        
+        // Build match stage
+        const matchStage = startDate ? { playedAt: { $gte: startDate } } : {};
+        
+        // Get all games for reference
+        const Game = require('../models/Game');
+        const allGames = await Game.find({}).select('gameId name coverImage enabled').lean();
+        const gameMap = new Map();
+        allGames.forEach(g => gameMap.set(g.gameId, g));
+        
+        // Aggregate game play stats
+        const gameStats = await GamePlayEvent.aggregate([
+            { $match: matchStage },
+            {
+                $group: {
+                    _id: '$gameId',
+                    gameName: { $first: '$gameName' },
+                    totalPlays: { $sum: 1 },
+                    uniquePlayers: { $addToSet: '$userId' },
+                    totalSessionSeconds: { $sum: '$sessionDurationSeconds' },
+                    avgSessionSeconds: { $avg: '$sessionDurationSeconds' },
+                    totalScore: { $sum: '$score' },
+                    avgScore: { $avg: '$score' },
+                    totalStars: { $sum: '$starsEarned' },
+                    avgStars: { $avg: '$starsEarned' },
+                    totalCoinsEarned: { $sum: '$coinsEarned' },
+                    completedCount: { $sum: { $cond: ['$completed', 1, 0] } },
+                    lastPlayed: { $max: '$playedAt' },
+                }
+            },
+            {
+                $project: {
+                    _id: 1,
+                    gameName: 1,
+                    totalPlays: 1,
+                    uniquePlayerCount: { $size: '$uniquePlayers' },
+                    totalSessionSeconds: 1,
+                    avgSessionSeconds: { $round: ['$avgSessionSeconds', 0] },
+                    totalScore: 1,
+                    avgScore: { $round: ['$avgScore', 0] },
+                    totalStars: 1,
+                    avgStars: { $round: ['$avgStars', 1] },
+                    totalCoinsEarned: 1,
+                    completedCount: 1,
+                    completionRate: { 
+                        $round: [
+                            { $multiply: [{ $divide: ['$completedCount', '$totalPlays'] }, 100] },
+                            0
+                        ]
+                    },
+                    lastPlayed: 1,
+                }
+            },
+            { $sort: { totalPlays: -1 } }
+        ]);
+        
+        // Enrich with game metadata
+        const enrichedGames = gameStats.map(g => {
+            const gameInfo = gameMap.get(g._id);
+            return {
+                ...g,
+                gameId: g._id,
+                name: gameInfo?.name || g.gameName || g._id,
+                coverImage: gameInfo?.coverImage || null,
+                enabled: gameInfo?.enabled ?? true,
+            };
+        });
+        
+        // Get overall summary
+        const overallStats = await GamePlayEvent.aggregate([
+            { $match: matchStage },
+            {
+                $group: {
+                    _id: null,
+                    totalPlays: { $sum: 1 },
+                    uniquePlayers: { $addToSet: '$userId' },
+                    totalSessionSeconds: { $sum: '$sessionDurationSeconds' },
+                    avgSessionSeconds: { $avg: '$sessionDurationSeconds' },
+                    totalCoinsEarned: { $sum: '$coinsEarned' },
+                    completedCount: { $sum: { $cond: ['$completed', 1, 0] } },
+                    totalStars: { $sum: '$starsEarned' },
+                }
+            }
+        ]);
+        
+        const summary = overallStats[0] || {
+            totalPlays: 0,
+            uniquePlayers: [],
+            totalSessionSeconds: 0,
+            avgSessionSeconds: 0,
+            totalCoinsEarned: 0,
+            completedCount: 0,
+            totalStars: 0,
+        };
+        
+        // Get daily play counts for chart (last 30 days)
+        const dailyPlays = await GamePlayEvent.aggregate([
+            { 
+                $match: { 
+                    playedAt: { $gte: new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000) } 
+                } 
+            },
+            {
+                $group: {
+                    _id: { $dateToString: { format: '%Y-%m-%d', date: '$playedAt' } },
+                    count: { $sum: 1 },
+                    uniquePlayers: { $addToSet: '$userId' },
+                    totalSessionSeconds: { $sum: '$sessionDurationSeconds' },
+                }
+            },
+            {
+                $project: {
+                    _id: 1,
+                    count: 1,
+                    uniquePlayerCount: { $size: '$uniquePlayers' },
+                    totalSessionSeconds: 1,
+                }
+            },
+            { $sort: { _id: 1 } }
+        ]);
+        
+        // Get recent play events
+        const recentPlays = await GamePlayEvent.find({})
+            .sort({ playedAt: -1 })
+            .limit(20)
+            .lean();
+        
+        res.json({
+            success: true,
+            timeRange,
+            summary: {
+                totalPlays: summary.totalPlays,
+                uniquePlayerCount: summary.uniquePlayers?.length || 0,
+                totalSessionMinutes: Math.round(summary.totalSessionSeconds / 60),
+                avgSessionSeconds: Math.round(summary.avgSessionSeconds || 0),
+                totalCoinsEarned: summary.totalCoinsEarned,
+                totalStarsEarned: summary.totalStars,
+                completionRate: summary.totalPlays > 0 
+                    ? Math.round((summary.completedCount / summary.totalPlays) * 100) 
+                    : 0,
+            },
+            games: enrichedGames,
+            dailyPlays: dailyPlays.map(d => ({
+                date: d._id,
+                plays: d.count,
+                uniquePlayers: d.uniquePlayerCount,
+                sessionMinutes: Math.round(d.totalSessionSeconds / 60),
+            })),
+            recentPlays: recentPlays.map(e => ({
+                id: e._id,
+                gameId: e.gameId,
+                gameName: e.gameName,
+                userId: e.userId,
+                kidName: e.kidName,
+                sessionDurationSeconds: e.sessionDurationSeconds,
+                score: e.score,
+                starsEarned: e.starsEarned,
+                coinsEarned: e.coinsEarned,
+                completed: e.completed,
+                platform: e.platform,
+                playedAt: e.playedAt,
+            })),
+        });
+    } catch (error) {
+        console.error('Game analytics error:', error);
+        res.status(500).json({ 
+            success: false, 
+            message: 'Failed to fetch game analytics',
+            error: error.message 
         });
     }
 });

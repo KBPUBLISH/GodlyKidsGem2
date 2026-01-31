@@ -268,12 +268,22 @@ router.post('/generate', async (req, res) => {
 
         } catch (error) {
             console.error('❌ ElevenLabs API Error:', error.response?.status, error.response?.data);
+            console.error('❌ Failed voice ID:', voiceId);
             
-            // Fallback to regular TTS without timestamps if /with-timestamps fails
-            console.log('⚠️ Falling back to TTS without timestamps...');
+            // If 404, the voice doesn't exist - try a default fallback voice
+            const FALLBACK_VOICE_ID = 'EXAVITQu4vr4xnSDxMaL'; // Sarah - a reliable ElevenLabs premade voice
+            const shouldUseFallback = error.response?.status === 404 && voiceId !== FALLBACK_VOICE_ID;
+            
+            if (shouldUseFallback) {
+                console.log(`⚠️ Voice ${voiceId} not found, trying fallback voice ${FALLBACK_VOICE_ID}...`);
+            } else {
+                console.log('⚠️ Falling back to TTS without timestamps...');
+            }
+            
             try {
+                const fallbackVoice = shouldUseFallback ? FALLBACK_VOICE_ID : voiceId;
                 const fallbackResponse = await axios.post(
-                    `https://api.elevenlabs.io/v1/text-to-speech/${voiceId}`,
+                    `https://api.elevenlabs.io/v1/text-to-speech/${fallbackVoice}`,
                     {
                         text: processedText, // Use processed text with brackets stripped
                         model_id: modelId,
@@ -306,8 +316,12 @@ router.post('/generate', async (req, res) => {
                     })),
                     isEstimated: true
                 };
+                
+                if (shouldUseFallback) {
+                    console.log('✅ Fallback voice worked!');
+                }
             } catch (fallbackError) {
-                console.error('❌ Fallback TTS also failed:', fallbackError.message);
+                console.error('❌ Fallback TTS also failed:', fallbackError.response?.status, fallbackError.message);
                 throw fallbackError;
             }
         }

@@ -212,6 +212,23 @@ router.put('/:voiceId', async (req, res) => {
         if (req.body.displayOrder !== undefined) voice.displayOrder = req.body.displayOrder;
         if (req.body.isPremium !== undefined) voice.isPremium = req.body.isPremium;
         
+        // Handle voice ID change (e.g., when ElevenLabs voice ID needs correction)
+        if (req.body.newVoiceId && req.body.newVoiceId !== voice.voiceId) {
+            const oldVoiceId = voice.voiceId;
+            
+            // Check if new voice ID already exists
+            const existingVoice = await Voice.findOne({ voiceId: req.body.newVoiceId });
+            if (existingVoice) {
+                return res.status(400).json({ 
+                    message: 'A voice with this ID already exists',
+                    existingVoice: existingVoice.customName || existingVoice.name
+                });
+            }
+            
+            voice.voiceId = req.body.newVoiceId;
+            console.log(`🔄 Voice ID changed: ${oldVoiceId} → ${req.body.newVoiceId}`);
+        }
+        
         voice.updatedAt = Date.now();
         await voice.save();
 

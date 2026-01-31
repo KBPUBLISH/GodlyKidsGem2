@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Volume2, Play, Pause, RefreshCw, XCircle, Image, Edit2, Save, X, Crown } from 'lucide-react';
+import { Volume2, Play, Pause, RefreshCw, XCircle, Image, Edit2, Save, X, Crown, Copy, Check } from 'lucide-react';
 import { apiClient } from '../services/apiClient';
 
 interface Voice {
@@ -26,12 +26,14 @@ const Voices: React.FC = () => {
     const [playingPreview, setPlayingPreview] = useState<string | null>(null);
     const [previewAudio, setPreviewAudio] = useState<HTMLAudioElement | null>(null);
     const [editingVoice, setEditingVoice] = useState<string | null>(null);
-    const [editForm, setEditForm] = useState<{ customName: string; characterImage: string; isPremium: boolean }>({
+    const [editForm, setEditForm] = useState<{ customName: string; characterImage: string; isPremium: boolean; voiceId: string }>({
         customName: '',
         characterImage: '',
-        isPremium: false
+        isPremium: false,
+        voiceId: ''
     });
     const [uploadingImage, setUploadingImage] = useState(false);
+    const [copiedVoiceId, setCopiedVoiceId] = useState<string | null>(null);
 
     useEffect(() => {
         fetchVoices();
@@ -201,25 +203,43 @@ const Voices: React.FC = () => {
         setEditForm({
             customName: voice.customName || '',
             characterImage: voice.characterImage || '',
-            isPremium: voice.isPremium || false
+            isPremium: voice.isPremium || false,
+            voiceId: voice.voiceId
         });
     };
 
     const handleCancelEdit = () => {
         setEditingVoice(null);
-        setEditForm({ customName: '', characterImage: '', isPremium: false });
+        setEditForm({ customName: '', characterImage: '', isPremium: false, voiceId: '' });
     };
 
-    const handleSaveEdit = async (voiceId: string) => {
+    const handleCopyVoiceId = async (voiceId: string) => {
         try {
-            await apiClient.put(`/api/voices/${voiceId}`, {
+            await navigator.clipboard.writeText(voiceId);
+            setCopiedVoiceId(voiceId);
+            setTimeout(() => setCopiedVoiceId(null), 2000);
+        } catch (err) {
+            console.error('Failed to copy:', err);
+        }
+    };
+
+    const handleSaveEdit = async (originalVoiceId: string) => {
+        try {
+            const updateData: any = {
                 customName: editForm.customName || undefined,
                 characterImage: editForm.characterImage || undefined,
                 isPremium: editForm.isPremium
-            });
+            };
+            
+            // If voiceId changed, include it in the update
+            if (editForm.voiceId && editForm.voiceId !== originalVoiceId) {
+                updateData.newVoiceId = editForm.voiceId;
+            }
+            
+            await apiClient.put(`/api/voices/${originalVoiceId}`, updateData);
             await fetchVoices();
             setEditingVoice(null);
-            setEditForm({ customName: '', characterImage: '', isPremium: false });
+            setEditForm({ customName: '', characterImage: '', isPremium: false, voiceId: '' });
         } catch (error: any) {
             console.error('Error saving voice:', error);
             alert(error.response?.data?.message || 'Failed to save voice');
@@ -373,6 +393,17 @@ const Voices: React.FC = () => {
                                     // Edit Mode
                                     <div className="space-y-3">
                                         <div>
+                                            <label className="text-xs text-gray-500 block mb-1">ElevenLabs Voice ID</label>
+                                            <input
+                                                type="text"
+                                                value={editForm.voiceId}
+                                                onChange={(e) => setEditForm(prev => ({ ...prev, voiceId: e.target.value }))}
+                                                placeholder="Voice ID from ElevenLabs"
+                                                className="w-full border rounded px-2 py-1 text-sm font-mono bg-amber-50 border-amber-300"
+                                            />
+                                            <p className="text-[10px] text-amber-600 mt-0.5">⚠️ Only change if voice ID is incorrect in ElevenLabs</p>
+                                        </div>
+                                        <div>
                                             <label className="text-xs text-gray-500 block mb-1">Display Name</label>
                                             <input
                                                 type="text"
@@ -436,7 +467,7 @@ const Voices: React.FC = () => {
                                 ) : (
                                     // View Mode
                                     <>
-                                        <div className="flex items-start justify-between mb-3">
+                                        <div className="flex items-start justify-between mb-2">
                                             <div>
                                                 <h3 className="font-bold text-gray-900">
                                                     {voice.customName || voice.name}
@@ -453,6 +484,29 @@ const Voices: React.FC = () => {
                                                 className="text-gray-400 hover:text-indigo-600"
                                             >
                                                 <Edit2 className="w-4 h-4" />
+                                            </button>
+                                        </div>
+                                        
+                                        {/* Voice ID Display */}
+                                        <div className="mb-3 bg-gray-50 rounded px-2 py-1.5 flex items-center justify-between gap-2">
+                                            <div className="min-w-0">
+                                                <p className="text-[10px] text-gray-400 uppercase tracking-wide">Voice ID</p>
+                                                <p className="text-xs font-mono text-gray-600 truncate">{voice.voiceId}</p>
+                                            </div>
+                                            <button
+                                                onClick={() => handleCopyVoiceId(voice.voiceId)}
+                                                className={`flex-shrink-0 p-1.5 rounded transition ${
+                                                    copiedVoiceId === voice.voiceId 
+                                                        ? 'bg-green-100 text-green-600' 
+                                                        : 'bg-gray-200 text-gray-500 hover:bg-gray-300'
+                                                }`}
+                                                title="Copy Voice ID"
+                                            >
+                                                {copiedVoiceId === voice.voiceId ? (
+                                                    <Check className="w-3.5 h-3.5" />
+                                                ) : (
+                                                    <Copy className="w-3.5 h-3.5" />
+                                                )}
                                             </button>
                                         </div>
 

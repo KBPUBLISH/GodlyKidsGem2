@@ -12,19 +12,24 @@ import PremiumBadge from '../components/ui/PremiumBadge';
 
 const ageOptions = ['All Ages', '3+', '4+', '5+', '6+', '7+', '8+', '9+', '10+'];
 
-// Category button configuration with icons and colors for books page (purple/indigo theme)
-const CATEGORY_CONFIG: Record<string, { icon: any; activeColor: string; activeBg: string }> = {
-  'All': { icon: Sparkles, activeColor: 'text-white', activeBg: 'bg-gradient-to-r from-indigo-500 to-purple-600' },
-  'Bible Stories': { icon: Book, activeColor: 'text-white', activeBg: 'bg-gradient-to-r from-blue-600 to-indigo-600' },
-  'Nature Tales': { icon: TreePine, activeColor: 'text-white', activeBg: 'bg-gradient-to-r from-emerald-500 to-teal-600' },
-  'Character Building': { icon: Users, activeColor: 'text-white', activeBg: 'bg-gradient-to-r from-orange-500 to-amber-500' },
-  'Adventures': { icon: Compass, activeColor: 'text-white', activeBg: 'bg-gradient-to-r from-rose-500 to-red-600' },
-  'Favorites': { icon: Heart, activeColor: 'text-white', activeBg: 'bg-gradient-to-r from-pink-500 to-rose-500' },
-  'Fantasy': { icon: Castle, activeColor: 'text-white', activeBg: 'bg-gradient-to-r from-violet-500 to-purple-600' },
-  'Heroes': { icon: Sword, activeColor: 'text-white', activeBg: 'bg-gradient-to-r from-amber-500 to-yellow-500' },
-  'Bedtime': { icon: Smile, activeColor: 'text-white', activeBg: 'bg-gradient-to-r from-indigo-400 to-blue-500' },
-  'Learning': { icon: Star, activeColor: 'text-white', activeBg: 'bg-gradient-to-r from-cyan-500 to-blue-500' },
-  'default': { icon: Crown, activeColor: 'text-white', activeBg: 'bg-gradient-to-r from-slate-500 to-slate-600' },
+// Category card configuration with colors for books page
+const CATEGORY_CONFIG: Record<string, { icon: any; bgColor: string }> = {
+  'All': { icon: Sparkles, bgColor: 'from-indigo-500 to-purple-600' },
+  'Bible Stories': { icon: Book, bgColor: 'from-sky-400 to-blue-500' },
+  'Nature Tales': { icon: TreePine, bgColor: 'from-green-500 to-emerald-600' },
+  'Animal Tales': { icon: TreePine, bgColor: 'from-green-500 to-emerald-600' },
+  'Character Building': { icon: Users, bgColor: 'from-amber-400 to-orange-500' },
+  'Adventures': { icon: Compass, bgColor: 'from-rose-400 to-red-500' },
+  'Bible Adventures': { icon: Compass, bgColor: 'from-amber-500 to-yellow-500' },
+  'Favorites': { icon: Heart, bgColor: 'from-pink-400 to-rose-500' },
+  'Fantasy': { icon: Castle, bgColor: 'from-violet-500 to-purple-600' },
+  'Fantasy Worlds': { icon: Castle, bgColor: 'from-sky-400 to-blue-500' },
+  'Heroes': { icon: Sword, bgColor: 'from-amber-500 to-yellow-500' },
+  'Bedtime': { icon: Smile, bgColor: 'from-indigo-400 to-blue-500' },
+  'Bedtime Stories': { icon: Smile, bgColor: 'from-indigo-500 to-purple-600' },
+  'Funny Fables': { icon: Smile, bgColor: 'from-amber-400 to-orange-400' },
+  'Learning': { icon: Star, bgColor: 'from-cyan-500 to-blue-500' },
+  'default': { icon: Crown, bgColor: 'from-slate-400 to-slate-600' },
 };
 
 // Series card component
@@ -83,7 +88,7 @@ const ReadPage: React.FC = () => {
   const [showAgeDropdown, setShowAgeDropdown] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState<string>('All');
   const [categories, setCategories] = useState<string[]>(['All']);
-  // Category dropdown removed - using horizontal buttons instead
+  const [isCategoriesExpanded, setIsCategoriesExpanded] = useState(false);
   const [bookSeries, setBookSeries] = useState<any[]>([]);
   // categoryDropdownRef removed - using horizontal buttons
   const ageDropdownRef = useRef<HTMLDivElement>(null);
@@ -317,33 +322,90 @@ const ReadPage: React.FC = () => {
           </div>
         </div>
 
-        {/* Category Buttons - Horizontal Scrollable */}
-        <div className="my-4 -mx-4">
-          <div className="flex gap-2 overflow-x-auto no-scrollbar pb-2 px-4">
-            {categories.map((category) => {
-              const config = CATEGORY_CONFIG[category] || CATEGORY_CONFIG['default'];
-              const IconComponent = config.icon;
-              const isSelected = selectedCategory === category;
-              
-              return (
-                <button
-                  key={category}
-                  onClick={() => setSelectedCategory(category)}
-                  className={`flex items-center gap-2 px-4 py-2.5 rounded-full font-display text-sm font-semibold whitespace-nowrap transition-all duration-300 transform active:scale-95 shadow-lg ${
-                    isSelected
-                      ? `${config.activeBg} ${config.activeColor} scale-105 ring-2 ring-white/30`
-                      : 'bg-white/90 text-gray-700 hover:bg-white hover:scale-105'
-                  }`}
-                >
-                  <div className={`w-6 h-6 rounded-full flex items-center justify-center ${
-                    isSelected ? 'bg-white/20' : 'bg-gray-100'
-                  }`}>
-                    <IconComponent className={`w-3.5 h-3.5 ${isSelected ? 'text-white' : 'text-gray-600'}`} />
-                  </div>
-                  <span>{category}</span>
-                </button>
-              );
-            })}
+        {/* Collapsible Category Section */}
+        <div className="my-4">
+          {/* Category Header - Always visible */}
+          <button
+            onClick={() => setIsCategoriesExpanded(!isCategoriesExpanded)}
+            className={`w-full flex items-center justify-between px-4 py-3 rounded-2xl transition-all duration-300 ${
+              isCategoriesExpanded 
+                ? 'bg-white/20 backdrop-blur-sm' 
+                : `bg-gradient-to-r ${CATEGORY_CONFIG[selectedCategory]?.bgColor || CATEGORY_CONFIG['default'].bgColor}`
+            }`}
+          >
+            <div className="flex items-center gap-3">
+              {(() => {
+                const config = CATEGORY_CONFIG[selectedCategory] || CATEGORY_CONFIG['default'];
+                const IconComponent = config.icon;
+                return (
+                  <>
+                    <div className="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center">
+                      <IconComponent className="w-5 h-5 text-white" />
+                    </div>
+                    <span className="text-white font-display text-lg font-bold">
+                      {selectedCategory === 'All' ? 'All Categories' : selectedCategory}
+                    </span>
+                  </>
+                );
+              })()}
+            </div>
+            <ChevronDown className={`w-6 h-6 text-white transition-transform duration-300 ${isCategoriesExpanded ? 'rotate-180' : ''}`} />
+          </button>
+
+          {/* Expandable Category Cards */}
+          <div className={`overflow-hidden transition-all duration-500 ease-in-out ${
+            isCategoriesExpanded ? 'max-h-[2000px] opacity-100 mt-3' : 'max-h-0 opacity-0'
+          }`}>
+            <div className="space-y-3">
+              {categories.map((category) => {
+                const config = CATEGORY_CONFIG[category] || CATEGORY_CONFIG['default'];
+                const IconComponent = config.icon;
+                const isSelected = selectedCategory === category;
+                
+                return (
+                  <button
+                    key={category}
+                    onClick={() => {
+                      setSelectedCategory(category);
+                      setIsCategoriesExpanded(false);
+                    }}
+                    className={`w-full relative overflow-hidden rounded-2xl transition-all duration-300 transform active:scale-[0.98] ${
+                      isSelected ? 'ring-4 ring-white/50 scale-[1.02]' : 'hover:scale-[1.01]'
+                    }`}
+                  >
+                    {/* Gradient Background */}
+                    <div className={`bg-gradient-to-r ${config.bgColor} p-4 min-h-[80px] flex items-center`}>
+                      {/* Left side - Icon and Text */}
+                      <div className="flex items-center gap-4 flex-1">
+                        <div className="w-12 h-12 rounded-xl bg-white/20 flex items-center justify-center shadow-lg">
+                          <IconComponent className="w-6 h-6 text-white" />
+                        </div>
+                        <div className="text-left">
+                          <h3 className="text-white font-display text-xl font-bold drop-shadow-md">
+                            {category === 'All' ? 'All Categories' : category}
+                          </h3>
+                          {isSelected && (
+                            <span className="text-white/80 text-sm">Currently viewing</span>
+                          )}
+                        </div>
+                      </div>
+                      
+                      {/* Right side - Decorative elements */}
+                      <div className="absolute right-4 top-1/2 -translate-y-1/2 opacity-30">
+                        <IconComponent className="w-20 h-20 text-white" />
+                      </div>
+                      
+                      {/* Selected indicator */}
+                      {isSelected && (
+                        <div className="absolute top-2 right-2 w-6 h-6 rounded-full bg-white flex items-center justify-center">
+                          <div className="w-3 h-3 rounded-full bg-green-500" />
+                        </div>
+                      )}
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
           </div>
         </div>
         

@@ -49,7 +49,7 @@ router.get('/users', async (req, res) => {
 
         // Get users from AppUser collection (app-specific data)
         const appUsers = await AppUser.find({})
-            .select('email deviceId coins kidProfiles stats createdAt lastActiveAt subscriptionStatus platform referralCode referralCount notificationEmail emailSignupAt parentName')
+            .select('email deviceId coins kidProfiles stats createdAt lastActiveAt subscriptionStatus platform referralCode referralCount notificationEmail emailSignupAt parentName reverseTrialStartDate reverseTrialActive reverseTrialConverted reverseTrialConvertedAt reverseTrialNotificationsSent onboardingStatus onboardingCompletedAt')
             .sort({ createdAt: -1 })
             .lean();
 
@@ -115,6 +115,14 @@ router.get('/users', async (req, res) => {
                 subscriberEmail: subscriberData?.email || null,
                 emailBonusAwarded: subscriberData?.bonusAwarded || false,
                 emailOptIn: subscriberData?.optInUpdates || false,
+                // Reverse trial fields
+                reverseTrialStartDate: appData?.reverseTrialStartDate || null,
+                reverseTrialActive: appData?.reverseTrialActive || false,
+                reverseTrialConverted: appData?.reverseTrialConverted || false,
+                reverseTrialConvertedAt: appData?.reverseTrialConvertedAt || null,
+                // Onboarding fields
+                onboardingStatus: appData?.onboardingStatus || 'not_started',
+                onboardingCompletedAt: appData?.onboardingCompletedAt || null,
             });
             
             if (email) processedEmails.add(email);
@@ -152,6 +160,14 @@ router.get('/users', async (req, res) => {
                 subscriberEmail: subscriberData?.email || null,
                 emailBonusAwarded: subscriberData?.bonusAwarded || false,
                 emailOptIn: subscriberData?.optInUpdates || false,
+                // Reverse trial fields
+                reverseTrialStartDate: appUser.reverseTrialStartDate || null,
+                reverseTrialActive: appUser.reverseTrialActive || false,
+                reverseTrialConverted: appUser.reverseTrialConverted || false,
+                reverseTrialConvertedAt: appUser.reverseTrialConvertedAt || null,
+                // Onboarding fields
+                onboardingStatus: appUser.onboardingStatus || 'not_started',
+                onboardingCompletedAt: appUser.onboardingCompletedAt || null,
             });
         });
 
@@ -230,6 +246,7 @@ router.get('/users', async (req, res) => {
         const subscriptionStats = {
             free: statsUsers.filter(u => u.subscriptionStatus === 'free').length,
             trial: statsUsers.filter(u => u.subscriptionStatus === 'trial').length,
+            reverse_trial: statsUsers.filter(u => u.subscriptionStatus === 'reverse_trial').length,
             active: statsUsers.filter(u => u.subscriptionStatus === 'active').length,
             cancelled: statsUsers.filter(u => u.subscriptionStatus === 'cancelled').length,
             expired: statsUsers.filter(u => u.subscriptionStatus === 'expired').length,
@@ -291,6 +308,14 @@ router.get('/users', async (req, res) => {
                                  tutorialProgressMap[`device_${user.deviceId}`] ||
                                  { stepIndex: 0, lastStep: 'not_started' };
             
+            // Calculate reverse trial days remaining
+            let reverseTrialDaysRemaining = null;
+            if (user.reverseTrialStartDate && user.reverseTrialActive) {
+                const trialEndDate = new Date(new Date(user.reverseTrialStartDate).getTime() + 7 * 24 * 60 * 60 * 1000);
+                const msRemaining = trialEndDate - new Date();
+                reverseTrialDaysRemaining = Math.max(0, Math.ceil(msRemaining / (24 * 60 * 60 * 1000)));
+            }
+            
             return {
             id: user._id,
             email: user.email || 'Anonymous',
@@ -324,6 +349,15 @@ router.get('/users', async (req, res) => {
             subscriberEmail: user.subscriberEmail || null,
             emailBonusAwarded: user.emailBonusAwarded || false,
             emailOptIn: user.emailOptIn || false,
+            // Reverse trial fields
+            reverseTrialStartDate: formatDate(user.reverseTrialStartDate),
+            reverseTrialActive: user.reverseTrialActive || false,
+            reverseTrialConverted: user.reverseTrialConverted || false,
+            reverseTrialConvertedAt: formatDate(user.reverseTrialConvertedAt),
+            reverseTrialDaysRemaining: reverseTrialDaysRemaining,
+            // Onboarding fields
+            onboardingStatus: user.onboardingStatus || 'not_started',
+            onboardingCompletedAt: formatDate(user.onboardingCompletedAt),
             // Dates - formatted as ISO strings for consistent sorting
             createdAt: formatDate(user.createdAt),
             lastActiveAt: formatDate(user.lastActiveAt),
@@ -991,10 +1025,14 @@ router.get('/content', async (req, res) => {
                 {
                     $group: {
                         _id: '$playlistId',
-                        totalListeningSeconds: { $sum: '$durationSeconds' },
-                        listeningSessions: { $sum: 1 },
-                        avgListeningSeconds: { $avg: '$durationSeconds' },
-                        avgCompletionPercent: { $avg: '$completionPercent' },
+                        // Total listening time from all events with duration
+                        totalListeningSeconds: { $sum: { $cond: [{ $gt: ['$durationSeconds', 0] }, '$durationSeconds', 0] } },
+                        // Count sessions with actual listening duration
+                        listeningSessions: { $sum: { $cond: [{ $gt: ['$durationSeconds', 0] }, 1, 0] } },
+                        // Average listening time
+                        avgListeningSeconds: { $avg: { $cond: [{ $gt: ['$durationSeconds', 0] }, '$durationSeconds', null] } },
+                        // Average completion
+                        avgCompletionPercent: { $avg: { $cond: [{ $gt: ['$completionPercent', 0] }, '$completionPercent', null] } },
                     }
                 }
             ]);
@@ -1119,10 +1157,17 @@ router.get('/content', async (req, res) => {
                 {
                     $group: {
                         _id: '$contentId',
+                        // Count initial plays (non-engagement-updates)
                         playCount: { $sum: { $cond: [{ $ne: ['$isEngagementUpdate', true] }, 1, 0] } },
-                        totalListeningSeconds: { $sum: '$durationSeconds' },
+                        // Count sessions that have actual listening duration (from any event type)
+                        sessionsWithDuration: { $sum: { $cond: [{ $gt: ['$durationSeconds', 0] }, 1, 0] } },
+                        // Total seconds from all events with duration (includes engagement updates for accuracy)
+                        totalListeningSeconds: { $sum: { $cond: [{ $gt: ['$durationSeconds', 0] }, '$durationSeconds', 0] } },
+                        // Sessions with actual listening (non-engagement with duration, for fallback)
                         listeningSessions: { $sum: { $cond: [{ $and: [{ $gt: ['$durationSeconds', 0] }, { $ne: ['$isEngagementUpdate', true] }] }, 1, 0] } },
+                        // Average listening time (from all events with duration)
                         avgListeningSeconds: { $avg: { $cond: [{ $gt: ['$durationSeconds', 0] }, '$durationSeconds', null] } },
+                        // Average completion (from all events with completion)
                         avgCompletionPercent: { $avg: { $cond: [{ $gt: ['$completionPercent', 0] }, '$completionPercent', null] } },
                     }
                 }
@@ -1132,10 +1177,14 @@ router.get('/content', async (req, res) => {
             const episodeStatsMap = new Map();
             episodeStatsAgg.forEach(e => {
                 if (e._id) {
+                    // Use playCount if available, otherwise fall back to sessionsWithDuration
+                    // This handles cases where only engagement updates exist (no initial play events)
+                    const effectivePlayCount = e.playCount > 0 ? e.playCount : (e.sessionsWithDuration || 0);
+                    
                     episodeStatsMap.set(e._id.toString(), {
-                        playCount: e.playCount || 0,
+                        playCount: effectivePlayCount,
                         totalListeningSeconds: Math.round(e.totalListeningSeconds || 0),
-                        listeningSessions: e.listeningSessions || 0,
+                        listeningSessions: e.listeningSessions || e.sessionsWithDuration || 0,
                         avgListeningSeconds: Math.round(e.avgListeningSeconds || 0),
                         avgCompletionPercent: Math.round(e.avgCompletionPercent || 0),
                     });

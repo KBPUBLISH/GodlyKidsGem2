@@ -1,10 +1,11 @@
 import React, { useState } from 'react';
-import { BarChart3, BookOpen, Music } from 'lucide-react';
+import { BarChart3, BookOpen, Music, Gamepad2 } from 'lucide-react';
 import BooksAnalytics from '../components/BooksAnalytics';
 import PlaylistsAnalytics from '../components/PlaylistsAnalytics';
+import GamesAnalytics from '../components/GamesAnalytics';
 
 const AnalyticsDashboard: React.FC = () => {
-  const [tab, setTab] = useState<'books' | 'playlists'>('books');
+  const [tab, setTab] = useState<'books' | 'playlists' | 'games'>('books');
 
   return (
     <div className="space-y-6">
@@ -39,9 +40,20 @@ const AnalyticsDashboard: React.FC = () => {
           <Music className="w-4 h-4" />
           Playlists
         </button>
+        <button
+          onClick={() => setTab('games')}
+          className={`flex-1 px-3 py-2 rounded-lg text-sm font-semibold flex items-center justify-center gap-2 ${
+            tab === 'games' ? 'bg-purple-600 text-white' : 'text-gray-700 hover:bg-gray-50'
+          }`}
+        >
+          <Gamepad2 className="w-4 h-4" />
+          Games
+        </button>
       </div>
 
-      {tab === 'books' ? <BooksAnalytics /> : <PlaylistsAnalytics />}
+      {tab === 'books' && <BooksAnalytics />}
+      {tab === 'playlists' && <PlaylistsAnalytics />}
+      {tab === 'games' && <GamesAnalytics />}
     </div>
   );
 };

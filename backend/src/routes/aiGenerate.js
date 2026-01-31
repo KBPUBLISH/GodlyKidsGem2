@@ -920,7 +920,7 @@ function getFallbackDiscussionQuestions(bookTitle) {
 // POST /api/ai-generate/recommend-book - AI-powered book recommendation for daily lessons
 router.post('/recommend-book', async (req, res) => {
     try {
-        const { goal, books, maxDuration, subjects } = req.body;
+        const { goal, books, maxDuration, subjects, childAge = 7 } = req.body;
         
         if (!books || books.length === 0) {
             return res.status(400).json({ message: 'books array is required' });
@@ -946,6 +946,7 @@ router.post('/recommend-book', async (req, res) => {
         
         const prompt = `You are helping a homeschool parent select the best children's book/audiobook for their child's daily learning session.
 
+CHILD'S AGE: ${childAge} years old
 PARENT'S LEARNING GOAL: "${goal}"
 SESSION DURATION: ${maxDuration} minutes
 PREFERRED SUBJECTS: ${subjects?.join(', ') || 'None specified'}
@@ -956,16 +957,22 @@ ${bookList}
 Your task: Select THE SINGLE BEST book from the list that:
 1. Best matches the parent's learning goal "${goal}"
 2. Has content appropriate for the session duration (shorter books for shorter sessions)
-3. Will engage children aged 7-12 while teaching the desired lesson
+3. Will engage a child aged ${childAge} while teaching the desired lesson
+4. Has age-appropriate complexity (simpler language for younger kids, more depth for older kids)
 
 Analyze each book's title, description, category, and tags to find the BEST match for "${goal}".
 
 IMPORTANT: 
 - DO NOT select music or worship songs - only books/stories/audiobooks
-- Consider the description carefully - a book about "self esteem" should be selected for "Improve Self Esteem"
-- A book about prayer/God should be selected for "Feel More Connected to God"
-- A book with Bible stories should be selected for "Learn More About the Bible"
-- A calming bedtime story should be selected for "Get Better Sleep"
+- Consider the description carefully - match books to these learning goals:
+  * "Courage" - books about bravery, standing up for what's right, facing fears
+  * "Faith" - books about trusting God, belief, relationship with God
+  * "Gratitude" - books about thankfulness, appreciation, counting blessings
+  * "Love" - books about God's love, loving others, kindness
+  * "Obedience" - books about following God, listening to parents, doing what's right
+  * "Self-Control" - books about patience, managing emotions, making good choices
+  * "Theology" - books about who God is, Bible doctrine, deeper faith concepts
+  * "Wisdom" - books about making wise decisions, learning from mistakes, discernment
 
 Return ONLY a valid JSON object with:
 {
@@ -976,7 +983,7 @@ Return ONLY a valid JSON object with:
 
 Return ONLY the JSON object, no other text.`;
 
-        console.log(`📚 AI selecting book for goal: "${goal}" from ${books.length} books`);
+        console.log(`📚 AI selecting book for goal: "${goal}" from ${books.length} books (child age: ${childAge})`);
         
         const response = await fetch(
             `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${geminiKey}`,

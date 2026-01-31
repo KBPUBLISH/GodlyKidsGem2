@@ -1,13 +1,35 @@
 const express = require('express');
 const router = express.Router();
-const { Resend } = require('resend');
+const nodemailer = require('nodemailer');
 const AppUser = require('../models/AppUser');
 
 // Admin API key for protected job endpoints
 const ADMIN_API_KEY = process.env.ADMIN_API_KEY || process.env.MIGRATION_API_KEY;
 
-// Initialize Resend
-const resend = new Resend(process.env.RESEND_API_KEY);
+// Initialize nodemailer transporter lazily
+let transporter = null;
+const getTransporter = () => {
+    if (transporter) return transporter;
+    
+    const emailUser = process.env.EMAIL_USER;
+    const emailPassword = process.env.EMAIL_PASSWORD;
+    
+    if (!emailUser || !emailPassword) {
+        console.warn('⚠️ EMAIL_USER or EMAIL_PASSWORD not configured - drip emails disabled');
+        return null;
+    }
+    
+    transporter = nodemailer.createTransport({
+        service: 'gmail',
+        auth: {
+            user: emailUser,
+            pass: emailPassword
+        }
+    });
+    
+    console.log('✅ Email transporter initialized for drip campaigns');
+    return transporter;
+};
 
 /**
  * Middleware to verify admin API key
@@ -266,6 +288,15 @@ function getDripStage(createdAt, emailsSent = {}) {
 router.post('/run', verifyAdminKey, async (req, res) => {
     console.log('📧 Running drip campaign...');
     
+    // Check if email is configured
+    const transport = getTransporter();
+    if (!transport) {
+        return res.status(503).json({
+            success: false,
+            error: 'Email service not configured (EMAIL_USER/EMAIL_PASSWORD missing)',
+        });
+    }
+    
     try {
         const { limit = 100 } = req.body;
         
@@ -324,9 +355,10 @@ router.post('/run', verifyAdminKey, async (req, res) => {
                     : template.getHtml(firstName);
                 
                 const subject = template.subject.replace('${firstName}', firstName);
+                const fromEmail = process.env.EMAIL_USER || 'hello@kbpublish.org';
                 
-                await resend.emails.send({
-                    from: 'Michael from Godly Kids <hello@kbpublish.org>',
+                await transport.sendMail({
+                    from: `Michael from Godly Kids <${fromEmail}>`,
                     replyTo: 'hello@kbpublish.org',
                     to: user.email,
                     subject: subject,

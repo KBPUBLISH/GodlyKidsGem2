@@ -46,6 +46,47 @@ interface UserData {
     onboardingCompletedAt?: string;
 }
 
+interface GameStats {
+    gameId: string;
+    name: string;
+    gameName?: string;
+    coverImage?: string;
+    totalPlays: number;
+    uniquePlayerCount: number;
+    totalSessionSeconds: number;
+    avgSessionSeconds: number;
+    avgStars: number;
+    totalCoinsEarned: number;
+    completionRate: number;
+    lastPlayed: string;
+}
+
+interface GameAnalytics {
+    summary: {
+        totalPlays: number;
+        uniquePlayerCount: number;
+        totalSessionMinutes: number;
+        avgSessionSeconds: number;
+        totalCoinsEarned: number;
+        totalStarsEarned: number;
+        completionRate: number;
+    };
+    games: GameStats[];
+    dailyPlays: { date: string; plays: number; uniquePlayers: number }[];
+    recentPlays: {
+        id: string;
+        gameId: string;
+        gameName: string;
+        userId: string;
+        kidName?: string;
+        sessionDurationSeconds: number;
+        starsEarned: number;
+        coinsEarned: number;
+        completed: boolean;
+        playedAt: string;
+    }[];
+}
+
 type TimeRange = '1d' | '1w' | '1m' | '3m' | 'all';
 
 interface AnalyticsData {
@@ -116,6 +157,7 @@ const TIME_RANGE_OPTIONS: { value: TimeRange; label: string }[] = [
 
 const Dashboard: React.FC = () => {
     const [data, setData] = useState<AnalyticsData | null>(null);
+    const [gameAnalytics, setGameAnalytics] = useState<GameAnalytics | null>(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [searchTerm, setSearchTerm] = useState('');
@@ -124,16 +166,27 @@ const Dashboard: React.FC = () => {
     const [expandedUserId, setExpandedUserId] = useState<string | null>(null);
     const [timeView, setTimeView] = useState<'daily' | 'weekly'>('daily');
     const [selectedTimeRange, setSelectedTimeRange] = useState<TimeRange>('all');
+    const [showGameSection, setShowGameSection] = useState(true);
 
     const fetchData = async (timeRange: TimeRange = selectedTimeRange) => {
         setLoading(true);
         try {
-            const response = await fetch(`${API_BASE}/analytics/users?timeRange=${timeRange}`);
-            const result = await response.json();
-            if (result.success) {
-                setData(result);
+            // Fetch user analytics and game analytics in parallel
+            const [userResponse, gameResponse] = await Promise.all([
+                fetch(`${API_BASE}/analytics/users?timeRange=${timeRange}`),
+                fetch(`${API_BASE}/analytics/games?timeRange=${timeRange === '1d' ? 'day' : timeRange === '1w' ? 'week' : timeRange === '1m' ? 'month' : 'all'}`),
+            ]);
+            
+            const userResult = await userResponse.json();
+            if (userResult.success) {
+                setData(userResult);
             } else {
-                setError(result.message || 'Failed to fetch data');
+                setError(userResult.message || 'Failed to fetch data');
+            }
+            
+            const gameResult = await gameResponse.json();
+            if (gameResult.success) {
+                setGameAnalytics(gameResult);
             }
         } catch (err) {
             setError('Failed to connect to server');
@@ -498,6 +551,156 @@ const Dashboard: React.FC = () => {
                     </div>
                 </div>
             </div>
+
+            {/* Game Analytics Section */}
+            {gameAnalytics && (
+                <div className="bg-white rounded-xl border border-gray-100 p-6 shadow-sm">
+                    <div className="flex items-center justify-between mb-4">
+                        <h3 className="text-lg font-semibold text-gray-800 flex items-center gap-2">
+                            <Gamepad2 className="w-5 h-5 text-purple-600" />
+                            Game Analytics
+                        </h3>
+                        <button
+                            onClick={() => setShowGameSection(!showGameSection)}
+                            className="text-sm text-gray-500 hover:text-gray-700 flex items-center gap-1"
+                        >
+                            {showGameSection ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                            {showGameSection ? 'Collapse' : 'Expand'}
+                        </button>
+                    </div>
+                    
+                    {showGameSection && (
+                        <>
+                            {/* Game Summary Stats */}
+                            <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4 mb-6">
+                                <div className="bg-purple-50 rounded-lg p-3 text-center">
+                                    <p className="text-2xl font-bold text-purple-600">{gameAnalytics.summary.totalPlays.toLocaleString()}</p>
+                                    <p className="text-xs text-gray-500">Total Plays</p>
+                                </div>
+                                <div className="bg-indigo-50 rounded-lg p-3 text-center">
+                                    <p className="text-2xl font-bold text-indigo-600">{gameAnalytics.summary.uniquePlayerCount.toLocaleString()}</p>
+                                    <p className="text-xs text-gray-500">Players</p>
+                                </div>
+                                <div className="bg-blue-50 rounded-lg p-3 text-center">
+                                    <p className="text-2xl font-bold text-blue-600">{gameAnalytics.summary.totalSessionMinutes}m</p>
+                                    <p className="text-xs text-gray-500">Total Play Time</p>
+                                </div>
+                                <div className="bg-teal-50 rounded-lg p-3 text-center">
+                                    <p className="text-2xl font-bold text-teal-600">{gameAnalytics.summary.avgSessionSeconds}s</p>
+                                    <p className="text-xs text-gray-500">Avg Session</p>
+                                </div>
+                                <div className="bg-yellow-50 rounded-lg p-3 text-center">
+                                    <p className="text-2xl font-bold text-yellow-600">{gameAnalytics.summary.totalCoinsEarned.toLocaleString()}</p>
+                                    <p className="text-xs text-gray-500">Coins Earned</p>
+                                </div>
+                                <div className="bg-green-50 rounded-lg p-3 text-center">
+                                    <p className="text-2xl font-bold text-green-600">{gameAnalytics.summary.completionRate}%</p>
+                                    <p className="text-xs text-gray-500">Completion</p>
+                                </div>
+                            </div>
+
+                            {/* Games Table */}
+                            {gameAnalytics.games.length > 0 ? (
+                                <div className="overflow-x-auto mb-6">
+                                    <table className="w-full text-sm">
+                                        <thead className="bg-gray-50 text-gray-600">
+                                            <tr>
+                                                <th className="px-3 py-2 text-left font-medium">Game</th>
+                                                <th className="px-3 py-2 text-center font-medium">Plays</th>
+                                                <th className="px-3 py-2 text-center font-medium">Players</th>
+                                                <th className="px-3 py-2 text-center font-medium">Avg Time</th>
+                                                <th className="px-3 py-2 text-center font-medium">Avg ⭐</th>
+                                                <th className="px-3 py-2 text-center font-medium">Coins</th>
+                                                <th className="px-3 py-2 text-center font-medium">Completion</th>
+                                                <th className="px-3 py-2 text-left font-medium">Last Played</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody className="divide-y divide-gray-100">
+                                            {gameAnalytics.games.map((game) => (
+                                                <tr key={game.gameId} className="hover:bg-gray-50">
+                                                    <td className="px-3 py-2">
+                                                        <div className="flex items-center gap-2">
+                                                            {game.coverImage ? (
+                                                                <img 
+                                                                    src={game.coverImage} 
+                                                                    alt={game.name} 
+                                                                    className="w-8 h-8 rounded object-cover"
+                                                                />
+                                                            ) : (
+                                                                <div className="w-8 h-8 rounded bg-purple-100 flex items-center justify-center">
+                                                                    <Gamepad2 className="w-4 h-4 text-purple-500" />
+                                                                </div>
+                                                            )}
+                                                            <span className="font-medium text-gray-800">{game.name || game.gameName || game.gameId}</span>
+                                                        </div>
+                                                    </td>
+                                                    <td className="px-3 py-2 text-center font-semibold text-purple-600">{game.totalPlays}</td>
+                                                    <td className="px-3 py-2 text-center text-gray-600">{game.uniquePlayerCount}</td>
+                                                    <td className="px-3 py-2 text-center text-gray-600">{game.avgSessionSeconds}s</td>
+                                                    <td className="px-3 py-2 text-center text-yellow-600">{game.avgStars}</td>
+                                                    <td className="px-3 py-2 text-center text-yellow-600">{game.totalCoinsEarned}</td>
+                                                    <td className="px-3 py-2 text-center">
+                                                        <span className={`px-2 py-0.5 rounded text-xs font-medium ${
+                                                            game.completionRate >= 70 ? 'bg-green-100 text-green-700' :
+                                                            game.completionRate >= 40 ? 'bg-yellow-100 text-yellow-700' :
+                                                            'bg-red-100 text-red-700'
+                                                        }`}>
+                                                            {game.completionRate}%
+                                                        </span>
+                                                    </td>
+                                                    <td className="px-3 py-2 text-xs text-gray-500">
+                                                        {game.lastPlayed ? formatDate(game.lastPlayed) : '-'}
+                                                    </td>
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            ) : (
+                                <div className="text-center py-8 text-gray-500">
+                                    <Gamepad2 className="w-12 h-12 mx-auto mb-2 text-gray-300" />
+                                    <p>No game plays recorded yet</p>
+                                </div>
+                            )}
+
+                            {/* Recent Game Plays */}
+                            {gameAnalytics.recentPlays.length > 0 && (
+                                <div>
+                                    <h4 className="text-sm font-semibold text-gray-700 mb-3">Recent Game Sessions</h4>
+                                    <div className="space-y-2 max-h-64 overflow-y-auto">
+                                        {gameAnalytics.recentPlays.slice(0, 10).map((play) => (
+                                            <div 
+                                                key={play.id} 
+                                                className="flex items-center justify-between p-2 bg-gray-50 rounded-lg text-sm"
+                                            >
+                                                <div className="flex items-center gap-3">
+                                                    <Gamepad2 className="w-4 h-4 text-purple-500" />
+                                                    <div>
+                                                        <span className="font-medium text-gray-800">{play.gameName}</span>
+                                                        <span className="text-gray-400 mx-2">•</span>
+                                                        <span className="text-gray-600">{play.kidName || play.userId.slice(0, 12)}...</span>
+                                                    </div>
+                                                </div>
+                                                <div className="flex items-center gap-4 text-xs">
+                                                    <span className="text-gray-500">{play.sessionDurationSeconds}s</span>
+                                                    <span className="text-yellow-600">{play.starsEarned}⭐</span>
+                                                    <span className="text-yellow-600">{play.coinsEarned}🪙</span>
+                                                    <span className={`px-1.5 py-0.5 rounded ${play.completed ? 'bg-green-100 text-green-600' : 'bg-gray-100 text-gray-500'}`}>
+                                                        {play.completed ? '✓' : '○'}
+                                                    </span>
+                                                    <span className="text-gray-400 w-24 text-right">
+                                                        {new Date(play.playedAt).toLocaleDateString()}
+                                                    </span>
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
+                        </>
+                    )}
+                </div>
+            )}
 
             {/* Signups Chart */}
             <div className="bg-white rounded-xl border border-gray-100 p-6 shadow-sm">

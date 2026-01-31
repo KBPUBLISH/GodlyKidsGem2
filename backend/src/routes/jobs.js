@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const { Resend } = require('resend');
+const nodemailer = require('nodemailer');
 const { runSubscriptionCheck } = require('../jobs/subscriptionChecker');
 const { runReverseTrialNotifications, expireEndedTrials, getReverseTrialAnalytics } = require('../jobs/reverseTrialNotifier');
 const AppUser = require('../models/AppUser');
@@ -8,8 +8,30 @@ const AppUser = require('../models/AppUser');
 // Admin API key for protected job endpoints
 const ADMIN_API_KEY = process.env.ADMIN_API_KEY || process.env.MIGRATION_API_KEY;
 
-// Initialize Resend
-const resend = new Resend(process.env.RESEND_API_KEY);
+// Initialize nodemailer transporter lazily
+let transporter = null;
+const getTransporter = () => {
+    if (transporter) return transporter;
+    
+    const emailUser = process.env.EMAIL_USER;
+    const emailPassword = process.env.EMAIL_PASSWORD;
+    
+    if (!emailUser || !emailPassword) {
+        console.warn('⚠️ EMAIL_USER or EMAIL_PASSWORD not configured - emails disabled');
+        return null;
+    }
+    
+    transporter = nodemailer.createTransport({
+        service: 'gmail',
+        auth: {
+            user: emailUser,
+            pass: emailPassword
+        }
+    });
+    
+    console.log('✅ Email transporter initialized for jobs');
+    return transporter;
+};
 
 /**
  * Middleware to verify admin API key
@@ -104,6 +126,15 @@ router.post('/send-reengagement', verifyAdminKey, async (req, res) => {
             });
         }
 
+        // Check if email is configured
+        const transport = getTransporter();
+        if (!transport) {
+            return res.status(503).json({
+                success: false,
+                error: 'Email service not configured (EMAIL_USER/EMAIL_PASSWORD missing)',
+            });
+        }
+
         // Send emails
         const results = {
             sent: 0,
@@ -111,12 +142,14 @@ router.post('/send-reengagement', verifyAdminKey, async (req, res) => {
             errors: [],
         };
 
+        const fromEmail = process.env.EMAIL_USER || 'hello@kbpublish.org';
+
         for (const user of inactiveUsers) {
             try {
                 const firstName = user.parentName?.split(' ')[0] || 'there';
                 
-                await resend.emails.send({
-                    from: 'Godly Kids <hello@godlykids.app>',
+                await transport.sendMail({
+                    from: `Godly Kids <${fromEmail}>`,
                     to: user.email,
                     subject: `${firstName}, your family's faith journey is waiting! 🙏`,
                     html: `
@@ -247,6 +280,15 @@ router.post('/send-trial-welcome', verifyAdminKey, async (req, res) => {
             });
         }
 
+        // Check if email is configured
+        const transport = getTransporter();
+        if (!transport) {
+            return res.status(503).json({
+                success: false,
+                error: 'Email service not configured (EMAIL_USER/EMAIL_PASSWORD missing)',
+            });
+        }
+
         // Send emails
         const results = {
             sent: 0,
@@ -255,12 +297,14 @@ router.post('/send-trial-welcome', verifyAdminKey, async (req, res) => {
             welcomed: [],
         };
 
+        const fromEmail = process.env.EMAIL_USER || 'hello@kbpublish.org';
+
         for (const user of trialUsers) {
             try {
                 const firstName = user.parentName?.split(' ')[0] || 'friend';
                 
-                await resend.emails.send({
-                    from: 'Michael from Godly Kids <hello@kbpublish.org>',
+                await transport.sendMail({
+                    from: `Michael from Godly Kids <${fromEmail}>`,
                     replyTo: 'hello@kbpublish.org',
                     to: user.email,
                     subject: `Thank you for trying Godly Kids! 🙏`,

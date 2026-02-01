@@ -488,9 +488,11 @@ const PaywallPage: React.FC = () => {
       // Track paywall closed (don't await to prevent blocking)
       activityTrackingService.trackOnboardingEvent('paywall_closed').catch(() => {});
       
-      // Check if user is eligible for reverse trial (first-time close, not premium)
-      // Add safety check for reverseTrial object
-      if (reverseTrial?.eligible && !isPremium) {
+      // Check if user is eligible for reverse trial (first-time close, not premium, HAS ACCOUNT)
+      // Reverse trial requires an account - anonymous users should create account first
+      const hasAccount = !!(localStorage.getItem('godlykids_auth_token') || localStorage.getItem('godlykids_user_email'));
+      
+      if (reverseTrial?.eligible && !isPremium && hasAccount) {
         console.log('🎁 User eligible for reverse trial - starting...');
         activityTrackingService.trackOnboardingEvent('reverse_trial_offered').catch(() => {});
         

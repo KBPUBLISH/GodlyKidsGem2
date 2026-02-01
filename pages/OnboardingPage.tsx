@@ -792,6 +792,16 @@ const OnboardingPage: React.FC = () => {
 
   const handleAddKid = () => {
     if (!kidName.trim()) return;
+    
+    // Check subscription limit - free users can only have 1 kid during onboarding
+    // This prevents users from adding multiple kids then closing the app before paywall
+    const isPremium = localStorage.getItem('godlykids_premium') === 'true';
+    if (!isPremium && kids.length >= 1) {
+      console.log('🚫 Free users limited to 1 kid during onboarding');
+      // Still allow continuing with the one kid they have
+      return;
+    }
+    
     playSuccess();
     
     // Generate kid ID
@@ -918,11 +928,14 @@ const OnboardingPage: React.FC = () => {
     setStep(5);
   };
   
-  // Free tier allows only 1 kid account, but let users add all kids during onboarding
-  // They'll see the paywall at the end showing how many kids they added
+  // Free tier allows only 1 kid account
+  // Premium users can add up to 5 kids
   const FREE_KID_LIMIT = 1;
   const MAX_KIDS = 5;
-  const canAddMoreKids = kids.length < MAX_KIDS; // Always allow up to 5 kids
+  const isPremiumUser = localStorage.getItem('godlykids_premium') === 'true';
+  const canAddMoreKids = isPremiumUser 
+    ? kids.length < MAX_KIDS  // Premium: up to 5 kids
+    : kids.length < FREE_KID_LIMIT; // Free: only 1 kid
   
   // Handle inline subscribe from family step
   const handleFamilyUnlockClick = () => {
@@ -1801,11 +1814,22 @@ const OnboardingPage: React.FC = () => {
                    </button>
                 </div>
               ) : (
-                /* Max Kids Reached */
+                /* Max Kids Reached or Premium Required */
                 <div className="bg-[#3E1F07]/50 p-4 rounded-xl border border-[#8B4513] text-center">
-                  <p className="text-[#eecaa0] text-sm">
-                    Maximum of {MAX_KIDS} profiles allowed
-                  </p>
+                  {isPremiumUser ? (
+                    <p className="text-[#eecaa0] text-sm">
+                      Maximum of {MAX_KIDS} profiles allowed
+                    </p>
+                  ) : (
+                    <div>
+                      <p className="text-[#FFD700] font-bold text-sm mb-1">
+                        🌟 Want to add more kids?
+                      </p>
+                      <p className="text-[#eecaa0] text-xs">
+                        Upgrade to Premium for unlimited kid profiles!
+                      </p>
+                    </div>
+                  )}
                 </div>
               )}
 

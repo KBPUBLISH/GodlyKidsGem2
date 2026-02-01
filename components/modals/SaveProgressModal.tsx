@@ -1,6 +1,82 @@
 import React from 'react';
 import { X, BookOpen, Music, Sparkles, Save } from 'lucide-react';
 
+// Ship's Wheel SVG Component - decorative background
+const ShipsWheel: React.FC<{ className?: string }> = ({ className }) => (
+  <svg viewBox="0 0 400 400" className={className}>
+    <defs>
+      <linearGradient id="swWoodGrain" x1="0%" y1="0%" x2="100%" y2="0%">
+        <stop offset="0%" stopColor="#8B5A2B" />
+        <stop offset="50%" stopColor="#A56B3A" />
+        <stop offset="100%" stopColor="#6B4423" />
+      </linearGradient>
+      <radialGradient id="swRimDepth" cx="50%" cy="30%" r="70%">
+        <stop offset="0%" stopColor="#D4975A" />
+        <stop offset="50%" stopColor="#A56B3A" />
+        <stop offset="100%" stopColor="#5C3D1E" />
+      </radialGradient>
+      <linearGradient id="swSpokeWood" x1="0%" y1="0%" x2="100%" y2="0%">
+        <stop offset="0%" stopColor="#5C3D1E" />
+        <stop offset="50%" stopColor="#A56B3A" />
+        <stop offset="100%" stopColor="#5C3D1E" />
+      </linearGradient>
+      <radialGradient id="swHubWood" cx="30%" cy="30%" r="80%">
+        <stop offset="0%" stopColor="#C4884A" />
+        <stop offset="50%" stopColor="#8B5A2B" />
+        <stop offset="100%" stopColor="#4A2810" />
+      </radialGradient>
+      <radialGradient id="swGoldCenter" cx="30%" cy="30%" r="70%">
+        <stop offset="0%" stopColor="#FFE55C" />
+        <stop offset="50%" stopColor="#FFD700" />
+        <stop offset="100%" stopColor="#B8860B" />
+      </radialGradient>
+    </defs>
+    
+    <g transform="translate(200, 200)">
+      {/* Handles */}
+      {[...Array(8)].map((_, i) => (
+        <g key={`handle-${i}`} transform={`rotate(${i * 45})`}>
+          <path
+            d="M-6,-130 L-6,-145 C-8,-147 -12,-151 -12,-161 C-12,-172 -5,-177 0,-177 C5,-177 12,-172 12,-161 C12,-151 8,-147 6,-145 L6,-130 Z"
+            fill="url(#swSpokeWood)"
+            stroke="#3d1e03"
+            strokeWidth="1.5"
+          />
+        </g>
+      ))}
+
+      {/* Spokes */}
+      {[...Array(8)].map((_, i) => (
+        <g key={`spoke-${i}`} transform={`rotate(${i * 45})`}>
+          <path
+            d="M-6,-42 L-5,-128 L5,-128 L6,-42 Z"
+            fill="url(#swSpokeWood)"
+            stroke="#3d1e03"
+            strokeWidth="1"
+          />
+        </g>
+      ))}
+
+      {/* Outer Rim */}
+      <circle r="125" fill="none" stroke="url(#swRimDepth)" strokeWidth="26" />
+      <circle r="136" fill="none" stroke="#5C3D1E" strokeWidth="1.5" />
+      <circle r="112" fill="none" stroke="#4A2810" strokeWidth="2" />
+
+      {/* Gold Studs */}
+      {[...Array(16)].map((_, i) => (
+        <g key={`stud-${i}`} transform={`rotate(${i * 22.5 + 11.25})`}>
+          <circle cx="0" cy="-125" r="4" fill="url(#swGoldCenter)" />
+        </g>
+      ))}
+
+      {/* Hub */}
+      <circle r="47" fill="#4A2810" />
+      <circle r="44" fill="url(#swHubWood)" stroke="#3d1e03" strokeWidth="2" />
+      <circle r="20" fill="url(#swGoldCenter)" stroke="#B8860B" strokeWidth="2" />
+    </g>
+  </svg>
+);
+
 interface SaveProgressModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -30,6 +106,11 @@ const SaveProgressModal: React.FC<SaveProgressModalProps> = ({
         className="absolute inset-0 bg-black/60 backdrop-blur-sm"
         onClick={onClose}
       />
+      
+      {/* Ship's Wheel - Behind Modal */}
+      <div className="absolute inset-0 flex items-center justify-center pointer-events-none overflow-hidden">
+        <ShipsWheel className="w-[500px] h-[500px] opacity-15 animate-[spinSlow_60s_linear_infinite]" />
+      </div>
       
       {/* Modal */}
       <div className="relative bg-gradient-to-b from-[#1a3a52] to-[#0f2538] rounded-3xl max-w-md w-full p-6 shadow-2xl border border-white/10 animate-[slideUp_0.3s_ease-out]">
@@ -138,6 +219,14 @@ const SaveProgressModal: React.FC<SaveProgressModalProps> = ({
           to {
             opacity: 1;
             transform: translateY(0);
+          }
+        }
+        @keyframes spinSlow {
+          from {
+            transform: rotate(0deg);
+          }
+          to {
+            transform: rotate(360deg);
           }
         }
       `}</style>

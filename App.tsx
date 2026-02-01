@@ -9,7 +9,52 @@ import HomePage from './pages/HomePage';
 import ReferralPromptModal from './components/features/ReferralPromptModal';
 import CreateAccountModal from './components/modals/CreateAccountModal';
 import ReverseTrialExpiredModal from './components/modals/ReverseTrialExpiredModal';
+import SaveProgressModal from './components/modals/SaveProgressModal';
 import { useUser } from './context/UserContext';
+
+// Guest content tracking - tracks what content guests have consumed
+const GUEST_CONTENT_KEY = 'godlykids_guest_content';
+const GUEST_PROMPT_SHOWN_KEY = 'godlykids_guest_prompt_shown';
+
+const getGuestContentStats = () => {
+  try {
+    const data = localStorage.getItem(GUEST_CONTENT_KEY);
+    if (!data) return { booksRead: 0, audioPlayed: 0 };
+    return JSON.parse(data);
+  } catch {
+    return { booksRead: 0, audioPlayed: 0 };
+  }
+};
+
+const trackGuestContent = (type: 'book' | 'audio') => {
+  try {
+    const current = getGuestContentStats();
+    if (type === 'book') {
+      current.booksRead = (current.booksRead || 0) + 1;
+    } else {
+      current.audioPlayed = (current.audioPlayed || 0) + 1;
+    }
+    localStorage.setItem(GUEST_CONTENT_KEY, JSON.stringify(current));
+    // Dispatch event so components can react
+    window.dispatchEvent(new CustomEvent('guestContentConsumed', { detail: current }));
+  } catch {}
+};
+
+const hasGuestConsumedContent = () => {
+  const stats = getGuestContentStats();
+  return stats.booksRead > 0 || stats.audioPlayed > 0;
+};
+
+const hasGuestPromptBeenShown = () => {
+  return localStorage.getItem(GUEST_PROMPT_SHOWN_KEY) === 'true';
+};
+
+const markGuestPromptShown = () => {
+  localStorage.setItem(GUEST_PROMPT_SHOWN_KEY, 'true');
+};
+
+// Export for use in content pages
+(window as any).trackGuestContent = trackGuestContent;
 
 // Diagnostic: Log when the entire app JS module is evaluated (WebView recreation)
 if (!(window as any).__GK_APP_BOOTED__) {
@@ -591,6 +636,26 @@ const hasCompletedOnboarding = (): boolean => {
   } catch { return false; }
 };
 
+// Guest-friendly route wrapper - allows guests to consume content without account
+// Tracks their activity so we can prompt them to save progress later
+const GuestFriendlyRoute: React.FC<{ children: React.ReactNode; contentType?: 'book' | 'audio' }> = ({ children, contentType }) => {
+  const hasAccount = hasUserAccount();
+  
+  // Track guest content consumption when they access this route
+  useEffect(() => {
+    if (!hasAccount && contentType) {
+      // Small delay to ensure they're actually consuming content, not just browsing
+      const timer = setTimeout(() => {
+        trackGuestContent(contentType);
+      }, 5000); // Track after 5 seconds of being on the page
+      return () => clearTimeout(timer);
+    }
+  }, [hasAccount, contentType]);
+  
+  // Always allow access - guests can consume content!
+  return <>{children}</>;
+};
+
 // Protected route wrapper - requires account AND completed onboarding for content access
 // Exceptions: 
 // 1. Allows full access during active tutorial
@@ -661,11 +726,14 @@ const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) =
 };
 
 // Home page wrapper - shows welcome screen for new users who completed onboarding
+// Also shows save progress prompt for guests who have consumed content
 const HomePageWithWelcomeCheck: React.FC = () => {
   const navigate = useNavigate();
   const [showAccountModal, setShowAccountModal] = useState(false);
+  const [showSaveProgressModal, setShowSaveProgressModal] = useState(false);
   const [showTrialExpiredModal, setShowTrialExpiredModal] = useState(false);
   const [hasAccount, setHasAccount] = useState(() => hasUserAccount());
+  const [guestStats, setGuestStats] = useState(() => getGuestContentStats());
   
   // Check if user completed onboarding
   const savedData = localStorage.getItem('godly_kids_data_v7') || localStorage.getItem('godly_kids_data_v6');
@@ -722,14 +790,28 @@ const HomePageWithWelcomeCheck: React.FC = () => {
     checkReverseTrial();
   }, []);
   
-  // Show account modal if: tutorial is done/skipped AND no account AND not completed onboarding
+  // Show save progress modal for guests who have consumed content
   useEffect(() => {
-    if (!tutorialActive && !hasAccount && !userCompletedOnboarding) {
+    // Only show if: no account, not in tutorial, has consumed content, hasn't been shown this session
+    if (!hasAccount && !tutorialActive && hasGuestConsumedContent() && !hasGuestPromptBeenShown()) {
+      // Small delay to let page render first
+      const timer = setTimeout(() => {
+        setGuestStats(getGuestContentStats());
+        setShowSaveProgressModal(true);
+        markGuestPromptShown();
+      }, 1000);
+      return () => clearTimeout(timer);
+    }
+  }, [hasAccount, tutorialActive]);
+  
+  // Fallback: Show account modal if: tutorial is done/skipped AND no account AND not completed onboarding AND not showing save progress
+  useEffect(() => {
+    if (!tutorialActive && !hasAccount && !userCompletedOnboarding && !showSaveProgressModal && !hasGuestConsumedContent()) {
       // Small delay to let page render first
       const timer = setTimeout(() => setShowAccountModal(true), 500);
       return () => clearTimeout(timer);
     }
-  }, [tutorialActive, hasAccount, userCompletedOnboarding]);
+  }, [tutorialActive, hasAccount, userCompletedOnboarding, showSaveProgressModal]);
   
   // Only show welcome screen if user completed onboarding AND hasn't seen welcome yet
   if (userCompletedOnboarding && shouldShowWelcome()) {
@@ -739,7 +821,24 @@ const HomePageWithWelcomeCheck: React.FC = () => {
   return (
     <>
       <HomePage />
-      {showAccountModal && (
+      {showSaveProgressModal && (
+        <SaveProgressModal
+          isOpen={true}
+          consumedContent={guestStats}
+          onClose={() => {
+            setShowSaveProgressModal(false);
+          }}
+          onCreateAccount={() => {
+            setShowSaveProgressModal(false);
+            navigate('/onboarding');
+          }}
+          onSignIn={() => {
+            setShowSaveProgressModal(false);
+            navigate('/signin', { state: { returnTo: '/home' } });
+          }}
+        />
+      )}
+      {showAccountModal && !showSaveProgressModal && (
         <CreateAccountModal
           isOpen={true}
           navigateToOnboarding={true}
@@ -1235,10 +1334,10 @@ const App: React.FC = () => {
                   <Route path="/audio/playlist/:playlistId" element={<PlaylistDetailPage />} />
                   <Route path="/book-series/:seriesId" element={<BookSeriesDetailPage />} />
                   
-                  {/* CONTENT CONSUMPTION - Account required to read/play */}
-                  <Route path="/read/:bookId" element={<ProtectedRoute><BookReaderPage /></ProtectedRoute>} />
-                  <Route path="/player/:bookId/:chapterId" element={<ProtectedRoute><AudioPlayerPage /></ProtectedRoute>} />
-                  <Route path="/audio/playlist/:playlistId/play/:itemIndex" element={<ProtectedRoute><PlaylistPlayerPage /></ProtectedRoute>} />
+                  {/* CONTENT CONSUMPTION - Allow guests to try content, prompt to save progress later */}
+                  <Route path="/read/:bookId" element={<GuestFriendlyRoute contentType="book"><BookReaderPage /></GuestFriendlyRoute>} />
+                  <Route path="/player/:bookId/:chapterId" element={<GuestFriendlyRoute contentType="audio"><AudioPlayerPage /></GuestFriendlyRoute>} />
+                  <Route path="/audio/playlist/:playlistId/play/:itemIndex" element={<GuestFriendlyRoute contentType="audio"><PlaylistPlayerPage /></GuestFriendlyRoute>} />
                   <Route path="/my-playlist/:id" element={<ProtectedRoute><UserPlaylistPage /></ProtectedRoute>} />
                   <Route path="/create-playlist" element={<ProtectedRoute><CreatePlaylistPage /></ProtectedRoute>} />
                   <Route path="/lessons" element={<ProtectedRoute><LessonsPage /></ProtectedRoute>} />

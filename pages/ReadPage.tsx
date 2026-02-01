@@ -143,8 +143,13 @@ const ReadPage: React.FC = () => {
               image: c.image,
               icon: c.icon,
             };
+            // Debug: Log categories with images
+            if (c.image) {
+              console.log(`📸 Category "${c.name}" has image:`, c.image);
+            }
           }
         });
+        console.log('📚 Category data loaded:', Object.keys(dataMap).length, 'categories');
         setCategoryData(dataMap);
       } catch (error) {
         console.error('Error fetching categories:', error);

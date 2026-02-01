@@ -302,9 +302,9 @@ const HomePage: React.FC = () => {
   // Use sessionStorage so it persists across component remounts
   const FETCH_DEBOUNCE_MS = 120000; // Don't refetch within 2 minutes
 
-  // Check if we should show the review prompt (immediately on home page)
+  // Check if we should show the review prompt (after user has been in app for a while)
   useEffect(() => {
-    // Short delay to let the page render first
+    // Wait about a minute before showing review prompt - let user explore first
     const timer = setTimeout(() => {
       try {
         if (shouldShowReviewPrompt()) {
@@ -314,7 +314,7 @@ const HomePage: React.FC = () => {
       } catch (e) {
         console.error('Review prompt error:', e);
       }
-    }, 2000); // 2 second delay after page load
+    }, 60000); // 60 second delay (1 minute)
     
     return () => clearTimeout(timer);
   }, []);

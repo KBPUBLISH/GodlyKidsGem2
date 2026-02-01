@@ -729,7 +729,6 @@ const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) =
 // Also shows save progress prompt for guests who have consumed content
 const HomePageWithWelcomeCheck: React.FC = () => {
   const navigate = useNavigate();
-  const [showAccountModal, setShowAccountModal] = useState(false);
   const [showSaveProgressModal, setShowSaveProgressModal] = useState(false);
   const [showTrialExpiredModal, setShowTrialExpiredModal] = useState(false);
   const [hasAccount, setHasAccount] = useState(() => hasUserAccount());
@@ -791,6 +790,7 @@ const HomePageWithWelcomeCheck: React.FC = () => {
   }, []);
   
   // Show save progress modal for guests who have consumed content
+  // This is the ONLY account prompt for new users - they must try content first!
   useEffect(() => {
     // Only show if: no account, not in tutorial, has consumed content, hasn't been shown this session
     if (!hasAccount && !tutorialActive && hasGuestConsumedContent() && !hasGuestPromptBeenShown()) {
@@ -804,14 +804,9 @@ const HomePageWithWelcomeCheck: React.FC = () => {
     }
   }, [hasAccount, tutorialActive]);
   
-  // Fallback: Show account modal if: tutorial is done/skipped AND no account AND not completed onboarding AND not showing save progress
-  useEffect(() => {
-    if (!tutorialActive && !hasAccount && !userCompletedOnboarding && !showSaveProgressModal && !hasGuestConsumedContent()) {
-      // Small delay to let page render first
-      const timer = setTimeout(() => setShowAccountModal(true), 500);
-      return () => clearTimeout(timer);
-    }
-  }, [tutorialActive, hasAccount, userCompletedOnboarding, showSaveProgressModal]);
+  // NOTE: We intentionally do NOT show CreateAccountModal immediately for new users!
+  // The flow is: explore → try content → SaveProgressModal prompts to create account
+  // This gives users a chance to experience the app before asking them to sign up
   
   // Only show welcome screen if user completed onboarding AND hasn't seen welcome yet
   if (userCompletedOnboarding && shouldShowWelcome()) {
@@ -838,23 +833,8 @@ const HomePageWithWelcomeCheck: React.FC = () => {
           }}
         />
       )}
-      {showAccountModal && !showSaveProgressModal && (
-        <CreateAccountModal
-          isOpen={true}
-          navigateToOnboarding={true}
-          onClose={() => {
-            setShowAccountModal(false);
-            // Stay on explore page - user can continue exploring without account
-          }}
-          onAccountCreated={() => {
-            setHasAccount(true);
-            setShowAccountModal(false);
-          }}
-          onSignIn={() => {
-            navigate('/signin', { state: { returnTo: '/home' } });
-          }}
-        />
-      )}
+      {/* CreateAccountModal is NOT shown automatically for new users */}
+      {/* Users explore freely → try content → SaveProgressModal prompts them */}
       {showTrialExpiredModal && (
         <ReverseTrialExpiredModal
           isOpen={true}

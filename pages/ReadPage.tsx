@@ -372,12 +372,12 @@ const ReadPage: React.FC = () => {
                     <img 
                       src={catData.image} 
                       alt="" 
-                      className="absolute right-0 top-0 h-full w-2/3 object-cover object-center"
+                      className="absolute right-0 top-0 h-full w-2/3 object-cover object-center z-0"
                     />
                     {/* Gradient overlay - solid on left, transparent on right */}
                     <div 
-                      className="absolute inset-0"
-                      style={{ background: `linear-gradient(to right, ${gradientFrom} 0%, ${gradientFrom} 30%, transparent 70%)` }}
+                      className="absolute inset-0 z-[1]"
+                      style={{ background: `linear-gradient(to right, ${gradientFrom} 0%, ${gradientFrom} 20%, transparent 60%)` }}
                     />
                   </>
                 )}
@@ -429,12 +429,12 @@ const ReadPage: React.FC = () => {
                           <img 
                             src={catData.image} 
                             alt="" 
-                            className="absolute right-0 top-0 h-full w-2/3 object-cover object-center"
+                            className="absolute right-0 top-0 h-full w-2/3 object-cover object-center z-0"
                           />
                           {/* Gradient overlay - solid on left, transparent on right */}
                           <div 
-                            className="absolute inset-0"
-                            style={{ background: `linear-gradient(to right, ${gradientFrom} 0%, ${gradientFrom} 30%, transparent 70%)` }}
+                            className="absolute inset-0 z-[1]"
+                            style={{ background: `linear-gradient(to right, ${gradientFrom} 0%, ${gradientFrom} 20%, transparent 60%)` }}
                           />
                         </>
                       )}

@@ -729,10 +729,12 @@ const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) =
 // Also shows save progress prompt for guests who have consumed content
 const HomePageWithWelcomeCheck: React.FC = () => {
   const navigate = useNavigate();
+  const location = useLocation();
   const [showSaveProgressModal, setShowSaveProgressModal] = useState(false);
   const [showTrialExpiredModal, setShowTrialExpiredModal] = useState(false);
   const [hasAccount, setHasAccount] = useState(() => hasUserAccount());
   const [guestStats, setGuestStats] = useState(() => getGuestContentStats());
+  const [checkTrigger, setCheckTrigger] = useState(0); // Used to re-trigger checks
   
   // Check if user completed onboarding
   const savedData = localStorage.getItem('godly_kids_data_v7') || localStorage.getItem('godly_kids_data_v6');
@@ -747,6 +749,22 @@ const HomePageWithWelcomeCheck: React.FC = () => {
   
   // Check if tutorial is still in progress
   const tutorialActive = isTutorialInProgress();
+  
+  // Listen for guest content consumption events to re-check when user returns
+  useEffect(() => {
+    const handleContentConsumed = () => {
+      console.log('📚 Guest consumed content, will check for prompt on next visit');
+    };
+    
+    window.addEventListener('guestContentConsumed', handleContentConsumed);
+    return () => window.removeEventListener('guestContentConsumed', handleContentConsumed);
+  }, []);
+  
+  // Re-check for save progress modal whenever user navigates to this page
+  useEffect(() => {
+    // Trigger a check when location changes (user navigates here)
+    setCheckTrigger(prev => prev + 1);
+  }, [location.key]);
   
   // Check for expired reverse trial on mount
   useEffect(() => {
@@ -790,19 +808,24 @@ const HomePageWithWelcomeCheck: React.FC = () => {
   }, []);
   
   // Show save progress modal for guests who have consumed content
-  // This is the ONLY account prompt for new users - they must try content first!
+  // This triggers on mount AND whenever user navigates back to explore page
   useEffect(() => {
+    // Re-read hasAccount in case it changed
+    const currentHasAccount = hasUserAccount();
+    const currentTutorialActive = isTutorialInProgress();
+    
     // Only show if: no account, not in tutorial, has consumed content, hasn't been shown this session
-    if (!hasAccount && !tutorialActive && hasGuestConsumedContent() && !hasGuestPromptBeenShown()) {
+    if (!currentHasAccount && !currentTutorialActive && hasGuestConsumedContent() && !hasGuestPromptBeenShown()) {
+      console.log('📚 Guest has consumed content, showing save progress modal');
       // Small delay to let page render first
       const timer = setTimeout(() => {
         setGuestStats(getGuestContentStats());
         setShowSaveProgressModal(true);
         markGuestPromptShown();
-      }, 1000);
+      }, 800);
       return () => clearTimeout(timer);
     }
-  }, [hasAccount, tutorialActive]);
+  }, [checkTrigger]); // Re-run when checkTrigger changes (on navigation)
   
   // NOTE: We intentionally do NOT show CreateAccountModal immediately for new users!
   // The flow is: explore → try content → SaveProgressModal prompts to create account

@@ -337,12 +337,27 @@ const HomePage: React.FC = () => {
     return () => clearTimeout(timer);
   }, [showReviewPrompt]);
 
-  // Show tutorial prompt for new users after they've explored for a bit
+  // Show tutorial prompt for new users after a brief moment
   useEffect(() => {
     // Don't show if tutorial is already active
     if (isTutorialActive) return;
     
-    // Wait 12 seconds to let user explore before showing prompt
+    // Check if this is a completely new user (no account, no onboarding data)
+    const hasAccount = !!(localStorage.getItem('godlykids_auth_token') || localStorage.getItem('godlykids_user_email'));
+    const savedData = localStorage.getItem('godly_kids_data_v7') || localStorage.getItem('godly_kids_data_v6');
+    const hasOnboardingData = (() => {
+      if (!savedData) return false;
+      try {
+        const data = JSON.parse(savedData);
+        return (data.parentName && data.parentName !== 'Parent' && data.parentName !== '') || 
+               (data.kids && data.kids.length > 0);
+      } catch { return false; }
+    })();
+    
+    // For first-time users (no account, no data), show tutorial faster (3 seconds)
+    // For returning users, show after 12 seconds
+    const delay = (!hasAccount && !hasOnboardingData) ? 3000 : 12000;
+    
     const timer = setTimeout(() => {
       try {
         // Don't show if other modals are showing
@@ -355,7 +370,7 @@ const HomePage: React.FC = () => {
       } catch (e) {
         console.error('Tutorial prompt check error:', e);
       }
-    }, 12000); // 12 second delay - enough time to look around
+    }, delay);
     
     return () => clearTimeout(timer);
   }, [isTutorialActive, showReviewPrompt, showSurvey]);

@@ -212,7 +212,14 @@ class ActivityTrackingService {
   }
 
   // Track game played/opened
-  trackGamePlayed(gameId: string, gameName: string): void {
+  trackGamePlayed(gameId: string, gameName: string, options?: {
+    sessionDurationSeconds?: number;
+    score?: number;
+    starsEarned?: number;
+    coinsEarned?: number;
+    completed?: boolean;
+    kidName?: string;
+  }): void {
     const key = this.getKey('activity_games_played');
     const entries = this.getActivityEntries(key);
     
@@ -224,6 +231,68 @@ class ActivityTrackingService {
     });
     localStorage.setItem(key, JSON.stringify(entries));
     console.log('🎮 Tracked game played:', gameName);
+    
+    // Also record to backend for analytics
+    this.recordGamePlayToBackend(gameId, gameName, options);
+  }
+  
+  // Record game play to backend asynchronously
+  private async recordGamePlayToBackend(gameId: string, gameName: string, options?: {
+    sessionDurationSeconds?: number;
+    score?: number;
+    starsEarned?: number;
+    coinsEarned?: number;
+    completed?: boolean;
+    kidName?: string;
+  }): Promise<void> {
+    try {
+      // Get user ID
+      const userId = localStorage.getItem('godlykids_device_id') || 
+                     localStorage.getItem('godlykids_user_email') || 
+                     `anonymous_${Date.now()}`;
+      
+      // Get current kid name if available
+      const selectedKidRaw = localStorage.getItem('godlykids_selected_kid');
+      let kidName = options?.kidName;
+      if (!kidName && selectedKidRaw) {
+        try {
+          const selectedKid = JSON.parse(selectedKidRaw);
+          kidName = selectedKid?.name;
+        } catch {}
+      }
+      
+      const apiBase = window.location.hostname === 'localhost' 
+        ? 'http://localhost:5001/api/' 
+        : 'https://backendgk2-0.onrender.com/api/';
+      
+      const response = await fetch(`${apiBase}games/play-event`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          gameId,
+          gameName,
+          userId,
+          kidName,
+          sessionDurationSeconds: options?.sessionDurationSeconds || 0,
+          score: options?.score || 0,
+          starsEarned: options?.starsEarned || 0,
+          coinsEarned: options?.coinsEarned || 0,
+          completed: options?.completed || false,
+          platform: navigator.userAgent.toLowerCase().includes('despia') 
+            ? (navigator.userAgent.toLowerCase().includes('iphone') || navigator.userAgent.toLowerCase().includes('ipad') ? 'ios' : 'android')
+            : 'web',
+        }),
+      });
+      
+      if (response.ok) {
+        const result = await response.json();
+        console.log('🎮 Game play recorded to backend:', result);
+      } else {
+        console.warn('⚠️ Failed to record game play to backend:', response.status);
+      }
+    } catch (error) {
+      console.warn('⚠️ Failed to record game play to backend:', error);
+    }
   }
 
   // Track lesson completed

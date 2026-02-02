@@ -1980,6 +1980,47 @@ export const ApiService = {
       console.log(`🗑️ Cleared ${keysToRemove.length} cache entries`);
     } catch {}
   },
+
+  // Record game play event to backend
+  recordGamePlay: async (data: {
+    gameId: string;
+    gameName: string;
+    userId: string;
+    kidName?: string;
+    sessionDurationSeconds?: number;
+    score?: number;
+    starsEarned?: number;
+    coinsEarned?: number;
+    completed?: boolean;
+    platform?: string;
+    metadata?: Record<string, any>;
+  }): Promise<{ success: boolean; eventId?: string }> => {
+    try {
+      const baseUrl = getApiBaseUrl();
+      const response = await fetchWithTimeout(`${baseUrl}games/play-event`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ...data,
+          platform: data.platform || (navigator.userAgent.toLowerCase().includes('despia') ? 
+            (navigator.userAgent.toLowerCase().includes('iphone') || navigator.userAgent.toLowerCase().includes('ipad') ? 'ios' : 'android') : 
+            'web'),
+        }),
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        console.log('🎮 Game play recorded to backend:', result);
+        return { success: true, eventId: result.eventId };
+      }
+
+      console.warn('⚠️ Failed to record game play:', response.status);
+      return { success: false };
+    } catch (error) {
+      console.error('❌ Failed to record game play:', error);
+      return { success: false };
+    }
+  },
 };
 
 // Log API configuration on startup

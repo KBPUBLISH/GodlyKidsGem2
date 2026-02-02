@@ -13,6 +13,12 @@ interface UserData {
     coins: number;
     kidCount: number;
     kids: { name: string; age?: number }[];
+    // Account type tracking
+    accountType: 'email' | 'anonymous';
+    isNewUser: boolean;
+    isReturningAnonymous: boolean;
+    hasActivity: boolean;
+    // Activity stats
     sessions: number;
     timeSpentMinutes: number;
     booksRead: number;
@@ -109,6 +115,11 @@ interface AnalyticsData {
         today: number;
         thisWeek: number;
         thisMonth: number;
+    };
+    accountTypes: {
+        emailAccounts: number;
+        anonymousNew: number;
+        anonymousReturning: number;
     };
     activeUsers: {
         today: number;
@@ -438,13 +449,13 @@ const Dashboard: React.FC = () => {
                 </div>
             </div>
 
-            {/* New Accounts & Active Users Row */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {/* New Accounts, Account Types & Active Users Row */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                 {/* New Accounts */}
                 <div className="bg-white rounded-xl border border-gray-100 p-6 shadow-sm">
                     <h3 className="text-lg font-semibold text-gray-800 flex items-center gap-2 mb-4">
                         <UserPlus className="w-5 h-5 text-indigo-600" />
-                        New Accounts
+                        New Signups
                     </h3>
                     <div className="grid grid-cols-3 gap-4">
                         <div className="text-center p-3 bg-indigo-50 rounded-lg">
@@ -462,12 +473,42 @@ const Dashboard: React.FC = () => {
                     </div>
                 </div>
 
+                {/* Account Types Breakdown */}
+                <div className="bg-white rounded-xl border border-gray-100 p-6 shadow-sm">
+                    <h3 className="text-lg font-semibold text-gray-800 flex items-center gap-2 mb-4">
+                        <Users className="w-5 h-5 text-blue-600" />
+                        Account Types
+                    </h3>
+                    <div className="space-y-3">
+                        <div className="flex items-center justify-between p-2 bg-blue-50 rounded-lg">
+                            <span className="flex items-center gap-2 text-sm font-medium text-blue-700">
+                                <Mail className="w-4 h-4" />
+                                Email Accounts
+                            </span>
+                            <span className="text-lg font-bold text-blue-600">{data.accountTypes?.emailAccounts || 0}</span>
+                        </div>
+                        <div className="flex items-center justify-between p-2 bg-gray-50 rounded-lg">
+                            <span className="flex items-center gap-2 text-sm font-medium text-gray-600">
+                                <span className="text-xs">✨</span>
+                                Anonymous (New)
+                            </span>
+                            <span className="text-lg font-bold text-gray-600">{data.accountTypes?.anonymousNew || 0}</span>
+                        </div>
+                        <div className="flex items-center justify-between p-2 bg-amber-50 rounded-lg">
+                            <span className="flex items-center gap-2 text-sm font-medium text-amber-700">
+                                <span className="text-xs">↩</span>
+                                Anonymous (Returning)
+                            </span>
+                            <span className="text-lg font-bold text-amber-600">{data.accountTypes?.anonymousReturning || 0}</span>
+                        </div>
+                    </div>
+                </div>
+
                 {/* Active Users - by last activity */}
                 <div className="bg-white rounded-xl border border-gray-100 p-6 shadow-sm">
                     <h3 className="text-lg font-semibold text-gray-800 flex items-center gap-2 mb-4">
                         <Activity className="w-5 h-5 text-green-600" />
                         Active Users
-                        <span className="text-xs font-normal text-gray-400">(by last activity)</span>
                     </h3>
                     <div className="grid grid-cols-3 gap-4">
                         <div className="text-center p-3 bg-green-50 rounded-lg">
@@ -842,7 +883,24 @@ const Dashboard: React.FC = () => {
                                                     <ChevronDown className="w-4 h-4 text-gray-400" />
                                                 }
                                                 <div>
-                                                    <p className="font-medium text-gray-800">{user.email}</p>
+                                                    <div className="flex items-center gap-2">
+                                                        <p className="font-medium text-gray-800">{user.email}</p>
+                                                        {/* Account type badge */}
+                                                        {user.accountType === 'email' ? (
+                                                            <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-blue-100 text-blue-700">
+                                                                <Mail className="w-2.5 h-2.5 mr-0.5" />
+                                                                Account
+                                                            </span>
+                                                        ) : (
+                                                            <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium ${
+                                                                user.isReturningAnonymous 
+                                                                    ? 'bg-amber-100 text-amber-700' 
+                                                                    : 'bg-gray-100 text-gray-600'
+                                                            }`}>
+                                                                {user.isReturningAnonymous ? '↩ Returning' : '✨ New'}
+                                                            </span>
+                                                        )}
+                                                    </div>
                                                     {user.deviceId && (
                                                         <p className="text-xs text-gray-400 truncate max-w-[150px]">{user.deviceId}</p>
                                                     )}

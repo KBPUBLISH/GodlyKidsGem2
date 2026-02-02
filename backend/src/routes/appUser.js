@@ -4,6 +4,69 @@ const AppUser = require('../models/AppUser');
 const ReverseTrialDevice = require('../models/ReverseTrialDevice');
 
 /**
+ * POST /api/app-user/register-device
+ * Register a device on first app launch - creates AppUser record immediately
+ * This ensures we track all app opens, not just engaged users
+ */
+router.post('/register-device', async (req, res) => {
+    try {
+        const { deviceId, platform, appVersion } = req.body;
+        
+        if (!deviceId) {
+            return res.status(400).json({ 
+                success: false, 
+                error: 'deviceId is required' 
+            });
+        }
+        
+        // Find existing user or create new one
+        let user = await AppUser.findOne({ deviceId });
+        let isNewUser = false;
+        
+        if (!user) {
+            // Create new user record - this tracks the "install"
+            user = new AppUser({
+                deviceId,
+                platform: platform || 'unknown',
+                subscriptionStatus: 'free',
+                stats: {
+                    totalSessions: 1,
+                    totalTimeSpent: 0,
+                },
+                lastActiveAt: new Date(),
+            });
+            isNewUser = true;
+            console.log(`📱 New device registered: ${deviceId} (platform: ${platform || 'unknown'})`);
+        } else {
+            // Update existing user's last active and increment sessions
+            user.lastActiveAt = new Date();
+            user.stats = user.stats || {};
+            user.stats.totalSessions = (user.stats.totalSessions || 0) + 1;
+            if (platform && !user.platform) {
+                user.platform = platform;
+            }
+        }
+        
+        await user.save();
+        
+        res.json({ 
+            success: true,
+            isNewUser,
+            userId: user._id,
+            subscriptionStatus: user.subscriptionStatus,
+            reverseTrialActive: user.reverseTrialActive || false,
+        });
+        
+    } catch (error) {
+        console.error('Error registering device:', error);
+        res.status(500).json({ 
+            success: false, 
+            error: 'Failed to register device' 
+        });
+    }
+});
+
+/**
  * POST /api/app-user/preferences
  * Save user's onboarding preferences (discipleship goals and feature interests)
  */

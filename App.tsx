@@ -63,13 +63,54 @@ if (!(window as any).__GK_APP_BOOTED__) {
 
   // Generate deviceId immediately on app boot (before any React renders)
   // This ensures deviceId exists for link-email during signup
+  let generatedDeviceId: string | null = null;
   try {
     if (!localStorage.getItem('godlykids_device_id')) {
-      const deviceId = `device_${Date.now()}_${Math.random().toString(36).slice(2)}`;
-      localStorage.setItem('godlykids_device_id', deviceId);
-      console.log('🔑 Generated device ID on boot:', deviceId);
+      generatedDeviceId = `device_${Date.now()}_${Math.random().toString(36).slice(2)}`;
+      localStorage.setItem('godlykids_device_id', generatedDeviceId);
+      console.log('🔑 Generated device ID on boot:', generatedDeviceId);
     }
   } catch {}
+  
+  // Register device with backend immediately on app open
+  // This ensures we track all app opens for accurate install counts
+  const registerDevice = async () => {
+    try {
+      const deviceId = localStorage.getItem('godlykids_device_id');
+      if (!deviceId) return;
+      
+      // Detect platform
+      const ua = navigator.userAgent.toLowerCase();
+      let platform = 'web';
+      if (/despia/i.test(ua)) {
+        platform = ua.includes('iphone') || ua.includes('ipad') ? 'ios' : 'android';
+      } else if (/iphone|ipad|ipod/i.test(ua)) {
+        platform = 'ios';
+      } else if (/android/i.test(ua)) {
+        platform = 'android';
+      }
+      
+      const apiBase = window.location.hostname === 'localhost' 
+        ? 'http://localhost:5001' 
+        : 'https://backendgk2-0.onrender.com';
+      
+      const response = await fetch(`${apiBase}/api/app-user/register-device`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ deviceId, platform }),
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        console.log('📱 Device registered:', data.isNewUser ? 'NEW USER' : 'returning user');
+      }
+    } catch (err) {
+      console.warn('📱 Device registration failed:', err);
+    }
+  };
+  
+  // Register device after a short delay (don't block app startup)
+  setTimeout(registerDevice, 1000);
 
   // Detect Despia early - we need this for crash detection logic
   const ua = navigator.userAgent || '';

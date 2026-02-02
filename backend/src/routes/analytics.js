@@ -317,6 +317,23 @@ router.get('/users', async (req, res) => {
                 reverseTrialDaysRemaining = Math.max(0, Math.ceil(msRemaining / (24 * 60 * 60 * 1000)));
             }
             
+            // Determine account type: email-registered vs anonymous (device-only)
+            const hasEmail = !!(user.email && user.email.includes('@'));
+            const accountType = hasEmail ? 'email' : 'anonymous';
+            
+            // For anonymous users, determine if they're "new" (created in last 7 days) or "returning"
+            const createdDate = user.createdAt ? new Date(user.createdAt) : null;
+            const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+            const isNewUser = createdDate && createdDate >= sevenDaysAgo;
+            
+            // Check if user has significant activity (indicates returning user even if recent)
+            const hasActivity = (user.stats?.totalSessions || 0) > 1 || 
+                               (user.stats?.booksRead || 0) > 0 || 
+                               (user.stats?.playlistsPlayed || 0) > 0;
+            
+            // Anonymous users are "returning" if they have activity beyond their first session
+            const isReturningAnonymous = accountType === 'anonymous' && hasActivity && (user.stats?.totalSessions || 0) > 1;
+            
             return {
             id: user._id,
             email: user.email || 'Anonymous',
@@ -325,6 +342,11 @@ router.get('/users', async (req, res) => {
             coins: user.coins || 0,
             kidCount: user.kidProfiles?.length || 0,
             kids: user.kidProfiles?.map(k => ({ name: k.name, age: k.age })) || [],
+            // Account type tracking
+            accountType, // 'email' or 'anonymous'
+            isNewUser, // true if created in last 7 days
+            isReturningAnonymous, // true if anonymous with multiple sessions
+            hasActivity, // true if has any content engagement
             // Activity stats
             sessions: user.stats?.totalSessions || 0,
             timeSpentMinutes: Math.round((user.stats?.totalTimeSpent || 0) / 60),
@@ -372,6 +394,11 @@ router.get('/users', async (req, res) => {
         // Count by source (use statsUsers for time-range stats)
         const authUserCount = statsUsers.filter(u => u.source === 'auth').length;
         const appOnlyUserCount = statsUsers.filter(u => u.source === 'app').length;
+        
+        // Count by account type from formatted users
+        const emailAccountCount = formattedUsers.filter(u => u.accountType === 'email').length;
+        const anonymousNewCount = formattedUsers.filter(u => u.accountType === 'anonymous' && !u.isReturningAnonymous).length;
+        const anonymousReturningCount = formattedUsers.filter(u => u.accountType === 'anonymous' && u.isReturningAnonymous).length;
 
         // Get daily signups for the past 30 days
         const dailySignups = [];
@@ -435,6 +462,11 @@ router.get('/users', async (req, res) => {
                 today: newToday,
                 thisWeek: newThisWeek,
                 thisMonth: newThisMonth,
+            },
+            accountTypes: {
+                emailAccounts: emailAccountCount,
+                anonymousNew: anonymousNewCount,
+                anonymousReturning: anonymousReturningCount,
             },
             activeUsers: {
                 today: activeToday,

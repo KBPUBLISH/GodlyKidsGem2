@@ -20,6 +20,7 @@ import PageEditor from './pages/PageEditor';
 import Categories from './pages/Categories';
 import Voices from './pages/Voices';
 import Games from './pages/Games';
+import AmazonBooks from './pages/AmazonBooks';
 import Lessons from './pages/Lessons';
 import LessonForm from './pages/LessonForm';
 import LessonCalendarPage from './pages/LessonCalendarPage';
@@ -101,6 +102,7 @@ function App() {
             <Route path="categories" element={<Categories />} />
             <Route path="voices" element={<Voices />} />
             <Route path="games" element={<Games />} />
+            <Route path="amazon-books" element={<AmazonBooks />} />
             <Route path="lessons" element={<Lessons />} />
             <Route path="lessons/new" element={<LessonForm />} />
             <Route path="lessons/edit/:id" element={<LessonForm />} />

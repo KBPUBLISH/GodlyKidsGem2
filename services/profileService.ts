@@ -12,6 +12,10 @@ export interface CloudProfile {
     age: number;
     avatar: any;
     avatarSeed?: string;
+    // Character avatar for personalized stories
+    characterAvatar?: string;    // URL to AI-generated character image
+    characterStyle?: string;     // Style used (minecraft, lego, cartoon, etc.)
+    originalSelfie?: string;     // Base64 of original selfie for regeneration
   }>;
   coins: number;
   equippedAvatar: any;

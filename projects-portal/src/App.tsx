@@ -39,6 +39,8 @@ import EmailSubscribers from './pages/EmailSubscribers';
 import Campaigns from './pages/Campaigns';
 import CampaignForm from './pages/CampaignForm';
 import CampaignUpdates from './pages/CampaignUpdates';
+import DevotionalStories from './pages/DevotionalStories';
+import DevotionalStoryForm from './pages/DevotionalStoryForm';
 
 // Godly Hub - Creator Portal
 import CreatorLogin from './pages/CreatorLogin';
@@ -123,6 +125,9 @@ function App() {
             <Route path="campaigns/new" element={<CampaignForm />} />
             <Route path="campaigns/:id/edit" element={<CampaignForm />} />
             <Route path="campaigns/:campaignId/updates" element={<CampaignUpdates />} />
+            <Route path="devotional-stories" element={<DevotionalStories />} />
+            <Route path="devotional-stories/new" element={<DevotionalStoryForm />} />
+            <Route path="devotional-stories/:id" element={<DevotionalStoryForm />} />
             
             {/* Godly Hub Admin */}
             <Route path="hub/creators" element={<HubCreators />} />

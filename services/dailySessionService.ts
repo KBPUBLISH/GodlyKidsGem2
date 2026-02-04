@@ -15,7 +15,7 @@ const SESSION_STORAGE_KEY = 'godlykids_daily_session';
 const SESSION_HISTORY_KEY = 'godlykids_session_history';
 
 // Session step types
-export type SessionStepType = 'scripture' | 'book' | 'discussion' | 'prayer';
+export type SessionStepType = 'scripture' | 'book' | 'story' | 'discussion' | 'prayer';
 
 export interface SessionStep {
   type: SessionStepType;
@@ -42,6 +42,7 @@ export interface DailySession {
 const STEP_REWARDS = {
   scripture: 10, // Daily verse reflection
   book: 30, // Reading time
+  story: 30, // Personalized devotional story
   discussion: 20, // Parent-child discussion
   prayer: 30, // Daily prayer
 };
@@ -106,6 +107,69 @@ export const createDailySession = (selectedSubjects?: string[]): DailySession =>
   localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(session));
   
   return session;
+};
+
+// Create a personalized session with AI-generated story instead of book reading
+export const createPersonalizedSession = (selectedSubjects?: string[]): DailySession => {
+  // Archive any existing completed session before creating a new one
+  const existingSession = getCurrentSession();
+  if (existingSession?.completed) {
+    archiveSession(existingSession);
+    localStorage.removeItem(SESSION_STORAGE_KEY);
+  }
+  
+  const subjects = selectedSubjects || getSavedPreferences();
+  
+  const session: DailySession = {
+    date: getTodayDateKey(),
+    subjects,
+    steps: [
+      {
+        type: 'scripture',
+        label: 'Scripture Puzzle',
+        icon: '📖',
+        status: 'pending',
+        coinsEarned: 0,
+      },
+      {
+        type: 'story',
+        label: 'Your Story',
+        icon: '✨',
+        status: 'pending',
+        coinsEarned: 0,
+      },
+      {
+        type: 'discussion',
+        label: 'Reflect Together',
+        icon: '💬',
+        status: 'pending',
+        coinsEarned: 0,
+      },
+      {
+        type: 'prayer',
+        label: 'Prayer Time',
+        icon: '🙏',
+        status: 'pending',
+        coinsEarned: 0,
+      },
+    ],
+    currentStepIndex: 0,
+    totalCoinsEarned: 0,
+    completed: false,
+    startedAt: Date.now(),
+  };
+  
+  // Save to localStorage
+  localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(session));
+  
+  return session;
+};
+
+// Check if current session uses personalized stories
+export const isPersonalizedSession = (): boolean => {
+  const session = getCurrentSession();
+  if (!session) return false;
+  return session.steps.some(step => step.type === 'story');
 };
 
 // Get current session (or null if none exists for today)

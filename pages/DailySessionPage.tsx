@@ -1,10 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { X, Check, ChevronRight, Play, BookOpen, MessageCircle } from 'lucide-react';
+import { X, Check, ChevronRight, Play, BookOpen, MessageCircle, Camera, Sparkles } from 'lucide-react';
 import PrayerGameModal from '../components/features/PrayerGameModal';
 import SessionCelebrationModal from '../components/modals/SessionCelebrationModal';
 import DiscussionQuestionsModal from '../components/modals/DiscussionQuestionsModal';
 import DailyVerseModal from '../components/modals/DailyVerseModal';
+import SelfieCapture from '../components/features/SelfieCapture';
+import CharacterStyleSelector from '../components/features/CharacterStyleSelector';
+import PersonalizedStoryPlayer from '../components/features/PersonalizedStoryPlayer';
+import StoryLoadingScreen from '../components/features/StoryLoadingScreen';
 import { useUser } from '../context/UserContext';
 import { useBooks } from '../context/BooksContext';
 import { activityTrackingService } from '../services/activityTrackingService';
@@ -12,6 +16,8 @@ import {
   DailySession,
   SessionStep,
   createDailySession,
+  createPersonalizedSession,
+  isPersonalizedSession,
   getCurrentSession,
   startCurrentStep,
   completeCurrentStep,
@@ -89,11 +95,14 @@ const DailySessionPage: React.FC = () => {
     equippedHatRotation,
     kids,
     currentProfileId,
+    addKid,
+    switchProfile,
   } = useUser();
   
   // Get current kid's age for age-aware AI content
   const currentKid = kids.find(k => k.id === currentProfileId);
   const childAge = currentKid?.age || 7; // Default to 7 if not set
+  const childName = currentKid?.name || '';
   const { books, loading: booksLoading, refreshBooks } = useBooks();
   
   const [session, setSession] = useState<DailySession | null>(null);
@@ -125,6 +134,27 @@ const DailySessionPage: React.FC = () => {
   const [showGoalsSelection, setShowGoalsSelection] = useState(false);
   const [selectedGoal, setSelectedGoal] = useState<string | null>(null);
   const [sessionDuration, setSessionDuration] = useState<number>(10); // Minutes from widget
+  
+  // Profile creation state (for first-time users without a kid profile)
+  const [showProfileCreation, setShowProfileCreation] = useState(false);
+  const [newKidName, setNewKidName] = useState('');
+  const [newKidAge, setNewKidAge] = useState<number | ''>('');
+
+  // Character creation state (selfie + style selection)
+  const [showSelfieCapture, setShowSelfieCapture] = useState(false);
+  const [showStyleSelector, setShowStyleSelector] = useState(false);
+  const [capturedSelfie, setCapturedSelfie] = useState<string | null>(null);
+  const [isGeneratingCharacter, setIsGeneratingCharacter] = useState(false);
+  
+  // Personalized story state
+  const [showStoryLoading, setShowStoryLoading] = useState(false);
+  const [storyLoadingStage, setStoryLoadingStage] = useState<'finding' | 'cover' | 'narration' | 'ready'>('finding');
+  const [showStoryPlayer, setShowStoryPlayer] = useState(false);
+  const [personalizedStoryData, setPersonalizedStoryData] = useState<any>(null);
+  const [usePersonalizedSession, setUsePersonalizedSession] = useState(false);
+
+  // API URL for backend requests
+  const API_URL = import.meta.env.VITE_API_URL || 'https://godlykids-backend.onrender.com';
 
   // Track screen size for responsive background
   useEffect(() => {
@@ -183,6 +213,13 @@ const DailySessionPage: React.FC = () => {
         sessionStorage.removeItem('godlykids_session_goal');
         sessionStorage.removeItem('godlykids_session_goal_date');
         localStorage.removeItem('godlykids_daily_session');
+        
+        // Check if user has no kid profiles - show profile creation first
+        if (kids.length === 0) {
+          setShowProfileCreation(true);
+          setIsLoading(false);
+          return;
+        }
         
         // Show goal selection for new session
         setShowGoalsSelection(true);
@@ -600,6 +637,12 @@ const DailySessionPage: React.FC = () => {
         console.error('📚 No books available. Books loaded:', books?.length, 'booksLoading:', booksLoading);
         alert('Unable to load books. Please check your connection and try again.');
         break;
+      case 'story':
+        // Load personalized devotional story
+        console.log('✨ Starting personalized story for', childName);
+        const goalTag = sessionStorage.getItem('godlykids_session_goal') || selectedGoal || 'faith';
+        loadPersonalizedStory(goalTag);
+        break;
       case 'discussion':
         setShowDiscussionModal(true);
         break;
@@ -719,6 +762,167 @@ const DailySessionPage: React.FC = () => {
     navigate('/home');
   };
 
+  // Handle selfie capture for character creation
+  const handleSelfieCapture = (imageBase64: string) => {
+    setCapturedSelfie(imageBase64);
+    setShowSelfieCapture(false);
+    setShowStyleSelector(true);
+  };
+
+  // Handle character style selection and generation
+  const handleStyleSelect = async (styleId: string) => {
+    if (!capturedSelfie || !currentKid) return;
+    
+    setIsGeneratingCharacter(true);
+    
+    try {
+      const response = await fetch(`${API_URL}/api/character/generate`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          imageBase64: capturedSelfie,
+          styleId,
+          childId: currentKid.id,
+          childName: currentKid.name,
+        }),
+      });
+      
+      if (!response.ok) {
+        throw new Error('Failed to generate character');
+      }
+      
+      const data = await response.json();
+      
+      // Update kid profile with character avatar
+      if (data.characterAvatarUrl) {
+        // Use the updateKid function from context to save the character
+        const { updateKid } = require('../context/UserContext');
+        // Note: This would need proper context access - for now we'll store locally
+        localStorage.setItem(`kid_character_${currentKid.id}`, JSON.stringify({
+          characterAvatar: data.characterAvatarUrl,
+          characterStyle: styleId,
+          originalSelfie: capturedSelfie,
+        }));
+        
+        // Track event
+        activityTrackingService.trackActivity('character_created', {
+          style: styleId,
+          childId: currentKid.id,
+        });
+      }
+      
+      setIsGeneratingCharacter(false);
+      setShowStyleSelector(false);
+      setUsePersonalizedSession(true);
+      
+    } catch (error) {
+      console.error('Character generation error:', error);
+      setIsGeneratingCharacter(false);
+      // Still allow continuing without character
+      setShowStyleSelector(false);
+    }
+  };
+
+  // Load personalized story
+  const loadPersonalizedStory = async (goalTag: string) => {
+    if (!currentKid) return;
+    
+    setShowStoryLoading(true);
+    setStoryLoadingStage('finding');
+    
+    try {
+      // Step 1: Find a random story matching criteria
+      const randomResponse = await fetch(
+        `${API_URL}/api/devotional-stories/random?ageGroup=${getAgeGroup(childAge)}&goalTag=${goalTag}`
+      );
+      
+      if (!randomResponse.ok) {
+        throw new Error('No stories available');
+      }
+      
+      const { story } = await randomResponse.json();
+      
+      // Step 2: Personalize the story
+      setStoryLoadingStage('cover');
+      
+      // Get character avatar if available
+      const characterData = localStorage.getItem(`kid_character_${currentKid.id}`);
+      const characterAvatarUrl = characterData ? JSON.parse(characterData).characterAvatar : null;
+      
+      const personalizeResponse = await fetch(
+        `${API_URL}/api/devotional-stories/${story._id}/personalize`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            childName: currentKid.name,
+            childAge: childAge,
+            characterAvatarUrl,
+          }),
+        }
+      );
+      
+      setStoryLoadingStage('narration');
+      
+      if (!personalizeResponse.ok) {
+        throw new Error('Failed to personalize story');
+      }
+      
+      const personalizedData = await personalizeResponse.json();
+      
+      setStoryLoadingStage('ready');
+      
+      // Brief pause to show "ready" state
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      
+      setPersonalizedStoryData(personalizedData);
+      setShowStoryLoading(false);
+      setShowStoryPlayer(true);
+      
+    } catch (error) {
+      console.error('Error loading personalized story:', error);
+      setShowStoryLoading(false);
+      // Fallback to regular book flow if story loading fails
+      setUsePersonalizedSession(false);
+    }
+  };
+
+  // Helper to get age group string
+  const getAgeGroup = (age: number): string => {
+    if (age <= 6) return '4-6';
+    if (age <= 8) return '6-8';
+    if (age <= 10) return '8-10';
+    if (age <= 12) return '10-12';
+    return 'all';
+  };
+
+  // Handle personalized story completion
+  const handleStoryComplete = () => {
+    setShowStoryPlayer(false);
+    
+    // Complete the story step
+    const updatedSession = completeCurrentStep();
+    setSession(updatedSession);
+    
+    // Store story content for discussion questions
+    if (personalizedStoryData) {
+      setBookContent(personalizedStoryData.content);
+      // Use story's reflection questions if available
+      if (personalizedStoryData.reflectionQuestions?.length > 0) {
+        setDiscussionQuestions(personalizedStoryData.reflectionQuestions);
+      }
+    }
+    
+    // Auto-start next step
+    if (!updatedSession?.completed) {
+      setTimeout(() => {
+        handleStartStep();
+      }, 500);
+    } else {
+      setShowCelebration(true);
+    }
+  };
+
   // Get step status icon
   const getStepStatusIcon = (step: SessionStep, index: number) => {
     if (step.status === 'completed') {
@@ -771,6 +975,140 @@ const DailySessionPage: React.FC = () => {
     );
   }
 
+  // ============== PROFILE CREATION SCREEN (First-time users) ==============
+  if (showProfileCreation) {
+    const handleCreateProfile = () => {
+      if (!newKidName.trim() || !newKidAge) return;
+      
+      // Create the new kid profile
+      const newKid = {
+        id: Date.now().toString(),
+        name: newKidName.trim(),
+        age: typeof newKidAge === 'number' ? newKidAge : parseInt(String(newKidAge), 10),
+        avatar: '/avatars/heads/head-1.png',
+        frame: 'border-[#8B4513]',
+        animation: 'anim-breathe',
+        coins: 500,
+        coinTransactions: [],
+        ownedItems: ['f1', 'anim1'],
+        unlockedVoices: [],
+      };
+      
+      // Add the kid profile
+      addKid(newKid);
+      
+      // Switch to the new profile
+      setTimeout(() => {
+        switchProfile(newKid.id);
+      }, 100);
+      
+      // Track the profile creation
+      activityTrackingService.trackOnboardingEvent('kid_profile_created_from_lesson', {
+        kidId: newKid.id,
+        name: newKid.name,
+        age: newKid.age,
+      });
+      
+      // Move to goals selection
+      setShowProfileCreation(false);
+      setShowGoalsSelection(true);
+    };
+
+    return (
+      <div className="fixed inset-0 flex flex-col z-50 overflow-auto" style={woodBackground}>
+        {/* Safe area top */}
+        <div className="flex-shrink-0" style={{ height: 'var(--safe-area-top, 0px)' }} />
+        
+        {/* Close button */}
+        <button
+          onClick={handleExit}
+          className="absolute top-4 left-4 w-10 h-10 rounded-full bg-black/30 flex items-center justify-center z-10"
+          style={{ marginTop: 'var(--safe-area-top, 0px)' }}
+        >
+          <X className="w-6 h-6 text-white/80" />
+        </button>
+
+        {/* Header Banner */}
+        <div className="flex justify-center pt-4 pb-4">
+          <img 
+            src="/daily-session/dailysessiontitle.png" 
+            alt="Daily Session" 
+            className="h-24 md:h-28 object-contain"
+          />
+        </div>
+        
+        {/* Content */}
+        <div className="flex-1 flex flex-col items-center justify-center px-6">
+          <div className="w-full max-w-md bg-[#5D4037]/60 rounded-2xl p-6 backdrop-blur-sm border-2 border-[#FFD700]/30">
+            <h2 className="text-[#FFD700] font-display font-bold text-2xl text-center mb-2 drop-shadow-lg">
+              Let's Get Started!
+            </h2>
+            <p className="text-[#f3e5ab]/80 text-center mb-6 font-display">
+              Tell us a bit about your child
+            </p>
+            
+            {/* Name Input */}
+            <div className="mb-4">
+              <label className="block text-[#f3e5ab] font-display text-sm mb-2">
+                Child's Name
+              </label>
+              <input
+                type="text"
+                value={newKidName}
+                onChange={(e) => setNewKidName(e.target.value)}
+                placeholder="Enter name"
+                className="w-full px-4 py-3 rounded-xl bg-[#3E2723] border-2 border-[#8B4513] text-white font-display placeholder-white/40 focus:outline-none focus:border-[#FFD700] transition-colors"
+                autoFocus
+              />
+            </div>
+            
+            {/* Age Input */}
+            <div className="mb-6">
+              <label className="block text-[#f3e5ab] font-display text-sm mb-2">
+                Child's Age
+              </label>
+              <input
+                type="number"
+                value={newKidAge}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  if (val === '') {
+                    setNewKidAge('');
+                  } else {
+                    const num = parseInt(val, 10);
+                    if (num >= 1 && num <= 18) {
+                      setNewKidAge(num);
+                    }
+                  }
+                }}
+                placeholder="Enter age (1-18)"
+                min="1"
+                max="18"
+                className="w-full px-4 py-3 rounded-xl bg-[#3E2723] border-2 border-[#8B4513] text-white font-display placeholder-white/40 focus:outline-none focus:border-[#FFD700] transition-colors"
+              />
+            </div>
+            
+            {/* Continue Button */}
+            <button
+              onClick={handleCreateProfile}
+              disabled={!newKidName.trim() || !newKidAge}
+              className={`w-full py-4 rounded-xl font-display font-bold text-lg transition-all transform active:scale-[0.98] ${
+                newKidName.trim() && newKidAge
+                  ? 'bg-gradient-to-r from-[#FFD700] to-[#FFA500] text-[#3E2723] shadow-lg'
+                  : 'bg-[#8B4513]/50 text-white/40 cursor-not-allowed'
+              }`}
+            >
+              Continue
+            </button>
+          </div>
+        </div>
+
+        {/* Safe area bottom */}
+        <div className="flex-shrink-0" style={{ height: 'var(--safe-area-bottom, 0px)' }} />
+      </div>
+    );
+  }
+
   // ============== GOALS SELECTION SCREEN ==============
   if (showGoalsSelection) {
     return (
@@ -799,7 +1137,7 @@ const DailySessionPage: React.FC = () => {
         {/* Question */}
         <div className="text-center px-6 mb-4">
           <h2 className="text-[#FFD700] font-display font-bold text-xl drop-shadow-lg">
-            What would you like to help your child with today?
+            {childName ? `What does ${childName} need today?` : 'What would you like to help your child with today?'}
           </h2>
           <p className="text-[#f3e5ab]/70 text-sm mt-2 font-display">
             Select a learning focus for this session
@@ -1584,6 +1922,44 @@ const DailySessionPage: React.FC = () => {
         isOpen={showCelebration}
         onClose={handleCelebrationClose}
         session={session}
+      />
+
+      {/* Selfie Capture Modal */}
+      <SelfieCapture
+        isOpen={showSelfieCapture}
+        onCapture={handleSelfieCapture}
+        onClose={() => setShowSelfieCapture(false)}
+        childName={childName}
+      />
+
+      {/* Character Style Selector Modal */}
+      <CharacterStyleSelector
+        isOpen={showStyleSelector}
+        selfiePreview={capturedSelfie || undefined}
+        onSelect={handleStyleSelect}
+        onBack={() => {
+          setShowStyleSelector(false);
+          setShowSelfieCapture(true);
+        }}
+        onClose={() => setShowStyleSelector(false)}
+        isGenerating={isGeneratingCharacter}
+        childName={childName}
+      />
+
+      {/* Story Loading Screen */}
+      <StoryLoadingScreen
+        isOpen={showStoryLoading}
+        childName={childName}
+        stage={storyLoadingStage}
+      />
+
+      {/* Personalized Story Player */}
+      <PersonalizedStoryPlayer
+        isOpen={showStoryPlayer}
+        onClose={() => setShowStoryPlayer(false)}
+        onComplete={handleStoryComplete}
+        storyData={personalizedStoryData}
+        childName={childName}
       />
     </div>
   );

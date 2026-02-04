@@ -295,6 +295,11 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
     headScale?: number;
     bodyScale?: number;
     hatScale?: number;
+    
+    // Character avatar for personalized stories
+    characterAvatar?: string;    // URL to AI-generated character image
+    characterStyle?: string;     // Style used (minecraft, lego, cartoon, etc.)
+    originalSelfie?: string;     // Base64 of original selfie for regeneration
   };
 
   const [parentName, setParentName] = useState<string>(saved?.parentName ?? 'Parent');

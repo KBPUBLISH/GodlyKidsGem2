@@ -126,6 +126,12 @@ app.use('/api/hub', require('./routes/hub'));
 // Surveys & Feedback
 app.use('/api/survey', require('./routes/survey'));
 
+// Character Generation (Personalized Stories)
+app.use('/api/character', require('./routes/character'));
+
+// Devotional Stories (Personalized Stories)
+app.use('/api/devotional-stories', require('./routes/devotional-stories'));
+
 // ===========================================
 // HEALTH & STATUS ENDPOINTS
 // ===========================================

@@ -132,6 +132,9 @@ app.use('/api/character', require('./routes/character'));
 // Devotional Stories (Personalized Stories)
 app.use('/api/devotional-stories', require('./routes/devotional-stories'));
 
+// Background Music Library (for Devotional Stories)
+app.use('/api/background-music', require('./routes/background-music'));
+
 // ===========================================
 // HEALTH & STATUS ENDPOINTS
 // ===========================================

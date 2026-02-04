@@ -1,6 +1,6 @@
 import React from 'react';
 import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom';
-import { Book, Music, Layout as LayoutIcon, Home, Tag, Volume2, Gamepad2, Video, LogOut, Bell, Music2, Star, CalendarDays, BarChart3, Library, Sparkles, TrendingUp, Radio, Mail, Heart, Users, ClipboardCheck, ShoppingCart, BookHeart } from 'lucide-react';
+import { Book, Music, Layout as LayoutIcon, Home, Tag, Volume2, Gamepad2, Video, LogOut, Bell, Music2, Star, CalendarDays, BarChart3, Library, Sparkles, TrendingUp, Radio, Mail, Heart, Users, ClipboardCheck, ShoppingCart, BookHeart, Disc } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 
 const Layout: React.FC = () => {
@@ -27,6 +27,7 @@ const Layout: React.FC = () => {
         { path: '/lessons', icon: Video, label: 'Lessons' },
         { path: '/lessons/calendar', icon: CalendarDays, label: 'Lesson Calendar' },
         { path: '/devotional-stories', icon: BookHeart, label: 'Devotional Stories' },
+        { path: '/background-music', icon: Disc, label: 'Story Music Library' },
         { path: '/categories', icon: Tag, label: 'Categories' },
         { path: '/voices', icon: Volume2, label: 'Voices' },
         { path: '/games', icon: Gamepad2, label: 'Games' },

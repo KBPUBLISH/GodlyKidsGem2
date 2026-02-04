@@ -4,6 +4,7 @@ const mongoose = require('mongoose');
 const crypto = require('crypto');
 const fetch = require('node-fetch');
 const DevotionalStory = require('../models/DevotionalStory');
+const BackgroundMusic = require('../models/BackgroundMusic');
 const { bucket } = require('../config/storage');
 const { generateElevenLabsTTS, getVoiceOptions, VOICE_OPTIONS } = require('../utils/elevenLabsTTS');
 
@@ -245,6 +246,21 @@ router.post('/:id/personalize', async (req, res) => {
             }
         }
         
+        // Get background music - either from story or auto-select from library
+        let backgroundMusicUrl = story.backgroundMusicUrl;
+        if (!backgroundMusicUrl && story.goalTags && story.goalTags.length > 0) {
+            console.log('🎵 Auto-selecting background music for goals:', story.goalTags);
+            try {
+                const music = await BackgroundMusic.findForGoals(story.goalTags);
+                if (music) {
+                    backgroundMusicUrl = music.audioUrl;
+                    console.log(`🎵 Auto-selected music: ${music.name}`);
+                }
+            } catch (musicErr) {
+                console.error('Failed to auto-select music:', musicErr.message);
+            }
+        }
+        
         const result = {
             storyId: story._id,
             title: personalized.title,
@@ -254,7 +270,7 @@ router.post('/:id/personalize', async (req, res) => {
             ttsAudioUrl: ttsResult?.url || null,
             estimatedDuration: ttsResult?.duration || story.estimatedDuration * 60,
             coverImageUrl: coverUrl,
-            backgroundMusicUrl: story.backgroundMusicUrl,
+            backgroundMusicUrl,
             reflectionQuestions: personalized.reflectionQuestions,
         };
         

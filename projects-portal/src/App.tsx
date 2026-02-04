@@ -41,6 +41,7 @@ import CampaignForm from './pages/CampaignForm';
 import CampaignUpdates from './pages/CampaignUpdates';
 import DevotionalStories from './pages/DevotionalStories';
 import DevotionalStoryForm from './pages/DevotionalStoryForm';
+import BackgroundMusicLibrary from './pages/BackgroundMusicLibrary';
 
 // Godly Hub - Creator Portal
 import CreatorLogin from './pages/CreatorLogin';
@@ -128,6 +129,7 @@ function App() {
             <Route path="devotional-stories" element={<DevotionalStories />} />
             <Route path="devotional-stories/new" element={<DevotionalStoryForm />} />
             <Route path="devotional-stories/:id" element={<DevotionalStoryForm />} />
+            <Route path="background-music" element={<BackgroundMusicLibrary />} />
             
             {/* Godly Hub Admin */}
             <Route path="hub/creators" element={<HubCreators />} />

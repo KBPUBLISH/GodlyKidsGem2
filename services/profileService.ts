@@ -16,6 +16,9 @@ export interface CloudProfile {
     characterAvatar?: string;    // URL to AI-generated character image
     characterStyle?: string;     // Style used (minecraft, lego, cartoon, etc.)
     originalSelfie?: string;     // Base64 of original selfie for regeneration
+    // Narrator preferences
+    preferredNarratorId?: string;    // ElevenLabs voice ID
+    preferredNarratorName?: string;  // Display name of the narrator
   }>;
   coins: number;
   equippedAvatar: any;

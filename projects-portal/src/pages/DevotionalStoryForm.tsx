@@ -27,7 +27,18 @@ interface StoryFormData {
     preferredVoice: string;
 }
 
-const VOICES = ['Kore', 'Aoede', 'Leda', 'Charon', 'Fenrir', 'Orus', 'Puck', 'Zephyr'];
+// ElevenLabs voices for story narration
+const VOICES = [
+    { id: '21m00Tcm4TlvDq8ikWAM', name: 'Rachel', gender: 'female', description: 'Calm, warm' },
+    { id: 'EXAVITQu4vr4xnSDxMaL', name: 'Bella', gender: 'female', description: 'Soft, friendly' },
+    { id: 'XB0fDUnXU5powFXDhCwa', name: 'Charlotte', gender: 'female', description: 'Expressive, youthful' },
+    { id: 'XrExE9yKIg1WjnnlVkGX', name: 'Matilda', gender: 'female', description: 'Warm, nurturing' },
+    { id: 'oWAxZDx7w5VEj9dCyTzz', name: 'Grace', gender: 'female', description: 'Gentle, soothing' },
+    { id: 'pNInz6obpgDQGcFmaJgB', name: 'Adam', gender: 'male', description: 'Deep, warm' },
+    { id: 'TxGEqnHWrfWFTfGW9XjX', name: 'Josh', gender: 'male', description: 'Young, energetic' },
+    { id: 'onwK4e9ZLuTAKqWW03F9', name: 'Daniel', gender: 'male', description: 'British, clear' },
+    { id: 'N2lVS1w4EtoT3dr4eOWO', name: 'Callum', gender: 'male', description: 'Hoarse, storyteller' },
+];
 const AGE_GROUPS = ['4-6', '6-8', '8-10', '10-12', 'all'];
 const GOAL_TAGS = ['courage', 'faith', 'gratitude', 'love', 'obedience', 'self-control', 'theology', 'wisdom'];
 
@@ -431,7 +442,7 @@ const DevotionalStoryForm: React.FC = () => {
 
                         <div>
                             <label className="block text-sm font-medium text-gray-700 mb-1">
-                                Preferred Voice (optional)
+                                Preferred Voice (ElevenLabs)
                             </label>
                             <select
                                 name="preferredVoice"
@@ -439,9 +450,11 @@ const DevotionalStoryForm: React.FC = () => {
                                 onChange={handleChange}
                                 className="w-full border rounded-lg px-4 py-2"
                             >
-                                <option value="">Auto-select</option>
+                                <option value="">Auto-select (Rachel)</option>
                                 {VOICES.map(voice => (
-                                    <option key={voice} value={voice}>{voice}</option>
+                                    <option key={voice.id} value={voice.id}>
+                                        {voice.name} - {voice.description} ({voice.gender})
+                                    </option>
                                 ))}
                             </select>
                         </div>

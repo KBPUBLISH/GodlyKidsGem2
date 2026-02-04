@@ -85,10 +85,10 @@ const devotionalStorySchema = new mongoose.Schema({
         emoji: String,
     }],
     
-    // TTS voice preference (optional override)
+    // TTS voice preference (ElevenLabs voice ID)
     preferredVoice: {
         type: String,
-        enum: ['Kore', 'Aoede', 'Leda', 'Charon', 'Fenrir', 'Orus', 'Puck', 'Zephyr'],
+        // No enum restriction - accepts any ElevenLabs voice ID
     },
     
     // Track usage

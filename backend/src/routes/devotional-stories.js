@@ -5,7 +5,7 @@ const crypto = require('crypto');
 const fetch = require('node-fetch');
 const DevotionalStory = require('../models/DevotionalStory');
 const { bucket } = require('../config/storage');
-const { generateTTS, addEmotionalCues } = require('../utils/geminiTTS');
+const { generateElevenLabsTTS, getVoiceOptions, VOICE_OPTIONS } = require('../utils/elevenLabsTTS');
 
 // Cache for personalized content (to avoid regenerating same content)
 const personalizedCache = new Map();
@@ -20,6 +20,43 @@ setInterval(() => {
         }
     }
 }, 60 * 60 * 1000); // Every hour
+
+// GET /api/devotional-stories/voices
+// Get available ElevenLabs voices for story narration
+router.get('/voices', (req, res) => {
+    res.json({ voices: VOICE_OPTIONS });
+});
+
+// POST /api/devotional-stories/preview-voice
+// Generate a short TTS preview for voice selection
+router.post('/preview-voice', async (req, res) => {
+    try {
+        const { voiceId, text } = req.body;
+        
+        if (!voiceId || !text) {
+            return res.status(400).json({ error: 'voiceId and text are required' });
+        }
+        
+        // Limit preview text length
+        const previewText = text.slice(0, 200);
+        
+        console.log(`🎙️ Generating voice preview for ${voiceId}...`);
+        
+        const result = await generateElevenLabsTTS(previewText, {
+            voiceId,
+            storagePath: 'devotional-stories/previews',
+            filenamePrefix: `preview_${voiceId.slice(0, 8)}`,
+            stability: 0.5,
+            similarityBoost: 0.75,
+            style: 0.2
+        });
+        
+        res.json({ audioUrl: result.url });
+    } catch (err) {
+        console.error('Error generating voice preview:', err);
+        res.status(500).json({ error: 'Failed to generate preview' });
+    }
+});
 
 // GET /api/devotional-stories
 // List all stories (for portal)
@@ -165,8 +202,9 @@ router.post('/:id/personalize', async (req, res) => {
             return res.status(404).json({ error: 'Story not found' });
         }
         
-        // Check cache first
-        const cacheKey = `${story._id}_${childName}_${story.updatedAt.getTime()}`;
+        // Check cache first (include voice preference in cache key)
+        const effectiveVoice = voicePreference || story.preferredVoice || 'auto';
+        const cacheKey = `${story._id}_${childName}_${effectiveVoice}_${story.updatedAt.getTime()}`;
         const cached = personalizedCache.get(cacheKey);
         if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
             console.log(`📚 Using cached personalized story for ${childName}`);
@@ -178,14 +216,17 @@ router.post('/:id/personalize', async (req, res) => {
         // Personalize content
         const personalized = story.personalizeContent(childName);
         
-        // Generate TTS audio
-        console.log('🎙️ Generating TTS narration...');
-        const ttsText = addEmotionalCues(personalized.content, 'warm');
-        const ttsResult = await generateTTS(ttsText, {
-            voice: story.preferredVoice || voicePreference,
-            gender: 'female', // Default to female for story narration
+        // Generate TTS audio using ElevenLabs
+        // Priority: User's voice preference > Story's default voice > Auto-select
+        const voiceId = voicePreference || story.preferredVoice || null;
+        console.log(`🎙️ Generating ElevenLabs TTS narration (voice: ${voiceId || 'auto'})...`);
+        const ttsResult = await generateElevenLabsTTS(personalized.content, {
+            voiceId,
             storagePath: 'devotional-stories/tts',
-            filenamePrefix: `story_${story._id}_${childName.replace(/\s+/g, '_')}`
+            filenamePrefix: `story_${story._id}_${childName.replace(/\s+/g, '_')}`,
+            stability: 0.5,
+            similarityBoost: 0.75,
+            style: 0.3 // More expressive for storytelling
         });
         
         // Generate cover image if we have character avatar

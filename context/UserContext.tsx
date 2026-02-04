@@ -300,6 +300,10 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
     characterAvatar?: string;    // URL to AI-generated character image
     characterStyle?: string;     // Style used (minecraft, lego, cartoon, etc.)
     originalSelfie?: string;     // Base64 of original selfie for regeneration
+    
+    // Narrator preferences for story reading
+    preferredNarratorId?: string;    // ElevenLabs voice ID
+    preferredNarratorName?: string;  // Display name of the narrator
   };
 
   const [parentName, setParentName] = useState<string>(saved?.parentName ?? 'Parent');

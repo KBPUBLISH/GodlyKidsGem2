@@ -7,6 +7,7 @@ import DiscussionQuestionsModal from '../components/modals/DiscussionQuestionsMo
 import DailyVerseModal from '../components/modals/DailyVerseModal';
 import SelfieCapture from '../components/features/SelfieCapture';
 import CharacterStyleSelector from '../components/features/CharacterStyleSelector';
+import NarratorSelector from '../components/features/NarratorSelector';
 import PersonalizedStoryPlayer from '../components/features/PersonalizedStoryPlayer';
 import StoryLoadingScreen from '../components/features/StoryLoadingScreen';
 import { useUser } from '../context/UserContext';
@@ -96,6 +97,7 @@ const DailySessionPage: React.FC = () => {
     kids,
     currentProfileId,
     addKid,
+    updateKid,
     switchProfile,
   } = useUser();
   
@@ -143,6 +145,7 @@ const DailySessionPage: React.FC = () => {
   // Character creation state (selfie + style selection)
   const [showSelfieCapture, setShowSelfieCapture] = useState(false);
   const [showStyleSelector, setShowStyleSelector] = useState(false);
+  const [showNarratorSelector, setShowNarratorSelector] = useState(false);
   const [capturedSelfie, setCapturedSelfie] = useState<string | null>(null);
   const [isGeneratingCharacter, setIsGeneratingCharacter] = useState(false);
   
@@ -795,14 +798,12 @@ const DailySessionPage: React.FC = () => {
       
       // Update kid profile with character avatar
       if (data.characterAvatarUrl) {
-        // Use the updateKid function from context to save the character
-        const { updateKid } = require('../context/UserContext');
-        // Note: This would need proper context access - for now we'll store locally
-        localStorage.setItem(`kid_character_${currentKid.id}`, JSON.stringify({
+        // Update kid profile with character data
+        updateKid(currentKid.id, {
           characterAvatar: data.characterAvatarUrl,
           characterStyle: styleId,
           originalSelfie: capturedSelfie,
-        }));
+        });
         
         // Track event
         activityTrackingService.trackActivity('character_created', {
@@ -813,14 +814,48 @@ const DailySessionPage: React.FC = () => {
       
       setIsGeneratingCharacter(false);
       setShowStyleSelector(false);
-      setUsePersonalizedSession(true);
+      
+      // Check if kid already has a narrator selected
+      if (currentKid.preferredNarratorId) {
+        // Already has narrator, go straight to personalized session
+        setUsePersonalizedSession(true);
+      } else {
+        // Show narrator selection
+        setShowNarratorSelector(true);
+      }
       
     } catch (error) {
       console.error('Character generation error:', error);
       setIsGeneratingCharacter(false);
-      // Still allow continuing without character
+      // Still allow continuing - show narrator selection
       setShowStyleSelector(false);
+      if (!currentKid?.preferredNarratorId) {
+        setShowNarratorSelector(true);
+      } else {
+        setUsePersonalizedSession(true);
+      }
     }
+  };
+
+  // Handle narrator selection
+  const handleNarratorSelect = (narratorId: string, narratorName: string) => {
+    if (!currentKid) return;
+    
+    // Update kid profile with narrator preference
+    updateKid(currentKid.id, {
+      preferredNarratorId: narratorId,
+      preferredNarratorName: narratorName,
+    });
+    
+    // Track event
+    activityTrackingService.trackActivity('narrator_selected', {
+      narratorId,
+      narratorName,
+      childId: currentKid.id,
+    });
+    
+    setShowNarratorSelector(false);
+    setUsePersonalizedSession(true);
   };
 
   // Load personalized story
@@ -845,9 +880,11 @@ const DailySessionPage: React.FC = () => {
       // Step 2: Personalize the story
       setStoryLoadingStage('cover');
       
-      // Get character avatar if available
-      const characterData = localStorage.getItem(`kid_character_${currentKid.id}`);
-      const characterAvatarUrl = characterData ? JSON.parse(characterData).characterAvatar : null;
+      // Get character avatar from kid profile
+      const characterAvatarUrl = currentKid.characterAvatar || null;
+      
+      // Get narrator preference from kid profile
+      const voicePreference = currentKid.preferredNarratorId || null;
       
       const personalizeResponse = await fetch(
         `${API_URL}/api/devotional-stories/${story._id}/personalize`,
@@ -858,6 +895,7 @@ const DailySessionPage: React.FC = () => {
             childName: currentKid.name,
             childAge: childAge,
             characterAvatarUrl,
+            voicePreference, // Use kid's preferred narrator
           }),
         }
       );
@@ -1945,6 +1983,21 @@ const DailySessionPage: React.FC = () => {
         isGenerating={isGeneratingCharacter}
         childName={childName}
       />
+
+      {/* Narrator Selector Modal */}
+      {showNarratorSelector && (
+        <div className="fixed inset-0 z-50">
+          <NarratorSelector
+            kidName={childName}
+            currentNarratorId={currentKid?.preferredNarratorId}
+            onSelect={handleNarratorSelect}
+            onBack={() => {
+              setShowNarratorSelector(false);
+              setShowStyleSelector(true);
+            }}
+          />
+        </div>
+      )}
 
       {/* Story Loading Screen */}
       <StoryLoadingScreen

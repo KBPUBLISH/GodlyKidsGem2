@@ -116,6 +116,7 @@ app.use('/api/campaigns', require('./routes/campaigns'));
 app.use('/api/donations', require('./routes/donations'));
 app.use('/api/campaign-updates', require('./routes/campaignUpdates'));
 app.use('/api/app-user', require('./routes/appUser'));
+app.use('/api/amazon-books', require('./routes/amazonBooks'));
 
 // Godly Hub - Creator marketplace
 app.use('/api/creator', authLimiter, require('./routes/creatorAuth'));

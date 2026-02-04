@@ -1,7 +1,7 @@
 
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { Book } from '../../types';
-import { BookOpen, Music } from 'lucide-react';
+import { BookOpen, Music, ShoppingCart } from 'lucide-react';
 import { ApiService } from '../../services/apiService';
 
 // Simple localStorage cache for page images (survives app restarts - 24hr TTL)
@@ -28,14 +28,18 @@ interface FeaturedItem extends Partial<Book> {
   title: string;
   coverUrl?: string;
   coverImage?: string;
-  _itemType?: 'book' | 'playlist' | 'episode';
+  _itemType?: 'book' | 'playlist' | 'episode' | 'amazonBook';
   _playlistId?: string;
   _itemIndex?: number;
+  _amazonUrl?: string;
+  badgeText?: string;
+  badgeColor?: string;
+  price?: string;
 }
 
 interface FeaturedCarouselProps {
   books: FeaturedItem[];
-  onBookClick: (id: string, isPlaylist?: boolean) => void;
+  onBookClick: (id: string, isPlaylist?: boolean, isAmazonBook?: boolean, amazonUrl?: string) => void;
 }
 
 // OPTIMIZED Page Preview - Simple crossfade between cover and ONE page
@@ -186,6 +190,7 @@ const FeaturedCarousel: React.FC<FeaturedCarouselProps> = ({ books, onBookClick 
 
   const isPlaylist = (item: FeaturedItem) => item._itemType === 'playlist';
   const isEpisode = (item: FeaturedItem) => item._itemType === 'episode';
+  const isAmazonBook = (item: FeaturedItem) => item._itemType === 'amazonBook';
 
   const scrollToIndex = useCallback((index: number) => {
     if (scrollRef.current) {
@@ -233,6 +238,7 @@ const FeaturedCarousel: React.FC<FeaturedCarouselProps> = ({ books, onBookClick 
           const itemId = item.id || item._id || '';
           const itemIsPlaylist = isPlaylist(item);
           const itemIsEpisode = isEpisode(item);
+          const itemIsAmazonBook = isAmazonBook(item);
           const isActive = index === activeIndex;
           const coverUrl = getImageSrc(item);
 
@@ -241,7 +247,10 @@ const FeaturedCarousel: React.FC<FeaturedCarouselProps> = ({ books, onBookClick 
               key={itemId}
               className="flex-shrink-0 w-full h-full snap-center relative flex flex-col items-center justify-center"
               onClick={() => {
-                if (itemIsEpisode && item._playlistId !== undefined && item._itemIndex !== undefined) {
+                if (itemIsAmazonBook && item._amazonUrl) {
+                  // For Amazon books, pass the amazon URL for webview
+                  onBookClick(itemId, false, true, item._amazonUrl);
+                } else if (itemIsEpisode && item._playlistId !== undefined && item._itemIndex !== undefined) {
                   // For episodes, navigate to the specific track in the playlist
                   onBookClick(`${item._playlistId}/${item._itemIndex}`, true);
                 } else {
@@ -269,8 +278,8 @@ const FeaturedCarousel: React.FC<FeaturedCarouselProps> = ({ books, onBookClick 
               <div className="relative z-10 transform transition-transform active:scale-95 duration-200 px-6 py-4 w-full h-full flex items-center justify-center">
                 <div className="w-full max-w-[85%] sm:max-w-[75%] md:max-w-[70%] aspect-square rounded-lg shadow-2xl relative overflow-visible">
                   
-                  {/* Use SimplePagePreview for books, static image for playlists and episodes */}
-                  {(itemIsPlaylist || itemIsEpisode) ? (
+                  {/* Use SimplePagePreview for books, static image for playlists, episodes, and Amazon books */}
+                  {(itemIsPlaylist || itemIsEpisode || itemIsAmazonBook) ? (
                     <img
                       src={coverUrl || '/assets/images/placeholder-book.png'}
                       alt={item.title}
@@ -294,9 +303,31 @@ const FeaturedCarousel: React.FC<FeaturedCarouselProps> = ({ books, onBookClick 
                     )
                   )}
 
+                  {/* Badge for Amazon books */}
+                  {itemIsAmazonBook && item.badgeText && (
+                    <div 
+                      className="absolute top-2 left-2 px-2 py-1 rounded-full text-white text-xs font-bold shadow-lg z-30"
+                      style={{ backgroundColor: item.badgeColor || '#f59e0b' }}
+                    >
+                      {item.badgeText}
+                    </div>
+                  )}
+
+                  {/* Price tag for Amazon books */}
+                  {itemIsAmazonBook && item.price && (
+                    <div className="absolute top-2 right-2 bg-green-600 text-white text-xs font-bold px-2 py-1 rounded-full shadow-lg z-30">
+                      {item.price}
+                    </div>
+                  )}
+
                   {/* Action Button */}
                   <div className="absolute bottom-3 right-3 bg-white/95 backdrop-blur-md text-black text-xs md:text-sm font-bold px-4 py-1.5 rounded-full flex items-center gap-2 shadow-lg hover:bg-white transition-colors z-30">
-                    {(itemIsPlaylist || itemIsEpisode) ? (
+                    {itemIsAmazonBook ? (
+                      <>
+                        <ShoppingCart size={14} className="md:w-4 md:h-4" />
+                        <span>Shop</span>
+                      </>
+                    ) : (itemIsPlaylist || itemIsEpisode) ? (
                       <>
                         <Music size={14} fill="currentColor" className="md:w-4 md:h-4" />
                         <span>Listen</span>

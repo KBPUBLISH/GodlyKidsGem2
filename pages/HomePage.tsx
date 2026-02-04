@@ -1605,8 +1605,13 @@ const HomePage: React.FC = () => {
             />
             <FeaturedCarousel 
               books={featuredBooks} 
-              onBookClick={(id, isPlaylist) => {
-                if (isPlaylist) {
+              onBookClick={(id, isPlaylist, isAmazonBook, amazonUrl) => {
+                if (isAmazonBook && amazonUrl) {
+                  // Track the click for analytics
+                  ApiService.trackAmazonBookClick(id);
+                  // Navigate to webview with Amazon URL
+                  navigate(`/game?url=${encodeURIComponent(amazonUrl)}&name=${encodeURIComponent('Shop on Amazon')}`);
+                } else if (isPlaylist) {
                   navigate(`/audio/playlist/${id}`);
                 } else {
                   handleBookClick(id);

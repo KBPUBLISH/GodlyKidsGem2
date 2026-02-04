@@ -1,5 +1,5 @@
 import { API_BASE_URL, MOCK_BOOKS } from '../constants';
-import { Book, FeaturedEpisode } from '../types';
+import { Book, FeaturedEpisode, AmazonBook } from '../types';
 import { authService } from './authService';
 import { DespiaService } from './despiaService';
 
@@ -492,20 +492,21 @@ export const ApiService = {
     }
   },
 
-  getFeaturedContent: async (): Promise<Array<Book | Playlist>> => {
+  getFeaturedContent: async (): Promise<Array<Book | Playlist | AmazonBook>> => {
     const cacheKey = 'featured_content';
-    const cached = getCached<Array<Book | Playlist>>(cacheKey);
+    const cached = getCached<Array<Book | Playlist | AmazonBook>>(cacheKey);
     // Only use cache if it has at least 2 items (prevents stale cache on mobile)
     if (cached && cached.length >= 2) return cached;
 
     try {
-      const [featuredBooks, featuredPlaylists, featuredEpisodes] = await Promise.all([
+      const [featuredBooks, featuredPlaylists, featuredEpisodes, featuredAmazonBooks] = await Promise.all([
         ApiService.getFeaturedBooks(),
         ApiService.getFeaturedPlaylists(),
         ApiService.getFeaturedEpisodes(),
+        ApiService.getFeaturedAmazonBooks(),
       ]);
 
-      // Combine books, playlists, and featured episodes
+      // Combine books, playlists, featured episodes, and Amazon books
       const combined: any[] = [
         ...featuredBooks.map(b => ({ ...b, _itemType: 'book' as const })),
         ...featuredPlaylists.map(p => ({ ...p, _itemType: 'playlist' as const })),
@@ -521,6 +522,14 @@ export const ApiService = {
           _playlistId: e.playlist._id,
           _itemIndex: e.itemIndex,
           featuredOrder: e.featuredOrder || 100,
+        })),
+        // Add featured Amazon books (they navigate to webview with Amazon URL)
+        ...featuredAmazonBooks.map(ab => ({
+          ...ab,
+          id: ab._id,
+          coverUrl: ab.coverImage,
+          _itemType: 'amazonBook' as const,
+          _amazonUrl: ab.amazonUrl,
         })),
       ];
 
@@ -559,6 +568,44 @@ export const ApiService = {
     } catch (error) {
       console.warn("Failed to fetch featured episodes:", error);
       return [];
+    }
+  },
+
+  // Get featured Amazon books for carousel
+  getFeaturedAmazonBooks: async (): Promise<AmazonBook[]> => {
+    const cacheKey = 'featured_amazon_books';
+    const cached = getCached<AmazonBook[]>(cacheKey);
+    if (cached) return cached;
+
+    try {
+      const baseUrl = getApiBaseUrl();
+      const response = await fetchWithTimeout(`${baseUrl}amazon-books/featured`, {
+        method: 'GET',
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        const result = Array.isArray(data) ? data : [];
+        setCache(cacheKey, result);
+        console.log(`📚 Featured Amazon books loaded: ${result.length} items`);
+        return result;
+      }
+      return [];
+    } catch (error) {
+      console.warn("Failed to fetch featured Amazon books:", error);
+      return [];
+    }
+  },
+
+  // Track Amazon book click
+  trackAmazonBookClick: async (bookId: string): Promise<void> => {
+    try {
+      const baseUrl = getApiBaseUrl();
+      await fetchWithTimeout(`${baseUrl}amazon-books/${bookId}/click`, {
+        method: 'POST',
+      });
+    } catch (error) {
+      console.warn("Failed to track Amazon book click:", error);
     }
   },
 

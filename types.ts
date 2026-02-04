@@ -60,6 +60,29 @@ export interface FeaturedEpisode {
   itemIndex: number;
 }
 
+export interface AmazonBook {
+  _id: string;
+  title: string;
+  author: string;
+  description?: string;
+  amazonUrl: string;
+  asin?: string;
+  price?: string;
+  coverImage: string;
+  category?: string;
+  categories?: string[];
+  minAge?: number;
+  maxAge?: number;
+  status?: string;
+  isFeatured?: boolean;
+  featuredOrder?: number;
+  badgeText?: string;
+  badgeColor?: string;
+  clickCount?: number;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
 export interface User {
   id: string;
   name: string;

@@ -638,9 +638,10 @@ const PremiumOnboarding: React.FC<PremiumOnboardingProps> = ({ isOpen, onComplet
   // Get book covers for the carousel (up to 12 books)
   const bookCovers = React.useMemo(() => {
     return books
-      .filter(book => book.coverUrl && book.coverUrl.trim() !== '')
+      .filter(book => book?.coverUrl && typeof book.coverUrl === 'string' && book.coverUrl.trim() !== '')
       .slice(0, 12)
-      .map(book => book.coverUrl);
+      .map(book => book.coverUrl)
+      .filter((url): url is string => !!url); // Extra safety filter
   }, [books]);
   
   // Create screens with dynamic book covers and voice characters

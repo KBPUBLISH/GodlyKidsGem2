@@ -295,6 +295,7 @@ router.post('/:id/personalize', async (req, res) => {
             ttsAudioUrl: ttsResult?.url || null,
             estimatedDuration: ttsResult?.duration || story.estimatedDuration * 60,
             coverImageUrl: coverUrl,
+            sceneImageUrl: story.sceneImageUrl || null,
             backgroundMusicUrl,
             reflectionQuestions: personalized.reflectionQuestions,
             isIllustrated: story.isIllustrated,
@@ -501,5 +502,134 @@ router.post('/:id/upload-music', async (req, res) => {
         res.status(500).json({ error: 'Failed to upload music' });
     }
 });
+
+// POST /api/devotional-stories/:id/generate-scene
+// Generate AI scene image for audio story player
+router.post('/:id/generate-scene', async (req, res) => {
+    try {
+        const { customPrompt } = req.body;
+        
+        const story = await DevotionalStory.findById(req.params.id);
+        if (!story) {
+            return res.status(404).json({ error: 'Story not found' });
+        }
+        
+        // Build prompt from story content or use custom prompt
+        let basePrompt = customPrompt || story.sceneImagePrompt;
+        
+        if (!basePrompt) {
+            // Auto-generate prompt from story details
+            const storyContent = story.content || story.description || '';
+            const contentPreview = storyContent.slice(0, 200).replace(/\{childName\}/g, 'a child');
+            
+            basePrompt = `${story.title.replace(/\{childName\}/g, 'a child')}: ${contentPreview}`;
+        }
+        
+        const enhancedPrompt = `${basePrompt}. 
+        Children's book illustration style, beautiful warm colors, inviting scene, 
+        Bible story setting, soft lighting, suitable for children ages 4-12, 
+        no text overlays, peaceful atmosphere, Christian faith theme.`;
+        
+        console.log(`🎨 Generating scene image for story "${story.title}"...`);
+        console.log(`📝 Prompt: ${enhancedPrompt.slice(0, 200)}...`);
+        
+        const sceneImageUrl = await generateSceneImage(story._id, enhancedPrompt);
+        
+        // Save the scene image URL and prompt to the story
+        story.sceneImageUrl = sceneImageUrl;
+        if (customPrompt) {
+            story.sceneImagePrompt = customPrompt;
+        }
+        await story.save();
+        
+        console.log(`✅ Scene image generated: ${sceneImageUrl}`);
+        
+        res.json({ 
+            story,
+            sceneImageUrl 
+        });
+    } catch (err) {
+        console.error('Error generating scene image:', err);
+        res.status(500).json({ error: 'Failed to generate scene image', message: err.message });
+    }
+});
+
+// Helper: Generate scene image using Imagen
+async function generateSceneImage(storyId, prompt) {
+    const credentialsJson = process.env.GCS_CREDENTIALS_JSON || process.env.GOOGLE_SERVICE_ACCOUNT_JSON;
+    if (!credentialsJson) {
+        throw new Error('GCS credentials not configured');
+    }
+    
+    try {
+        const credentials = JSON.parse(credentialsJson);
+        const projectId = credentials.project_id;
+        
+        // Get access token
+        const { GoogleAuth } = require('google-auth-library');
+        const auth = new GoogleAuth({
+            credentials,
+            scopes: ['https://www.googleapis.com/auth/cloud-platform']
+        });
+        const client = await auth.getClient();
+        const token = await client.getAccessToken();
+        
+        const response = await fetch(
+            `https://us-central1-aiplatform.googleapis.com/v1/projects/${projectId}/locations/us-central1/publishers/google/models/imagen-3.0-generate-001:predict`,
+            {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token.token}`
+                },
+                body: JSON.stringify({
+                    instances: [{ prompt }],
+                    parameters: {
+                        sampleCount: 1,
+                        aspectRatio: "16:9", // Wide aspect for background
+                        safetyFilterLevel: "block_some",
+                        personGeneration: "dont_allow" // Safer for children's content
+                    }
+                })
+            }
+        );
+        
+        if (!response.ok) {
+            const errorText = await response.text();
+            throw new Error(`Imagen API error: ${errorText}`);
+        }
+        
+        const data = await response.json();
+        
+        if (!data.predictions || !data.predictions[0]) {
+            throw new Error('No image generated');
+        }
+        
+        const imageBase64 = data.predictions[0].bytesBase64Encoded;
+        const buffer = Buffer.from(imageBase64, 'base64');
+        
+        // Save to GCS
+        const hash = crypto.createHash('md5').update(storyId + Date.now()).digest('hex').slice(0, 12);
+        const filename = `devotional-stories/scenes/scene_${storyId}_${hash}.png`;
+        
+        if (bucket) {
+            const blob = bucket.file(filename);
+            await blob.save(buffer, {
+                metadata: {
+                    contentType: 'image/png',
+                    cacheControl: 'public, max-age=86400'
+                }
+            });
+            await blob.makePublic();
+            
+            return `https://storage.googleapis.com/${bucket.name}/${filename}`;
+        }
+        
+        throw new Error('GCS bucket not available');
+    } catch (err) {
+        console.error('Scene image generation error:', err.message);
+        throw err;
+    }
+}
 
 module.exports = router;

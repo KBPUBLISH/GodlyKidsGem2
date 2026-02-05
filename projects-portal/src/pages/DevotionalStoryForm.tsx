@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Save, Upload, Music, Eye, Sparkles, Plus, Trash2, Book, HelpCircle } from 'lucide-react';
+import { ArrowLeft, Save, Upload, Music, Eye, Sparkles, Plus, Trash2, Book, HelpCircle, Image, RefreshCw } from 'lucide-react';
 import apiClient from '../services/apiClient';
 
 interface ReflectionQuestion {
@@ -22,6 +22,8 @@ interface StoryFormData {
     estimatedDuration: number;
     coverPrompt: string;
     defaultCoverUrl: string;
+    sceneImageUrl: string;
+    sceneImagePrompt: string;
     status: 'draft' | 'published' | 'archived';
     reflectionQuestions: ReflectionQuestion[];
     preferredVoice: string;
@@ -50,6 +52,7 @@ const DevotionalStoryForm: React.FC = () => {
     const [loading, setLoading] = useState(false);
     const [fetching, setFetching] = useState(!!id);
     const [uploadingMusic, setUploadingMusic] = useState(false);
+    const [generatingScene, setGeneratingScene] = useState(false);
     const [showPreview, setShowPreview] = useState(false);
     const musicInputRef = useRef<HTMLInputElement>(null);
 
@@ -66,6 +69,8 @@ const DevotionalStoryForm: React.FC = () => {
         estimatedDuration: 3,
         coverPrompt: '',
         defaultCoverUrl: '',
+        sceneImageUrl: '',
+        sceneImagePrompt: '',
         status: 'draft',
         reflectionQuestions: [],
         preferredVoice: '',
@@ -96,6 +101,8 @@ const DevotionalStoryForm: React.FC = () => {
                 estimatedDuration: story.estimatedDuration || 3,
                 coverPrompt: story.coverPrompt || '',
                 defaultCoverUrl: story.defaultCoverUrl || '',
+                sceneImageUrl: story.sceneImageUrl || '',
+                sceneImagePrompt: story.sceneImagePrompt || '',
                 status: story.status || 'draft',
                 reflectionQuestions: story.reflectionQuestions || [],
                 preferredVoice: story.preferredVoice || '',
@@ -205,6 +212,29 @@ const DevotionalStoryForm: React.FC = () => {
             ...prev,
             reflectionQuestions: prev.reflectionQuestions.filter((_, i) => i !== index)
         }));
+    };
+
+    const handleGenerateSceneImage = async () => {
+        if (!id || id === 'new') {
+            alert('Please save the story first, then generate the scene image');
+            return;
+        }
+
+        setGeneratingScene(true);
+        try {
+            const response = await apiClient.post(`/api/devotional-stories/${id}/generate-scene`, {
+                customPrompt: formData.sceneImagePrompt || undefined
+            });
+            setFormData(prev => ({ 
+                ...prev, 
+                sceneImageUrl: response.data.sceneImageUrl 
+            }));
+        } catch (error) {
+            console.error('Error generating scene image:', error);
+            alert('Failed to generate scene image');
+        } finally {
+            setGeneratingScene(false);
+        }
     };
 
     const handleSubmit = async (e: React.FormEvent) => {
@@ -564,6 +594,87 @@ const DevotionalStoryForm: React.FC = () => {
                                 className="w-full border rounded-lg px-4 py-2"
                                 placeholder="https://..."
                             />
+                        </div>
+
+                        {/* Scene Image for Audio Story Player */}
+                        <div className="border-t pt-4 mt-4">
+                            <h3 className="text-md font-medium text-gray-800 mb-3 flex items-center gap-2">
+                                <Image className="w-5 h-5 text-purple-600" />
+                                Audio Story Player Scene
+                            </h3>
+                            <p className="text-sm text-gray-500 mb-3">
+                                Generate a background image for the Audio Story Player experience. This image will be displayed while the story is being narrated.
+                            </p>
+
+                            <div className="space-y-3">
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                                        Scene Image Prompt (optional - auto-generates from story if empty)
+                                    </label>
+                                    <textarea
+                                        name="sceneImagePrompt"
+                                        value={formData.sceneImagePrompt}
+                                        onChange={handleChange}
+                                        rows={2}
+                                        className="w-full border rounded-lg px-4 py-2"
+                                        placeholder="e.g., A peaceful garden with a stone path, flowers blooming, soft morning light filtering through trees"
+                                    />
+                                </div>
+
+                                {formData.sceneImageUrl ? (
+                                    <div className="space-y-3">
+                                        <div className="relative rounded-lg overflow-hidden bg-gray-100">
+                                            <img
+                                                src={formData.sceneImageUrl}
+                                                alt="Scene preview"
+                                                className="w-full h-48 object-cover"
+                                            />
+                                            <div className="absolute top-2 right-2">
+                                                <button
+                                                    type="button"
+                                                    onClick={handleGenerateSceneImage}
+                                                    disabled={generatingScene || !id || id === 'new'}
+                                                    className="p-2 bg-white/90 hover:bg-white rounded-full shadow-lg disabled:opacity-50"
+                                                    title="Regenerate scene image"
+                                                >
+                                                    <RefreshCw className={`w-5 h-5 text-purple-600 ${generatingScene ? 'animate-spin' : ''}`} />
+                                                </button>
+                                            </div>
+                                        </div>
+                                        <button
+                                            type="button"
+                                            onClick={() => setFormData(prev => ({ ...prev, sceneImageUrl: '' }))}
+                                            className="text-sm text-red-600 hover:text-red-700"
+                                        >
+                                            Remove scene image
+                                        </button>
+                                    </div>
+                                ) : (
+                                    <button
+                                        type="button"
+                                        onClick={handleGenerateSceneImage}
+                                        disabled={generatingScene || !id || id === 'new'}
+                                        className="flex items-center gap-2 px-4 py-2 bg-purple-100 text-purple-700 rounded-lg hover:bg-purple-200 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                                    >
+                                        {generatingScene ? (
+                                            <>
+                                                <div className="w-5 h-5 border-2 border-purple-600 border-t-transparent rounded-full animate-spin" />
+                                                Generating Scene Image...
+                                            </>
+                                        ) : (
+                                            <>
+                                                <Image className="w-5 h-5" />
+                                                Generate Scene Image (~$0.02)
+                                            </>
+                                        )}
+                                    </button>
+                                )}
+                                {(!id || id === 'new') && (
+                                    <p className="text-xs text-gray-500">
+                                        Save the story first, then generate the scene image
+                                    </p>
+                                )}
+                            </div>
                         </div>
 
                         <div>

@@ -10,6 +10,7 @@ import SelfieCapture from '../components/features/SelfieCapture';
 import CharacterStyleSelector from '../components/features/CharacterStyleSelector';
 import NarratorSelector from '../components/features/NarratorSelector';
 import PersonalizedStoryPlayer from '../components/features/PersonalizedStoryPlayer';
+import AudioStoryPlayer from '../components/features/AudioStoryPlayer';
 import StoryLoadingScreen from '../components/features/StoryLoadingScreen';
 import { useUser } from '../context/UserContext';
 import { useSubscription } from '../context/SubscriptionContext';
@@ -2049,14 +2050,24 @@ const DailySessionPage: React.FC = () => {
         stage={storyLoadingStage}
       />
 
-      {/* Personalized Story Player */}
-      <PersonalizedStoryPlayer
-        isOpen={showStoryPlayer}
-        onClose={() => setShowStoryPlayer(false)}
-        onComplete={handleStoryComplete}
-        storyData={personalizedStoryData}
-        childName={childName}
-      />
+      {/* Personalized Story Player - Use AudioStoryPlayer when scene image available */}
+      {personalizedStoryData?.sceneImageUrl ? (
+        <AudioStoryPlayer
+          isOpen={showStoryPlayer}
+          onClose={() => setShowStoryPlayer(false)}
+          onComplete={handleStoryComplete}
+          story={personalizedStoryData}
+          childName={childName}
+        />
+      ) : (
+        <PersonalizedStoryPlayer
+          isOpen={showStoryPlayer}
+          onClose={() => setShowStoryPlayer(false)}
+          onComplete={handleStoryComplete}
+          storyData={personalizedStoryData}
+          childName={childName}
+        />
+      )}
     </div>
   );
 };

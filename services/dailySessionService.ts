@@ -204,7 +204,7 @@ export const isSessionCompletedToday = (): boolean => {
   // Also check history in case localStorage was cleared (e.g., after reviewing lesson)
   const history = getSessionHistory();
   const todayKey = getTodayDateKey();
-  const todayInHistory = history.find(s => s.date === todayKey && s.completed);
+  const todayInHistory = history.find(s => s?.date === todayKey && s?.completed);
   return !!todayInHistory;
 };
 
@@ -333,7 +333,7 @@ export const getSessionStreak = (): number => {
   
   // Check if today's session is completed (either in current session or history)
   const currentSession = getCurrentSession();
-  const todayInHistory = history.find(s => s.date === todayKey && s.completed);
+  const todayInHistory = history.find(s => s?.date === todayKey && s?.completed);
   
   if (currentSession?.completed || todayInHistory) {
     streak = 1;
@@ -355,7 +355,7 @@ export const getSessionStreak = (): number => {
     if (countedDates.has(checkDateKey)) continue;
     
     // Find completed session for this date
-    const sessionForDay = history.find(s => s.date === checkDateKey && s.completed);
+    const sessionForDay = history.find(s => s?.date === checkDateKey && s?.completed);
     
     if (sessionForDay) {
       streak++;

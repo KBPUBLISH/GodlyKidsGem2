@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ChevronRight, BookOpen, Volume2, Gamepad2, Sparkles, Check, X, Heart, Star, Zap, Sun, Shield, Gift, Music } from 'lucide-react';
+import { ChevronRight, BookOpen, Volume2, Gamepad2, Sparkles, Check, X, Heart, Star, Zap, Sun, Shield, Gift, Music, UserPlus } from 'lucide-react';
 import { activityTrackingService } from '../../services/activityTrackingService';
 import { useSubscription } from '../../context/SubscriptionContext';
 import { useBooks } from '../../context/BooksContext';
@@ -8,6 +8,8 @@ import { ApiService } from '../../services/apiService';
 import { NotificationService } from '../../services/notificationService';
 import { DespiaService } from '../../services/despiaService';
 import { Bell, BellOff } from 'lucide-react';
+import { authService } from '../../services/authService';
+import CreateAccountModal from '../modals/CreateAccountModal';
 
 // Fruits of the Spirit for character building
 const FRUITS_OF_SPIRIT = [
@@ -523,7 +525,7 @@ const createScreens = (bookCovers: string[], voiceCharacters: VoiceCharacter[]) 
   // Screen 6: Start Exploring (Final)
   {
     id: 'complete',
-    content: (props: { onNext: () => void }) => (
+    content: (props: { onNext: () => void; hasAccount?: boolean; onCreateAccount?: () => void }) => (
       <div className="flex flex-col items-center justify-center min-h-[70vh] text-center px-6">
         {/* Success icon */}
         <div className="w-20 h-20 bg-gradient-to-br from-green-400 to-green-500 rounded-full flex items-center justify-center mb-6 shadow-lg">
@@ -543,10 +545,31 @@ const createScreens = (bookCovers: string[], voiceCharacters: VoiceCharacter[]) 
         {/* Notification Toggle */}
         <NotificationToggle />
         
-        {/* Button */}
+        {/* Create Account Section - show if no account */}
+        {!props.hasAccount && (
+          <div className="w-full max-w-xs mb-4">
+            <button
+              onClick={props.onCreateAccount}
+              className="w-full bg-gradient-to-r from-amber-400 to-orange-500 text-white font-bold py-4 px-8 rounded-full shadow-lg hover:shadow-xl transition-all active:scale-[0.98] flex items-center justify-center gap-2"
+            >
+              <UserPlus size={20} />
+              <span>Create Free Account</span>
+            </button>
+            <p className="text-gray-500 text-xs mt-2">
+              Save your progress and trial access
+            </p>
+          </div>
+        )}
+        
+        {/* Button - disabled if no account */}
         <button
           onClick={props.onNext}
-          className="w-full max-w-xs bg-gradient-to-r from-[#7C3AED] to-[#6D28D9] text-white font-bold py-4 px-8 rounded-full shadow-lg hover:shadow-xl transition-all active:scale-[0.98] flex items-center justify-center gap-2"
+          disabled={!props.hasAccount}
+          className={`w-full max-w-xs font-bold py-4 px-8 rounded-full shadow-lg transition-all flex items-center justify-center gap-2 ${
+            props.hasAccount 
+              ? 'bg-gradient-to-r from-[#7C3AED] to-[#6D28D9] text-white hover:shadow-xl active:scale-[0.98]'
+              : 'bg-gray-300 text-gray-500 cursor-not-allowed'
+          }`}
         >
           <span>Start Exploring</span>
           <ChevronRight size={20} />
@@ -567,6 +590,27 @@ const PremiumOnboarding: React.FC<PremiumOnboardingProps> = ({ isOpen, onComplet
   const { reverseTrial } = useSubscription();
   const { books } = useBooks();
   const [voiceCharacters, setVoiceCharacters] = useState<VoiceCharacter[]>([]);
+  const [hasAccount, setHasAccount] = useState(false);
+  const [showCreateAccountModal, setShowCreateAccountModal] = useState(false);
+  
+  // Check if user has an account on mount
+  useEffect(() => {
+    const checkAccount = () => {
+      const isAuthenticated = authService.isAuthenticated();
+      const hasEmail = !!localStorage.getItem('godlykids_user_email');
+      setHasAccount(isAuthenticated || hasEmail);
+    };
+    
+    checkAccount();
+    
+    // Listen for auth changes
+    const handleAuthUpdate = () => checkAccount();
+    window.addEventListener('authTokenUpdated', handleAuthUpdate);
+    
+    return () => {
+      window.removeEventListener('authTokenUpdated', handleAuthUpdate);
+    };
+  }, [isOpen]);
   
   // Fetch voices on mount
   useEffect(() => {
@@ -686,7 +730,11 @@ const PremiumOnboarding: React.FC<PremiumOnboardingProps> = ({ isOpen, onComplet
         >
           {screens.map((screen, index) => (
             <div key={screen.id} className="w-full h-full flex-shrink-0 overflow-y-auto">
-              <screen.content onNext={handleNext} />
+              <screen.content 
+                onNext={handleNext} 
+                hasAccount={hasAccount}
+                onCreateAccount={() => setShowCreateAccountModal(true)}
+              />
             </div>
           ))}
         </div>
@@ -699,6 +747,21 @@ const PremiumOnboarding: React.FC<PremiumOnboardingProps> = ({ isOpen, onComplet
       >
         <ProgressDots current={currentScreen} total={screens.length} />
       </div>
+      
+      {/* Create Account Modal */}
+      <CreateAccountModal
+        isOpen={showCreateAccountModal}
+        onClose={() => setShowCreateAccountModal(false)}
+        onAccountCreated={() => {
+          setHasAccount(true);
+          setShowCreateAccountModal(false);
+        }}
+        onSignIn={() => {
+          setShowCreateAccountModal(false);
+          navigate('/signin', { state: { returnTo: '/premium-onboarding' } });
+        }}
+        navigateToOnboarding={false}
+      />
     </div>
   );
 };

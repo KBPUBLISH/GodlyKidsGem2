@@ -64,6 +64,13 @@ const bookSchema = new mongoose.Schema({
         default: false,
     },
     
+    // Whether this book should show the child's character on pages
+    // When true, AI will analyze each page and place the character optimally
+    showCharacterOverlay: {
+        type: Boolean,
+        default: false,
+    },
+    
     // Learning goal tags for daily session matching
     // Values: 'courage', 'faith', 'gratitude', 'love', 'obedience', 'self-control', 'theology', 'wisdom'
     goalTags: {
@@ -205,6 +212,33 @@ const bookSchema = new mongoose.Schema({
                     filename: { type: String },
                     uploadedAt: { type: Date, default: Date.now },
                 },
+            },
+            
+            // Character overlay settings (AI-determined or manual)
+            // These are cached after first AI analysis to avoid repeated API calls
+            characterOverlay: {
+                // Whether to show character on this page (overrides book-level setting)
+                showCharacter: { type: Boolean, default: true },
+                // Pose to use (from user's generated poses)
+                pose: { 
+                    type: String, 
+                    enum: ['standing_front', 'standing_happy', 'sitting', 'reading', 
+                           'praying', 'walking', 'thinking', 'pointing', 'waving', 'celebrating', 'none'],
+                    default: 'standing_front'
+                },
+                // Position as percentages (0-100)
+                x: { type: Number, default: 75 },
+                y: { type: Number, default: 70 },
+                // Scale factor (0.5 to 2.0)
+                scale: { type: Number, default: 1.0 },
+                // Whether to flip character horizontally
+                flipHorizontal: { type: Boolean, default: false },
+                // AI reasoning for this placement (for debugging/review)
+                reasoning: { type: String },
+                // Whether this was set by AI or manually
+                source: { type: String, enum: ['ai', 'manual'], default: 'ai' },
+                // Timestamp of last AI analysis
+                analyzedAt: { type: Date },
             },
             
             // Legacy fields (for backward compatibility)

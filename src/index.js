@@ -138,6 +138,9 @@ app.use('/api/background-music', require('./routes/background-music'));
 // Character Poses (for Illustrated Stories)
 app.use('/api/character-poses', require('./routes/character-poses'));
 
+// AI Character Placement (analyzes backgrounds for optimal character positioning)
+app.use('/api/character-placement', require('./routes/character-placement'));
+
 // Story Backgrounds Library (for Illustrated Stories)
 app.use('/api/story-backgrounds', require('./routes/story-backgrounds'));
 

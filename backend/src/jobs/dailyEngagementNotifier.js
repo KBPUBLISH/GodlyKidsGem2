@@ -257,8 +257,9 @@ async function sendDailyNotification(user, message) {
  * Run the daily engagement notification job
  * Should be called every hour via cron
  */
-async function runDailyEngagementNotifications() {
-  console.log('🌅 Starting daily engagement notification job...');
+async function runDailyEngagementNotifications(options = {}) {
+  const { ignoreTimezone = false } = options;
+  console.log('🌅 Starting daily engagement notification job...', ignoreTimezone ? '(all users)' : '(timezone-based)');
   
   const startTime = Date.now();
   const now = new Date();
@@ -270,34 +271,50 @@ async function runDailyEngagementNotifications() {
     sent: 0,
     skipped: 0,
     failed: 0,
-    timezonesChecked: []
+    timezonesChecked: [],
+    mode: ignoreTimezone ? 'all_users' : 'timezone_based'
   };
   
   try {
-    // Find timezones where it's currently 8am
-    const targetTimezones = getTimezonesAt8am();
-    results.timezonesChecked = targetTimezones;
+    let query;
     
-    if (targetTimezones.length === 0) {
-      console.log('⏰ No timezones at 8am right now');
-      return { success: true, ...results, message: 'No timezones at 8am' };
+    if (ignoreTimezone) {
+      // Send to ALL users who have notifications enabled
+      console.log('📢 Sending to all users with notifications enabled...');
+      query = {
+        $or: [
+          { oneSignalPlayerId: { $exists: true, $ne: null, $ne: '' } },
+          { notificationEmail: { $exists: true, $ne: null, $ne: '' } }
+        ],
+        dailyNotificationDisabled: { $ne: true },
+        lastDailyNotificationDate: { $ne: today }
+      };
+    } else {
+      // Find timezones where it's currently 8am
+      const targetTimezones = getTimezonesAt8am();
+      results.timezonesChecked = targetTimezones;
+      
+      if (targetTimezones.length === 0) {
+        console.log('⏰ No timezones at 8am right now');
+        return { success: true, ...results, message: 'No timezones at 8am' };
+      }
+      
+      console.log(`⏰ Timezones at 8am: ${targetTimezones.join(', ')}`);
+      
+      query = {
+        timezone: { $in: targetTimezones },
+        $or: [
+          { oneSignalPlayerId: { $exists: true, $ne: null, $ne: '' } },
+          { notificationEmail: { $exists: true, $ne: null, $ne: '' } }
+        ],
+        dailyNotificationDisabled: { $ne: true },
+        lastDailyNotificationDate: { $ne: today }
+      };
     }
     
-    console.log(`⏰ Timezones at 8am: ${targetTimezones.join(', ')}`);
-    
-    // Find users who:
-    // - Are in one of the 8am timezones
-    // - Have notifications enabled (has oneSignalPlayerId or email)
-    // - Haven't received today's notification yet
-    const users = await AppUser.find({
-      timezone: { $in: targetTimezones },
-      $or: [
-        { oneSignalPlayerId: { $exists: true, $ne: null, $ne: '' } },
-        { notificationEmail: { $exists: true, $ne: null, $ne: '' } }
-      ],
-      dailyNotificationDisabled: { $ne: true },
-      lastDailyNotificationDate: { $ne: today }
-    }).select('_id email parentName oneSignalPlayerId timezone reverseTrialActive reverseTrialStartDate reverseTrialConverted');
+    // Find users matching the query
+    const users = await AppUser.find(query)
+      .select('_id email parentName oneSignalPlayerId timezone reverseTrialActive reverseTrialStartDate reverseTrialConverted');
     
     results.total = users.length;
     console.log(`📊 Found ${users.length} users to notify`);

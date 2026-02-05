@@ -195,10 +195,17 @@ export const getCurrentSession = (): DailySession | null => {
   }
 };
 
-// Check if today's session is completed
+// Check if today's session is completed (checks both current session AND history)
 export const isSessionCompletedToday = (): boolean => {
+  // First check current session in localStorage
   const session = getCurrentSession();
-  return session?.completed ?? false;
+  if (session?.completed) return true;
+  
+  // Also check history in case localStorage was cleared (e.g., after reviewing lesson)
+  const history = getSessionHistory();
+  const todayKey = getTodayDateKey();
+  const todayInHistory = history.find(s => s.date === todayKey && s.completed);
+  return !!todayInHistory;
 };
 
 // Check if a session exists for today (started but maybe not completed)

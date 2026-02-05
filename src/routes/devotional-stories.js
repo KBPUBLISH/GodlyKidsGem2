@@ -99,14 +99,20 @@ router.get('/', async (req, res) => {
 // Get a random story matching criteria (for app)
 router.get('/random', async (req, res) => {
     try {
-        const { ageGroup, goalTag, excludeIds } = req.query;
+        const { ageGroup, goalTag, excludeIds, isIllustrated } = req.query;
         
         const excludeArray = excludeIds ? excludeIds.split(',') : [];
+        
+        // Parse isIllustrated query param (can be 'true', 'false', or undefined)
+        let illustratedFilter;
+        if (isIllustrated === 'true') illustratedFilter = true;
+        else if (isIllustrated === 'false') illustratedFilter = false;
         
         const story = await DevotionalStory.findRandomMatching({
             ageGroup,
             goalTag,
-            excludeIds: excludeArray
+            excludeIds: excludeArray,
+            isIllustrated: illustratedFilter
         });
         
         if (!story) {
@@ -192,7 +198,7 @@ router.delete('/:id', async (req, res) => {
 // Generate personalized story content with TTS and cover
 router.post('/:id/personalize', async (req, res) => {
     try {
-        const { childName, childAge, characterAvatarUrl, voicePreference } = req.body;
+        const { childName, childAge, characterAvatarUrl, voicePreference, characterPoses } = req.body;
         
         if (!childName) {
             return res.status(400).json({ error: 'Child name is required' });
@@ -212,23 +218,42 @@ router.post('/:id/personalize', async (req, res) => {
             return res.json(cached.data);
         }
         
-        console.log(`📚 Personalizing story "${story.title}" for ${childName}...`);
+        console.log(`📚 Personalizing ${story.isIllustrated ? 'illustrated' : 'text'} story "${story.title}" for ${childName}...`);
         
         // Personalize content
         const personalized = story.personalizeContent(childName);
         
+        // Prepare TTS text based on story type
+        let ttsText;
+        if (story.isIllustrated && personalized.pages && personalized.pages.length > 0) {
+            // For illustrated stories, combine all page ttsText for narration
+            // Add pauses between pages for natural pacing
+            ttsText = personalized.pages
+                .map(page => page.ttsText || page.textBoxes?.map(tb => tb.text).join(' ') || '')
+                .filter(text => text.trim())
+                .join(' ... '); // Triple dots for pause
+            console.log(`📖 Illustrated story with ${personalized.pages.length} pages`);
+        } else {
+            // For text-based stories, use single content block
+            ttsText = personalized.content;
+        }
+        
         // Generate TTS audio using ElevenLabs
         // Priority: User's voice preference > Story's default voice > Auto-select
         const voiceId = voicePreference || story.preferredVoice || null;
-        console.log(`🎙️ Generating ElevenLabs TTS narration (voice: ${voiceId || 'auto'})...`);
-        const ttsResult = await generateElevenLabsTTS(personalized.content, {
-            voiceId,
-            storagePath: 'devotional-stories/tts',
-            filenamePrefix: `story_${story._id}_${childName.replace(/\s+/g, '_')}`,
-            stability: 0.5,
-            similarityBoost: 0.75,
-            style: 0.3 // More expressive for storytelling
-        });
+        let ttsResult = null;
+        
+        if (ttsText) {
+            console.log(`🎙️ Generating ElevenLabs TTS narration (voice: ${voiceId || 'auto'})...`);
+            ttsResult = await generateElevenLabsTTS(ttsText, {
+                voiceId,
+                storagePath: 'devotional-stories/tts',
+                filenamePrefix: `story_${story._id}_${childName.replace(/\s+/g, '_')}`,
+                stability: 0.5,
+                similarityBoost: 0.75,
+                style: 0.3 // More expressive for storytelling
+            });
+        }
         
         // Generate cover image if we have character avatar
         let coverUrl = story.defaultCoverUrl;
@@ -261,10 +286,10 @@ router.post('/:id/personalize', async (req, res) => {
             }
         }
         
+        // Build result object
         const result = {
             storyId: story._id,
             title: personalized.title,
-            content: personalized.content,
             scripture: personalized.scripture,
             scriptureText: personalized.scriptureText,
             ttsAudioUrl: ttsResult?.url || null,
@@ -272,7 +297,30 @@ router.post('/:id/personalize', async (req, res) => {
             coverImageUrl: coverUrl,
             backgroundMusicUrl,
             reflectionQuestions: personalized.reflectionQuestions,
+            isIllustrated: story.isIllustrated,
         };
+        
+        if (story.isIllustrated && personalized.pages) {
+            // For illustrated stories, include pages with character info
+            // Merge character pose URLs if provided
+            result.pages = personalized.pages.map(page => {
+                const pageResult = { ...page };
+                
+                // If client sent characterPoses, add the pose URL to each page
+                if (characterPoses && page.showCharacter !== false && page.characterPose && page.characterPose !== 'none') {
+                    const poseData = characterPoses[page.characterPose];
+                    if (poseData) {
+                        pageResult.characterPoseUrl = poseData.url;
+                    }
+                }
+                
+                return pageResult;
+            });
+            result.content = null; // No single content block for illustrated
+        } else {
+            result.content = personalized.content;
+            result.pages = null;
+        }
         
         // Cache the result
         personalizedCache.set(cacheKey, {

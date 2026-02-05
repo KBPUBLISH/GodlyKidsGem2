@@ -658,6 +658,117 @@ router.get('/stats/:identifier', async (req, res) => {
     }
 });
 
+/**
+ * PUT /api/app-user/timezone/:userId
+ * Update user's timezone for daily notifications
+ */
+router.put('/timezone/:userId', async (req, res) => {
+    try {
+        const { userId } = req.params;
+        const { timezone } = req.body;
+        
+        if (!timezone) {
+            return res.status(400).json({ success: false, error: 'Timezone is required' });
+        }
+        
+        // Validate timezone by trying to use it
+        try {
+            new Intl.DateTimeFormat('en-US', { timeZone: timezone }).format(new Date());
+        } catch (e) {
+            return res.status(400).json({ success: false, error: 'Invalid timezone' });
+        }
+        
+        const user = await AppUser.findOneAndUpdate(
+            { $or: [{ _id: userId }, { deviceId: userId }, { email: userId }] },
+            { $set: { timezone } },
+            { new: true }
+        );
+        
+        if (!user) {
+            return res.status(404).json({ success: false, error: 'User not found' });
+        }
+        
+        console.log(`⏰ Timezone updated for user ${userId}: ${timezone}`);
+        res.json({ success: true, timezone: user.timezone });
+        
+    } catch (error) {
+        console.error('Error updating timezone:', error);
+        res.status(500).json({ success: false, error: 'Failed to update timezone' });
+    }
+});
+
+/**
+ * PUT /api/app-user/notifications/:userId
+ * Toggle daily notifications for a user
+ */
+router.put('/notifications/:userId', async (req, res) => {
+    try {
+        const { userId } = req.params;
+        const { enabled, notificationTime } = req.body;
+        
+        const updateFields = {};
+        if (typeof enabled === 'boolean') {
+            updateFields.dailyNotificationDisabled = !enabled;
+        }
+        if (typeof notificationTime === 'number' && notificationTime >= 0 && notificationTime <= 23) {
+            updateFields.dailyNotificationTime = notificationTime;
+        }
+        
+        const user = await AppUser.findOneAndUpdate(
+            { $or: [{ _id: userId }, { deviceId: userId }, { email: userId }] },
+            { $set: updateFields },
+            { new: true }
+        );
+        
+        if (!user) {
+            return res.status(404).json({ success: false, error: 'User not found' });
+        }
+        
+        console.log(`🔔 Notifications ${enabled ? 'enabled' : 'disabled'} for user ${userId}`);
+        res.json({ 
+            success: true, 
+            enabled: !user.dailyNotificationDisabled,
+            notificationTime: user.dailyNotificationTime
+        });
+        
+    } catch (error) {
+        console.error('Error updating notification settings:', error);
+        res.status(500).json({ success: false, error: 'Failed to update notification settings' });
+    }
+});
+
+/**
+ * GET /api/app-user/notification-settings/:userId
+ * Get user's notification settings
+ */
+router.get('/notification-settings/:userId', async (req, res) => {
+    try {
+        const { userId } = req.params;
+        
+        const user = await AppUser.findOne(
+            { $or: [{ _id: userId }, { deviceId: userId }, { email: userId }] }
+        ).select('timezone dailyNotificationDisabled dailyNotificationTime oneSignalPlayerId');
+        
+        if (!user) {
+            return res.status(404).json({ success: false, error: 'User not found' });
+        }
+        
+        res.json({
+            success: true,
+            settings: {
+                timezone: user.timezone || 'America/New_York',
+                enabled: !user.dailyNotificationDisabled,
+                notificationTime: user.dailyNotificationTime || 8,
+                hasOneSignal: !!user.oneSignalPlayerId,
+            }
+        });
+        
+    } catch (error) {
+        console.error('Error getting notification settings:', error);
+        res.status(500).json({ success: false, error: 'Failed to get notification settings' });
+    }
+});
+
 module.exports = router;
 
 /**

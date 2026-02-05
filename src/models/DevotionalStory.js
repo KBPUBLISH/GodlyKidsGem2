@@ -1,5 +1,54 @@
 const mongoose = require('mongoose');
 
+// Sub-schema for text boxes on illustrated pages
+const textBoxSchema = new mongoose.Schema({
+    text: { type: String, required: true },      // Text content (supports {childName})
+    x: { type: Number, default: 50 },            // X position (0-100%)
+    y: { type: Number, default: 80 },            // Y position (0-100%)
+    width: { type: Number, default: 80 },        // Width (0-100%)
+    fontSize: { type: Number, default: 18 },     // Font size in px
+    color: { type: String, default: '#FFFFFF' }, // Text color
+    fontFamily: { type: String, default: 'Patrick Hand' },
+    alignment: { type: String, enum: ['left', 'center', 'right'], default: 'center' },
+    showBackground: { type: Boolean, default: true },  // Semi-transparent bg
+    backgroundColor: { type: String, default: 'rgba(0,0,0,0.6)' },
+}, { _id: false });
+
+// Sub-schema for illustrated story pages
+const illustratedPageSchema = new mongoose.Schema({
+    pageNumber: { type: Number, required: true },
+    
+    // Background
+    backgroundUrl: { type: String },             // Pre-set background image URL
+    backgroundPrompt: { type: String },          // Optional: AI generation prompt
+    
+    // Character placement
+    characterPose: {                             // Which pose to use
+        type: String,
+        enum: ['standing_front', 'standing_happy', 'sitting', 'reading', 
+               'praying', 'walking', 'thinking', 'pointing', 'waving', 'celebrating', 'none'],
+        default: 'standing_front'
+    },
+    characterPosition: {
+        x: { type: Number, default: 50 },        // X position (0-100%)
+        y: { type: Number, default: 70 },        // Y position (0-100%)
+        scale: { type: Number, default: 1 },     // Scale factor (0.5-2.0)
+        flipHorizontal: { type: Boolean, default: false }
+    },
+    showCharacter: { type: Boolean, default: true }, // Whether to show character
+    
+    // Text content
+    textBoxes: [textBoxSchema],
+    
+    // TTS text (may differ from displayed text for better narration)
+    ttsText: { type: String },
+    
+    // Optional page-specific audio
+    pageAudioUrl: { type: String },
+    soundEffectUrl: { type: String },
+    
+}, { _id: false });
+
 const devotionalStorySchema = new mongoose.Schema({
     // Template title (for portal management)
     title: {
@@ -30,12 +79,27 @@ const devotionalStorySchema = new mongoose.Schema({
         required: true,
     },
     
+    // ============================================
+    // STORY TYPE: Text-based OR Illustrated
+    // ============================================
+    
+    // Flag to distinguish illustrated stories from text-only
+    isIllustrated: {
+        type: Boolean,
+        default: false,
+    },
+    
+    // For TEXT-BASED stories (isIllustrated = false):
     // Story content with {childName} placeholders
     // Example: "One day, {childName} went on an adventure..."
     content: {
         type: String,
-        required: true,
+        required: function() { return !this.isIllustrated; },
     },
+    
+    // For ILLUSTRATED stories (isIllustrated = true):
+    // Array of pages with backgrounds, character positions, and text
+    pages: [illustratedPageSchema],
     
     // Target age groups
     ageGroups: [{
@@ -112,25 +176,53 @@ devotionalStorySchema.index({ status: 1 });
 devotionalStorySchema.index({ ageGroups: 1 });
 devotionalStorySchema.index({ goalTags: 1 });
 devotionalStorySchema.index({ createdAt: -1 });
+devotionalStorySchema.index({ isIllustrated: 1 });
 
 // Method to personalize content for a specific child
 devotionalStorySchema.methods.personalizeContent = function(childName) {
-    return {
-        title: this.displayTitle.replace(/\{childName\}/g, childName),
-        content: this.content.replace(/\{childName\}/g, childName),
+    const replaceChildName = (str) => str ? str.replace(/\{childName\}/g, childName) : str;
+    
+    const result = {
+        title: replaceChildName(this.displayTitle),
         scripture: this.scripture,
         scriptureText: this.scriptureText,
         backgroundMusicUrl: this.backgroundMusicUrl,
-        coverPrompt: this.coverPrompt ? this.coverPrompt.replace(/\{childName\}/g, childName) : null,
+        coverPrompt: replaceChildName(this.coverPrompt),
         defaultCoverUrl: this.defaultCoverUrl,
         reflectionQuestions: this.reflectionQuestions,
         estimatedDuration: this.estimatedDuration,
+        isIllustrated: this.isIllustrated,
     };
+    
+    if (this.isIllustrated && this.pages && this.pages.length > 0) {
+        // For illustrated stories, personalize each page
+        result.pages = this.pages.map(page => ({
+            pageNumber: page.pageNumber,
+            backgroundUrl: page.backgroundUrl,
+            characterPose: page.characterPose,
+            characterPosition: page.characterPosition,
+            showCharacter: page.showCharacter,
+            textBoxes: page.textBoxes.map(tb => ({
+                ...tb.toObject ? tb.toObject() : tb,
+                text: replaceChildName(tb.text),
+            })),
+            ttsText: replaceChildName(page.ttsText),
+            pageAudioUrl: page.pageAudioUrl,
+            soundEffectUrl: page.soundEffectUrl,
+        }));
+        result.content = null; // No single content block for illustrated stories
+    } else {
+        // For text-based stories, use single content block
+        result.content = replaceChildName(this.content);
+        result.pages = null;
+    }
+    
+    return result;
 };
 
 // Static method to find a random story matching criteria
 devotionalStorySchema.statics.findRandomMatching = async function(options = {}) {
-    const { ageGroup, goalTag, excludeIds = [] } = options;
+    const { ageGroup, goalTag, excludeIds = [], isIllustrated } = options;
     
     const query = { status: 'published' };
     
@@ -143,6 +235,11 @@ devotionalStorySchema.statics.findRandomMatching = async function(options = {}) 
     
     if (goalTag) {
         query.goalTags = goalTag;
+    }
+    
+    // Filter by story type if specified
+    if (isIllustrated !== undefined) {
+        query.isIllustrated = isIllustrated;
     }
     
     if (excludeIds.length > 0) {

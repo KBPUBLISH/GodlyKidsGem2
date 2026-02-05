@@ -230,6 +230,23 @@ const appUserSchema = new mongoose.Schema({
         type: Date,
     },
     
+    // Daily notification preferences
+    timezone: {
+        type: String,
+        default: 'America/New_York', // Default timezone
+    },
+    dailyNotificationDisabled: {
+        type: Boolean,
+        default: false,
+    },
+    lastDailyNotificationDate: {
+        type: String, // YYYY-MM-DD format
+    },
+    dailyNotificationTime: {
+        type: Number, // Hour in 24h format (default 8 for 8am)
+        default: 8,
+    },
+    
     // Usage statistics (aggregate counters for quick access)
     stats: {
         totalSessions: {

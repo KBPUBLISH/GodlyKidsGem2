@@ -3,6 +3,7 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { X, Check, ChevronRight, Play, BookOpen, MessageCircle, Camera, Sparkles } from 'lucide-react';
 import PrayerGameModal from '../components/features/PrayerGameModal';
 import SessionCelebrationModal from '../components/modals/SessionCelebrationModal';
+import ReverseTrialOfferModal from '../components/modals/ReverseTrialOfferModal';
 import DiscussionQuestionsModal from '../components/modals/DiscussionQuestionsModal';
 import DailyVerseModal from '../components/modals/DailyVerseModal';
 import SelfieCapture from '../components/features/SelfieCapture';
@@ -11,6 +12,7 @@ import NarratorSelector from '../components/features/NarratorSelector';
 import PersonalizedStoryPlayer from '../components/features/PersonalizedStoryPlayer';
 import StoryLoadingScreen from '../components/features/StoryLoadingScreen';
 import { useUser } from '../context/UserContext';
+import { useSubscription } from '../context/SubscriptionContext';
 import { useBooks } from '../context/BooksContext';
 import { activityTrackingService } from '../services/activityTrackingService';
 import {
@@ -26,6 +28,7 @@ import {
   exitSession,
   setStepContent,
   getRecommendedBookFilter,
+  getSessionHistory,
 } from '../services/dailySessionService';
 import { getSavedPreferences } from './InterestSelectionPage';
 import AvatarCompositor from '../components/avatar/AvatarCompositor';
@@ -100,6 +103,7 @@ const DailySessionPage: React.FC = () => {
     updateKid,
     switchProfile,
   } = useUser();
+  const { isPremium, reverseTrial } = useSubscription();
   
   // Get current kid's age for age-aware AI content
   const currentKid = kids.find(k => k.id === currentProfileId);
@@ -112,6 +116,7 @@ const DailySessionPage: React.FC = () => {
   const [showPrayerModal, setShowPrayerModal] = useState(false);
   const [showDiscussionModal, setShowDiscussionModal] = useState(false);
   const [showCelebration, setShowCelebration] = useState(false);
+  const [showReverseTrialOffer, setShowReverseTrialOffer] = useState(false);
   const [recommendedBook, setRecommendedBook] = useState<any>(null);
   const [bookContent, setBookContent] = useState<string>(''); // Story text for discussion questions
   const [discussionQuestions, setDiscussionQuestions] = useState<any[]>([]); // Pre-generated questions
@@ -762,6 +767,23 @@ const DailySessionPage: React.FC = () => {
   // Handle celebration close
   const handleCelebrationClose = () => {
     setShowCelebration(false);
+    
+    // Check if this is user's first completed session and they're not premium
+    const sessionHistory = getSessionHistory();
+    const isFirstSession = sessionHistory.length <= 1; // Current session just got archived
+    const isEligibleForTrial = reverseTrial?.eligible && !isPremium;
+    
+    if (isFirstSession && isEligibleForTrial) {
+      // Show reverse trial offer after first session
+      setShowReverseTrialOffer(true);
+    } else {
+      navigate('/home');
+    }
+  };
+  
+  // Handle reverse trial offer close
+  const handleReverseTrialOfferClose = () => {
+    setShowReverseTrialOffer(false);
     navigate('/home');
   };
 
@@ -1301,22 +1323,36 @@ const DailySessionPage: React.FC = () => {
               </div>
             </div>
           ) : (
-            // Ready button
-            <button
-              onClick={handleReadyClick}
-              className="group transition-all transform hover:scale-105 active:scale-95"
-            >
-              <div className="bg-[#FFD700] hover:bg-[#FFE44D] px-16 py-8 rounded-3xl shadow-2xl border-4 border-[#FFA000] transition-all"
-                style={{ boxShadow: '0 8px 32px rgba(255, 215, 0, 0.4), inset 0 -4px 8px rgba(0,0,0,0.1)' }}
-              >
-                <span className="text-[#5D4037] font-display font-bold text-4xl">
-                  Ready?
-                </span>
+            // Ready button with headline
+            <div className="text-center">
+              {/* Headline */}
+              <div className="mb-8">
+                <h2 className="text-[#FFD700] font-display font-bold text-4xl mb-3 drop-shadow-lg"
+                  style={{ textShadow: '0 2px 8px rgba(0,0,0,0.3)' }}
+                >
+                  Awesome{childName ? `, ${childName}` : ''}!
+                </h2>
+                <p className="text-[#f3e5ab] font-display text-xl">
+                  Let's start with a scripture puzzle 🧩
+                </p>
               </div>
-              <p className="text-[#f3e5ab]/60 text-sm text-center mt-6 font-display">
-                Tap to start your adventure
-              </p>
-            </button>
+              
+              <button
+                onClick={handleReadyClick}
+                className="group transition-all transform hover:scale-105 active:scale-95"
+              >
+                <div className="bg-[#FFD700] hover:bg-[#FFE44D] px-16 py-8 rounded-3xl shadow-2xl border-4 border-[#FFA000] transition-all"
+                  style={{ boxShadow: '0 8px 32px rgba(255, 215, 0, 0.4), inset 0 -4px 8px rgba(0,0,0,0.1)' }}
+                >
+                  <span className="text-[#5D4037] font-display font-bold text-4xl">
+                    Ready?
+                  </span>
+                </div>
+                <p className="text-[#f3e5ab]/60 text-sm text-center mt-6 font-display">
+                  Tap to start your adventure
+                </p>
+              </button>
+            </div>
           )}
         </div>
 
@@ -1960,6 +1996,13 @@ const DailySessionPage: React.FC = () => {
         isOpen={showCelebration}
         onClose={handleCelebrationClose}
         session={session}
+      />
+      
+      {/* Reverse Trial Offer Modal - Shows after first session */}
+      <ReverseTrialOfferModal
+        isOpen={showReverseTrialOffer}
+        onClose={handleReverseTrialOfferClose}
+        childName={childName}
       />
 
       {/* Selfie Capture Modal */}

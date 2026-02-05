@@ -195,6 +195,8 @@ const DailyVerseModal: React.FC<DailyVerseModalProps> = ({
   useEffect(() => {
     if (isOpen) {
       initializeGame();
+      // Skip intro and go straight to preview countdown
+      setTimeout(() => startGame(), 100);
     } else {
       setGameState('intro');
     }
@@ -292,11 +294,11 @@ const DailyVerseModal: React.FC<DailyVerseModalProps> = ({
   };
 
   const handleWin = () => {
-    // Calculate stars based on mistakes and hints used
+    // Calculate stars based on mistakes
+    // 0-2 mistakes = 3 stars, 3-4 mistakes = 2 stars, 5+ mistakes = 1 star
     let stars = 3;
-    const totalPenalties = mistakes + hintsUsed;
-    if (totalPenalties > 3) stars = 1;
-    else if (totalPenalties > 1) stars = 2;
+    if (mistakes >= 5) stars = 1;
+    else if (mistakes >= 3) stars = 2;
     
     setEarnedStars(stars);
     setShowSparkles(true);

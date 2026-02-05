@@ -529,24 +529,40 @@ const PrayerGameModal: React.FC<PrayerGameModalProps> = ({ isOpen, onClose }) =>
                           </p>
                       )}
 
-                      {/* Hold to Pray Button OR Amen Button */}
+                      {/* Hold to Pray Button + Manual Amen Button OR Completed Amen Button */}
                       {!isPrayerFilled ? (
-                          <button
-                              onMouseDown={() => setHolding(true)}
-                              onMouseUp={() => setHolding(false)}
-                              onMouseLeave={() => setHolding(false)}
-                              onTouchStart={() => setHolding(true)}
-                              onTouchEnd={() => setHolding(false)}
-                              className={`
-                                  w-32 h-32 rounded-full flex flex-col items-center justify-center gap-1
-                                  bg-gradient-to-b from-[#7b1fa2] to-[#4a148c] border-4 border-[#ab47bc]
-                                  shadow-lg active:scale-95 transition-all
-                                  ${isHoldingRef.current ? 'scale-95 shadow-inner' : ''}
-                              `}
-                          >
-                              <span className="text-4xl">🙏</span>
-                              <span className="text-[10px] font-bold text-white/80 uppercase tracking-wider">Hold to Pray</span>
-                          </button>
+                          <div className="flex flex-col items-center gap-4">
+                              <button
+                                  onMouseDown={() => setHolding(true)}
+                                  onMouseUp={() => setHolding(false)}
+                                  onMouseLeave={() => setHolding(false)}
+                                  onTouchStart={() => setHolding(true)}
+                                  onTouchEnd={() => setHolding(false)}
+                                  className={`
+                                      w-32 h-32 rounded-full flex flex-col items-center justify-center gap-1
+                                      bg-gradient-to-b from-[#7b1fa2] to-[#4a148c] border-4 border-[#ab47bc]
+                                      shadow-lg active:scale-95 transition-all
+                                      ${isHoldingRef.current ? 'scale-95 shadow-inner' : ''}
+                                  `}
+                              >
+                                  <span className="text-4xl">🙏</span>
+                                  <span className="text-[10px] font-bold text-white/80 uppercase tracking-wider">Hold to Pray</span>
+                              </button>
+                              
+                              {/* Manual Amen button - always available */}
+                              <button
+                                  onClick={() => {
+                                      progressRef.current = 100;
+                                      setHoldProgress(100);
+                                      isPrayerFilledRef.current = true;
+                                      setIsPrayerFilled(true);
+                                      playSuccess?.();
+                                  }}
+                                  className="px-6 py-2 bg-[#FFD700]/20 hover:bg-[#FFD700]/30 border-2 border-[#FFD700]/50 rounded-full text-[#FFD700] font-bold text-sm transition-all active:scale-95"
+                              >
+                                  Say Amen
+                              </button>
+                          </div>
                       ) : (
                           <div className="w-full animate-in slide-in-from-bottom-4 fade-in duration-500">
                               <WoodButton 

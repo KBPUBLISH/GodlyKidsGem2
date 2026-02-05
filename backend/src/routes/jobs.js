@@ -3,6 +3,7 @@ const router = express.Router();
 const nodemailer = require('nodemailer');
 const { runSubscriptionCheck } = require('../jobs/subscriptionChecker');
 const { runReverseTrialNotifications, expireEndedTrials, getReverseTrialAnalytics } = require('../jobs/reverseTrialNotifier');
+const { runDailyEngagementNotifications } = require('../jobs/dailyEngagementNotifier');
 const AppUser = require('../models/AppUser');
 
 // Admin API key for protected job endpoints
@@ -434,6 +435,32 @@ router.get('/reverse-trial-stats', verifyAdminKey, async (req, res) => {
         res.json(stats);
     } catch (error) {
         console.error('Error getting reverse trial stats:', error);
+        res.status(500).json({
+            success: false,
+            error: error.message,
+        });
+    }
+});
+
+/**
+ * POST /api/jobs/daily-engagement-notifications
+ * Send daily engagement notifications to users where it's 8am in their timezone
+ * Should be set up as hourly cron job
+ * Requires X-Admin-API-Key header
+ */
+router.post('/daily-engagement-notifications', verifyAdminKey, async (req, res) => {
+    console.log('🌅 Daily engagement notification job triggered');
+
+    try {
+        const result = await runDailyEngagementNotifications();
+        
+        res.json({
+            success: result.success,
+            message: 'Daily engagement notification job completed',
+            ...result,
+        });
+    } catch (error) {
+        console.error('Error running daily engagement notifications:', error);
         res.status(500).json({
             success: false,
             error: error.message,

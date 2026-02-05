@@ -304,6 +304,17 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
     // Narrator preferences for story reading
     preferredNarratorId?: string;    // ElevenLabs voice ID
     preferredNarratorName?: string;  // Display name of the narrator
+    
+    // Character poses for illustrated stories (10 pre-generated poses)
+    characterPoses?: {
+      [poseId: string]: {
+        url: string;
+        name: string;
+        description: string;
+      };
+    };
+    posesStyleId?: string;           // Style used for poses (minecraft, lego, etc.)
+    posesGeneratedAt?: number;       // Timestamp when poses were generated
   };
 
   const [parentName, setParentName] = useState<string>(saved?.parentName ?? 'Parent');

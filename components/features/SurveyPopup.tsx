@@ -61,7 +61,15 @@ const SurveyPopup: React.FC<SurveyPopupProps> = ({
     useEffect(() => {
         if (isOpen) {
             setStep('content');
+            // Hide the bottom navigation wheel while modal is open
+            document.body.setAttribute('data-modal-open', 'true');
+        } else {
+            document.body.removeAttribute('data-modal-open');
         }
+        
+        return () => {
+            document.body.removeAttribute('data-modal-open');
+        };
     }, [isOpen]);
 
     const togglePreference = (key: keyof typeof contentPreferences) => {
@@ -124,7 +132,7 @@ const SurveyPopup: React.FC<SurveyPopupProps> = ({
     if (!isOpen) return null;
 
     return (
-        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-[60] p-4">
             <div className="bg-gradient-to-b from-amber-50 to-orange-50 rounded-3xl max-w-md w-full shadow-2xl overflow-hidden border-4 border-amber-600">
                 {/* Header */}
                 <div className="bg-gradient-to-r from-amber-500 to-orange-500 px-6 py-4 flex items-center justify-between">

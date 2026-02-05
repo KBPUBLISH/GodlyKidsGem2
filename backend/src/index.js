@@ -181,10 +181,22 @@ app.use((err, req, res, next) => {
 // ===========================================
 // SCHEDULED JOBS (Internal Cron)
 // ===========================================
-const cron = require('node-cron');
-const { runDailyEngagementNotifications } = require('./jobs/dailyEngagementNotifier');
-const { runReverseTrialNotifications, expireEndedTrials } = require('./jobs/reverseTrialNotifier');
+let cron, runDailyEngagementNotifications, runReverseTrialNotifications, expireEndedTrials;
+try {
+  cron = require('node-cron');
+  const dailyNotifier = require('./jobs/dailyEngagementNotifier');
+  runDailyEngagementNotifications = dailyNotifier.runDailyEngagementNotifications;
+  const trialNotifier = require('./jobs/reverseTrialNotifier');
+  runReverseTrialNotifications = trialNotifier.runReverseTrialNotifications;
+  expireEndedTrials = trialNotifier.expireEndedTrials;
+  console.log('✅ Cron dependencies loaded successfully');
+} catch (cronError) {
+  console.error('❌ Failed to load cron dependencies:', cronError.message);
+  cron = null;
+}
 
+// Only set up cron jobs if cron loaded successfully
+if (cron) {
 // Morning scripture at 7am Mountain Time - just uplifting, no call to action
 cron.schedule('0 7 * * *', async () => {
   console.log('🌅 [Cron] Running 7am morning scripture notifications...');
@@ -223,7 +235,10 @@ cron.schedule('0 */6 * * *', async () => {
   }
 });
 
-console.log('📅 Scheduled jobs initialized');
+  console.log('📅 Scheduled jobs initialized');
+} else {
+  console.log('⚠️ Cron not available - scheduled jobs disabled');
+}
 
 // ===========================================
 // START SERVER

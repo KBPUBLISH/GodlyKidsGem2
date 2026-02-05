@@ -198,7 +198,7 @@ router.delete('/:id', async (req, res) => {
 // Generate personalized story content with TTS and cover
 router.post('/:id/personalize', async (req, res) => {
     try {
-        const { childName, childAge, characterAvatarUrl, voicePreference, characterPoses } = req.body;
+        const { childName, childAge, characterAvatarUrl, voicePreference, characterPoses, originalSelfie, characterStyle } = req.body;
         
         if (!childName) {
             return res.status(400).json({ error: 'Child name is required' });
@@ -209,9 +209,10 @@ router.post('/:id/personalize', async (req, res) => {
             return res.status(404).json({ error: 'Story not found' });
         }
         
-        // Check cache first (include voice preference in cache key)
+        // Check cache first (include voice preference and selfie hash in cache key)
         const effectiveVoice = voicePreference || story.preferredVoice || 'auto';
-        const cacheKey = `${story._id}_${childName}_${effectiveVoice}_${story.updatedAt.getTime()}`;
+        const selfieHash = originalSelfie ? crypto.createHash('md5').update(originalSelfie.slice(0, 100)).digest('hex').slice(0, 8) : 'no-selfie';
+        const cacheKey = `${story._id}_${childName}_${effectiveVoice}_${selfieHash}_${story.updatedAt.getTime()}`;
         const cached = personalizedCache.get(cacheKey);
         if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
             console.log(`📚 Using cached personalized story for ${childName}`);
@@ -286,6 +287,27 @@ router.post('/:id/personalize', async (req, res) => {
             }
         }
         
+        // Generate personalized scene image with child's character from selfie
+        let sceneImageUrl = story.sceneImageUrl || null;
+        if (originalSelfie && !story.isIllustrated) {
+            console.log(`🎨 Generating personalized scene image with ${childName}'s character...`);
+            try {
+                sceneImageUrl = await generatePersonalizedSceneImage(
+                    story._id,
+                    childName,
+                    originalSelfie,
+                    characterStyle || 'illustrated',
+                    story.sceneImagePrompt || story.description || story.title,
+                    personalized.content
+                );
+                console.log(`✅ Personalized scene image generated`);
+            } catch (sceneErr) {
+                console.error('Scene image generation failed, using default:', sceneErr.message);
+                // Fall back to story's default scene image if available
+                sceneImageUrl = story.sceneImageUrl || null;
+            }
+        }
+        
         // Build result object
         const result = {
             storyId: story._id,
@@ -295,7 +317,7 @@ router.post('/:id/personalize', async (req, res) => {
             ttsAudioUrl: ttsResult?.url || null,
             estimatedDuration: ttsResult?.duration || story.estimatedDuration * 60,
             coverImageUrl: coverUrl,
-            sceneImageUrl: story.sceneImageUrl || null,
+            sceneImageUrl: sceneImageUrl,
             backgroundMusicUrl,
             reflectionQuestions: personalized.reflectionQuestions,
             isIllustrated: story.isIllustrated,
@@ -419,6 +441,179 @@ async function generatePersonalizedCover(storyId, childName, coverPrompt, charac
         console.error('Cover generation error:', err.message);
         throw err;
     }
+}
+
+// Helper: Generate personalized scene image with child's character using Imagen
+async function generatePersonalizedSceneImage(storyId, childName, selfieBase64, styleId, scenePrompt, storyContent) {
+    const credentialsJson = process.env.GCS_CREDENTIALS_JSON || process.env.GOOGLE_SERVICE_ACCOUNT_JSON;
+    if (!credentialsJson) {
+        throw new Error('GCS credentials not configured');
+    }
+    
+    try {
+        const credentials = JSON.parse(credentialsJson);
+        const projectId = credentials.project_id;
+        
+        // Get access token
+        const { GoogleAuth } = require('google-auth-library');
+        const auth = new GoogleAuth({
+            credentials,
+            scopes: ['https://www.googleapis.com/auth/cloud-platform']
+        });
+        const client = await auth.getClient();
+        const token = await client.getAccessToken();
+        
+        // Style descriptions for character transformation
+        const styleDescriptions = {
+            minecraft: 'Minecraft blocky pixel art style, cubic shapes, 3D voxel',
+            lego: 'LEGO minifigure style, yellow skin, plastic look, brick aesthetic',
+            cartoon: 'Cartoon animated style, big expressive eyes, Disney-like',
+            illustrated: 'Children\'s book illustration style, soft watercolor, storybook',
+            disney: 'Disney/Pixar 3D animation style, expressive, cinematic lighting'
+        };
+        
+        const styleDesc = styleDescriptions[styleId] || styleDescriptions.illustrated;
+        
+        // Extract key scene elements from story content (first 200 chars for context)
+        const storyContext = (storyContent || '').slice(0, 200).replace(/\{childName\}/g, childName);
+        
+        // Build the prompt for scene generation with child's character
+        const enhancedPrompt = `A child named ${childName} in a Bible story scene. ${scenePrompt}. 
+        The child is the main character in this scene. ${styleDesc}.
+        Story context: ${storyContext}
+        Children's book illustration style, warm inviting colors, soft lighting, 
+        suitable for ages 4-12, peaceful atmosphere, Christian faith theme.
+        Wide scene showing environment with the child as focal point.`;
+        
+        console.log(`🎨 Generating personalized scene with style: ${styleId}`);
+        
+        // Clean up selfie base64 (remove data URL prefix if present)
+        const cleanSelfie = selfieBase64.replace(/^data:image\/\w+;base64,/, '');
+        
+        // Use Imagen with reference image for character consistency
+        const response = await fetch(
+            `https://us-central1-aiplatform.googleapis.com/v1/projects/${projectId}/locations/us-central1/publishers/google/models/imagen-3.0-generate-001:predict`,
+            {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token.token}`
+                },
+                body: JSON.stringify({
+                    instances: [{
+                        prompt: enhancedPrompt,
+                        referenceImages: [{
+                            referenceImage: {
+                                bytesBase64Encoded: cleanSelfie
+                            },
+                            referenceType: 'REFERENCE_TYPE_SUBJECT',
+                            subjectDescription: `A child named ${childName}, transform into ${styleDesc}`
+                        }]
+                    }],
+                    parameters: {
+                        sampleCount: 1,
+                        aspectRatio: "16:9", // Wide aspect for scene background
+                        safetyFilterLevel: "block_some",
+                        personGeneration: "allow_adult" // Allow since we're transforming child to character
+                    }
+                })
+            }
+        );
+        
+        if (!response.ok) {
+            const errorText = await response.text();
+            console.error('Imagen API error:', errorText);
+            // Fallback to generation without reference image
+            return await generateSceneImageFallback(storyId, childName, enhancedPrompt, token.token, projectId);
+        }
+        
+        const data = await response.json();
+        
+        if (!data.predictions || !data.predictions[0]) {
+            console.log('No image with reference, trying fallback...');
+            return await generateSceneImageFallback(storyId, childName, enhancedPrompt, token.token, projectId);
+        }
+        
+        const imageBase64 = data.predictions[0].bytesBase64Encoded;
+        const buffer = Buffer.from(imageBase64, 'base64');
+        
+        // Save to GCS
+        const hash = crypto.createHash('md5').update(storyId + childName + Date.now()).digest('hex').slice(0, 12);
+        const filename = `devotional-stories/personalized-scenes/scene_${storyId}_${childName.replace(/\s+/g, '_')}_${hash}.png`;
+        
+        if (bucket) {
+            const blob = bucket.file(filename);
+            await blob.save(buffer, {
+                metadata: {
+                    contentType: 'image/png',
+                    cacheControl: 'public, max-age=86400'
+                }
+            });
+            await blob.makePublic();
+            
+            return `https://storage.googleapis.com/${bucket.name}/${filename}`;
+        }
+        
+        throw new Error('GCS bucket not available');
+    } catch (err) {
+        console.error('Personalized scene generation error:', err.message);
+        throw err;
+    }
+}
+
+// Fallback scene generation without reference image
+async function generateSceneImageFallback(storyId, childName, prompt, accessToken, projectId) {
+    const response = await fetch(
+        `https://us-central1-aiplatform.googleapis.com/v1/projects/${projectId}/locations/us-central1/publishers/google/models/imagen-3.0-generate-001:predict`,
+        {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${accessToken}`
+            },
+            body: JSON.stringify({
+                instances: [{ prompt }],
+                parameters: {
+                    sampleCount: 1,
+                    aspectRatio: "16:9",
+                    safetyFilterLevel: "block_some",
+                    personGeneration: "dont_allow"
+                }
+            })
+        }
+    );
+    
+    if (!response.ok) {
+        throw new Error('Fallback scene generation failed');
+    }
+    
+    const data = await response.json();
+    
+    if (!data.predictions || !data.predictions[0]) {
+        throw new Error('No image generated in fallback');
+    }
+    
+    const imageBase64 = data.predictions[0].bytesBase64Encoded;
+    const buffer = Buffer.from(imageBase64, 'base64');
+    
+    // Save to GCS
+    const hash = crypto.createHash('md5').update(storyId + childName + Date.now()).digest('hex').slice(0, 12);
+    const filename = `devotional-stories/personalized-scenes/scene_${storyId}_fallback_${hash}.png`;
+    
+    if (bucket) {
+        const blob = bucket.file(filename);
+        await blob.save(buffer, {
+            metadata: {
+                contentType: 'image/png',
+                cacheControl: 'public, max-age=86400'
+            }
+        });
+        await blob.makePublic();
+        
+        return `https://storage.googleapis.com/${bucket.name}/${filename}`;
+    }
+    
+    throw new Error('GCS bucket not available');
 }
 
 // PUT /api/devotional-stories/reorder

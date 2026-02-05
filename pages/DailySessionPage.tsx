@@ -903,8 +903,10 @@ const DailySessionPage: React.FC = () => {
       // Step 2: Personalize the story
       setStoryLoadingStage('cover');
       
-      // Get character avatar from kid profile
+      // Get character data from kid profile
       const characterAvatarUrl = currentKid.characterAvatar || null;
+      const originalSelfie = currentKid.originalSelfie || null; // For personalized scene generation
+      const characterStyle = currentKid.characterStyle || null;
       
       // Get narrator preference from kid profile
       const voicePreference = currentKid.preferredNarratorId || null;
@@ -919,6 +921,8 @@ const DailySessionPage: React.FC = () => {
             childAge: childAge,
             characterAvatarUrl,
             voicePreference, // Use kid's preferred narrator
+            originalSelfie, // For personalized scene image with child's character
+            characterStyle, // Style to use for character in scene
           }),
         }
       );

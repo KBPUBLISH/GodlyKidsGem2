@@ -158,7 +158,7 @@ const BookReaderPage: React.FC = () => {
     const fromDailySession = (location.state as any)?.fromDailySession || false;
     const [searchParams] = useSearchParams();
     const { setGameMode, setMusicPaused, currentPlaylist, isPlaying, togglePlayPause } = useAudio();
-    const { isVoiceUnlocked, isSubscribed } = useUser();
+    const { isVoiceUnlocked, isSubscribed, kids, currentProfileId } = useUser();
     const { isTutorialActive, isStepActive, onPageSwipe, onBookEndModalOpen, onQuizStart, onBookQuizComplete, currentStep, goToStep } = useTutorial();
     const wasMusicEnabledRef = useRef<boolean>(false);
     const [pages, setPages] = useState<Page[]>([]);
@@ -171,6 +171,27 @@ const BookReaderPage: React.FC = () => {
     const [scrollState, setScrollState] = useState<ScrollState>('max'); // Default to max (60%) - matches portal editing view
     const [bookTitle, setBookTitle] = useState<string>('Book');
     const [bookOrientation, setBookOrientation] = useState<'portrait' | 'landscape'>('portrait');
+    
+    // Character overlay state (for showing kid's character in the book)
+    const [showCharacterOverlay, setShowCharacterOverlay] = useState(false);
+    
+    // Get current kid's character poses (for character overlay)
+    const currentKidPoses = React.useMemo(() => {
+        if (!currentProfileId || !kids || kids.length === 0) return null;
+        const currentKid = kids.find(k => k.id === currentProfileId);
+        if (!currentKid?.characterPoses) return null;
+        // Return poses for the current style, or find any available poses
+        const currentStyle = currentKid.posesStyleId;
+        if (currentStyle && currentKid.characterPoses[currentStyle]) {
+            return currentKid.characterPoses[currentStyle];
+        }
+        // Fallback: return first available style's poses
+        const availableStyles = Object.keys(currentKid.characterPoses);
+        if (availableStyles.length > 0) {
+            return currentKid.characterPoses[availableStyles[0]];
+        }
+        return null;
+    }, [currentProfileId, kids]);
     
     // Studio intro video state (per-book, set in portal)
     const [showIntroVideo, setShowIntroVideo] = useState(false);
@@ -1012,6 +1033,13 @@ const BookReaderPage: React.FC = () => {
                     const orientation = rawData?.orientation || (book as any)?.orientation || 'portrait';
                     setBookOrientation(orientation);
                     console.log('📖 Book orientation:', orientation);
+                    
+                    // Check if book should show character overlay
+                    const hasCharacterOverlay = rawData?.showCharacterOverlay || (book as any)?.showCharacterOverlay || false;
+                    setShowCharacterOverlay(hasCharacterOverlay);
+                    if (hasCharacterOverlay) {
+                        console.log('🎭 Book has character overlay enabled');
+                    }
                     
                     // Load book-specific voice settings
                     const defaultVoice = rawData?.defaultVoiceId || (book as any)?.defaultVoiceId;
@@ -4624,6 +4652,9 @@ const BookReaderPage: React.FC = () => {
                                 highlightedWordIndex={currentWordIndex}
                                 wordAlignment={wordAlignment}
                                 isTTSPlaying={playing}
+                                // Character overlay props
+                                showCharacterOverlay={showCharacterOverlay && !!currentKidPoses}
+                                characterPoses={currentKidPoses || undefined}
                             />
                         )}
                     </div>

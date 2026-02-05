@@ -19,16 +19,21 @@ export interface CloudProfile {
     // Narrator preferences
     preferredNarratorId?: string;    // ElevenLabs voice ID
     preferredNarratorName?: string;  // Display name of the narrator
-    // Character poses for illustrated stories
+    // Character poses for illustrated stories (grouped by styleId)
     characterPoses?: {
-      [poseId: string]: {
-        url: string;
-        name: string;
-        description: string;
+      [styleId: string]: {
+        [poseId: string]: {
+          url: string;
+          name: string;
+          description: string;
+        };
       };
     };
-    posesStyleId?: string;           // Style used for poses
+    posesStyleId?: string;           // Current active style for poses
     posesGeneratedAt?: number;       // Timestamp when poses were generated
+    // Character creation limits
+    characterPreviewCount?: number;
+    characterCommitCount?: number;
   }>;
   coins: number;
   equippedAvatar: any;

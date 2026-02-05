@@ -30,6 +30,25 @@ interface ImageSequenceItem {
     order: number;
 }
 
+// Character overlay settings for a page
+interface CharacterOverlay {
+    showCharacter: boolean;
+    pose: string; // e.g., 'standing_front', 'praying', etc.
+    x: number; // 0-100 percentage
+    y: number; // 0-100 percentage
+    scale: number; // 0.5-2.0
+    flipHorizontal: boolean;
+}
+
+// Character poses available (URLs from user's profile)
+interface CharacterPoses {
+    [poseId: string]: {
+        url: string;
+        name: string;
+        description: string;
+    };
+}
+
 interface PageData {
     id: string;
     pageNumber: number;
@@ -55,6 +74,8 @@ interface PageData {
     imageSequence?: ImageSequenceItem[];
     imageSequenceDuration?: number; // seconds per image (default 3)
     imageSequenceAnimation?: 'none' | 'panLeft' | 'panRight' | 'panUp' | 'panDown' | 'zoomIn' | 'zoomOut' | 'kenBurns'; // animation effect
+    // Character overlay settings (from AI or manual)
+    characterOverlay?: CharacterOverlay;
 }
 
 // Scroll state types
@@ -70,6 +91,9 @@ interface BookPageRendererProps {
     wordAlignment?: { words: Array<{ word: string; start: number; end: number }> } | null;
     onVideoTransition?: () => void; // Called when video loops/plays to resume TTS if suspended
     isTTSPlaying?: boolean; // When true, mute video to prevent audio conflicts on iOS
+    // Character overlay props
+    characterPoses?: CharacterPoses; // User's generated character poses
+    showCharacterOverlay?: boolean; // Book-level setting to show character
 }
 
 export const BookPageRenderer: React.FC<BookPageRendererProps> = ({
@@ -81,7 +105,9 @@ export const BookPageRenderer: React.FC<BookPageRendererProps> = ({
     highlightedWordIndex,
     wordAlignment,
     onVideoTransition,
-    isTTSPlaying = false
+    isTTSPlaying = false,
+    characterPoses,
+    showCharacterOverlay = false
 }) => {
     // For backward compatibility
     const showScroll = scrollState !== 'hidden';
@@ -698,6 +724,49 @@ export const BookPageRenderer: React.FC<BookPageRendererProps> = ({
 
             {/* Gradient Overlay for depth (spine shadow) */}
             <div className="absolute inset-y-0 left-0 w-8 bg-gradient-to-r from-black/20 to-transparent pointer-events-none z-10" />
+
+            {/* Character Overlay Layer */}
+            {showCharacterOverlay && 
+             characterPoses && 
+             page.characterOverlay?.showCharacter !== false && (
+                (() => {
+                    const overlay = page.characterOverlay || {
+                        pose: 'standing_front',
+                        x: 75,
+                        y: 70,
+                        scale: 1.0,
+                        flipHorizontal: false,
+                        showCharacter: true
+                    };
+                    
+                    const poseData = characterPoses[overlay.pose] || characterPoses['standing_front'];
+                    
+                    if (!poseData?.url) return null;
+                    
+                    return (
+                        <div
+                            className="absolute pointer-events-none z-[12] transition-all duration-500"
+                            style={{
+                                left: `${overlay.x}%`,
+                                top: `${overlay.y}%`,
+                                transform: `translate(-50%, -50%) scaleX(${overlay.flipHorizontal ? -1 : 1})`,
+                            }}
+                        >
+                            <img
+                                src={poseData.url}
+                                alt="Your character"
+                                className="max-w-none drop-shadow-lg"
+                                style={{
+                                    width: `${overlay.scale * 150}px`, // Base size 150px, scaled
+                                    height: 'auto',
+                                    filter: 'drop-shadow(2px 4px 6px rgba(0,0,0,0.3))',
+                                }}
+                                loading="eager"
+                            />
+                        </div>
+                    );
+                })()
+            )}
 
             {/* Scroll Image Layer - Three states: hidden, mid, max */}
             {page.scrollUrl && (

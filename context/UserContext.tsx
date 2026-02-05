@@ -305,16 +305,23 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
     preferredNarratorId?: string;    // ElevenLabs voice ID
     preferredNarratorName?: string;  // Display name of the narrator
     
-    // Character poses for illustrated stories (10 pre-generated poses)
+    // Character poses for illustrated stories (10 pre-generated poses per style)
+    // Grouped by styleId so we can save poses for multiple styles
     characterPoses?: {
-      [poseId: string]: {
-        url: string;
-        name: string;
-        description: string;
+      [styleId: string]: {
+        [poseId: string]: {
+          url: string;
+          name: string;
+          description: string;
+        };
       };
     };
-    posesStyleId?: string;           // Style used for poses (minecraft, lego, etc.)
+    posesStyleId?: string;           // Current active style for poses
     posesGeneratedAt?: number;       // Timestamp when poses were generated
+    
+    // Character creation limits (for trial vs subscribed users)
+    characterPreviewCount?: number;  // Number of style previews used
+    characterCommitCount?: number;   // Number of times committed to a style
   };
 
   const [parentName, setParentName] = useState<string>(saved?.parentName ?? 'Parent');

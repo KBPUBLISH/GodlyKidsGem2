@@ -70,15 +70,15 @@ const ReverseTrialOfferModal: React.FC<ReverseTrialOfferModalProps> = ({
       />
       
       {/* Modal */}
-      <div className="relative w-full max-w-sm bg-gradient-to-b from-indigo-600 via-purple-600 to-purple-700 rounded-3xl shadow-2xl overflow-hidden animate-in zoom-in-95 duration-300">
+      <div className="relative w-full max-w-sm bg-white rounded-3xl shadow-2xl overflow-hidden animate-in zoom-in-95 duration-300">
         {/* Decorative elements */}
         <div className="absolute top-0 left-0 w-full h-full overflow-hidden pointer-events-none">
-          <div className="absolute -top-10 -left-10 w-40 h-40 bg-white/10 rounded-full blur-3xl" />
-          <div className="absolute -bottom-10 -right-10 w-40 h-40 bg-yellow-400/20 rounded-full blur-3xl" />
+          <div className="absolute -top-10 -left-10 w-40 h-40 bg-purple-100 rounded-full blur-3xl" />
+          <div className="absolute -bottom-10 -right-10 w-40 h-40 bg-orange-100 rounded-full blur-3xl" />
           {/* Sparkles */}
-          <Sparkles className="absolute top-8 right-8 w-6 h-6 text-yellow-300/60 animate-pulse" />
-          <Sparkles className="absolute top-20 left-6 w-4 h-4 text-white/40 animate-pulse delay-300" />
-          <Sparkles className="absolute bottom-32 right-12 w-5 h-5 text-yellow-300/50 animate-pulse delay-500" />
+          <Sparkles className="absolute top-8 right-8 w-6 h-6 text-purple-400/60 animate-pulse" />
+          <Sparkles className="absolute top-20 left-6 w-4 h-4 text-purple-300/40 animate-pulse delay-300" />
+          <Sparkles className="absolute bottom-32 right-12 w-5 h-5 text-orange-400/50 animate-pulse delay-500" />
         </div>
         
         {/* Content */}
@@ -89,18 +89,18 @@ const ReverseTrialOfferModal: React.FC<ReverseTrialOfferModalProps> = ({
           </div>
           
           {/* Headline */}
-          <h2 className="text-2xl font-bold text-white mb-2">
+          <h2 className="text-2xl font-bold text-gray-800 mb-2">
             🎉 Amazing First Session{childName ? `, ${childName}` : ''}!
           </h2>
           
-          <p className="text-white/90 text-lg mb-6">
+          <p className="text-gray-600 text-lg mb-6">
             Keep the momentum going...
           </p>
           
           {/* Value prop box */}
-          <div className="bg-white/15 backdrop-blur rounded-2xl p-5 mb-6">
+          <div className="bg-gradient-to-br from-purple-500 to-indigo-600 rounded-2xl p-5 mb-6">
             <h3 className="text-xl font-bold text-white mb-3">
-              7 Days FREE Premium
+              7 Days Free Access On Us
             </h3>
             
             <ul className="space-y-2 text-left">
@@ -119,12 +119,12 @@ const ReverseTrialOfferModal: React.FC<ReverseTrialOfferModalProps> = ({
           </div>
           
           {/* No commitment badge */}
-          <p className="text-yellow-300 font-medium mb-4">
+          <p className="text-purple-600 font-medium mb-4">
             ✨ No card. No commitment. Just try it.
           </p>
           
           {/* Daily reminder toggle */}
-          <div className="bg-white/10 rounded-xl p-3 mb-4">
+          <div className="bg-gray-100 rounded-xl p-3 mb-4">
             <NotificationToggle 
               label="Get daily 8am reminders"
               size="md"
@@ -134,7 +134,7 @@ const ReverseTrialOfferModal: React.FC<ReverseTrialOfferModalProps> = ({
           
           {/* Error message */}
           {error && (
-            <p className="text-red-300 text-sm mb-4">{error}</p>
+            <p className="text-red-500 text-sm mb-4">{error}</p>
           )}
           
           {/* CTA Button */}
@@ -157,7 +157,7 @@ const ReverseTrialOfferModal: React.FC<ReverseTrialOfferModalProps> = ({
           <button
             onClick={handleMaybeLater}
             disabled={isStarting}
-            className="mt-4 text-white/60 hover:text-white/80 text-sm transition-colors"
+            className="mt-4 text-gray-400 hover:text-gray-600 text-sm transition-colors"
           >
             Maybe later
           </button>

@@ -14,6 +14,60 @@ const AppUser = require('../models/AppUser');
 const { sendNotificationByPlayerId, sendNotificationToUser } = require('../services/notificationService');
 
 // Notification message pool - rotates daily
+// Morning scripture messages - uplifting, no call to action
+const MORNING_SCRIPTURES = [
+  {
+    title: '📖 Morning Blessing',
+    message: '"The Lord bless you and keep you; the Lord make his face shine on you." - Numbers 6:24-25',
+    data: { type: 'morning_scripture' }
+  },
+  {
+    title: '🌅 Good Morning!',
+    message: '"This is the day the Lord has made; let us rejoice and be glad in it." - Psalm 118:24',
+    data: { type: 'morning_scripture' }
+  },
+  {
+    title: '✨ Start Your Day',
+    message: '"Trust in the Lord with all your heart and lean not on your own understanding." - Proverbs 3:5',
+    data: { type: 'morning_scripture' }
+  },
+  {
+    title: '🙏 Morning Prayer',
+    message: '"Be strong and courageous. Do not be afraid; for the Lord your God will be with you." - Joshua 1:9',
+    data: { type: 'morning_scripture' }
+  },
+  {
+    title: '💜 Daily Reminder',
+    message: '"I can do all things through Christ who strengthens me." - Philippians 4:13',
+    data: { type: 'morning_scripture' }
+  },
+  {
+    title: '🌟 Scripture of the Day',
+    message: '"For I know the plans I have for you, declares the Lord, plans to prosper you." - Jeremiah 29:11',
+    data: { type: 'morning_scripture' }
+  },
+  {
+    title: '☀️ Rise & Shine',
+    message: '"The steadfast love of the Lord never ceases; his mercies are new every morning." - Lamentations 3:22-23',
+    data: { type: 'morning_scripture' }
+  },
+  {
+    title: '💪 Be Encouraged',
+    message: '"Cast all your anxiety on him because he cares for you." - 1 Peter 5:7',
+    data: { type: 'morning_scripture' }
+  },
+  {
+    title: '❤️ God\'s Love',
+    message: '"See what great love the Father has lavished on us, that we should be called children of God!" - 1 John 3:1',
+    data: { type: 'morning_scripture' }
+  },
+  {
+    title: '🕊️ Peace Today',
+    message: '"Peace I leave with you; my peace I give you. Do not let your hearts be troubled." - John 14:27',
+    data: { type: 'morning_scripture' }
+  },
+];
+
 const DAILY_MESSAGES = [
   // Godly Kids Time reminders
   {
@@ -146,7 +200,16 @@ const TRIAL_MESSAGES = {
  * Get a notification message for a user
  * Rotates through messages based on day of year to ensure variety
  */
-function getDailyMessage(user, dayOfYear) {
+function getDailyMessage(user, dayOfYear, options = {}) {
+  const { morningScripture = false } = options;
+  
+  // Morning scripture - just uplifting, no call to action
+  if (morningScripture) {
+    const userHash = hashString(user._id.toString());
+    const scriptureIndex = (dayOfYear + userHash) % MORNING_SCRIPTURES.length;
+    return MORNING_SCRIPTURES[scriptureIndex];
+  }
+  
   // Check if user is in reverse trial - send trial-specific messages
   if (user.reverseTrialActive && user.reverseTrialStartDate && !user.reverseTrialConverted) {
     const trialDay = getTrialDay(user.reverseTrialStartDate);
@@ -258,8 +321,10 @@ async function sendDailyNotification(user, message) {
  * Should be called every hour via cron
  */
 async function runDailyEngagementNotifications(options = {}) {
-  const { ignoreTimezone = false } = options;
-  console.log('🌅 Starting daily engagement notification job...', ignoreTimezone ? '(all users)' : '(timezone-based)');
+  const { ignoreTimezone = false, morningScripture = false } = options;
+  console.log('🌅 Starting daily engagement notification job...', 
+    morningScripture ? '(morning scripture)' : '(afternoon engagement)',
+    ignoreTimezone ? '(all users)' : '(timezone-based)');
   
   const startTime = Date.now();
   const now = new Date();
@@ -275,6 +340,9 @@ async function runDailyEngagementNotifications(options = {}) {
     mode: ignoreTimezone ? 'all_users' : 'timezone_based'
   };
   
+  // Use different tracking fields for morning scripture vs afternoon engagement
+  const dateField = morningScripture ? 'lastMorningScriptureDate' : 'lastDailyNotificationDate';
+  
   try {
     let query;
     
@@ -287,7 +355,7 @@ async function runDailyEngagementNotifications(options = {}) {
           { notificationEmail: { $exists: true, $ne: null, $ne: '' } }
         ],
         dailyNotificationDisabled: { $ne: true },
-        lastDailyNotificationDate: { $ne: today }
+        [dateField]: { $ne: today }
       };
     } else {
       // Find timezones where it's currently 8am
@@ -308,7 +376,7 @@ async function runDailyEngagementNotifications(options = {}) {
           { notificationEmail: { $exists: true, $ne: null, $ne: '' } }
         ],
         dailyNotificationDisabled: { $ne: true },
-        lastDailyNotificationDate: { $ne: today }
+        [dateField]: { $ne: today }
       };
     }
     
@@ -327,13 +395,13 @@ async function runDailyEngagementNotifications(options = {}) {
       
       const batchPromises = batch.map(async (user) => {
         try {
-          const message = getDailyMessage(user, dayOfYear);
+          const message = getDailyMessage(user, dayOfYear, { morningScripture });
           const sendResult = await sendDailyNotification(user, message);
           
           if (sendResult.success) {
-            // Mark notification as sent for today
+            // Mark notification as sent for today (different field for scripture vs engagement)
             await AppUser.findByIdAndUpdate(user._id, {
-              $set: { lastDailyNotificationDate: today }
+              $set: { [dateField]: today }
             });
             return { sent: true };
           } else {

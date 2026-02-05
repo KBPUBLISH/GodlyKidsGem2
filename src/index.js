@@ -185,8 +185,20 @@ const cron = require('node-cron');
 const { runDailyEngagementNotifications } = require('./jobs/dailyEngagementNotifier');
 const { runReverseTrialNotifications, expireEndedTrials } = require('./jobs/reverseTrialNotifier');
 
-// Run daily engagement notifications at 2pm Mountain Time (America/Denver)
-// Chosen because: morning is hectic for parents, 2pm = after lunch, quiet time, or after school pickup
+// Morning scripture at 7am Mountain Time - just uplifting, no call to action
+cron.schedule('0 7 * * *', async () => {
+  console.log('🌅 [Cron] Running 7am morning scripture notifications...');
+  try {
+    const result = await runDailyEngagementNotifications({ ignoreTimezone: true, morningScripture: true });
+    console.log('✅ [Cron] Morning scripture job completed:', result.sent, 'notifications sent');
+  } catch (error) {
+    console.error('❌ [Cron] Morning scripture job failed:', error.message);
+  }
+}, {
+  timezone: 'America/Denver'
+});
+
+// Afternoon engagement at 2pm Mountain Time - call to action
 cron.schedule('0 14 * * *', async () => {
   console.log('⏰ [Cron] Running 2pm daily engagement notifications...');
   try {

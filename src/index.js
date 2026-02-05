@@ -185,15 +185,17 @@ const cron = require('node-cron');
 const { runDailyEngagementNotifications } = require('./jobs/dailyEngagementNotifier');
 const { runReverseTrialNotifications, expireEndedTrials } = require('./jobs/reverseTrialNotifier');
 
-// Run daily engagement notifications every hour (finds users where it's 8am in their timezone)
-cron.schedule('0 * * * *', async () => {
-  console.log('⏰ [Cron] Running hourly daily engagement notifications check...');
+// Run daily engagement notifications at 8am Mountain Time (America/Denver)
+cron.schedule('0 8 * * *', async () => {
+  console.log('⏰ [Cron] Running 8am daily engagement notifications...');
   try {
-    const result = await runDailyEngagementNotifications();
+    const result = await runDailyEngagementNotifications({ ignoreTimezone: true });
     console.log('✅ [Cron] Daily engagement job completed:', result.sent, 'notifications sent');
   } catch (error) {
     console.error('❌ [Cron] Daily engagement job failed:', error.message);
   }
+}, {
+  timezone: 'America/Denver'
 });
 
 // Run reverse trial notifications every 6 hours (reminders for expiring trials)

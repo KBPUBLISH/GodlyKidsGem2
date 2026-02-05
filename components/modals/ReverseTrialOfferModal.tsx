@@ -153,14 +153,6 @@ const ReverseTrialOfferModal: React.FC<ReverseTrialOfferModalProps> = ({
             )}
           </button>
           
-          {/* Maybe later link */}
-          <button
-            onClick={handleMaybeLater}
-            disabled={isStarting}
-            className="mt-4 text-gray-400 hover:text-gray-600 text-sm transition-colors"
-          >
-            Maybe later
-          </button>
         </div>
       </div>
     </div>

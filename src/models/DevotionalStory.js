@@ -135,6 +135,16 @@ const devotionalStorySchema = new mongoose.Schema({
         type: String,
     },
     
+    // AI-generated scene image (for audio story player)
+    sceneImageUrl: {
+        type: String,
+    },
+    
+    // Custom prompt for scene image generation
+    sceneImagePrompt: {
+        type: String,
+    },
+    
     // Publication status
     status: {
         type: String,
@@ -189,6 +199,7 @@ devotionalStorySchema.methods.personalizeContent = function(childName) {
         backgroundMusicUrl: this.backgroundMusicUrl,
         coverPrompt: replaceChildName(this.coverPrompt),
         defaultCoverUrl: this.defaultCoverUrl,
+        sceneImageUrl: this.sceneImageUrl,
         reflectionQuestions: this.reflectionQuestions,
         estimatedDuration: this.estimatedDuration,
         isIllustrated: this.isIllustrated,

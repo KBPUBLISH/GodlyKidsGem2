@@ -179,6 +179,38 @@ app.use((err, req, res, next) => {
 });
 
 // ===========================================
+// SCHEDULED JOBS (Internal Cron)
+// ===========================================
+const cron = require('node-cron');
+const { runDailyEngagementNotifications } = require('./jobs/dailyEngagementNotifier');
+const { runReverseTrialNotifications, expireEndedTrials } = require('./jobs/reverseTrialNotifier');
+
+// Run daily engagement notifications every hour (finds users where it's 8am in their timezone)
+cron.schedule('0 * * * *', async () => {
+  console.log('⏰ [Cron] Running hourly daily engagement notifications check...');
+  try {
+    const result = await runDailyEngagementNotifications();
+    console.log('✅ [Cron] Daily engagement job completed:', result.sent, 'notifications sent');
+  } catch (error) {
+    console.error('❌ [Cron] Daily engagement job failed:', error.message);
+  }
+});
+
+// Run reverse trial notifications every 6 hours (reminders for expiring trials)
+cron.schedule('0 */6 * * *', async () => {
+  console.log('⏰ [Cron] Running reverse trial notifications check...');
+  try {
+    await expireEndedTrials();
+    const result = await runReverseTrialNotifications();
+    console.log('✅ [Cron] Reverse trial job completed:', result);
+  } catch (error) {
+    console.error('❌ [Cron] Reverse trial job failed:', error.message);
+  }
+});
+
+console.log('📅 Scheduled jobs initialized');
+
+// ===========================================
 // START SERVER
 // ===========================================
 app.listen(PORT, () => {

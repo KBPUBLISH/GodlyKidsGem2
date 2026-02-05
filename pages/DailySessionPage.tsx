@@ -1365,20 +1365,20 @@ const DailySessionPage: React.FC = () => {
         <div className="absolute bottom-20 right-4" style={{ marginBottom: 'var(--safe-area-bottom, 0px)' }}>
           <style>{wingAnimationStyles}</style>
           
-          {/* Speech bubble when no body equipped - positioned to LEFT of avatar */}
+          {/* Speech bubble when no body equipped - positioned BELOW avatar head */}
           {!equippedBody && (
             <button
               onClick={() => navigate('/home', { state: { openShop: true } })}
-              className="absolute -top-8 right-20 bg-white rounded-2xl px-3 py-2 shadow-lg border-2 border-[#FFD700] whitespace-nowrap animate-bounce z-10"
+              className="absolute top-28 -left-20 bg-white rounded-2xl px-3 py-2 shadow-lg border-2 border-[#FFD700] whitespace-nowrap animate-bounce z-10"
               style={{ animationDuration: '2s' }}
             >
               <p className="text-[#5D4037] text-xs font-medium text-center leading-tight">
                 "I sure wish I had a body!" 🥺
               </p>
               <p className="text-[#8B5A2B] text-[10px] text-center mt-1 opacity-70">Tap me!</p>
-              {/* Speech bubble tail - pointing right toward avatar */}
-              <div className="absolute top-1/2 -right-2 -translate-y-1/2 w-0 h-0 border-t-[8px] border-t-transparent border-b-[8px] border-b-transparent border-l-[8px] border-l-white"></div>
-              <div className="absolute top-1/2 -right-[11px] -translate-y-1/2 w-0 h-0 border-t-[9px] border-t-transparent border-b-[9px] border-b-transparent border-l-[9px] border-l-[#FFD700]"></div>
+              {/* Speech bubble tail - pointing up toward avatar */}
+              <div className="absolute -top-2 right-4 w-0 h-0 border-l-[8px] border-l-transparent border-r-[8px] border-r-transparent border-b-[8px] border-b-white"></div>
+              <div className="absolute -top-[11px] right-[13px] w-0 h-0 border-l-[9px] border-l-transparent border-r-[9px] border-r-transparent border-b-[9px] border-b-[#FFD700]"></div>
             </button>
           )}
           
@@ -1527,20 +1527,20 @@ const DailySessionPage: React.FC = () => {
         <div className="absolute bottom-20 right-4" style={{ marginBottom: 'var(--safe-area-bottom, 0px)' }}>
           <style>{wingAnimationStyles}</style>
           
-          {/* Speech bubble when no body equipped - positioned to LEFT of avatar */}
+          {/* Speech bubble when no body equipped - positioned BELOW avatar head */}
           {!equippedBody && (
             <button
               onClick={() => navigate('/home', { state: { openShop: true } })}
-              className="absolute -top-8 right-20 bg-white rounded-2xl px-3 py-2 shadow-lg border-2 border-[#FFD700] whitespace-nowrap animate-bounce z-10"
+              className="absolute top-28 -left-20 bg-white rounded-2xl px-3 py-2 shadow-lg border-2 border-[#FFD700] whitespace-nowrap animate-bounce z-10"
               style={{ animationDuration: '2s' }}
             >
               <p className="text-[#5D4037] text-xs font-medium text-center leading-tight">
                 "I sure wish I had a body!" 🥺
               </p>
               <p className="text-[#8B5A2B] text-[10px] text-center mt-1 opacity-70">Tap me!</p>
-              {/* Speech bubble tail - pointing right toward avatar */}
-              <div className="absolute top-1/2 -right-2 -translate-y-1/2 w-0 h-0 border-t-[8px] border-t-transparent border-b-[8px] border-b-transparent border-l-[8px] border-l-white"></div>
-              <div className="absolute top-1/2 -right-[11px] -translate-y-1/2 w-0 h-0 border-t-[9px] border-t-transparent border-b-[9px] border-b-transparent border-l-[9px] border-l-[#FFD700]"></div>
+              {/* Speech bubble tail - pointing up toward avatar */}
+              <div className="absolute -top-2 right-4 w-0 h-0 border-l-[8px] border-l-transparent border-r-[8px] border-r-transparent border-b-[8px] border-b-white"></div>
+              <div className="absolute -top-[11px] right-[13px] w-0 h-0 border-l-[9px] border-l-transparent border-r-[9px] border-r-transparent border-b-[9px] border-b-[#FFD700]"></div>
             </button>
           )}
           
@@ -1663,20 +1663,20 @@ const DailySessionPage: React.FC = () => {
         <div className="absolute bottom-20 right-4" style={{ marginBottom: 'var(--safe-area-bottom, 0px)' }}>
           <style>{wingAnimationStyles}</style>
           
-          {/* Speech bubble when no body equipped - positioned to LEFT of avatar */}
+          {/* Speech bubble when no body equipped - positioned BELOW avatar head */}
           {!equippedBody && (
             <button
               onClick={() => navigate('/home', { state: { openShop: true } })}
-              className="absolute -top-8 right-20 bg-white rounded-2xl px-3 py-2 shadow-lg border-2 border-[#FFD700] whitespace-nowrap animate-bounce z-10"
+              className="absolute top-28 -left-20 bg-white rounded-2xl px-3 py-2 shadow-lg border-2 border-[#FFD700] whitespace-nowrap animate-bounce z-10"
               style={{ animationDuration: '2s' }}
             >
               <p className="text-[#5D4037] text-xs font-medium text-center leading-tight">
                 "I sure wish I had a body!" 🥺
               </p>
               <p className="text-[#8B5A2B] text-[10px] text-center mt-1 opacity-70">Tap me!</p>
-              {/* Speech bubble tail - pointing right toward avatar */}
-              <div className="absolute top-1/2 -right-2 -translate-y-1/2 w-0 h-0 border-t-[8px] border-t-transparent border-b-[8px] border-b-transparent border-l-[8px] border-l-white"></div>
-              <div className="absolute top-1/2 -right-[11px] -translate-y-1/2 w-0 h-0 border-t-[9px] border-t-transparent border-b-[9px] border-b-transparent border-l-[9px] border-l-[#FFD700]"></div>
+              {/* Speech bubble tail - pointing up toward avatar */}
+              <div className="absolute -top-2 right-4 w-0 h-0 border-l-[8px] border-l-transparent border-r-[8px] border-r-transparent border-b-[8px] border-b-white"></div>
+              <div className="absolute -top-[11px] right-[13px] w-0 h-0 border-l-[9px] border-l-transparent border-r-[9px] border-r-transparent border-b-[9px] border-b-[#FFD700]"></div>
             </button>
           )}
           

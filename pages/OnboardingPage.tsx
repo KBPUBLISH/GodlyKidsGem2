@@ -1577,7 +1577,15 @@ const OnboardingPage: React.FC = () => {
   };
 
   // Helper for rendering internal avatar asset
-  const renderAvatarAsset = (headKey: string) => {
+  const renderAvatarAsset = (headKey: string | undefined | null) => {
+    if (!headKey) {
+      // Return a default avatar placeholder
+      return (
+        <div className="w-full h-full flex items-center justify-center bg-[#f3e5ab] text-4xl">
+          👤
+        </div>
+      );
+    }
     const isInternalHead = headKey.startsWith('head-') && !headKey.startsWith('/');
     if (isInternalHead && AVATAR_ASSETS[headKey]) {
       return (

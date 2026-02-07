@@ -337,7 +337,7 @@ const TraitPill: React.FC<{ fruit: typeof FRUITS_OF_SPIRIT[0]; delay: number }> 
 
 // Screen content components - function to create screens with dynamic data
 const createScreens = (bookCovers: string[], voiceCharacters: VoiceCharacter[]) => [
-  // Screen 1: Welcome to Premium
+  // Screen 1: Free Gift
   {
     id: 'welcome',
     content: (props: { onNext: () => void }) => (
@@ -351,7 +351,7 @@ const createScreens = (bookCovers: string[], voiceCharacters: VoiceCharacter[]) 
         
         {/* Headline */}
         <h1 className="text-3xl font-bold text-gray-800 mb-3">
-          Welcome to Premium!
+          Free Gift to You!
         </h1>
         
         {/* Subtext */}

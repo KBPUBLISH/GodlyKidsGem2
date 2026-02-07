@@ -774,9 +774,16 @@ const DailySessionPage: React.FC = () => {
     const isFirstSession = sessionHistory.length <= 1; // Current session just got archived
     const isEligibleForTrial = reverseTrial?.eligible && !isPremium;
     
-    if (isFirstSession && isEligibleForTrial) {
-      // Show reverse trial offer after first session
-      setShowReverseTrialOffer(true);
+    if (isFirstSession && !isPremium) {
+      // Navigate to paywall first - if they dismiss, they'll see reverse trial offer
+      navigate('/paywall', { 
+        state: { 
+          source: 'first_session_complete',
+          showReverseTrialOnClose: isEligibleForTrial,
+          childName: childName
+        } 
+      });
+      return;
     } else {
       navigate('/home');
     }

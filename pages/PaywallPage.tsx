@@ -5,6 +5,7 @@ import { Check, X, Loader2, RefreshCw, AlertCircle, CheckCircle, Mail, UserPlus,
 import { useUser } from '../context/UserContext';
 import { useSubscription } from '../context/SubscriptionContext';
 import ParentGateModal from '../components/features/ParentGateModal';
+import ReverseTrialOfferModal from '../components/modals/ReverseTrialOfferModal';
 import { authService } from '../services/authService';
 import { getApiBaseUrl } from '../services/apiService';
 import { facebookPixelService } from '../services/facebookPixelService';
@@ -56,6 +57,13 @@ const PaywallPage: React.FC = () => {
   
   // Check if close button should be hidden (from tutorial timer expiry)
   const hideCloseButton = (location.state as any)?.hideCloseButton === true;
+  
+  // Check if coming from first session complete - show reverse trial modal on close
+  const showReverseTrialOnClose = (location.state as any)?.showReverseTrialOnClose === true;
+  const childNameFromState = (location.state as any)?.childName || '';
+  
+  // State for showing reverse trial modal
+  const [showReverseTrialModal, setShowReverseTrialModal] = useState(false);
   const { 
     isLoading, 
     isPremium,
@@ -481,15 +489,28 @@ const PaywallPage: React.FC = () => {
     console.log('🚪 Paywall close clicked', { 
       reverseTrial, 
       isPremium,
-      eligible: reverseTrial?.eligible 
+      eligible: reverseTrial?.eligible,
+      showReverseTrialOnClose 
     });
     
     try {
       // Track paywall closed (don't await to prevent blocking)
       activityTrackingService.trackOnboardingEvent('paywall_closed').catch(() => {});
       
-      // Check if user is eligible for reverse trial (first-time close, not premium, HAS ACCOUNT)
-      // Reverse trial requires an account - anonymous users should create account first
+      // Check if coming from first session AND eligible for reverse trial
+      // Show the modal to let user choose instead of auto-starting
+      if (showReverseTrialOnClose && reverseTrial?.eligible && !isPremium) {
+        console.log('🎁 Showing reverse trial modal...');
+        activityTrackingService.trackOnboardingEvent('reverse_trial_offered', {
+          source: 'paywall_close_first_session'
+        }).catch(() => {});
+        
+        // Show the reverse trial modal instead of auto-starting
+        setShowReverseTrialModal(true);
+        return;
+      }
+      
+      // Original behavior for non-first-session closes
       const hasAccount = !!(localStorage.getItem('godlykids_auth_token') || localStorage.getItem('godlykids_user_email'));
       
       if (reverseTrial?.eligible && !isPremium && hasAccount) {
@@ -523,6 +544,12 @@ const PaywallPage: React.FC = () => {
       // Ensure navigation happens even if there's an error
       navigate('/home');
     }
+  };
+  
+  // Handle reverse trial modal close
+  const handleReverseTrialModalClose = () => {
+    setShowReverseTrialModal(false);
+    navigate('/home');
   };
 
   return (
@@ -1021,6 +1048,13 @@ const PaywallPage: React.FC = () => {
             </div>
           </div>
         )}
+
+        {/* Reverse Trial Offer Modal - Shows when user closes paywall after first session */}
+        <ReverseTrialOfferModal
+          isOpen={showReverseTrialModal}
+          onClose={handleReverseTrialModalClose}
+          childName={childNameFromState}
+        />
     </div>
   );
 };

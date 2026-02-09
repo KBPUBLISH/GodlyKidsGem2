@@ -114,17 +114,31 @@ router.post('/create-checkout-session', async (req, res) => {
 /**
  * POST /api/stripe/webhook
  * Handle Stripe webhooks for subscription events
+ * NOTE: This route must receive RAW body for signature verification
+ * The main app.js excludes this route from JSON parsing
  */
 router.post('/webhook', express.raw({ type: 'application/json' }), async (req, res) => {
+  console.log('📬 Stripe webhook hit');
+  
   const sig = req.headers['stripe-signature'];
   const endpointSecret = process.env.STRIPE_WEBHOOK_SECRET;
+
+  // Check if webhook secret is configured
+  if (!endpointSecret) {
+    console.error('❌ STRIPE_WEBHOOK_SECRET is not configured!');
+    return res.status(500).json({ error: 'Webhook secret not configured' });
+  }
 
   let event;
 
   try {
+    // Verify the webhook signature
     event = stripe.webhooks.constructEvent(req.body, sig, endpointSecret);
   } catch (err) {
     console.error('⚠️ Webhook signature verification failed:', err.message);
+    console.error('   Signature:', sig ? sig.substring(0, 50) + '...' : 'missing');
+    console.error('   Body type:', typeof req.body);
+    console.error('   Body is Buffer:', Buffer.isBuffer(req.body));
     return res.status(400).send(`Webhook Error: ${err.message}`);
   }
 

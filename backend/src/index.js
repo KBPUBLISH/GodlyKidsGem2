@@ -44,7 +44,14 @@ app.use(cors({
 // ===========================================
 
 // Body parsing with size limits
-app.use(express.json({ limit: '10mb' })); // Reduced from 50mb
+// IMPORTANT: Skip JSON parsing for Stripe webhook - it needs raw body for signature verification
+app.use((req, res, next) => {
+  if (req.originalUrl === '/api/stripe/webhook') {
+    next(); // Skip JSON parsing for webhook
+  } else {
+    express.json({ limit: '10mb' })(req, res, next);
+  }
+});
 app.use(express.urlencoded({ limit: '10mb', extended: true }));
 
 // Apply general rate limiter to all routes

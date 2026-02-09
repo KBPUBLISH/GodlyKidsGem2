@@ -132,7 +132,7 @@ const SurveyPopup: React.FC<SurveyPopupProps> = ({
     if (!isOpen) return null;
 
     return (
-        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-[60] p-4">
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-[9999] p-4">
             <div className="bg-gradient-to-b from-amber-50 to-orange-50 rounded-3xl max-w-md w-full shadow-2xl overflow-hidden border-4 border-amber-600">
                 {/* Header */}
                 <div className="bg-gradient-to-r from-amber-500 to-orange-500 px-6 py-4 flex items-center justify-between">

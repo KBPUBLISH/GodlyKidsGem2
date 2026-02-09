@@ -215,7 +215,7 @@ const BottomNavigation: React.FC = () => {
 
   return (
     <div 
-      className="fixed bottom-0 left-0 right-0 z-40 h-0 flex justify-center pointer-events-none"
+      className="fixed bottom-0 left-0 right-0 z-40 h-0 flex justify-center pointer-events-none bottom-nav-wheel"
       style={{ 
         // Account for safe area bottom (home indicator on iPhone X+)
         paddingBottom: 'var(--safe-area-bottom, 0px)' 
@@ -566,6 +566,11 @@ const BottomNavigation: React.FC = () => {
         }
         .animate-spin-slow {
           animation: spin-slow 3s linear infinite;
+        }
+        /* Force hide wheel when any modal is open */
+        body[data-modal-open="true"] .bottom-nav-wheel {
+          display: none !important;
+          pointer-events: none !important;
         }
       `}</style>
     </div>

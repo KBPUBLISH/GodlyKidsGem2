@@ -99,11 +99,12 @@ router.post('/app-install', async (req, res) => {
     if (fbp) userData.fbp = fbp;
     if (fbc) userData.fbc = fbc;
 
-    // Build the event
+    // Build the event (Meta requires advertiser_tracking_enabled for action_source 'app')
+    const isApp = platform !== 'web';
     const eventData = {
       event_name: 'AppInstall',
       event_time: Math.floor(Date.now() / 1000),
-      action_source: platform === 'web' ? 'website' : 'app',
+      action_source: isApp ? 'app' : 'website',
       user_data: userData,
       custom_data: {
         platform: platform || 'unknown',
@@ -111,6 +112,11 @@ router.post('/app-install', async (req, res) => {
         device_id: deviceId,
       },
     };
+    if (isApp) {
+      eventData.advertiser_tracking_enabled = req.body.advertiser_tracking_enabled !== undefined
+        ? (req.body.advertiser_tracking_enabled ? 1 : 0)
+        : 0; // default 0 (opt-out) if client doesn't send
+    }
 
     // Add fbclid to event if present (important for attribution)
     if (fbclid) {
@@ -176,11 +182,14 @@ router.post('/event', async (req, res) => {
     if (fbp) userData.fbp = fbp;
     if (fbc) userData.fbc = fbc;
 
-    // Build event data
+    // Build event data (Meta requires advertiser_tracking_enabled for action_source 'app')
     const eventData = {
       event_name: eventName,
       event_time: Math.floor(Date.now() / 1000),
       action_source: 'app',
+      advertiser_tracking_enabled: req.body.advertiser_tracking_enabled !== undefined
+        ? (req.body.advertiser_tracking_enabled ? 1 : 0)
+        : 0,
       user_data: userData,
       custom_data: {
         ...customData,
@@ -246,6 +255,9 @@ router.post('/purchase', async (req, res) => {
       event_name: 'Purchase',
       event_time: Math.floor(Date.now() / 1000),
       action_source: 'app',
+      advertiser_tracking_enabled: req.body.advertiser_tracking_enabled !== undefined
+        ? (req.body.advertiser_tracking_enabled ? 1 : 0)
+        : 0,
       user_data: userData,
       custom_data: {
         value: value,
@@ -285,11 +297,12 @@ router.get('/test', async (req, res) => {
     });
   }
 
-  // Send a test event
+  // Send a test event (advertiser_tracking_enabled required for action_source 'app')
   const testEvent = {
     event_name: 'TestEvent',
     event_time: Math.floor(Date.now() / 1000),
     action_source: 'app',
+    advertiser_tracking_enabled: 0,
     user_data: {
       client_ip_address: req.ip,
       client_user_agent: req.headers['user-agent'],

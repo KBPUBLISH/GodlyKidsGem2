@@ -31,11 +31,12 @@ const Header: React.FC<HeaderProps> = ({ isVisible, title = "GODLY KIDS" }) => {
   const [isCoinHistoryOpen, setIsCoinHistoryOpen] = useState(false);
   const [isReportCardOpen, setIsReportCardOpen] = useState(false);
   
-  // Android detection — synchronous so the very first render uses simplified styles
+  // Android detection — synchronous so the very first render uses simplified styles.
+  // Include all Android (including Despia runtime) so header buttons render reliably.
   const [isAndroid] = useState(() => {
     if (typeof navigator === 'undefined') return false;
     const ua = navigator.userAgent.toLowerCase();
-    return /android/.test(ua) && !/despia/.test(ua);
+    return /android/.test(ua);
   });
   
   // Force repaint on Android after mount
@@ -301,7 +302,8 @@ const Header: React.FC<HeaderProps> = ({ isVisible, title = "GODLY KIDS" }) => {
               // excessive compositing layers that make children disappear
               transform: isAndroid ? 'translate3d(0,0,0)' : undefined,
               backfaceVisibility: 'hidden',
-              WebkitBackfaceVisibility: 'hidden'
+              WebkitBackfaceVisibility: 'hidden',
+              ...(isAndroid && { isolation: 'isolate' as const, minHeight: 40 })
             }}>
               {/* Gold Coins Display */}
               <button
@@ -321,7 +323,9 @@ const Header: React.FC<HeaderProps> = ({ isVisible, title = "GODLY KIDS" }) => {
                   transform: 'translateZ(0)',
                   backfaceVisibility: 'hidden',
                   WebkitBackfaceVisibility: 'hidden',
-                  opacity: 1
+                  opacity: 1,
+                  minWidth: 44,
+                  minHeight: 40
                 } : undefined}
               >
                 {/* Coin Icon */}
@@ -363,10 +367,12 @@ const Header: React.FC<HeaderProps> = ({ isVisible, title = "GODLY KIDS" }) => {
                   transform: 'translateZ(0)',
                   backfaceVisibility: 'hidden',
                   WebkitBackfaceVisibility: 'hidden',
-                  opacity: 1
+                  opacity: 1,
+                  minWidth: 44,
+                  minHeight: 40
                 } : undefined}
               >
-                <FileText className="w-5 h-5 text-white/90 group-hover:text-white transition-colors" />
+                <FileText className={`w-5 h-5 flex-shrink-0 ${isAndroid ? 'text-white' : 'text-white/90 group-hover:text-white'} transition-colors`} style={isAndroid ? { fill: 'currentColor' } : undefined} />
               </button>
 
               {/* Shop Sign Button */}
@@ -385,7 +391,9 @@ const Header: React.FC<HeaderProps> = ({ isVisible, title = "GODLY KIDS" }) => {
                   transform: 'translateZ(0)',
                   backfaceVisibility: 'hidden',
                   WebkitBackfaceVisibility: 'hidden',
-                  opacity: 1
+                  opacity: 1,
+                  minWidth: 44,
+                  minHeight: 40
                 } : undefined}
               >
                 {/* Wood Texture Overlay - hide on Android */}

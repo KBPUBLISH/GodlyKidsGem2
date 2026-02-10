@@ -19,11 +19,14 @@ const WEB_BILLING_ENABLED = true;
 // Entitlement identifier for premium access
 export const PREMIUM_ENTITLEMENT_ID = 'premium';
 
-// Product identifiers (these should match your RevenueCat product IDs)
+/**
+ * Product identifiers sent to RevenueCat (and thus to Google Play on Android / App Store on iOS).
+ * Must exactly match RevenueCat Dashboard → Products (and Google Play product IDs).
+ */
 export const PRODUCT_IDS = {
-  ANNUAL: 'kbpublish.godlykids.yearly',
-  MONTHLY: 'kbpublish.godlykids.monthly',
-  LIFETIME: 'Lifetimepurchase',
+  ANNUAL: 'yearlymember:yearly',
+  MONTHLY: 'godlykidsmonthly:monthly',
+  LIFETIME: 'lifetime',
 };
 
 // Web Billing product IDs (Stripe products linked in RevenueCat Web Billing)
@@ -296,9 +299,10 @@ export const RevenueCatService = {
       return RevenueCatService.purchaseWeb(productId);
     }
     
-    // Trigger DeSpia purchase via URL scheme
+    // Trigger DeSpia/RevenueCat purchase (Android → Google Play, iOS → App Store)
     const purchaseUrl = `revenuecat://purchase?external_id=${encodeURIComponent(userId)}&product=${encodeURIComponent(rcProductId)}`;
-    console.log('🔗 Setting window.despia to:', purchaseUrl);
+    const isAndroid = /android/.test(navigator.userAgent.toLowerCase());
+    console.log(isAndroid ? '🔗 [Android] Sending product to RevenueCat → Google Play:' : '🔗 Sending product to RevenueCat:', rcProductId, purchaseUrl);
     
     window.despia = purchaseUrl;
     

@@ -148,7 +148,7 @@ router.post('/revenuecat', async (req, res) => {
                         if (appUser) {
                             appUser.subscriptionStatus = 'active';
                             appUser.subscriptionPlan = productId?.includes('yearly') || productId?.includes('annual') ? 'annual' : 
-                                                       productId?.includes('Lifetime') ? 'lifetime' : 'monthly';
+                                                       /lifetime/i.test(productId || '') ? 'lifetime' : 'monthly';
                             appUser.subscriptionStartDate = new Date();
                             appUser.subscriptionEndDate = expirationDate ? new Date(expirationDate) : null;
                             await appUser.save();

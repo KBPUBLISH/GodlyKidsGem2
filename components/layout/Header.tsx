@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, lazy, Suspense } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { Crown, FileText, Clock } from 'lucide-react';
@@ -32,8 +31,32 @@ const Header: React.FC<HeaderProps> = ({ isVisible, title = "GODLY KIDS" }) => {
   const [isCoinHistoryOpen, setIsCoinHistoryOpen] = useState(false);
   const [isReportCardOpen, setIsReportCardOpen] = useState(false);
   
+  // Android detection
+  const [isAndroid, setIsAndroid] = useState(false);
+  
   // Lifetime deal countdown timer state
   const [dealTimeRemaining, setDealTimeRemaining] = useState<{ hours: number; minutes: number; seconds: number } | null>(null);
+  
+  // Detect Android browser
+  useEffect(() => {
+    const userAgent = navigator.userAgent.toLowerCase();
+    const isAndroidBrowser = /android/.test(userAgent) && !/despia/.test(userAgent);
+    setIsAndroid(isAndroidBrowser);
+    
+    // Force repaint on Android after mount
+    if (isAndroidBrowser) {
+      setTimeout(() => {
+        const header = document.querySelector('header');
+        if (header) {
+          // Force a repaint by toggling transform
+          (header as HTMLElement).style.transform = 'translateZ(0)';
+          setTimeout(() => {
+            (header as HTMLElement).style.transform = '';
+          }, 10);
+        }
+      }, 100);
+    }
+  }, []);
   
   // Track the 24-hour countdown for lifetime deal (only if not subscribed)
   useEffect(() => {
@@ -149,7 +172,13 @@ const Header: React.FC<HeaderProps> = ({ isVisible, title = "GODLY KIDS" }) => {
       <header
         className={`fixed top-0 left-0 right-0 z-50 transition-transform duration-300 ease-in-out ${isVisible ? 'translate-y-0' : '-translate-y-full'
           }`}
-        style={{ filter: 'drop-shadow(0 4px 8px rgba(0,0,0,0.3))' }}
+        style={{ 
+          filter: 'drop-shadow(0 4px 8px rgba(0,0,0,0.3))',
+          // Force hardware acceleration and proper rendering on Android
+          transform: isAndroid ? 'translateZ(0)' : undefined,
+          backfaceVisibility: 'hidden',
+          perspective: 1000
+        }}
       >
         {/* Safe Area Spacer for iOS notch/status bar */}
         <div 
@@ -267,25 +296,51 @@ const Header: React.FC<HeaderProps> = ({ isVisible, title = "GODLY KIDS" }) => {
 
             {/* Center - Empty for now */}
             <div className="flex-1"></div>
-            <div className="flex items-center gap-2">
+            
+            {/* Button Container with Android fixes */}
+            <div className="flex items-center gap-2" style={{
+              // Force hardware acceleration on Android
+              transform: isAndroid ? 'translate3d(0, 0, 0)' : undefined,
+              backfaceVisibility: 'hidden',
+              willChange: isAndroid ? 'transform' : undefined
+            }}>
               {/* Gold Coins Display */}
               <button
                 id="coins-button"
                 data-tutorial="coins-button"
                 onClick={handleCoinsClick}
-                className="bg-gradient-to-b from-[#FFD700] to-[#DAA520] px-2.5 py-1.5 rounded-lg border-2 border-[#B8860B] shadow-[0_3px_0_#8B6914,inset_0_1px_0_rgba(255,255,255,0.4)] active:translate-y-[2px] active:shadow-none transition-all flex items-center gap-1.5 group"
+                className={isAndroid ? 
+                  // Simplified styles for Android
+                  "bg-[#FFD700] px-2.5 py-1.5 rounded-lg border-2 border-[#B8860B] transition-all flex items-center gap-1.5 group" :
+                  // Original complex styles for other platforms
+                  "bg-gradient-to-b from-[#FFD700] to-[#DAA520] px-2.5 py-1.5 rounded-lg border-2 border-[#B8860B] shadow-[0_3px_0_#8B6914,inset_0_1px_0_rgba(255,255,255,0.4)] active:translate-y-[2px] active:shadow-none transition-all flex items-center gap-1.5 group"
+                }
                 title="Your Gold Coins - Click to view history"
+                style={isAndroid ? {
+                  // Android-specific inline styles
+                  boxShadow: '0 2px 4px rgba(0,0,0,0.3)',
+                  transform: 'translateZ(0)',
+                  backfaceVisibility: 'hidden'
+                } : undefined}
               >
                 {/* Coin Icon */}
                 <div className="relative">
-                  <div className="w-5 h-5 bg-gradient-to-br from-[#FFE55C] to-[#DAA520] rounded-full border border-[#B8860B] shadow-inner flex items-center justify-center">
+                  <div className={isAndroid ?
+                    "w-5 h-5 bg-[#FFE55C] rounded-full border border-[#B8860B] flex items-center justify-center" :
+                    "w-5 h-5 bg-gradient-to-br from-[#FFE55C] to-[#DAA520] rounded-full border border-[#B8860B] shadow-inner flex items-center justify-center"
+                  }>
                     <span className="text-[#8B6914] font-black text-[10px]">G</span>
                   </div>
-                  {/* Shine effect */}
-                  <div className="absolute top-0.5 left-0.5 w-1.5 h-1.5 bg-white/50 rounded-full"></div>
+                  {/* Shine effect - hide on Android */}
+                  {!isAndroid && (
+                    <div className="absolute top-0.5 left-0.5 w-1.5 h-1.5 bg-white/50 rounded-full"></div>
+                  )}
                 </div>
                 {/* Coin Count */}
-                <span className="text-[#5c2e0b] font-display font-black text-sm tracking-wide drop-shadow-[0_1px_0_rgba(255,255,255,0.3)] group-hover:text-[#3e1f07] transition-colors">
+                <span className={isAndroid ?
+                  "text-[#5c2e0b] font-display font-black text-sm tracking-wide" :
+                  "text-[#5c2e0b] font-display font-black text-sm tracking-wide drop-shadow-[0_1px_0_rgba(255,255,255,0.3)] group-hover:text-[#3e1f07] transition-colors"
+                }>
                   {coins.toLocaleString()}
                 </span>
               </button>
@@ -295,8 +350,18 @@ const Header: React.FC<HeaderProps> = ({ isVisible, title = "GODLY KIDS" }) => {
                 id="report-card-button"
                 data-tutorial="report-card-button"
                 onClick={handleReportCardClick}
-                className="bg-[#2E7D32] hover:bg-[#388E3C] px-2 py-1.5 rounded-lg border-2 border-[#1B5E20] shadow-[0_4px_0_#0D3811] active:translate-y-[2px] active:shadow-none transition-all relative group flex items-center justify-center"
+                className={isAndroid ?
+                  // Simplified for Android
+                  "bg-[#2E7D32] px-2 py-1.5 rounded-lg border-2 border-[#1B5E20] transition-all relative group flex items-center justify-center" :
+                  // Original styles
+                  "bg-[#2E7D32] hover:bg-[#388E3C] px-2 py-1.5 rounded-lg border-2 border-[#1B5E20] shadow-[0_4px_0_#0D3811] active:translate-y-[2px] active:shadow-none transition-all relative group flex items-center justify-center"
+                }
                 title="View Report Card"
+                style={isAndroid ? {
+                  boxShadow: '0 2px 4px rgba(0,0,0,0.3)',
+                  transform: 'translateZ(0)',
+                  backfaceVisibility: 'hidden'
+                } : undefined}
               >
                 <FileText className="w-5 h-5 text-white/90 group-hover:text-white transition-colors" />
               </button>
@@ -306,18 +371,37 @@ const Header: React.FC<HeaderProps> = ({ isVisible, title = "GODLY KIDS" }) => {
                 id="shop-button"
                 data-tutorial="shop-button"
                 onClick={handleShopClick}
-                className="bg-[#8B4513] hover:bg-[#A0522D] px-3 py-1.5 rounded-lg border-2 border-[#5c2e0b] shadow-[0_4px_0_#3e1f07] active:translate-y-[2px] active:shadow-none transition-all relative group flex items-center justify-center"
+                className={isAndroid ?
+                  // Simplified for Android
+                  "bg-[#8B4513] px-3 py-1.5 rounded-lg border-2 border-[#5c2e0b] transition-all relative group flex items-center justify-center" :
+                  // Original styles
+                  "bg-[#8B4513] hover:bg-[#A0522D] px-3 py-1.5 rounded-lg border-2 border-[#5c2e0b] shadow-[0_4px_0_#3e1f07] active:translate-y-[2px] active:shadow-none transition-all relative group flex items-center justify-center"
+                }
+                style={isAndroid ? {
+                  boxShadow: '0 2px 4px rgba(0,0,0,0.3)',
+                  transform: 'translateZ(0)',
+                  backfaceVisibility: 'hidden'
+                } : undefined}
               >
-                {/* Wood Texture Overlay */}
-                <div className="absolute inset-0 opacity-20 bg-[url('https://www.transparenttextures.com/patterns/wood-pattern.png')] pointer-events-none rounded-md"></div>
+                {/* Wood Texture Overlay - hide on Android */}
+                {!isAndroid && (
+                  <div className="absolute inset-0 opacity-20 bg-[url('https://www.transparenttextures.com/patterns/wood-pattern.png')] pointer-events-none rounded-md"></div>
+                )}
 
-                {/* Nails */}
-                <div className="absolute top-1 left-1 w-1 h-1 bg-[#2d1809] rounded-full opacity-60"></div>
-                <div className="absolute top-1 right-1 w-1 h-1 bg-[#2d1809] rounded-full opacity-60"></div>
-                <div className="absolute bottom-1 left-1 w-1 h-1 bg-[#2d1809] rounded-full opacity-60"></div>
-                <div className="absolute bottom-1 right-1 w-1 h-1 bg-[#2d1809] rounded-full opacity-60"></div>
+                {/* Nails - hide on Android */}
+                {!isAndroid && (
+                  <>
+                    <div className="absolute top-1 left-1 w-1 h-1 bg-[#2d1809] rounded-full opacity-60"></div>
+                    <div className="absolute top-1 right-1 w-1 h-1 bg-[#2d1809] rounded-full opacity-60"></div>
+                    <div className="absolute bottom-1 left-1 w-1 h-1 bg-[#2d1809] rounded-full opacity-60"></div>
+                    <div className="absolute bottom-1 right-1 w-1 h-1 bg-[#2d1809] rounded-full opacity-60"></div>
+                  </>
+                )}
 
-                <span className="text-[#FFD700] font-display font-black text-sm tracking-wide drop-shadow-md uppercase group-hover:text-white transition-colors relative z-10">
+                <span className={isAndroid ?
+                  "text-[#FFD700] font-display font-black text-sm tracking-wide uppercase relative z-10" :
+                  "text-[#FFD700] font-display font-black text-sm tracking-wide drop-shadow-md uppercase group-hover:text-white transition-colors relative z-10"
+                }>
                   Shop
                 </span>
               </button>

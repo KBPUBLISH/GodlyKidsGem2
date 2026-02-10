@@ -31,32 +31,28 @@ const Header: React.FC<HeaderProps> = ({ isVisible, title = "GODLY KIDS" }) => {
   const [isCoinHistoryOpen, setIsCoinHistoryOpen] = useState(false);
   const [isReportCardOpen, setIsReportCardOpen] = useState(false);
   
-  // Android detection
-  const [isAndroid, setIsAndroid] = useState(false);
+  // Android detection — synchronous so the very first render uses simplified styles
+  const [isAndroid] = useState(() => {
+    if (typeof navigator === 'undefined') return false;
+    const ua = navigator.userAgent.toLowerCase();
+    return /android/.test(ua) && !/despia/.test(ua);
+  });
+  
+  // Force repaint on Android after mount
+  const [androidReady, setAndroidReady] = useState(!isAndroid);
   
   // Lifetime deal countdown timer state
   const [dealTimeRemaining, setDealTimeRemaining] = useState<{ hours: number; minutes: number; seconds: number } | null>(null);
   
-  // Detect Android browser
+  // Force a repaint on Android after mount by toggling a CSS transform
   useEffect(() => {
-    const userAgent = navigator.userAgent.toLowerCase();
-    const isAndroidBrowser = /android/.test(userAgent) && !/despia/.test(userAgent);
-    setIsAndroid(isAndroidBrowser);
-    
-    // Force repaint on Android after mount
-    if (isAndroidBrowser) {
-      setTimeout(() => {
-        const header = document.querySelector('header');
-        if (header) {
-          // Force a repaint by toggling transform
-          (header as HTMLElement).style.transform = 'translateZ(0)';
-          setTimeout(() => {
-            (header as HTMLElement).style.transform = '';
-          }, 10);
-        }
-      }, 100);
-    }
-  }, []);
+    if (!isAndroid) return;
+    // Use a brief delay to let the browser finish initial paint, then toggle
+    const timer = setTimeout(() => {
+      setAndroidReady(true);
+    }, 50);
+    return () => clearTimeout(timer);
+  }, [isAndroid]);
   
   // Track the 24-hour countdown for lifetime deal (only if not subscribed)
   useEffect(() => {
@@ -173,11 +169,13 @@ const Header: React.FC<HeaderProps> = ({ isVisible, title = "GODLY KIDS" }) => {
         className={`fixed top-0 left-0 right-0 z-50 transition-transform duration-300 ease-in-out ${isVisible ? 'translate-y-0' : '-translate-y-full'
           }`}
         style={{ 
-          filter: 'drop-shadow(0 4px 8px rgba(0,0,0,0.3))',
+          // drop-shadow filter causes elements to disappear on Android browsers
+          filter: isAndroid ? undefined : 'drop-shadow(0 4px 8px rgba(0,0,0,0.3))',
           // Force hardware acceleration and proper rendering on Android
-          transform: isAndroid ? 'translateZ(0)' : undefined,
+          transform: isAndroid ? (androidReady ? 'translateZ(0)' : 'translate3d(0,0,1px)') : undefined,
           backfaceVisibility: 'hidden',
-          perspective: 1000
+          WebkitBackfaceVisibility: 'hidden',
+          perspective: isAndroid ? undefined : '1000px'
         }}
       >
         {/* Safe Area Spacer for iOS notch/status bar */}
@@ -299,10 +297,11 @@ const Header: React.FC<HeaderProps> = ({ isVisible, title = "GODLY KIDS" }) => {
             
             {/* Button Container with Android fixes */}
             <div className="flex items-center gap-2" style={{
-              // Force hardware acceleration on Android
-              transform: isAndroid ? 'translate3d(0, 0, 0)' : undefined,
+              // Force hardware acceleration on Android — avoid willChange as it causes
+              // excessive compositing layers that make children disappear
+              transform: isAndroid ? 'translate3d(0,0,0)' : undefined,
               backfaceVisibility: 'hidden',
-              willChange: isAndroid ? 'transform' : undefined
+              WebkitBackfaceVisibility: 'hidden'
             }}>
               {/* Gold Coins Display */}
               <button
@@ -317,10 +316,12 @@ const Header: React.FC<HeaderProps> = ({ isVisible, title = "GODLY KIDS" }) => {
                 }
                 title="Your Gold Coins - Click to view history"
                 style={isAndroid ? {
-                  // Android-specific inline styles
+                  // Android-specific inline styles — simple shadow, hardware-accelerated layer
                   boxShadow: '0 2px 4px rgba(0,0,0,0.3)',
                   transform: 'translateZ(0)',
-                  backfaceVisibility: 'hidden'
+                  backfaceVisibility: 'hidden',
+                  WebkitBackfaceVisibility: 'hidden',
+                  opacity: 1
                 } : undefined}
               >
                 {/* Coin Icon */}
@@ -360,7 +361,9 @@ const Header: React.FC<HeaderProps> = ({ isVisible, title = "GODLY KIDS" }) => {
                 style={isAndroid ? {
                   boxShadow: '0 2px 4px rgba(0,0,0,0.3)',
                   transform: 'translateZ(0)',
-                  backfaceVisibility: 'hidden'
+                  backfaceVisibility: 'hidden',
+                  WebkitBackfaceVisibility: 'hidden',
+                  opacity: 1
                 } : undefined}
               >
                 <FileText className="w-5 h-5 text-white/90 group-hover:text-white transition-colors" />
@@ -380,7 +383,9 @@ const Header: React.FC<HeaderProps> = ({ isVisible, title = "GODLY KIDS" }) => {
                 style={isAndroid ? {
                   boxShadow: '0 2px 4px rgba(0,0,0,0.3)',
                   transform: 'translateZ(0)',
-                  backfaceVisibility: 'hidden'
+                  backfaceVisibility: 'hidden',
+                  WebkitBackfaceVisibility: 'hidden',
+                  opacity: 1
                 } : undefined}
               >
                 {/* Wood Texture Overlay - hide on Android */}

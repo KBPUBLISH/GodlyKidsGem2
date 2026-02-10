@@ -1,10 +1,25 @@
 #!/bin/bash
-# Push only the backend/ folder to the BackendGK2.0 repo (for Render deploy).
+# Push backend/ to BackendGK2.0 repo so Render can deploy.
 # Run from repo root: ./scripts/push-backend-subtree.sh
-# Can take 1–2 minutes.
+# After this, trigger a deploy in Render (or it may auto-deploy if enabled).
 
 set -e
-cd "$(git rev-parse --show-toplevel)"
-echo "Pushing backend/ to remote 'backend' (BackendGK2.0)..."
-git subtree push --prefix=backend backend main
-echo "Done."
+ROOT=$(git rev-parse --show-toplevel)
+cd "$ROOT"
+
+BRANCH="${1:-main}"
+REMOTE="backend"
+PREFIX="backend"
+
+echo "→ Splitting subtree (prefix=$PREFIX) into branch backend-split..."
+git subtree split --prefix="$PREFIX" -b backend-split
+
+echo "→ Pushing backend-split to $REMOTE $BRANCH..."
+git push "$REMOTE" backend-split:"$BRANCH"
+
+echo "→ Deleting local branch backend-split..."
+git branch -D backend-split
+
+echo ""
+echo "Done. BackendGK2.0 ($REMOTE) is updated."
+echo "If Render didn’t auto-deploy: Dashboard → godlykids-backend → Manual Deploy → Deploy latest commit."

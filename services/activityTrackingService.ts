@@ -647,7 +647,10 @@ class ActivityTrackingService {
       API_BASE = API_BASE.replace(/\/+$/, '').replace(/\/api$/, '');
       const apiUrl = `${API_BASE}/api`;
       
-      const platform = (window as any).__GK_IS_DESPIA__ ? 'ios' : 'web';
+      const ua = navigator.userAgent.toLowerCase();
+      const platform = ua.includes('despia')
+        ? (ua.includes('iphone') || ua.includes('ipad') ? 'ios' : 'android')
+        : 'web';
       
       // Store onboarding step in localStorage for stats sync
       // Use the same key pattern as getAllTimeStats() expects
@@ -736,7 +739,10 @@ class ActivityTrackingService {
       API_BASE = API_BASE.replace(/\/+$/, '').replace(/\/api$/, '');
       const apiUrl = `${API_BASE}/api`;
       
-      const platform = (window as any).__GK_IS_DESPIA__ ? 'ios' : 'web';
+      const ua = navigator.userAgent.toLowerCase();
+      const platform = ua.includes('despia')
+        ? (ua.includes('iphone') || ua.includes('ipad') ? 'ios' : 'android')
+        : 'web';
       
       await fetch(`${apiUrl}/analytics/tutorial/event`, {
         method: 'POST',

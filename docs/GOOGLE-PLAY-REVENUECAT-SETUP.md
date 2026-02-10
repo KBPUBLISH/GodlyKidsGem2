@@ -8,6 +8,8 @@ This guide connects **Google Play Console** → **RevenueCat** → your **Androi
 | Annual   | `yearlymember:yearly`         |
 | Lifetime | `lifetime`                    |
 
+**Android “no product matched”:** On Android we send **subscription product ID only** (e.g. `yearlymember`, `godlykidsmonthly`) so Google Play can resolve the product. In RevenueCat Dashboard → Products, the Android product identifier can be either `subscriptionid` or `subscriptionid:baseplanid`; ensure at least one matches what the app sends.
+
 ---
 
 ## Paywall → RevenueCat (when called from Android app)

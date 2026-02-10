@@ -29,6 +29,17 @@ export const PRODUCT_IDS = {
   LIFETIME: 'lifetime',
 };
 
+/**
+ * Android: Google Play / RevenueCat often expect only the subscription product ID (no ":basePlanId")
+ * when resolving products. Use these if you get "no product matched" with the full format above.
+ * In RevenueCat Dashboard → Products, ensure the Android product identifier matches one of these formats.
+ */
+export const PRODUCT_IDS_ANDROID = {
+  ANNUAL: 'yearlymember',
+  MONTHLY: 'godlykidsmonthly',
+  LIFETIME: 'lifetime',
+};
+
 // Web Billing product IDs (Stripe products linked in RevenueCat Web Billing)
 const WEB_PRODUCT_IDS = {
   ANNUAL: 'prod_TeXtJJ1NvlbB02',
@@ -275,14 +286,17 @@ export const RevenueCatService = {
    * @param quickMode - if true, returns success quickly after triggering Apple sheet (optimistic)
    */
   purchase: async (productId: 'annual' | 'monthly' | 'lifetime', quickMode: boolean = true): Promise<{ success: boolean; error?: string }> => {
-    const rcProductId = productId === 'lifetime' 
-      ? PRODUCT_IDS.LIFETIME 
-      : productId === 'annual' 
-        ? PRODUCT_IDS.ANNUAL 
-        : PRODUCT_IDS.MONTHLY;
+    const isAndroid = /android/.test(navigator.userAgent.toLowerCase());
+    const ids = isAndroid ? PRODUCT_IDS_ANDROID : PRODUCT_IDS;
+    const rcProductId = productId === 'lifetime'
+      ? ids.LIFETIME
+      : productId === 'annual'
+        ? ids.ANNUAL
+        : ids.MONTHLY;
     const userId = getUserId();
     
     console.log('🛒 Initiating purchase via DeSpia URL scheme');
+    console.log('   Platform:', isAndroid ? 'Android' : 'iOS');
     console.log('   Product:', rcProductId);
     console.log('   User ID:', userId);
     console.log('   isNativeApp:', isNativeApp());
@@ -301,7 +315,6 @@ export const RevenueCatService = {
     
     // Trigger DeSpia/RevenueCat purchase (Android → Google Play, iOS → App Store)
     const purchaseUrl = `revenuecat://purchase?external_id=${encodeURIComponent(userId)}&product=${encodeURIComponent(rcProductId)}`;
-    const isAndroid = /android/.test(navigator.userAgent.toLowerCase());
     console.log(isAndroid ? '🔗 [Android] Sending product to RevenueCat → Google Play:' : '🔗 Sending product to RevenueCat:', rcProductId, purchaseUrl);
     
     window.despia = purchaseUrl;

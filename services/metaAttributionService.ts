@@ -128,6 +128,8 @@ const trackAppInstall = async (email?: string): Promise<boolean> => {
       fbclid: storedFbclid || attribution.fbclid,
       fbp: getFbp(),
       fbc: getFbc(),
+      // Required by Meta for action_source 'app' (0 = user has not enabled ad tracking)
+      advertiser_tracking_enabled: 0,
     };
 
     console.log('📊 Meta: Tracking app install...', { platform, hasFbclid: !!payload.fbclid });

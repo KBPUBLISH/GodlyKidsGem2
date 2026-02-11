@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const crypto = require('crypto');
 const { bucket } = require('../config/storage');
+const { GoogleGenAI } = require('@google/genai');
 
 // Style prompts for character generation
 const STYLE_PROMPTS = {
@@ -52,135 +53,114 @@ const getVertexAccessToken = async () => {
     }
 };
 
-// Generate character using Vertex AI Imagen
-const generateCharacterImage = async (imageBase64, styleId) => {
-    const credentialsJson = process.env.GCS_CREDENTIALS_JSON || process.env.GOOGLE_SERVICE_ACCOUNT_JSON;
-    
-    if (!credentialsJson) {
-        throw new Error('GCS credentials not configured');
-    }
+// Generate character with Gemini 2.5 Flash Image (Nano Banana): selfie + prompt → image in one call.
+// Uses GEMINI_API_KEY only; no Vertex. Returns base64 image or null.
+const generateCharacterWithGemini = async (imageBase64, styleId) => {
+    const geminiKey = process.env.GEMINI_API_KEY;
+    if (!geminiKey) return null;
 
+    const style = STYLE_PROMPTS[styleId];
+    if (!style) return null;
+
+    const base64Data = imageBase64.replace(/^data:image\/\w+;base64,/, '');
+    const mimeType = (imageBase64.match(/^data:(image\/\w+);base64,/) || [])[1] || 'image/jpeg';
+
+    const contents = [
+        { text: style.prompt },
+        { inlineData: { mimeType, data: base64Data } }
+    ];
+
+    try {
+        const ai = new GoogleGenAI({ apiKey: geminiKey });
+        const response = await ai.models.generateContent({
+            model: 'gemini-2.5-flash-image',
+            contents
+        });
+        const parts = response.candidates?.[0]?.content?.parts || [];
+        for (const part of parts) {
+            if (part.inlineData && part.inlineData.data) {
+                console.log('✅ Character generated with Gemini (Nano Banana)');
+                return part.inlineData.data;
+            }
+        }
+        return null;
+    } catch (err) {
+        console.warn('⚠️ Gemini image generation failed:', err.message);
+        return null;
+    }
+};
+
+// Generate character: try Gemini (Nano Banana) first, then fall back to Vertex Imagen (text-to-image).
+const generateCharacterImage = async (imageBase64, styleId) => {
     const style = STYLE_PROMPTS[styleId];
     if (!style) {
         throw new Error(`Invalid style: ${styleId}`);
     }
 
-    try {
-        console.log(`🎨 Generating character in ${styleId} style...`);
-        
-        const credentials = JSON.parse(credentialsJson);
-        const projectId = credentials.project_id;
-        
-        const accessToken = await getVertexAccessToken();
-        if (!accessToken) {
-            throw new Error('Could not get access token');
-        }
-
-        // Remove data URL prefix if present
-        const base64Data = imageBase64.replace(/^data:image\/\w+;base64,/, '');
-
-        // Use Imagen 3 for image editing/transformation
-        const response = await fetch(
-            `https://us-central1-aiplatform.googleapis.com/v1/projects/${projectId}/locations/us-central1/publishers/google/models/imagen-3.0-generate-001:predict`,
-            {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${accessToken}`
-                },
-                body: JSON.stringify({
-                    instances: [{
-                        prompt: style.prompt,
-                        image: {
-                            bytesBase64Encoded: base64Data
-                        }
-                    }],
-                    parameters: {
-                        sampleCount: 1,
-                        aspectRatio: "1:1",
-                        safetyFilterLevel: "block_some",
-                        personGeneration: "allow_adult",
-                        negativePrompt: style.negativePrompt
-                    }
-                })
-            }
-        );
-
-        if (!response.ok) {
-            const errorText = await response.text();
-            console.error('❌ Imagen API error:', errorText);
-            
-            // Try fallback to image generation without reference
-            console.log('🔄 Trying text-to-image generation as fallback...');
-            return await generateCharacterFromPromptOnly(accessToken, projectId, styleId);
-        }
-
-        const data = await response.json();
-        
-        if (!data.predictions || !data.predictions[0]) {
-            console.error('❌ No predictions in response:', data);
-            return await generateCharacterFromPromptOnly(accessToken, projectId, styleId);
-        }
-
-        const generatedImage = data.predictions[0].bytesBase64Encoded;
-        return generatedImage;
-
-    } catch (err) {
-        console.error('❌ Character generation error:', err.message);
-        throw err;
+    // Prefer Gemini 2.5 Flash Image: one call, selfie + style → image (like ChatGPT).
+    const geminiImage = await generateCharacterWithGemini(imageBase64, styleId);
+    if (geminiImage) {
+        return geminiImage;
     }
+
+    // Fallback: Vertex Imagen (text-to-image only; no selfie).
+    const credentialsJson = process.env.GCS_CREDENTIALS_JSON || process.env.GOOGLE_SERVICE_ACCOUNT_JSON;
+    if (!credentialsJson) {
+        throw new Error('GCS credentials not configured');
+    }
+    const credentials = JSON.parse(credentialsJson);
+    const projectId = credentials.project_id;
+    const accessToken = await getVertexAccessToken();
+    if (!accessToken) {
+        throw new Error('Could not get access token');
+    }
+    console.log(`🎨 Fallback: generating character in ${styleId} style with Vertex Imagen (text-to-image)...`);
+    return await generateCharacterFromPromptOnly(accessToken, projectId, styleId);
 };
 
-// Fallback: Generate character from prompt only (without reference image)
-const generateCharacterFromPromptOnly = async (accessToken, projectId, styleId) => {
+// Text-to-image: generate character from prompt (imagen-3.0-generate-001 is text-only).
+// If customPrompt is provided (from Gemini), use it; otherwise use style-only default.
+const generateCharacterFromPromptOnly = async (accessToken, projectId, styleId, customPrompt = null) => {
     const styleDescriptions = {
-        minecraft: "a cute child character in Minecraft blocky pixel art style, friendly expression, colorful, game character portrait",
-        lego: "a cute child LEGO minifigure character, yellow skin, cheerful smile, toy-like appearance, studio lighting",
-        cartoon: "a cute child cartoon character with big expressive eyes, 2D animated style, bright colors, friendly",
-        illustrated: "a cute child character in children's book watercolor illustration style, soft colors, whimsical",
-        disney: "a cute child character in Disney 3D animated style, big sparkling eyes, magical, heroic",
-        pixar: "a cute child character in Pixar 3D animated style, rounded features, playful, vibrant colors"
+        minecraft: "a friendly character in Minecraft blocky pixel art style, cheerful expression, colorful, game character portrait, for all ages",
+        lego: "a friendly LEGO minifigure character, yellow skin, cheerful smile, toy-like appearance, studio lighting, family friendly",
+        cartoon: "a friendly cartoon character with big expressive eyes, 2D animated style, bright colors, whimsical, for a storybook",
+        illustrated: "a friendly character in children's book watercolor illustration style, soft colors, whimsical, storybook avatar",
+        disney: "a friendly character in Disney 3D animated style, big sparkling eyes, magical, heroic, family friendly",
+        pixar: "a friendly character in Pixar 3D animated style, rounded features, playful, vibrant colors, for all ages"
     };
+    const prompt = (customPrompt && customPrompt.trim()) ? customPrompt.trim() : (styleDescriptions[styleId] || styleDescriptions.illustrated);
 
-    const prompt = styleDescriptions[styleId] || styleDescriptions.cartoon;
-
-    try {
-        const response = await fetch(
-            `https://us-central1-aiplatform.googleapis.com/v1/projects/${projectId}/locations/us-central1/publishers/google/models/imagen-3.0-generate-001:predict`,
-            {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${accessToken}`
-                },
-                body: JSON.stringify({
-                    instances: [{ prompt }],
-                    parameters: {
-                        sampleCount: 1,
-                        aspectRatio: "1:1",
-                        safetyFilterLevel: "block_some",
-                        personGeneration: "allow_adult"
-                    }
-                })
-            }
-        );
-
-        if (!response.ok) {
-            const errorText = await response.text();
-            throw new Error(`Imagen fallback failed: ${errorText}`);
+    const response = await fetch(
+        `https://us-central1-aiplatform.googleapis.com/v1/projects/${projectId}/locations/us-central1/publishers/google/models/imagen-3.0-generate-001:predict`,
+        {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${accessToken}`
+            },
+            body: JSON.stringify({
+                instances: [{ prompt }],
+                parameters: {
+                    sampleCount: 1,
+                    aspectRatio: "1:1",
+                    safetyFilterLevel: "block_medium_and_above",
+                    personGeneration: "allow_all"
+                }
+            })
         }
+    );
 
-        const data = await response.json();
-        
-        if (!data.predictions || !data.predictions[0]) {
-            throw new Error('No predictions in fallback response');
-        }
-
-        return data.predictions[0].bytesBase64Encoded;
-    } catch (err) {
-        console.error('❌ Fallback generation error:', err.message);
-        throw err;
+    if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`Imagen API error: ${errorText}`);
     }
+
+    const data = await response.json();
+    if (!data.predictions || !data.predictions[0] || !data.predictions[0].bytesBase64Encoded) {
+        throw new Error('No predictions in Imagen response (possible safety filter)');
+    }
+    return data.predictions[0].bytesBase64Encoded;
 };
 
 // Upload image to GCS

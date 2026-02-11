@@ -1,8 +1,28 @@
 const express = require('express');
 const router = express.Router();
+const mongoose = require('mongoose');
 const MonthlyBookTemplate = require('../models/MonthlyBookTemplate');
 const CustomMonthlyBook = require('../models/CustomMonthlyBook');
 const SavedCharacter = require('../models/SavedCharacter');
+const AppUser = require('../models/AppUser');
+
+/**
+ * Normalize userId to a MongoDB ObjectId for CustomMonthlyBook (required by schema).
+ * If already valid ObjectId, return it; otherwise try to find AppUser by email or deviceId.
+ */
+async function resolveUserId(userId) {
+    if (!userId) return null;
+    if (mongoose.Types.ObjectId.isValid(userId) && String(userId).length === 24) {
+        return new mongoose.Types.ObjectId(userId);
+    }
+    const user = await AppUser.findOne({
+        $or: [
+            { email: userId },
+            { deviceId: userId },
+        ],
+    }).select('_id').lean();
+    return user ? user._id : null;
+}
 
 /**
  * GET /api/monthly-book/templates
@@ -43,12 +63,20 @@ router.get('/templates', async (req, res) => {
  */
 router.post('/create', async (req, res) => {
     try {
-        const { userId, kidId, templateId, childName, childCharacterImageUrl, hasTrialOrPaid } = req.body;
+        const { userId: rawUserId, kidId, templateId, childName, childCharacterImageUrl, hasTrialOrPaid } = req.body;
 
-        if (!userId || !kidId || !templateId || !childName) {
+        if (!rawUserId || !kidId || !templateId || !childName) {
             return res.status(400).json({
                 success: false,
                 error: 'Missing required fields: userId, kidId, templateId, childName',
+            });
+        }
+
+        const userId = await resolveUserId(rawUserId);
+        if (!userId) {
+            return res.status(400).json({
+                success: false,
+                error: 'User not found. Sign in or create an account, then try again.',
             });
         }
 
@@ -117,9 +145,13 @@ router.get('/status/:customMonthlyBookId', async (req, res) => {
  */
 router.get('/my-books', async (req, res) => {
     try {
-        const { userId } = req.query;
-        if (!userId) {
+        const { userId: rawUserId } = req.query;
+        if (!rawUserId) {
             return res.status(400).json({ success: false, error: 'userId required' });
+        }
+        const userId = await resolveUserId(rawUserId);
+        if (!userId) {
+            return res.json({ success: true, books: [] });
         }
         const list = await CustomMonthlyBook.find({ userId, status: 'completed' })
             .populate('bookId', 'title files')
@@ -134,7 +166,7 @@ router.get('/my-books', async (req, res) => {
                 customMonthlyBookId: b._id,
                 bookId: b.bookId._id,
                 title: b.bookId.title,
-                coverImageUrl: b.bookId?.files?.cover?.url || null,
+                coverImageUrl: b.bookId?.files?.coverImage || b.bookId?.files?.cover?.url || null,
                 childName: b.childName,
                 createdAt: b.createdAt,
             }));

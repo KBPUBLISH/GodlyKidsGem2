@@ -178,4 +178,141 @@ router.get('/my-books', async (req, res) => {
     }
 });
 
+// ---------- Portal admin (all templates, CRUD) ----------
+
+/**
+ * GET /api/monthly-book/admin/templates
+ * List all templates (any status) for portal.
+ */
+router.get('/admin/templates', async (req, res) => {
+    try {
+        const templates = await MonthlyBookTemplate.find()
+            .populate('bibleCharacterId', 'internalTag displayName')
+            .sort({ order: 1, createdAt: -1 })
+            .lean();
+
+        const list = templates.map((t) => ({
+            _id: t._id,
+            title: t.title,
+            description: t.description,
+            bibleCharacterId: t.bibleCharacterId?._id,
+            bibleCharacter: t.bibleCharacterId
+                ? { internalTag: t.bibleCharacterId.internalTag, displayName: t.bibleCharacterId.displayName }
+                : null,
+            storyPages: t.storyPages || [],
+            order: t.order,
+            status: t.status,
+            createdAt: t.createdAt,
+        }));
+
+        res.json({ templates: list });
+    } catch (err) {
+        console.error('Admin monthly book templates error:', err);
+        res.status(500).json({ error: 'Failed to fetch templates' });
+    }
+});
+
+/**
+ * GET /api/monthly-book/admin/characters
+ * List saved characters (for template form dropdown).
+ */
+router.get('/admin/characters', async (req, res) => {
+    try {
+        const characters = await SavedCharacter.find({ status: 'active' })
+            .sort({ order: 1 })
+            .select('_id internalTag displayName')
+            .lean();
+        res.json({ characters });
+    } catch (err) {
+        console.error('Admin characters error:', err);
+        res.status(500).json({ error: 'Failed to fetch characters' });
+    }
+});
+
+/**
+ * GET /api/monthly-book/admin/templates/:id
+ * Get one template for portal edit.
+ */
+router.get('/admin/templates/:id', async (req, res) => {
+    try {
+        const t = await MonthlyBookTemplate.findById(req.params.id)
+            .populate('bibleCharacterId', 'internalTag displayName')
+            .lean();
+        if (!t) return res.status(404).json({ error: 'Template not found' });
+        res.json(t);
+    } catch (err) {
+        console.error('Admin get template error:', err);
+        res.status(500).json({ error: err.message });
+    }
+});
+
+/**
+ * POST /api/monthly-book/admin/templates
+ * Create a template (portal).
+ */
+router.post('/admin/templates', async (req, res) => {
+    try {
+        const { title, description, bibleCharacterId, storyPages, order, status } = req.body;
+        if (!title || !bibleCharacterId) {
+            return res.status(400).json({ error: 'title and bibleCharacterId are required' });
+        }
+        const template = await MonthlyBookTemplate.create({
+            title,
+            description: description || '',
+            bibleCharacterId,
+            storyPages: Array.isArray(storyPages) ? storyPages : [],
+            order: order != null ? order : 0,
+            status: status || 'draft',
+        });
+        res.status(201).json(template);
+    } catch (err) {
+        console.error('Admin create template error:', err);
+        res.status(500).json({ error: err.message });
+    }
+});
+
+/**
+ * PUT /api/monthly-book/admin/templates/:id
+ * Update a template (portal).
+ */
+router.put('/admin/templates/:id', async (req, res) => {
+    try {
+        const { title, description, bibleCharacterId, storyPages, order, status } = req.body;
+        const update = {};
+        if (title !== undefined) update.title = title;
+        if (description !== undefined) update.description = description;
+        if (bibleCharacterId !== undefined) update.bibleCharacterId = bibleCharacterId;
+        if (Array.isArray(storyPages)) update.storyPages = storyPages;
+        if (order !== undefined) update.order = order;
+        if (status !== undefined) update.status = status;
+
+        const template = await MonthlyBookTemplate.findByIdAndUpdate(
+            req.params.id,
+            { $set: update },
+            { new: true }
+        ).populate('bibleCharacterId', 'internalTag displayName');
+
+        if (!template) return res.status(404).json({ error: 'Template not found' });
+        res.json(template);
+    } catch (err) {
+        console.error('Admin update template error:', err);
+        res.status(500).json({ error: err.message });
+    }
+});
+
+/**
+ * DELETE /api/monthly-book/admin/templates/:id
+ * Delete a template (portal).
+ */
+router.delete('/admin/templates/:id', async (req, res) => {
+    try {
+        const template = await MonthlyBookTemplate.findByIdAndDelete(req.params.id);
+        if (!template) return res.status(404).json({ error: 'Template not found' });
+        res.json({ success: true });
+    } catch (err) {
+        console.error('Admin delete template error:', err);
+        res.status(500).json({ error: err.message });
+    }
+});
+
 module.exports = router;

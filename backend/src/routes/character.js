@@ -246,9 +246,15 @@ router.post('/generate', async (req, res) => {
 
     } catch (err) {
         console.error('❌ Character generation failed:', err.message);
-        res.status(500).json({ 
-            error: 'Failed to generate character', 
-            message: err.message 
+        // Return placeholder so Create Your Story flow can continue
+        const placeholderUrl = 'https://picsum.photos/seed/character-avatar/400/400';
+        res.status(200).json({
+            success: true,
+            characterAvatarUrl: placeholderUrl,
+            styleId: styleId,
+            childId: childId || null,
+            fallback: true,
+            message: 'Character generation unavailable; using placeholder. ' + err.message
         });
     }
 });

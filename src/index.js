@@ -151,6 +151,9 @@ app.use('/api/character-placement', require('./routes/character-placement'));
 // Story Backgrounds Library (for Illustrated Stories)
 app.use('/api/story-backgrounds', require('./routes/story-backgrounds'));
 
+// Monthly Custom Book (create your story with Bible character)
+app.use('/api/monthly-book', require('./routes/monthly-book'));
+
 // ===========================================
 // HEALTH & STATUS ENDPOINTS
 // ===========================================

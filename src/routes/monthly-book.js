@@ -214,18 +214,108 @@ router.get('/admin/templates', async (req, res) => {
 
 /**
  * GET /api/monthly-book/admin/characters
- * List saved characters (for template form dropdown).
+ * List saved characters. Query ?status=all for all statuses; otherwise default active only (for dropdown).
  */
 router.get('/admin/characters', async (req, res) => {
     try {
-        const characters = await SavedCharacter.find({ status: 'active' })
-            .sort({ order: 1 })
-            .select('_id internalTag displayName')
+        const filter = req.query.status === 'all' ? {} : { status: 'active' };
+        const characters = await SavedCharacter.find(filter)
+            .sort({ order: 1, createdAt: 1 })
+            .select('_id internalTag displayName styleId order status scriptureReference referenceImageUrl stylePrompt')
             .lean();
         res.json({ characters });
     } catch (err) {
         console.error('Admin characters error:', err);
         res.status(500).json({ error: 'Failed to fetch characters' });
+    }
+});
+
+/**
+ * GET /api/monthly-book/admin/characters/:id
+ * Get one saved character for portal edit.
+ */
+router.get('/admin/characters/:id', async (req, res) => {
+    try {
+        const char = await SavedCharacter.findById(req.params.id).lean();
+        if (!char) return res.status(404).json({ error: 'Character not found' });
+        res.json(char);
+    } catch (err) {
+        console.error('Admin get character error:', err);
+        res.status(500).json({ error: err.message });
+    }
+});
+
+/**
+ * POST /api/monthly-book/admin/characters
+ * Create a saved character (portal).
+ */
+router.post('/admin/characters', async (req, res) => {
+    try {
+        const { internalTag, displayName, scriptureReference, styleId, stylePrompt, referenceImageUrl, order, status } = req.body;
+        if (!internalTag || !displayName) {
+            return res.status(400).json({ error: 'internalTag and displayName are required' });
+        }
+        const character = await SavedCharacter.create({
+            internalTag: String(internalTag).trim(),
+            displayName: String(displayName).trim(),
+            scriptureReference: scriptureReference ? String(scriptureReference).trim() : undefined,
+            styleId: styleId || undefined,
+            stylePrompt: stylePrompt != null ? String(stylePrompt).trim() : '',
+            referenceImageUrl: referenceImageUrl || undefined,
+            order: order != null ? Number(order) : 0,
+            status: status || 'active',
+        });
+        res.status(201).json(character);
+    } catch (err) {
+        if (err.code === 11000) return res.status(400).json({ error: 'A character with this internal tag already exists' });
+        console.error('Admin create character error:', err);
+        res.status(500).json({ error: err.message });
+    }
+});
+
+/**
+ * PUT /api/monthly-book/admin/characters/:id
+ * Update a saved character (portal).
+ */
+router.put('/admin/characters/:id', async (req, res) => {
+    try {
+        const { internalTag, displayName, scriptureReference, styleId, stylePrompt, referenceImageUrl, order, status } = req.body;
+        const update = {};
+        if (internalTag !== undefined) update.internalTag = String(internalTag).trim();
+        if (displayName !== undefined) update.displayName = String(displayName).trim();
+        if (scriptureReference !== undefined) update.scriptureReference = scriptureReference ? String(scriptureReference).trim() : '';
+        if (styleId !== undefined) update.styleId = styleId || null;
+        if (stylePrompt !== undefined) update.stylePrompt = String(stylePrompt).trim();
+        if (referenceImageUrl !== undefined) update.referenceImageUrl = referenceImageUrl || null;
+        if (order !== undefined) update.order = Number(order);
+        if (status !== undefined) update.status = status;
+
+        const character = await SavedCharacter.findByIdAndUpdate(
+            req.params.id,
+            { $set: update },
+            { new: true }
+        ).lean();
+        if (!character) return res.status(404).json({ error: 'Character not found' });
+        res.json(character);
+    } catch (err) {
+        if (err.code === 11000) return res.status(400).json({ error: 'A character with this internal tag already exists' });
+        console.error('Admin update character error:', err);
+        res.status(500).json({ error: err.message });
+    }
+});
+
+/**
+ * DELETE /api/monthly-book/admin/characters/:id
+ * Delete a saved character (portal). Hard delete.
+ */
+router.delete('/admin/characters/:id', async (req, res) => {
+    try {
+        const character = await SavedCharacter.findByIdAndDelete(req.params.id);
+        if (!character) return res.status(404).json({ error: 'Character not found' });
+        res.json({ success: true });
+    } catch (err) {
+        console.error('Admin delete character error:', err);
+        res.status(500).json({ error: err.message });
     }
 });
 

@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { 
-    Image, Upload, Trash2, Plus, Search, Filter, 
-    Eye, Edit2, Check, X, Grid, List, Sparkles
+    Image, Upload, Trash2, Plus, Search, 
+    Eye, Check, X, Grid, List, Sparkles
 } from 'lucide-react';
 import apiClient from '../services/apiClient';
 

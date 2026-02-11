@@ -320,7 +320,23 @@ const LibraryPage: React.FC = () => {
       <Header isVisible={isHeaderVisible} title="MY LIBRARY" />
 
       <div className="px-4 pt-28 pb-52">
-        
+        {/* Create Your Story - front and center CTA */}
+        <div
+          onClick={() => navigate('/create-your-story')}
+          className="mb-6 rounded-2xl overflow-hidden border-2 border-amber-400/60 bg-gradient-to-br from-amber-600/40 to-amber-800/50 shadow-xl active:scale-[0.98] transition-transform"
+        >
+          <div className="p-4 flex items-center gap-4">
+            <div className="w-14 h-14 rounded-xl bg-amber-500/30 flex items-center justify-center shrink-0">
+              <BookOpen className="w-8 h-8 text-amber-200" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <h2 className="text-white font-bold text-lg">Create your story</h2>
+              <p className="text-amber-100/90 text-sm mt-0.5">Enter the Bible with your own adventure. Once a month, a new story with you in it.</p>
+            </div>
+            <ChevronDown className="w-5 h-5 text-amber-200 rotate-[-90deg] shrink-0" />
+          </div>
+        </div>
+
         {/* Search Bar with Age Filter */}
         <div className="flex gap-2 mb-4">
           <div className="relative flex-1">

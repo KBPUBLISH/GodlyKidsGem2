@@ -569,6 +569,7 @@ if (!(window as any).__GK_APP_BOOTED__) {
 import ListenPage from './pages/ListenPage';
 import ReadPage from './pages/ReadPage';
 import LibraryPage from './pages/LibraryPage';
+import CreateYourStoryPage from './pages/CreateYourStoryPage';
 import BookDetailPage from './pages/BookDetailPage';
 import ProfileSelectionPage from './pages/ProfileSelectionPage';
 import CreateProfilePage from './pages/CreateProfilePage';
@@ -1373,6 +1374,7 @@ const App: React.FC = () => {
                   <Route path="/listen" element={<ListenPage />} />
                   <Route path="/read" element={<ReadPage />} />
                   <Route path="/library" element={<LibraryPage />} />
+                  <Route path="/create-your-story" element={<CreateYourStoryPage />} />
                   <Route path="/audio" element={<AudioPage />} />
                   <Route path="/book/:id" element={<BookDetailPage />} />
                   <Route path="/audio/playlist/:playlistId" element={<PlaylistDetailPage />} />

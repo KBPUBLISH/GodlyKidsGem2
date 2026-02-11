@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Plus, Trash2, Edit, Book, Play, Eye, Filter } from 'lucide-react';
+import { Plus, Trash2, Edit, Book, Filter } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import apiClient from '../services/apiClient';
 

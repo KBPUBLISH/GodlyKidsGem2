@@ -3,12 +3,6 @@ import { Plus, Edit, Trash2, BookOpen, Filter } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import apiClient from '../services/apiClient';
 
-interface BibleCharacter {
-    _id: string;
-    internalTag: string;
-    displayName: string;
-}
-
 interface MonthlyBookTemplate {
     _id: string;
     title: string;

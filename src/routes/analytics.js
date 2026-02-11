@@ -1260,6 +1260,8 @@ router.get('/content', async (req, res) => {
 // Tutorial step order for funnel
 const TUTORIAL_STEP_ORDER = [
     'welcome_book_tap',
+    'lesson_button_highlight',
+    'daily_session_active',
     'book_controls_intro',
     'book_swipe_intro',
     'book_swipe_1',
@@ -1292,6 +1294,8 @@ const TUTORIAL_STEP_ORDER = [
 // Human-readable step names
 const TUTORIAL_STEP_LABELS = {
     'welcome_book_tap': 'Started - Tap Book',
+    'lesson_button_highlight': 'Lesson Button Highlight',
+    'daily_session_active': 'Daily Session Active',
     'book_controls_intro': 'Controls Intro',
     'book_swipe_intro': 'Swipe Intro',
     'book_swipe_1': 'Page 1',

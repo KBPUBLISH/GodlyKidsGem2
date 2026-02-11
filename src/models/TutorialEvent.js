@@ -23,6 +23,8 @@ const tutorialEventSchema = new mongoose.Schema({
             'tutorial_prompt_skipped',
             // Tutorial flow events
             'welcome_book_tap',
+            'lesson_button_highlight',
+            'daily_session_active',
             'book_controls_intro',
             'book_swipe_intro',
             'book_swipe_1',

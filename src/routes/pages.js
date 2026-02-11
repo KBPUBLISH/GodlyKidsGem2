@@ -8,10 +8,15 @@ router.get('/book/:bookId', async (req, res) => {
     try {
         const { bookId } = req.params;
         
-        // Validate that bookId is a valid MongoDB ObjectId
-        if (!mongoose.Types.ObjectId.isValid(bookId)) {
-            console.log(`⚠️ Invalid bookId format: ${bookId} (expected MongoDB ObjectId)`);
-            return res.json([]); // Return empty array for invalid IDs instead of error
+        // Validate that bookId is a valid MongoDB ObjectId (24-char hex)
+        const isValidObjectId = bookId && String(bookId).length === 24 && mongoose.Types.ObjectId.isValid(bookId);
+        if (!isValidObjectId) {
+            // Client may send numeric indices (e.g. 3, 4, 5) by mistake; return [] without spamming logs
+            if (process.env.NODE_ENV !== 'development' && /^\d{1,10}$/.test(String(bookId))) {
+                return res.json([]);
+            }
+            console.log(`⚠️ Invalid bookId format: ${bookId} (expected 24-char MongoDB ObjectId)`);
+            return res.json([]);
         }
         
         // Populate webView.gameId to include game URL for web view pages

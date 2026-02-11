@@ -1,0 +1,14 @@
+---
+description: Mark relevant todos completed when a feature is done
+alwaysApply: true
+---
+
+# Close relevant todos when a feature is done
+
+When you finish implementing a feature or completing a task:
+
+1. **Mark the relevant todo(s) as completed** using the TodoWrite tool with `merge: true` and `status: "completed"` for the matching todo id(s).
+2. Do this as part of the same turn where you deliver the feature—don’t leave related todos open after the work is done.
+3. If the user had a todo list for the work (e.g. multi-step plan), mark every todo that the completed feature satisfies.
+
+Example: after implementing “Portal: BookEdit bookType + featuredCharacterId”, mark that todo completed before responding to the user.

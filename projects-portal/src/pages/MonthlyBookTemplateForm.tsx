@@ -1,6 +1,6 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Save, ArrowLeft } from 'lucide-react';
+import { Save, ArrowLeft, Upload, X } from 'lucide-react';
 import apiClient from '../services/apiClient';
 
 const STYLE_OPTIONS = [
@@ -28,7 +28,9 @@ const MonthlyBookTemplateForm: React.FC = () => {
     const [status, setStatus] = useState<'draft' | 'active' | 'archived'>('active');
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
+    const [uploadingImage, setUploadingImage] = useState(false);
     const [error, setError] = useState<string | null>(null);
+    const fileInputRef = useRef<HTMLInputElement>(null);
 
     useEffect(() => {
         if (!id) {
@@ -55,6 +57,36 @@ const MonthlyBookTemplateForm: React.FC = () => {
             }
         })();
     }, [id]);
+
+    const handleReferenceImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file || !file.type.startsWith('image/')) {
+            setError('Please select an image file (e.g. JPG, PNG).');
+            return;
+        }
+        setError(null);
+        setUploadingImage(true);
+        try {
+            const formData = new FormData();
+            formData.append('file', file);
+            const res = await apiClient.post(
+                '/api/upload/image?bookId=monthly-book&type=character',
+                formData
+            );
+            const url = res.data?.url;
+            if (url) {
+                setReferenceImageUrl(url);
+            } else {
+                setError('Upload succeeded but no URL returned.');
+            }
+        } catch (err: any) {
+            setError(err.response?.data?.message || 'Image upload failed.');
+        } finally {
+            setUploadingImage(false);
+            e.target.value = '';
+            fileInputRef.current?.form?.reset();
+        }
+    };
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -168,14 +200,47 @@ const MonthlyBookTemplateForm: React.FC = () => {
                     />
                 </div>
                 <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Reference image URL</label>
-                    <input
-                        type="url"
-                        value={referenceImageUrl}
-                        onChange={(e) => setReferenceImageUrl(e.target.value)}
-                        className="w-full border rounded-lg px-3 py-2"
-                        placeholder="https://..."
-                    />
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Reference image</label>
+                    <p className="text-xs text-gray-500 mb-2">Upload an image (saved to Google Cloud) or paste a URL.</p>
+                    {referenceImageUrl && (
+                        <div className="mb-3 flex items-start gap-3">
+                            <img
+                                src={referenceImageUrl}
+                                alt="Reference"
+                                className="h-24 w-24 object-cover rounded-lg border border-gray-200"
+                            />
+                            <button
+                                type="button"
+                                onClick={() => setReferenceImageUrl('')}
+                                className="p-1.5 text-gray-500 hover:text-red-600 hover:bg-red-50 rounded"
+                                title="Remove image"
+                            >
+                                <X className="w-5 h-5" />
+                            </button>
+                        </div>
+                    )}
+                    <div className="flex flex-wrap items-center gap-3">
+                        <label className="inline-flex items-center gap-2 px-3 py-2 border border-gray-300 rounded-lg cursor-pointer hover:bg-gray-50 text-sm font-medium text-gray-700">
+                            <Upload className="w-4 h-4" />
+                            {uploadingImage ? 'Uploading…' : 'Upload image'}
+                            <input
+                                ref={fileInputRef}
+                                type="file"
+                                accept="image/*"
+                                className="sr-only"
+                                onChange={handleReferenceImageUpload}
+                                disabled={uploadingImage}
+                            />
+                        </label>
+                        <span className="text-gray-400 text-sm">or</span>
+                        <input
+                            type="url"
+                            value={referenceImageUrl}
+                            onChange={(e) => setReferenceImageUrl(e.target.value)}
+                            className="flex-1 min-w-[200px] border rounded-lg px-3 py-2"
+                            placeholder="Paste image URL"
+                        />
+                    </div>
                 </div>
                 <div className="flex gap-4">
                     <div>

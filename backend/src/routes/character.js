@@ -246,15 +246,15 @@ router.post('/generate', async (req, res) => {
 
     } catch (err) {
         console.error('❌ Character generation failed:', err.message);
-        // Return placeholder so Create Your Story flow can continue
+        // Return placeholder so Create Your Story flow can continue (use req.body in catch - styleId/childId are try-block scoped)
         const placeholderUrl = 'https://picsum.photos/seed/character-avatar/400/400';
         res.status(200).json({
             success: true,
             characterAvatarUrl: placeholderUrl,
-            styleId: styleId,
-            childId: childId || null,
+            styleId: req.body?.styleId || 'illustrated',
+            childId: req.body?.childId || null,
             fallback: true,
-            message: 'Character generation unavailable; using placeholder. ' + err.message
+            message: 'Character generation unavailable; using placeholder. ' + (err.message || '')
         });
     }
 });

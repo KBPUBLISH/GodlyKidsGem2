@@ -1,5 +1,6 @@
 import { API_BASE_URL, MOCK_BOOKS } from '../constants';
 import { Book, FeaturedEpisode, AmazonBook } from '../types';
+import { isValidBookId } from '../utils/bookUtils';
 import { authService } from './authService';
 import { DespiaService } from './despiaService';
 
@@ -1221,6 +1222,10 @@ export const ApiService = {
 
   // Get pages for a book
   getBookPages: async (bookId: string, forceRefresh: boolean = false): Promise<any[]> => {
+    if (!isValidBookId(bookId)) {
+      console.warn(`⚠️ getBookPages: invalid bookId "${bookId}" (expected 24-char MongoDB ObjectId). Load real books or check connection.`);
+      return [];
+    }
     const cacheKey = `book_pages_${bookId}`;
     
     // Skip cache if forceRefresh is true

@@ -8,7 +8,7 @@ This guide connects **Google Play Console** → **RevenueCat** → your **Androi
 | Annual   | `yearlymember:yearly`         |
 | Lifetime | `lifetime`                    |
 
-**Android “no product matched”:** On Android we send **subscription product ID only** (e.g. `yearlymember`, `godlykidsmonthly`) so Google Play can resolve the product. In RevenueCat Dashboard → Products, the Android product identifier can be either `subscriptionid` or `subscriptionid:baseplanid`; ensure at least one matches what the app sends.
+**Product IDs:** The app sends the **full identifier** on both iOS and Android to match RevenueCat: `godlykidsmonthly:monthly`, `yearlymember:yearly`, `lifetime`. RevenueCat Dashboard → Products must show these same identifiers.
 
 ---
 
@@ -141,8 +141,8 @@ Your app uses **DeSpia** and triggers purchases via:
 
 `revenuecat://purchase?external_id=USER_ID&product=PRODUCT_ID`
 
-- **Product IDs** are already correct in `services/revenueCatService.ts`:  
-  `kbpublish.godlykids.monthly`, `kbpublish.godlykids.yearly`, `Lifetimepurchase`.
+- **Product IDs** used by the app (see `services/revenueCatService.ts`):  
+  **Both iOS and Android:** `godlykidsmonthly:monthly`, `yearlymember:yearly`, `lifetime` — must match RevenueCat Dashboard → **Products** exactly (as in your RevenueCat screenshot).
 - In **DeSpia dashboard** (or wherever you configure the native Android app):
   - Add / confirm the **RevenueCat Android API key** (from step 1) in the app’s config so the native RevenueCat SDK can talk to your RevenueCat project.
   - Ensure the app’s **package name** matches what you added in RevenueCat and in Google Play.
@@ -167,6 +167,13 @@ After this, purchases on the Android app (via your existing purchase flow) shoul
 ---
 
 ## Troubleshooting
+
+- **"Could not get product on Android" (or "no product matched"):**  
+  The native layer (DeSpia/RevenueCat) cannot resolve the product. Ensure:
+  1. **RevenueCat Dashboard** → **Products**: identifiers are exactly `godlykidsmonthly:monthly`, `yearlymember:yearly`, `lifetime` (Published). The app sends these same strings on Android.
+  2. **Google Play Console** → **Subscriptions**: you have "Monthly Member" (ID `godlykidsmonthly`) and "Godly Kids Yearly Member" (ID `yearlymember`) with active base plans. RevenueCat syncs these and maps them to the full identifier.
+  3. App is signed with the same key as used in Play Console (or your upload key is configured).
+  4. Products are **active** and available in the user's country.
 
 - **Purchases not showing in RevenueCat:**  
   Check package name, service account permissions, and that product IDs match exactly (including case).

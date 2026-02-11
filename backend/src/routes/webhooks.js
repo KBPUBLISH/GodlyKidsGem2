@@ -8,6 +8,16 @@ const AppUser = require('../models/AppUser');
 // In production, this should be in Redis or database
 const pendingPurchases = new Map();
 
+// Short TTL cache for purchase-status to reduce DB/polling load (e.g. Android app polling repeatedly)
+const PURCHASE_STATUS_CACHE_TTL_MS = 5000; // 5 seconds
+const purchaseStatusCache = new Map(); // externalId -> { data, cachedAt }
+
+// Invalidate purchase-status cache for these IDs (call when webhook updates premium status)
+const invalidatePurchaseStatusCache = (ids) => {
+    if (!ids || !ids.forEach) return;
+    ids.forEach(id => purchaseStatusCache.delete(id));
+};
+
 // Helper to check if a string is a valid MongoDB ObjectId
 const isValidObjectId = (id) => {
     if (!id || typeof id !== 'string') return false;
@@ -121,6 +131,7 @@ router.post('/revenuecat', async (req, res) => {
                     console.log(`📝 Storing active subscription under: ${id}`);
                     pendingPurchases.set(id, purchaseData);
                 });
+                invalidatePurchaseStatusCache(allIdentifiers);
                 
                 // Try to update user in BOTH database collections
                 // Try ALL identifiers to find the user
@@ -178,6 +189,7 @@ router.post('/revenuecat', async (req, res) => {
                 allIdentifiers.forEach(id => {
                     pendingPurchases.set(id, expiredData);
                 });
+                invalidatePurchaseStatusCache(allIdentifiers);
                 
                 // Update User and AppUser collections for all identifiers
                 for (const userId of allIdentifiers) {
@@ -228,6 +240,12 @@ router.post('/revenuecat', async (req, res) => {
 router.get('/purchase-status/:externalId', async (req, res) => {
     try {
         const { externalId } = req.params;
+
+        // Return cached response if still valid (reduces DB load from repeated Android polling)
+        const cached = purchaseStatusCache.get(externalId);
+        if (cached && (Date.now() - cached.cachedAt) < PURCHASE_STATUS_CACHE_TTL_MS) {
+            return res.json(cached.data);
+        }
         
         console.log(`🔍 Checking purchase status for: ${externalId}`);
         
@@ -235,11 +253,9 @@ router.get('/purchase-status/:externalId', async (req, res) => {
         const pending = pendingPurchases.get(externalId);
         if (pending && pending.status === 'active') {
             console.log(`✅ Found active purchase in pending map for: ${externalId}`);
-            return res.json({
-                isPremium: true,
-                status: 'active',
-                source: 'webhook'
-            });
+            const data = { isPremium: true, status: 'active', source: 'webhook' };
+            purchaseStatusCache.set(externalId, { data, cachedAt: Date.now() });
+            return res.json(data);
         }
         
         // Check User collection (authentication users)
@@ -250,11 +266,9 @@ router.get('/purchase-status/:externalId', async (req, res) => {
                 console.log(`📋 Found user in User collection: ${user.email}`);
                 if (user.isPremium) {
                     console.log(`✅ User ${user.email} is premium in User collection`);
-                    return res.json({
-                        isPremium: true,
-                        status: 'active',
-                        source: 'database-user'
-                    });
+                    const data = { isPremium: true, status: 'active', source: 'database-user' };
+                    purchaseStatusCache.set(externalId, { data, cachedAt: Date.now() });
+                    return res.json(data);
                 }
             }
         } catch (dbError) {
@@ -269,11 +283,9 @@ router.get('/purchase-status/:externalId', async (req, res) => {
                 console.log(`📋 Found user in AppUser collection: ${appUser.email || appUser.deviceId}`);
                 if (appUser.subscriptionStatus === 'active') {
                     console.log(`✅ AppUser ${appUser.email || appUser.deviceId} has active subscription`);
-                    return res.json({
-                        isPremium: true,
-                        status: 'active',
-                        source: 'database-appuser'
-                    });
+                    const data = { isPremium: true, status: 'active', source: 'database-appuser' };
+                    purchaseStatusCache.set(externalId, { data, cachedAt: Date.now() });
+                    return res.json(data);
                 }
             }
         } catch (dbError) {
@@ -282,10 +294,9 @@ router.get('/purchase-status/:externalId', async (req, res) => {
         
         // Not found or not premium
         console.log(`❌ No premium subscription found for: ${externalId}`);
-        res.json({
-            isPremium: false,
-            status: pending?.status || 'not_found'
-        });
+        const data = { isPremium: false, status: pending?.status || 'not_found' };
+        purchaseStatusCache.set(externalId, { data, cachedAt: Date.now() });
+        res.json(data);
         
     } catch (error) {
         console.error('Purchase status check error:', error);

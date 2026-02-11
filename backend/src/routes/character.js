@@ -53,9 +53,61 @@ const getVertexAccessToken = async () => {
     }
 };
 
-// Generate character with Gemini 2.5 Flash Image (Nano Banana): selfie + prompt → image in one call.
-// Uses GEMINI_API_KEY only; no Vertex. Returns base64 image or null.
-const generateCharacterWithGemini = async (imageBase64, styleId) => {
+// Vertex AI Gemini 2.5 Flash Image: selfie + prompt → image. Uses your GCP project (no consumer API region block).
+// Returns base64 image or null.
+const generateCharacterWithVertexGemini = async (imageBase64, styleId, accessToken, projectId) => {
+    const style = STYLE_PROMPTS[styleId];
+    if (!style) return null;
+
+    const base64Data = imageBase64.replace(/^data:image\/\w+;base64,/, '');
+    const mimeType = (imageBase64.match(/^data:(image\/\w+);base64,/) || [])[1] || 'image/jpeg';
+
+    const url = `https://us-central1-aiplatform.googleapis.com/v1/projects/${projectId}/locations/us-central1/publishers/google/models/gemini-2.5-flash-image:generateContent`;
+    const body = {
+        contents: [{
+            role: 'user',
+            parts: [
+                { text: style.prompt },
+                { inlineData: { mimeType, data: base64Data } }
+            ]
+        }],
+        generationConfig: {
+            responseModalities: ['TEXT', 'IMAGE'],
+            imageConfig: { aspectRatio: '1:1' }
+        }
+    };
+
+    try {
+        const response = await fetch(url, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${accessToken}`
+            },
+            body: JSON.stringify(body)
+        });
+        if (!response.ok) {
+            const errText = await response.text();
+            console.warn('⚠️ Vertex Gemini image generation failed:', response.status, errText.slice(0, 200));
+            return null;
+        }
+        const data = await response.json();
+        const parts = data.candidates?.[0]?.content?.parts || [];
+        for (const part of parts) {
+            if (part.inlineData && part.inlineData.data) {
+                console.log('✅ Character generated with Vertex AI Gemini 2.5 Flash Image (selfie + style)');
+                return part.inlineData.data;
+            }
+        }
+        return null;
+    } catch (err) {
+        console.warn('⚠️ Vertex Gemini request error:', err?.message);
+        return null;
+    }
+};
+
+// Consumer Gemini API (Nano Banana): selfie + prompt → image. Often blocked by "location not supported" when using image input from Render.
+const generateCharacterWithConsumerGemini = async (imageBase64, styleId) => {
     const geminiKey = process.env.GEMINI_API_KEY;
     if (!geminiKey) return null;
 
@@ -79,42 +131,56 @@ const generateCharacterWithGemini = async (imageBase64, styleId) => {
         const parts = response.candidates?.[0]?.content?.parts || [];
         for (const part of parts) {
             if (part.inlineData && part.inlineData.data) {
-                console.log('✅ Character generated with Gemini (Nano Banana)');
+                console.log('✅ Character generated with consumer Gemini (Nano Banana)');
                 return part.inlineData.data;
             }
         }
         return null;
     } catch (err) {
-        console.warn('⚠️ Gemini image generation failed:', err.message);
+        const msg = err?.message || '';
+        if (msg.includes('location is not supported') || msg.includes('FAILED_PRECONDITION')) {
+            console.log('ℹ️ Consumer Gemini unavailable (region); Vertex/Imagen used instead.');
+        } else {
+            console.warn('⚠️ Consumer Gemini image generation failed:', msg);
+        }
         return null;
     }
 };
 
-// Generate character: try Gemini (Nano Banana) first, then fall back to Vertex Imagen (text-to-image).
+// Generate character: try Vertex Gemini (selfie + prompt) first, then consumer Gemini, then Vertex Imagen (text-only fallback).
 const generateCharacterImage = async (imageBase64, styleId) => {
     const style = STYLE_PROMPTS[styleId];
     if (!style) {
         throw new Error(`Invalid style: ${styleId}`);
     }
 
-    // Prefer Gemini 2.5 Flash Image: one call, selfie + style → image (like ChatGPT).
-    const geminiImage = await generateCharacterWithGemini(imageBase64, styleId);
-    if (geminiImage) {
-        return geminiImage;
+    const credentialsJson = process.env.GCS_CREDENTIALS_JSON || process.env.GOOGLE_SERVICE_ACCOUNT_JSON;
+    const hasVertex = !!credentialsJson;
+    let accessToken = null;
+    let projectId = null;
+    if (hasVertex) {
+        try {
+            const credentials = JSON.parse(credentialsJson);
+            projectId = credentials.project_id;
+            accessToken = await getVertexAccessToken();
+        } catch (_) {}
     }
 
-    // Fallback: Vertex Imagen (text-to-image only; no selfie).
-    const credentialsJson = process.env.GCS_CREDENTIALS_JSON || process.env.GOOGLE_SERVICE_ACCOUNT_JSON;
-    if (!credentialsJson) {
+    // 1) Vertex AI Gemini 2.5 Flash Image — same model as Nano Banana, but via your GCP project so the selfie is used and region block is avoided.
+    if (accessToken && projectId) {
+        const vertexImage = await generateCharacterWithVertexGemini(imageBase64, styleId, accessToken, projectId);
+        if (vertexImage) return vertexImage;
+    }
+
+    // 2) Consumer Gemini (in case backend runs in a region where it works).
+    const consumerImage = await generateCharacterWithConsumerGemini(imageBase64, styleId);
+    if (consumerImage) return consumerImage;
+
+    // 3) Fallback: Vertex Imagen text-to-image only (no selfie — generic character).
+    if (!hasVertex || !accessToken || !projectId) {
         throw new Error('GCS credentials not configured');
     }
-    const credentials = JSON.parse(credentialsJson);
-    const projectId = credentials.project_id;
-    const accessToken = await getVertexAccessToken();
-    if (!accessToken) {
-        throw new Error('Could not get access token');
-    }
-    console.log(`🎨 Fallback: generating character in ${styleId} style with Vertex Imagen (text-to-image)...`);
+    console.log(`🎨 Fallback: generating character in ${styleId} style with Vertex Imagen (text-to-image; no selfie)...`);
     return await generateCharacterFromPromptOnly(accessToken, projectId, styleId);
 };
 

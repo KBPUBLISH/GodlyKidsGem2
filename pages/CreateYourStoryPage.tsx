@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import Header from '../components/layout/Header';
 import SelfieCapture from '../components/features/SelfieCapture';
 import { getApiBaseUrl } from '../services/apiService';
 import { useUser } from '../context/UserContext';
@@ -45,6 +44,12 @@ const CreateYourStoryPage: React.FC = () => {
   const currentKid = kids.find((k) => k.id === currentProfileId);
   const hasTrialOrPaid = isPremium || (reverseTrial?.isActive ?? false);
 
+  // Hide bottom nav wheel for the entire Create Your Story flow
+  useEffect(() => {
+    document.body.setAttribute('data-modal-open', 'true');
+    return () => document.body.removeAttribute('data-modal-open');
+  }, []);
+
   useEffect(() => {
     if (currentKid?.name && !childName) setChildName(currentKid.name);
   }, [currentKid?.name, childName]);
@@ -84,8 +89,13 @@ const CreateYourStoryPage: React.FC = () => {
       });
       const data = await res.json().catch(() => ({}));
       const url = data.characterAvatarUrl || data.imageUrl;
-      if (url) setAvatarUrl(url);
-      else setError(data.error || data.message || 'Could not create your character. Try again.');
+      if (url) {
+        setAvatarUrl(url);
+        // Fallback = backend used placeholder; user can still continue
+        if (!data.fallback) setError(null);
+      } else {
+        setError(data.error || data.message || 'Could not create your character. Try again.');
+      }
     } catch (e) {
       setError('Could not create your character. Try again.');
     } finally {
@@ -137,8 +147,7 @@ const CreateYourStoryPage: React.FC = () => {
 
   return (
     <div className="flex flex-col min-h-full bg-gradient-to-b from-[#1a1a2e] to-[#16213e]">
-      <Header isVisible title="Create your story" />
-      <div className="flex-1 px-4 pt-24 pb-12 overflow-y-auto">
+      <div className="flex-1 px-4 pt-8 pb-12 overflow-y-auto" style={{ paddingTop: 'max(2rem, var(--safe-area-top, 0px))' }}>
         {submitted ? (
           <div className="text-center py-12">
             <div className="w-20 h-20 mx-auto rounded-full bg-amber-500/30 flex items-center justify-center mb-6">

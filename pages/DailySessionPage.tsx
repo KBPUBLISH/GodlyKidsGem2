@@ -33,6 +33,7 @@ import {
 } from '../services/dailySessionService';
 import { getSavedPreferences } from './InterestSelectionPage';
 import AvatarCompositor from '../components/avatar/AvatarCompositor';
+import { isValidBookId } from '../utils/bookUtils';
 
 // Learning goals options with character block images
 const LEARNING_GOALS = [
@@ -1441,12 +1442,16 @@ const DailySessionPage: React.FC = () => {
         } else {
           clearInterval(countdownInterval);
           setBookCountdown(null);
+          const id = pendingBookNavigation.id;
           setShowBookReadyScreen(false);
-          // Navigate to the book
-          navigate(`/read/${pendingBookNavigation.id}`, { 
-            state: { fromDailySession: true } 
-          });
           setPendingBookNavigation(null);
+          // Only navigate if we have a real book id (MongoDB ObjectId). Mock ids (1,2,3...) can't load pages.
+          if (isValidBookId(id)) {
+            navigate(`/read/${id}`, { state: { fromDailySession: true } });
+          } else {
+            console.warn('📚 Cannot open reader: book id is not valid. Check connection and refresh to load real books.');
+            refreshBooks();
+          }
         }
       }, 800);
     };

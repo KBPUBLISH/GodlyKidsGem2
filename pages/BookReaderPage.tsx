@@ -20,6 +20,7 @@ import { processTextWithEmotionalCues, removeEmotionalCues } from '../utils/text
 import { activityTrackingService } from '../services/activityTrackingService';
 import { authService } from '../services/authService';
 import { useTutorial } from '../context/TutorialContext';
+import { isValidBookId } from '../utils/bookUtils';
 
 const API_BASE_URL = (import.meta as any).env?.VITE_API_BASE_URL || 'https://backendgk2-0.onrender.com';
 
@@ -171,6 +172,7 @@ const BookReaderPage: React.FC = () => {
     const [scrollState, setScrollState] = useState<ScrollState>('max'); // Default to max (60%) - matches portal editing view
     const [bookTitle, setBookTitle] = useState<string>('Book');
     const [bookOrientation, setBookOrientation] = useState<'portrait' | 'landscape'>('portrait');
+    const [invalidBookId, setInvalidBookId] = useState(false);
     
     // Character overlay state (for showing kid's character in the book)
     const [showCharacterOverlay, setShowCharacterOverlay] = useState(false);
@@ -1186,6 +1188,20 @@ const BookReaderPage: React.FC = () => {
     useEffect(() => {
         currentAudioRef.current = currentAudio;
     }, [currentAudio]);
+
+    // Invalid book id (e.g. mock "3", "4", "5") cannot load pages from API - show friendly error
+    useEffect(() => {
+        if (!bookId) {
+            setInvalidBookId(false);
+            return;
+        }
+        if (!isValidBookId(bookId)) {
+            setInvalidBookId(true);
+            setLoading(false);
+        } else {
+            setInvalidBookId(false);
+        }
+    }, [bookId]);
 
     // Helper function to stop all book audio
     const stopAllBookAudio = useCallback(() => {
@@ -3841,6 +3857,25 @@ const BookReaderPage: React.FC = () => {
             setLoadingAudio(false);
         }
     };
+
+    if (invalidBookId) {
+        return (
+            <div className="min-h-screen flex flex-col items-center justify-center bg-gray-900 text-white p-6">
+                <BookOpen className="w-16 h-16 text-gray-500 mb-4" />
+                <h2 className="text-xl font-bold mb-2">This book couldn&apos;t be loaded</h2>
+                <p className="text-gray-400 text-center mb-6 max-w-sm">
+                    Check your connection and try again. If you just started a daily session, wait for books to load first.
+                </p>
+                <button
+                    onClick={() => navigate(fromDailySession ? '/daily-session' : '/')}
+                    className="px-6 py-3 bg-amber-500 hover:bg-amber-600 text-gray-900 font-semibold rounded-xl flex items-center gap-2"
+                >
+                    <Home className="w-5 h-5" />
+                    Back to {fromDailySession ? 'Daily Session' : 'Home'}
+                </button>
+            </div>
+        );
+    }
 
     if (loading) {
         return (

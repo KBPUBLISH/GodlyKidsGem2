@@ -75,6 +75,16 @@ const SelfieCapture: React.FC<SelfieCaptureProps> = ({
     }
   }, [facingMode]);
 
+  // Hide bottom nav wheel while selfie modal is open
+  useEffect(() => {
+    if (isOpen) {
+      document.body.setAttribute('data-modal-open', 'true');
+    }
+    return () => {
+      document.body.removeAttribute('data-modal-open');
+    };
+  }, [isOpen]);
+
   // Start camera when modal opens
   useEffect(() => {
     if (isOpen) {

@@ -30,13 +30,15 @@ export const PRODUCT_IDS = {
 };
 
 /**
- * Android: Google Play / RevenueCat often expect only the subscription product ID (no ":basePlanId")
- * when resolving products. Use these if you get "no product matched" with the full format above.
- * In RevenueCat Dashboard → Products, ensure the Android product identifier matches one of these formats.
+ * Android: Use the SAME identifiers as RevenueCat so the product matches.
+ * RevenueCat Dashboard shows: godlykidsmonthly:monthly, yearlymember:yearly, lifetime.
+ * Google Play has subscriptions "godlykidsmonthly" and "yearlymember" with base plans;
+ * the full format (subscriptionId:basePlanId) is required for RevenueCat to resolve the product.
+ * Fallback short form (PRODUCT_IDS_ANDROID_LEGACY) only if your RevenueCat products are configured that way.
  */
 export const PRODUCT_IDS_ANDROID = {
-  ANNUAL: 'yearlymember',
-  MONTHLY: 'godlykidsmonthly',
+  ANNUAL: 'yearlymember:yearly',
+  MONTHLY: 'godlykidsmonthly:monthly',
   LIFETIME: 'lifetime',
 };
 

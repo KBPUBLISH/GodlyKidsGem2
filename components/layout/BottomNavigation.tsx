@@ -208,8 +208,9 @@ const BottomNavigation: React.FC = () => {
   const targetRotation = (activeItem.index * ITEM_ANGLE);
   const visualRotation = isDragging && dragRotation !== null ? dragRotation : targetRotation;
 
-  // Hide when modal is open
-  if (isHidden) {
+  // Hide when modal is open or on Create Your Story flow
+  const hideForCreateStory = location.pathname === '/create-your-story';
+  if (isHidden || hideForCreateStory) {
     return null;
   }
 

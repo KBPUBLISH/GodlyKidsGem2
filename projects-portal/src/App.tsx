@@ -43,6 +43,8 @@ import DevotionalStories from './pages/DevotionalStories';
 import DevotionalStoryForm from './pages/DevotionalStoryForm';
 import BackgroundMusicLibrary from './pages/BackgroundMusicLibrary';
 import StoryBackgroundLibrary from './pages/StoryBackgroundLibrary';
+import MonthlyBookTemplates from './pages/MonthlyBookTemplates';
+import MonthlyBookTemplateForm from './pages/MonthlyBookTemplateForm';
 
 // Godly Hub - Creator Portal
 import CreatorLogin from './pages/CreatorLogin';
@@ -132,6 +134,9 @@ function App() {
             <Route path="devotional-stories/:id" element={<DevotionalStoryForm />} />
             <Route path="background-music" element={<BackgroundMusicLibrary />} />
             <Route path="story-backgrounds" element={<StoryBackgroundLibrary />} />
+            <Route path="monthly-books" element={<MonthlyBookTemplates />} />
+            <Route path="monthly-books/new" element={<MonthlyBookTemplateForm />} />
+            <Route path="monthly-books/edit/:id" element={<MonthlyBookTemplateForm />} />
             
             {/* Godly Hub Admin */}
             <Route path="hub/creators" element={<HubCreators />} />

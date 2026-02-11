@@ -75,6 +75,11 @@ const BookEdit: React.FC = () => {
     // Daily Session settings
     const [availableForDailySession, setAvailableForDailySession] = useState(false);
     const [goalTags, setGoalTags] = useState<string[]>([]);
+    
+    // Book type and featured character (Kids Monthly Book)
+    const [bookType, setBookType] = useState<'standard' | 'kids_monthly'>('standard');
+    const [featuredCharacterId, setFeaturedCharacterId] = useState<string>('');
+    const [characters, setCharacters] = useState<Array<{ _id: string; internalTag: string; displayName: string }>>([]);
 
     // Load existing book data
     useEffect(() => {
@@ -148,6 +153,10 @@ const BookEdit: React.FC = () => {
                 // Load daily session settings
                 setAvailableForDailySession(b.availableForDailySession || false);
                 setGoalTags(b.goalTags || []);
+                
+                // Book type and featured character
+                setBookType(b.bookType || 'standard');
+                setFeaturedCharacterId(b.featuredCharacterId?._id || b.featuredCharacterId || '');
             } catch (err) {
                 console.error('Failed to fetch book:', err);
             } finally {
@@ -156,6 +165,18 @@ const BookEdit: React.FC = () => {
         };
         fetchBook();
     }, [bookId]);
+
+    useEffect(() => {
+        const fetchCharacters = async () => {
+            try {
+                const response = await apiClient.get('/api/monthly-book/admin/characters');
+                setCharacters(response.data.characters || []);
+            } catch (error) {
+                console.error('Error fetching characters:', error);
+            }
+        };
+        fetchCharacters();
+    }, []);
 
     // Fetch available voices
     useEffect(() => {
@@ -469,6 +490,8 @@ const BookEdit: React.FC = () => {
                 characterVoices: characterVoices, // Character-to-voice mappings for @Character tags
                 availableForDailySession: availableForDailySession, // Whether this book shows in daily sessions
                 goalTags: goalTags, // Learning goal tags for daily session matching
+                bookType: bookType,
+                featuredCharacterId: bookType === 'kids_monthly' && featuredCharacterId ? featuredCharacterId : null,
             };
             console.log('Updating book with payload:', payload);
             await apiClient.put(`/api/books/${bookId}`, payload);
@@ -649,6 +672,36 @@ const BookEdit: React.FC = () => {
                             ))}
                         </div>
                     )}
+                </div>
+                <div className="space-y-4">
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">Book type</label>
+                        <select
+                            value={bookType}
+                            onChange={e => setBookType(e.target.value as 'standard' | 'kids_monthly')}
+                            className="w-full max-w-xs rounded-md border border-gray-300 bg-white text-gray-900 text-base focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent px-4 py-3 transition cursor-pointer min-h-[44px]"
+                        >
+                            <option value="standard">Standard Book</option>
+                            <option value="kids_monthly">Kids Monthly Book</option>
+                        </select>
+                        {bookType === 'kids_monthly' && (
+                            <div className="mt-3">
+                                <label className="block text-sm font-medium text-gray-700 mb-2">Featured character (optional)</label>
+                                <select
+                                    value={featuredCharacterId}
+                                    onChange={e => setFeaturedCharacterId(e.target.value)}
+                                    className="w-full max-w-md rounded-md border border-gray-300 bg-white text-gray-900 text-base focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent px-4 py-3 transition cursor-pointer min-h-[44px]"
+                                >
+                                    <option value="">— None —</option>
+                                    {characters.map((c) => (
+                                        <option key={c._id} value={c._id}>
+                                            {c.displayName} ({c.internalTag})
+                                        </option>
+                                    ))}
+                                </select>
+                            </div>
+                        )}
+                    </div>
                 </div>
                 <div className="grid grid-cols-3 gap-4">
                     <div>

@@ -32,6 +32,20 @@ const bookSchema = new mongoose.Schema({
         default: 'draft',
     },
     
+    // Book type: standard (regular book) or kids_monthly (shown in Create Your Story / Kids Monthly Book picker)
+    bookType: {
+        type: String,
+        enum: ['standard', 'kids_monthly'],
+        default: 'standard',
+    },
+    
+    // When bookType is kids_monthly, optional link to SavedCharacter (e.g. "Journey with Noah")
+    featuredCharacterId: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'SavedCharacter',
+        default: null,
+    },
+    
     // Book orientation - portrait (default) or landscape
     orientation: {
         type: String,

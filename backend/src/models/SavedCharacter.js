@@ -26,10 +26,16 @@ const savedCharacterSchema = new mongoose.Schema({
     referenceImageUrl: {
         type: String,
     },
-    // Required style prompt for consistent appearance in generated scenes
+    // Style tag matching app CHARACTER_STYLES (pixar, minecraft, etc.)
+    styleId: {
+        type: String,
+        enum: ['pixar', 'minecraft', 'disney', 'lego', 'cartoon', 'illustrated'],
+        default: undefined,
+    },
+    // Style prompt for consistent appearance; optional when styleId is set (can derive from style)
     stylePrompt: {
         type: String,
-        required: true,
+        default: '',
     },
     // For portal ordering
     order: {

@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const Book = require('../models/Book');
+const SavedCharacter = require('../models/SavedCharacter');
 const mongoose = require('mongoose');
 const { notifyNewBook } = require('../services/notificationService');
 
@@ -321,11 +322,19 @@ router.post('/', async (req, res) => {
             minAge: req.body.minAge ? Number(req.body.minAge) : undefined,
             category: req.body.category || 'Other',
             status: req.body.status || 'draft',
+            bookType: req.body.bookType || 'standard',
             text: req.body.text || '',
             games: req.body.games || [],
             bookGames: req.body.bookGames || [],
             pages: req.body.pages || [],
         };
+        if (req.body.featuredCharacterId) {
+            const exists = await SavedCharacter.findById(req.body.featuredCharacterId).select('_id').lean();
+            if (!exists) return res.status(400).json({ message: 'Invalid featuredCharacterId' });
+            bookData.featuredCharacterId = new mongoose.Types.ObjectId(req.body.featuredCharacterId);
+        } else {
+            bookData.featuredCharacterId = null;
+        }
         
         // Always initialize files structure
         bookData.files = {
@@ -462,6 +471,17 @@ router.put('/:id', async (req, res) => {
             book.characterVoices = req.body.characterVoices || [];
             console.log('🎭 Updated characterVoices:', JSON.stringify(book.characterVoices));
             delete req.body.characterVoices;
+        }
+        
+        if (req.body.featuredCharacterId !== undefined) {
+            if (req.body.featuredCharacterId) {
+                const exists = await SavedCharacter.findById(req.body.featuredCharacterId).select('_id').lean();
+                if (!exists) return res.status(400).json({ message: 'Invalid featuredCharacterId' });
+                book.featuredCharacterId = new mongoose.Types.ObjectId(req.body.featuredCharacterId);
+            } else {
+                book.featuredCharacterId = null;
+            }
+            delete req.body.featuredCharacterId;
         }
         
         // Update all other fields

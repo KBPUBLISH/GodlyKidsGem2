@@ -27,7 +27,7 @@ const Layout: React.FC = () => {
         { path: '/lessons', icon: Video, label: 'Lessons' },
         { path: '/lessons/calendar', icon: CalendarDays, label: 'Lesson Calendar' },
         { path: '/devotional-stories', icon: BookHeart, label: 'Devotional Stories' },
-        { path: '/monthly-books', icon: BookOpen, label: 'Kids Monthly Books' },
+        { path: '/monthly-books', icon: BookOpen, label: 'Kids Monthly Book Character Design' },
         { path: '/background-music', icon: Disc, label: 'Story Music Library' },
         { path: '/story-backgrounds', icon: Image, label: 'Story Backgrounds' },
         { path: '/categories', icon: Tag, label: 'Categories' },

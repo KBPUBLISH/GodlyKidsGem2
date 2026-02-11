@@ -14,11 +14,19 @@ interface BookFormData {
     orientation: 'portrait' | 'landscape';
     isMembersOnly: boolean;
     introVideoUrl: string;
+    bookType: 'standard' | 'kids_monthly';
+    featuredCharacterId: string;
 }
 
 interface Category {
     _id: string;
     name: string;
+}
+
+interface SavedCharacterOption {
+    _id: string;
+    internalTag: string;
+    displayName: string;
 }
 
 const BookForm: React.FC = () => {
@@ -42,7 +50,10 @@ const BookForm: React.FC = () => {
         orientation: 'portrait',
         isMembersOnly: false,
         introVideoUrl: '',
+        bookType: 'standard',
+        featuredCharacterId: '',
     });
+    const [characters, setCharacters] = useState<SavedCharacterOption[]>([]);
 
     useEffect(() => {
         const fetchCategories = async () => {
@@ -58,6 +69,18 @@ const BookForm: React.FC = () => {
             }
         };
         fetchCategories();
+    }, []);
+
+    useEffect(() => {
+        const fetchCharacters = async () => {
+            try {
+                const response = await apiClient.get('/api/monthly-book/admin/characters');
+                setCharacters(response.data.characters || []);
+            } catch (error) {
+                console.error('Error fetching characters:', error);
+            }
+        };
+        fetchCharacters();
     }, []);
 
     const handleInputChange = (
@@ -112,14 +135,17 @@ const BookForm: React.FC = () => {
 
         try {
             // Step 1: Create the book first (without cover image or intro video)
-            const bookData = { ...formData, coverImage: '', introVideoUrl: '' };
+            const bookData: Record<string, unknown> = { ...formData, coverImage: '', introVideoUrl: '' };
+            if (formData.bookType !== 'kids_monthly') {
+                bookData.featuredCharacterId = '';
+            }
             
             // Create book
             const response = await apiClient.post('/api/books', bookData);
             const newBook = response.data;
             const bookId = newBook._id;
             
-            const updateData: { coverImage?: string; introVideoUrl?: string } = {};
+            const updateData: { coverImage?: string; introVideoUrl?: string; featuredCharacterId?: string } = {};
             
             // Step 2: Upload cover image with bookId for organized structure
             if (coverFile) {
@@ -179,8 +205,11 @@ const BookForm: React.FC = () => {
                 }
             }
             
-            // Step 4: Update book with uploaded files
-            if (Object.keys(updateData).length > 0) {
+            // Step 4: Update book with uploaded files (and featuredCharacterId if set on create)
+            if (Object.keys(updateData).length > 0 || (formData.bookType === 'kids_monthly' && formData.featuredCharacterId)) {
+                if (formData.bookType === 'kids_monthly' && formData.featuredCharacterId) {
+                    updateData.featuredCharacterId = formData.featuredCharacterId;
+                }
                 await apiClient.put(`/api/books/${bookId}`, updateData);
             }
             
@@ -402,6 +431,45 @@ const BookForm: React.FC = () => {
                             )}
                         </select>
                     </div>
+                </div>
+
+                {/* Book type & Featured character (Kids Monthly Book) */}
+                <div className="mb-6">
+                    <label htmlFor="bookType" className="block text-sm font-medium text-gray-700 mb-2">
+                        Book type
+                    </label>
+                    <select
+                        id="bookType"
+                        name="bookType"
+                        value={formData.bookType}
+                        onChange={(e) => setFormData((prev) => ({ ...prev, bookType: e.target.value as 'standard' | 'kids_monthly', featuredCharacterId: e.target.value === 'kids_monthly' ? prev.featuredCharacterId : '' }))}
+                        className="w-full max-w-xs px-4 py-3 text-base border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent bg-white cursor-pointer min-h-[44px]"
+                    >
+                        <option value="standard">Standard Book</option>
+                        <option value="kids_monthly">Kids Monthly Book</option>
+                    </select>
+                    {formData.bookType === 'kids_monthly' && (
+                        <div className="mt-4">
+                            <label htmlFor="featuredCharacterId" className="block text-sm font-medium text-gray-700 mb-2">
+                                Featured character (optional)
+                            </label>
+                            <select
+                                id="featuredCharacterId"
+                                name="featuredCharacterId"
+                                value={formData.featuredCharacterId}
+                                onChange={(e) => setFormData((prev) => ({ ...prev, featuredCharacterId: e.target.value }))}
+                                className="w-full max-w-md px-4 py-3 text-base border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent bg-white cursor-pointer min-h-[44px]"
+                            >
+                                <option value="">— None —</option>
+                                {characters.map((c) => (
+                                    <option key={c._id} value={c._id}>
+                                        {c.displayName} ({c.internalTag})
+                                    </option>
+                                ))}
+                            </select>
+                            <p className="text-xs text-gray-500 mt-1">Link this book to a character from Kids Monthly Book Character Design (e.g. Journey with Noah).</p>
+                        </div>
+                    )}
                 </div>
 
                 {/* Status, Orientation & Access */}

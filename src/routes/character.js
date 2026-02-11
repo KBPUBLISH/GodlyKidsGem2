@@ -179,9 +179,8 @@ const uploadToGCS = async (imageBase64, filename) => {
         }
     });
 
-    // Make the file public
-    await file.makePublic();
-
+    // With uniform bucket-level access, do not call makePublic() (per-object ACLs are disabled).
+    // Ensure the bucket allows public read at bucket level if these URLs must be publicly accessible.
     const publicUrl = `https://storage.googleapis.com/${bucket.name}/characters/${filename}`;
     return publicUrl;
 };

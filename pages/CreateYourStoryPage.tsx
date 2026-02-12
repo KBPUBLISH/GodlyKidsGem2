@@ -35,6 +35,7 @@ const CreateYourStoryPage: React.FC = () => {
   const [selfieBase64, setSelfieBase64] = useState<string | null>(null);
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
   const [stories, setStories] = useState<Story[]>([]);
+  const [storiesLoaded, setStoriesLoaded] = useState(false);
   const [selectedBookId, setSelectedBookId] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -59,15 +60,21 @@ const CreateYourStoryPage: React.FC = () => {
 
   useEffect(() => {
     let cancelled = false;
+    setStoriesLoaded(false);
     (async () => {
       try {
         const base = getApiRoot();
-        const res = await fetch(`${base}/api/books?bookType=kids_monthly`);
+        const res = await fetch(`${base}/api/books?bookType=kids_monthly&status=published`);
         const data = await res.json().catch(() => ({}));
         if (!cancelled) {
+          setStoriesLoaded(true);
           if (!res.ok) setError(data.error || data.message || 'Could not load stories.');
           else {
-            const list = Array.isArray(data.data) ? data.data : [];
+            const list = Array.isArray(data.data)
+              ? data.data
+              : Array.isArray(data)
+                ? data
+                : [];
             setStories(list.map((b: any) => ({
               _id: b._id,
               title: b.title,
@@ -78,7 +85,10 @@ const CreateYourStoryPage: React.FC = () => {
           }
         }
       } catch (e) {
-        if (!cancelled) setError('Could not load stories.');
+        if (!cancelled) {
+          setStoriesLoaded(true);
+          setError('Could not load stories.');
+        }
       }
     })();
     return () => { cancelled = true; };
@@ -293,7 +303,12 @@ const CreateYourStoryPage: React.FC = () => {
                     </button>
                   ))}
                 </div>
-                {stories.length === 0 && !error && <p className="text-white/50">Loading stories...</p>}
+                {!storiesLoaded && !error && <p className="text-white/50">Loading stories...</p>}
+                {storiesLoaded && stories.length === 0 && !error && (
+                  <p className="text-white/80 text-sm">
+                    No Kids Monthly stories yet. Create a book in the portal, set its type to &quot;Kids Monthly Book&quot;, and publish it—then it will appear here.
+                  </p>
+                )}
                 <div className="flex gap-3">
                   <button onClick={() => setStep(2)} className="flex-1 py-3 rounded-xl bg-white/10 text-white">
                     Back

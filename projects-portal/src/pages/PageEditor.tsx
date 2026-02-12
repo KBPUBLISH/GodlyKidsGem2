@@ -1392,13 +1392,22 @@ const PageEditor: React.FC = () => {
                                                     setImagePromptSuggestionsOpen(false);
                                                     return;
                                                 }
-                                                const asImagePrompt = raw
-                                                    .replace(/\{childName\}/gi, '@child')
-                                                    .replace(/\{kidname\}/gi, '@child')
-                                                    .replace(/\{kidName\}/gi, '@child')
-                                                    .replace(/\{childname\}/gi, '@child')
+                                                // Replace any {childName}, {kidname}, {kid name}, etc. with @child (keep other placeholders)
+                                                const withChildTag = raw.replace(/\{([^}]+)\}/g, (_, key) => {
+                                                    const k = key.trim().toLowerCase().replace(/\s+/g, '');
+                                                    if (k === 'childname' || k === 'kidname' || k === 'child_name' || k === 'kid_name') return '@child';
+                                                    return `{${key}}`;
+                                                });
+                                                // Make it a scene-style image prompt: strip dialogue (quoted text) to keep narrative/action, collapse spaces
+                                                const withoutQuotes = withChildTag
+                                                    .replace(/"([^"]*)"/g, ' ')
+                                                    .replace(/'([^']*)'/g, ' ')
                                                     .replace(/\s+/g, ' ')
                                                     .trim();
+                                                const sceneText = withoutQuotes.length > 0 ? withoutQuotes : withChildTag.replace(/\s+/g, ' ').trim();
+                                                const asImagePrompt = sceneText.startsWith('Scene') || sceneText.startsWith('scene')
+                                                    ? sceneText
+                                                    : `Scene: ${sceneText}`;
                                                 const prompt = asImagePrompt.length > 400
                                                     ? asImagePrompt.slice(0, 397) + '...'
                                                     : asImagePrompt;

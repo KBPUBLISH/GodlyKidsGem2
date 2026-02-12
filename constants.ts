@@ -122,3 +122,8 @@ export const API_BASE_URL =
   typeof import.meta !== "undefined" && (import.meta as any).env?.VITE_API_BASE_URL
     ? (import.meta as any).env.VITE_API_BASE_URL
     : "http://localhost:5001/api/";
+
+/** Feature flag: Create Your Story (Kids Monthly). Set VITE_SHOW_CREATE_YOUR_STORY=true to show in production. */
+export const FEATURE_CREATE_YOUR_STORY =
+  typeof import.meta !== "undefined" &&
+  (import.meta as any).env?.VITE_SHOW_CREATE_YOUR_STORY === "true";

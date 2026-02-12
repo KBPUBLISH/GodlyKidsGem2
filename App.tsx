@@ -1,6 +1,7 @@
 
 import React, { useMemo, useEffect, useState } from 'react';
 import { HashRouter, Routes, Route, useLocation, Navigate, useNavigate } from 'react-router-dom';
+import { FEATURE_CREATE_YOUR_STORY } from './constants';
 import LandingPage from './pages/LandingPage';
 import SignInPage from './pages/SignInPage';
 import ResetPasswordPage from './pages/ResetPasswordPage';
@@ -1374,7 +1375,7 @@ const App: React.FC = () => {
                   <Route path="/listen" element={<ListenPage />} />
                   <Route path="/read" element={<ReadPage />} />
                   <Route path="/library" element={<LibraryPage />} />
-                  <Route path="/create-your-story" element={<CreateYourStoryPage />} />
+                  <Route path="/create-your-story" element={FEATURE_CREATE_YOUR_STORY ? <CreateYourStoryPage /> : <Navigate to="/library" replace />} />
                   <Route path="/audio" element={<AudioPage />} />
                   <Route path="/book/:id" element={<BookDetailPage />} />
                   <Route path="/audio/playlist/:playlistId" element={<PlaylistDetailPage />} />

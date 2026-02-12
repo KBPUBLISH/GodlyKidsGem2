@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Save, ArrowLeft, Upload, X } from 'lucide-react';
+import axios from 'axios';
 import apiClient from '../services/apiClient';
 
 const STYLE_OPTIONS = [
@@ -69,9 +70,11 @@ const MonthlyBookTemplateForm: React.FC = () => {
         try {
             const formData = new FormData();
             formData.append('file', file);
-            const res = await apiClient.post(
-                '/api/upload/image?bookId=monthly-book&type=character',
-                formData
+            const baseURL = apiClient.defaults.baseURL || '';
+            const res = await axios.post(
+                `${baseURL}/api/upload/image?bookId=monthly-book&type=character`,
+                formData,
+                { timeout: 60000 }
             );
             const url = res.data?.url;
             if (url) {

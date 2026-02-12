@@ -65,6 +65,14 @@ const pageSchema = new mongoose.Schema({
         }],
     },
 
+    // Kids Monthly Book: optional prompt for on-demand background image generation (used when bookType is kids_monthly)
+    sceneDescription: { type: String },
+    // Kids Monthly Book: optional saved characters to reference on this page (e.g. Noah, David) for image generation
+    referenceCharacterIds: [{
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'SavedCharacter',
+    }],
+
     // Page files - organized per page
     files: {
         // Background (image or video)

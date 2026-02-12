@@ -64,6 +64,8 @@ router.post('/', async (req, res) => {
         useImageSequence: req.body.useImageSequence || false,
         imageSequenceDuration: req.body.imageSequenceDuration || 3,
         imageSequenceAnimation: req.body.imageSequenceAnimation || 'kenBurns',
+        sceneDescription: req.body.sceneDescription, // Kids Monthly: prompt for on-demand background generation
+        referenceCharacterIds: req.body.referenceCharacterIds || [], // Kids Monthly: saved characters to reference on this page
     });
 
     try {

@@ -16,11 +16,18 @@ const customMonthlyBookSchema = new mongoose.Schema({
         required: true,
         index: true, // Kid profile id (frontend id or mongo _id string)
     },
-    // Template user selected (Bible character story)
+    // Template user selected (Bible character story) – used for legacy template-based flow
     templateId: {
         type: mongoose.Schema.Types.ObjectId,
         ref: 'MonthlyBookTemplate',
-        required: true,
+        required: false,
+        index: true,
+    },
+    // Source Book from Book Builder – used for create-from-book flow (Book with bookType kids_monthly)
+    sourceBookId: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Book',
+        required: false,
         index: true,
     },
     childName: {

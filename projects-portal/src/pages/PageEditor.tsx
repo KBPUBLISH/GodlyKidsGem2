@@ -143,6 +143,12 @@ const PageEditor: React.FC = () => {
     // Kids Monthly Book: saved characters to reference on this page (for image generation)
     const [referenceCharacterIds, setReferenceCharacterIds] = useState<string[]>([]);
     const [availableCharacters, setAvailableCharacters] = useState<Array<{ _id: string; displayName: string; internalTag: string }>>([]);
+    // Image prompt @-mention popup (e.g. @disneyjesus, @kid)
+    const [imagePromptSuggestionsOpen, setImagePromptSuggestionsOpen] = useState(false);
+    const [imagePromptFilter, setImagePromptFilter] = useState('');
+    const [imagePromptStart, setImagePromptStart] = useState(0);
+    const [imagePromptSelectedIndex, setImagePromptSelectedIndex] = useState(0);
+    const imagePromptRef = useRef<HTMLTextAreaElement>(null);
     
     // TTS Cache clearing
     const [clearingCache, setClearingCache] = useState(false);
@@ -1370,7 +1376,7 @@ const PageEditor: React.FC = () => {
                         {/* Kids Monthly only: image prompt for on-demand background generation */}
                         {bookType === 'kids_monthly' && (
                             <>
-                                <div className="space-y-2 pt-2">
+                                <div className="space-y-2 pt-2 relative">
                                     <div className="flex items-center justify-between gap-2">
                                         <label className="block text-xs font-semibold text-gray-600">Image prompt (optional)</label>
                                         <button
@@ -1382,6 +1388,7 @@ const PageEditor: React.FC = () => {
                                                     .join(' ')
                                                     .trim();
                                                 setSceneDescription(pageText || '');
+                                                setImagePromptSuggestionsOpen(false);
                                             }}
                                             className="flex items-center gap-1 px-2 py-1 text-xs font-medium text-indigo-600 hover:text-indigo-800 hover:bg-indigo-50 rounded transition"
                                         >
@@ -1390,17 +1397,99 @@ const PageEditor: React.FC = () => {
                                         </button>
                                     </div>
                                     <textarea
+                                        ref={imagePromptRef}
                                         value={sceneDescription}
-                                        onChange={e => setSceneDescription(e.target.value)}
-                                        placeholder="e.g. A cozy bedroom at night with stars on the ceiling"
+                                        onChange={(e) => {
+                                            const val = e.target.value;
+                                            const pos = e.target.selectionStart ?? val.length;
+                                            setSceneDescription(val);
+                                            const before = val.slice(0, pos);
+                                            const lastAt = before.lastIndexOf('@');
+                                            if (lastAt === -1 || /\s/.test(before.slice(lastAt + 1))) {
+                                                setImagePromptSuggestionsOpen(false);
+                                                return;
+                                            }
+                                            const filter = before.slice(lastAt + 1);
+                                            setImagePromptSuggestionsOpen(true);
+                                            setImagePromptFilter(filter);
+                                            setImagePromptStart(lastAt);
+                                            setImagePromptSelectedIndex(0);
+                                        }}
+                                        onKeyDown={(e) => {
+                                            if (!imagePromptSuggestionsOpen) return;
+                                            const suggestions = availableCharacters
+                                                .filter(c =>
+                                                    c.internalTag.toLowerCase().includes(imagePromptFilter.toLowerCase()) ||
+                                                    c.displayName.toLowerCase().includes(imagePromptFilter.toLowerCase())
+                                                )
+                                                .map(c => ({ tag: c.internalTag, label: c.displayName }));
+                                            if (e.key === 'ArrowDown') {
+                                                e.preventDefault();
+                                                setImagePromptSelectedIndex(i => (i + 1) % suggestions.length);
+                                            } else if (e.key === 'ArrowUp') {
+                                                e.preventDefault();
+                                                setImagePromptSelectedIndex(i => (i - 1 + suggestions.length) % suggestions.length);
+                                            } else if (e.key === 'Enter' && suggestions.length > 0) {
+                                                e.preventDefault();
+                                                const tag = suggestions[imagePromptSelectedIndex].tag;
+                                                const end = imagePromptStart + 1 + imagePromptFilter.length;
+                                                const newText = sceneDescription.slice(0, imagePromptStart) + '@' + tag + ' ' + sceneDescription.slice(end);
+                                                setSceneDescription(newText);
+                                                setImagePromptSuggestionsOpen(false);
+                                                setTimeout(() => {
+                                                    imagePromptRef.current?.focus();
+                                                    const newPos = imagePromptStart + tag.length + 2;
+                                                    imagePromptRef.current?.setSelectionRange(newPos, newPos);
+                                                }, 0);
+                                            } else if (e.key === 'Escape') {
+                                                setImagePromptSuggestionsOpen(false);
+                                            }
+                                        }}
+                                        onBlur={() => setTimeout(() => setImagePromptSuggestionsOpen(false), 200)}
+                                        placeholder="e.g. A cozy bedroom at night with stars on the ceiling. Type @ for character suggestions"
                                         rows={2}
                                         className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
                                     />
+                                    {imagePromptSuggestionsOpen && (() => {
+                                        const suggestions = availableCharacters
+                                            .filter(c =>
+                                                c.internalTag.toLowerCase().includes(imagePromptFilter.toLowerCase()) ||
+                                                c.displayName.toLowerCase().includes(imagePromptFilter.toLowerCase())
+                                            )
+                                            .map(c => ({ tag: c.internalTag, label: c.displayName }));
+                                        if (suggestions.length === 0) return null;
+                                        return (
+                                            <div className="absolute z-50 mt-1 w-full max-h-48 overflow-auto rounded-lg border border-gray-200 bg-white shadow-lg py-1">
+                                                {suggestions.map((s, i) => (
+                                                    <button
+                                                        key={`${s.tag}-${i}`}
+                                                        type="button"
+                                                        onClick={() => {
+                                                            const tag = s.tag;
+                                                            const end = imagePromptStart + 1 + imagePromptFilter.length;
+                                                            const newText = sceneDescription.slice(0, imagePromptStart) + '@' + tag + ' ' + sceneDescription.slice(end);
+                                                            setSceneDescription(newText);
+                                                            setImagePromptSuggestionsOpen(false);
+                                                            setTimeout(() => {
+                                                                imagePromptRef.current?.focus();
+                                                                const newPos = imagePromptStart + tag.length + 2;
+                                                                imagePromptRef.current?.setSelectionRange(newPos, newPos);
+                                                            }, 0);
+                                                        }}
+                                                        className={`w-full text-left px-3 py-2 text-sm ${i === imagePromptSelectedIndex ? 'bg-indigo-100 text-indigo-900' : 'text-gray-700 hover:bg-gray-100'}`}
+                                                    >
+                                                        <span className="font-medium">@{s.tag}</span>
+                                                        {s.label !== s.tag && <span className="text-gray-500 ml-2">{s.label}</span>}
+                                                    </button>
+                                                ))}
+                                            </div>
+                                        );
+                                    })()}
                                     <p className="text-xs text-gray-400">
                                         Used when generating a personalized book for a child. Use the button above to fill from page text, or leave empty to use page text automatically.
                                     </p>
                                     <p className="text-xs text-gray-500 mt-1">
-                                        Use <code className="bg-gray-100 px-1 rounded">@kid</code> (or <code className="bg-gray-100 px-1 rounded">@child</code>) for the child’s avatar, and <code className="bg-gray-100 px-1 rounded">@Noah</code> / <code className="bg-gray-100 px-1 rounded">@disneyjesus</code> etc. for saved characters. E.g. “@disneyjesus and @kid are building a house.” Backgrounds are generated in 9:16 portrait for mobile. (In the page text block, @ is for voice, [] for ElevenLabs, {'{}'} for {'{childName}'}.)
+                                        Type <code className="bg-gray-100 px-1 rounded">@kid</code> or <code className="bg-gray-100 px-1 rounded">@child</code> for the child’s avatar (per child, from their device). Use the popup when you type <code className="bg-gray-100 px-1 rounded">@</code> to pick saved characters (e.g. @Noah, @disneyjesus). E.g. “@disneyjesus and @kid are building a house.” Backgrounds are 9:16 portrait for mobile.
                                     </p>
                                 </div>
 

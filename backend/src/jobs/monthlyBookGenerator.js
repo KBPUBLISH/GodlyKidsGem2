@@ -147,8 +147,11 @@ async function buildScenePrompt(pageDoc, characterStylePrompt, childName) {
     const fromBoxes = (pageDoc.content?.textBoxes || []).map((b) => b.text).filter(Boolean).join(' ');
     const combined = (text + ' ' + fromBoxes).trim().slice(0, 200);
     const context = substituteChildName(combined, childName) || 'A gentle storybook scene';
-    const prompt = `Scene for a children's story: ${context}. ${characterStylePrompt}. Children's book illustration style, warm inviting colors, soft lighting, suitable for ages 4-12, Christian faith theme, no text in image.`;
-    return { prompt, hasKidReference: false };
+    // When no portal scene prompt: still ask to include the child in the scene when we have a name,
+    // so Page 1 (and any page without sceneDescription) gets the user's character in the image.
+    const childInScene = childName ? ` Include ${childName} in the scene.` : '';
+    const prompt = `Scene for a children's story: ${context}. ${characterStylePrompt}.${childInScene} Children's book illustration style, warm inviting colors, soft lighting, suitable for ages 4-12, Christian faith theme, no text in image.`;
+    return { prompt, hasKidReference: !!childName };
 }
 
 /**
@@ -181,9 +184,64 @@ async function gatherPageReferenceImages(customBook, pageDoc) {
 }
 
 /**
+ * All Vertex AI regions that support Gemini 2.5 Flash Image (per Google model endpoint locations).
+ * Used as default for round-robin so each page uses a different region's quota (maximizes effective RPM).
+ */
+const VERTEX_IMAGE_REGIONS_DEFAULT = [
+    'us-central1', 'us-east1', 'us-east4', 'us-east5', 'us-west1', 'us-west4', 'us-south1',
+    'northamerica-northeast1', 'southamerica-east1',
+    'europe-west1', 'europe-west2', 'europe-west3', 'europe-west4', 'europe-west6', 'europe-west8', 'europe-west9',
+    'europe-north1', 'europe-central2', 'europe-southwest1',
+    'asia-northeast1', 'asia-northeast3', 'asia-southeast1', 'asia-east1', 'asia-east2', 'asia-south1',
+    'australia-southeast1',
+    'me-central1', 'me-central2', 'me-west1',
+];
+
+let _vertexRegionsLogged = false;
+
+/**
+ * Get Vertex AI endpoint for Gemini 2.5 Flash Image.
+ * - VERTEX_AI_IMAGE_LOCATION=global → use global endpoint (separate quota, can reduce 429s).
+ * - VERTEX_AI_IMAGE_REGIONS=us-central1,us-east1,... → round-robin across those regions only.
+ * - Otherwise round-robin across VERTEX_IMAGE_REGIONS_DEFAULT (all supported regions) to maximize effective RPM.
+ * @param {number} pageIndex - Used for round-robin.
+ * @returns {{ baseUrl: string, location: string }}
+ */
+function getVertexImageEndpoint(pageIndex) {
+    const loc = (process.env.VERTEX_AI_IMAGE_LOCATION || '').trim().toLowerCase();
+    if (loc === 'global') {
+        return {
+            baseUrl: 'https://aiplatform.googleapis.com/v1',
+            location: 'global',
+        };
+    }
+    const regionsStr = (process.env.VERTEX_AI_IMAGE_REGIONS || '').trim();
+    const regions = regionsStr
+        ? regionsStr.split(/\s*,\s*/).map((r) => r.trim()).filter(Boolean)
+        : VERTEX_IMAGE_REGIONS_DEFAULT;
+    if (regions.length) {
+        if (!_vertexRegionsLogged) {
+            _vertexRegionsLogged = true;
+            console.log('MonthlyBookGenerator: Using', regions.length, 'regions for Vertex Gemini image round-robin');
+        }
+        const idx = Math.abs(pageIndex) % regions.length;
+        const region = regions[idx];
+        return {
+            baseUrl: `https://${region}-aiplatform.googleapis.com/v1`,
+            location: region,
+        };
+    }
+    const region = loc || 'us-central1';
+    return {
+        baseUrl: `https://${region}-aiplatform.googleapis.com/v1`,
+        location: region,
+    };
+}
+
+/**
  * Generate one page image with Vertex Gemini 2.5 Flash Image for all pages (superior consistency).
  * Uses child + portal character reference images when available; supports text-only when no refs.
- * Returns GCS URL or null on failure (caller retries; no Imagen fallback).
+ * Returns { imageUrl: string | null, httpStatus: number } so caller can use longer backoff on 429.
  */
 async function generatePageImageWithVertexGemini(customBook, pageDoc, characterStylePrompt, pageIndex) {
     const customMonthlyBookId = String(customBook._id);
@@ -194,10 +252,15 @@ async function generatePageImageWithVertexGemini(customBook, pageDoc, characterS
     try {
         projectId = credentialsJson ? JSON.parse(credentialsJson).project_id : null;
     } catch (_) {}
-    if (!token || !projectId || !bucket) return null;
+    if (!token || !projectId || !bucket) return { imageUrl: null, httpStatus: 0 };
 
     const { prompt } = await buildScenePrompt(pageDoc, characterStylePrompt, customBook.childName);
     const referenceImages = await gatherPageReferenceImages(customBook, pageDoc);
+
+    // Log prompt preview for every page (including Page 1) so it's clear what prompt is used.
+    const promptPreview = prompt.slice(0, 100) + (prompt.length > 100 ? '...' : '');
+    const { baseUrl, location } = getVertexImageEndpoint(pageIndex);
+    console.log('MonthlyBookGenerator: Page', pageNumber, 'prompt:', promptPreview, 'location:', location);
 
     const refDescription = referenceImages.length
         ? referenceImages.map((r, i) => `Image ${i + 1}: ${r.label}`).join('. ')
@@ -212,7 +275,7 @@ async function generatePageImageWithVertexGemini(customBook, pageDoc, characterS
     }
 
     try {
-        const url = `https://us-central1-aiplatform.googleapis.com/v1/projects/${projectId}/locations/us-central1/publishers/google/models/gemini-2.5-flash-image:generateContent`;
+        const url = `${baseUrl}/projects/${projectId}/locations/${location}/publishers/google/models/gemini-2.5-flash-image:generateContent`;
         const res = await axios.post(
             url,
             {
@@ -232,8 +295,8 @@ async function generatePageImageWithVertexGemini(customBook, pageDoc, characterS
             }
         );
         if (res.status !== 200) {
-            console.warn('MonthlyBookGenerator: Gemini page', pageNumber, 'failed', res.status, typeof res.data === 'string' ? res.data.slice(0, 150) : '');
-            return null;
+            console.warn('MonthlyBookGenerator: Gemini page', pageNumber, 'failed', res.status, res.status === 429 ? '(rate limit)' : '', typeof res.data === 'string' ? res.data.slice(0, 150) : '');
+            return { imageUrl: null, httpStatus: res.status };
         }
         const outParts = res.data.candidates?.[0]?.content?.parts || [];
         let imageBase64 = null;
@@ -245,7 +308,7 @@ async function generatePageImageWithVertexGemini(customBook, pageDoc, characterS
         }
         if (!imageBase64) {
             console.warn('MonthlyBookGenerator: Gemini page', pageNumber, 'returned no image');
-            return null;
+            return { imageUrl: null, httpStatus: 200 };
         }
         const buffer = Buffer.from(imageBase64, 'base64');
         const hash = crypto.createHash('md5').update(customMonthlyBookId + pageNumber + Date.now()).digest('hex').slice(0, 8);
@@ -257,10 +320,11 @@ async function generatePageImageWithVertexGemini(customBook, pageDoc, characterS
         await blob.makePublic().catch(() => {});
         const imageUrl = `https://storage.googleapis.com/${bucket.name}/${filename}`;
         console.log('MonthlyBookGenerator: Generated page', pageNumber, 'with Vertex Gemini 2.5 Flash Image', imageUrl);
-        return imageUrl;
+        return { imageUrl, httpStatus: 200 };
     } catch (err) {
-        console.warn('MonthlyBookGenerator: Gemini page', pageNumber, 'error', err.message);
-        return null;
+        const status = err.response?.status;
+        console.warn('MonthlyBookGenerator: Gemini page', pageNumber, 'error', err.message, status ? `(${status})` : '');
+        return { imageUrl: null, httpStatus: status || 0 };
     }
 }
 
@@ -269,6 +333,17 @@ const PAGE_GEMINI_MAX_ATTEMPTS = 3;
 
 /** Delay in ms between Gemini retries for page generation. */
 const PAGE_GEMINI_RETRY_DELAY_MS = 2000;
+
+/**
+ * Gemini 2.5 Flash Image "Generate content requests per minute" is often capped at 10 RPM and
+ * not adjustable in Cloud Console for image-generation models. If you need higher quota, use
+ * https://cloud.google.com/vertex-ai/generative-ai/docs/quotas (Contact Us) or GCP Support.
+ */
+/** Delay in ms when Vertex returns 429 (rate limit) — wait longer for quota to reset. Override with MONTHLY_BOOK_GEMINI_RATE_LIMIT_DELAY_MS. */
+const PAGE_GEMINI_RATE_LIMIT_DELAY_MS = parseInt(process.env.MONTHLY_BOOK_GEMINI_RATE_LIMIT_DELAY_MS, 10) || 20000;
+
+/** Delay in ms between generating one page and the next (avoids hitting rate limit after page 1). Override with MONTHLY_BOOK_DELAY_BETWEEN_PAGES_MS. */
+const DELAY_BETWEEN_PAGES_MS = parseInt(process.env.MONTHLY_BOOK_DELAY_BETWEEN_PAGES_MS, 10) || 5000;
 
 /**
  * Generate one page background image for Book-based flow. Gemini 2.5 Flash only; retries up to PAGE_GEMINI_MAX_ATTEMPTS.
@@ -293,13 +368,13 @@ async function generatePageImageForBook(customBook, pageDoc, characterStylePromp
         throw new Error('GCS bucket not configured (GCS_BUCKET_NAME). Cannot upload page ' + pageNumber + ' image.');
     }
 
-    let lastError = null;
     for (let attempt = 1; attempt <= PAGE_GEMINI_MAX_ATTEMPTS; attempt++) {
-        const geminiUrl = await generatePageImageWithVertexGemini(customBook, pageDoc, characterStylePrompt, pageIndex);
+        const { imageUrl: geminiUrl, httpStatus } = await generatePageImageWithVertexGemini(customBook, pageDoc, characterStylePrompt, pageIndex);
         if (geminiUrl) return geminiUrl;
         if (attempt < PAGE_GEMINI_MAX_ATTEMPTS) {
-            console.log('MonthlyBookGenerator: Gemini page', pageNumber, 'attempt', attempt, 'failed; retrying in', PAGE_GEMINI_RETRY_DELAY_MS, 'ms...');
-            await new Promise((r) => setTimeout(r, PAGE_GEMINI_RETRY_DELAY_MS));
+            const delayMs = httpStatus === 429 ? PAGE_GEMINI_RATE_LIMIT_DELAY_MS : PAGE_GEMINI_RETRY_DELAY_MS;
+            console.log('MonthlyBookGenerator: Gemini page', pageNumber, 'attempt', attempt, 'failed' + (httpStatus === 429 ? ' (429 rate limit)' : '') + '; retrying in', delayMs, 'ms...');
+            await new Promise((r) => setTimeout(r, delayMs));
         }
     }
     throw new Error('Page ' + pageNumber + ': Gemini 2.5 Flash Image failed after ' + PAGE_GEMINI_MAX_ATTEMPTS + ' attempts. No Imagen fallback.');
@@ -461,6 +536,10 @@ async function runMonthlyBookGenerationFromBook(customMonthlyBookId, custom, sou
 
     const pages = [];
     for (let i = 0; i < pagesToProcess.length; i++) {
+        if (i > 0) {
+            console.log('MonthlyBookGenerator: Waiting', DELAY_BETWEEN_PAGES_MS, 'ms before page', i + 1, '(rate limit avoidance)');
+            await new Promise((r) => setTimeout(r, DELAY_BETWEEN_PAGES_MS));
+        }
         const pageDoc = pagesToProcess[i];
         const portalPrompt = (pageDoc.sceneDescription || '').trim();
         const hasPortalPrompt = portalPrompt.length > 0;

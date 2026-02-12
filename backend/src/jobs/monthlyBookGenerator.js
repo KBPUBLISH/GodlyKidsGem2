@@ -197,9 +197,10 @@ async function generatePageImageForBook(customBook, pageDoc, characterStylePromp
         ? (prompt + ` Include the child [${subjectRefId}] in the scene.`)
         : prompt;
     const instancesPayload = referenceImages.length ? { prompt: effectivePrompt, referenceImages } : { prompt: effectivePrompt };
+    const model = referenceImages.length > 0 ? 'imagen-3.0-capability-001' : 'imagen-3.0-generate-001';
 
     const response = await axios.post(
-        `https://us-central1-aiplatform.googleapis.com/v1/projects/${projectId}/locations/us-central1/publishers/google/models/imagen-3.0-generate-001:predict`,
+        `https://us-central1-aiplatform.googleapis.com/v1/projects/${projectId}/locations/us-central1/publishers/google/models/${model}:predict`,
         {
             instances: [instancesPayload],
             parameters: {
@@ -324,8 +325,10 @@ async function generateCoverImageForBook(customBook, sourceBook) {
     const instancesPayload = referenceImages.length
         ? { prompt, referenceImages }
         : { prompt };
+    // Reference images require the capability model; generate-001 is text-only and mis-handles referenceImages as "editing" (missing media).
+    const model = referenceImages.length > 0 ? 'imagen-3.0-capability-001' : 'imagen-3.0-generate-001';
     const response = await axios.post(
-        `https://us-central1-aiplatform.googleapis.com/v1/projects/${projectId}/locations/us-central1/publishers/google/models/imagen-3.0-generate-001:predict`,
+        `https://us-central1-aiplatform.googleapis.com/v1/projects/${projectId}/locations/us-central1/publishers/google/models/${model}:predict`,
         {
             instances: [instancesPayload],
             parameters: {

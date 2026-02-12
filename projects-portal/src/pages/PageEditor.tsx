@@ -1382,18 +1382,33 @@ const PageEditor: React.FC = () => {
                                         <button
                                             type="button"
                                             onClick={() => {
-                                                const pageText = textBoxes
+                                                const raw = textBoxes
                                                     .map(b => b.text)
                                                     .filter(t => t && t.trim())
                                                     .join(' ')
                                                     .trim();
-                                                setSceneDescription(pageText || '');
+                                                if (!raw) {
+                                                    setSceneDescription('');
+                                                    setImagePromptSuggestionsOpen(false);
+                                                    return;
+                                                }
+                                                const asImagePrompt = raw
+                                                    .replace(/\{childName\}/gi, '@child')
+                                                    .replace(/\{kidname\}/gi, '@child')
+                                                    .replace(/\{kidName\}/gi, '@child')
+                                                    .replace(/\{childname\}/gi, '@child')
+                                                    .replace(/\s+/g, ' ')
+                                                    .trim();
+                                                const prompt = asImagePrompt.length > 400
+                                                    ? asImagePrompt.slice(0, 397) + '...'
+                                                    : asImagePrompt;
+                                                setSceneDescription(prompt);
                                                 setImagePromptSuggestionsOpen(false);
                                             }}
                                             className="flex items-center gap-1 px-2 py-1 text-xs font-medium text-indigo-600 hover:text-indigo-800 hover:bg-indigo-50 rounded transition"
                                         >
                                             <Type className="w-3.5 h-3.5" />
-                                            Use page text
+                                            Generate from page text
                                         </button>
                                     </div>
                                     <textarea
@@ -1486,10 +1501,10 @@ const PageEditor: React.FC = () => {
                                         );
                                     })()}
                                     <p className="text-xs text-gray-400">
-                                        Used when generating a personalized book for a child. Use the button above to fill from page text, or leave empty to use page text automatically.
+                                        Used when generating a personalized book for a child. Use “Generate from page text” to build a prompt from this page’s text ({'{childName}'} and {'{kidname}'} become <code className="bg-gray-100 px-1 rounded">@child</code>), or leave empty to use page text automatically.
                                     </p>
                                     <p className="text-xs text-gray-500 mt-1">
-                                        Type <code className="bg-gray-100 px-1 rounded">@kid</code> or <code className="bg-gray-100 px-1 rounded">@child</code> for the child’s avatar (per child, from their device). Use the popup when you type <code className="bg-gray-100 px-1 rounded">@</code> to pick saved characters (e.g. @Noah, @disneyjesus). E.g. “@disneyjesus and @kid are building a house.” Backgrounds are 9:16 portrait for mobile.
+                                        Type <code className="bg-gray-100 px-1 rounded">@kid</code> or <code className="bg-gray-100 px-1 rounded">@child</code> for the child’s avatar (per child, from their device). Use the popup when you type <code className="bg-gray-100 px-1 rounded">@</code> to pick saved characters (e.g. @Noah, @disneyjesus). E.g. “@disneyjesus and @child are building a house.” Backgrounds are 9:16 portrait for mobile.
                                     </p>
                                 </div>
 

@@ -26,6 +26,17 @@ interface Playlist {
   items: any[];
 }
 
+/** From GET /api/monthly-book/my-books (Create Your Story) */
+interface MyMonthlyBook {
+  customMonthlyBookId: string;
+  bookId: string | null;
+  title: string;
+  coverImageUrl: string | null;
+  childName?: string;
+  createdAt: string;
+  status: 'pending' | 'generating' | 'completed';
+}
+
 const LibraryPage: React.FC = () => {
   const navigate = useNavigate();
   const { books, loading } = useBooks();
@@ -37,6 +48,8 @@ const LibraryPage: React.FC = () => {
   const [playlistsLoading, setPlaylistsLoading] = useState(true);
   const [userPlaylists, setUserPlaylists] = useState<UserPlaylist[]>([]);
   const [userPlaylistsLoading, setUserPlaylistsLoading] = useState(true);
+  const [myMonthlyBooks, setMyMonthlyBooks] = useState<MyMonthlyBook[]>([]);
+  const [myMonthlyBooksLoading, setMyMonthlyBooksLoading] = useState(false);
   const ageDropdownRef = useRef<HTMLDivElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const lastScrollY = useRef(0);
@@ -101,6 +114,33 @@ const LibraryPage: React.FC = () => {
       }
     };
     fetchUserPlaylists();
+  }, []);
+
+  // Fetch user's Create Your Story books (completed + in-progress)
+  useEffect(() => {
+    if (!FEATURE_CREATE_YOUR_STORY) return;
+    const user = authService.getUser();
+    const userId = (user as any)?._id || (user as any)?.id || user?.email || localStorage.getItem('godlykids_user_email') || localStorage.getItem('device_id');
+    if (!userId) {
+      setMyMonthlyBooksLoading(false);
+      return;
+    }
+    const fetchMyMonthlyBooks = async () => {
+      try {
+        setMyMonthlyBooksLoading(true);
+        const base = getApiBaseUrl()?.replace(/\/$/, '') || '';
+        const res = await fetch(`${base}/api/monthly-book/my-books?userId=${encodeURIComponent(userId)}&includeInProgress=1`);
+        const data = await res.json().catch(() => ({}));
+        if (data.success && Array.isArray(data.books)) {
+          setMyMonthlyBooks(data.books);
+        }
+      } catch (e) {
+        console.error('Error fetching my monthly books:', e);
+      } finally {
+        setMyMonthlyBooksLoading(false);
+      }
+    };
+    fetchMyMonthlyBooks();
   }, []);
 
   // Close age dropdown when clicking outside
@@ -337,6 +377,62 @@ const LibraryPage: React.FC = () => {
               </div>
               <ChevronDown className="w-5 h-5 text-amber-200 rotate-[-90deg] shrink-0" />
             </div>
+          </div>
+        )}
+
+        {/* Your created stories (Create Your Story) - in-progress + completed */}
+        {FEATURE_CREATE_YOUR_STORY && (myMonthlyBooks.length > 0 || myMonthlyBooksLoading) && (
+          <div className="mb-8">
+            <SectionTitle title="Your created stories" />
+            {myMonthlyBooksLoading ? (
+              <div className="py-6 text-center text-white/60 text-sm">Loading your stories...</div>
+            ) : (
+              <div className="w-screen overflow-x-auto no-scrollbar pb-4 -mx-4">
+                <div className="flex space-x-3 px-4">
+                  {myMonthlyBooks.map((item) => (
+                    <div
+                      key={item.customMonthlyBookId}
+                      className="flex-shrink-0 w-[42vw] md:w-[30vw] lg:w-[23vw] max-w-[200px]"
+                    >
+                      {item.status === 'completed' && item.bookId ? (
+                        <BookCard
+                          book={{
+                            id: item.bookId,
+                            title: item.title,
+                            coverUrl: item.coverImageUrl || '',
+                            author: item.childName,
+                          } as any}
+                          onClick={(id) => navigate(`/book/${id}`, { state: { from: '/library' } })}
+                        />
+                      ) : (
+                        <div className="bg-white/10 backdrop-blur-sm rounded-2xl overflow-hidden border-2 border-amber-400/30">
+                          <div className="aspect-square relative bg-gradient-to-br from-amber-900/40 to-amber-800/30">
+                            {item.coverImageUrl ? (
+                              <img
+                                src={item.coverImageUrl}
+                                alt=""
+                                className="w-full h-full object-cover opacity-80"
+                              />
+                            ) : (
+                              <div className="w-full h-full flex items-center justify-center">
+                                <BookOpen className="w-12 h-12 text-amber-200/60" />
+                              </div>
+                            )}
+                            <div className="absolute inset-0 flex items-center justify-center bg-black/50">
+                              <span className="text-amber-200 text-sm font-bold text-center px-2">Creating...</span>
+                            </div>
+                          </div>
+                          <div className="p-2">
+                            <p className="text-white font-medium text-sm truncate">{item.title}</p>
+                            <p className="text-amber-200/80 text-xs">Ready in ~5 min</p>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         )}
 

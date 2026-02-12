@@ -152,9 +152,122 @@ async function buildScenePrompt(pageDoc, characterStylePrompt, childName) {
 }
 
 /**
- * Generate one page background image for Book-based flow via Imagen.
+ * Gather all reference images for a page: child character + portal characters (SavedCharacter with referenceImageUrl).
+ * Returns [{ base64, label }] in order: child first (if present), then portal characters by referenceCharacterIds.
+ */
+async function gatherPageReferenceImages(customBook, pageDoc) {
+    const refs = [];
+    if (customBook.childCharacterImageUrl) {
+        const childBase64 = await fetchImageAsBase64(customBook.childCharacterImageUrl);
+        if (childBase64) {
+            refs.push({ base64: childBase64, label: 'the child' });
+        }
+    }
+    const refIds = (pageDoc.referenceCharacterIds || []).filter(Boolean);
+    if (refIds.length) {
+        const savedChars = await SavedCharacter.find({ _id: { $in: refIds } })
+            .select('displayName referenceImageUrl')
+            .lean();
+        for (const char of savedChars) {
+            if (char.referenceImageUrl) {
+                const base64 = await fetchImageAsBase64(char.referenceImageUrl);
+                if (base64) {
+                    refs.push({ base64, label: char.displayName || 'character' });
+                }
+            }
+        }
+    }
+    return refs;
+}
+
+/**
+ * Generate one page image with Vertex Gemini 2.5 Flash Image for all pages (superior consistency).
+ * Uses child + portal character reference images when available; supports text-only when no refs.
+ * Returns GCS URL or null on failure (caller falls back to Imagen).
+ */
+async function generatePageImageWithVertexGemini(customBook, pageDoc, characterStylePrompt, pageIndex) {
+    const customMonthlyBookId = String(customBook._id);
+    const pageNumber = pageIndex + 1;
+    const token = await getImagenAccessToken();
+    const credentialsJson = process.env.GCS_CREDENTIALS_JSON || process.env.GOOGLE_SERVICE_ACCOUNT_JSON;
+    let projectId = null;
+    try {
+        projectId = credentialsJson ? JSON.parse(credentialsJson).project_id : null;
+    } catch (_) {}
+    if (!token || !projectId || !bucket) return null;
+
+    const { prompt } = await buildScenePrompt(pageDoc, characterStylePrompt, customBook.childName);
+    const referenceImages = await gatherPageReferenceImages(customBook, pageDoc);
+
+    const refDescription = referenceImages.length
+        ? referenceImages.map((r, i) => `Image ${i + 1}: ${r.label}`).join('. ')
+        : '';
+    const geminiPrompt = referenceImages.length
+        ? `Using the provided reference images (${refDescription}), generate one image: ${prompt} Place each character in the scene as described. Children's book illustration style, warm inviting colors, soft lighting, suitable for ages 4-12, Christian faith theme, no text in image. Vertical 9:16 composition.`
+        : `Generate one image: ${prompt} Children's book illustration style, warm inviting colors, soft lighting, suitable for ages 4-12, Christian faith theme, no text in image. Vertical 9:16 composition.`;
+
+    const parts = [{ text: geminiPrompt }];
+    for (const ref of referenceImages) {
+        parts.push({ inlineData: { mimeType: 'image/png', data: ref.base64 } });
+    }
+
+    try {
+        const url = `https://us-central1-aiplatform.googleapis.com/v1/projects/${projectId}/locations/us-central1/publishers/google/models/gemini-2.5-flash-image:generateContent`;
+        const res = await axios.post(
+            url,
+            {
+                contents: [{ role: 'user', parts }],
+                generationConfig: {
+                    responseModalities: ['TEXT', 'IMAGE'],
+                    imageConfig: { aspectRatio: '9:16' },
+                },
+            },
+            {
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`,
+                },
+                timeout: 60000,
+                validateStatus: () => true,
+            }
+        );
+        if (res.status !== 200) {
+            console.warn('MonthlyBookGenerator: Gemini page', pageNumber, 'failed', res.status, typeof res.data === 'string' ? res.data.slice(0, 150) : '');
+            return null;
+        }
+        const outParts = res.data.candidates?.[0]?.content?.parts || [];
+        let imageBase64 = null;
+        for (const part of outParts) {
+            if (part.inlineData && part.inlineData.data) {
+                imageBase64 = part.inlineData.data;
+                break;
+            }
+        }
+        if (!imageBase64) {
+            console.warn('MonthlyBookGenerator: Gemini page', pageNumber, 'returned no image');
+            return null;
+        }
+        const buffer = Buffer.from(imageBase64, 'base64');
+        const hash = crypto.createHash('md5').update(customMonthlyBookId + pageNumber + Date.now()).digest('hex').slice(0, 8);
+        const filename = `monthly-books/${customMonthlyBookId}/page-${pageNumber}-${hash}.png`;
+        const blob = bucket.file(filename);
+        await blob.save(buffer, {
+            metadata: { contentType: 'image/png', cacheControl: 'public, max-age=86400' },
+        });
+        await blob.makePublic().catch(() => {});
+        const imageUrl = `https://storage.googleapis.com/${bucket.name}/${filename}`;
+        console.log('MonthlyBookGenerator: Generated page', pageNumber, 'with Vertex Gemini 2.5 Flash Image', imageUrl);
+        return imageUrl;
+    } catch (err) {
+        console.warn('MonthlyBookGenerator: Gemini page', pageNumber, 'error', err.message);
+        return null;
+    }
+}
+
+/**
+ * Generate one page background image for Book-based flow. Tries Vertex Gemini first (for consistency with character), then Imagen.
  * Uses page.sceneDescription or page text + character style; uploads to GCS and returns URL.
- * Throws on any failure (no credentials, Imagen error, or GCS error) so the book is not created.
+ * Throws on any failure (no credentials, both Gemini and Imagen fail, or GCS error) so the book is not created.
  */
 async function generatePageImageForBook(customBook, pageDoc, characterStylePrompt, pageIndex) {
     const customMonthlyBookId = String(customBook._id);
@@ -176,6 +289,11 @@ async function generatePageImageForBook(customBook, pageDoc, characterStylePromp
     }
     const { prompt, hasKidReference } = await buildScenePrompt(pageDoc, characterStylePrompt, customBook.childName);
 
+    // Use Vertex Gemini 2.5 Flash Image for all pages (superior). Refs: child + portal characters (e.g. Jesus, Disney).
+    const geminiUrl = await generatePageImageWithVertexGemini(customBook, pageDoc, characterStylePrompt, pageIndex);
+    if (geminiUrl) return geminiUrl;
+
+    // Fall back to Imagen if Gemini fails.
     const referenceImages = [];
     const subjectRefId = 1;
     if (hasKidReference && customBook.childCharacterImageUrl) {
@@ -239,7 +357,7 @@ async function generatePageImageForBook(customBook, pageDoc, characterStylePromp
     });
     await blob.makePublic().catch(() => {});
     const url = `https://storage.googleapis.com/${bucket.name}/${filename}`;
-    console.log('MonthlyBookGenerator: Generated background for page', pageNumber, url);
+    console.log('MonthlyBookGenerator: Generated background for page', pageNumber, 'with Imagen', url);
     return url;
 }
 
@@ -391,12 +509,19 @@ async function runMonthlyBookGenerationFromBook(customMonthlyBookId, custom, sou
 
     const bookTitle = substituteChildName(sourceBook.title, custom.childName) || `${custom.childName}'s ${sourceBook.title}`;
 
-    // Generate cover with kid character + Bible/featured character (throws on failure)
-    const coverUrl = await generateCoverImageForBook(custom, sourceBook);
+    // Use source book's cover when available (consistent, predictable). Otherwise generate with kid + featured character.
+    const sourceCoverUrl = sourceBook.files?.coverImage || sourceBook.coverImage;
+    const coverUrl = sourceCoverUrl
+        ? sourceCoverUrl
+        : await generateCoverImageForBook(custom, sourceBook);
 
     const pages = [];
     for (let i = 0; i < pagesToProcess.length; i++) {
         const pageDoc = pagesToProcess[i];
+        const portalPrompt = (pageDoc.sceneDescription || '').trim();
+        const hasPortalPrompt = portalPrompt.length > 0;
+        const preview = hasPortalPrompt ? ` "${portalPrompt.slice(0, 80)}${portalPrompt.length > 80 ? '...' : ''}"` : '';
+        console.log(`MonthlyBookGenerator: Page ${i + 1}/${pagesToProcess.length} ${hasPortalPrompt ? 'using portal scene prompt' : 'using fallback from page text'}${preview}`);
         const pageWithName = substituteChildNameInPage(pageDoc, custom.childName);
         const backgroundUrl = await generatePageImageForBook(
             custom,

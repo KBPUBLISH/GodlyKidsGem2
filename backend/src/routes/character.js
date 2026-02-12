@@ -172,8 +172,8 @@ const generateCharacterWithVertexImagenSelfie = async (imageBase64, styleId, acc
     };
     const styleDesc = styleDescriptions[styleId] || styleDescriptions.illustrated;
     const scene = setting || SETTINGS[DEFAULT_SETTING];
-    // Same person + explicit background: scene must be the described setting, not the reference photo's room/indoor background. Full style transform.
-    const prompt = `The child in the reference photo [1], and only that child, as a ${styleDesc}, standing in ${scene}. The background must be only this scene (e.g. forest), not the reference photo's room or indoor setting. Keep the child's face and identity exactly from the reference. Fully stylized (e.g. Disney/Pixar look), not photorealistic. Full body from head to feet. Family-friendly.`;
+    // Same person + explicit background: scene must be the described setting, not the reference photo's room/indoor background. Full style transform. Preserve glasses; no extra accessories.
+    const prompt = `The child in the reference photo [1], and only that child, as a ${styleDesc}, standing in ${scene}. The background must be only this scene (e.g. forest), not the reference photo's room or indoor setting. Keep the child's face and identity exactly from the reference. Preserve glasses if worn in the reference; do not add headphones or other accessories not in the photo. Fully stylized (e.g. Disney/Pixar look), not photorealistic. Full body from head to feet. Family-friendly.`;
 
     const cleanBase64 = imageBase64.replace(/^data:image\/\w+;base64,/, '');
 
@@ -237,7 +237,8 @@ const generateCharacterImage = async (imageBase64, styleId, settingId = null) =>
     }
 
     const setting = SETTINGS[settingId] || SETTINGS[DEFAULT_SETTING];
-    const resolvedPrompt = style.prompt.replace(/\{\{SETTING\}\}/g, setting);
+    const resolvedPrompt = style.prompt.replace(/\{\{SETTING\}\}/g, setting) +
+        ' Preserve glasses and any visible accessories from the reference. Do not add accessories (e.g. headphones) that are not in the photo.';
 
     const credentialsJson = process.env.GCS_CREDENTIALS_JSON || process.env.GOOGLE_SERVICE_ACCOUNT_JSON;
     const hasVertex = !!credentialsJson;

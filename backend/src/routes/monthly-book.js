@@ -201,12 +201,12 @@ router.get('/status/:customMonthlyBookId', async (req, res) => {
 
 /**
  * GET /api/monthly-book/my-books
- * List completed custom books for a user (for My Library).
- * Query: userId (required)
+ * List custom books for a user (for My Library). Optionally include in-progress.
+ * Query: userId (required), includeInProgress (optional, 1/true to include pending/generating)
  */
 router.get('/my-books', async (req, res) => {
     try {
-        const { userId: rawUserId } = req.query;
+        const { userId: rawUserId, includeInProgress } = req.query;
         if (!rawUserId) {
             return res.status(400).json({ success: false, error: 'userId required' });
         }
@@ -214,23 +214,41 @@ router.get('/my-books', async (req, res) => {
         if (!userId) {
             return res.json({ success: true, books: [] });
         }
-        const list = await CustomMonthlyBook.find({ userId, status: 'completed' })
+        const includeAll = includeInProgress === '1' || includeInProgress === 'true';
+        const statusFilter = includeAll ? {} : { status: 'completed' };
+        const list = await CustomMonthlyBook.find({ userId, ...statusFilter })
             .populate('bookId', 'title files')
             .populate('templateId', 'title')
+            .populate('sourceBookId', 'title files')
             .sort({ createdAt: -1 })
             .limit(50)
             .lean();
 
-        const books = list
-            .filter((b) => b.bookId)
-            .map((b) => ({
+        const books = list.map((b) => {
+            if (b.status === 'completed' && b.bookId) {
+                return {
+                    customMonthlyBookId: b._id,
+                    bookId: b.bookId._id,
+                    title: b.bookId.title,
+                    coverImageUrl: b.bookId?.files?.coverImage || b.bookId?.files?.cover?.url || null,
+                    childName: b.childName,
+                    createdAt: b.createdAt,
+                    status: 'completed',
+                };
+            }
+            const source = b.sourceBookId || b.templateId;
+            const sourceTitle = source?.title || 'Your story';
+            const sourceCover = source?.files?.coverImage || source?.coverImage || null;
+            return {
                 customMonthlyBookId: b._id,
-                bookId: b.bookId._id,
-                title: b.bookId.title,
-                coverImageUrl: b.bookId?.files?.coverImage || b.bookId?.files?.cover?.url || null,
+                bookId: null,
+                title: sourceTitle,
+                coverImageUrl: sourceCover,
                 childName: b.childName,
                 createdAt: b.createdAt,
-            }));
+                status: b.status || 'pending',
+            };
+        });
 
         res.json({ success: true, books });
     } catch (err) {

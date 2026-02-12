@@ -160,7 +160,73 @@ const generateCharacterWithConsumerGemini = async (imageBase64, styleId, resolve
     }
 };
 
-// Generate character: try Vertex Gemini (selfie + prompt) first, then consumer Gemini, then Vertex Imagen (text-only fallback).
+// Vertex Imagen with selfie as subject reference (imagen-3.0-capability-001). Use when Gemini paths fail so we still use the selfie.
+const generateCharacterWithVertexImagenSelfie = async (imageBase64, styleId, accessToken, projectId, resolvedPrompt) => {
+    const styleDescriptions = {
+        minecraft: 'Minecraft blocky pixel art character, full body',
+        lego: 'LEGO minifigure style character, full body',
+        cartoon: '2D cartoon character with big eyes, full body',
+        illustrated: 'children\'s book watercolor illustration character, full body',
+        disney: 'Disney 3D animated character, full body, big sparkling eyes',
+        pixar: 'Pixar 3D animated character, full body, rounded features'
+    };
+    const styleDesc = styleDescriptions[styleId] || styleDescriptions.illustrated;
+    const prompt = `Person [1] as a ${styleDesc}, standing in the scene. Keep face recognizable from the reference. Full body from head to feet visible. Family-friendly.`;
+
+    const cleanBase64 = imageBase64.replace(/^data:image\/\w+;base64,/, '');
+
+    try {
+        const response = await fetch(
+            `https://us-central1-aiplatform.googleapis.com/v1/projects/${projectId}/locations/us-central1/publishers/google/models/imagen-3.0-capability-001:predict`,
+            {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${accessToken}`
+                },
+                body: JSON.stringify({
+                    instances: [{
+                        prompt,
+                        referenceImages: [{
+                            referenceId: 1,
+                            referenceImage: { bytesBase64Encoded: cleanBase64 },
+                            referenceType: 'REFERENCE_TYPE_SUBJECT',
+                            subjectImageConfig: {
+                                subjectDescription: 'A child; transform into the described character while keeping face recognizable.',
+                                subjectType: 'SUBJECT_TYPE_PERSON'
+                            }
+                        }]
+                    }],
+                    parameters: {
+                        sampleCount: 1,
+                        aspectRatio: '1:1',
+                        safetyFilterLevel: 'block_medium_and_above',
+                        personGeneration: 'allow_all'
+                    }
+                })
+            }
+        );
+
+        if (!response.ok) {
+            const errText = await response.text();
+            console.warn('⚠️ Vertex Imagen (selfie ref) failed:', response.status, errText.slice(0, 200));
+            return null;
+        }
+
+        const data = await response.json();
+        if (!data.predictions || !data.predictions[0] || !data.predictions[0].bytesBase64Encoded) {
+            console.warn('⚠️ Vertex Imagen (selfie ref) returned no image (possible safety filter)');
+            return null;
+        }
+        console.log('✅ Character generated with Vertex Imagen (selfie as reference)');
+        return data.predictions[0].bytesBase64Encoded;
+    } catch (err) {
+        console.warn('⚠️ Vertex Imagen (selfie ref) error:', err?.message);
+        return null;
+    }
+};
+
+// Generate character: try Vertex Imagen with selfie first (reliable), then Vertex Gemini, then consumer Gemini, then text-only Imagen.
 // settingId: optional, one of SETTINGS keys (default forest) — used to replace {{SETTING}} in the prompt for full-body-in-scene.
 const generateCharacterImage = async (imageBase64, styleId, settingId = null) => {
     const style = STYLE_PROMPTS[styleId];
@@ -183,20 +249,26 @@ const generateCharacterImage = async (imageBase64, styleId, settingId = null) =>
         } catch (_) {}
     }
 
-    // 1) Vertex AI Gemini 2.5 Flash Image — same model as Nano Banana, but via your GCP project so the selfie is used and region block is avoided.
-    if (accessToken && projectId) {
-        const vertexImage = await generateCharacterWithVertexGemini(imageBase64, styleId, accessToken, projectId, resolvedPrompt);
-        if (vertexImage) return vertexImage;
+    if (!hasVertex || !accessToken || !projectId) {
+        // No Vertex: try Consumer Gemini only, then fail (no text-only without GCP).
+        const consumerImage = await generateCharacterWithConsumerGemini(imageBase64, styleId, resolvedPrompt);
+        if (consumerImage) return consumerImage;
+        throw new Error('GCS credentials not configured');
     }
 
-    // 2) Consumer Gemini (in case backend runs in a region where it works).
+    // 1) Vertex Imagen with selfie as subject reference — same path as monthly books; use first for reliability.
+    const imagenWithSelfie = await generateCharacterWithVertexImagenSelfie(imageBase64, styleId, accessToken, projectId, resolvedPrompt);
+    if (imagenWithSelfie) return imagenWithSelfie;
+
+    // 2) Vertex AI Gemini 2.5 Flash Image (selfie + prompt).
+    const vertexImage = await generateCharacterWithVertexGemini(imageBase64, styleId, accessToken, projectId, resolvedPrompt);
+    if (vertexImage) return vertexImage;
+
+    // 3) Consumer Gemini (in case backend runs in a region where it works).
     const consumerImage = await generateCharacterWithConsumerGemini(imageBase64, styleId, resolvedPrompt);
     if (consumerImage) return consumerImage;
 
-    // 3) Fallback: Vertex Imagen text-to-image only (no selfie — generic character).
-    if (!hasVertex || !accessToken || !projectId) {
-        throw new Error('GCS credentials not configured');
-    }
+    // 4) Last fallback: Vertex Imagen text-to-image only (no selfie — generic character).
     console.log(`🎨 Fallback: generating character in ${styleId} style with Vertex Imagen (text-to-image; no selfie)...`);
     return await generateCharacterFromPromptOnly(accessToken, projectId, styleId);
 };

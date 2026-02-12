@@ -378,9 +378,15 @@ async function runMonthlyBookGenerationFromBook(customMonthlyBookId, custom, sou
     if (!sourcePages.length) {
         throw new Error('Source book has no pages. Add pages in the portal before generating.');
     }
-    const pageCount = custom.hasTrialOrPaid
+    let pageCount = custom.hasTrialOrPaid
         ? sourcePages.length
         : Math.min(4, sourcePages.length);
+    // For testing: set MONTHLY_BOOK_MAX_PAGES_FOR_TESTING=3 (or 1, 2, etc.) to cap pages and save time/Imagen calls
+    const testMaxEnv = process.env.MONTHLY_BOOK_MAX_PAGES_FOR_TESTING;
+    if (testMaxEnv != null && testMaxEnv !== '') {
+        const cap = parseInt(testMaxEnv, 10);
+        if (!Number.isNaN(cap) && cap >= 1) pageCount = Math.min(pageCount, cap);
+    }
     const pagesToProcess = sourcePages.slice(0, pageCount);
 
     const bookTitle = substituteChildName(sourceBook.title, custom.childName) || `${custom.childName}'s ${sourceBook.title}`;
@@ -500,10 +506,15 @@ async function runMonthlyBookGeneration(customMonthlyBookId) {
         }
         const bibleCharacter = template.bibleCharacterId;
         const storyPages = template.storyPages || [];
-        const pageCount = custom.hasTrialOrPaid
+        let templatePageCount = custom.hasTrialOrPaid
             ? storyPages.length
             : Math.min(4, storyPages.length);
-        const pagesToGenerate = storyPages.slice(0, pageCount);
+        const testMaxEnv = process.env.MONTHLY_BOOK_MAX_PAGES_FOR_TESTING;
+        if (testMaxEnv != null && testMaxEnv !== '') {
+            const cap = parseInt(testMaxEnv, 10);
+            if (!Number.isNaN(cap) && cap >= 1) templatePageCount = Math.min(templatePageCount, cap);
+        }
+        const pagesToGenerate = storyPages.slice(0, templatePageCount);
 
         const bookTitle = `${custom.childName}'s Adventure with ${bibleCharacter.displayName}`;
         const pages = [];

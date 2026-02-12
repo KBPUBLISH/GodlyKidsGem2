@@ -167,9 +167,14 @@ const Header: React.FC<HeaderProps> = ({ isVisible, title = "GODLY KIDS" }) => {
   return (
     <>
       <header
-        className={`fixed top-0 left-0 right-0 z-50 transition-transform duration-300 ease-in-out ${isVisible ? 'translate-y-0' : '-translate-y-full'
+        className={`fixed top-0 left-0 right-0 z-50 transition-transform duration-300 ease-in-out overflow-hidden ${isVisible ? 'translate-y-0' : '-translate-y-full'
           }`}
         style={{ 
+          width: '100%',
+          maxWidth: '100%',
+          paddingLeft: 'var(--safe-area-left, 0px)',
+          paddingRight: 'var(--safe-area-right, 0px)',
+          boxSizing: 'border-box',
           // drop-shadow filter causes elements to disappear on Android browsers
           filter: isAndroid ? undefined : 'drop-shadow(0 4px 8px rgba(0,0,0,0.3))',
           // Force hardware acceleration and proper rendering on Android
@@ -216,8 +221,8 @@ const Header: React.FC<HeaderProps> = ({ isVisible, title = "GODLY KIDS" }) => {
           {/* Edge Highlight (top inner glow) */}
           <div className="absolute top-0 left-4 right-4 h-[2px] bg-gradient-to-r from-transparent via-[#E8B87A] to-transparent opacity-40"></div>
 
-          {/* Content */}
-          <div className="flex justify-between items-center relative z-10 mb-1">
+          {/* Content - min-w-0 allows flex children to shrink on narrow Android viewports */}
+          <div className="flex justify-between items-center relative z-10 mb-1 min-w-0">
             {/* User Avatar - Head Only */}
             <div
               onClick={() => setIsDetailOpen(true)}
@@ -296,8 +301,8 @@ const Header: React.FC<HeaderProps> = ({ isVisible, title = "GODLY KIDS" }) => {
             {/* Center - Empty for now */}
             <div className="flex-1"></div>
             
-            {/* Button Container with Android fixes */}
-            <div className="flex items-center gap-2" style={{
+            {/* Button Container with Android fixes - min-w-0 so it can shrink on narrow viewports */}
+            <div className="flex items-center gap-2 min-w-0 shrink-0" style={{
               // Force hardware acceleration on Android — avoid willChange as it causes
               // excessive compositing layers that make children disappear
               transform: isAndroid ? 'translate3d(0,0,0)' : undefined,

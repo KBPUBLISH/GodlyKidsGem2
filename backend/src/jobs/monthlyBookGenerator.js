@@ -207,7 +207,7 @@ async function generatePageImageForBook(customBook, pageDoc, characterStylePromp
                 sampleCount: 1,
                 aspectRatio: '9:16',
                 safetyFilterLevel: 'block_some',
-                personGeneration: referenceImages.length ? 'allow_adult' : 'dont_allow',
+                personGeneration: referenceImages.length ? 'allow_all' : 'dont_allow',
             },
         },
         {
@@ -335,7 +335,7 @@ async function generateCoverImageForBook(customBook, sourceBook) {
                 sampleCount: 1,
                 aspectRatio: '9:16',
                 safetyFilterLevel: 'block_some',
-                personGeneration: childImageBase64 ? 'allow_adult' : 'dont_allow',
+                personGeneration: childImageBase64 ? 'allow_all' : 'dont_allow',
             },
         },
         {

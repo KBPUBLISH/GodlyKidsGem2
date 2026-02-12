@@ -177,18 +177,26 @@ async function generatePageImageForBook(customBook, pageDoc, characterStylePromp
     const { prompt, hasKidReference } = await buildScenePrompt(pageDoc, characterStylePrompt, customBook.childName);
 
     const referenceImages = [];
+    const subjectRefId = 1;
     if (hasKidReference && customBook.childCharacterImageUrl) {
         const childImageBase64 = await fetchImageAsBase64(customBook.childCharacterImageUrl);
         if (childImageBase64) {
             const childName = customBook.childName || 'the child';
             referenceImages.push({
+                referenceId: subjectRefId,
                 referenceImage: { bytesBase64Encoded: childImageBase64 },
                 referenceType: 'REFERENCE_TYPE_SUBJECT',
-                subjectDescription: `A child named ${childName}; include this child in the scene as described in the prompt.`,
+                subjectImageConfig: {
+                    subjectDescription: `A child named ${childName}; include this child in the scene as described in the prompt.`,
+                    subjectType: 'SUBJECT_TYPE_PERSON',
+                },
             });
         }
     }
-    const instancesPayload = referenceImages.length ? { prompt, referenceImages } : { prompt };
+    const effectivePrompt = referenceImages.length
+        ? (prompt + ` Include the child [${subjectRefId}] in the scene.`)
+        : prompt;
+    const instancesPayload = referenceImages.length ? { prompt: effectivePrompt, referenceImages } : { prompt: effectivePrompt };
 
     const response = await axios.post(
         `https://us-central1-aiplatform.googleapis.com/v1/projects/${projectId}/locations/us-central1/publishers/google/models/imagen-3.0-generate-001:predict`,
@@ -276,29 +284,42 @@ async function generateCoverImageForBook(customBook, sourceBook) {
     const childName = customBook.childName || 'the child';
 
     const referenceImages = [];
+    let styleRefId = 0;
+    let subjectRefId = 0;
     const templateCoverUrl = sourceBook.files?.coverImage || sourceBook.coverImage;
     const templateCoverBase64 = templateCoverUrl ? await fetchImageAsBase64(templateCoverUrl) : null;
     if (templateCoverBase64) {
+        styleRefId = 1;
         referenceImages.push({
+            referenceId: styleRefId,
             referenceImage: { bytesBase64Encoded: templateCoverBase64 },
             referenceType: 'REFERENCE_TYPE_STYLE',
-            styleDescription: 'Use this image as the style and composition reference for the book cover. Recreate the same layout and visual style.',
+            styleImageConfig: {
+                styleDescription: 'Use this image as the style and composition reference for the book cover. Recreate the same layout and visual style.',
+            },
         });
     }
     const childImageBase64 = customBook.childCharacterImageUrl
         ? await fetchImageAsBase64(customBook.childCharacterImageUrl)
         : null;
     if (childImageBase64) {
+        subjectRefId = styleRefId + 1;
         referenceImages.push({
+            referenceId: subjectRefId,
             referenceImage: { bytesBase64Encoded: childImageBase64 },
             referenceType: 'REFERENCE_TYPE_SUBJECT',
-            subjectDescription: `A child named ${childName}, include this child in the scene with ${characterName}`,
+            subjectImageConfig: {
+                subjectDescription: `A child named ${childName}, include this child in the scene with ${characterName}`,
+                subjectType: 'SUBJECT_TYPE_PERSON',
+            },
         });
     }
 
     const prompt = templateCoverBase64
-        ? `Recreate this book cover in the same style and composition. Feature the child from the reference and ${characterName} (${characterStyle}). Children's book illustration, Christian faith theme, ages 4-12, no text in image.`
-        : `Children's book cover: A child named ${childName} and ${characterName} (${characterStyle}) standing together in a warm, magical storybook scene. Both characters visible and friendly, side by side. Children's book illustration style, Christian faith theme, suitable for ages 4-12, no text in image.`;
+        ? `Recreate this book cover in the same style and composition. Feature the child [${subjectRefId || 1}] and ${characterName} (${characterStyle}). Children's book illustration, Christian faith theme, ages 4-12, no text in image.`
+        : subjectRefId
+            ? `Children's book cover: The child [${subjectRefId}] and ${characterName} (${characterStyle}) standing together in a warm, magical storybook scene. Both characters visible and friendly, side by side. Children's book illustration style, Christian faith theme, suitable for ages 4-12, no text in image.`
+            : `Children's book cover: A child named ${childName} and ${characterName} (${characterStyle}) standing together in a warm, magical storybook scene. Both characters visible and friendly, side by side. Children's book illustration style, Christian faith theme, suitable for ages 4-12, no text in image.`;
 
     const instancesPayload = referenceImages.length
         ? { prompt, referenceImages }

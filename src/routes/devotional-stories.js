@@ -477,20 +477,21 @@ async function generatePersonalizedSceneImage(storyId, childName, selfieBase64, 
         // Extract key scene elements from story content (first 200 chars for context)
         const storyContext = (storyContent || '').slice(0, 200).replace(/\{childName\}/g, childName);
         
-        // Build the prompt for scene generation with child's character
-        const enhancedPrompt = `A child named ${childName} in a Bible story scene. ${scenePrompt}. 
-        The child is the main character in this scene. ${styleDesc}.
+        // Build the prompt for scene generation with child's character.
+        // [1] references the subject reference image (required by Imagen API).
+        const enhancedPrompt = `A child named ${childName} [1] in a Bible story scene. ${scenePrompt}. 
+        The child [1] is the main character in this scene. ${styleDesc}.
         Story context: ${storyContext}
         Children's book illustration style, warm inviting colors, soft lighting, 
         suitable for ages 4-12, peaceful atmosphere, Christian faith theme.
-        Wide scene showing environment with the child as focal point.`;
+        Wide scene showing environment with the child [1] as focal point.`;
         
         console.log(`🎨 Generating personalized scene with style: ${styleId}`);
         
         // Clean up selfie base64 (remove data URL prefix if present)
         const cleanSelfie = selfieBase64.replace(/^data:image\/\w+;base64,/, '');
         
-        // Use Imagen with reference image for character consistency
+        // Use Imagen with reference image for character consistency (referenceId + subjectImageConfig required)
         const response = await fetch(
             `https://us-central1-aiplatform.googleapis.com/v1/projects/${projectId}/locations/us-central1/publishers/google/models/imagen-3.0-generate-001:predict`,
             {
@@ -503,11 +504,15 @@ async function generatePersonalizedSceneImage(storyId, childName, selfieBase64, 
                     instances: [{
                         prompt: enhancedPrompt,
                         referenceImages: [{
+                            referenceId: 1,
                             referenceImage: {
                                 bytesBase64Encoded: cleanSelfie
                             },
                             referenceType: 'REFERENCE_TYPE_SUBJECT',
-                            subjectDescription: `A child named ${childName}, transform into ${styleDesc}`
+                            subjectImageConfig: {
+                                subjectDescription: `A child named ${childName}, transform into ${styleDesc}`,
+                                subjectType: 'SUBJECT_TYPE_PERSON'
+                            }
                         }]
                     }],
                     parameters: {

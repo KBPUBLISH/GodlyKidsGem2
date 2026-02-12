@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import SelfieCapture from '../components/features/SelfieCapture';
 import CharacterStyleSelector, { CHARACTER_STYLES } from '../components/features/CharacterStyleSelector';
@@ -6,7 +6,7 @@ import { getApiBaseUrl } from '../services/apiService';
 import { useUser } from '../context/UserContext';
 import { useSubscription } from '../context/SubscriptionContext';
 import { authService } from '../services/authService';
-import { BookOpen, ChevronRight, Sparkles } from 'lucide-react';
+import { BookOpen, ChevronRight, Sparkles, RotateCcw } from 'lucide-react';
 
 type Step = 1 | 2 | 3 | 4;
 
@@ -44,6 +44,7 @@ const CreateYourStoryPage: React.FC = () => {
   const [selectedStyleId, setSelectedStyleId] = useState<string | null>(null);
   const [isGeneratingCharacter, setIsGeneratingCharacter] = useState(false);
   const [submitted, setSubmitted] = useState(false);
+  const characterGenerationIdRef = useRef(0);
 
   const currentKid = kids.find((k) => k.id === currentProfileId);
   const hasTrialOrPaid = isPremium || (reverseTrial?.isActive ?? false);
@@ -112,6 +113,38 @@ const CreateYourStoryPage: React.FC = () => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           imageBase64,
+          styleId: selectedStyleId,
+          settingId: 'forest',
+          childId: currentProfileId || currentKid?.id,
+          childName: childName || currentKid?.name,
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      const url = data.characterAvatarUrl || data.imageUrl;
+      if (url) {
+        setAvatarUrl(url);
+        if (!data.fallback) setError(null);
+      } else {
+        setError(data.error || data.message || 'Could not create your character. Try again.');
+      }
+    } catch (e) {
+      setError('Could not create your character. Try again.');
+    } finally {
+      setIsGeneratingCharacter(false);
+    }
+  };
+
+  const handleRegenerateCharacter = async () => {
+    if (!selfieBase64 || !selectedStyleId) return;
+    setError(null);
+    setIsGeneratingCharacter(true);
+    try {
+      const base = getApiRoot();
+      const res = await fetch(`${base}/api/character/generate`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          imageBase64: selfieBase64,
           styleId: selectedStyleId,
           settingId: 'forest',
           childId: currentProfileId || currentKid?.id,
@@ -244,19 +277,32 @@ const CreateYourStoryPage: React.FC = () => {
                     ))}
                   </div>
                 ) : selectedStyleId && (
-                  avatarUrl ? (
-                    <div className="rounded-2xl overflow-hidden border-2 border-amber-400/50">
-                      <img src={avatarUrl} alt="Your character" className="w-full aspect-square object-cover" />
-                    </div>
-                  ) : (
-                    <button
-                      onClick={() => setShowSelfieModal(true)}
-                      disabled={isGeneratingCharacter}
-                      className="w-full aspect-square max-w-[280px] mx-auto rounded-2xl border-2 border-dashed border-amber-400/50 bg-amber-500/10 flex flex-col items-center justify-center gap-2 text-amber-200"
-                    >
-                      {isGeneratingCharacter ? <span>Creating your character...</span> : <><BookOpen className="w-12 h-12" /> Tap to take selfie</>}
-                    </button>
-                  )
+                  <>
+                    {avatarUrl ? (
+                      <div className="space-y-3">
+                        <div className="rounded-2xl overflow-hidden border-2 border-amber-400/50">
+                          <img src={avatarUrl} alt="Your character" className="w-full aspect-square object-cover" />
+                        </div>
+                        <button
+                          type="button"
+                          onClick={handleRegenerateCharacter}
+                          disabled={isGeneratingCharacter}
+                          className="w-full py-2.5 rounded-xl bg-white/10 hover:bg-white/20 text-white/90 text-sm font-medium flex items-center justify-center gap-2 transition-colors disabled:opacity-50"
+                        >
+                          <RotateCcw className="w-4 h-4" />
+                          {isGeneratingCharacter ? 'Regenerating...' : 'Regenerate character'}
+                        </button>
+                      </div>
+                    ) : (
+                      <button
+                        onClick={() => setShowSelfieModal(true)}
+                        disabled={isGeneratingCharacter}
+                        className="w-full aspect-square max-w-[280px] mx-auto rounded-2xl border-2 border-dashed border-amber-400/50 bg-amber-500/10 flex flex-col items-center justify-center gap-2 text-amber-200"
+                      >
+                        {isGeneratingCharacter ? <span>Creating your character...</span> : <><BookOpen className="w-12 h-12" /> Tap to take selfie</>}
+                      </button>
+                    )}
+                  </>
                 )}
                 <div className="flex gap-3">
                   <button

@@ -14,30 +14,30 @@ const SETTINGS = {
 const DEFAULT_SETTING = 'forest';
 
 // Style prompts: full-body character in a setting (not just a portrait). Selfie is reference for face/identity.
-// {{SETTING}} is replaced with SETTINGS[settingId] (e.g. forest, meadow).
+// {{SETTING}} is replaced with SETTINGS[settingId]. We explicitly require background replacement and full style transform (no keeping the original room/photo look).
 const STYLE_PROMPTS = {
     pixar: {
-        prompt: "Using this photo as the only reference for this child's face and identity, generate one image: the child as a full-body character in Pixar 3D animated style, standing or walking in {{SETTING}}. Rounded features, vibrant colors, playful energy. The child must be full body (head to feet visible) in the scene. Keep the child's face recognizable from the photo; body and environment in Pixar style.",
+        prompt: "Using this photo as the only reference for this child's face and identity, generate one image: the child as a full-body character in Pixar 3D animated style, standing or walking in {{SETTING}}. Replace the entire background with {{SETTING}}; do not keep the original room or indoor setting. Fully transform the image into Pixar 3D animation style—smooth, stylized, not photorealistic. Rounded features, vibrant colors, playful energy. The child must be full body (head to feet visible). Keep the child's face recognizable from the photo; body and environment in Pixar style.",
         negativePrompt: "realistic, photograph, scary, dark, flat, portrait only, close-up face only"
     },
     minecraft: {
-        prompt: "Using this photo as the only reference for this child's face and identity, generate one image: the child as a full-body Minecraft-style blocky character, standing in {{SETTING}}. Square head and body, voxel style. The child must be full body (head to feet visible). Keep facial features recognizable but blocky; friendly, bright colors.",
+        prompt: "Using this photo as the only reference for this child's face and identity, generate one image: the child as a full-body Minecraft-style blocky character, standing in {{SETTING}}. Replace the entire background with {{SETTING}}; do not keep the original room or setting. Square head and body, voxel style. The child must be full body (head to feet visible). Keep facial features recognizable but blocky; friendly, bright colors.",
         negativePrompt: "realistic, smooth, round, detailed photograph, blurry, portrait only, close-up only"
     },
     disney: {
-        prompt: "Using this photo as the only reference for this child's face and identity, generate one image: the child as a full-body character in Disney 3D animated style, standing or walking in {{SETTING}}. Big sparkling eyes, smooth features, magical glow. The child must be full body (head to feet visible). Keep face recognizable; enchanting, family-friendly atmosphere.",
+        prompt: "Using this photo as the only reference for this child's face and identity, generate one image: the child as a full-body character in Disney 3D animated style, standing or walking in {{SETTING}}. Replace the entire background with {{SETTING}}—the scene must be only the forest (or chosen setting); do not keep the original room, desk, TV, or indoor background. Fully transform into Disney 3D animated style: smooth stylized features, big sparkling eyes, magical glow, like a Disney movie character—not a photograph or realistic image. The child must be full body (head to feet visible). Keep face recognizable; enchanting, family-friendly atmosphere.",
         negativePrompt: "realistic, photograph, scary, dark, villainous, portrait only, close-up only"
     },
     lego: {
-        prompt: "Using this photo as the only reference for this child's face and identity, generate one image: the child as a full-body LEGO minifigure style character, standing in {{SETTING}}. Yellow plastic skin, simple features. Full body visible in the scene. Keep hair color/style recognizable.",
+        prompt: "Using this photo as the only reference for this child's face and identity, generate one image: the child as a full-body LEGO minifigure style character, standing in {{SETTING}}. Replace the entire background with {{SETTING}}; do not keep the original room or indoor setting. Yellow plastic skin, simple features. Full body visible in the scene. Keep hair color/style recognizable.",
         negativePrompt: "realistic skin tone, complex features, photograph, scary, portrait only"
     },
     cartoon: {
-        prompt: "Using this photo as the only reference for this child's face and identity, generate one image: the child as a full-body cute 2D cartoon character, standing in {{SETTING}}. Big expressive eyes, simplified features, bright colors. Full body (head to feet) in the scene.",
+        prompt: "Using this photo as the only reference for this child's face and identity, generate one image: the child as a full-body cute 2D cartoon character, standing in {{SETTING}}. Replace the entire background with {{SETTING}}; do not keep the original room or setting. Big expressive eyes, simplified features, bright colors. Full body (head to feet) in the scene.",
         negativePrompt: "realistic, 3D, photograph, scary, portrait only, close-up only"
     },
     illustrated: {
-        prompt: "Using this photo as the only reference for this child's face and identity, generate one image: the child as a full-body character in children's book illustration style, standing in {{SETTING}}. Soft watercolor textures, gentle colors, whimsical. Full body visible in the scene.",
+        prompt: "Using this photo as the only reference for this child's face and identity, generate one image: the child as a full-body character in children's book illustration style, standing in {{SETTING}}. Replace the entire background with {{SETTING}}; do not keep the original room or setting. Soft watercolor textures, gentle colors, whimsical. Full body visible in the scene.",
         negativePrompt: "realistic, photograph, harsh colors, scary, portrait only, close-up only"
     }
 };
@@ -160,8 +160,8 @@ const generateCharacterWithConsumerGemini = async (imageBase64, styleId, resolve
     }
 };
 
-// Vertex Imagen with selfie as subject reference (imagen-3.0-capability-001). Use when Gemini paths fail so we still use the selfie.
-const generateCharacterWithVertexImagenSelfie = async (imageBase64, styleId, accessToken, projectId, resolvedPrompt) => {
+// Vertex Imagen with selfie as subject reference (imagen-3.0-capability-001). Fallback when Gemini fails. Output is used as childCharacterImageUrl in books.
+const generateCharacterWithVertexImagenSelfie = async (imageBase64, styleId, accessToken, projectId, resolvedPrompt, setting = null) => {
     const styleDescriptions = {
         minecraft: 'Minecraft blocky pixel art character, full body',
         lego: 'LEGO minifigure style character, full body',
@@ -171,7 +171,9 @@ const generateCharacterWithVertexImagenSelfie = async (imageBase64, styleId, acc
         pixar: 'Pixar 3D animated character, full body, rounded features'
     };
     const styleDesc = styleDescriptions[styleId] || styleDescriptions.illustrated;
-    const prompt = `Person [1] as a ${styleDesc}, standing in the scene. Keep face recognizable from the reference. Full body from head to feet visible. Family-friendly.`;
+    const scene = setting || SETTINGS[DEFAULT_SETTING];
+    // Same person + explicit background: scene must be the described setting, not the reference photo's room/indoor background. Full style transform.
+    const prompt = `The child in the reference photo [1], and only that child, as a ${styleDesc}, standing in ${scene}. The background must be only this scene (e.g. forest), not the reference photo's room or indoor setting. Keep the child's face and identity exactly from the reference. Fully stylized (e.g. Disney/Pixar look), not photorealistic. Full body from head to feet. Family-friendly.`;
 
     const cleanBase64 = imageBase64.replace(/^data:image\/\w+;base64,/, '');
 
@@ -192,7 +194,7 @@ const generateCharacterWithVertexImagenSelfie = async (imageBase64, styleId, acc
                             referenceImage: { bytesBase64Encoded: cleanBase64 },
                             referenceType: 'REFERENCE_TYPE_SUBJECT',
                             subjectImageConfig: {
-                                subjectDescription: 'A child; transform into the described character while keeping face recognizable.',
+                                subjectDescription: 'The child in this photo. Output must be the same person with the same face, only styled as the requested character.',
                                 subjectType: 'SUBJECT_TYPE_PERSON'
                             }
                         }]
@@ -226,7 +228,7 @@ const generateCharacterWithVertexImagenSelfie = async (imageBase64, styleId, acc
     }
 };
 
-// Generate character: try Vertex Imagen with selfie first (reliable), then Vertex Gemini, then consumer Gemini, then text-only Imagen.
+// Generate character: try Gemini first (best face preservation; this URL becomes childCharacterImageUrl for the book), then Imagen with selfie, then text-only.
 // settingId: optional, one of SETTINGS keys (default forest) — used to replace {{SETTING}} in the prompt for full-body-in-scene.
 const generateCharacterImage = async (imageBase64, styleId, settingId = null) => {
     const style = STYLE_PROMPTS[styleId];
@@ -256,17 +258,17 @@ const generateCharacterImage = async (imageBase64, styleId, settingId = null) =>
         throw new Error('GCS credentials not configured');
     }
 
-    // 1) Vertex Imagen with selfie as subject reference — same path as monthly books; use first for reliability.
-    const imagenWithSelfie = await generateCharacterWithVertexImagenSelfie(imageBase64, styleId, accessToken, projectId, resolvedPrompt);
-    if (imagenWithSelfie) return imagenWithSelfie;
-
-    // 2) Vertex AI Gemini 2.5 Flash Image (selfie + prompt).
+    // 1) Vertex AI Gemini 2.5 Flash Image — best at preserving the face from the photo; this image becomes the book's child reference.
     const vertexImage = await generateCharacterWithVertexGemini(imageBase64, styleId, accessToken, projectId, resolvedPrompt);
     if (vertexImage) return vertexImage;
 
-    // 3) Consumer Gemini (in case backend runs in a region where it works).
+    // 2) Consumer Gemini (when backend runs in a region where it works).
     const consumerImage = await generateCharacterWithConsumerGemini(imageBase64, styleId, resolvedPrompt);
     if (consumerImage) return consumerImage;
+
+    // 3) Vertex Imagen with selfie as subject (fallback when Gemini unavailable).
+    const imagenWithSelfie = await generateCharacterWithVertexImagenSelfie(imageBase64, styleId, accessToken, projectId, resolvedPrompt, setting);
+    if (imagenWithSelfie) return imagenWithSelfie;
 
     // 4) Last fallback: Vertex Imagen text-to-image only (no selfie — generic character).
     console.log(`🎨 Fallback: generating character in ${styleId} style with Vertex Imagen (text-to-image; no selfie)...`);

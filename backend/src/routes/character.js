@@ -4,31 +4,41 @@ const crypto = require('crypto');
 const { bucket } = require('../config/storage');
 const { GoogleGenAI } = require('@google/genai');
 
-// Style prompts for character generation
+// Settings: where we place the full-body character (default forest)
+const SETTINGS = {
+    forest: 'a sun-dappled enchanted forest with tall trees, soft moss, and gentle light filtering through leaves',
+    meadow: 'a peaceful flower meadow with butterflies and blue sky',
+    kingdom: 'a friendly fantasy kingdom with a castle in the background and cobblestone path'
+};
+
+const DEFAULT_SETTING = 'forest';
+
+// Style prompts: full-body character in a setting (not just a portrait). Selfie is reference for face/identity.
+// {{SETTING}} is replaced with SETTINGS[settingId] (e.g. forest, meadow).
 const STYLE_PROMPTS = {
+    pixar: {
+        prompt: "Using this photo as the only reference for this child's face and identity, generate one image: the child as a full-body character in Pixar 3D animated style, standing or walking in {{SETTING}}. Rounded features, vibrant colors, playful energy. The child must be full body (head to feet visible) in the scene. Keep the child's face recognizable from the photo; body and environment in Pixar style.",
+        negativePrompt: "realistic, photograph, scary, dark, flat, portrait only, close-up face only"
+    },
     minecraft: {
-        prompt: "Transform this child's photo into a Minecraft-style character. Blocky, pixelated appearance with square head and body. Keep the child's key facial features recognizable but stylized as cubic voxel art. Friendly expression, bright colors, game-ready character portrait.",
-        negativePrompt: "realistic, smooth, round, detailed, photograph, blurry"
-    },
-    lego: {
-        prompt: "Transform this child's photo into a LEGO minifigure style character. Yellow plastic skin, simple curved smile, dot eyes, cylindrical head shape. Keep recognizable features like hair color/style. Cheerful toy-like appearance, studio lighting, clean background.",
-        negativePrompt: "realistic skin tone, complex features, photograph, scary"
-    },
-    cartoon: {
-        prompt: "Transform this child's photo into a cute 2D cartoon character. Big expressive eyes, simplified features, animated style like modern cartoons. Bright colors, clean lines, friendly expression. Keep hair color and general features recognizable.",
-        negativePrompt: "realistic, 3D, photograph, scary, complex shading"
-    },
-    illustrated: {
-        prompt: "Transform this child's photo into a children's book illustration style character. Soft watercolor textures, gentle colors, whimsical storybook aesthetic. Warm and inviting, painterly style. Keep the child's key features recognizable in an artistic way.",
-        negativePrompt: "realistic, photograph, harsh colors, scary, digital art"
+        prompt: "Using this photo as the only reference for this child's face and identity, generate one image: the child as a full-body Minecraft-style blocky character, standing in {{SETTING}}. Square head and body, voxel style. The child must be full body (head to feet visible). Keep facial features recognizable but blocky; friendly, bright colors.",
+        negativePrompt: "realistic, smooth, round, detailed photograph, blurry, portrait only, close-up only"
     },
     disney: {
-        prompt: "Transform this child's photo into a Disney 3D animated style character. Big sparkling eyes, smooth features, magical glow. Keep recognizable features like hair color and style. Friendly, heroic pose, studio quality, enchanting atmosphere.",
-        negativePrompt: "realistic, photograph, scary, dark, villainous"
+        prompt: "Using this photo as the only reference for this child's face and identity, generate one image: the child as a full-body character in Disney 3D animated style, standing or walking in {{SETTING}}. Big sparkling eyes, smooth features, magical glow. The child must be full body (head to feet visible). Keep face recognizable; enchanting, family-friendly atmosphere.",
+        negativePrompt: "realistic, photograph, scary, dark, villainous, portrait only, close-up only"
     },
-    pixar: {
-        prompt: "Transform this child's photo into a Pixar 3D animated style character. Rounded features, exaggerated expressions, stylized proportions. Vibrant colors, playful energy. Keep key features recognizable. Friendly character portrait, clean studio lighting.",
-        negativePrompt: "realistic, photograph, scary, dark, flat"
+    lego: {
+        prompt: "Using this photo as the only reference for this child's face and identity, generate one image: the child as a full-body LEGO minifigure style character, standing in {{SETTING}}. Yellow plastic skin, simple features. Full body visible in the scene. Keep hair color/style recognizable.",
+        negativePrompt: "realistic skin tone, complex features, photograph, scary, portrait only"
+    },
+    cartoon: {
+        prompt: "Using this photo as the only reference for this child's face and identity, generate one image: the child as a full-body cute 2D cartoon character, standing in {{SETTING}}. Big expressive eyes, simplified features, bright colors. Full body (head to feet) in the scene.",
+        negativePrompt: "realistic, 3D, photograph, scary, portrait only, close-up only"
+    },
+    illustrated: {
+        prompt: "Using this photo as the only reference for this child's face and identity, generate one image: the child as a full-body character in children's book illustration style, standing in {{SETTING}}. Soft watercolor textures, gentle colors, whimsical. Full body visible in the scene.",
+        negativePrompt: "realistic, photograph, harsh colors, scary, portrait only, close-up only"
     }
 };
 
@@ -54,10 +64,11 @@ const getVertexAccessToken = async () => {
 };
 
 // Vertex AI Gemini 2.5 Flash Image: selfie + prompt → image. Uses your GCP project (no consumer API region block).
-// Returns base64 image or null.
-const generateCharacterWithVertexGemini = async (imageBase64, styleId, accessToken, projectId) => {
+// resolvedPrompt: if provided, use instead of style.prompt (e.g. with {{SETTING}} already replaced).
+const generateCharacterWithVertexGemini = async (imageBase64, styleId, accessToken, projectId, resolvedPrompt = null) => {
     const style = STYLE_PROMPTS[styleId];
     if (!style) return null;
+    const promptText = resolvedPrompt != null ? resolvedPrompt : style.prompt;
 
     const base64Data = imageBase64.replace(/^data:image\/\w+;base64,/, '');
     const mimeType = (imageBase64.match(/^data:(image\/\w+);base64,/) || [])[1] || 'image/jpeg';
@@ -67,7 +78,7 @@ const generateCharacterWithVertexGemini = async (imageBase64, styleId, accessTok
         contents: [{
             role: 'user',
             parts: [
-                { text: style.prompt },
+                { text: promptText },
                 { inlineData: { mimeType, data: base64Data } }
             ]
         }],
@@ -107,18 +118,20 @@ const generateCharacterWithVertexGemini = async (imageBase64, styleId, accessTok
 };
 
 // Consumer Gemini API (Nano Banana): selfie + prompt → image. Often blocked by "location not supported" when using image input from Render.
-const generateCharacterWithConsumerGemini = async (imageBase64, styleId) => {
+// resolvedPrompt: if provided, use instead of style.prompt.
+const generateCharacterWithConsumerGemini = async (imageBase64, styleId, resolvedPrompt = null) => {
     const geminiKey = process.env.GEMINI_API_KEY;
     if (!geminiKey) return null;
 
     const style = STYLE_PROMPTS[styleId];
     if (!style) return null;
+    const promptText = resolvedPrompt != null ? resolvedPrompt : style.prompt;
 
     const base64Data = imageBase64.replace(/^data:image\/\w+;base64,/, '');
     const mimeType = (imageBase64.match(/^data:(image\/\w+);base64,/) || [])[1] || 'image/jpeg';
 
     const contents = [
-        { text: style.prompt },
+        { text: promptText },
         { inlineData: { mimeType, data: base64Data } }
     ];
 
@@ -148,11 +161,15 @@ const generateCharacterWithConsumerGemini = async (imageBase64, styleId) => {
 };
 
 // Generate character: try Vertex Gemini (selfie + prompt) first, then consumer Gemini, then Vertex Imagen (text-only fallback).
-const generateCharacterImage = async (imageBase64, styleId) => {
+// settingId: optional, one of SETTINGS keys (default forest) — used to replace {{SETTING}} in the prompt for full-body-in-scene.
+const generateCharacterImage = async (imageBase64, styleId, settingId = null) => {
     const style = STYLE_PROMPTS[styleId];
     if (!style) {
         throw new Error(`Invalid style: ${styleId}`);
     }
+
+    const setting = SETTINGS[settingId] || SETTINGS[DEFAULT_SETTING];
+    const resolvedPrompt = style.prompt.replace(/\{\{SETTING\}\}/g, setting);
 
     const credentialsJson = process.env.GCS_CREDENTIALS_JSON || process.env.GOOGLE_SERVICE_ACCOUNT_JSON;
     const hasVertex = !!credentialsJson;
@@ -168,12 +185,12 @@ const generateCharacterImage = async (imageBase64, styleId) => {
 
     // 1) Vertex AI Gemini 2.5 Flash Image — same model as Nano Banana, but via your GCP project so the selfie is used and region block is avoided.
     if (accessToken && projectId) {
-        const vertexImage = await generateCharacterWithVertexGemini(imageBase64, styleId, accessToken, projectId);
+        const vertexImage = await generateCharacterWithVertexGemini(imageBase64, styleId, accessToken, projectId, resolvedPrompt);
         if (vertexImage) return vertexImage;
     }
 
     // 2) Consumer Gemini (in case backend runs in a region where it works).
-    const consumerImage = await generateCharacterWithConsumerGemini(imageBase64, styleId);
+    const consumerImage = await generateCharacterWithConsumerGemini(imageBase64, styleId, resolvedPrompt);
     if (consumerImage) return consumerImage;
 
     // 3) Fallback: Vertex Imagen text-to-image only (no selfie — generic character).
@@ -252,10 +269,10 @@ const uploadToGCS = async (imageBase64, filename) => {
 };
 
 // POST /api/character/generate
-// Generate a character avatar from a selfie
+// Generate a full-body character from a selfie, in the chosen style, placed in a setting (e.g. forest).
 router.post('/generate', async (req, res) => {
     try {
-        const { imageBase64, styleId, childId, childName } = req.body;
+        const { imageBase64, styleId, childId, childName, settingId } = req.body;
 
         if (!imageBase64) {
             return res.status(400).json({ error: 'Image is required' });
@@ -268,10 +285,11 @@ router.post('/generate', async (req, res) => {
             });
         }
 
-        console.log(`🎨 Generating ${styleId} character for ${childName || 'child'}...`);
+        const setting = settingId && SETTINGS[settingId] ? settingId : DEFAULT_SETTING;
+        console.log(`🎨 Generating full-body ${styleId} character in ${setting} for ${childName || 'child'}...`);
 
-        // Generate the character image
-        const generatedImageBase64 = await generateCharacterImage(imageBase64, styleId);
+        // Generate the character image (full body in setting)
+        const generatedImageBase64 = await generateCharacterImage(imageBase64, styleId, setting);
 
         // Create unique filename
         const hash = crypto.createHash('md5').update(imageBase64.slice(0, 1000) + styleId + Date.now()).digest('hex').slice(0, 12);

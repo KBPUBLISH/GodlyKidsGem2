@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { useParams } from 'react-router-dom';
+import { useParams, Link } from 'react-router-dom';
 import { apiClient, getMediaUrl } from '../services/apiClient';
 import {
     Save,
@@ -25,7 +25,8 @@ import {
     ChevronRight,
     Film,
     Globe,
-    Gamepad2
+    Gamepad2,
+    Users
 } from 'lucide-react';
 
 interface TextBox {
@@ -136,6 +137,12 @@ const PageEditor: React.FC = () => {
     
     // Character voices for @ autocomplete
     const [characterVoices, setCharacterVoices] = useState<Array<{ characterName: string; voiceId: string; color?: string }>>([]);
+    // Kids Monthly Book: optional scene prompt for on-demand background image generation
+    const [bookType, setBookType] = useState<'standard' | 'kids_monthly'>('standard');
+    const [sceneDescription, setSceneDescription] = useState<string>('');
+    // Kids Monthly Book: saved characters to reference on this page (for image generation)
+    const [referenceCharacterIds, setReferenceCharacterIds] = useState<string[]>([]);
+    const [availableCharacters, setAvailableCharacters] = useState<Array<{ _id: string; displayName: string; internalTag: string }>>([]);
     
     // TTS Cache clearing
     const [clearingCache, setClearingCache] = useState(false);
@@ -163,7 +170,7 @@ const PageEditor: React.FC = () => {
     const [isResizingRight, setIsResizingRight] = useState(false);
     const [isResizingCanvas, setIsResizingCanvas] = useState(false);
 
-    // Fetch book data to get character voices
+    // Fetch book data to get character voices and book type (for Kids Monthly image prompt)
     useEffect(() => {
         const fetchBookData = async () => {
             if (!bookId) return;
@@ -173,12 +180,26 @@ const PageEditor: React.FC = () => {
                     console.log('🎭 Loaded character voices:', res.data.characterVoices);
                     setCharacterVoices(res.data.characterVoices);
                 }
+                setBookType(res.data.bookType || 'standard');
             } catch (err) {
                 console.error('Failed to fetch book data for character voices:', err);
             }
         };
         fetchBookData();
     }, [bookId]);
+
+    // Fetch saved characters for Kids Monthly reference-character picker
+    useEffect(() => {
+        const fetchCharacters = async () => {
+            try {
+                const res = await apiClient.get('/api/monthly-book/admin/characters');
+                setAvailableCharacters(res.data?.characters || []);
+            } catch (err) {
+                console.error('Failed to fetch characters for reference picker:', err);
+            }
+        };
+        fetchCharacters();
+    }, []);
 
     // Fetch available games for web view page selector
     useEffect(() => {
@@ -496,6 +517,10 @@ const PageEditor: React.FC = () => {
             setTextBoxes([]);
         }
 
+        // Kids Monthly: scene description for on-demand background image generation
+        setSceneDescription(page.sceneDescription || '');
+        setReferenceCharacterIds(page.referenceCharacterIds ? page.referenceCharacterIds.map((id: any) => String(id)) : []);
+
         // Load coloring page settings
         setIsColoringPage(page.isColoringPage || false);
         setColoringEndModalOnly(page.coloringEndModalOnly !== false); // Default to true if not set
@@ -576,6 +601,8 @@ const PageEditor: React.FC = () => {
         setBackgroundType('image');
         setBackgroundFile(null);
         setBackgroundPreview(null);
+        setSceneDescription('');
+        setReferenceCharacterIds([]);
         setScrollFile(null);
         setScrollHeight(33); // Reset to default
         setScrollOffsetY(0); // Reset vertical offset
@@ -1001,6 +1028,8 @@ const PageEditor: React.FC = () => {
                 imageSequence: uploadedImageSequence,
                 imageSequenceDuration,
                 imageSequenceAnimation,
+                sceneDescription: sceneDescription.trim() || undefined, // Kids Monthly: prompt for on-demand background generation
+                referenceCharacterIds: referenceCharacterIds, // Kids Monthly: characters to reference on this page (empty array to clear)
             };
 
             console.log('📤 Sending payload:', JSON.stringify(payload, null, 2));
@@ -1222,6 +1251,18 @@ const PageEditor: React.FC = () => {
                                 className="w-20 border rounded px-2 py-1 text-sm"
                             />
                         </div>
+                        {/* Book type: controls visibility of Image prompt & Reference characters */}
+                        <div className="flex items-center gap-2 flex-wrap">
+                            <span className="text-xs text-gray-500">Book type:</span>
+                            <span className={`px-2 py-0.5 rounded text-xs font-medium ${bookType === 'kids_monthly' ? 'bg-indigo-100 text-indigo-800' : 'bg-gray-100 text-gray-600'}`}>
+                                {bookType === 'kids_monthly' ? 'Kids Monthly' : 'Standard'}
+                            </span>
+                            {bookType !== 'kids_monthly' && bookId && (
+                                <p className="text-xs text-gray-500 w-full">
+                                    Image prompt & reference characters available for Kids Monthly. <Link to={`/books/edit/${bookId}`} className="text-indigo-600 hover:underline">Set in Book settings →</Link>
+                                </p>
+                            )}
+                        </div>
                         
                         {/* Copy layout to other pages - only show for page 1 */}
                         {pageNumber === 1 && existingPages.length > 1 && (scrollPreview || textBoxes.length > 0) && (
@@ -1324,6 +1365,95 @@ const PageEditor: React.FC = () => {
                             >
                                 Remove Background
                             </button>
+                        )}
+
+                        {/* Kids Monthly only: image prompt for on-demand background generation */}
+                        {bookType === 'kids_monthly' && (
+                            <>
+                                <div className="space-y-2 pt-2">
+                                    <div className="flex items-center justify-between gap-2">
+                                        <label className="block text-xs font-semibold text-gray-600">Image prompt (optional)</label>
+                                        <button
+                                            type="button"
+                                            onClick={() => {
+                                                const pageText = textBoxes
+                                                    .map(b => b.text)
+                                                    .filter(t => t && t.trim())
+                                                    .join(' ')
+                                                    .trim();
+                                                setSceneDescription(pageText || '');
+                                            }}
+                                            className="flex items-center gap-1 px-2 py-1 text-xs font-medium text-indigo-600 hover:text-indigo-800 hover:bg-indigo-50 rounded transition"
+                                        >
+                                            <Type className="w-3.5 h-3.5" />
+                                            Use page text
+                                        </button>
+                                    </div>
+                                    <textarea
+                                        value={sceneDescription}
+                                        onChange={e => setSceneDescription(e.target.value)}
+                                        placeholder="e.g. A cozy bedroom at night with stars on the ceiling"
+                                        rows={2}
+                                        className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                                    />
+                                    <p className="text-xs text-gray-400">
+                                        Used when generating a personalized book for a child. Use the button above to fill from page text, or leave empty to use page text automatically.
+                                    </p>
+                                    <p className="text-xs text-gray-500 mt-1">
+                                        Use <code className="bg-gray-100 px-1 rounded">@kid</code> (or <code className="bg-gray-100 px-1 rounded">@child</code>) for the child’s avatar, and <code className="bg-gray-100 px-1 rounded">@Noah</code> / <code className="bg-gray-100 px-1 rounded">@disneyjesus</code> etc. for saved characters. E.g. “@disneyjesus and @kid are building a house.” Backgrounds are generated in 9:16 portrait for mobile. (In the page text block, @ is for voice, [] for ElevenLabs, {'{}'} for {'{childName}'}.)
+                                    </p>
+                                </div>
+
+                                {/* Reference characters for this page */}
+                                <div className="space-y-2 pt-3">
+                                    <label className="block text-xs font-semibold text-gray-600 flex items-center gap-2">
+                                        <Users className="w-4 h-4" />
+                                        Reference characters (optional)
+                                    </label>
+                                    <p className="text-xs text-gray-400">
+                                        Add saved characters (e.g. Noah, David) to reference on this page when generating personalized images.
+                                    </p>
+                                    <div className="flex flex-wrap gap-2">
+                                        {referenceCharacterIds.map((id) => {
+                                            const char = availableCharacters.find(c => c._id === id);
+                                            return (
+                                                <span
+                                                    key={id}
+                                                    className="inline-flex items-center gap-1 px-2 py-1 bg-indigo-100 text-indigo-800 rounded-md text-xs"
+                                                >
+                                                    {char?.displayName || id}
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => setReferenceCharacterIds(prev => prev.filter(x => x !== id))}
+                                                        className="p-0.5 hover:bg-indigo-200 rounded"
+                                                        aria-label="Remove"
+                                                    >
+                                                        <X className="w-3 h-3" />
+                                                    </button>
+                                                </span>
+                                            );
+                                        })}
+                                    </div>
+                                    <select
+                                        value=""
+                                        onChange={(e) => {
+                                            const id = e.target.value;
+                                            if (id && !referenceCharacterIds.includes(id)) {
+                                                setReferenceCharacterIds(prev => [...prev, id]);
+                                            }
+                                            e.target.value = '';
+                                        }}
+                                        className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                                    >
+                                        <option value="">Add a character…</option>
+                                        {availableCharacters
+                                            .filter(c => !referenceCharacterIds.includes(c._id))
+                                            .map(c => (
+                                                <option key={c._id} value={c._id}>{c.displayName}</option>
+                                            ))}
+                                    </select>
+                                </div>
+                            </>
                         )}
                     </div>
 

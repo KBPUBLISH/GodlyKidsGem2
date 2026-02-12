@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import SelfieCapture from '../components/features/SelfieCapture';
+import CharacterStyleSelector, { CHARACTER_STYLES } from '../components/features/CharacterStyleSelector';
 import { getApiBaseUrl } from '../services/apiService';
 import { useUser } from '../context/UserContext';
 import { useSubscription } from '../context/SubscriptionContext';
@@ -9,15 +10,14 @@ import { BookOpen, ChevronRight, Sparkles } from 'lucide-react';
 
 type Step = 1 | 2 | 3 | 4;
 
-interface Template {
+/** Story option for Create Your Story (from Books with bookType kids_monthly) */
+interface Story {
   _id: string;
   title: string;
   description?: string;
-  bibleCharacter?: { displayName: string; internalTag: string };
-  pageCount: number;
+  coverImage?: string | null;
+  bibleCharacter?: { displayName: string; internalTag?: string };
 }
-
-const DEFAULT_STYLE_ID = 'illustrated';
 
 // Base URL for API calls (no double /api when env ends with /api/)
 function getApiRoot(): string {
@@ -34,11 +34,14 @@ const CreateYourStoryPage: React.FC = () => {
   const [childName, setChildName] = useState('');
   const [selfieBase64, setSelfieBase64] = useState<string | null>(null);
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
-  const [templates, setTemplates] = useState<Template[]>([]);
-  const [selectedTemplateId, setSelectedTemplateId] = useState<string | null>(null);
+  const [stories, setStories] = useState<Story[]>([]);
+  const [selectedBookId, setSelectedBookId] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showSelfieModal, setShowSelfieModal] = useState(false);
+  const [showStyleSelector, setShowStyleSelector] = useState(false);
+  const [selectedStyleId, setSelectedStyleId] = useState<string | null>(null);
+  const [isGeneratingCharacter, setIsGeneratingCharacter] = useState(false);
   const [submitted, setSubmitted] = useState(false);
 
   const currentKid = kids.find((k) => k.id === currentProfileId);
@@ -59,11 +62,20 @@ const CreateYourStoryPage: React.FC = () => {
     (async () => {
       try {
         const base = getApiRoot();
-        const res = await fetch(`${base}/api/monthly-book/templates`);
+        const res = await fetch(`${base}/api/books?bookType=kids_monthly`);
         const data = await res.json().catch(() => ({}));
         if (!cancelled) {
-          if (!res.ok) setError(data.error || 'Could not load stories.');
-          else setTemplates(Array.isArray(data.templates) ? data.templates : []);
+          if (!res.ok) setError(data.error || data.message || 'Could not load stories.');
+          else {
+            const list = Array.isArray(data.data) ? data.data : [];
+            setStories(list.map((b: any) => ({
+              _id: b._id,
+              title: b.title,
+              description: b.description,
+              coverImage: b.files?.coverImage || b.coverImage || null,
+              bibleCharacter: b.featuredCharacterId ? { displayName: b.featuredCharacterId.displayName } : undefined,
+            })));
+          }
         }
       } catch (e) {
         if (!cancelled) setError('Could not load stories.');
@@ -72,26 +84,34 @@ const CreateYourStoryPage: React.FC = () => {
     return () => { cancelled = true; };
   }, []);
 
+  const handleStyleSelect = (styleId: string) => {
+    setSelectedStyleId(styleId);
+    setShowStyleSelector(false);
+  };
+
   const handleSelfieCapture = async (imageBase64: string) => {
     setSelfieBase64(imageBase64);
     setShowSelfieModal(false);
-    setLoading(true);
     setError(null);
+    if (!selectedStyleId) return;
+    setIsGeneratingCharacter(true);
     try {
       const base = getApiRoot();
       const res = await fetch(`${base}/api/character/generate`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          imageBase64: imageBase64,
-          styleId: DEFAULT_STYLE_ID,
+          imageBase64,
+          styleId: selectedStyleId,
+          settingId: 'forest',
+          childId: currentProfileId || currentKid?.id,
+          childName: childName || currentKid?.name,
         }),
       });
       const data = await res.json().catch(() => ({}));
       const url = data.characterAvatarUrl || data.imageUrl;
       if (url) {
         setAvatarUrl(url);
-        // Fallback = backend used placeholder; user can still continue
         if (!data.fallback) setError(null);
       } else {
         setError(data.error || data.message || 'Could not create your character. Try again.');
@@ -99,12 +119,12 @@ const CreateYourStoryPage: React.FC = () => {
     } catch (e) {
       setError('Could not create your character. Try again.');
     } finally {
-      setLoading(false);
+      setIsGeneratingCharacter(false);
     }
   };
 
   const handleSubmit = async () => {
-    if (!selectedTemplateId || !childName.trim()) return;
+    if (!selectedBookId || !childName.trim()) return;
     const user = authService.getUser();
     const userId = (user as any)?._id || (user as any)?.id || user?.email || localStorage.getItem('godlykids_user_email') || localStorage.getItem('device_id');
     const kidId = currentProfileId || currentKid?.id || (kids[0]?.id ?? '');
@@ -116,13 +136,13 @@ const CreateYourStoryPage: React.FC = () => {
     setError(null);
     try {
       const base = getApiRoot();
-      const res = await fetch(`${base}/api/monthly-book/create`, {
+      const res = await fetch(`${base}/api/monthly-book/create-from-book`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           userId,
           kidId,
-          templateId: selectedTemplateId,
+          bookId: selectedBookId,
           childName: childName.trim(),
           childCharacterImageUrl: avatarUrl || undefined,
           hasTrialOrPaid,
@@ -142,8 +162,8 @@ const CreateYourStoryPage: React.FC = () => {
     }
   };
 
-  const selectedTemplate = templates.find((t) => t._id === selectedTemplateId);
-  const bibleCharacterName = selectedTemplate?.bibleCharacter?.displayName || 'your hero';
+  const selectedStory = stories.find((s) => s._id === selectedBookId);
+  const bibleCharacterName = selectedStory?.bibleCharacter?.displayName || 'your hero';
 
   return (
     <div className="flex flex-col min-h-full bg-gradient-to-b from-[#1a1a2e] to-[#16213e]">
@@ -153,7 +173,7 @@ const CreateYourStoryPage: React.FC = () => {
             <div className="w-20 h-20 mx-auto rounded-full bg-amber-500/30 flex items-center justify-center mb-6">
               <Sparkles className="w-10 h-10 text-amber-300" />
             </div>
-            <h2 className="text-2xl font-bold text-white mb-2">Creating your story with {bibleCharacterName}...</h2>
+            <h2 className="text-2xl font-bold text-white mb-2">Creating your story{selectedStory?.title ? `: ${selectedStory.title}` : ''}...</h2>
             <p className="text-white/80 mb-2">Your story is being written by angels.</p>
             <p className="text-amber-200/90">We'll notify you in ~5 minutes when it's ready!</p>
             <p className="text-white/50 text-sm mt-6">Taking you back to your library...</p>
@@ -188,67 +208,99 @@ const CreateYourStoryPage: React.FC = () => {
 
             {step === 2 && (
               <div className="space-y-6">
-                <h2 className="text-xl font-bold text-white">Take a selfie for your character</h2>
-                <p className="text-white/70 text-sm">We'll turn it into your story character.</p>
-                {avatarUrl ? (
-                  <div className="rounded-2xl overflow-hidden border-2 border-amber-400/50">
-                    <img src={avatarUrl} alt="Your character" className="w-full aspect-square object-cover" />
+                <h2 className="text-xl font-bold text-white">{selectedStyleId ? 'Now take your selfie' : '1. Choose your character style'}</h2>
+                <p className="text-white/70 text-sm">
+                  {selectedStyleId
+                    ? "2. We'll turn your photo into a full-body character in a scene."
+                    : "Pick a style below (Pixar, Minecraft, Disney…). Then you'll take a selfie and we'll place you full-body in a fun scene."}
+                </p>
+                {!selectedStyleId ? (
+                  <div className="grid grid-cols-2 gap-3">
+                    {CHARACTER_STYLES.map((style) => (
+                      <button
+                        key={style.id}
+                        onClick={() => setSelectedStyleId(style.id)}
+                        className={`p-4 rounded-2xl text-left border-2 transition-all bg-[#3A2A1A] hover:bg-[#4A3A2A] border-white/20 hover:border-amber-400/50`}
+                      >
+                        <span className="text-3xl block mb-2">{style.previewEmoji}</span>
+                        <span className="font-bold text-[#FFD700] block">{style.name}</span>
+                        <span className="text-xs text-white/70">{style.description}</span>
+                      </button>
+                    ))}
                   </div>
-                ) : (
-                  <button
-                    onClick={() => setShowSelfieModal(true)}
-                    disabled={loading}
-                    className="w-full aspect-square max-w-[280px] mx-auto rounded-2xl border-2 border-dashed border-amber-400/50 bg-amber-500/10 flex flex-col items-center justify-center gap-2 text-amber-200"
-                  >
-                    {loading ? <span>Creating your character...</span> : <><BookOpen className="w-12 h-12" /> Tap to take selfie</>}
-                  </button>
+                ) : selectedStyleId && (
+                  avatarUrl ? (
+                    <div className="rounded-2xl overflow-hidden border-2 border-amber-400/50">
+                      <img src={avatarUrl} alt="Your character" className="w-full aspect-square object-cover" />
+                    </div>
+                  ) : (
+                    <button
+                      onClick={() => setShowSelfieModal(true)}
+                      disabled={isGeneratingCharacter}
+                      className="w-full aspect-square max-w-[280px] mx-auto rounded-2xl border-2 border-dashed border-amber-400/50 bg-amber-500/10 flex flex-col items-center justify-center gap-2 text-amber-200"
+                    >
+                      {isGeneratingCharacter ? <span>Creating your character...</span> : <><BookOpen className="w-12 h-12" /> Tap to take selfie</>}
+                    </button>
+                  )
                 )}
                 <div className="flex gap-3">
-                  <button onClick={() => setStep(1)} className="flex-1 py-3 rounded-xl bg-white/10 text-white">
+                  <button
+                    onClick={() => {
+                    if (selectedStyleId) {
+                      setSelectedStyleId(null);
+                      setSelfieBase64(null);
+                    } else {
+                      setShowStyleSelector(false);
+                      setStep(1);
+                    }
+                  }}
+                    className="flex-1 py-3 rounded-xl bg-white/10 text-white"
+                  >
                     Back
                   </button>
-                  <button
-                    onClick={() => setStep(3)}
-                    disabled={!avatarUrl && !selfieBase64}
-                    className="flex-1 py-3 rounded-xl bg-amber-500 text-white font-bold flex items-center justify-center gap-2 disabled:opacity-50"
-                    title={selfieBase64 && !avatarUrl ? 'You can continue; we’ll use a default character if needed.' : ''}
-                  >
-                    Next <ChevronRight className="w-5 h-5" />
-                  </button>
+                  {selectedStyleId && (
+                    <button
+                      onClick={() => setStep(3)}
+                      disabled={!avatarUrl}
+                      className="flex-1 py-3 rounded-xl bg-amber-500 text-white font-bold flex items-center justify-center gap-2 disabled:opacity-50"
+                    >
+                      Next <ChevronRight className="w-5 h-5" />
+                    </button>
+                  )}
                 </div>
               </div>
             )}
 
             {step === 3 && (
               <div className="space-y-6">
-                <h2 className="text-xl font-bold text-white">Pick your Bible character adventure</h2>
+                <h2 className="text-xl font-bold text-white">Pick your story</h2>
                 <p className="text-white/70 text-sm">Choose which story you want to star in.</p>
                 <div className="grid grid-cols-2 gap-3">
-                  {templates.map((t) => (
+                  {stories.map((s) => (
                     <button
-                      key={t._id}
-                      onClick={() => setSelectedTemplateId(t._id)}
+                      key={s._id}
+                      onClick={() => setSelectedBookId(s._id)}
                       className={`p-4 rounded-xl text-left border-2 transition-all ${
-                        selectedTemplateId === t._id
+                        selectedBookId === s._id
                           ? 'border-amber-400 bg-amber-500/20'
                           : 'border-white/20 bg-white/5 hover:border-white/40'
                       }`}
                     >
-                      <span className="text-white font-medium block">{t.title}</span>
-                      {t.bibleCharacter?.displayName && (
-                        <span className="text-amber-200/90 text-sm">{t.bibleCharacter.displayName}</span>
+                      <span className="text-white font-medium block">{s.title}</span>
+                      {s.bibleCharacter?.displayName && (
+                        <span className="text-amber-200/90 text-sm">{s.bibleCharacter.displayName}</span>
                       )}
                     </button>
                   ))}
                 </div>
-                {templates.length === 0 && !error && <p className="text-white/50">Loading stories...</p>}
+                {stories.length === 0 && !error && <p className="text-white/50">Loading stories...</p>}
                 <div className="flex gap-3">
                   <button onClick={() => setStep(2)} className="flex-1 py-3 rounded-xl bg-white/10 text-white">
                     Back
                   </button>
                   <button
                     onClick={() => setStep(4)}
-                    disabled={!selectedTemplateId}
+                    disabled={!selectedBookId}
                     className="flex-1 py-3 rounded-xl bg-amber-500 text-white font-bold flex items-center justify-center gap-2 disabled:opacity-50"
                   >
                     Next <ChevronRight className="w-5 h-5" />
@@ -261,7 +313,7 @@ const CreateYourStoryPage: React.FC = () => {
               <div className="space-y-6">
                 <h2 className="text-xl font-bold text-white">Ready to create your story!</h2>
                 <p className="text-white/70">
-                  <strong className="text-amber-200">{childName}</strong> will star in <strong className="text-amber-200">{selectedTemplate?.title}</strong>.
+                  <strong className="text-amber-200">{childName}</strong> will star in <strong className="text-amber-200">{selectedStory?.title}</strong>.
                 </p>
                 <p className="text-white/50 text-sm">We'll build your book and notify you when it's ready (~5 min).</p>
                 <div className="flex gap-3">
@@ -287,6 +339,25 @@ const CreateYourStoryPage: React.FC = () => {
         onCapture={handleSelfieCapture}
         onClose={() => setShowSelfieModal(false)}
         childName={childName || 'there'}
+      />
+
+      <CharacterStyleSelector
+        isOpen={showStyleSelector}
+        selfiePreview={selfieBase64 || undefined}
+        onSelect={handleStyleSelect}
+        onBack={() => {
+          if (selfieBase64) {
+            setShowStyleSelector(false);
+            setShowSelfieModal(true);
+          } else {
+            setShowStyleSelector(false);
+            setStep(1);
+          }
+        }}
+        onClose={() => setShowStyleSelector(false)}
+        isGenerating={isGeneratingCharacter}
+        childName={childName || currentKid?.name || 'there'}
+        confirmLabel={!selfieBase64 ? 'Next: take selfie' : undefined}
       />
     </div>
   );

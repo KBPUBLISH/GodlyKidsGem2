@@ -52,16 +52,22 @@ router.get('/', async (req, res) => {
             filter.status = 'published';
         }
         if (req.query.categoryId) filter.categoryId = req.query.categoryId;
+        if (req.query.bookType) {
+            filter.bookType = req.query.bookType;
+        } else if (req.query.status !== 'all') {
+            // App list (published): exclude kids_monthly so they only appear as Create Your Story templates
+            filter.bookType = { $ne: 'kids_monthly' };
+        }
         
         // Get total count for pagination metadata
         const total = await Book.countDocuments(filter);
         
-        // Fetch books with pagination
-        const books = await Book.find(filter)
-            .sort({ createdAt: -1 })
-            .skip(skip)
-            .limit(limit)
-            .lean(); // Use lean() for better performance - returns plain JS objects
+        // Fetch books with pagination (populate featured character for kids_monthly list)
+        let query = Book.find(filter).sort({ createdAt: -1 }).skip(skip).limit(limit);
+        if (filter.bookType === 'kids_monthly') {
+            query = query.populate('featuredCharacterId', 'displayName');
+        }
+        const books = await query.lean();
         
         // Map books to include coverImage for backward compatibility
         const booksWithCoverImage = books.map(book => {

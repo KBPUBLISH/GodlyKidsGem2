@@ -19,21 +19,40 @@ interface CharacterStyleSelectorProps {
   onClose: () => void;
   isGenerating?: boolean;
   childName?: string;
+  /** When provided (e.g. "Next: take selfie"), used instead of "Create My Character!" for the confirm button */
+  confirmLabel?: string;
 }
 
+// Order: Pixar, Minecraft, Disney first (main styles); then LEGO, Cartoon, Illustrated.
 export const CHARACTER_STYLES: CharacterStyle[] = [
+  {
+    id: 'pixar',
+    name: 'Pixar',
+    description: 'Full body in a forest scene',
+    previewEmoji: '🎬',
+    gradient: 'from-[#11998E] to-[#38EF7D]',
+    borderColor: 'border-[#00B894]'
+  },
   {
     id: 'minecraft',
     name: 'Minecraft',
-    description: 'Blocky pixel art style',
+    description: 'Blocky style in a forest',
     previewEmoji: '🟫',
     gradient: 'from-[#7B5B3A] to-[#5D4427]',
     borderColor: 'border-[#8B6914]'
   },
   {
+    id: 'disney',
+    name: 'Disney',
+    description: '3D magic in a forest',
+    previewEmoji: '✨',
+    gradient: 'from-[#667EEA] to-[#764BA2]',
+    borderColor: 'border-[#5B52CC]'
+  },
+  {
     id: 'lego',
     name: 'LEGO',
-    description: 'Classic minifigure look',
+    description: 'Minifigure in a scene',
     previewEmoji: '🧱',
     gradient: 'from-[#FFD500] to-[#E6C200]',
     borderColor: 'border-[#CC0000]'
@@ -41,7 +60,7 @@ export const CHARACTER_STYLES: CharacterStyle[] = [
   {
     id: 'cartoon',
     name: 'Cartoon',
-    description: '2D animated style',
+    description: '2D style in a scene',
     previewEmoji: '🎨',
     gradient: 'from-[#FF6B6B] to-[#FF8E53]',
     borderColor: 'border-[#FF4757]'
@@ -49,26 +68,10 @@ export const CHARACTER_STYLES: CharacterStyle[] = [
   {
     id: 'illustrated',
     name: 'Illustrated',
-    description: 'Storybook watercolor',
+    description: 'Storybook in a scene',
     previewEmoji: '📚',
     gradient: 'from-[#A8E6CF] to-[#7FCDCD]',
     borderColor: 'border-[#3D9970]'
-  },
-  {
-    id: 'disney',
-    name: 'Disney',
-    description: '3D animated magic',
-    previewEmoji: '✨',
-    gradient: 'from-[#667EEA] to-[#764BA2]',
-    borderColor: 'border-[#5B52CC]'
-  },
-  {
-    id: 'pixar',
-    name: 'Pixar',
-    description: 'Fun 3D character',
-    previewEmoji: '🎬',
-    gradient: 'from-[#11998E] to-[#38EF7D]',
-    borderColor: 'border-[#00B894]'
   }
 ];
 
@@ -79,7 +82,8 @@ const CharacterStyleSelector: React.FC<CharacterStyleSelectorProps> = ({
   onBack,
   onClose,
   isGenerating = false,
-  childName = 'there'
+  childName = 'there',
+  confirmLabel,
 }) => {
   const [selectedStyle, setSelectedStyle] = useState<string | null>(null);
 
@@ -109,7 +113,7 @@ const CharacterStyleSelector: React.FC<CharacterStyleSelectorProps> = ({
             <div>
               <h2 className="text-xl font-bold text-white">Choose Your Style</h2>
               <p className="text-white/80 text-sm">
-                Pick how you want to look, {childName}!
+                You’ll appear full-body in a fun scene (like a forest), {childName}!
               </p>
             </div>
           </div>
@@ -202,7 +206,7 @@ const CharacterStyleSelector: React.FC<CharacterStyleSelectorProps> = ({
             `}
           >
             <Sparkles className="w-6 h-6" />
-            {isGenerating ? 'Creating...' : 'Create My Character!'}
+            {isGenerating ? 'Creating...' : (confirmLabel ?? 'Create My Character!')}
           </button>
 
           {!isGenerating && (
@@ -219,7 +223,7 @@ const CharacterStyleSelector: React.FC<CharacterStyleSelectorProps> = ({
         {!isGenerating && (
           <div className="px-6 pb-6">
             <p className="text-center text-white/50 text-xs">
-              Your character will appear in your personalized stories!
+              We’ll place you full-body in a scene (e.g. forest) in your chosen style — not just a portrait!
             </p>
           </div>
         )}

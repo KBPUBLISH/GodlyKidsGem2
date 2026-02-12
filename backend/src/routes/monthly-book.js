@@ -113,6 +113,65 @@ router.post('/create', async (req, res) => {
 });
 
 /**
+ * POST /api/monthly-book/create-from-book
+ * Create a custom monthly book from a Book Builder book (bookType kids_monthly).
+ * Body: userId, kidId, bookId, childName, childCharacterImageUrl?, hasTrialOrPaid?
+ */
+router.post('/create-from-book', async (req, res) => {
+    try {
+        const { userId: rawUserId, kidId, bookId: sourceBookId, childName, childCharacterImageUrl, hasTrialOrPaid } = req.body;
+
+        if (!rawUserId || !kidId || !sourceBookId || !childName) {
+            return res.status(400).json({
+                success: false,
+                error: 'Missing required fields: userId, kidId, bookId, childName',
+            });
+        }
+
+        const userId = await resolveUserId(rawUserId);
+        if (!userId) {
+            return res.status(400).json({
+                success: false,
+                error: 'User not found. Sign in or create an account, then try again.',
+            });
+        }
+
+        const Book = require('../models/Book');
+        const sourceBook = await Book.findById(sourceBookId).populate('featuredCharacterId').lean();
+        if (!sourceBook || sourceBook.bookType !== 'kids_monthly' || sourceBook.status !== 'published') {
+            return res.status(400).json({
+                success: false,
+                error: 'Invalid or unpublished Kids Monthly book',
+            });
+        }
+
+        const customBook = await CustomMonthlyBook.create({
+            userId,
+            kidId,
+            sourceBookId: new mongoose.Types.ObjectId(sourceBookId),
+            childName: String(childName).trim(),
+            childCharacterImageUrl: childCharacterImageUrl || null,
+            hasTrialOrPaid: Boolean(hasTrialOrPaid),
+            status: 'pending',
+        });
+
+        const { runMonthlyBookGeneration } = require('../jobs/monthlyBookGenerator');
+        runMonthlyBookGeneration(customBook._id).catch((err) => {
+            console.error('Monthly book generation error:', err);
+        });
+
+        res.status(202).json({
+            success: true,
+            customMonthlyBookId: customBook._id,
+            message: 'Your story is being created. We will notify you when it is ready.',
+        });
+    } catch (err) {
+        console.error('Monthly book create-from-book error:', err);
+        res.status(500).json({ success: false, error: err.message || 'Failed to create monthly book' });
+    }
+});
+
+/**
  * GET /api/monthly-book/status/:customMonthlyBookId
  * Check status of a custom book (for polling or deep link).
  */
@@ -122,15 +181,17 @@ router.get('/status/:customMonthlyBookId', async (req, res) => {
         const custom = await CustomMonthlyBook.findById(customMonthlyBookId)
             .populate('templateId', 'title')
             .populate('bookId', 'title')
+            .populate('sourceBookId', 'title')
             .lean();
         if (!custom) {
             return res.status(404).json({ success: false, error: 'Not found' });
         }
+        const title = custom.bookId?.title || custom.templateId?.title || custom.sourceBookId?.title;
         res.json({
             success: true,
             status: custom.status,
             bookId: custom.bookId?._id || null,
-            title: custom.bookId?.title || custom.templateId?.title,
+            title: title || null,
         });
     } catch (err) {
         console.error('Monthly book status error:', err);

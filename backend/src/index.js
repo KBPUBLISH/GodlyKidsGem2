@@ -15,6 +15,9 @@ const {
 const app = express();
 const PORT = process.env.PORT || 5001;
 
+// Trust first proxy (Render, etc.) so X-Forwarded-For is used and rate-limit identifies clients correctly
+app.set('trust proxy', 1);
+
 // ===========================================
 // SECURITY MIDDLEWARE
 // ===========================================

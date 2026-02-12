@@ -35,6 +35,7 @@ interface MyMonthlyBook {
   childName?: string;
   createdAt: string;
   status: 'pending' | 'generating' | 'completed';
+  pageCount?: number;
 }
 
 const LibraryPage: React.FC = () => {
@@ -380,12 +381,12 @@ const LibraryPage: React.FC = () => {
           </div>
         )}
 
-        {/* Your created stories (Create Your Story) - in-progress + completed */}
+        {/* My Books (Create Your Story) - in-progress + completed */}
         {FEATURE_CREATE_YOUR_STORY && (myMonthlyBooks.length > 0 || myMonthlyBooksLoading) && (
           <div className="mb-8">
-            <SectionTitle title="Your created stories" />
+            <SectionTitle title="My Books" />
             {myMonthlyBooksLoading ? (
-              <div className="py-6 text-center text-white/60 text-sm">Loading your stories...</div>
+              <div className="py-6 text-center text-white/60 text-sm">Loading your books...</div>
             ) : (
               <div className="w-screen overflow-x-auto no-scrollbar pb-4 -mx-4">
                 <div className="flex space-x-3 px-4">
@@ -395,15 +396,22 @@ const LibraryPage: React.FC = () => {
                       className="flex-shrink-0 w-[42vw] md:w-[30vw] lg:w-[23vw] max-w-[200px]"
                     >
                       {item.status === 'completed' && item.bookId ? (
-                        <BookCard
-                          book={{
-                            id: item.bookId,
-                            title: item.title,
-                            coverUrl: item.coverImageUrl || '',
-                            author: item.childName,
-                          } as any}
-                          onClick={(id) => navigate(`/book/${id}`, { state: { from: '/library' } })}
-                        />
+                        <div className="relative">
+                          <BookCard
+                            book={{
+                              id: item.bookId,
+                              title: item.title,
+                              coverUrl: item.coverImageUrl || '',
+                              author: item.childName,
+                            } as any}
+                            onClick={(id) => navigate(`/book/${id}`, { state: { from: '/library' } })}
+                          />
+                          {item.pageCount != null && item.pageCount > 0 && (
+                            <p className="text-amber-200/90 text-xs text-center mt-1 px-1">
+                              {item.pageCount} {item.pageCount === 1 ? 'page' : 'pages'}
+                            </p>
+                          )}
+                        </div>
                       ) : (
                         <div className="bg-white/10 backdrop-blur-sm rounded-2xl overflow-hidden border-2 border-amber-400/30">
                           <div className="aspect-square relative bg-gradient-to-br from-amber-900/40 to-amber-800/30">

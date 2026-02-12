@@ -3,6 +3,7 @@ const router = express.Router();
 const mongoose = require('mongoose');
 const MonthlyBookTemplate = require('../models/MonthlyBookTemplate');
 const CustomMonthlyBook = require('../models/CustomMonthlyBook');
+const Book = require('../models/Book');
 const SavedCharacter = require('../models/SavedCharacter');
 const AppUser = require('../models/AppUser');
 
@@ -224,8 +225,19 @@ router.get('/my-books', async (req, res) => {
             .limit(50)
             .lean();
 
+        const completedBookIds = list.filter((b) => b.status === 'completed' && b.bookId?._id).map((b) => b.bookId._id);
+        let pageCountByBookId = {};
+        if (completedBookIds.length > 0) {
+            const counts = await Book.aggregate([
+                { $match: { _id: { $in: completedBookIds } } },
+                { $project: { pageCount: { $size: { $ifNull: ['$pages', []] } } } },
+            ]).exec();
+            counts.forEach((c) => { pageCountByBookId[String(c._id)] = c.pageCount; });
+        }
+
         const books = list.map((b) => {
             if (b.status === 'completed' && b.bookId) {
+                const bookIdStr = String(b.bookId._id);
                 return {
                     customMonthlyBookId: b._id,
                     bookId: b.bookId._id,
@@ -234,6 +246,7 @@ router.get('/my-books', async (req, res) => {
                     childName: b.childName,
                     createdAt: b.createdAt,
                     status: 'completed',
+                    pageCount: pageCountByBookId[bookIdStr],
                 };
             }
             const source = b.sourceBookId || b.templateId;

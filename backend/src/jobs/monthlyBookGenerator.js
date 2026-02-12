@@ -183,7 +183,7 @@ async function gatherPageReferenceImages(customBook, pageDoc) {
 /**
  * Generate one page image with Vertex Gemini 2.5 Flash Image for all pages (superior consistency).
  * Uses child + portal character reference images when available; supports text-only when no refs.
- * Returns GCS URL or null on failure (caller falls back to Imagen).
+ * Returns GCS URL or null on failure (caller retries; no Imagen fallback).
  */
 async function generatePageImageWithVertexGemini(customBook, pageDoc, characterStylePrompt, pageIndex) {
     const customMonthlyBookId = String(customBook._id);
@@ -264,17 +264,22 @@ async function generatePageImageWithVertexGemini(customBook, pageDoc, characterS
     }
 }
 
+/** Number of Gemini attempts per page before failing (no Imagen fallback). */
+const PAGE_GEMINI_MAX_ATTEMPTS = 3;
+
+/** Delay in ms between Gemini retries for page generation. */
+const PAGE_GEMINI_RETRY_DELAY_MS = 2000;
+
 /**
- * Generate one page background image for Book-based flow. Tries Vertex Gemini first (for consistency with character), then Imagen.
- * Uses page.sceneDescription or page text + character style; uploads to GCS and returns URL.
- * Throws on any failure (no credentials, both Gemini and Imagen fail, or GCS error) so the book is not created.
+ * Generate one page background image for Book-based flow. Gemini 2.5 Flash only; retries up to PAGE_GEMINI_MAX_ATTEMPTS.
+ * No Imagen fallback. Uses page.sceneDescription or page text + character style; uploads to GCS and returns URL.
+ * Throws if all Gemini attempts fail or credentials/GCS missing.
  */
 async function generatePageImageForBook(customBook, pageDoc, characterStylePrompt, pageIndex) {
-    const customMonthlyBookId = String(customBook._id);
     const pageNumber = pageIndex + 1;
     const token = await getImagenAccessToken();
     if (!token) {
-        throw new Error('Imagen credentials not configured (GCS_CREDENTIALS_JSON or GOOGLE_SERVICE_ACCOUNT_JSON). Cannot generate page ' + pageNumber + '.');
+        throw new Error('GCP credentials not configured (GCS_CREDENTIALS_JSON or GOOGLE_SERVICE_ACCOUNT_JSON). Cannot generate page ' + pageNumber + '.');
     }
     const credentialsJson = process.env.GCS_CREDENTIALS_JSON || process.env.GOOGLE_SERVICE_ACCOUNT_JSON;
     let projectId = null;
@@ -282,83 +287,22 @@ async function generatePageImageForBook(customBook, pageDoc, characterStylePromp
         projectId = credentialsJson ? JSON.parse(credentialsJson).project_id : null;
     } catch (_) {}
     if (!projectId) {
-        throw new Error('Imagen project_id not found in credentials. Cannot generate page ' + pageNumber + '.');
+        throw new Error('GCP project_id not found in credentials. Cannot generate page ' + pageNumber + '.');
     }
     if (!bucket) {
         throw new Error('GCS bucket not configured (GCS_BUCKET_NAME). Cannot upload page ' + pageNumber + ' image.');
     }
-    const { prompt, hasKidReference } = await buildScenePrompt(pageDoc, characterStylePrompt, customBook.childName);
 
-    // Use Vertex Gemini 2.5 Flash Image for all pages (superior). Refs: child + portal characters (e.g. Jesus, Disney).
-    const geminiUrl = await generatePageImageWithVertexGemini(customBook, pageDoc, characterStylePrompt, pageIndex);
-    if (geminiUrl) return geminiUrl;
-
-    // Fall back to Imagen if Gemini fails.
-    const referenceImages = [];
-    const subjectRefId = 1;
-    if (hasKidReference && customBook.childCharacterImageUrl) {
-        const childImageBase64 = await fetchImageAsBase64(customBook.childCharacterImageUrl);
-        if (childImageBase64) {
-            const childName = customBook.childName || 'the child';
-            referenceImages.push({
-                referenceId: subjectRefId,
-                referenceImage: { bytesBase64Encoded: childImageBase64 },
-                referenceType: 'REFERENCE_TYPE_SUBJECT',
-                subjectImageConfig: {
-                    subjectDescription: `A child named ${childName}; include this child in the scene as described in the prompt.`,
-                    subjectType: 'SUBJECT_TYPE_PERSON',
-                },
-            });
+    let lastError = null;
+    for (let attempt = 1; attempt <= PAGE_GEMINI_MAX_ATTEMPTS; attempt++) {
+        const geminiUrl = await generatePageImageWithVertexGemini(customBook, pageDoc, characterStylePrompt, pageIndex);
+        if (geminiUrl) return geminiUrl;
+        if (attempt < PAGE_GEMINI_MAX_ATTEMPTS) {
+            console.log('MonthlyBookGenerator: Gemini page', pageNumber, 'attempt', attempt, 'failed; retrying in', PAGE_GEMINI_RETRY_DELAY_MS, 'ms...');
+            await new Promise((r) => setTimeout(r, PAGE_GEMINI_RETRY_DELAY_MS));
         }
     }
-    const effectivePrompt = referenceImages.length
-        ? (prompt + ` Include the child [${subjectRefId}] in the scene.`)
-        : prompt;
-    const instancesPayload = referenceImages.length ? { prompt: effectivePrompt, referenceImages } : { prompt: effectivePrompt };
-    const model = referenceImages.length > 0 ? 'imagen-3.0-capability-001' : 'imagen-3.0-generate-001';
-
-    const response = await axios.post(
-        `https://us-central1-aiplatform.googleapis.com/v1/projects/${projectId}/locations/us-central1/publishers/google/models/${model}:predict`,
-        {
-            instances: [instancesPayload],
-            parameters: {
-                sampleCount: 1,
-                aspectRatio: '9:16',
-                safetyFilterLevel: 'block_some',
-                personGeneration: referenceImages.length ? 'allow_all' : 'dont_allow',
-            },
-        },
-        {
-            headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${token}`,
-            },
-            validateStatus: () => true,
-        }
-    );
-    if (response.status !== 200) {
-        const errText = typeof response.data === 'string' ? response.data : JSON.stringify(response.data || {}).slice(0, 300);
-        throw new Error('Imagen API error for page ' + pageNumber + ' (status ' + response.status + '): ' + errText);
-    }
-    const data = response.data;
-    if (!data.predictions || !data.predictions[0]) {
-        throw new Error('Imagen returned no image for page ' + pageNumber + '.');
-    }
-    const imageBase64 = data.predictions[0].bytesBase64Encoded;
-    const buffer = Buffer.from(imageBase64, 'base64');
-    const hash = crypto.createHash('md5').update(customMonthlyBookId + pageNumber + Date.now()).digest('hex').slice(0, 8);
-    const filename = `monthly-books/${customMonthlyBookId}/page-${pageNumber}-${hash}.png`;
-    const blob = bucket.file(filename);
-    await blob.save(buffer, {
-        metadata: {
-            contentType: 'image/png',
-            cacheControl: 'public, max-age=86400',
-        },
-    });
-    await blob.makePublic().catch(() => {});
-    const url = `https://storage.googleapis.com/${bucket.name}/${filename}`;
-    console.log('MonthlyBookGenerator: Generated background for page', pageNumber, 'with Imagen', url);
-    return url;
+    throw new Error('Page ' + pageNumber + ': Gemini 2.5 Flash Image failed after ' + PAGE_GEMINI_MAX_ATTEMPTS + ' attempts. No Imagen fallback.');
 }
 
 /**

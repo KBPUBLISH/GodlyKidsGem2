@@ -152,6 +152,35 @@ router.delete('/:id', async (req, res) => {
     }
 });
 
+// POST clear all page backgrounds for a book (e.g. Kids Monthly template – keep prompts only)
+// Route: POST /api/pages/clear-backgrounds/book/:bookId
+router.post('/clear-backgrounds/book/:bookId', async (req, res) => {
+    try {
+        const bookId = req.params.bookId;
+        if (!bookId || !mongoose.Types.ObjectId.isValid(bookId) || String(bookId).length !== 24) {
+            return res.status(400).json({ message: 'Invalid bookId' });
+        }
+        const result = await Page.updateMany(
+            { bookId },
+            {
+                $set: {
+                    backgroundUrl: '',
+                    backgroundType: 'image',
+                },
+                $unset: {
+                    'files.background': 1,
+                    'content.backgroundUrl': 1,
+                },
+            }
+        );
+        const pages = await Page.find({ bookId }).sort({ pageNumber: 1 });
+        res.json({ message: 'Backgrounds cleared', modifiedCount: result.modifiedCount, pages });
+    } catch (error) {
+        console.error('Clear backgrounds error:', error.message);
+        res.status(500).json({ message: error.message });
+    }
+});
+
 // POST reorder pages for a book
 // Body: { bookId, pageOrder: [{ pageId: string, newPageNumber: number }] }
 // Uses two-phase update to avoid duplicate key conflicts on unique index

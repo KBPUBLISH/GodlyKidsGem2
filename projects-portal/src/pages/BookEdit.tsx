@@ -83,6 +83,8 @@ const BookEdit: React.FC = () => {
     // Kid-created books from this template (read-only list)
     const [booksFromTemplate, setBooksFromTemplate] = useState<Array<{ bookId: string; title: string; coverImageUrl?: string; childName: string; createdAt: string }>>([]);
     const [loadingBooksFromTemplate, setLoadingBooksFromTemplate] = useState(false);
+    const [clearingBackgrounds, setClearingBackgrounds] = useState(false);
+    const [clearBackgroundsMessage, setClearBackgroundsMessage] = useState<string | null>(null);
 
     // Load existing book data
     useEffect(() => {
@@ -731,6 +733,35 @@ const BookEdit: React.FC = () => {
                                         </option>
                                     ))}
                                 </select>
+                            </div>
+                        )}
+                        {bookType === 'kids_monthly' && bookId && (
+                            <div className="mt-4 p-4 rounded-lg bg-amber-50 border border-amber-200">
+                                <h3 className="text-sm font-semibold text-amber-900 mb-1">Template: blank page backgrounds</h3>
+                                <p className="text-xs text-amber-800 mb-3">Kids Monthly templates should have no page images so each kid gets generated images. Clear all page backgrounds below, then edit image prompts in Page Editor.</p>
+                                <button
+                                    type="button"
+                                    disabled={clearingBackgrounds}
+                                    onClick={async () => {
+                                        setClearBackgroundsMessage(null);
+                                        setClearingBackgrounds(true);
+                                        try {
+                                            const res = await apiClient.post(`/api/pages/clear-backgrounds/book/${bookId}`);
+                                            const n = res.data?.modifiedCount ?? 0;
+                                            setClearBackgroundsMessage(`Cleared ${n} page background(s). Reload Page Editor to see blank thumbnails.`);
+                                        } catch (err: any) {
+                                            setClearBackgroundsMessage(err.response?.data?.message || err.message || 'Failed to clear');
+                                        } finally {
+                                            setClearingBackgrounds(false);
+                                        }
+                                    }}
+                                    className="px-3 py-2 text-sm font-medium bg-amber-200 hover:bg-amber-300 text-amber-900 rounded disabled:opacity-50"
+                                >
+                                    {clearingBackgrounds ? 'Clearing…' : 'Clear all page backgrounds for this template'}
+                                </button>
+                                {clearBackgroundsMessage && (
+                                    <p className="mt-2 text-sm text-amber-800">{clearBackgroundsMessage}</p>
+                                )}
                             </div>
                         )}
                         {bookType === 'kids_monthly' && bookId && (

@@ -144,31 +144,24 @@ const CharacterStyleSelector: React.FC<CharacterStyleSelectorProps> = ({
                 onClick={() => handleStyleClick(style.id)}
                 disabled={isGenerating}
                 className={`
-                  relative p-4 rounded-2xl transition-all duration-200
+                  relative rounded-2xl overflow-hidden border-2 transition-all duration-200 focus:outline-none focus:ring-0
                   ${selectedStyle === style.id 
-                    ? `bg-gradient-to-br ${style.gradient} scale-[1.02] shadow-lg ring-4 ring-[#FFD700]` 
-                    : 'bg-[#3A2A1A] hover:bg-[#4A3A2A]'
+                    ? 'scale-[1.02] shadow-lg ring-4 ring-[#FFD700] border-amber-400' 
+                    : 'border-white/20 hover:border-amber-400/50'
                   }
                   ${isGenerating ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}
                 `}
               >
-                {/* Selection checkmark */}
                 {selectedStyle === style.id && (
-                  <div className="absolute top-2 right-2 p-1 bg-[#FFD700] rounded-full">
+                  <div className="absolute top-2 right-2 z-10 p-1 bg-[#FFD700] rounded-full">
                     <Check className="w-4 h-4 text-[#2A1810]" />
                   </div>
                 )}
-
-                {/* Style preview */}
-                <div className="text-4xl mb-2">{style.previewEmoji}</div>
-                
-                {/* Style info */}
-                <h3 className={`font-bold text-lg ${selectedStyle === style.id ? 'text-white' : 'text-[#FFD700]'}`}>
-                  {style.name}
-                </h3>
-                <p className={`text-xs ${selectedStyle === style.id ? 'text-white/80' : 'text-white/60'}`}>
-                  {style.description}
-                </p>
+                <img
+                  src={`/assets/images/create-story-style-${style.id}.png`}
+                  alt={style.name}
+                  className="w-full aspect-[3/4] object-cover object-top"
+                />
               </button>
             ))}
           </div>

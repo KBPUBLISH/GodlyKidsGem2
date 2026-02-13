@@ -6,7 +6,7 @@ import { getApiBaseUrl } from '../services/apiService';
 import { useUser } from '../context/UserContext';
 import { useSubscription } from '../context/SubscriptionContext';
 import { authService } from '../services/authService';
-import { BookOpen, ChevronRight, Sparkles, RotateCcw } from 'lucide-react';
+import { BookOpen, Sparkles, RotateCcw } from 'lucide-react';
 
 type Step = 1 | 2 | 3 | 4;
 
@@ -44,6 +44,7 @@ const CreateYourStoryPage: React.FC = () => {
   const [selectedStyleId, setSelectedStyleId] = useState<string | null>(null);
   const [isGeneratingCharacter, setIsGeneratingCharacter] = useState(false);
   const [submitted, setSubmitted] = useState(false);
+  const [isFlashTransition, setIsFlashTransition] = useState(false);
   const characterGenerationIdRef = useRef(0);
 
   const currentKid = kids.find((k) => k.id === currentProfileId);
@@ -211,9 +212,45 @@ const CreateYourStoryPage: React.FC = () => {
   const selectedStory = stories.find((s) => s._id === selectedBookId);
   const bibleCharacterName = selectedStory?.bibleCharacter?.displayName || 'your hero';
 
+  const isScreenOne = !submitted && step === 1;
+  const isStyleStep = !submitted && step === 2;
+  const pageBg = isScreenOne
+    ? { backgroundImage: 'url(/assets/images/create-story-screen1-background.png)', backgroundSize: 'cover', backgroundPosition: 'center' }
+    : isStyleStep
+      ? { backgroundImage: 'url(/assets/images/create-story-style-background.png)', backgroundSize: 'cover', backgroundPosition: 'center' }
+      : undefined;
   return (
-    <div className="flex flex-col min-h-full bg-gradient-to-b from-[#1a1a2e] to-[#16213e]">
-      <div className="flex-1 px-4 pt-8 pb-12 overflow-y-auto" style={{ paddingTop: 'max(2rem, var(--safe-area-top, 0px))' }}>
+    <div
+      className={`flex flex-col min-h-full relative ${isScreenOne || isStyleStep ? '' : 'bg-gradient-to-b from-[#1a1a2e] to-[#16213e]'}`}
+      style={pageBg}
+    >
+      <style>{`
+        @keyframes screen-flash {
+          0% { opacity: 0; }
+          12% { opacity: 1; }
+          45% { opacity: 1; }
+          80% { opacity: 0.4; }
+          100% { opacity: 0; }
+        }
+        @keyframes chest-pop-click {
+          0% { transform: scale(1); }
+          35% { transform: scale(1.18); }
+          70% { transform: scale(1.08); }
+          100% { transform: scale(1); }
+        }
+      `}</style>
+      {isFlashTransition && (
+        <div
+          className="fixed inset-0 z-[100] pointer-events-none bg-white"
+          style={{ animation: 'screen-flash 0.55s ease-out forwards' }}
+          onAnimationEnd={() => {
+            setIsFlashTransition(false);
+            setStep(2);
+          }}
+          aria-hidden
+        />
+      )}
+      <div className="flex-1 px-4 pt-8 pb-12 overflow-y-auto relative z-10" style={{ paddingTop: 'max(2rem, var(--safe-area-top, 0px))' }}>
         {submitted ? (
           <div className="text-center py-12">
             <div className="w-20 h-20 mx-auto rounded-full bg-amber-500/30 flex items-center justify-center mb-6">
@@ -238,53 +275,114 @@ const CreateYourStoryPage: React.FC = () => {
             )}
 
             {step === 1 && (
-              <div className="space-y-6">
-                <h2 className="text-xl font-bold text-white">What name should we use in your story?</h2>
-                <input
-                  type="text"
-                  value={childName}
-                  onChange={(e) => setChildName(e.target.value)}
-                  placeholder="Enter name"
-                  className="w-full bg-black/30 border border-white/20 rounded-xl px-4 py-3 text-white placeholder:text-white/50 focus:outline-none focus:border-amber-400/50"
-                />
-                <button
-                  onClick={() => setStep(2)}
-                  disabled={!childName.trim()}
-                  className="w-full py-3 rounded-xl bg-amber-500 text-white font-bold flex items-center justify-center gap-2 disabled:opacity-50"
+              <div className="flex flex-col min-h-[100dvh] min-h-[100vh]">
+                <div className="flex-shrink-0 pt-2 w-full flex justify-center">
+                  <img
+                    src="/assets/images/create-story-header.png"
+                    alt="Jump into the Bible! Create your own Story!"
+                    className="max-w-[320px] w-full block"
+                  />
+                </div>
+                <div
+                  className="relative w-full max-w-4xl mx-auto bg-no-repeat bg-center bg-contain min-h-[280px] flex items-center justify-center py-8 px-12 flex-shrink-0 -mt-14"
+                  style={{ backgroundImage: 'url(/assets/images/create-story-cloud-input.png)' }}
                 >
-                  Next <ChevronRight className="w-5 h-5" />
+                  <input
+                    type="text"
+                    value={childName}
+                    onChange={(e) => setChildName(e.target.value)}
+                    placeholder="What is your captain's name?"
+                    className="w-full min-w-0 bg-transparent border-0 text-center text-xl sm:text-2xl font-medium text-[#2c1810] placeholder:text-[#2c1810]/70 focus:outline-none focus:ring-0 px-4"
+                    aria-label="Captain's name"
+                  />
+                </div>
+                <div className="flex-1 min-h-[2rem]" />
+                <style>{`
+                  @keyframes chest-jiggle {
+                    0%, 18%, 22%, 48%, 52%, 78%, 82%, 100% { transform: rotate(0deg); }
+                    19% { transform: rotate(-4deg); }
+                    20% { transform: rotate(4deg); }
+                    21% { transform: rotate(-2deg); }
+                    49% { transform: rotate(-4deg); }
+                    50% { transform: rotate(4deg); }
+                    51% { transform: rotate(-2deg); }
+                    79% { transform: rotate(-4deg); }
+                    80% { transform: rotate(4deg); }
+                    81% { transform: rotate(-2deg); }
+                  }
+                `}</style>
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (!childName.trim()) return;
+                    setIsFlashTransition(true);
+                  }}
+                  disabled={!childName.trim()}
+                  className="flex justify-center items-end disabled:opacity-50 focus:outline-none focus:ring-0 rounded-lg flex-shrink-0 pb-4 mb-20"
+                  aria-label="Next"
+                >
+                  <img
+                    src="/assets/images/create-story-next-button.png"
+                    alt="Next"
+                    className="max-w-[210px] w-full h-auto object-contain"
+                    style={{
+                      animation: isFlashTransition
+                        ? 'chest-pop-click 0.32s ease-out forwards'
+                        : 'chest-jiggle 5s ease-in-out infinite',
+                    }}
+                  />
                 </button>
               </div>
             )}
 
             {step === 2 && (
-              <div className="space-y-6">
-                <h2 className="text-xl font-bold text-white">{selectedStyleId ? 'Now take your selfie' : '1. Choose your character style'}</h2>
-                <p className="text-white/70 text-sm">
+              <div className="flex flex-col items-center gap-2 min-h-0 flex-1 overflow-visible">
+                <div className="flex justify-center flex-shrink-0">
+                  <img
+                    src="/assets/images/create-story-you-are-the-character.png"
+                    alt="You are the Character!"
+                    className="max-w-[200px] w-full h-auto block"
+                  />
+                </div>
+                <h2 className="text-base font-bold text-white flex-shrink-0">{selectedStyleId ? 'Now take your selfie' : '1. Choose your character style'}</h2>
+                <p className="text-white/70 text-xs flex-shrink-0 min-w-0">
                   {selectedStyleId
                     ? "2. We'll turn your photo into a full-body character in a scene."
                     : "Pick a style below (Pixar, Minecraft, Disney…). Then you'll take a selfie and we'll place you full-body in a fun scene."}
                 </p>
                 {!selectedStyleId ? (
-                  <div className="grid grid-cols-2 gap-3">
+                  <div className="grid grid-cols-2 gap-2 max-w-[240px] mx-auto flex-1 min-h-0 content-start">
                     {CHARACTER_STYLES.map((style) => (
                       <button
                         key={style.id}
                         onClick={() => setSelectedStyleId(style.id)}
-                        className={`p-4 rounded-2xl text-left border-2 transition-all bg-[#3A2A1A] hover:bg-[#4A3A2A] border-white/20 hover:border-amber-400/50`}
+                        className="block w-full focus:outline-none focus:ring-0 active:opacity-90"
+                        type="button"
                       >
-                        <span className="text-3xl block mb-2">{style.previewEmoji}</span>
-                        <span className="font-bold text-[#FFD700] block">{style.name}</span>
-                        <span className="text-xs text-white/70">{style.description}</span>
+                        <img
+                          src={`/assets/images/create-story-style-${style.id}.png`}
+                          alt={style.name}
+                          className="w-full h-auto aspect-[3/4] object-contain object-top block"
+                        />
                       </button>
                     ))}
                   </div>
                 ) : selectedStyleId && (
                   <>
                     {avatarUrl ? (
-                      <div className="space-y-3">
-                        <div className="rounded-2xl overflow-hidden border-2 border-amber-400/50">
-                          <img src={avatarUrl} alt="Your character" className="w-full aspect-square object-cover" />
+                      <div className="space-y-3 w-full flex flex-col items-center">
+                        <div className="relative w-full max-w-[320px] aspect-square mx-auto">
+                          <img
+                            src="/assets/images/create-story-selfie-frame.png"
+                            alt=""
+                            aria-hidden
+                            className="absolute inset-0 w-full h-full object-contain pointer-events-none"
+                          />
+                          <div className="absolute inset-0 flex items-center justify-center">
+                            <div className="w-[62%] h-[62%] rounded-full overflow-hidden bg-[#0a0a0a] flex items-center justify-center">
+                              <img src={avatarUrl} alt="Your character" className="w-full h-full object-cover" />
+                            </div>
+                          </div>
                         </div>
                         <button
                           type="button"
@@ -297,17 +395,28 @@ const CreateYourStoryPage: React.FC = () => {
                         </button>
                       </div>
                     ) : (
-                      <button
-                        onClick={() => setShowSelfieModal(true)}
-                        disabled={isGeneratingCharacter}
-                        className="w-full aspect-square max-w-[280px] mx-auto rounded-2xl border-2 border-dashed border-amber-400/50 bg-amber-500/10 flex flex-col items-center justify-center gap-2 text-amber-200"
-                      >
-                        {isGeneratingCharacter ? <span>Creating your character...</span> : <><BookOpen className="w-12 h-12" /> Tap to take selfie</>}
-                      </button>
+                      <div className="relative w-full max-w-[320px] aspect-square mx-auto">
+                        <img
+                          src="/assets/images/create-story-selfie-frame.png"
+                          alt=""
+                          aria-hidden
+                          className="absolute inset-0 w-full h-full object-contain pointer-events-none"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setShowSelfieModal(true)}
+                          disabled={isGeneratingCharacter}
+                          className="absolute inset-0 flex items-center justify-center focus:outline-none focus:ring-0"
+                        >
+                          <div className="w-[62%] h-[62%] rounded-full overflow-hidden bg-amber-500/10 border-2 border-dashed border-amber-400/50 flex flex-col items-center justify-center gap-2 text-amber-200">
+                            {isGeneratingCharacter ? <span className="text-sm">Creating your character...</span> : <><BookOpen className="w-10 h-10" /> <span className="text-sm">Tap to take selfie</span></>}
+                          </div>
+                        </button>
+                      </div>
                     )}
                   </>
                 )}
-                <div className="flex gap-3">
+                <div className="flex gap-2 flex-shrink-0 items-center w-full">
                   <button
                     onClick={() => {
                     if (selectedStyleId) {
@@ -318,17 +427,19 @@ const CreateYourStoryPage: React.FC = () => {
                       setStep(1);
                     }
                   }}
-                    className="flex-1 py-3 rounded-xl bg-white/10 text-white"
+                    className="flex-1 py-2.5 text-sm rounded-xl bg-white/10 text-white"
                   >
                     Back
                   </button>
                   {selectedStyleId && (
                     <button
+                      type="button"
                       onClick={() => setStep(3)}
                       disabled={!avatarUrl}
-                      className="flex-1 py-3 rounded-xl bg-amber-500 text-white font-bold flex items-center justify-center gap-2 disabled:opacity-50"
+                      className="flex-1 flex justify-center disabled:opacity-50 focus:outline-none focus:ring-0 rounded-lg"
+                      aria-label="Next"
                     >
-                      Next <ChevronRight className="w-5 h-5" />
+                      <img src="/assets/images/create-story-next-button.png" alt="Next" className="max-h-9 w-auto object-contain" />
                     </button>
                   )}
                 </div>
@@ -368,11 +479,13 @@ const CreateYourStoryPage: React.FC = () => {
                     Back
                   </button>
                   <button
+                    type="button"
                     onClick={() => setStep(4)}
                     disabled={!selectedBookId}
-                    className="flex-1 py-3 rounded-xl bg-amber-500 text-white font-bold flex items-center justify-center gap-2 disabled:opacity-50"
+                    className="flex-1 flex justify-center disabled:opacity-50 focus:outline-none focus:ring-2 focus:ring-amber-400/50 rounded-lg"
+                    aria-label="Next"
                   >
-                    Next <ChevronRight className="w-5 h-5" />
+                    <img src="/assets/images/create-story-next-button.png" alt="Next" className="max-h-12 w-auto object-contain" />
                   </button>
                 </div>
               </div>
@@ -408,6 +521,7 @@ const CreateYourStoryPage: React.FC = () => {
         onCapture={handleSelfieCapture}
         onClose={() => setShowSelfieModal(false)}
         childName={childName || 'there'}
+        frameOverlayImageUrl="/assets/images/create-story-selfie-frame.png"
       />
 
       <CharacterStyleSelector

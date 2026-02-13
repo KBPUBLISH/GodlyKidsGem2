@@ -7,6 +7,8 @@ interface SelfieCaptureProps {
   onCapture: (imageBase64: string) => void;
   onClose: () => void;
   childName?: string;
+  /** When set, overlays this image (e.g. porthole frame) so the user frames their face in the circular window */
+  frameOverlayImageUrl?: string;
 }
 
 type CaptureState = 'preview' | 'countdown' | 'captured' | 'error';
@@ -15,7 +17,8 @@ const SelfieCapture: React.FC<SelfieCaptureProps> = ({
   isOpen,
   onCapture,
   onClose,
-  childName = 'there'
+  childName = 'there',
+  frameOverlayImageUrl
 }) => {
   const [state, setState] = useState<CaptureState>('preview');
   const [countdown, setCountdown] = useState(3);
@@ -235,16 +238,24 @@ const SelfieCapture: React.FC<SelfieCaptureProps> = ({
                 className={`w-full h-full object-cover ${facingMode === 'user' ? 'scale-x-[-1]' : ''}`}
               />
               
-              {/* Camera overlay guide */}
-              <div className="absolute inset-0 pointer-events-none">
-                {/* Face guide circle */}
-                <div className="absolute inset-[15%] border-4 border-white/30 rounded-full" />
-                
-                {/* Corner guides */}
-                <div className="absolute top-[10%] left-[10%] w-8 h-8 border-l-4 border-t-4 border-[#FFD700] rounded-tl-lg" />
-                <div className="absolute top-[10%] right-[10%] w-8 h-8 border-r-4 border-t-4 border-[#FFD700] rounded-tr-lg" />
-                <div className="absolute bottom-[10%] left-[10%] w-8 h-8 border-l-4 border-b-4 border-[#FFD700] rounded-bl-lg" />
-                <div className="absolute bottom-[10%] right-[10%] w-8 h-8 border-r-4 border-b-4 border-[#FFD700] rounded-br-lg" />
+              {/* Camera overlay guide: porthole frame or default circle + corners */}
+              <div className="absolute inset-0 pointer-events-none flex items-center justify-center">
+                {frameOverlayImageUrl ? (
+                  <img
+                    src={frameOverlayImageUrl}
+                    alt=""
+                    className="w-full h-full object-contain opacity-50"
+                    aria-hidden
+                  />
+                ) : (
+                  <>
+                    <div className="absolute inset-[15%] border-4 border-white/30 rounded-full" />
+                    <div className="absolute top-[10%] left-[10%] w-8 h-8 border-l-4 border-t-4 border-[#FFD700] rounded-tl-lg" />
+                    <div className="absolute top-[10%] right-[10%] w-8 h-8 border-r-4 border-t-4 border-[#FFD700] rounded-tr-lg" />
+                    <div className="absolute bottom-[10%] left-[10%] w-8 h-8 border-l-4 border-b-4 border-[#FFD700] rounded-bl-lg" />
+                    <div className="absolute bottom-[10%] right-[10%] w-8 h-8 border-r-4 border-b-4 border-[#FFD700] rounded-br-lg" />
+                  </>
+                )}
               </div>
 
               {/* Countdown overlay */}
@@ -309,7 +320,7 @@ const SelfieCapture: React.FC<SelfieCaptureProps> = ({
           {/* Tip */}
           {state !== 'captured' && (
             <p className="text-center text-white/60 text-sm">
-              Position your face in the circle and smile!
+              {frameOverlayImageUrl ? "Position your face in the porthole and smile!" : "Position your face in the circle and smile!"}
             </p>
           )}
         </div>

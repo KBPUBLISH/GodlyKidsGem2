@@ -144,10 +144,13 @@ const pageSchema = new mongoose.Schema({
     }],
     // Flag to use image sequence instead of single background image
     useImageSequence: { type: Boolean, default: false },
-    // Duration each image shows (in seconds)
-    imageSequenceDuration: { type: Number, default: 3 },
+    // Duration each image shows (in seconds) — default 10s for Ken Burns–style effect
+    imageSequenceDuration: { type: Number, default: 10 },
     // Animation effect for image sequence: 'none', 'panLeft', 'panRight', 'panUp', 'panDown', 'zoomIn', 'zoomOut', 'kenBurns'
     imageSequenceAnimation: { type: String, default: 'kenBurns' },
+    // Single background image animation (for pages with one image, e.g. kids monthly generated pages)
+    backgroundImageAnimation: { type: String, default: 'kenBurns' },
+    backgroundImageAnimationDuration: { type: Number, default: 10 },
     
     // Legacy fields (for backward compatibility)
     imageUrl: { type: String },

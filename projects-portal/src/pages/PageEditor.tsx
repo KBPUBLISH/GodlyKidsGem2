@@ -1305,6 +1305,24 @@ const PageEditor: React.FC = () => {
                     {/* Background */}
                     <div className="space-y-3">
                         <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider">Background</label>
+                        {bookType === 'kids_monthly' && (
+                            <div className="rounded-lg bg-amber-50 border border-amber-200 p-3 text-sm text-amber-900">
+                                <p className="font-medium">Template: keep page backgrounds blank</p>
+                                <p className="mt-1 text-amber-800">Images are generated for each kid when they create their book. Leave backgrounds empty here and use the <strong>Image prompt</strong> section below to describe each scene.</p>
+                                {backgroundPreview && (
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            setBackgroundFile(null);
+                                            setBackgroundPreview(null);
+                                        }}
+                                        className="mt-2 px-3 py-1.5 text-xs font-medium bg-amber-200 hover:bg-amber-300 text-amber-900 rounded"
+                                    >
+                                        Clear this page&apos;s background (template only)
+                                    </button>
+                                )}
+                            </div>
+                        )}
                         <div className="flex gap-2 mb-2">
                             <button
                                 onClick={() => setBackgroundType('image')}

@@ -14,8 +14,8 @@ PREFIX="backend"
 echo "→ Splitting subtree (prefix=$PREFIX) into branch backend-split..."
 git subtree split --prefix="$PREFIX" -b backend-split
 
-echo "→ Pushing backend-split to $REMOTE $BRANCH..."
-git push "$REMOTE" backend-split:"$BRANCH"
+echo "→ Pushing backend-split to $REMOTE $BRANCH (force; subtree history differs from remote)..."
+git push "$REMOTE" backend-split:"$BRANCH" --force
 
 echo "→ Deleting local branch backend-split..."
 git branch -D backend-split

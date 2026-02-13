@@ -62,8 +62,10 @@ router.post('/', async (req, res) => {
         // Image sequence settings
         imageSequence: req.body.imageSequence || [],
         useImageSequence: req.body.useImageSequence || false,
-        imageSequenceDuration: req.body.imageSequenceDuration || 3,
+        imageSequenceDuration: req.body.imageSequenceDuration ?? 10,
         imageSequenceAnimation: req.body.imageSequenceAnimation || 'kenBurns',
+        backgroundImageAnimation: req.body.backgroundImageAnimation ?? 'kenBurns',
+        backgroundImageAnimationDuration: req.body.backgroundImageAnimationDuration ?? 10,
         sceneDescription: req.body.sceneDescription, // Kids Monthly: prompt for on-demand background generation
         referenceCharacterIds: req.body.referenceCharacterIds || [], // Kids Monthly: saved characters to reference on this page
     });
@@ -107,6 +109,26 @@ router.put('/:id', async (req, res) => {
         }
         if (typeof req.body.scrollHeight === 'number') {
             page.scrollHeight = req.body.scrollHeight;
+        }
+        // Keep scrollUrl and files.scroll in sync so book reader and generator find scroll from either location
+        if (req.body.scrollUrl !== undefined) {
+            page.scrollUrl = req.body.scrollUrl || '';
+            if (!page.files) page.files = {};
+            page.files.scroll = req.body.scrollUrl ? { url: req.body.scrollUrl } : undefined;
+        }
+
+        // When background is cleared (empty string), clear both legacy and files.background so template pages stay blank (e.g. kids_monthly)
+        if (req.body.backgroundUrl === '' || req.body.backgroundUrl === null) {
+            page.backgroundUrl = '';
+            page.backgroundType = 'image';
+            if (page.files && page.files.background) {
+                page.files.background = undefined;
+            }
+            if (page.content && page.content.backgroundUrl) {
+                page.content.backgroundUrl = undefined;
+            }
+            delete req.body.backgroundUrl;
+            delete req.body.backgroundType;
         }
 
         Object.assign(page, req.body);

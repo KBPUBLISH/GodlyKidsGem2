@@ -37,11 +37,12 @@ async function getImagenAccessToken() {
 }
 
 /**
- * Substitute {childName} in template text.
+ * Substitute {childName}, {kidname}, {kidName}, etc. in template text.
+ * Case-insensitive; supports childName and kidname (and "child name", "kid name") so portal text shows the actual name.
  */
 function substituteChildName(text, childName) {
     if (!text || !childName) return text || '';
-    return String(text).replace(/\{childName\}/g, childName);
+    return String(text).replace(/\{(?:childName|child name|kidname|kid name)\}/gi, childName);
 }
 
 /**
@@ -268,12 +269,13 @@ async function generatePageImageWithVertexGemini(customBook, pageDoc, characterS
     const refDescription = referenceImages.length
         ? referenceImages.map((r, i) => `Image ${i + 1}: ${r.label}`).join('. ')
         : '';
-    const firstRefIsChild = referenceImages.length > 0 && (referenceImages[0].label === 'the child' || referenceImages[0].label === 'child');
-    const childConsistencyInstruction = firstRefIsChild
-        ? ` IMPORTANT: The child (Image 1) must look exactly as in the reference photo in every image: same face, same hair, same modern clothes. Do not change their clothing to match the time period or setting - they are a modern-day child placed in the scene, like a real photo of them in that moment. Keep their appearance identical across all images.`
+    const firstRefIsPerson = referenceImages.length > 0 && (referenceImages[0].label === 'the child' || referenceImages[0].label === 'child');
+    // Age-neutral: match the person in the photo (adult or child). Do not force a "child" look if the selfie is an adult.
+    const personConsistencyInstruction = firstRefIsPerson
+        ? ` IMPORTANT: The person in the reference photo (Image 1) must look exactly as in that photo in every image: same face, same hair, same clothing. Match their age—if the reference is an adult, depict them as an adult; if a child, as a child. Do not change their clothing to match the time period. Keep their appearance identical across all images.`
         : '';
     const geminiPrompt = referenceImages.length
-        ? `Using the provided reference images (${refDescription}), generate one image: ${prompt}${childConsistencyInstruction} Place each character in the scene as described. Children's book illustration style, warm inviting colors, soft lighting, suitable for ages 4-12, Christian faith theme, no text in image. Vertical 9:16 composition.`
+        ? `Using the provided reference images (${refDescription}), generate one image: ${prompt}${personConsistencyInstruction} Place each character in the scene as described. Children's book illustration style, warm inviting colors, soft lighting, suitable for ages 4-12, Christian faith theme, no text in image. Vertical 9:16 composition.`
         : `Generate one image: ${prompt} Children's book illustration style, warm inviting colors, soft lighting, suitable for ages 4-12, Christian faith theme, no text in image. Vertical 9:16 composition.`;
 
     const parts = [{ text: geminiPrompt }];
@@ -460,17 +462,17 @@ async function generateCoverImageForBook(customBook, sourceBook) {
             referenceImage: { bytesBase64Encoded: childImageBase64 },
             referenceType: 'REFERENCE_TYPE_SUBJECT',
             subjectImageConfig: {
-                subjectDescription: `A child named ${childName}, include this child in the scene with ${characterName}`,
+                subjectDescription: `The person in this photo (${childName}); match their age—adult or child. Include them in the scene with ${characterName}.`,
                 subjectType: 'SUBJECT_TYPE_PERSON',
             },
         });
     }
 
     const prompt = templateCoverBase64
-        ? `Recreate this book cover in the same style and composition. Feature the child [${subjectRefId || 1}] and ${characterName} (${characterStyle}). Children's book illustration, Christian faith theme, ages 4-12, no text in image.`
+        ? `Recreate this book cover in the same style and composition. Feature the person [${subjectRefId || 1}] and ${characterName} (${characterStyle}). Match the age of the person in the reference (adult or child). Children's book illustration, Christian faith theme, ages 4-12, no text in image.`
         : subjectRefId
-            ? `Children's book cover: The child [${subjectRefId}] and ${characterName} (${characterStyle}) standing together in a warm, magical storybook scene. Both characters visible and friendly, side by side. Children's book illustration style, Christian faith theme, suitable for ages 4-12, no text in image.`
-            : `Children's book cover: A child named ${childName} and ${characterName} (${characterStyle}) standing together in a warm, magical storybook scene. Both characters visible and friendly, side by side. Children's book illustration style, Christian faith theme, suitable for ages 4-12, no text in image.`;
+            ? `Children's book cover: The person [${subjectRefId}] and ${characterName} (${characterStyle}) standing together in a warm, magical storybook scene. Match the age of the person in the reference (adult or child). Both characters visible and friendly, side by side. Children's book illustration style, Christian faith theme, suitable for ages 4-12, no text in image.`
+            : `Children's book cover: ${childName} and ${characterName} (${characterStyle}) standing together in a warm, magical storybook scene. Both characters visible and friendly, side by side. Children's book illustration style, Christian faith theme, suitable for ages 4-12, no text in image.`;
 
     const instancesPayload = referenceImages.length
         ? { prompt, referenceImages }
@@ -574,10 +576,13 @@ async function runMonthlyBookGenerationFromBook(customMonthlyBookId, custom, sou
         pageNumber: p.pageNumber,
         content: p.content || {},
         files: p.files || {},
+        scrollUrl: p.scrollUrl || p.files?.scroll?.url || undefined,
         isColoringPage: p.isColoringPage || false,
         coloringEndModalOnly: p.coloringEndModalOnly !== false,
         isWebViewPage: p.isWebViewPage || false,
         webView: p.webView || {},
+        backgroundImageAnimation: p.backgroundImageAnimation ?? 'kenBurns',
+        backgroundImageAnimationDuration: p.backgroundImageAnimationDuration ?? 10,
     });
 
     for (let i = startIndex; i < pagesToProcess.length; i++) {
@@ -589,6 +594,10 @@ async function runMonthlyBookGenerationFromBook(customMonthlyBookId, custom, sou
             await new Promise((r) => setTimeout(r, DELAY_BETWEEN_PAGES_MS));
         }
         const pageDoc = pagesToProcess[i];
+        const hasText = (pageDoc.content?.textBoxes?.length > 0) || (pageDoc.content?.text && String(pageDoc.content.text).trim().length > 0);
+        if (!hasText) {
+            console.warn(`MonthlyBookGenerator: [${bookIdShort}] Page ${pageNum}/${total} has no text content (no textBoxes and no content.text). Check source book in portal.`);
+        }
         const portalPrompt = (pageDoc.sceneDescription || '').trim();
         const hasPortalPrompt = portalPrompt.length > 0;
         const preview = hasPortalPrompt ? ` "${portalPrompt.slice(0, 80)}${portalPrompt.length > 80 ? '...' : ''}"` : '';
@@ -600,6 +609,7 @@ async function runMonthlyBookGenerationFromBook(customMonthlyBookId, custom, sou
             characterStylePrompt,
             i
         );
+        // Preserve source page content and files (including scroll) so text and scroll UI are present in the reader
         const pagePayload = {
             pageNumber: pageNum,
             content: pageWithName.content || {},
@@ -611,10 +621,19 @@ async function runMonthlyBookGenerationFromBook(customMonthlyBookId, custom, sou
                 },
             },
         };
+        // Copy scroll from source so reader shows parchment + text (reader checks page.scrollUrl and page.files.scroll.url)
+        const sourceScrollUrl = pageWithName.files?.scroll?.url || pageWithName.scrollUrl;
+        if (sourceScrollUrl) {
+            pagePayload.scrollUrl = sourceScrollUrl;
+            pagePayload.files = pagePayload.files || {};
+            pagePayload.files.scroll = { url: sourceScrollUrl };
+        }
         if (pageWithName.isColoringPage != null) pagePayload.isColoringPage = pageWithName.isColoringPage;
         if (pageWithName.coloringEndModalOnly != null) pagePayload.coloringEndModalOnly = pageWithName.coloringEndModalOnly;
         if (pageWithName.isWebViewPage != null) pagePayload.isWebViewPage = pageWithName.isWebViewPage;
         if (pageWithName.webView) pagePayload.webView = pageWithName.webView;
+        if (pageWithName.backgroundImageAnimation != null) pagePayload.backgroundImageAnimation = pageWithName.backgroundImageAnimation;
+        if (pageWithName.backgroundImageAnimationDuration != null) pagePayload.backgroundImageAnimationDuration = pageWithName.backgroundImageAnimationDuration;
 
         if (!book) {
             // Create book and first page so user can open and test (text, TTS, etc.) while the rest generate

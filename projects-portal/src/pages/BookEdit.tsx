@@ -80,6 +80,9 @@ const BookEdit: React.FC = () => {
     const [bookType, setBookType] = useState<'standard' | 'kids_monthly'>('standard');
     const [featuredCharacterId, setFeaturedCharacterId] = useState<string>('');
     const [characters, setCharacters] = useState<Array<{ _id: string; internalTag: string; displayName: string }>>([]);
+    // Kid-created books from this template (read-only list)
+    const [booksFromTemplate, setBooksFromTemplate] = useState<Array<{ bookId: string; title: string; coverImageUrl?: string; childName: string; createdAt: string }>>([]);
+    const [loadingBooksFromTemplate, setLoadingBooksFromTemplate] = useState(false);
 
     // Load existing book data
     useEffect(() => {
@@ -177,6 +180,35 @@ const BookEdit: React.FC = () => {
         };
         fetchCharacters();
     }, []);
+
+    // Kid-created books from this template (Kids Monthly only)
+    useEffect(() => {
+        if (!bookId || bookType !== 'kids_monthly') {
+            setBooksFromTemplate([]);
+            return;
+        }
+        let cancelled = false;
+        setLoadingBooksFromTemplate(true);
+        apiClient.get(`/api/monthly-book/by-source?sourceBookId=${bookId}`)
+            .then((res) => {
+                if (!cancelled && res.data?.books) {
+                    setBooksFromTemplate(res.data.books.map((b: any) => ({
+                        bookId: b.bookId,
+                        title: b.title,
+                        coverImageUrl: b.coverImageUrl,
+                        childName: b.childName,
+                        createdAt: b.createdAt,
+                    })));
+                }
+            })
+            .catch(() => {
+                if (!cancelled) setBooksFromTemplate([]);
+            })
+            .finally(() => {
+                if (!cancelled) setLoadingBooksFromTemplate(false);
+            });
+        return () => { cancelled = true; };
+    }, [bookId, bookType]);
 
     // Fetch available voices
     useEffect(() => {
@@ -699,6 +731,39 @@ const BookEdit: React.FC = () => {
                                         </option>
                                     ))}
                                 </select>
+                            </div>
+                        )}
+                        {bookType === 'kids_monthly' && bookId && (
+                            <div className="mt-4 p-4 rounded-lg bg-gray-50 border border-gray-200">
+                                <h3 className="text-sm font-semibold text-gray-700 mb-2">Books created from this template</h3>
+                                <p className="text-xs text-gray-500 mb-3">Kid-created books that used this template. View-only; the template stays unchanged.</p>
+                                {loadingBooksFromTemplate ? (
+                                    <p className="text-sm text-gray-500">Loading…</p>
+                                ) : booksFromTemplate.length === 0 ? (
+                                    <p className="text-sm text-gray-500">No books created from this template yet.</p>
+                                ) : (
+                                    <ul className="space-y-2 max-h-48 overflow-y-auto">
+                                        {booksFromTemplate.filter((b) => b.bookId).map((b) => (
+                                            <li key={String(b.bookId)} className="flex items-center gap-3 text-sm">
+                                                {b.coverImageUrl && (
+                                                    <img src={b.coverImageUrl} alt="" className="w-10 h-14 object-cover rounded border border-gray-200" />
+                                                )}
+                                                <div className="flex-1 min-w-0">
+                                                    <span className="font-medium text-gray-800 truncate block">{b.title}</span>
+                                                    <span className="text-gray-500">{b.childName} · {new Date(b.createdAt).toLocaleDateString()}</span>
+                                                </div>
+                                                <a
+                                                    href={`/books/read/${b.bookId}`}
+                                                    target="_blank"
+                                                    rel="noopener noreferrer"
+                                                    className="text-indigo-600 hover:underline text-xs font-medium shrink-0"
+                                                >
+                                                    View book
+                                                </a>
+                                            </li>
+                                        ))}
+                                    </ul>
+                                )}
                             </div>
                         )}
                     </div>

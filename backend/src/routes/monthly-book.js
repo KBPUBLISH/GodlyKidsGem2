@@ -303,6 +303,121 @@ router.get('/my-books', async (req, res) => {
     }
 });
 
+/**
+ * GET /api/monthly-book/by-source?sourceBookId=...
+ * Portal: list kid-created books (CustomMonthlyBook) that used this Book as template.
+ * Returns completed books so you can view what kids created without changing the template.
+ */
+router.get('/by-source', async (req, res) => {
+    try {
+        const sourceBookId = req.query.sourceBookId;
+        if (!sourceBookId || !mongoose.Types.ObjectId.isValid(sourceBookId)) {
+            return res.status(400).json({ error: 'sourceBookId (valid ObjectId) is required' });
+        }
+        const list = await CustomMonthlyBook.find({
+            sourceBookId: new mongoose.Types.ObjectId(sourceBookId),
+            status: 'completed',
+            bookId: { $exists: true, $ne: null },
+        })
+            .populate('bookId', 'title files')
+            .sort({ createdAt: -1 })
+            .limit(200)
+            .lean();
+
+        const books = list.map((b) => ({
+            customMonthlyBookId: b._id,
+            bookId: b.bookId?._id,
+            title: b.bookId?.title || 'Story',
+            coverImageUrl: b.bookId?.files?.coverImage || b.bookId?.coverImage || null,
+            childName: b.childName,
+            createdAt: b.createdAt,
+        }));
+
+        res.json({ success: true, books });
+    } catch (err) {
+        console.error('Monthly book by-source error:', err);
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+/**
+ * POST /api/monthly-book/analyze-scene-prompt
+ * Portal: analyze page text to produce an image prompt with setting/background and character consistency.
+ * Body: { pageText: string, bookId: string }
+ * Returns: { sceneDescription: string }
+ */
+router.post('/analyze-scene-prompt', async (req, res) => {
+    try {
+        const { pageText, bookId } = req.body;
+        if (!pageText || typeof pageText !== 'string') {
+            return res.status(400).json({ error: 'pageText is required' });
+        }
+        const geminiKey = process.env.GEMINI_API_KEY;
+        if (!geminiKey) {
+            return res.status(503).json({ error: 'AI analysis not configured (GEMINI_API_KEY)' });
+        }
+
+        let characterConsistencyBlock = '';
+        if (bookId && mongoose.Types.ObjectId.isValid(bookId)) {
+            const book = await Book.findById(bookId).populate('featuredCharacterId').lean();
+            const featured = book?.featuredCharacterId;
+            if (featured && (featured.displayName || featured.internalTag)) {
+                const name = featured.displayName || featured.internalTag;
+                const stylePrompt = (featured.stylePrompt || '').trim();
+                const outfitHint = stylePrompt
+                    ? ` Use this appearance: ${stylePrompt.slice(0, 200)}${stylePrompt.length > 200 ? '...' : ''}.`
+                    : ' Keep the same clothing and appearance in every scene.';
+                characterConsistencyBlock = `\n\nCharacter consistency (important): Keep ${name} in the same clothing and appearance in every scene.${outfitHint}`;
+            }
+        }
+
+        const userPrompt = `You are helping create an image prompt for a single page of a children's storybook. The page text is below.
+
+PAGE TEXT:
+"""
+${pageText.slice(0, 2000)}
+"""
+
+Tasks:
+1. Analyze the text and write a short scene description suitable for generating one illustration. Answer: What is the background? What is the setting? (e.g. indoor/outdoor, location, time of day, mood.)
+2. Describe the scene in 2-4 sentences. Be specific about the setting and environment so an image model can draw it. Do not include dialogue or long narration—focus on what we SEE.
+3. If the text mentions a child or main character, you can refer to "the child" or use @child. For other named characters use their name (e.g. Jesus, Mary). Keep the same tone: warm, children's book, faith-friendly.
+4. Output ONLY the scene description. No labels like "Scene:" or "Setting:". Plain paragraph(s) that can be used as the image prompt.${characterConsistencyBlock}`;
+
+        const response = await fetch(
+            `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${geminiKey}`,
+            {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    contents: [{ role: 'user', parts: [{ text: userPrompt }] }],
+                    generationConfig: {
+                        temperature: 0.4,
+                        maxOutputTokens: 512,
+                    },
+                }),
+            }
+        );
+
+        if (!response.ok) {
+            const errText = await response.text();
+            console.error('Gemini analyze-scene-prompt error:', response.status, errText);
+            return res.status(502).json({ error: 'AI analysis failed', details: errText.slice(0, 200) });
+        }
+
+        const data = await response.json();
+        const sceneDescription = data.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || '';
+        if (!sceneDescription) {
+            return res.status(502).json({ error: 'AI returned empty scene description' });
+        }
+
+        res.json({ sceneDescription });
+    } catch (err) {
+        console.error('analyze-scene-prompt error:', err);
+        res.status(500).json({ error: err.message || 'Failed to analyze scene' });
+    }
+});
+
 // ---------- Portal admin (all templates, CRUD) ----------
 
 /**

@@ -31,8 +31,8 @@ if [[ "$SPLIT_ONLY" == "true" ]]; then
   exit 0
 fi
 
-echo "→ Pushing portal-split to $REMOTE $BRANCH..."
-git push "$REMOTE" portal-split:"$BRANCH"
+echo "→ Pushing portal-split to $REMOTE $BRANCH (force; subtree history differs from remote)..."
+git push "$REMOTE" portal-split:"$BRANCH" --force
 
 echo "→ Deleting local branch portal-split..."
 git branch -D portal-split

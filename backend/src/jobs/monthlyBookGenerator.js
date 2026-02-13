@@ -183,6 +183,8 @@ async function gatherPageReferenceImages(customBook, pageDoc) {
         const childBase64 = await fetchImageAsBase64(customBook.childCharacterImageUrl);
         if (childBase64) {
             refs.push({ base64: childBase64, label: 'the child' });
+        } else {
+            console.warn('MonthlyBookGenerator: Failed to fetch child reference image from', customBook.childCharacterImageUrl?.slice(0, 80) + '...');
         }
     }
     const refIds = (pageDoc.referenceCharacterIds || []).filter(Boolean);
@@ -278,6 +280,12 @@ async function generatePageImageWithVertexGemini(customBook, pageDoc, characterS
 
     const { prompt } = await buildScenePrompt(pageDoc, characterStylePrompt, customBook.childName);
     const referenceImages = await gatherPageReferenceImages(customBook, pageDoc);
+
+    const childRefIncluded = referenceImages.length > 0 && (referenceImages[0].label === 'the child' || referenceImages[0].label === 'child');
+    console.log('MonthlyBookGenerator: Page', pageNumber, 'sending', referenceImages.length, 'reference image(s); child reference included:', childRefIncluded);
+    if (customBook.childCharacterImageUrl && !childRefIncluded) {
+        console.warn('MonthlyBookGenerator: Page', pageNumber, '— child avatar URL set but reference image missing (fetch may have failed); image may not match user.');
+    }
 
     // Log prompt preview for every page (including Page 1) so it's clear what prompt is used.
     const promptPreview = prompt.slice(0, 100) + (prompt.length > 100 ? '...' : '');

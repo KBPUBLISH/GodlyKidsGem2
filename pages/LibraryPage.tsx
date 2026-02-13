@@ -118,7 +118,8 @@ const LibraryPage: React.FC = () => {
     fetchUserPlaylists();
   }, []);
 
-  // Fetch user's Create Your Story books (completed + in-progress). Refetch when user lands on Library (e.g. after "Go to My Library").
+  // Fetch user's Create Your Story books (completed + in-progress). Refetch when user lands on Library and when page becomes visible again.
+  const fetchMyMonthlyBooksRef = useRef<() => Promise<void>>(null);
   useEffect(() => {
     if (!FEATURE_CREATE_YOUR_STORY || location.pathname !== '/library') return;
     const user = authService.getUser();
@@ -142,21 +143,40 @@ const LibraryPage: React.FC = () => {
         setMyMonthlyBooksLoading(false);
       }
     };
+    fetchMyMonthlyBooksRef.current = fetchMyMonthlyBooks;
     fetchMyMonthlyBooks();
   }, [location.pathname]);
 
-  // When coming from Create Your Story, scroll My Books into view so the user sees where their book will appear.
+  // Refetch my books when user returns to this tab/page so in-progress and newly completed books are visible.
+  useEffect(() => {
+    if (!FEATURE_CREATE_YOUR_STORY || location.pathname !== '/library') return;
+    const onVisible = () => {
+      if (document.visibilityState === 'visible' && fetchMyMonthlyBooksRef.current) {
+        fetchMyMonthlyBooksRef.current();
+      }
+    };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => document.removeEventListener('visibilitychange', onVisible);
+  }, [location.pathname]);
+
+  // When coming from Create Your Story or from the Creating page, scroll My Books into view so the user sees their book (in-progress or completed).
   const myBooksSectionRef = useRef<HTMLDivElement>(null);
   const didScrollToMyBooks = useRef(false);
   useEffect(() => {
-    if (!FEATURE_CREATE_YOUR_STORY || !(location.state as any)?.fromCreateYourStory) return;
+    if (location.pathname !== '/library') {
+      didScrollToMyBooks.current = false;
+      return;
+    }
+    if (!FEATURE_CREATE_YOUR_STORY) return;
+    const state = location.state as any;
+    if (!state?.fromCreateYourStory && !state?.fromCreating) return;
     if (didScrollToMyBooks.current) return;
     didScrollToMyBooks.current = true;
     const t = setTimeout(() => {
       myBooksSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    }, 100);
+    }, 300);
     return () => clearTimeout(t);
-  }, [location.state]);
+  }, [location.pathname, location.state]);
 
   // Close age dropdown when clicking outside
   useEffect(() => {
@@ -378,21 +398,43 @@ const LibraryPage: React.FC = () => {
       <div className="px-4 pt-28 pb-52">
         {/* Create Your Story - front and center CTA (hidden until feature launch) */}
         {FEATURE_CREATE_YOUR_STORY && (
-          <div
-            onClick={() => navigate('/create-your-story')}
-            className="mb-6 rounded-2xl overflow-hidden border-2 border-amber-400/60 bg-gradient-to-br from-amber-600/40 to-amber-800/50 shadow-xl active:scale-[0.98] transition-transform"
-          >
-            <div className="p-4 flex items-center gap-4">
-              <div className="w-14 h-14 rounded-xl bg-amber-500/30 flex items-center justify-center shrink-0">
-                <BookOpen className="w-8 h-8 text-amber-200" />
+          <>
+            <div
+              onClick={() => navigate('/create-your-story')}
+              className="mb-3 rounded-2xl overflow-hidden border-2 border-amber-400/60 bg-gradient-to-br from-amber-600/40 to-amber-800/50 shadow-xl active:scale-[0.98] transition-transform"
+            >
+              <div className="p-4 flex items-center gap-4">
+                <div className="w-14 h-14 rounded-xl bg-amber-500/30 flex items-center justify-center shrink-0">
+                  <BookOpen className="w-8 h-8 text-amber-200" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <h2 className="text-white font-bold text-lg">Create your story</h2>
+                  <p className="text-amber-100/90 text-sm mt-0.5">Enter the Bible with your own adventure. Once a month, a new story with you in it.</p>
+                </div>
+                <ChevronDown className="w-5 h-5 text-amber-200 rotate-[-90deg] shrink-0" />
               </div>
-              <div className="flex-1 min-w-0">
-                <h2 className="text-white font-bold text-lg">Create your story</h2>
-                <p className="text-amber-100/90 text-sm mt-0.5">Enter the Bible with your own adventure. Once a month, a new story with you in it.</p>
-              </div>
-              <ChevronDown className="w-5 h-5 text-amber-200 rotate-[-90deg] shrink-0" />
             </div>
-          </div>
+            <button
+              type="button"
+              onClick={() => navigate('/kids-monthly')}
+              className="mb-3 w-full py-2.5 rounded-xl border border-amber-400/40 bg-amber-500/20 text-amber-200 text-sm font-medium hover:bg-amber-500/30 active:scale-[0.98] transition-all"
+            >
+              Kids Monthly — stories you created
+            </button>
+            {myMonthlyBooks.some((b) => b.status === 'pending' || b.status === 'generating') && (
+              <button
+                type="button"
+                onClick={() => {
+                  const creating = myMonthlyBooks.find((b) => b.status === 'pending' || b.status === 'generating');
+                  if (creating) navigate(`/library/creating/${creating.customMonthlyBookId}`);
+                }}
+                className="mb-6 w-full py-3 rounded-xl border-2 border-amber-400/50 bg-amber-500/25 text-amber-100 text-sm font-semibold flex items-center justify-center gap-2 hover:bg-amber-500/35 active:scale-[0.98] transition-all"
+              >
+                <Loader2 className="w-4 h-4 animate-spin shrink-0" />
+                Your story is still creating — tap to see progress
+              </button>
+            )}
+          </>
         )}
 
         {/* My Books (Create Your Story) - always show so user knows where to find created books */}

@@ -570,6 +570,7 @@ if (!(window as any).__GK_APP_BOOTED__) {
 import ListenPage from './pages/ListenPage';
 import ReadPage from './pages/ReadPage';
 import LibraryPage from './pages/LibraryPage';
+import KidsMonthlyPage from './pages/KidsMonthlyPage';
 import BookCreatingPage from './pages/BookCreatingPage';
 import CreateYourStoryPage from './pages/CreateYourStoryPage';
 import BookDetailPage from './pages/BookDetailPage';
@@ -997,7 +998,7 @@ const PanoramaBackground: React.FC = () => {
     if (path === '/home') return 1;
     if (path === '/listen') return 2;
     if (path === '/read') return 3;
-    if (path === '/library') return 4;
+    if (path === '/library' || path === '/kids-monthly') return 4;
     if (path === '/giving') return 5;
     if (path === '/audio' || path.startsWith('/audio/')) return 2; // Use same as listen
     if (path === '/lessons' || path.startsWith('/lesson/')) return 1; // Use same as home/explore
@@ -1376,6 +1377,7 @@ const App: React.FC = () => {
                   <Route path="/listen" element={<ListenPage />} />
                   <Route path="/read" element={<ReadPage />} />
                   <Route path="/library" element={<LibraryPage />} />
+                  <Route path="/kids-monthly" element={FEATURE_CREATE_YOUR_STORY ? <KidsMonthlyPage /> : <Navigate to="/library" replace />} />
                   <Route path="/library/creating/:customMonthlyBookId" element={FEATURE_CREATE_YOUR_STORY ? <BookCreatingPage /> : <Navigate to="/library" replace />} />
                   <Route path="/create-your-story" element={FEATURE_CREATE_YOUR_STORY ? <CreateYourStoryPage /> : <Navigate to="/library" replace />} />
                   <Route path="/audio" element={<AudioPage />} />

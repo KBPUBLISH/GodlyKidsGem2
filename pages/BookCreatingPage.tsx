@@ -91,7 +91,7 @@ const BookCreatingPage: React.FC = () => {
           <AlertCircle className="w-12 h-12 text-red-400 mb-4" />
           <p className="text-white/80 text-center mb-4">{error}</p>
           <button
-            onClick={() => navigate('/library')}
+            onClick={() => navigate('/library', { state: { fromCreating: true } })}
             className="px-6 py-3 rounded-xl bg-amber-500 text-white font-bold flex items-center gap-2"
           >
             <ArrowLeft className="w-5 h-5" /> Back to My Library
@@ -113,7 +113,7 @@ const BookCreatingPage: React.FC = () => {
       <Header isVisible={true} title="MY LIBRARY" />
       <div className="flex flex-col min-h-full px-4 pt-24 pb-12" style={{ paddingTop: 'max(6rem, calc(var(--safe-area-top, 0px) + 4rem))' }}>
         <button
-          onClick={() => navigate('/library')}
+          onClick={() => navigate('/library', { state: { fromCreating: true } })}
           className="self-start flex items-center gap-2 text-amber-200 hover:text-amber-100 mb-6"
         >
           <ArrowLeft className="w-5 h-5" /> Back to My Library
@@ -126,7 +126,7 @@ const BookCreatingPage: React.FC = () => {
             <p className="text-red-200/90 text-sm mb-4">{status.errorMessage || 'Something went wrong.'}</p>
             <p className="text-white/70 text-sm mb-4">Try again with &quot;Create your story&quot; from My Library.</p>
             <button
-              onClick={() => navigate('/library')}
+              onClick={() => navigate('/library', { state: { fromCreating: true } })}
               className="px-6 py-3 rounded-xl bg-amber-500 text-white font-bold"
             >
               Back to My Library

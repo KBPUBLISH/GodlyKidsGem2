@@ -61,6 +61,22 @@ function substituteChildNameInPage(pageDoc, childName) {
 }
 
 /**
+ * For image prompts only: replace language that misdirects the model (e.g. "the child", "the kid")
+ * with neutral phrasing so the image model matches the reference photo instead of defaulting to a child.
+ * Use "the main character" so we don't prime the AI to draw a child when the user is an adult.
+ */
+function neutralizeChildLanguageForImagePrompt(text) {
+    if (!text || typeof text !== 'string') return text || '';
+    return String(text)
+        .replace(/\bthe child\b/gi, 'the main character')
+        .replace(/\bthe kid\b/gi, 'the main character')
+        .replace(/\ba child\b/gi, 'the main character')
+        .replace(/\ba kid\b/gi, 'the main character')
+        .replace(/\bthe young child\b/gi, 'the main character')
+        .replace(/\bthe young kid\b/gi, 'the main character');
+}
+
+/**
  * Generate one page image for template-based flow (stub: returns placeholder).
  */
 async function generatePageImage(_customBook, _templatePage, _bibleCharacter, _pageIndex) {
@@ -69,8 +85,9 @@ async function generatePageImage(_customBook, _templatePage, _bibleCharacter, _p
 
 /**
  * Expand @CharacterName or @internalTag in the Image prompt (sceneDescription) to inject
- * saved character style. @kid (or @child) references the child's avatar. Used only in the prompt field;
+ * saved character style. @kid (or @child) references the user's avatar. Used only in the prompt field;
  * text block keeps @ for voice, [] for ElevenLabs, {} for {childName}.
+ * We use "the main character" (not "the child") in the image prompt so the model doesn't assume a child.
  * Returns { text, stylePrompts, hasKidReference }.
  */
 async function expandAtReferencesInScene(sceneDescription, referenceCharacterIds, childName) {
@@ -84,11 +101,11 @@ async function expandAtReferencesInScene(sceneDescription, referenceCharacterIds
         if (!tags.includes(m[1])) tags.push(m[1]);
     }
 
-    // @kid / @child -> child's avatar; replace with child name and flag for reference image
+    // @kid / @child -> user's avatar; use child name or neutral "the main character" so image model isn't primed with "child"
     const kidTags = tags.filter((t) => t.toLowerCase() === 'kid' || t.toLowerCase() === 'child');
     if (kidTags.length > 0) {
         hasKidReference = true;
-        const name = childName || 'the child';
+        const name = childName || 'the main character';
         kidTags.forEach((tag) => {
             text = text.replace(new RegExp('@' + tag.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\b', 'gi'), name);
         });
@@ -139,19 +156,20 @@ async function buildScenePrompt(pageDoc, characterStylePrompt, childName) {
             pageDoc.referenceCharacterIds,
             childName
         );
+        const sceneForImage = neutralizeChildLanguageForImagePrompt(expandedScene);
         const allStyles = [characterStylePrompt, ...stylePrompts].filter(Boolean);
         const styleBlock = allStyles.join('. ');
-        const prompt = `${expandedScene}. ${styleBlock}. Children's book illustration style, warm inviting colors, soft lighting, suitable for ages 4-12, Christian faith theme, no text in image.`;
+        const prompt = `${sceneForImage}. ${styleBlock}. Children's book illustration style, warm inviting colors, soft lighting, suitable for ages 4-12, Christian faith theme, no text in image.`;
         return { prompt, hasKidReference };
     }
     const text = pageDoc.content?.text || '';
     const fromBoxes = (pageDoc.content?.textBoxes || []).map((b) => b.text).filter(Boolean).join(' ');
     const combined = (text + ' ' + fromBoxes).trim().slice(0, 200);
     const context = substituteChildName(combined, childName) || 'A gentle storybook scene';
-    // When no portal scene prompt: still ask to include the child in the scene when we have a name,
-    // so Page 1 (and any page without sceneDescription) gets the user's character in the image.
+    const contextForImage = neutralizeChildLanguageForImagePrompt(context);
     const childInScene = childName ? ` Include ${childName} in the scene.` : '';
-    const prompt = `Scene for a children's story: ${context}. ${characterStylePrompt}.${childInScene} Children's book illustration style, warm inviting colors, soft lighting, suitable for ages 4-12, Christian faith theme, no text in image.`;
+    const rawPrompt = `Scene for a children's story: ${contextForImage}. ${characterStylePrompt}.${childInScene} Children's book illustration style, warm inviting colors, soft lighting, suitable for ages 4-12, Christian faith theme, no text in image.`;
+    const prompt = neutralizeChildLanguageForImagePrompt(rawPrompt);
     return { prompt, hasKidReference: !!childName };
 }
 
@@ -266,16 +284,22 @@ async function generatePageImageWithVertexGemini(customBook, pageDoc, characterS
     const { baseUrl, location } = getVertexImageEndpoint(pageIndex, attemptOffset || 0);
     console.log('MonthlyBookGenerator: Page', pageNumber, 'prompt:', promptPreview, 'location:', location + (attemptOffset ? ` (retry ${attemptOffset})` : ''));
 
+    // Describe reference images so the model does not assume "child" — use age-neutral wording for the main character.
     const refDescription = referenceImages.length
-        ? referenceImages.map((r, i) => `Image ${i + 1}: ${r.label}`).join('. ')
+        ? referenceImages.map((r, i) => {
+            const isFirstPerson = i === 0 && (r.label === 'the child' || r.label === 'child');
+            return isFirstPerson
+                ? `Image ${i + 1}: the main character (match this person's exact age and appearance from the photo in every scene—if they are an adult with beard or hat, depict an adult with beard or hat; if a child, depict a child; do not age down or change their features)`
+                : `Image ${i + 1}: ${r.label}`;
+        }).join('. ')
         : '';
     const firstRefIsPerson = referenceImages.length > 0 && (referenceImages[0].label === 'the child' || referenceImages[0].label === 'child');
-    // Age-neutral: match the person in the photo (adult or child). Do not force a "child" look if the selfie is an adult.
+    // Strong consistency so parents/kids get the same person every page (goal 90–99% for unreviewed books).
     const personConsistencyInstruction = firstRefIsPerson
-        ? ` IMPORTANT: The person in the reference photo (Image 1) must look exactly as in that photo in every image: same face, same hair, same clothing. Match their age—if the reference is an adult, depict them as an adult; if a child, as a child. Do not change their clothing to match the time period. Keep their appearance identical across all images.`
+        ? ` CRITICAL — character consistency: The person in reference Image 1 must look EXACTLY like the photo in every image: same face, same age (if the photo shows an adult with beard, hat, or adult features, you MUST depict an adult with those features; if the photo shows a child, depict a child). Do NOT age them down to a child when the reference is an adult. Do NOT remove beard, hat, or adult clothing. Preserve identical appearance on every page. `
         : '';
     const geminiPrompt = referenceImages.length
-        ? `Using the provided reference images (${refDescription}), generate one image: ${prompt}${personConsistencyInstruction} Place each character in the scene as described. Children's book illustration style, warm inviting colors, soft lighting, suitable for ages 4-12, Christian faith theme, no text in image. Vertical 9:16 composition.`
+        ? `${personConsistencyInstruction}Using the provided reference images (${refDescription}), generate one image: ${prompt} Remember: keep the main character's appearance identical to the reference photo (same age, face, hair, clothing). Place each character in the scene as described. Children's book illustration style, warm inviting colors, soft lighting, suitable for ages 4-12, Christian faith theme, no text in image. Vertical 9:16 composition.`
         : `Generate one image: ${prompt} Children's book illustration style, warm inviting colors, soft lighting, suitable for ages 4-12, Christian faith theme, no text in image. Vertical 9:16 composition.`;
 
     const parts = [{ text: geminiPrompt }];
@@ -462,16 +486,16 @@ async function generateCoverImageForBook(customBook, sourceBook) {
             referenceImage: { bytesBase64Encoded: childImageBase64 },
             referenceType: 'REFERENCE_TYPE_SUBJECT',
             subjectImageConfig: {
-                subjectDescription: `The person in this photo (${childName}); match their age—adult or child. Include them in the scene with ${characterName}.`,
+                subjectDescription: `The person in this photo (${childName}). Match their exact age and appearance: if they are an adult (e.g. with beard, hat), depict an adult; if a child, depict a child. Do not age them down. Include them in the scene with ${characterName}.`,
                 subjectType: 'SUBJECT_TYPE_PERSON',
             },
         });
     }
 
     const prompt = templateCoverBase64
-        ? `Recreate this book cover in the same style and composition. Feature the person [${subjectRefId || 1}] and ${characterName} (${characterStyle}). Match the age of the person in the reference (adult or child). Children's book illustration, Christian faith theme, ages 4-12, no text in image.`
+        ? `Recreate this book cover in the same style and composition. Feature the person [${subjectRefId || 1}] and ${characterName} (${characterStyle}). Depict the person exactly as in the reference photo—same age (adult or child), same features (beard, hat, etc.); do not age them down. Children's book illustration, Christian faith theme, ages 4-12, no text in image.`
         : subjectRefId
-            ? `Children's book cover: The person [${subjectRefId}] and ${characterName} (${characterStyle}) standing together in a warm, magical storybook scene. Match the age of the person in the reference (adult or child). Both characters visible and friendly, side by side. Children's book illustration style, Christian faith theme, suitable for ages 4-12, no text in image.`
+            ? `Children's book cover: The person [${subjectRefId}] and ${characterName} (${characterStyle}) standing together in a warm, magical storybook scene. Depict the person exactly as in the reference—same age and appearance (if adult with beard/hat, show adult with beard/hat). Both characters visible and friendly, side by side. Children's book illustration style, Christian faith theme, suitable for ages 4-12, no text in image.`
             : `Children's book cover: ${childName} and ${characterName} (${characterStyle}) standing together in a warm, magical storybook scene. Both characters visible and friendly, side by side. Children's book illustration style, Christian faith theme, suitable for ages 4-12, no text in image.`;
 
     const instancesPayload = referenceImages.length

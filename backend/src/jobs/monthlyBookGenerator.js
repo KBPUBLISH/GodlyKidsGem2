@@ -204,10 +204,12 @@ let _vertexRegionsLogged = false;
  * - VERTEX_AI_IMAGE_LOCATION=global → use global endpoint (separate quota, can reduce 429s).
  * - VERTEX_AI_IMAGE_REGIONS=us-central1,us-east1,... → round-robin across those regions only.
  * - Otherwise round-robin across VERTEX_IMAGE_REGIONS_DEFAULT (all supported regions) to maximize effective RPM.
- * @param {number} pageIndex - Used for round-robin.
+ * @param {number} pageIndex - Used for round-robin (first attempt).
+ * @param {number} [attemptOffset=0] - Added to pageIndex for retries so each retry uses a different region (avoids re-hitting same region's 429).
  * @returns {{ baseUrl: string, location: string }}
  */
-function getVertexImageEndpoint(pageIndex) {
+function getVertexImageEndpoint(pageIndex, attemptOffset) {
+    const offset = Math.max(0, parseInt(attemptOffset, 10) || 0);
     const loc = (process.env.VERTEX_AI_IMAGE_LOCATION || '').trim().toLowerCase();
     if (loc === 'global') {
         return {
@@ -224,7 +226,7 @@ function getVertexImageEndpoint(pageIndex) {
             _vertexRegionsLogged = true;
             console.log('MonthlyBookGenerator: Using', regions.length, 'regions for Vertex Gemini image round-robin');
         }
-        const idx = Math.abs(pageIndex) % regions.length;
+        const idx = (Math.abs(pageIndex) + offset) % regions.length;
         const region = regions[idx];
         return {
             baseUrl: `https://${region}-aiplatform.googleapis.com/v1`,
@@ -241,9 +243,10 @@ function getVertexImageEndpoint(pageIndex) {
 /**
  * Generate one page image with Vertex Gemini 2.5 Flash Image for all pages (superior consistency).
  * Uses child + portal character reference images when available; supports text-only when no refs.
+ * attemptOffset: 0 = first try, 1 = first retry (use next region), 2 = second retry (use next region).
  * Returns { imageUrl: string | null, httpStatus: number } so caller can use longer backoff on 429.
  */
-async function generatePageImageWithVertexGemini(customBook, pageDoc, characterStylePrompt, pageIndex) {
+async function generatePageImageWithVertexGemini(customBook, pageDoc, characterStylePrompt, pageIndex, attemptOffset) {
     const customMonthlyBookId = String(customBook._id);
     const pageNumber = pageIndex + 1;
     const token = await getImagenAccessToken();
@@ -259,14 +262,18 @@ async function generatePageImageWithVertexGemini(customBook, pageDoc, characterS
 
     // Log prompt preview for every page (including Page 1) so it's clear what prompt is used.
     const promptPreview = prompt.slice(0, 100) + (prompt.length > 100 ? '...' : '');
-    const { baseUrl, location } = getVertexImageEndpoint(pageIndex);
-    console.log('MonthlyBookGenerator: Page', pageNumber, 'prompt:', promptPreview, 'location:', location);
+    const { baseUrl, location } = getVertexImageEndpoint(pageIndex, attemptOffset || 0);
+    console.log('MonthlyBookGenerator: Page', pageNumber, 'prompt:', promptPreview, 'location:', location + (attemptOffset ? ` (retry ${attemptOffset})` : ''));
 
     const refDescription = referenceImages.length
         ? referenceImages.map((r, i) => `Image ${i + 1}: ${r.label}`).join('. ')
         : '';
+    const firstRefIsChild = referenceImages.length > 0 && (referenceImages[0].label === 'the child' || referenceImages[0].label === 'child');
+    const childConsistencyInstruction = firstRefIsChild
+        ? ` IMPORTANT: The child (Image 1) must look exactly as in the reference photo in every image: same face, same hair, same modern clothes. Do not change their clothing to match the time period or setting - they are a modern-day child placed in the scene, like a real photo of them in that moment. Keep their appearance identical across all images.`
+        : '';
     const geminiPrompt = referenceImages.length
-        ? `Using the provided reference images (${refDescription}), generate one image: ${prompt} Place each character in the scene as described. Children's book illustration style, warm inviting colors, soft lighting, suitable for ages 4-12, Christian faith theme, no text in image. Vertical 9:16 composition.`
+        ? `Using the provided reference images (${refDescription}), generate one image: ${prompt}${childConsistencyInstruction} Place each character in the scene as described. Children's book illustration style, warm inviting colors, soft lighting, suitable for ages 4-12, Christian faith theme, no text in image. Vertical 9:16 composition.`
         : `Generate one image: ${prompt} Children's book illustration style, warm inviting colors, soft lighting, suitable for ages 4-12, Christian faith theme, no text in image. Vertical 9:16 composition.`;
 
     const parts = [{ text: geminiPrompt }];
@@ -369,11 +376,12 @@ async function generatePageImageForBook(customBook, pageDoc, characterStylePromp
     }
 
     for (let attempt = 1; attempt <= PAGE_GEMINI_MAX_ATTEMPTS; attempt++) {
-        const { imageUrl: geminiUrl, httpStatus } = await generatePageImageWithVertexGemini(customBook, pageDoc, characterStylePrompt, pageIndex);
+        const attemptOffset = attempt - 1; // 0 = first try, 1 = first retry (different region), 2 = second retry (different region)
+        const { imageUrl: geminiUrl, httpStatus } = await generatePageImageWithVertexGemini(customBook, pageDoc, characterStylePrompt, pageIndex, attemptOffset);
         if (geminiUrl) return geminiUrl;
         if (attempt < PAGE_GEMINI_MAX_ATTEMPTS) {
             const delayMs = httpStatus === 429 ? PAGE_GEMINI_RATE_LIMIT_DELAY_MS : PAGE_GEMINI_RETRY_DELAY_MS;
-            console.log('MonthlyBookGenerator: Gemini page', pageNumber, 'attempt', attempt, 'failed' + (httpStatus === 429 ? ' (429 rate limit)' : '') + '; retrying in', delayMs, 'ms...');
+            console.log('MonthlyBookGenerator: Gemini page', pageNumber, 'attempt', attempt, 'failed' + (httpStatus === 429 ? ' (429 rate limit)' : '') + '; retrying in', delayMs, 'ms in a different region...');
             await new Promise((r) => setTimeout(r, delayMs));
         }
     }
@@ -526,6 +534,11 @@ async function runMonthlyBookGenerationFromBook(customMonthlyBookId, custom, sou
     }
     const pagesToProcess = sourcePages.slice(0, pageCount);
 
+    await CustomMonthlyBook.findByIdAndUpdate(customMonthlyBookId, {
+        progressTotalPages: pageCount,
+        progressPage: 0,
+    });
+
     const bookTitle = substituteChildName(sourceBook.title, custom.childName) || `${custom.childName}'s ${sourceBook.title}`;
 
     // Use source book's cover when available (consistent, predictable). Otherwise generate with kid + featured character.
@@ -568,6 +581,8 @@ async function runMonthlyBookGenerationFromBook(customMonthlyBookId, custom, sou
         if (pageWithName.isWebViewPage != null) pagePayload.isWebViewPage = pageWithName.isWebViewPage;
         if (pageWithName.webView) pagePayload.webView = pageWithName.webView;
         pages.push(pagePayload);
+
+        await CustomMonthlyBook.findByIdAndUpdate(customMonthlyBookId, { progressPage: i + 1 });
     }
 
     const book = await Book.create({

@@ -1,11 +1,11 @@
 
 import React, { useState, useRef, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import BookCard from '../components/ui/BookCard';
 import Header from '../components/layout/Header';
 import SectionTitle from '../components/ui/SectionTitle';
 import { useBooks } from '../context/BooksContext';
-import { Search, ChevronDown, Music, BookOpen, Clock, Heart, ListMusic, Plus, Trash2 } from 'lucide-react';
+import { Search, ChevronDown, Music, BookOpen, Clock, Heart, ListMusic, Plus, Trash2, Loader2 } from 'lucide-react';
 import { libraryService } from '../services/libraryService';
 import { favoritesService } from '../services/favoritesService';
 import { readingProgressService } from '../services/readingProgressService';
@@ -40,6 +40,7 @@ interface MyMonthlyBook {
 
 const LibraryPage: React.FC = () => {
   const navigate = useNavigate();
+  const location = useLocation();
   const { books, loading } = useBooks();
   const [isHeaderVisible, setIsHeaderVisible] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
@@ -117,9 +118,9 @@ const LibraryPage: React.FC = () => {
     fetchUserPlaylists();
   }, []);
 
-  // Fetch user's Create Your Story books (completed + in-progress)
+  // Fetch user's Create Your Story books (completed + in-progress). Refetch when user lands on Library (e.g. after "Go to My Library").
   useEffect(() => {
-    if (!FEATURE_CREATE_YOUR_STORY) return;
+    if (!FEATURE_CREATE_YOUR_STORY || location.pathname !== '/library') return;
     const user = authService.getUser();
     const userId = (user as any)?._id || (user as any)?.id || user?.email || localStorage.getItem('godlykids_user_email') || localStorage.getItem('device_id');
     if (!userId) {
@@ -142,7 +143,20 @@ const LibraryPage: React.FC = () => {
       }
     };
     fetchMyMonthlyBooks();
-  }, []);
+  }, [location.pathname]);
+
+  // When coming from Create Your Story, scroll My Books into view so the user sees where their book will appear.
+  const myBooksSectionRef = useRef<HTMLDivElement>(null);
+  const didScrollToMyBooks = useRef(false);
+  useEffect(() => {
+    if (!FEATURE_CREATE_YOUR_STORY || !(location.state as any)?.fromCreateYourStory) return;
+    if (didScrollToMyBooks.current) return;
+    didScrollToMyBooks.current = true;
+    const t = setTimeout(() => {
+      myBooksSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 100);
+    return () => clearTimeout(t);
+  }, [location.state]);
 
   // Close age dropdown when clicking outside
   useEffect(() => {
@@ -381,12 +395,14 @@ const LibraryPage: React.FC = () => {
           </div>
         )}
 
-        {/* My Books (Create Your Story) - in-progress + completed */}
-        {FEATURE_CREATE_YOUR_STORY && (myMonthlyBooks.length > 0 || myMonthlyBooksLoading) && (
-          <div className="mb-8">
+        {/* My Books (Create Your Story) - always show so user knows where to find created books */}
+        {FEATURE_CREATE_YOUR_STORY && (
+          <div className="mb-8" ref={myBooksSectionRef} data-my-books-section>
             <SectionTitle title="My Books" />
             {myMonthlyBooksLoading ? (
               <div className="py-6 text-center text-white/60 text-sm">Loading your books...</div>
+            ) : myMonthlyBooks.length === 0 ? (
+              <p className="py-4 text-white/60 text-sm">Books you create will appear here. Use &quot;Create your story&quot; above to make one.</p>
             ) : (
               <div className="w-screen overflow-x-auto no-scrollbar pb-4 -mx-4">
                 <div className="flex space-x-3 px-4">
@@ -412,8 +428,24 @@ const LibraryPage: React.FC = () => {
                             </p>
                           )}
                         </div>
+                      ) : item.status === 'failed' ? (
+                        <div className="bg-white/10 backdrop-blur-sm rounded-2xl overflow-hidden border-2 border-red-400/40">
+                          <div className="aspect-square relative bg-gradient-to-br from-red-900/40 to-amber-900/30 flex flex-col items-center justify-center p-3">
+                            <BookOpen className="w-12 h-12 text-red-300/80" />
+                            <span className="text-red-200 text-sm font-bold text-center mt-2">Couldn’t create</span>
+                            <span className="text-red-200/80 text-xs text-center mt-1">Try again with &quot;Create your story&quot;</span>
+                          </div>
+                          <div className="p-2">
+                            <p className="text-white font-medium text-sm truncate">{item.title}</p>
+                            <p className="text-red-300/80 text-xs">Creation failed · try again</p>
+                          </div>
+                        </div>
                       ) : (
-                        <div className="bg-white/10 backdrop-blur-sm rounded-2xl overflow-hidden border-2 border-amber-400/30">
+                        <button
+                          type="button"
+                          onClick={() => navigate(`/library/creating/${item.customMonthlyBookId}`)}
+                          className="w-full text-left bg-white/10 backdrop-blur-sm rounded-2xl overflow-hidden border-2 border-amber-400/30 hover:border-amber-400/50 active:scale-[0.98] transition-all"
+                        >
                           <div className="aspect-square relative bg-gradient-to-br from-amber-900/40 to-amber-800/30">
                             {item.coverImageUrl ? (
                               <img
@@ -426,15 +458,16 @@ const LibraryPage: React.FC = () => {
                                 <BookOpen className="w-12 h-12 text-amber-200/60" />
                               </div>
                             )}
-                            <div className="absolute inset-0 flex items-center justify-center bg-black/50">
-                              <span className="text-amber-200 text-sm font-bold text-center px-2">Creating...</span>
+                            <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/60 gap-2">
+                              <Loader2 className="w-10 h-10 text-amber-300 animate-spin" aria-hidden />
+                              <span className="text-amber-200 text-sm font-bold text-center px-2">Creating your story...</span>
                             </div>
                           </div>
                           <div className="p-2">
                             <p className="text-white font-medium text-sm truncate">{item.title}</p>
-                            <p className="text-amber-200/80 text-xs">Ready in ~5 min</p>
+                            <p className="text-amber-200/80 text-xs">Tap to see progress</p>
                           </div>
-                        </div>
+                        </button>
                       )}
                     </div>
                   ))}

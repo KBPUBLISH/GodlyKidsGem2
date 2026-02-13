@@ -192,9 +192,12 @@ const CreateYourStoryPage: React.FC = () => {
         }),
       });
       const data = await res.json().catch(() => ({}));
+      if (res.ok && data.success && data.customMonthlyBookId) {
+        navigate(`/library/creating/${data.customMonthlyBookId}`, { replace: true });
+        return;
+      }
       if (res.ok && data.success) {
         setSubmitted(true);
-        // Stay on page while book generates; user can go to library when ready
       } else {
         setError(data.error || data.message || (res.ok ? 'Something went wrong.' : `Request failed (${res.status}). Try again.`));
       }
@@ -220,7 +223,7 @@ const CreateYourStoryPage: React.FC = () => {
             <p className="text-white/80 mb-2">Your story is being written by angels.</p>
             <p className="text-amber-200/90">We'll notify you in ~5 minutes when it's ready!</p>
             <button
-              onClick={() => navigate('/library')}
+              onClick={() => navigate('/library', { state: { fromCreateYourStory: true } })}
               className="mt-6 px-6 py-3 rounded-xl bg-amber-500 text-white font-bold"
             >
               Go to My Library

@@ -181,18 +181,26 @@ router.get('/status/:customMonthlyBookId', async (req, res) => {
         const { customMonthlyBookId } = req.params;
         const custom = await CustomMonthlyBook.findById(customMonthlyBookId)
             .populate('templateId', 'title')
-            .populate('bookId', 'title')
-            .populate('sourceBookId', 'title')
+            .populate('bookId', 'title files')
+            .populate('sourceBookId', 'title files')
             .lean();
         if (!custom) {
             return res.status(404).json({ success: false, error: 'Not found' });
         }
         const title = custom.bookId?.title || custom.templateId?.title || custom.sourceBookId?.title;
+        const coverImageUrl = custom.bookId?.files?.coverImage
+            || custom.sourceBookId?.files?.coverImage
+            || custom.sourceBookId?.coverImage
+            || null;
         res.json({
             success: true,
             status: custom.status,
             bookId: custom.bookId?._id || null,
             title: title || null,
+            coverImageUrl: coverImageUrl || null,
+            progressPage: custom.progressPage ?? 0,
+            progressTotalPages: custom.progressTotalPages ?? 0,
+            errorMessage: custom.errorMessage || null,
         });
     } catch (err) {
         console.error('Monthly book status error:', err);

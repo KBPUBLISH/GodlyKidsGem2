@@ -63,6 +63,9 @@ const customMonthlyBookSchema = new mongoose.Schema({
     errorMessage: {
         type: String,
     },
+    // Progress for loading UI (page index 1-based; 0 = not started)
+    progressPage: { type: Number, default: 0 },
+    progressTotalPages: { type: Number, default: 0 },
     // Notifications sent
     notificationSentAt: { type: Date },
     notification24hSentAt: { type: Date },

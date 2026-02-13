@@ -221,7 +221,7 @@ const CreateYourStoryPage: React.FC = () => {
             </div>
             <h2 className="text-2xl font-bold text-white mb-2">Creating your story{selectedStory?.title ? `: ${selectedStory.title}` : ''}...</h2>
             <p className="text-white/80 mb-2">Your story is being written by angels.</p>
-            <p className="text-amber-200/90">We'll notify you in ~5 minutes when it's ready!</p>
+            <p className="text-amber-200/90">Usually ready in 5–10 minutes. Go explore — we’ll notify you when it’s ready!</p>
             <button
               onClick={() => navigate('/library', { state: { fromCreateYourStory: true } })}
               className="mt-6 px-6 py-3 rounded-xl bg-amber-500 text-white font-bold"
@@ -384,7 +384,7 @@ const CreateYourStoryPage: React.FC = () => {
                 <p className="text-white/70">
                   <strong className="text-amber-200">{childName}</strong> will star in <strong className="text-amber-200">{selectedStory?.title}</strong>.
                 </p>
-                <p className="text-white/50 text-sm">We'll build your book and notify you when it's ready (~5 min).</p>
+                <p className="text-white/50 text-sm">We’ll build your book in the background (usually 5–10 min). Go explore — we’ll notify you when it’s ready.</p>
                 <div className="flex gap-3">
                   <button onClick={() => setStep(3)} className="flex-1 py-3 rounded-xl bg-white/10 text-white">
                     Back

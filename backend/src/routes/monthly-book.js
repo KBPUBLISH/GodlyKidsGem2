@@ -173,6 +173,31 @@ router.post('/create-from-book', async (req, res) => {
 });
 
 /**
+ * POST /api/monthly-book/retry/:customMonthlyBookId
+ * Re-run generation for a book stuck in 'generating' (e.g. after crash). Resumes from the next page.
+ */
+router.post('/retry/:customMonthlyBookId', async (req, res) => {
+    try {
+        const { customMonthlyBookId } = req.params;
+        const custom = await CustomMonthlyBook.findById(customMonthlyBookId).lean();
+        if (!custom) {
+            return res.status(404).json({ success: false, error: 'Not found' });
+        }
+        if (custom.status !== 'generating') {
+            return res.status(400).json({ success: false, error: 'Can only retry a book that is currently generating. Status: ' + custom.status });
+        }
+        const { runMonthlyBookGeneration } = require('../jobs/monthlyBookGenerator');
+        runMonthlyBookGeneration(customMonthlyBookId).catch((err) => {
+            console.error('Monthly book retry error:', err);
+        });
+        res.status(202).json({ success: true, message: 'Retry started. Generation will resume from the next page.' });
+    } catch (err) {
+        console.error('Monthly book retry error:', err);
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+/**
  * GET /api/monthly-book/status/:customMonthlyBookId
  * Check status of a custom book (for polling or deep link).
  */

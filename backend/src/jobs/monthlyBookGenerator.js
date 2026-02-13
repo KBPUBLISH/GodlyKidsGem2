@@ -335,8 +335,13 @@ async function generatePageImageWithVertexGemini(customBook, pageDoc, characterS
     }
 }
 
-/** Number of Gemini attempts per page before failing (no Imagen fallback). */
-const PAGE_GEMINI_MAX_ATTEMPTS = 3;
+/**
+ * Number of Gemini attempts per page before failing (no Imagen fallback).
+ * Vertex charges only for successful image generation; 429 (rate limit) responses are not billed.
+ * So more attempts don't increase cost when they fail—they just give more chances across regions.
+ * Override with MONTHLY_BOOK_GEMINI_MAX_ATTEMPTS (e.g. 20 to try many regions before giving up).
+ */
+const PAGE_GEMINI_MAX_ATTEMPTS = Math.max(1, parseInt(process.env.MONTHLY_BOOK_GEMINI_MAX_ATTEMPTS, 10) || 20);
 
 /** Delay in ms between Gemini retries for page generation. */
 const PAGE_GEMINI_RETRY_DELAY_MS = 2000;
@@ -534,30 +539,60 @@ async function runMonthlyBookGenerationFromBook(customMonthlyBookId, custom, sou
     }
     const pagesToProcess = sourcePages.slice(0, pageCount);
 
-    await CustomMonthlyBook.findByIdAndUpdate(customMonthlyBookId, {
-        progressTotalPages: pageCount,
-        progressPage: 0,
+    const isResume = custom.bookId && (custom.progressPage || 0) >= 1 && (custom.progressTotalPages || 0) > 0;
+    let startIndex = 0;
+    let book = null;
+    let bookTitle;
+    let coverUrl;
+
+    if (isResume) {
+        book = await Book.findById(custom.bookId).lean();
+        if (!book) {
+            console.warn('MonthlyBookGenerator: Resume requested but Book not found', custom.bookId, '- starting from scratch');
+        } else {
+            startIndex = Math.min(custom.progressPage || 0, pagesToProcess.length);
+            bookTitle = book.title;
+            coverUrl = book.files?.coverImage || book.coverImage;
+            console.log('MonthlyBookGenerator: Resuming from page', startIndex + 1, 'of', pagesToProcess.length, 'existing Book', custom.bookId);
+        }
+    }
+
+    if (!isResume || !book) {
+        await CustomMonthlyBook.findByIdAndUpdate(customMonthlyBookId, {
+            progressTotalPages: pageCount,
+            progressPage: 0,
+        });
+        bookTitle = substituteChildName(sourceBook.title, custom.childName) || `${custom.childName}'s ${sourceBook.title}`;
+        const sourceCoverUrl = sourceBook.files?.coverImage || sourceBook.coverImage;
+        coverUrl = sourceCoverUrl ? sourceCoverUrl : await generateCoverImageForBook(custom, sourceBook);
+    }
+
+    const bookIdShort = String(customMonthlyBookId).slice(-8);
+
+    const toPageDoc = (p, bid) => ({
+        bookId: bid,
+        pageNumber: p.pageNumber,
+        content: p.content || {},
+        files: p.files || {},
+        isColoringPage: p.isColoringPage || false,
+        coloringEndModalOnly: p.coloringEndModalOnly !== false,
+        isWebViewPage: p.isWebViewPage || false,
+        webView: p.webView || {},
     });
 
-    const bookTitle = substituteChildName(sourceBook.title, custom.childName) || `${custom.childName}'s ${sourceBook.title}`;
-
-    // Use source book's cover when available (consistent, predictable). Otherwise generate with kid + featured character.
-    const sourceCoverUrl = sourceBook.files?.coverImage || sourceBook.coverImage;
-    const coverUrl = sourceCoverUrl
-        ? sourceCoverUrl
-        : await generateCoverImageForBook(custom, sourceBook);
-
-    const pages = [];
-    for (let i = 0; i < pagesToProcess.length; i++) {
+    for (let i = startIndex; i < pagesToProcess.length; i++) {
+        const pageNum = i + 1;
+        const total = pagesToProcess.length;
+        console.log(`MonthlyBookGenerator: [${bookIdShort}] Starting page ${pageNum}/${total} (loop index ${i})`);
         if (i > 0) {
-            console.log('MonthlyBookGenerator: Waiting', DELAY_BETWEEN_PAGES_MS, 'ms before page', i + 1, '(rate limit avoidance)');
+            console.log('MonthlyBookGenerator: Waiting', DELAY_BETWEEN_PAGES_MS, 'ms before page', pageNum, '(rate limit avoidance)');
             await new Promise((r) => setTimeout(r, DELAY_BETWEEN_PAGES_MS));
         }
         const pageDoc = pagesToProcess[i];
         const portalPrompt = (pageDoc.sceneDescription || '').trim();
         const hasPortalPrompt = portalPrompt.length > 0;
         const preview = hasPortalPrompt ? ` "${portalPrompt.slice(0, 80)}${portalPrompt.length > 80 ? '...' : ''}"` : '';
-        console.log(`MonthlyBookGenerator: Page ${i + 1}/${pagesToProcess.length} ${hasPortalPrompt ? 'using portal scene prompt' : 'using fallback from page text'}${preview}`);
+        console.log(`MonthlyBookGenerator: Page ${pageNum}/${total} ${hasPortalPrompt ? 'using portal scene prompt' : 'using fallback from page text'}${preview}`);
         const pageWithName = substituteChildNameInPage(pageDoc, custom.childName);
         const backgroundUrl = await generatePageImageForBook(
             custom,
@@ -566,7 +601,7 @@ async function runMonthlyBookGenerationFromBook(customMonthlyBookId, custom, sou
             i
         );
         const pagePayload = {
-            pageNumber: i + 1,
+            pageNumber: pageNum,
             content: pageWithName.content || {},
             files: {
                 ...(pageWithName.files || {}),
@@ -580,43 +615,37 @@ async function runMonthlyBookGenerationFromBook(customMonthlyBookId, custom, sou
         if (pageWithName.coloringEndModalOnly != null) pagePayload.coloringEndModalOnly = pageWithName.coloringEndModalOnly;
         if (pageWithName.isWebViewPage != null) pagePayload.isWebViewPage = pageWithName.isWebViewPage;
         if (pageWithName.webView) pagePayload.webView = pageWithName.webView;
-        pages.push(pagePayload);
 
-        await CustomMonthlyBook.findByIdAndUpdate(customMonthlyBookId, { progressPage: i + 1 });
+        if (!book) {
+            // Create book and first page so user can open and test (text, TTS, etc.) while the rest generate
+            book = await Book.create({
+                title: bookTitle,
+                author: sourceBook.author || 'GodlyKids',
+                description: substituteChildName(sourceBook.description || `A custom story for ${custom.childName}.`, custom.childName),
+                status: 'published',
+                bookType: 'standard',
+                pages: [pagePayload],
+                files: {
+                    coverImage: coverUrl,
+                    images: [],
+                    videos: [],
+                    audio: [],
+                },
+                showCharacterOverlay: sourceBook.showCharacterOverlay || false,
+            });
+            await Page.create(toPageDoc(pagePayload, book._id));
+            await CustomMonthlyBook.findByIdAndUpdate(customMonthlyBookId, { bookId: book._id, progressPage: pageNum });
+            console.log(`MonthlyBookGenerator: [${bookIdShort}] Book created; preview at /book/${book._id} (${pageNum} page). More pages will appear as they generate.`);
+        } else {
+            await Book.findByIdAndUpdate(book._id, { $push: { pages: pagePayload } });
+            await Page.create(toPageDoc(pagePayload, book._id));
+            await CustomMonthlyBook.findByIdAndUpdate(customMonthlyBookId, { progressPage: pageNum });
+        }
+        console.log(`MonthlyBookGenerator: [${bookIdShort}] Finished page ${pageNum}/${total}`);
     }
-
-    const book = await Book.create({
-        title: bookTitle,
-        author: sourceBook.author || 'GodlyKids',
-        description: substituteChildName(sourceBook.description || `A custom story for ${custom.childName}.`, custom.childName),
-        status: 'published',
-        bookType: 'standard',
-        pages,
-        files: {
-            coverImage: coverUrl,
-            images: [],
-            videos: [],
-            audio: [],
-        },
-        showCharacterOverlay: sourceBook.showCharacterOverlay || false,
-    });
-
-    // Create Page documents so GET /api/pages/book/:bookId returns them (app reader loads from Page collection)
-    const pageDocs = pages.map((p) => ({
-        bookId: book._id,
-        pageNumber: p.pageNumber,
-        content: p.content || {},
-        files: p.files || {},
-        isColoringPage: p.isColoringPage || false,
-        coloringEndModalOnly: p.coloringEndModalOnly !== false,
-        isWebViewPage: p.isWebViewPage || false,
-        webView: p.webView || {},
-    }));
-    await Page.insertMany(pageDocs);
 
     await CustomMonthlyBook.findByIdAndUpdate(customMonthlyBookId, {
         status: 'completed',
-        bookId: book._id,
         notificationSentAt: new Date(),
     });
 
@@ -638,19 +667,40 @@ async function runMonthlyBookGenerationFromBook(customMonthlyBookId, custom, sou
  * If sourceBookId: Book-based flow. Else: template-based flow.
  */
 async function runMonthlyBookGeneration(customMonthlyBookId) {
-    const custom = await CustomMonthlyBook.findById(customMonthlyBookId)
+    let custom = await CustomMonthlyBook.findById(customMonthlyBookId)
         .populate('templateId')
         .lean();
     if (!custom) {
         console.error('MonthlyBookGenerator: CustomMonthlyBook not found', customMonthlyBookId);
         return;
     }
-    if (custom.status !== 'pending') {
-        console.log('MonthlyBookGenerator: Skipping non-pending', customMonthlyBookId, custom.status);
+    const isResume = custom.status === 'generating' && custom.bookId && custom.progressPage >= 1 && (custom.progressTotalPages || 0) > custom.progressPage;
+    if (custom.status === 'completed' || custom.status === 'failed') {
+        console.log('MonthlyBookGenerator: Skipping completed/failed', customMonthlyBookId, custom.status);
         return;
     }
-
-    await CustomMonthlyBook.findByIdAndUpdate(customMonthlyBookId, { status: 'generating' });
+    if (custom.status === 'pending' || isResume) {
+        if (custom.status === 'pending') {
+            // Claim the job so only one worker processes this book (avoid concurrent runs skipping/duplicating pages)
+            const updated = await CustomMonthlyBook.findOneAndUpdate(
+                { _id: customMonthlyBookId, status: 'pending' },
+                { $set: { status: 'generating' } },
+                { new: true }
+            );
+            if (!updated) {
+                console.log('MonthlyBookGenerator: Book already claimed or not pending', customMonthlyBookId);
+                return;
+            }
+            custom = updated;
+        } else {
+            // Resuming: re-fetch to get latest progressPage
+            custom = await CustomMonthlyBook.findById(customMonthlyBookId).populate('templateId').lean();
+            console.log('MonthlyBookGenerator: Resuming', customMonthlyBookId, 'from page', custom.progressPage + 1, 'of', custom.progressTotalPages);
+        }
+    } else {
+        console.log('MonthlyBookGenerator: Skipping', customMonthlyBookId, custom.status);
+        return;
+    }
 
     try {
         if (custom.sourceBookId) {

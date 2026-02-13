@@ -465,7 +465,7 @@ const LibraryPage: React.FC = () => {
                           </div>
                           <div className="p-2">
                             <p className="text-white font-medium text-sm truncate">{item.title}</p>
-                            <p className="text-amber-200/80 text-xs">Tap to see progress</p>
+                            <p className="text-amber-200/80 text-xs">Usually 5–10 min · tap to see progress</p>
                           </div>
                         </button>
                       )}

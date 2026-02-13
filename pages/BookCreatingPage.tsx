@@ -30,6 +30,7 @@ const BookCreatingPage: React.FC = () => {
   const [status, setStatus] = useState<StatusResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [retrying, setRetrying] = useState(false);
 
   const fetchStatus = useCallback(async () => {
     if (!customMonthlyBookId) return;
@@ -182,11 +183,47 @@ const BookCreatingPage: React.FC = () => {
                 <p className="text-amber-200/80 text-xs mt-2">
                   {current} of {total} pages complete
                 </p>
+                {status.bookId && current > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => navigate(`/book/${status.bookId}`)}
+                    className="mt-4 w-full py-3 rounded-xl bg-amber-500 text-white font-bold flex items-center justify-center gap-2"
+                  >
+                    <BookOpen className="w-5 h-5" />
+                    Preview book ({current} page{current === 1 ? '' : 's'})
+                  </button>
+                )}
               </div>
             </div>
             <p className="text-center text-white/50 text-sm mt-4">
-              You can leave and come back. Your book will appear in My Library when ready.
+              Usually ready in 5–10 minutes. Go explore the app — your book will show in My Library when it’s done.
+              {status.bookId && current > 0 && ' You can open it now to preview while the rest generate.'}
             </p>
+            {isGenerating && total > 0 && current < total && (
+              <div className="text-center mt-4">
+                <button
+                  type="button"
+                  disabled={retrying}
+                  onClick={async () => {
+                    if (!customMonthlyBookId) return;
+                    setRetrying(true);
+                    try {
+                      const base = getApiRoot();
+                      const res = await fetch(`${base}/api/monthly-book/retry/${customMonthlyBookId}`, { method: 'POST' });
+                      const data = await res.json().catch(() => ({}));
+                      if (data.success) {
+                        await fetchStatus();
+                      }
+                    } finally {
+                      setRetrying(false);
+                    }
+                  }}
+                  className="text-amber-300 hover:text-amber-200 text-sm underline disabled:opacity-50"
+                >
+                  {retrying ? 'Retrying…' : 'Generation stuck? Tap to resume from next page'}
+                </button>
+              </div>
+            )}
           </div>
         )}
       </div>

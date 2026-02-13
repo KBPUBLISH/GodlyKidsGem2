@@ -244,7 +244,7 @@ const SelfieCapture: React.FC<SelfieCaptureProps> = ({
                   <img
                     src={frameOverlayImageUrl}
                     alt=""
-                    className="w-full h-full object-contain opacity-50"
+                    className="w-full h-full object-contain"
                     aria-hidden
                   />
                 ) : (

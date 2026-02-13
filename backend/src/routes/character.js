@@ -4,7 +4,7 @@ const crypto = require('crypto');
 const { bucket } = require('../config/storage');
 const { GoogleGenAI } = require('@google/genai');
 
-// Settings: where we place the full-body character (default forest)
+// Settings: background for waist-up character (default forest)
 const SETTINGS = {
     forest: 'a sun-dappled enchanted forest with tall trees, soft moss, and gentle light filtering through leaves',
     meadow: 'a peaceful flower meadow with butterflies and blue sky',
@@ -13,32 +13,32 @@ const SETTINGS = {
 
 const DEFAULT_SETTING = 'forest';
 
-// Style prompts: full-body character in a setting (not just a portrait). Selfie is reference for face/identity.
-// {{SETTING}} is replaced with SETTINGS[settingId]. We explicitly require background replacement and full style transform (no keeping the original room/photo look).
+// Style prompts: waist-up, face-focused character. Selfie is reference for face/identity.
+// {{SETTING}} is replaced with SETTINGS[settingId]. Composition: zoom in on character (waist up), face is the main focus; background secondary.
 const STYLE_PROMPTS = {
     pixar: {
-        prompt: "Using this photo as the only reference for this child's face and identity, generate one image: the child as a full-body character in Pixar 3D animated style, standing or walking in {{SETTING}}. Replace the entire background with {{SETTING}}; do not keep the original room or indoor setting. Fully transform the image into Pixar 3D animation style—smooth, stylized, not photorealistic. Rounded features, vibrant colors, playful energy. The child must be full body (head to feet visible). Keep the child's face recognizable from the photo; body and environment in Pixar style.",
-        negativePrompt: "realistic, photograph, scary, dark, flat, portrait only, close-up face only"
+        prompt: "Using this photo as the only reference for this person's face and identity, generate one image: the person as a character in Pixar 3D animated style, shown from the WAIST UP (head and upper body only; do not show full body or feet). The FACE must be the main focus and clearly recognizable—zoom in so the face and upper body fill most of the frame. Soft, blurred {{SETTING}} in the background; the character is the focus, not the background. Pixar style: rounded features, vibrant colors, playful. Keep the face recognizable from the photo.",
+        negativePrompt: "realistic, photograph, scary, dark, full body, head to feet, distant shot, background dominant"
     },
     minecraft: {
-        prompt: "Using this photo as the only reference for this child's face and identity, generate one image: the child as a full-body Minecraft-style blocky character, standing in {{SETTING}}. Replace the entire background with {{SETTING}}; do not keep the original room or setting. Square head and body, voxel style. The child must be full body (head to feet visible). Keep facial features recognizable but blocky; friendly, bright colors.",
-        negativePrompt: "realistic, smooth, round, detailed photograph, blurry, portrait only, close-up only"
+        prompt: "Using this photo as the only reference for this person's face and identity, generate one image: the person as a Minecraft-style blocky character, shown from the WAIST UP (head and upper body only). The FACE must be the main focus—zoom in so the face and upper body fill most of the frame. Soft {{SETTING}} in the background; character is the focus. Square head and body, voxel style. Keep facial features recognizable but blocky; friendly, bright colors.",
+        negativePrompt: "realistic, smooth, full body, distant shot, background dominant, blurry"
     },
     disney: {
-        prompt: "Using this photo as the only reference for this child's face and identity, generate one image: the child as a full-body character in Disney 3D animated style, standing or walking in {{SETTING}}. Replace the entire background with {{SETTING}}—the scene must be only the forest (or chosen setting); do not keep the original room, desk, TV, or indoor background. Fully transform into Disney 3D animated style: smooth stylized features, big sparkling eyes, magical glow, like a Disney movie character—not a photograph or realistic image. The child must be full body (head to feet visible). Keep face recognizable; enchanting, family-friendly atmosphere.",
-        negativePrompt: "realistic, photograph, scary, dark, villainous, portrait only, close-up only"
+        prompt: "Using this photo as the only reference for this person's face and identity, generate one image: the person as a character in Disney 3D animated style, shown from the WAIST UP (head and upper body only). The FACE must be the main focus—zoom in so the face and upper body fill most of the frame. Soft {{SETTING}} in the background; character is the focus. Disney style: big sparkling eyes, magical glow. Keep face recognizable; enchanting, family-friendly.",
+        negativePrompt: "realistic, photograph, scary, full body, head to feet, distant shot, background dominant"
     },
     lego: {
-        prompt: "Using this photo as the only reference for this child's face and identity, generate one image: the child as a full-body LEGO minifigure style character, standing in {{SETTING}}. Replace the entire background with {{SETTING}}; do not keep the original room or indoor setting. Yellow plastic skin, simple features. Full body visible in the scene. Keep hair color/style recognizable.",
-        negativePrompt: "realistic skin tone, complex features, photograph, scary, portrait only"
+        prompt: "Using this photo as the only reference for this person's face and identity, generate one image: the person as a LEGO minifigure style character, shown from the WAIST UP (head and upper body only). The FACE must be the main focus—zoom in so the face and upper body fill most of the frame. Soft {{SETTING}} in the background. Yellow plastic skin, simple features. Keep hair color/style recognizable.",
+        negativePrompt: "realistic skin tone, full body, distant shot, photograph, scary"
     },
     cartoon: {
-        prompt: "Using this photo as the only reference for this child's face and identity, generate one image: the child as a full-body cute 2D cartoon character, standing in {{SETTING}}. Replace the entire background with {{SETTING}}; do not keep the original room or setting. Big expressive eyes, simplified features, bright colors. Full body (head to feet) in the scene.",
-        negativePrompt: "realistic, 3D, photograph, scary, portrait only, close-up only"
+        prompt: "Using this photo as the only reference for this person's face and identity, generate one image: the person as a cute 2D cartoon character, shown from the WAIST UP (head and upper body only). The FACE must be the main focus—zoom in so the face and upper body fill most of the frame. Soft {{SETTING}} in the background; character is the focus. Big expressive eyes, simplified features, bright colors.",
+        negativePrompt: "realistic, 3D, photograph, full body, distant shot, background dominant"
     },
     illustrated: {
-        prompt: "Using this photo as the only reference for this child's face and identity, generate one image: the child as a full-body character in children's book illustration style, standing in {{SETTING}}. Replace the entire background with {{SETTING}}; do not keep the original room or setting. Soft watercolor textures, gentle colors, whimsical. Full body visible in the scene.",
-        negativePrompt: "realistic, photograph, harsh colors, scary, portrait only, close-up only"
+        prompt: "Using this photo as the only reference for this person's face and identity, generate one image: the person as a character in children's book illustration style, shown from the WAIST UP (head and upper body only). The FACE must be the main focus—zoom in so the face and upper body fill most of the frame. Soft {{SETTING}} in the background. Soft watercolor textures, gentle colors, whimsical. Keep face recognizable.",
+        negativePrompt: "realistic, photograph, harsh colors, full body, distant shot, background dominant"
     }
 };
 
@@ -163,17 +163,16 @@ const generateCharacterWithConsumerGemini = async (imageBase64, styleId, resolve
 // Vertex Imagen with selfie as subject reference (imagen-3.0-capability-001). Fallback when Gemini fails. Output is used as childCharacterImageUrl in books.
 const generateCharacterWithVertexImagenSelfie = async (imageBase64, styleId, accessToken, projectId, resolvedPrompt, setting = null) => {
     const styleDescriptions = {
-        minecraft: 'Minecraft blocky pixel art character, full body',
-        lego: 'LEGO minifigure style character, full body',
-        cartoon: '2D cartoon character with big eyes, full body',
-        illustrated: 'children\'s book watercolor illustration character, full body',
-        disney: 'Disney 3D animated character, full body, big sparkling eyes',
-        pixar: 'Pixar 3D animated character, full body, rounded features'
+        minecraft: 'Minecraft blocky pixel art character, waist up',
+        lego: 'LEGO minifigure style character, waist up',
+        cartoon: '2D cartoon character with big eyes, waist up',
+        illustrated: 'children\'s book watercolor illustration character, waist up',
+        disney: 'Disney 3D animated character, waist up, big sparkling eyes',
+        pixar: 'Pixar 3D animated character, waist up, rounded features'
     };
     const styleDesc = styleDescriptions[styleId] || styleDescriptions.illustrated;
     const scene = setting || SETTINGS[DEFAULT_SETTING];
-    // Same person + explicit background: scene must be the described setting, not the reference photo's room/indoor background. Only include accessories (e.g. glasses) if visible in the reference; do not add them otherwise.
-    const prompt = `The child in the reference photo [1], and only that child, as a ${styleDesc}, standing in ${scene}. The background must be only this scene (e.g. forest), not the reference photo's room or indoor setting. Keep the child's face and identity exactly from the reference. Only include glasses or other accessories if they are clearly visible in the reference photo; do not add glasses, headphones, or any accessory that is not in the photo. Fully stylized (e.g. Disney/Pixar look), not photorealistic. Full body from head to feet. Family-friendly.`;
+    const prompt = `The person in the reference photo [1], and only that person, as a ${styleDesc}, with ${scene} as a soft background. Show from the WAIST UP only (head and upper body); the FACE must be the main focus and fill most of the frame. Background soft and secondary. Keep the person's face and identity exactly from the reference. Only include glasses or other accessories if clearly visible in the reference; do not add any accessory not in the photo. Fully stylized (e.g. Disney/Pixar look), not photorealistic. Family-friendly.`;
 
     const cleanBase64 = imageBase64.replace(/^data:image\/\w+;base64,/, '');
 
@@ -229,7 +228,7 @@ const generateCharacterWithVertexImagenSelfie = async (imageBase64, styleId, acc
 };
 
 // Generate character: try Gemini first (best face preservation; this URL becomes childCharacterImageUrl for the book), then Imagen with selfie, then text-only.
-// settingId: optional, one of SETTINGS keys (default forest) — used to replace {{SETTING}} in the prompt for full-body-in-scene.
+// settingId: optional, one of SETTINGS keys (default forest) — used to replace {{SETTING}} in the prompt.
 const generateCharacterImage = async (imageBase64, styleId, settingId = null) => {
     const style = STYLE_PROMPTS[styleId];
     if (!style) {
@@ -361,9 +360,9 @@ router.post('/generate', async (req, res) => {
         }
 
         const setting = settingId && SETTINGS[settingId] ? settingId : DEFAULT_SETTING;
-        console.log(`🎨 Generating full-body ${styleId} character in ${setting} for ${childName || 'child'}...`);
+        console.log(`🎨 Generating waist-up ${styleId} character in ${setting} for ${childName || 'child'}...`);
 
-        // Generate the character image (full body in setting)
+        // Generate the character image (waist-up, face-focused)
         const generatedImageBase64 = await generateCharacterImage(imageBase64, styleId, setting);
 
         // Create unique filename

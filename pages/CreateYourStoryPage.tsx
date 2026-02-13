@@ -341,22 +341,22 @@ const CreateYourStoryPage: React.FC = () => {
                   <img
                     src="/assets/images/create-story-you-are-the-character.png"
                     alt="You are the Character!"
-                    className="max-w-[200px] w-full h-auto block"
+                    className="max-w-[280px] w-full h-auto block"
                   />
                 </div>
                 <h2 className="text-base font-bold text-white flex-shrink-0">{selectedStyleId ? 'Now take your selfie' : '1. Choose your character style'}</h2>
                 <p className="text-white/70 text-xs flex-shrink-0 min-w-0">
                   {selectedStyleId
-                    ? "2. We'll turn your photo into a full-body character in a scene."
-                    : "Pick a style below (Pixar, Minecraft, Disney…). Then you'll take a selfie and we'll place you full-body in a fun scene."}
+                    ? "2. We'll turn your photo into a character in a scene (waist-up, face-focused)."
+                    : "Pick a style below (Pixar, Minecraft, Disney…). Then you'll take a selfie and we'll place you in a fun scene (waist-up, face-focused)."}
                 </p>
                 {!selectedStyleId ? (
-                  <div className="grid grid-cols-2 gap-2 max-w-[240px] mx-auto flex-1 min-h-0 content-start">
+                  <div className="grid grid-cols-2 gap-2 max-w-[240px] mx-auto flex-1 min-h-0 content-center mt-8">
                     {CHARACTER_STYLES.map((style) => (
                       <button
                         key={style.id}
                         onClick={() => setSelectedStyleId(style.id)}
-                        className="block w-full focus:outline-none focus:ring-0 active:opacity-90"
+                        className="block w-full focus:outline-none focus:ring-0 active:opacity-90 drop-shadow-lg"
                         type="button"
                       >
                         <img
@@ -379,8 +379,8 @@ const CreateYourStoryPage: React.FC = () => {
                             className="absolute inset-0 w-full h-full object-contain pointer-events-none"
                           />
                           <div className="absolute inset-0 flex items-center justify-center">
-                            <div className="w-[62%] h-[62%] rounded-full overflow-hidden bg-[#0a0a0a] flex items-center justify-center">
-                              <img src={avatarUrl} alt="Your character" className="w-full h-full object-cover" />
+                            <div className="w-[72%] h-[72%] rounded-full overflow-hidden bg-[#0a0a0a] flex items-center justify-center">
+                              <img src={avatarUrl} alt="Your character" className="w-full h-full object-cover object-top" />
                             </div>
                           </div>
                         </div>
@@ -408,7 +408,7 @@ const CreateYourStoryPage: React.FC = () => {
                           disabled={isGeneratingCharacter}
                           className="absolute inset-0 flex items-center justify-center focus:outline-none focus:ring-0"
                         >
-                          <div className="w-[62%] h-[62%] rounded-full overflow-hidden bg-amber-500/10 border-2 border-dashed border-amber-400/50 flex flex-col items-center justify-center gap-2 text-amber-200">
+                          <div className="w-[72%] h-[72%] rounded-full overflow-hidden bg-amber-500/10 border-2 border-dashed border-amber-400/50 flex flex-col items-center justify-center gap-2 text-amber-200">
                             {isGeneratingCharacter ? <span className="text-sm">Creating your character...</span> : <><BookOpen className="w-10 h-10" /> <span className="text-sm">Tap to take selfie</span></>}
                           </div>
                         </button>
@@ -416,7 +416,7 @@ const CreateYourStoryPage: React.FC = () => {
                     )}
                   </>
                 )}
-                <div className="flex gap-2 flex-shrink-0 items-center w-full">
+                <div className="flex gap-2 flex-shrink-0 items-center w-full mt-auto pt-4 pb-4" style={{ paddingBottom: 'max(1rem, var(--safe-area-bottom, 0px))' }}>
                   <button
                     onClick={() => {
                     if (selectedStyleId) {
@@ -427,7 +427,7 @@ const CreateYourStoryPage: React.FC = () => {
                       setStep(1);
                     }
                   }}
-                    className="flex-1 py-2.5 text-sm rounded-xl bg-white/10 text-white"
+                    className="flex-1 py-2.5 text-sm rounded-xl bg-white/10 text-white drop-shadow-md"
                   >
                     Back
                   </button>
@@ -521,7 +521,7 @@ const CreateYourStoryPage: React.FC = () => {
         onCapture={handleSelfieCapture}
         onClose={() => setShowSelfieModal(false)}
         childName={childName || 'there'}
-        frameOverlayImageUrl="/assets/images/create-story-selfie-frame.png"
+        frameOverlayImageUrl="/assets/images/create-story-selfie-porthole-overlay.png"
       />
 
       <CharacterStyleSelector

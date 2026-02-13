@@ -1480,7 +1480,10 @@ const PageEditor: React.FC = () => {
                                                         }
                                                     } catch (err: any) {
                                                         console.error('Analyze scene prompt error:', err);
-                                                        alert(err.response?.data?.error || err.message || 'Analysis failed. Try "Generate from page text".');
+                                                        const data = err.response?.data;
+                                                        const msg = data?.error || err.message || 'Analysis failed. Try "Generate from page text".';
+                                                        const details = data?.details ? ` (${String(data.details).slice(0, 150)})` : '';
+                                                        alert(msg + details);
                                                     } finally {
                                                         setAnalyzingScenePrompt(false);
                                                     }

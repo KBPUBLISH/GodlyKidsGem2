@@ -1767,6 +1767,9 @@ const BookReaderPage: React.FC = () => {
         };
     }, [bookId, pages.length, bookTitle]);
 
+    // Default scroll asset so pages with text show the parchment + swipe-up/down UI when no scroll is set (e.g. custom monthly books)
+    const DEFAULT_SCROLL_URL = '/daily-session/scroll-bg.png';
+
     // Helper to map page data to include all file URLs
     const mapPage = (page: Page | undefined) => {
         if (!page) return null;
@@ -1775,13 +1778,16 @@ const BookReaderPage: React.FC = () => {
         // Ensure empty strings are treated as no scroll
         const rawScrollUrl = page.scrollUrl || page.files?.scroll?.url || '';
         const extractedScrollUrl = rawScrollUrl.trim() || '';
+        // When page has text but no scroll asset, use default so the scroll UI (parchment + swipe up/down) appears
+        const hasText = (page.content?.textBoxes?.length ?? 0) > 0 || (page.textBoxes?.length ?? 0) > 0;
+        const scrollUrl = extractedScrollUrl || (hasText ? DEFAULT_SCROLL_URL : '');
         
         return {
             ...page,
             id: page._id,
             // Extract URLs from files object if not at root level
             soundEffectUrl: page.files?.soundEffect?.url || page.soundEffectUrl,
-            scrollUrl: extractedScrollUrl,
+            scrollUrl,
             backgroundUrl: page.backgroundUrl || page.files?.background?.url,
         };
     };

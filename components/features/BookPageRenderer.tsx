@@ -72,8 +72,11 @@ interface PageData {
     // Image sequence - multiple images that cycle with transitions
     useImageSequence?: boolean;
     imageSequence?: ImageSequenceItem[];
-    imageSequenceDuration?: number; // seconds per image (default 3)
+    imageSequenceDuration?: number; // seconds per image (default 10)
     imageSequenceAnimation?: 'none' | 'panLeft' | 'panRight' | 'panUp' | 'panDown' | 'zoomIn' | 'zoomOut' | 'kenBurns'; // animation effect
+    // Single background image animation (e.g. kids monthly generated pages)
+    backgroundImageAnimation?: 'none' | 'panLeft' | 'panRight' | 'panUp' | 'panDown' | 'zoomIn' | 'zoomOut' | 'kenBurns';
+    backgroundImageAnimationDuration?: number; // seconds (default 10)
     // Character overlay settings (from AI or manual)
     characterOverlay?: CharacterOverlay;
 }
@@ -705,20 +708,95 @@ export const BookPageRenderer: React.FC<BookPageRendererProps> = ({
                         }}
                     />
                 ) : page.backgroundUrl ? (
-                    <img
-                        src={page.backgroundUrl}
-                        alt={`Page ${page.pageNumber}`}
-                        className="w-full h-full object-cover"
-                        loading="eager"
-                        style={{
-                            // Lock image in place
-                            position: 'absolute',
-                            top: 0,
-                            left: 0,
-                            width: '100%',
-                            height: '100%',
-                        }}
-                    />
+                    (() => {
+                        const bgAnim = page.backgroundImageAnimation ?? 'kenBurns';
+                        const bgDuration = page.backgroundImageAnimationDuration ?? 10;
+                        const useAnim = bgAnim && bgAnim !== 'none';
+                        const kenBurnsVariants = ['imageKenBurns1', 'imageKenBurns2', 'imageKenBurns3', 'imageKenBurns4'];
+                        const getBgAnimationStyle = (): React.CSSProperties => {
+                            if (!useAnim) return {};
+                            const base: React.CSSProperties = {
+                                animationDuration: `${bgDuration}s`,
+                                animationTimingFunction: 'ease-in-out',
+                                animationFillMode: 'forwards',
+                                animationIterationCount: 1,
+                            };
+                            switch (bgAnim) {
+                                case 'zoomIn': return { ...base, animationName: 'imageZoomIn' };
+                                case 'zoomOut': return { ...base, animationName: 'imageZoomOut' };
+                                case 'panLeft': return { ...base, animationName: 'imagePanLeft' };
+                                case 'panRight': return { ...base, animationName: 'imagePanRight' };
+                                case 'panUp': return { ...base, animationName: 'imagePanUp' };
+                                case 'panDown': return { ...base, animationName: 'imagePanDown' };
+                                case 'kenBurns': return { ...base, animationName: kenBurnsVariants[page.pageNumber % kenBurnsVariants.length] };
+                                default: return {};
+                            }
+                        };
+                        return (
+                            <>
+                                <img
+                                    src={page.backgroundUrl}
+                                    alt={`Page ${page.pageNumber}`}
+                                    className="w-full h-full object-cover"
+                                    loading="eager"
+                                    style={{
+                                        position: 'absolute',
+                                        left: useAnim ? '-5%' : 0,
+                                        top: useAnim ? '-5%' : 0,
+                                        minWidth: useAnim ? '110%' : '100%',
+                                        minHeight: useAnim ? '110%' : '100%',
+                                        width: useAnim ? undefined : '100%',
+                                        height: useAnim ? undefined : '100%',
+                                        ...getBgAnimationStyle(),
+                                    }}
+                                />
+                                {useAnim && (
+                                    <style>{`
+                                        @keyframes imageZoomIn {
+                                            from { transform: scale(1) translate(0, 0); }
+                                            to { transform: scale(1.15) translate(0, 0); }
+                                        }
+                                        @keyframes imageZoomOut {
+                                            from { transform: scale(1.15) translate(0, 0); }
+                                            to { transform: scale(1) translate(0, 0); }
+                                        }
+                                        @keyframes imagePanLeft {
+                                            from { transform: scale(1.1) translateX(3%); }
+                                            to { transform: scale(1.1) translateX(-3%); }
+                                        }
+                                        @keyframes imagePanRight {
+                                            from { transform: scale(1.1) translateX(-3%); }
+                                            to { transform: scale(1.1) translateX(3%); }
+                                        }
+                                        @keyframes imagePanUp {
+                                            from { transform: scale(1.1) translateY(3%); }
+                                            to { transform: scale(1.1) translateY(-3%); }
+                                        }
+                                        @keyframes imagePanDown {
+                                            from { transform: scale(1.1) translateY(-3%); }
+                                            to { transform: scale(1.1) translateY(3%); }
+                                        }
+                                        @keyframes imageKenBurns1 {
+                                            from { transform: scale(1) translate(0, 0); }
+                                            to { transform: scale(1.12) translate(-2%, -1%); }
+                                        }
+                                        @keyframes imageKenBurns2 {
+                                            from { transform: scale(1.12) translate(2%, 1%); }
+                                            to { transform: scale(1) translate(-1%, 2%); }
+                                        }
+                                        @keyframes imageKenBurns3 {
+                                            from { transform: scale(1) translate(1%, -1%); }
+                                            to { transform: scale(1.1) translate(2%, 1%); }
+                                        }
+                                        @keyframes imageKenBurns4 {
+                                            from { transform: scale(1.1) translate(-1%, 2%); }
+                                            to { transform: scale(1) translate(0, -1%); }
+                                        }
+                                    `}</style>
+                                )}
+                            </>
+                        );
+                    })()
                 ) : null}
             </div>
 

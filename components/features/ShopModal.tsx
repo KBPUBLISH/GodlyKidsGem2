@@ -3,7 +3,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import WoodButton from '../ui/WoodButton';
-import { X, ShoppingBag, Check, Trash2, Crown, Wrench, Play, Pause, ArrowUpToLine, ArrowDownToLine, MoveHorizontal, RotateCcw, RotateCw, ArrowLeftRight, Activity, Save, User, ZoomIn, ZoomOut, Mic } from 'lucide-react';
+import { X, ShoppingBag, Check, Trash2, Crown, Wrench, Play, Pause, ArrowUpToLine, ArrowDownToLine, MoveHorizontal, RotateCcw, RotateCw, ArrowLeftRight, Activity, Save, User, ZoomIn, ZoomOut, Mic, ImageIcon } from 'lucide-react';
 import { useUser, ShopItem, SavedCharacter } from '../../context/UserContext';
 import AvatarCompositor from '../avatar/AvatarCompositor';
 import { AVATAR_ASSETS } from '../avatar/AvatarAssets';
@@ -17,6 +17,34 @@ interface ShopModalProps {
     onClose: () => void;
     initialTab?: ShopTab;
     hideCloseButton?: boolean; // Hide X button during tutorial
+}
+
+/** Resolve public avatar asset URL so it works with Vite base path (e.g. deployed to subpath). */
+function getAvatarAssetUrl(path: string): string {
+    if (!path || !path.startsWith('/')) return path;
+    const base = (typeof import.meta !== 'undefined' && (import.meta as any).env?.BASE_URL) || '/';
+    const baseNorm = base.endsWith('/') ? base.slice(0, -1) : base;
+    return baseNorm + path;
+}
+
+/** Renders an image with a fallback icon when the asset fails to load (missing file or wrong base path). */
+function ShopImageWithFallback({ src, alt, className }: { src: string; alt?: string; className?: string }) {
+    const [failed, setFailed] = useState(false);
+    if (failed || !src) {
+        return (
+            <div className={`flex items-center justify-center bg-[#eecaa0]/30 ${className || ''}`} title={alt || 'Image'}>
+                <ImageIcon className="w-8 h-8 text-[#8B4513]/50" />
+            </div>
+        );
+    }
+    return (
+        <img
+            src={src}
+            alt={alt || ''}
+            className={className}
+            onError={() => setFailed(true)}
+        />
+    );
 }
 
 // --- SHOP DATA ---
@@ -514,7 +542,7 @@ const ShopModal: React.FC<ShopModalProps> = ({ isOpen, onClose, initialTab, hide
                                 </svg>
                             </div>
                         ) : (
-                            <img src={item.value} alt={item.name} className="w-full h-full object-cover" />
+                            <ShopImageWithFallback src={getAvatarAssetUrl(item.value)} alt={item.name} className="w-full h-full object-cover" />
                         )
                     )}
                     {item.type === 'animation' && (
@@ -539,7 +567,7 @@ const ShopModal: React.FC<ShopModalProps> = ({ isOpen, onClose, initialTab, hide
                     )}
                     {(['hat', 'body', 'leftArm', 'rightArm', 'legs'].includes(item.type)) && (
                         item.value.startsWith('/') ? (
-                            <img src={item.value} alt={item.name || item.type} className="w-full h-full object-contain p-1" />
+                            <ShopImageWithFallback src={getAvatarAssetUrl(item.value)} alt={item.name || item.type} className="w-full h-full object-contain p-1" />
                         ) : AVATAR_ASSETS[item.value] ? (
                             <svg viewBox="0 0 100 100" className="w-full h-full p-2 overflow-visible">
                                 {AVATAR_ASSETS[item.value]}
@@ -547,9 +575,9 @@ const ShopModal: React.FC<ShopModalProps> = ({ isOpen, onClose, initialTab, hide
                         ) : null
                     )}
                     {item.type === 'background' && (
-                        <img 
-                            src={item.value} 
-                            alt={item.name} 
+                        <ShopImageWithFallback
+                            src={item.value.startsWith('/') ? getAvatarAssetUrl(item.value) : item.value}
+                            alt={item.name}
                             className="w-full h-full object-cover rounded-lg"
                         />
                     )}

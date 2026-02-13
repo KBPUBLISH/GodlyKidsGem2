@@ -341,8 +341,37 @@ router.get('/by-source', async (req, res) => {
 });
 
 /**
+ * Get Vertex AI access token and project ID from GCP credentials (same as monthly book image generation).
+ * Returns { accessToken, projectId } or null if not configured.
+ */
+async function getVertexForAnalyzeScene() {
+    const credentialsJson = process.env.GCS_CREDENTIALS_JSON || process.env.GOOGLE_SERVICE_ACCOUNT_JSON;
+    if (!credentialsJson) return null;
+    try {
+        const credentials = JSON.parse(credentialsJson);
+        const projectId = credentials.project_id;
+        if (!projectId) return null;
+        const { GoogleAuth } = require('google-auth-library');
+        const auth = new GoogleAuth({
+            credentials,
+            scopes: ['https://www.googleapis.com/auth/cloud-platform'],
+        });
+        const client = await auth.getClient();
+        const tokenResponse = await client.getAccessToken();
+        const accessToken = tokenResponse.token;
+        if (!accessToken) return null;
+        return { accessToken, projectId };
+    } catch (err) {
+        console.warn('analyze-scene-prompt: Vertex credentials error', err.message);
+        return null;
+    }
+}
+
+/**
  * POST /api/monthly-book/analyze-scene-prompt
  * Portal: analyze page text to produce an image prompt with setting/background and character consistency.
+ * Uses Vertex AI (Gemini 2.0 Flash) when GCP credentials are set, to avoid Consumer API region restrictions.
+ * Falls back to Consumer Gemini API (GEMINI_API_KEY) when Vertex is not available.
  * Body: { pageText: string, bookId: string }
  * Returns: { sceneDescription: string }
  */
@@ -351,10 +380,6 @@ router.post('/analyze-scene-prompt', async (req, res) => {
         const { pageText, bookId } = req.body;
         if (!pageText || typeof pageText !== 'string') {
             return res.status(400).json({ error: 'pageText is required' });
-        }
-        const geminiKey = process.env.GEMINI_API_KEY;
-        if (!geminiKey) {
-            return res.status(503).json({ error: 'AI analysis not configured (GEMINI_API_KEY)' });
         }
 
         let characterConsistencyBlock = '';
@@ -384,25 +409,61 @@ Tasks:
 3. If the text mentions a child or main character, you can refer to "the child" or use @child. For other named characters use their name (e.g. Jesus, Mary). Keep the same tone: warm, children's book, faith-friendly.
 4. Output ONLY the scene description. No labels like "Scene:" or "Setting:". Plain paragraph(s) that can be used as the image prompt.${characterConsistencyBlock}`;
 
+        const payload = {
+            contents: [{ role: 'user', parts: [{ text: userPrompt }] }],
+            generationConfig: { temperature: 0.4, maxOutputTokens: 512 },
+        };
+
+        // Prefer Vertex AI (explicit region) to avoid Consumer API "User location is not supported"
+        const vertex = await getVertexForAnalyzeScene();
+        if (vertex) {
+            const location = (process.env.VERTEX_AI_ANALYZE_SCENE_LOCATION || 'us-central1').trim();
+            const url = `https://${location}-aiplatform.googleapis.com/v1/projects/${vertex.projectId}/locations/${location}/publishers/google/models/gemini-2.0-flash:generateContent`;
+            const response = await fetch(url, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${vertex.accessToken}`,
+                },
+                body: JSON.stringify(payload),
+            });
+            if (response.ok) {
+                const data = await response.json();
+                const sceneDescription = data.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || '';
+                if (sceneDescription) {
+                    return res.json({ sceneDescription });
+                }
+            }
+            const errText = await response.text();
+            console.warn('analyze-scene-prompt: Vertex returned', response.status, errText.slice(0, 200));
+            // Fall through to Consumer API if Vertex failed (e.g. model not enabled)
+        }
+
+        // Fallback: Consumer Gemini API (can fail with "User location is not supported" from some regions)
+        const geminiKey = process.env.GEMINI_API_KEY;
+        if (!geminiKey) {
+            return res.status(503).json({
+                error: 'AI analysis not configured. Set GCS_CREDENTIALS_JSON (or GOOGLE_SERVICE_ACCOUNT_JSON) for Vertex AI, or GEMINI_API_KEY for Consumer Gemini.',
+            });
+        }
+
         const response = await fetch(
             `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${geminiKey}`,
             {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    contents: [{ role: 'user', parts: [{ text: userPrompt }] }],
-                    generationConfig: {
-                        temperature: 0.4,
-                        maxOutputTokens: 512,
-                    },
-                }),
+                body: JSON.stringify(payload),
             }
         );
 
         if (!response.ok) {
             const errText = await response.text();
             console.error('Gemini analyze-scene-prompt error:', response.status, errText);
-            return res.status(502).json({ error: 'AI analysis failed', details: errText.slice(0, 200) });
+            const isLocationError = response.status === 400 && /user location is not supported/i.test(errText);
+            const errorMessage = isLocationError
+                ? 'Gemini API is not available from this server region. Use Vertex AI by setting GCS_CREDENTIALS_JSON (or GOOGLE_SERVICE_ACCOUNT_JSON) on the backend.'
+                : 'AI analysis failed';
+            return res.status(502).json({ error: errorMessage, details: errText.slice(0, 300) });
         }
 
         const data = await response.json();

@@ -25,7 +25,8 @@ This splits `backend/` and pushes to the `backend` remote (BackendGK2.0) as `mai
 ## 2. Trigger deploy on Render
 
 - **Auto-deploy:** If the Render service is connected to **BackendGK2.0** and “Auto-Deploy” is on for `main`, a deploy should start after the push. Check the Render dashboard for a new deploy.
-- **Manual deploy:** If nothing started:
+- **From the terminal:** Run `./scripts/trigger-render-deploy.sh` (one-time: set `RENDER_DEPLOY_HOOK_URL` from Render → godlykids-backend → Settings → Deploy Hook).
+- **Manual deploy in dashboard:** If nothing started:
   1. Open [Render Dashboard](https://dashboard.render.com)
   2. Open the **godlykids-backend** service
   3. **Manual Deploy** → **Deploy latest commit**
@@ -39,3 +40,23 @@ This splits `backend/` and pushes to the `backend` remote (BackendGK2.0) as `mai
 
 **If Render is connected to GodlyKidsGem2 with Root Directory = `backend`:**  
 Then the subtree push to BackendGK2.0 does nothing for Render. Pushing to **origin** (e.g. `git push origin main`) is what triggers the deploy. No need to run `push-backend-subtree.sh` for Render in that case.
+
+---
+
+## 4. Gemini “User location is not supported” (502 from analyze-scene-prompt)
+
+If you see in logs:
+
+```text
+Gemini analyze-scene-prompt error: 400 { "error": { "message": "User location is not supported for the API use.", "status": "FAILED_PRECONDITION" } }
+```
+
+the **Consumer Gemini API** is not allowed from the region your Render service uses (even if Render is set to Oregon, routing can still trigger this).
+
+**Preferred fix:** Use **Vertex AI** for this endpoint so the request uses an explicit GCP region (e.g. `us-central1`), not Render’s location.
+
+1. Ensure the backend has **GCP credentials** set: **GCS_CREDENTIALS_JSON** or **GOOGLE_SERVICE_ACCOUNT_JSON** (same as for monthly book image generation).
+2. Redeploy. The analyze-scene-prompt route **tries Vertex first** when those env vars are set; only if Vertex is missing or fails does it call the Consumer Gemini API.
+3. Optional: set **VERTEX_AI_ANALYZE_SCENE_LOCATION** (e.g. `us-central1`) to force a specific region; default is `us-central1`.
+
+**Alternative:** If you cannot use Vertex, set the Render service **Region** to **Oregon (US West)** or **Ohio (US East)** in the dashboard and redeploy. Sometimes that resolves the Consumer API block; if not, Vertex is the reliable fix.

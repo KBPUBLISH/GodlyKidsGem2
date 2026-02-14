@@ -55,7 +55,8 @@ const VOICE_OPTIONS = [
  * @param {number} options.stability - Voice stability (0-1, default 0.5)
  * @param {number} options.similarityBoost - Voice clarity (0-1, default 0.75)
  * @param {number} options.style - Style exaggeration (0-1, default 0)
- * @returns {Promise<{url: string, duration: number}>}
+ * @param {boolean} options.skipStorage - If true, return audioBase64 instead of uploading to GCS (avoids ACL issues)
+ * @returns {Promise<{url: string, duration: number}|{audioBase64: string, duration: number}>}
  */
 async function generateElevenLabsTTS(text, options = {}) {
     const apiKey = process.env.ELEVENLABS_API_KEY;
@@ -81,6 +82,7 @@ async function generateElevenLabsTTS(text, options = {}) {
         stability = 0.5,
         similarityBoost = 0.75,
         style = 0.2, // Slight style for more expressive narration
+        skipStorage = false, // When true, return base64 instead of GCS upload (for previews; avoids uniform bucket ACL errors)
     } = options;
     
     // Clean text for TTS (remove markdown, keep punctuation)
@@ -127,6 +129,15 @@ async function generateElevenLabsTTS(text, options = {}) {
         const wordCount = cleanText.split(/\s+/).length;
         const estimatedDuration = Math.ceil((wordCount / 150) * 60);
         
+        // For previews: return base64 directly to avoid GCS upload (uniform bucket-level access disables per-object ACLs)
+        if (skipStorage) {
+            return {
+                audioBase64: audioBuffer.toString('base64'),
+                duration: estimatedDuration,
+                voiceId
+            };
+        }
+        
         // Save to GCS
         if (bucket) {
             const hash = crypto.createHash('md5')
@@ -142,7 +153,8 @@ async function generateElevenLabsTTS(text, options = {}) {
                     cacheControl: 'public, max-age=86400'
                 }
             });
-            await blob.makePublic();
+            // With uniform bucket-level access, do NOT call makePublic() - per-object ACLs are disabled.
+            // Ensure the bucket allows public read at bucket level for these URLs to be accessible.
             
             const url = `https://storage.googleapis.com/${bucket.name}/${filename}`;
             console.log(`✅ ElevenLabs TTS saved to: ${url}`);

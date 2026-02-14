@@ -1156,9 +1156,10 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const isDailySession = location.pathname === '/daily-session';
   const isPremiumOnboarding = location.pathname === '/premium-onboarding';
   const isTrialStats = location.pathname === '/trial-stats';
+  const isCreateYourStory = location.pathname === '/create-your-story';
 
   // Standalone pages that don't need the app chrome (background, navigation, etc.)
-  const isStandalonePage = isParentQuiz || isSharePage || isReadyToJumpIn || isDailySession || isPremiumOnboarding || isTrialStats;
+  const isStandalonePage = isParentQuiz || isSharePage || isReadyToJumpIn || isDailySession || isPremiumOnboarding || isTrialStats || isCreateYourStory;
 
   // For standalone pages, render just the children without app styling
   if (isStandalonePage) {

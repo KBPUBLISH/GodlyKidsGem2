@@ -45,14 +45,13 @@ router.post('/preview-voice', async (req, res) => {
         
         const result = await generateElevenLabsTTS(previewText, {
             voiceId,
-            storagePath: 'devotional-stories/previews',
-            filenamePrefix: `preview_${voiceId.slice(0, 8)}`,
             stability: 0.5,
             similarityBoost: 0.75,
-            style: 0.2
+            style: 0.2,
+            skipStorage: true // Return base64 directly; avoids GCS uniform bucket-level ACL errors
         });
         
-        res.json({ audioUrl: result.url });
+        res.json({ audioBase64: result.audioBase64 });
     } catch (err) {
         console.error('Error generating voice preview:', err);
         res.status(500).json({ error: 'Failed to generate preview' });

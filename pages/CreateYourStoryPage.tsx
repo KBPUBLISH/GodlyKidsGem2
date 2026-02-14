@@ -152,7 +152,7 @@ const CreateYourStoryPage: React.FC = () => {
         });
         if (!res.ok) throw new Error('Preview failed');
         const data = await res.json().catch(() => ({}));
-        audioUrl = data.audioUrl;
+        audioUrl = data.audioUrl ?? (data.audioBase64 ? `data:audio/mpeg;base64,${data.audioBase64}` : undefined);
         if (audioUrl) voicePreviewCacheRef.current[cacheKey] = audioUrl;
       }
       if (!audioUrl) throw new Error('No audio URL');
@@ -281,14 +281,17 @@ const CreateYourStoryPage: React.FC = () => {
   const isScreenOne = !submitted && step === 1;
   const isStyleStep = !submitted && step === 2;
   const isPickStoryStep = !submitted && step === 3;
+  const isStep4 = !submitted && step === 4;
   const pageBg = isScreenOne
     ? { backgroundImage: 'url(/assets/images/create-story-screen1-background.png)', backgroundSize: 'cover', backgroundPosition: 'center' }
     : isStyleStep || isPickStoryStep
       ? { backgroundImage: 'url(/assets/images/create-story-style-background.png)', backgroundSize: 'cover', backgroundPosition: 'center' }
-      : undefined;
+      : isStep4
+        ? { backgroundImage: 'url(/assets/images/create-story-stage-background.png)', backgroundSize: 'cover', backgroundPosition: 'center' }
+        : undefined;
   return (
     <div
-      className={`flex flex-col min-h-full relative ${isScreenOne || isStyleStep || isPickStoryStep ? '' : 'bg-gradient-to-b from-[#1a1a2e] to-[#16213e]'}`}
+      className={`flex flex-col min-h-full relative ${isScreenOne || isStyleStep || isPickStoryStep || isStep4 ? '' : 'bg-gradient-to-b from-[#1a1a2e] to-[#16213e]'}`}
       style={pageBg}
     >
       <style>{`
@@ -304,6 +307,15 @@ const CreateYourStoryPage: React.FC = () => {
           35% { transform: scale(1.18); }
           70% { transform: scale(1.08); }
           100% { transform: scale(1); }
+        }
+        @keyframes curtain-reveal {
+          0% { transform: translateY(0); opacity: 1; }
+          100% { transform: translateY(-66%); opacity: 1; }
+        }
+        @keyframes curtain-content-fade {
+          0% { opacity: 0; }
+          50% { opacity: 0; }
+          100% { opacity: 1; }
         }
       `}</style>
       {isFlashTransition && (
@@ -534,12 +546,12 @@ const CreateYourStoryPage: React.FC = () => {
             )}
 
             {step === 3 && (
-              <div className="flex flex-col min-h-[100dvh] min-h-[100vh] -mb-12">
+              <div className="flex flex-col min-h-0">
                 <div className="flex-shrink-0 pt-2 text-center">
                   <h2 className="text-2xl sm:text-3xl font-bold text-white">Pick your story</h2>
                   <p className="text-white/80 text-base mt-1">Choose which story you want to star in.</p>
                 </div>
-                <div className="flex-1 flex flex-col items-center min-h-0 py-4 overflow-y-auto">
+                <div className="flex flex-col items-center py-4 pb-8">
                   {!storiesLoaded && !error && <p className="text-white/70">Loading stories...</p>}
                   {storiesLoaded && stories.length === 0 && !error && (
                     <p className="text-white/80 text-sm text-center px-4">
@@ -583,7 +595,7 @@ const CreateYourStoryPage: React.FC = () => {
                           <p className="text-white/50 text-sm">Loading voices...</p>
                         ) : (
                           <div className="grid grid-cols-3 sm:grid-cols-4 gap-3">
-                            {narratorVoices.map((v) => {
+                            {narratorVoices.slice(0, 9).map((v) => {
                               const isSelected = selectedNarratorVoiceId === v.voice_id;
                               const imgUrl = v.characterImage?.startsWith('http')
                                 ? v.characterImage
@@ -601,7 +613,7 @@ const CreateYourStoryPage: React.FC = () => {
                                   aria-label={`Preview ${v.name}`}
                                 >
                                   <div
-                                    className={`relative w-14 h-14 rounded-full overflow-hidden flex items-center justify-center transition-all ${
+                                    className={`relative w-14 h-14 rounded-full overflow-hidden flex items-center justify-center transition-all border-2 border-white/40 ${
                                       isSelected ? 'ring-2 ring-amber-400 ring-offset-2 ring-offset-transparent' : ''
                                     }`}
                                   >
@@ -646,7 +658,19 @@ const CreateYourStoryPage: React.FC = () => {
             )}
 
             {step === 4 && (
-              <div className="space-y-6">
+              <div className="relative">
+                <div
+                  className="fixed inset-0 z-[5] bg-cover bg-center pointer-events-none"
+                  style={{
+                    backgroundImage: 'url(/assets/images/create-story-curtain.png)',
+                    animation: 'curtain-reveal 1.4s ease-out forwards',
+                  }}
+                  aria-hidden
+                />
+                <div
+                  className="relative z-20 space-y-6"
+                  style={{ animation: 'curtain-content-fade 1.4s ease-out forwards' }}
+                >
                 <h2 className="text-xl font-bold text-white">Ready to create your story!</h2>
                 <p className="text-white/70">
                   <strong className="text-amber-200">{childName}</strong> will star in <strong className="text-amber-200">{selectedStory?.title}</strong>.
@@ -663,6 +687,7 @@ const CreateYourStoryPage: React.FC = () => {
                   >
                     {loading ? 'Creating...' : 'Create my story'}
                   </button>
+                </div>
                 </div>
               </div>
             )}

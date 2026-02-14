@@ -128,7 +128,7 @@ const NarratorSelector: React.FC<NarratorSelectorProps> = ({
         if (!response.ok) throw new Error('Failed to generate preview');
 
         const data = await response.json();
-        audioUrl = data.audioUrl;
+        audioUrl = data.audioUrl ?? (data.audioBase64 ? `data:audio/mpeg;base64,${data.audioBase64}` : undefined);
 
         // Cache for later
         setAudioCache(prev => ({ ...prev, [narrator.id]: audioUrl }));

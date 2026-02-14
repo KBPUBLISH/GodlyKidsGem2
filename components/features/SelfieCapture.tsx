@@ -210,7 +210,14 @@ const SelfieCapture: React.FC<SelfieCaptureProps> = ({
         </div>
 
         {/* Camera View / Captured Image */}
-        <div className="relative aspect-square bg-black">
+        <div
+          className="relative aspect-square bg-black"
+          style={frameOverlayImageUrl ? {
+            backgroundImage: 'url(/assets/images/create-story-style-background.png)',
+            backgroundSize: 'cover',
+            backgroundPosition: 'center'
+          } : undefined}
+        >
           {/* Hidden canvas for capturing */}
           <canvas ref={canvasRef} className="hidden" />
 
@@ -223,21 +230,59 @@ const SelfieCapture: React.FC<SelfieCaptureProps> = ({
               </WoodButton>
             </div>
           ) : state === 'captured' && capturedImage ? (
-            <img
-              src={capturedImage}
-              alt="Captured selfie"
-              className="w-full h-full object-cover"
-            />
+            <>
+              {frameOverlayImageUrl ? (
+                <>
+                  <div className="absolute inset-0 flex items-center justify-center">
+                    <div className="w-[78%] h-[78%] rounded-full overflow-hidden bg-black">
+                      <img
+                        src={capturedImage}
+                        alt="Captured selfie"
+                        className="w-full h-full object-cover"
+                      />
+                    </div>
+                  </div>
+                  <div className="absolute inset-0 pointer-events-none flex items-center justify-center">
+                    <img
+                      src={frameOverlayImageUrl}
+                      alt=""
+                      className="w-full h-full object-contain"
+                      aria-hidden
+                    />
+                  </div>
+                </>
+              ) : (
+                <img
+                  src={capturedImage}
+                  alt="Captured selfie"
+                  className="w-full h-full object-cover"
+                />
+              )}
+            </>
           ) : (
             <>
-              <video
-                ref={videoRef}
-                autoPlay
-                playsInline
-                muted
-                className={`w-full h-full object-cover ${facingMode === 'user' ? 'scale-x-[-1]' : ''}`}
-              />
-              
+              {frameOverlayImageUrl ? (
+                <div className="absolute inset-0 flex items-center justify-center">
+                  <div className="w-[78%] h-[78%] rounded-full overflow-hidden bg-black">
+                    <video
+                      ref={videoRef}
+                      autoPlay
+                      playsInline
+                      muted
+                      className={`w-full h-full object-cover ${facingMode === 'user' ? 'scale-x-[-1]' : ''}`}
+                    />
+                  </div>
+                </div>
+              ) : (
+                <video
+                  ref={videoRef}
+                  autoPlay
+                  playsInline
+                  muted
+                  className={`w-full h-full object-cover ${facingMode === 'user' ? 'scale-x-[-1]' : ''}`}
+                />
+              )}
+
               {/* Camera overlay guide: porthole frame or default circle + corners */}
               <div className="absolute inset-0 pointer-events-none flex items-center justify-center">
                 {frameOverlayImageUrl ? (

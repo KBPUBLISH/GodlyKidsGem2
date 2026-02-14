@@ -2,11 +2,11 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import SelfieCapture from '../components/features/SelfieCapture';
 import CharacterStyleSelector, { CHARACTER_STYLES } from '../components/features/CharacterStyleSelector';
-import { getApiBaseUrl } from '../services/apiService';
+import { getApiBaseUrl, ApiService } from '../services/apiService';
 import { useUser } from '../context/UserContext';
 import { useSubscription } from '../context/SubscriptionContext';
 import { authService } from '../services/authService';
-import { BookOpen, Sparkles, RotateCcw } from 'lucide-react';
+import { BookOpen, Sparkles, RotateCcw, Volume2, Mic } from 'lucide-react';
 
 type Step = 1 | 2 | 3 | 4;
 
@@ -37,6 +37,11 @@ const CreateYourStoryPage: React.FC = () => {
   const [stories, setStories] = useState<Story[]>([]);
   const [storiesLoaded, setStoriesLoaded] = useState(false);
   const [selectedBookId, setSelectedBookId] = useState<string | null>(null);
+  const [narratorVoices, setNarratorVoices] = useState<Array<{ voice_id: string; name: string; characterImage?: string }>>([]);
+  const [selectedNarratorVoiceId, setSelectedNarratorVoiceId] = useState<string | null>(null);
+  const [previewingVoiceId, setPreviewingVoiceId] = useState<string | null>(null);
+  const voicePreviewCacheRef = useRef<Record<string, string>>({});
+  const voiceAudioRef = useRef<HTMLAudioElement | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showSelfieModal, setShowSelfieModal] = useState(false);
@@ -96,9 +101,69 @@ const CreateYourStoryPage: React.FC = () => {
     return () => { cancelled = true; };
   }, []);
 
+  useEffect(() => {
+    return () => {
+      if (voiceAudioRef.current) {
+        voiceAudioRef.current.pause();
+        voiceAudioRef.current = null;
+      }
+    };
+  }, []);
+
+  // Fetch narrator voices from ElevenLabs voice manager (for step 3)
+  useEffect(() => {
+    let cancelled = false;
+    ApiService.getVoices()
+      .then((voices) => {
+        if (cancelled) return;
+        const showInApp = (voices as any[]).filter((v: any) => v.showInApp !== false);
+        setNarratorVoices(showInApp);
+        setSelectedNarratorVoiceId((prev) => prev || (showInApp[0]?.voice_id ?? null));
+      })
+      .catch(() => { if (!cancelled) setNarratorVoices([]); });
+    return () => { cancelled = true; };
+  }, []);
+
   const handleStyleSelect = (styleId: string) => {
     setSelectedStyleId(styleId);
     setShowStyleSelector(false);
+  };
+
+  const handleNarratorVoiceClick = async (voiceId: string) => {
+    setSelectedNarratorVoiceId(voiceId);
+    if (voiceAudioRef.current) {
+      voiceAudioRef.current.pause();
+      voiceAudioRef.current = null;
+    }
+    if (previewingVoiceId === voiceId) {
+      setPreviewingVoiceId(null);
+      return;
+    }
+    setPreviewingVoiceId(voiceId);
+    const previewText = `Hello ${childName || 'there'}, are you excited!?`;
+    try {
+      let audioUrl = voicePreviewCacheRef.current[voiceId];
+      if (!audioUrl) {
+        const base = getApiRoot();
+        const res = await fetch(`${base}/api/devotional-stories/preview-voice`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ voiceId, text: previewText }),
+        });
+        if (!res.ok) throw new Error('Preview failed');
+        const data = await res.json().catch(() => ({}));
+        audioUrl = data.audioUrl;
+        if (audioUrl) voicePreviewCacheRef.current[cacheKey] = audioUrl;
+      }
+      if (!audioUrl) throw new Error('No audio URL');
+      const audio = new Audio(audioUrl);
+      voiceAudioRef.current = audio;
+      audio.onended = () => { setPreviewingVoiceId(null); voiceAudioRef.current = null; };
+      audio.onerror = () => { setPreviewingVoiceId(null); voiceAudioRef.current = null; };
+      await audio.play();
+    } catch {
+      setPreviewingVoiceId(null);
+    }
   };
 
   const handleSelfieCapture = async (imageBase64: string) => {
@@ -190,6 +255,7 @@ const CreateYourStoryPage: React.FC = () => {
           childName: childName.trim(),
           childCharacterImageUrl: avatarUrl || undefined,
           hasTrialOrPaid,
+          narratorVoiceId: selectedNarratorVoiceId || undefined,
         }),
       });
       const data = await res.json().catch(() => ({}));
@@ -214,14 +280,15 @@ const CreateYourStoryPage: React.FC = () => {
 
   const isScreenOne = !submitted && step === 1;
   const isStyleStep = !submitted && step === 2;
+  const isPickStoryStep = !submitted && step === 3;
   const pageBg = isScreenOne
     ? { backgroundImage: 'url(/assets/images/create-story-screen1-background.png)', backgroundSize: 'cover', backgroundPosition: 'center' }
-    : isStyleStep
+    : isStyleStep || isPickStoryStep
       ? { backgroundImage: 'url(/assets/images/create-story-style-background.png)', backgroundSize: 'cover', backgroundPosition: 'center' }
       : undefined;
   return (
     <div
-      className={`flex flex-col min-h-full relative ${isScreenOne || isStyleStep ? '' : 'bg-gradient-to-b from-[#1a1a2e] to-[#16213e]'}`}
+      className={`flex flex-col min-h-full relative ${isScreenOne || isStyleStep || isPickStoryStep ? '' : 'bg-gradient-to-b from-[#1a1a2e] to-[#16213e]'}`}
       style={pageBg}
     >
       <style>{`
@@ -336,27 +403,27 @@ const CreateYourStoryPage: React.FC = () => {
             )}
 
             {step === 2 && (
-              <div className="flex flex-col items-center gap-2 min-h-0 flex-1 overflow-visible">
+              <div className="flex flex-col items-center min-h-[100dvh] w-full pt-6 -mb-12">
                 <div className="flex justify-center flex-shrink-0">
                   <img
                     src="/assets/images/create-story-you-are-the-character.png"
                     alt="You are the Character!"
-                    className="max-w-[280px] w-full h-auto block"
+                    className="max-w-[340px] w-full h-auto block"
                   />
                 </div>
-                <h2 className="text-base font-bold text-white flex-shrink-0">{selectedStyleId ? 'Now take your selfie' : '1. Choose your character style'}</h2>
-                <p className="text-white/70 text-xs flex-shrink-0 min-w-0">
-                  {selectedStyleId
-                    ? "2. We'll turn your photo into a character in a scene (waist-up, face-focused)."
-                    : "Pick a style below (Pixar, Minecraft, Disney…). Then you'll take a selfie and we'll place you in a fun scene (waist-up, face-focused)."}
-                </p>
+                <h2 className="text-xl font-bold text-white flex-shrink-0 mb-6 mt-2">{selectedStyleId ? `You're Ready to Transform ${childName || 'you'}!` : '1. Choose your character style'}</h2>
+                {selectedStyleId && (
+                  <p className="text-white/70 text-xs flex-shrink-0 min-w-0 text-center px-2">
+                    Take a Selfie and Create your Character for the Book
+                  </p>
+                )}
                 {!selectedStyleId ? (
-                  <div className="grid grid-cols-2 gap-2 max-w-[240px] mx-auto flex-1 min-h-0 content-center mt-8">
+                  <div className="grid grid-cols-2 gap-4 max-w-[280px] mx-auto flex-1 min-h-0 content-center bg-transparent">
                     {CHARACTER_STYLES.map((style) => (
                       <button
                         key={style.id}
                         onClick={() => setSelectedStyleId(style.id)}
-                        className="block w-full focus:outline-none focus:ring-0 active:opacity-90 drop-shadow-lg"
+                        className="block w-full focus:outline-none focus:ring-0 active:opacity-90 shadow-lg bg-transparent border-0 p-0"
                         type="button"
                       >
                         <img
@@ -368,7 +435,27 @@ const CreateYourStoryPage: React.FC = () => {
                     ))}
                   </div>
                 ) : selectedStyleId && (
-                  <>
+                  <div className="flex-1 flex flex-col justify-center items-center w-full min-h-0 flex-grow -mt-8">
+                    <div className="flex-shrink-0 mb-3 -mt-4 flex items-end justify-center gap-2 sm:gap-3">
+                      <img
+                        src="/assets/images/create-story-kid-photo.png"
+                        alt=""
+                        aria-hidden
+                        className="max-h-[100px] sm:max-h-[120px] w-auto object-contain -rotate-6"
+                      />
+                      <img
+                        src="/assets/images/create-story-arrow.png"
+                        alt=""
+                        aria-hidden
+                        className="max-h-[64px] sm:max-h-[80px] w-auto object-contain flex-shrink-0"
+                      />
+                      <img
+                        src="/assets/images/create-story-port-character.png"
+                        alt=""
+                        aria-hidden
+                        className="max-h-[100px] sm:max-h-[120px] w-auto object-contain rotate-6"
+                      />
+                    </div>
                     {avatarUrl ? (
                       <div className="space-y-3 w-full flex flex-col items-center">
                         <div className="relative w-full max-w-[320px] aspect-square mx-auto">
@@ -414,9 +501,9 @@ const CreateYourStoryPage: React.FC = () => {
                         </button>
                       </div>
                     )}
-                  </>
+                  </div>
                 )}
-                <div className="flex gap-2 flex-shrink-0 items-center w-full mt-auto pt-4 pb-4" style={{ paddingBottom: 'max(1rem, var(--safe-area-bottom, 0px))' }}>
+                <div className="flex gap-2 flex-shrink-0 items-center w-full mt-auto pt-4 mb-6 pb-2" style={{ paddingBottom: 'max(1rem, var(--safe-area-bottom, 0px))' }}>
                   <button
                     onClick={() => {
                     if (selectedStyleId) {
@@ -427,7 +514,7 @@ const CreateYourStoryPage: React.FC = () => {
                       setStep(1);
                     }
                   }}
-                    className="flex-1 py-2.5 text-sm rounded-xl bg-white/10 text-white drop-shadow-md"
+                    className="flex-1 py-2.5 text-sm rounded-xl bg-white/10 text-white shadow-md"
                   >
                     Back
                   </button>
@@ -447,35 +534,102 @@ const CreateYourStoryPage: React.FC = () => {
             )}
 
             {step === 3 && (
-              <div className="space-y-6">
-                <h2 className="text-xl font-bold text-white">Pick your story</h2>
-                <p className="text-white/70 text-sm">Choose which story you want to star in.</p>
-                <div className="grid grid-cols-2 gap-3">
-                  {stories.map((s) => (
-                    <button
-                      key={s._id}
-                      onClick={() => setSelectedBookId(s._id)}
-                      className={`p-4 rounded-xl text-left border-2 transition-all ${
-                        selectedBookId === s._id
-                          ? 'border-amber-400 bg-amber-500/20'
-                          : 'border-white/20 bg-white/5 hover:border-white/40'
-                      }`}
-                    >
-                      <span className="text-white font-medium block">{s.title}</span>
-                      {s.bibleCharacter?.displayName && (
-                        <span className="text-amber-200/90 text-sm">{s.bibleCharacter.displayName}</span>
-                      )}
-                    </button>
-                  ))}
+              <div className="flex flex-col min-h-[100dvh] min-h-[100vh] -mb-12">
+                <div className="flex-shrink-0 pt-2 text-center">
+                  <h2 className="text-2xl sm:text-3xl font-bold text-white">Pick your story</h2>
+                  <p className="text-white/80 text-base mt-1">Choose which story you want to star in.</p>
                 </div>
-                {!storiesLoaded && !error && <p className="text-white/50">Loading stories...</p>}
-                {storiesLoaded && stories.length === 0 && !error && (
-                  <p className="text-white/80 text-sm">
-                    No Kids Monthly stories yet. Create a book in the portal, set its type to &quot;Kids Monthly Book&quot;, and publish it—then it will appear here.
-                  </p>
-                )}
-                <div className="flex gap-3">
-                  <button onClick={() => setStep(2)} className="flex-1 py-3 rounded-xl bg-white/10 text-white">
+                <div className="flex-1 flex flex-col items-center min-h-0 py-4 overflow-y-auto">
+                  {!storiesLoaded && !error && <p className="text-white/70">Loading stories...</p>}
+                  {storiesLoaded && stories.length === 0 && !error && (
+                    <p className="text-white/80 text-sm text-center px-4">
+                      No Kids Monthly stories yet. Create a book in the portal, set its type to &quot;Kids Monthly Book&quot;, and publish it—then it will appear here.
+                    </p>
+                  )}
+                  {storiesLoaded && stories.length > 0 && (
+                    <>
+                      <div className="flex flex-wrap justify-center gap-4 w-full max-w-md mx-auto px-2 flex-shrink-0 -mt-4">
+                        {stories.map((s) => {
+                          const coverUrl = s.coverImage?.startsWith('http') ? s.coverImage : s.coverImage ? `${getApiRoot()}${s.coverImage.startsWith('/') ? '' : '/'}${s.coverImage}` : null;
+                          return (
+                            <button
+                              key={s._id}
+                              onClick={() => setSelectedBookId(s._id)}
+                              className={`flex flex-col items-center transition-all focus:outline-none focus:ring-0 ${
+                                selectedBookId === s._id ? 'ring-2 ring-amber-400 rounded-xl ring-offset-2 ring-offset-transparent' : ''
+                              }`}
+                            >
+                              <div className="w-full max-w-[160px] aspect-[3/4] rounded-xl overflow-hidden shadow-lg bg-white/5 flex items-center justify-center">
+                                {coverUrl ? (
+                                  <img src={coverUrl} alt="" className="w-full h-full object-cover object-top" />
+                                ) : (
+                                  <BookOpen className="w-12 h-12 text-white/40" aria-hidden />
+                                )}
+                              </div>
+                              <span className="text-white font-medium text-sm text-center px-2 py-2 block">{s.title}</span>
+                              {s.bibleCharacter?.displayName && (
+                                <span className="text-amber-200/90 text-xs pb-2">{s.bibleCharacter.displayName}</span>
+                              )}
+                            </button>
+                          );
+                        })}
+                      </div>
+                      <div className="flex-shrink-0 w-full max-w-md mx-auto px-2 mt-4">
+                        <p className="text-white/80 text-sm font-medium mb-2 flex items-center gap-2">
+                          <Volume2 className="w-4 h-4" aria-hidden />
+                          Choose narrator voice
+                        </p>
+                        {narratorVoices.length === 0 ? (
+                          <p className="text-white/50 text-sm">Loading voices...</p>
+                        ) : (
+                          <div className="grid grid-cols-3 sm:grid-cols-4 gap-3">
+                            {narratorVoices.map((v) => {
+                              const isSelected = selectedNarratorVoiceId === v.voice_id;
+                              const imgUrl = v.characterImage?.startsWith('http')
+                                ? v.characterImage
+                                : v.characterImage
+                                  ? `${getApiRoot()}${v.characterImage.startsWith('/') ? '' : '/'}${v.characterImage}`
+                                  : null;
+                              const isPreviewing = previewingVoiceId === v.voice_id;
+                              return (
+                                <button
+                                  key={v.voice_id}
+                                  type="button"
+                                  onClick={() => handleNarratorVoiceClick(v.voice_id)}
+                                  disabled={isPreviewing}
+                                  className={`flex flex-col items-center gap-1.5 focus:outline-none focus:ring-0 ${isPreviewing ? 'opacity-80' : ''}`}
+                                  aria-label={`Preview ${v.name}`}
+                                >
+                                  <div
+                                    className={`relative w-14 h-14 rounded-full overflow-hidden flex items-center justify-center transition-all ${
+                                      isSelected ? 'ring-2 ring-amber-400 ring-offset-2 ring-offset-transparent' : ''
+                                    }`}
+                                  >
+                                    {imgUrl ? (
+                                      <img src={imgUrl} alt={v.name} className="w-full h-full object-cover" />
+                                    ) : (
+                                      <div className="w-full h-full bg-white/10 flex items-center justify-center">
+                                        <Mic className="w-6 h-6 text-white/60" aria-hidden />
+                                      </div>
+                                    )}
+                                    {isPreviewing && (
+                                      <div className="absolute inset-0 bg-black/30 flex items-center justify-center">
+                                        <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" aria-hidden />
+                                      </div>
+                                    )}
+                                  </div>
+                                  <span className="text-white font-medium text-xs text-center truncate max-w-full px-0.5">{v.name}</span>
+                                </button>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </div>
+                    </>
+                  )}
+                </div>
+                <div className="flex gap-3 flex-shrink-0 mt-auto pt-4 mb-6" style={{ paddingBottom: 'max(1rem, var(--safe-area-bottom, 0px))' }}>
+                  <button onClick={() => setStep(2)} className="flex-1 py-3 rounded-xl bg-white/10 text-white shadow-md">
                     Back
                   </button>
                   <button

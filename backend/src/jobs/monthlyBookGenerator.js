@@ -669,6 +669,12 @@ async function runMonthlyBookGenerationFromBook(customMonthlyBookId, custom, sou
 
         if (!book) {
             // Create book and first page so user can open and test (text, TTS, etc.) while the rest generate
+            const narratorVoiceId = custom.narratorVoiceId
+                || sourceBook.defaultNarratorVoiceId
+                || sourceBook.files?.defaultNarratorVoiceId
+                || sourceBook.defaultVoiceId
+                || sourceBook.files?.defaultVoiceId
+                || null;
             book = await Book.create({
                 title: bookTitle,
                 author: sourceBook.author || 'GodlyKids',
@@ -683,6 +689,8 @@ async function runMonthlyBookGenerationFromBook(customMonthlyBookId, custom, sou
                     audio: [],
                 },
                 showCharacterOverlay: sourceBook.showCharacterOverlay || false,
+                defaultVoiceId: narratorVoiceId,
+                defaultNarratorVoiceId: narratorVoiceId,
             });
             await Page.create(toPageDoc(pagePayload, book._id));
             await CustomMonthlyBook.findByIdAndUpdate(customMonthlyBookId, { bookId: book._id, progressPage: pageNum });

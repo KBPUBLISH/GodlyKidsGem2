@@ -48,6 +48,11 @@ const customMonthlyBookSchema = new mongoose.Schema({
         type: Boolean,
         default: false,
     },
+    // User-selected narrator voice (ElevenLabs voice ID) for TTS when reading the book
+    narratorVoiceId: {
+        type: String,
+        default: null,
+    },
     status: {
         type: String,
         enum: ['pending', 'generating', 'completed', 'failed'],

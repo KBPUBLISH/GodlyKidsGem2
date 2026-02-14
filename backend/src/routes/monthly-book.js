@@ -116,11 +116,11 @@ router.post('/create', async (req, res) => {
 /**
  * POST /api/monthly-book/create-from-book
  * Create a custom monthly book from a Book Builder book (bookType kids_monthly).
- * Body: userId, kidId, bookId, childName, childCharacterImageUrl?, hasTrialOrPaid?
+ * Body: userId, kidId, bookId, childName, childCharacterImageUrl?, hasTrialOrPaid?, narratorVoiceId?
  */
 router.post('/create-from-book', async (req, res) => {
     try {
-        const { userId: rawUserId, kidId, bookId: sourceBookId, childName, childCharacterImageUrl, hasTrialOrPaid } = req.body;
+        const { userId: rawUserId, kidId, bookId: sourceBookId, childName, childCharacterImageUrl, hasTrialOrPaid, narratorVoiceId } = req.body;
 
         if (!rawUserId || !kidId || !sourceBookId || !childName) {
             return res.status(400).json({
@@ -153,6 +153,7 @@ router.post('/create-from-book', async (req, res) => {
             childName: String(childName).trim(),
             childCharacterImageUrl: childCharacterImageUrl || null,
             hasTrialOrPaid: Boolean(hasTrialOrPaid),
+            narratorVoiceId: narratorVoiceId || null,
             status: 'pending',
         });
 

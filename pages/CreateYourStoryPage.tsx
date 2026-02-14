@@ -50,6 +50,9 @@ const CreateYourStoryPage: React.FC = () => {
   const [isGeneratingCharacter, setIsGeneratingCharacter] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const [isFlashTransition, setIsFlashTransition] = useState(false);
+  const [creatingBook, setCreatingBook] = useState<{ customMonthlyBookId: string; title: string; coverImageUrl: string | null } | null>(null);
+  const [notifyWhenDone, setNotifyWhenDone] = useState(false);
+  const [notifyToggleLoading, setNotifyToggleLoading] = useState(false);
   const characterGenerationIdRef = useRef(0);
 
   const currentKid = kids.find((k) => k.id === currentProfileId);
@@ -153,13 +156,37 @@ const CreateYourStoryPage: React.FC = () => {
         if (!res.ok) throw new Error('Preview failed');
         const data = await res.json().catch(() => ({}));
         audioUrl = data.audioUrl ?? (data.audioBase64 ? `data:audio/mpeg;base64,${data.audioBase64}` : undefined);
-        if (audioUrl) voicePreviewCacheRef.current[cacheKey] = audioUrl;
+        if (audioUrl) voicePreviewCacheRef.current[voiceId] = audioUrl;
       }
       if (!audioUrl) throw new Error('No audio URL');
-      const audio = new Audio(audioUrl);
+      // Use Blob URL for base64 on first play (more reliable on iOS/some browsers than long data URLs)
+      let playUrl = audioUrl;
+      let revokeUrl: string | null = null;
+      if (audioUrl.startsWith('data:audio/mpeg;base64,')) {
+        try {
+          const base64 = audioUrl.slice(audioUrl.indexOf(',') + 1);
+          const binary = atob(base64);
+          const bytes = new Uint8Array(binary.length);
+          for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+          const blob = new Blob([bytes], { type: 'audio/mpeg' });
+          revokeUrl = playUrl = URL.createObjectURL(blob);
+        } catch {
+          // fallback to data URL
+        }
+      }
+      const audio = new Audio(playUrl);
       voiceAudioRef.current = audio;
-      audio.onended = () => { setPreviewingVoiceId(null); voiceAudioRef.current = null; };
-      audio.onerror = () => { setPreviewingVoiceId(null); voiceAudioRef.current = null; };
+      audio.volume = 1;
+      audio.onended = () => {
+        if (revokeUrl) URL.revokeObjectURL(revokeUrl);
+        setPreviewingVoiceId(null);
+        voiceAudioRef.current = null;
+      };
+      audio.onerror = () => {
+        if (revokeUrl) URL.revokeObjectURL(revokeUrl);
+        setPreviewingVoiceId(null);
+        voiceAudioRef.current = null;
+      };
       await audio.play();
     } catch {
       setPreviewingVoiceId(null);
@@ -260,7 +287,14 @@ const CreateYourStoryPage: React.FC = () => {
       });
       const data = await res.json().catch(() => ({}));
       if (res.ok && data.success && data.customMonthlyBookId) {
-        navigate(`/library/creating/${data.customMonthlyBookId}`, { replace: true });
+        const coverImageUrl = selectedStory?.coverImage
+          ? (selectedStory.coverImage.startsWith('http') ? selectedStory.coverImage : `${getApiRoot()}${selectedStory.coverImage.startsWith('/') ? '' : '/'}${selectedStory.coverImage}`)
+          : null;
+        setCreatingBook({
+          customMonthlyBookId: data.customMonthlyBookId,
+          title: selectedStory?.title ?? 'Your story',
+          coverImageUrl,
+        });
         return;
       }
       if (res.ok && data.success) {
@@ -291,7 +325,7 @@ const CreateYourStoryPage: React.FC = () => {
         : undefined;
   return (
     <div
-      className={`flex flex-col min-h-full relative ${isScreenOne || isStyleStep || isPickStoryStep || isStep4 ? '' : 'bg-gradient-to-b from-[#1a1a2e] to-[#16213e]'}`}
+      className={`flex flex-col min-h-screen min-h-[100dvh] relative ${isScreenOne || isStyleStep || isPickStoryStep || isStep4 ? '' : 'bg-gradient-to-b from-[#1a1a2e] to-[#16213e]'}`}
       style={pageBg}
     >
       <style>{`
@@ -311,6 +345,10 @@ const CreateYourStoryPage: React.FC = () => {
         @keyframes curtain-reveal {
           0% { transform: translateY(0); opacity: 1; }
           100% { transform: translateY(-66%); opacity: 1; }
+        }
+        @keyframes curtain-close {
+          0% { transform: translateY(-66%); opacity: 1; }
+          100% { transform: translateY(0); opacity: 1; }
         }
         @keyframes curtain-content-fade {
           0% { opacity: 0; }
@@ -659,36 +697,131 @@ const CreateYourStoryPage: React.FC = () => {
 
             {step === 4 && (
               <div className="relative">
-                <div
-                  className="fixed inset-0 z-[5] bg-cover bg-center pointer-events-none"
-                  style={{
-                    backgroundImage: 'url(/assets/images/create-story-curtain.png)',
-                    animation: 'curtain-reveal 1.4s ease-out forwards',
-                  }}
-                  aria-hidden
-                />
-                <div
-                  className="relative z-20 space-y-6"
-                  style={{ animation: 'curtain-content-fade 1.4s ease-out forwards' }}
-                >
-                <h2 className="text-xl font-bold text-white">Ready to create your story!</h2>
-                <p className="text-white/70">
-                  <strong className="text-amber-200">{childName}</strong> will star in <strong className="text-amber-200">{selectedStory?.title}</strong>.
-                </p>
-                <p className="text-white/50 text-sm">We’ll build your book in the background (usually 5–10 min). Go explore — we’ll notify you when it’s ready.</p>
-                <div className="flex gap-3">
-                  <button onClick={() => setStep(3)} className="flex-1 py-3 rounded-xl bg-white/10 text-white">
-                    Back
-                  </button>
-                  <button
-                    onClick={handleSubmit}
-                    disabled={loading}
-                    className="flex-1 py-3 rounded-xl bg-amber-500 text-white font-bold flex items-center justify-center gap-2 disabled:opacity-50"
-                  >
-                    {loading ? 'Creating...' : 'Create my story'}
-                  </button>
-                </div>
-                </div>
+                {!creatingBook && (
+                  <>
+                    <div
+                      className="fixed left-0 right-0 z-[2] flex gap-3 px-4 py-3"
+                      style={{
+                        bottom: 0,
+                        paddingBottom: 'max(0.75rem, var(--safe-area-bottom, 0px))',
+                        paddingTop: '0.75rem',
+                      }}
+                    >
+                      <button onClick={() => setStep(3)} className="flex-1 py-3 rounded-xl bg-white/10 text-white">
+                        Back
+                      </button>
+                      <button
+                        onClick={handleSubmit}
+                        disabled={loading}
+                        className="flex-1 py-3 rounded-xl bg-amber-500 text-white font-bold flex items-center justify-center gap-2 disabled:opacity-50"
+                      >
+                        {loading ? 'Creating...' : 'Create my story'}
+                      </button>
+                    </div>
+                    <div
+                      className="fixed inset-0 z-[5] bg-cover bg-center pointer-events-none"
+                      style={{
+                        backgroundImage: 'url(/assets/images/create-story-curtain.png)',
+                        animation: 'curtain-reveal 1.4s ease-out forwards',
+                      }}
+                      aria-hidden
+                    />
+                    <div
+                      className="relative z-20 space-y-6"
+                      style={{ animation: 'curtain-content-fade 1.4s ease-out forwards' }}
+                    >
+                      <div className="flex justify-center w-full pt-2">
+                        <img
+                          src="/assets/images/create-story-ready-text.png"
+                          alt="Ready to create your story!"
+                          className="max-w-[min(320px,85vw)] w-full h-auto"
+                        />
+                      </div>
+                      <p className="text-white/70">
+                        <strong className="text-amber-200">{childName}</strong> will star in <strong className="text-amber-200">{selectedStory?.title}</strong>.
+                      </p>
+                      <p className="text-white/50 text-sm">We’ll build your book in the background (usually 5–10 min). Go explore — we’ll notify you when it’s ready.</p>
+                    </div>
+                  </>
+                )}
+                {creatingBook && (
+                  <>
+                    <div
+                      key="curtain-close"
+                      className="fixed inset-0 z-[5] bg-cover bg-center pointer-events-none"
+                      style={{
+                        backgroundImage: 'url(/assets/images/create-story-curtain.png)',
+                        animation: 'curtain-close 1s ease-out forwards',
+                      }}
+                      aria-hidden
+                    />
+                    <div
+                      className="fixed inset-0 z-20 flex flex-col items-center justify-center px-6 pt-8 pb-24"
+                      style={{ paddingTop: 'max(2rem, var(--safe-area-top, 0px))', paddingBottom: 'max(6rem, var(--safe-area-bottom, 0px))' }}
+                    >
+                      <div className="relative w-full max-w-[200px] aspect-[3/4] rounded-xl overflow-hidden border-2 border-amber-400/50 bg-amber-900/30 shadow-xl flex items-center justify-center">
+                        {creatingBook.coverImageUrl ? (
+                          <img src={creatingBook.coverImageUrl} alt="" className="w-full h-full object-cover" />
+                        ) : (
+                          <BookOpen className="w-16 h-16 text-amber-200/60" />
+                        )}
+                        <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/50 gap-2">
+                          <Loader2 className="w-10 h-10 text-amber-300 animate-spin" aria-hidden />
+                          <span className="text-amber-200 text-sm font-bold text-center px-2">Creating your story...</span>
+                          <span className="text-white/70 text-xs">Usually 5–10 min</span>
+                        </div>
+                      </div>
+                      <p className="text-white font-medium text-center mt-4 px-2">{creatingBook.title}</p>
+                      <label className="flex items-center gap-3 mt-6 text-white/90 cursor-pointer">
+                        <button
+                          type="button"
+                          role="switch"
+                          aria-checked={notifyWhenDone}
+                          disabled={notifyToggleLoading}
+                          onClick={async () => {
+                            if (notifyWhenDone) {
+                              setNotifyWhenDone(false);
+                              return;
+                            }
+                            setNotifyToggleLoading(true);
+                            try {
+                              if (typeof Notification !== 'undefined' && Notification.permission === 'default') {
+                                const permission = await Notification.requestPermission();
+                                if (permission !== 'granted') {
+                                  setNotifyToggleLoading(false);
+                                  return;
+                                }
+                              }
+                              const user = authService.getUser();
+                              const userId = (user as any)?._id || (user as any)?.id || user?.email;
+                              if (userId) {
+                                await NotificationService.registerPushWithBackend(userId);
+                              }
+                              setNotifyWhenDone(true);
+                            } catch (e) {
+                              console.error('Notify toggle error:', e);
+                            } finally {
+                              setNotifyToggleLoading(false);
+                            }
+                          }}
+                          className={`relative w-12 h-7 rounded-full transition-colors ${notifyWhenDone ? 'bg-amber-500' : 'bg-white/20'}`}
+                        >
+                          <span className={`absolute top-1 left-1 w-5 h-5 rounded-full bg-white shadow transition-transform ${notifyWhenDone ? 'translate-x-5' : 'translate-x-0'}`} />
+                        </button>
+                        <span className="text-sm">Get notified when done</span>
+                        {notifyToggleLoading && <Loader2 className="w-4 h-4 animate-spin text-amber-300" />}
+                      </label>
+                      <button
+                        type="button"
+                        onClick={() => navigate('/home')}
+                        className="mt-6 w-full max-w-[240px] py-3 rounded-xl bg-amber-500 text-white font-bold flex items-center justify-center gap-2 hover:bg-amber-600 active:scale-[0.98]"
+                      >
+                        <Compass className="w-5 h-5" />
+                        Explore
+                      </button>
+                    </div>
+                  </>
+                )}
               </div>
             )}
           </>

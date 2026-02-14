@@ -134,15 +134,33 @@ const NarratorSelector: React.FC<NarratorSelectorProps> = ({
         setAudioCache(prev => ({ ...prev, [narrator.id]: audioUrl }));
       }
 
-      // Play the audio
-      const audio = new Audio(audioUrl);
+      // Use Blob URL for base64 (more reliable on iOS/some browsers)
+      let playUrl = audioUrl;
+      let revokeUrl: string | null = null;
+      if (audioUrl.startsWith('data:audio/mpeg;base64,')) {
+        try {
+          const base64 = audioUrl.slice(audioUrl.indexOf(',') + 1);
+          const binary = atob(base64);
+          const bytes = new Uint8Array(binary.length);
+          for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+          const blob = new Blob([bytes], { type: 'audio/mpeg' });
+          revokeUrl = playUrl = URL.createObjectURL(blob);
+        } catch {
+          // fallback to data URL
+        }
+      }
+
+      const audio = new Audio(playUrl);
       audioRef.current = audio;
+      audio.volume = 1;
 
       audio.onended = () => {
+        if (revokeUrl) URL.revokeObjectURL(revokeUrl);
         setPlayingId(null);
       };
 
       audio.onerror = () => {
+        if (revokeUrl) URL.revokeObjectURL(revokeUrl);
         setPlayingId(null);
         console.error('Audio playback error');
       };

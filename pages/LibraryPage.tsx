@@ -34,7 +34,7 @@ interface MyMonthlyBook {
   coverImageUrl: string | null;
   childName?: string;
   createdAt: string;
-  status: 'pending' | 'generating' | 'completed';
+  status: 'pending' | 'generating' | 'completed' | 'failed';
   pageCount?: number;
 }
 
@@ -159,7 +159,7 @@ const LibraryPage: React.FC = () => {
     return () => document.removeEventListener('visibilitychange', onVisible);
   }, [location.pathname]);
 
-  // When coming from Create Your Story or from the Creating page, scroll My Books into view so the user sees their book (in-progress or completed).
+  // When coming from Create Your Story: refetch My Books so the new book (loading) appears, then scroll to My Books.
   const myBooksSectionRef = useRef<HTMLDivElement>(null);
   const didScrollToMyBooks = useRef(false);
   useEffect(() => {
@@ -170,12 +170,19 @@ const LibraryPage: React.FC = () => {
     if (!FEATURE_CREATE_YOUR_STORY) return;
     const state = location.state as any;
     if (!state?.fromCreateYourStory && !state?.fromCreating) return;
-    if (didScrollToMyBooks.current) return;
+    // Refetch so the newly created book appears under My Books (loading state).
+    const refetchT = setTimeout(() => {
+      if (fetchMyMonthlyBooksRef.current) fetchMyMonthlyBooksRef.current();
+    }, 600);
+    if (didScrollToMyBooks.current) return () => clearTimeout(refetchT);
     didScrollToMyBooks.current = true;
-    const t = setTimeout(() => {
+    const scrollT = setTimeout(() => {
       myBooksSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    }, 300);
-    return () => clearTimeout(t);
+    }, 400);
+    return () => {
+      clearTimeout(refetchT);
+      clearTimeout(scrollT);
+    };
   }, [location.pathname, location.state]);
 
   // Close age dropdown when clicking outside
@@ -396,58 +403,44 @@ const LibraryPage: React.FC = () => {
       <Header isVisible={isHeaderVisible} title="MY LIBRARY" />
 
       <div className="px-4 pt-28 pb-52">
-        {/* Create Your Story - front and center CTA (hidden until feature launch) */}
-        {FEATURE_CREATE_YOUR_STORY && (
-          <>
-            <div
-              onClick={() => navigate('/create-your-story')}
-              className="mb-3 rounded-2xl overflow-hidden border-2 border-amber-400/60 bg-gradient-to-br from-amber-600/40 to-amber-800/50 shadow-xl active:scale-[0.98] transition-transform"
-            >
-              <div className="p-4 flex items-center gap-4">
-                <div className="w-14 h-14 rounded-xl bg-amber-500/30 flex items-center justify-center shrink-0">
-                  <BookOpen className="w-8 h-8 text-amber-200" />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <h2 className="text-white font-bold text-lg">Create your story</h2>
-                  <p className="text-amber-100/90 text-sm mt-0.5">Enter the Bible with your own adventure. Once a month, a new story with you in it.</p>
-                </div>
-                <ChevronDown className="w-5 h-5 text-amber-200 rotate-[-90deg] shrink-0" />
-              </div>
-            </div>
-            <button
-              type="button"
-              onClick={() => navigate('/kids-monthly')}
-              className="mb-3 w-full py-2.5 rounded-xl border border-amber-400/40 bg-amber-500/20 text-amber-200 text-sm font-medium hover:bg-amber-500/30 active:scale-[0.98] transition-all"
-            >
-              Kids Monthly — stories you created
-            </button>
-            {myMonthlyBooks.some((b) => b.status === 'pending' || b.status === 'generating') && (
-              <button
-                type="button"
-                onClick={() => {
-                  const creating = myMonthlyBooks.find((b) => b.status === 'pending' || b.status === 'generating');
-                  if (creating) navigate(`/library/creating/${creating.customMonthlyBookId}`);
-                }}
-                className="mb-6 w-full py-3 rounded-xl border-2 border-amber-400/50 bg-amber-500/25 text-amber-100 text-sm font-semibold flex items-center justify-center gap-2 hover:bg-amber-500/35 active:scale-[0.98] transition-all"
-              >
-                <Loader2 className="w-4 h-4 animate-spin shrink-0" />
-                Your story is still creating — tap to see progress
-              </button>
-            )}
-          </>
-        )}
-
-        {/* My Books (Create Your Story) - always show so user knows where to find created books */}
+        {/* My Books (Create Your Story) - Create your story card styled like Create New Playlist, under My Books */}
         {FEATURE_CREATE_YOUR_STORY && (
           <div className="mb-8" ref={myBooksSectionRef} data-my-books-section>
             <SectionTitle title="My Books" />
             {myMonthlyBooksLoading ? (
               <div className="py-6 text-center text-white/60 text-sm">Loading your books...</div>
-            ) : myMonthlyBooks.length === 0 ? (
-              <p className="py-4 text-white/60 text-sm">Books you create will appear here. Use &quot;Create your story&quot; above to make one.</p>
             ) : (
               <div className="w-screen overflow-x-auto no-scrollbar pb-4 -mx-4">
                 <div className="flex space-x-3 px-4">
+                  {/* Create your story - same style as Create New Playlist */}
+                  <div
+                    className="flex-shrink-0 w-[42vw] md:w-[30vw] lg:w-[23vw] max-w-[200px] cursor-pointer"
+                    onClick={() => navigate('/create-your-story')}
+                  >
+                    <div className="bg-gradient-to-br from-amber-600/30 to-amber-800/30 backdrop-blur-sm rounded-2xl overflow-hidden shadow-lg border-2 border-dashed border-amber-400/50 hover:border-amber-400 hover:shadow-2xl hover:scale-105 transition-all group">
+                      <div className="aspect-square flex items-center justify-center">
+                        <div className="text-center">
+                          <div className="w-16 h-16 mx-auto rounded-full bg-amber-500/30 flex items-center justify-center mb-2 group-hover:bg-amber-500/50 transition-colors">
+                            <Plus className="w-8 h-8 text-amber-300" />
+                          </div>
+                          <p className="text-amber-200 font-bold text-sm">Create your story</p>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                  {myMonthlyBooks.some((b) => b.status === 'pending' || b.status === 'generating') && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const creating = myMonthlyBooks.find((b) => b.status === 'pending' || b.status === 'generating');
+                        if (creating) navigate(`/library/creating/${creating.customMonthlyBookId}`);
+                      }}
+                      className="flex-shrink-0 w-[42vw] md:w-[30vw] lg:w-[23vw] max-w-[200px] text-left rounded-2xl overflow-hidden border-2 border-amber-400/50 bg-amber-500/20 hover:bg-amber-500/30 active:scale-[0.98] transition-all py-3 px-4 flex items-center justify-center gap-2"
+                    >
+                      <Loader2 className="w-5 h-5 text-amber-300 animate-spin shrink-0" />
+                      <span className="text-amber-100 text-sm font-medium text-center">Creating...</span>
+                    </button>
+                  )}
                   {myMonthlyBooks.map((item) => (
                     <div
                       key={item.customMonthlyBookId}

@@ -377,18 +377,28 @@ async function generatePageImageWithVertexGemini(customBook, pageDoc, characterS
  */
 const PAGE_GEMINI_MAX_ATTEMPTS = Math.max(1, parseInt(process.env.MONTHLY_BOOK_GEMINI_MAX_ATTEMPTS, 10) || 20);
 
-/** Delay in ms between Gemini retries for page generation. */
-const PAGE_GEMINI_RETRY_DELAY_MS = 2000;
+/**
+ * Randomized exponential backoff for Vertex AI 429 / transient errors (per Google Cloud recommendation).
+ * delay = min(baseMs * 2^attempt + jitter, maxMs). Jitter spreads retries so we don't thundering-herd.
+ * @param {number} attempt - 1-based attempt number (1 = first retry).
+ * @param {boolean} is429 - true if last response was 429 RESOURCE_EXHAUSTED (use longer base/max).
+ * @returns {number} Delay in milliseconds.
+ */
+function vertexBackoffMs(attempt, is429) {
+    const baseMs = is429 ? 5000 : 2000;
+    const maxMs = is429 ? 120000 : 30000;
+    const exponential = baseMs * Math.pow(2, attempt - 1);
+    const jitter = Math.floor(Math.random() * (baseMs + 1));
+    return Math.min(exponential + jitter, maxMs);
+}
 
 /**
- * Gemini 2.5 Flash Image "Generate content requests per minute" is often capped at 10 RPM and
- * not adjustable in Cloud Console for image-generation models. If you need higher quota, use
- * https://cloud.google.com/vertex-ai/generative-ai/docs/quotas (Contact Us) or GCP Support.
+ * Gemini 2.5 Flash Image uses Standard PayGo (shared capacity). Use exponential backoff on 429
+ * and smooth request rate (delay between pages). See:
+ * https://cloud.google.com/vertex-ai/generative-ai/docs/standard-paygo
+ * https://cloud.google.com/vertex-ai/generative-ai/docs/provisioned-throughput/error-code-429
  */
-/** Delay in ms when Vertex returns 429 (rate limit) — wait longer for quota to reset. Override with MONTHLY_BOOK_GEMINI_RATE_LIMIT_DELAY_MS. */
-const PAGE_GEMINI_RATE_LIMIT_DELAY_MS = parseInt(process.env.MONTHLY_BOOK_GEMINI_RATE_LIMIT_DELAY_MS, 10) || 20000;
-
-/** Delay in ms between generating one page and the next (avoids hitting rate limit after page 1). Override with MONTHLY_BOOK_DELAY_BETWEEN_PAGES_MS. */
+/** Delay in ms between generating one page and the next (smooth request rate). Override with MONTHLY_BOOK_DELAY_BETWEEN_PAGES_MS. */
 const DELAY_BETWEEN_PAGES_MS = parseInt(process.env.MONTHLY_BOOK_DELAY_BETWEEN_PAGES_MS, 10) || 5000;
 
 /**
@@ -414,17 +424,19 @@ async function generatePageImageForBook(customBook, pageDoc, characterStylePromp
         throw new Error('GCS bucket not configured (GCS_BUCKET_NAME). Cannot upload page ' + pageNumber + ' image.');
     }
 
+    let lastHttpStatus = 0;
     for (let attempt = 1; attempt <= PAGE_GEMINI_MAX_ATTEMPTS; attempt++) {
-        const attemptOffset = attempt - 1; // 0 = first try, 1 = first retry (different region), 2 = second retry (different region)
+        const attemptOffset = attempt - 1; // 0 = first try, 1 = first retry (different region), etc.
         const { imageUrl: geminiUrl, httpStatus } = await generatePageImageWithVertexGemini(customBook, pageDoc, characterStylePrompt, pageIndex, attemptOffset);
         if (geminiUrl) return geminiUrl;
+        lastHttpStatus = httpStatus;
         if (attempt < PAGE_GEMINI_MAX_ATTEMPTS) {
-            const delayMs = httpStatus === 429 ? PAGE_GEMINI_RATE_LIMIT_DELAY_MS : PAGE_GEMINI_RETRY_DELAY_MS;
-            console.log('MonthlyBookGenerator: Gemini page', pageNumber, 'attempt', attempt, 'failed' + (httpStatus === 429 ? ' (429 rate limit)' : '') + '; retrying in', delayMs, 'ms in a different region...');
+            const delayMs = vertexBackoffMs(attempt, httpStatus === 429);
+            console.log('MonthlyBookGenerator: Gemini page', pageNumber, 'attempt', attempt, 'failed' + (httpStatus === 429 ? ' (429 rate limit)' : '') + '; exponential backoff: retrying in', delayMs, 'ms (different region)...');
             await new Promise((r) => setTimeout(r, delayMs));
         }
     }
-    throw new Error('Page ' + pageNumber + ': Gemini 2.5 Flash Image failed after ' + PAGE_GEMINI_MAX_ATTEMPTS + ' attempts. No Imagen fallback.');
+    throw new Error('Page ' + pageNumber + ': Gemini 2.5 Flash Image failed after ' + PAGE_GEMINI_MAX_ATTEMPTS + ' attempts (last status ' + lastHttpStatus + '). Use exponential backoff; consider MONTHLY_BOOK_DELAY_BETWEEN_PAGES_MS or Provisioned Throughput.');
 }
 
 /**

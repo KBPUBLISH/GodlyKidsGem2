@@ -169,7 +169,7 @@ const BookReaderPage: React.FC = () => {
     // Premium preview state
     const [isBookPremium, setIsBookPremium] = useState(false);
     const [showPreviewLimitModal, setShowPreviewLimitModal] = useState(false);
-    const [scrollState, setScrollState] = useState<ScrollState>('max'); // Default to max (60%) - matches portal editing view
+    const [scrollState, setScrollState] = useState<ScrollState>('mid'); // Default to mid (30% cover) so text starts higher
     const [bookTitle, setBookTitle] = useState<string>('Book');
     const [bookOrientation, setBookOrientation] = useState<'portrait' | 'landscape'>('portrait');
     const [invalidBookId, setInvalidBookId] = useState(false);
@@ -202,7 +202,7 @@ const BookReaderPage: React.FC = () => {
     const introVideoRef = useRef<HTMLVideoElement>(null);
 
     // Keep ref in sync with state
-    const scrollStateRef = useRef<ScrollState>('max');
+    const scrollStateRef = useRef<ScrollState>('mid');
     useEffect(() => {
         scrollStateRef.current = scrollState;
     }, [scrollState]);

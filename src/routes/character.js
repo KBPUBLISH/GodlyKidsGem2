@@ -13,32 +13,38 @@ const SETTINGS = {
 
 const DEFAULT_SETTING = 'forest';
 
-// Style prompts: full-body character in a setting (not just a portrait). Selfie is reference for face/identity.
+// Critical: preserve what the person is wearing so the avatar matches their real outfit (hoodie, headphones, etc.).
+const CLOTHING_PRESERVATION = " CRITICAL: Keep the exact same clothing and accessories as in the photo (e.g. hoodie, headphones, hat, jacket, shirt). Do not replace them with costumes, tunics, or fantasy outfits. Only the art style should change; the person's outfit and accessories must match the photo.";
+
+// Critical: preserve age, facial features, and height. Do NOT turn adults into children.
+const AGE_AND_APPEARANCE_PRESERVATION = " CRITICAL — age and appearance: If the photo shows an ADULT (e.g. with beard, adult facial structure, or adult features), you MUST depict an ADULT—do NOT turn them into a child or kid. Preserve exact eye color from the photo (e.g. brown eyes stay brown, not blue). Preserve hair color and details (e.g. streaks, gray, style). Preserve beard, mustache, or facial hair if present. Depict the person at appropriate height for their age: adult = adult height (taller), child = child height. Full body so proportions are clear.";
+
+// Style prompts: full-body character in a setting (not just a portrait). Selfie is reference for face, identity, age, clothing, and accessories.
 // {{SETTING}} is replaced with SETTINGS[settingId] (e.g. forest, meadow).
 const STYLE_PROMPTS = {
     pixar: {
-        prompt: "Using this photo as the only reference for this child's face and identity, generate one image: the child as a full-body character in Pixar 3D animated style, standing or walking in {{SETTING}}. Rounded features, vibrant colors, playful energy. The child must be full body (head to feet visible) in the scene. Keep the child's face recognizable from the photo; body and environment in Pixar style.",
-        negativePrompt: "realistic, photograph, scary, dark, flat, portrait only, close-up face only"
+        prompt: "Using this photo as the only reference for this person's face, identity, age, clothing, and accessories, generate one image: the person as a full-body character in Pixar 3D animated style, standing or walking in {{SETTING}}. If the photo shows an adult (e.g. with beard), depict an adult—do not turn them into a child. Preserve exact eye color, hair (including streaks), and facial hair from the photo. Use adult height if the person is an adult. Rounded features, vibrant colors, playful energy. Full body (head to feet visible). Keep the exact same clothing and accessories as in the photo (e.g. hoodie, headphones)." + AGE_AND_APPEARANCE_PRESERVATION + CLOTHING_PRESERVATION,
+        negativePrompt: "realistic, photograph, scary, dark, flat, portrait only, close-up face only, turning adult into child"
     },
     minecraft: {
-        prompt: "Using this photo as the only reference for this child's face and identity, generate one image: the child as a full-body Minecraft-style blocky character, standing in {{SETTING}}. Square head and body, voxel style. The child must be full body (head to feet visible). Keep facial features recognizable but blocky; friendly, bright colors.",
+        prompt: "Using this photo as the only reference for this person's face, identity, age, clothing, and accessories, generate one image: the person as a full-body Minecraft-style blocky character, standing in {{SETTING}}. If the photo shows an adult (e.g. with beard), depict an adult—do not turn them into a child. Preserve eye color, hair (including streaks), and beard in blocky form. Use adult height if the person is an adult. Full body (head to feet visible). Keep outfit recognizable but blocky (same hoodie, headphones, etc.)." + AGE_AND_APPEARANCE_PRESERVATION + CLOTHING_PRESERVATION,
         negativePrompt: "realistic, smooth, round, detailed photograph, blurry, portrait only, close-up only"
     },
     disney: {
-        prompt: "Using this photo as the only reference for this child's face and identity, generate one image: the child as a full-body character in Disney 3D animated style, standing or walking in {{SETTING}}. Big sparkling eyes, smooth features, magical glow. The child must be full body (head to feet visible). Keep face recognizable; enchanting, family-friendly atmosphere.",
-        negativePrompt: "realistic, photograph, scary, dark, villainous, portrait only, close-up only"
+        prompt: "Using this photo as the only reference for this person's face, identity, age, clothing, and accessories, generate one image: the person as a full-body character in Disney 3D animated style, standing or walking in {{SETTING}}. If the photo shows an adult (e.g. with beard), depict an adult—do not turn them into a child. Preserve exact eye color, hair (including streaks), and facial hair. Use adult height if the person is an adult. Big sparkling eyes, smooth features, magical glow. Full body (head to feet visible). Keep face and outfit the same as in the photo." + AGE_AND_APPEARANCE_PRESERVATION + CLOTHING_PRESERVATION,
+        negativePrompt: "realistic, photograph, scary, dark, villainous, portrait only, close-up only, turning adult into child"
     },
     lego: {
-        prompt: "Using this photo as the only reference for this child's face and identity, generate one image: the child as a full-body LEGO minifigure style character, standing in {{SETTING}}. Yellow plastic skin, simple features. Full body visible in the scene. Keep hair color/style recognizable.",
+        prompt: "Using this photo as the only reference for this person's face, identity, age, clothing, and accessories, generate one image: the person as a full-body LEGO minifigure style character, standing in {{SETTING}}. If the photo shows an adult (e.g. with beard), depict an adult minifigure—do not turn them into a child. Preserve hair color and style (e.g. streaks) and suggest beard if present. Full body visible. Keep outfit recognizable (same hoodie, headphones, etc. in LEGO style)." + AGE_AND_APPEARANCE_PRESERVATION + CLOTHING_PRESERVATION,
         negativePrompt: "realistic skin tone, complex features, photograph, scary, portrait only"
     },
     cartoon: {
-        prompt: "Using this photo as the only reference for this child's face and identity, generate one image: the child as a full-body cute 2D cartoon character, standing in {{SETTING}}. Big expressive eyes, simplified features, bright colors. Full body (head to feet) in the scene.",
-        negativePrompt: "realistic, 3D, photograph, scary, portrait only, close-up only"
+        prompt: "Using this photo as the only reference for this person's face, identity, age, clothing, and accessories, generate one image: the person as a full-body cute 2D cartoon character, standing in {{SETTING}}. If the photo shows an adult (e.g. with beard), depict an adult—do not turn them into a child. Preserve exact eye color, hair (including streaks), and facial hair. Use adult height if the person is an adult. Big expressive eyes, simplified features, bright colors. Full body (head to feet). Keep the same clothing and accessories as in the photo." + AGE_AND_APPEARANCE_PRESERVATION + CLOTHING_PRESERVATION,
+        negativePrompt: "realistic, 3D, photograph, scary, portrait only, close-up only, turning adult into child"
     },
     illustrated: {
-        prompt: "Using this photo as the only reference for this child's face and identity, generate one image: the child as a full-body character in children's book illustration style, standing in {{SETTING}}. Soft watercolor textures, gentle colors, whimsical. Full body visible in the scene.",
-        negativePrompt: "realistic, photograph, harsh colors, scary, portrait only, close-up only"
+        prompt: "Using this photo as the only reference for this person's face, identity, age, clothing, and accessories, generate one image: the person as a full-body character in children's book illustration style, standing in {{SETTING}}. If the photo shows an adult (e.g. with beard), depict an adult—do not turn them into a child. Preserve exact eye color, hair (including streaks), and facial hair. Use adult height if the person is an adult. Soft watercolor textures, gentle colors, whimsical. Full body visible. Preserve the exact same clothing and accessories as in the photo." + AGE_AND_APPEARANCE_PRESERVATION + CLOTHING_PRESERVATION,
+        negativePrompt: "realistic, photograph, harsh colors, scary, portrait only, close-up only, turning adult into child"
     }
 };
 

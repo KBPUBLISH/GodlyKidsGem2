@@ -38,8 +38,13 @@ const customMonthlyBookSchema = new mongoose.Schema({
     childCharacterImageUrl: {
         type: String,
     },
-    // MVP: one style; store style id or label if we need it for generation
+    // How the main character (kid) is drawn — from character creation or chosen here
     characterStyleId: {
+        type: String,
+        default: 'illustrated',
+    },
+    // How the whole book is drawn (all characters + environment); can differ from character (e.g. Lego you in a Pixar book)
+    bookStyleId: {
         type: String,
         default: 'illustrated',
     },

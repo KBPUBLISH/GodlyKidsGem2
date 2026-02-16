@@ -1,9 +1,18 @@
 const express = require('express');
 const router = express.Router();
 const Book = require('../models/Book');
+const CustomMonthlyBook = require('../models/CustomMonthlyBook');
 const SavedCharacter = require('../models/SavedCharacter');
 const mongoose = require('mongoose');
 const { notifyNewBook } = require('../services/notificationService');
+
+/** Kid-created (Create Your Story) book IDs — excluded from main catalog, featured, trending, top-rated. */
+async function getGeneratedMonthlyBookIds() {
+    const ids = await CustomMonthlyBook.find({ bookId: { $exists: true, $ne: null } })
+        .distinct('bookId')
+        .lean();
+    return ids;
+}
 
 // GET all books (with pagination support)
 router.get('/', async (req, res) => {
@@ -58,7 +67,26 @@ router.get('/', async (req, res) => {
             // App list (published): exclude kids_monthly so they only appear as Create Your Story templates
             filter.bookType = { $ne: 'kids_monthly' };
         }
-        
+
+        // Kid-created monthly books (CustomMonthlyBook.bookId) are per-user and must NEVER appear in the
+        // main catalog for all users. They only appear in that user's "My Books" via /api/monthly-book/my-books.
+        const generatedBookIds = await getGeneratedMonthlyBookIds();
+        const onlyGeneratedMonthly = req.query.onlyGeneratedMonthly === '1' || req.query.onlyGeneratedMonthly === 'true';
+        if (onlyGeneratedMonthly) {
+            // Portal "Kids Monthly Books" tab only: list books that are kid-created (for admin view).
+            if (generatedBookIds.length > 0) {
+                filter._id = { $in: generatedBookIds };
+            } else {
+                filter._id = { $in: [] };
+            }
+        } else {
+            // Always exclude kid-created books from the main list (app catalog, portal List tab).
+            if (generatedBookIds.length > 0) {
+                filter._id = filter._id || {};
+                filter._id.$nin = (filter._id.$nin || []).concat(generatedBookIds);
+            }
+        }
+
         // Get total count for pagination metadata
         const total = await Book.countDocuments(filter);
         
@@ -97,12 +125,15 @@ router.get('/', async (req, res) => {
     }
 });
 
-// GET featured books for carousel
+// GET featured books for carousel (exclude kid-created books)
 router.get('/featured', async (req, res) => {
     try {
+        const generatedIds = await getGeneratedMonthlyBookIds();
+        const excludeIds = generatedIds.length > 0 ? { _id: { $nin: generatedIds } } : {};
         const books = await Book.find({ 
             isFeatured: true, 
-            status: 'published' 
+            status: 'published',
+            ...excludeIds
         }).sort({ featuredOrder: 1, createdAt: -1 });
         
         // Map books to include coverImage for backward compatibility
@@ -122,15 +153,17 @@ router.get('/featured', async (req, res) => {
     }
 });
 
-// GET top-rated books (15% or more likes/favorites to reads ratio)
+// GET top-rated books (15% or more likes/favorites to reads ratio); exclude kid-created books
 router.get('/top-rated', async (req, res) => {
     try {
         const minRatio = parseFloat(req.query.minRatio) || 0.15; // Default 15%
         const minReads = parseInt(req.query.minReads) || 5; // Minimum reads to qualify
-        
+        const generatedIds = await getGeneratedMonthlyBookIds();
+        const excludeIds = generatedIds.length > 0 ? { _id: { $nin: generatedIds } } : {};
         const books = await Book.find({ 
             status: 'published',
-            readCount: { $gte: minReads } // At least minReads to be considered
+            readCount: { $gte: minReads },
+            ...excludeIds
         });
         
         // Calculate rating ratio and filter
@@ -207,9 +240,14 @@ router.get('/trending', async (req, res) => {
             { $limit: limit }
         ]);
         
-        // If we have trending data, fetch the book details
+        // If we have trending data, fetch the book details (exclude kid-created books)
         if (trendingData.length > 0) {
-            const bookIds = trendingData.map(t => t._id);
+            const generatedIds = await getGeneratedMonthlyBookIds();
+            const generatedSet = new Set(generatedIds.map(id => id.toString()));
+            const bookIds = trendingData.map(t => t._id).filter(id => !generatedSet.has(id.toString()));
+            if (bookIds.length === 0) {
+                return res.json([]);
+            }
             const books = await Book.find({ 
                 _id: { $in: bookIds },
                 status: 'published'
@@ -246,10 +284,13 @@ router.get('/trending', async (req, res) => {
             return res.json(formattedBooks);
         }
         
-        // Fallback: If no recent play events, use readCount
+        // Fallback: If no recent play events, use readCount (exclude kid-created books)
+        const generatedIds = await getGeneratedMonthlyBookIds();
+        const excludeIds = generatedIds.length > 0 ? { _id: { $nin: generatedIds } } : {};
         const books = await Book.find({ 
             status: 'published',
-            readCount: { $gt: 0 }
+            readCount: { $gt: 0 },
+            ...excludeIds
         })
         .sort({ readCount: -1 })
         .limit(limit)

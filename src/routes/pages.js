@@ -47,6 +47,7 @@ router.post('/', async (req, res) => {
         scrollOffsetY: req.body.scrollOffsetY || 0,
         scrollOffsetX: req.body.scrollOffsetX || 0,
         scrollWidth: req.body.scrollWidth || 100,
+        scrollOpacity: req.body.scrollOpacity != null ? req.body.scrollOpacity : 100,
         soundEffectUrl: req.body.soundEffectUrl,
         backgroundAudioUrl: req.body.backgroundAudioUrl, // Auto-extracted from video for iOS audio layering
         textBoxes: req.body.textBoxes,
@@ -62,8 +63,10 @@ router.post('/', async (req, res) => {
         // Image sequence settings
         imageSequence: req.body.imageSequence || [],
         useImageSequence: req.body.useImageSequence || false,
-        imageSequenceDuration: req.body.imageSequenceDuration || 3,
+        imageSequenceDuration: req.body.imageSequenceDuration ?? 10,
         imageSequenceAnimation: req.body.imageSequenceAnimation || 'kenBurns',
+        backgroundImageAnimation: req.body.backgroundImageAnimation ?? 'kenBurns',
+        backgroundImageAnimationDuration: req.body.backgroundImageAnimationDuration ?? 10,
         sceneDescription: req.body.sceneDescription, // Kids Monthly: prompt for on-demand background generation
         referenceCharacterIds: req.body.referenceCharacterIds || [], // Kids Monthly: saved characters to reference on this page
     });
@@ -108,6 +111,29 @@ router.put('/:id', async (req, res) => {
         if (typeof req.body.scrollHeight === 'number') {
             page.scrollHeight = req.body.scrollHeight;
         }
+        if (typeof req.body.scrollOpacity === 'number' && req.body.scrollOpacity >= 0 && req.body.scrollOpacity <= 100) {
+            page.scrollOpacity = req.body.scrollOpacity;
+        }
+        // Keep scrollUrl and files.scroll in sync so book reader and generator find scroll from either location
+        if (req.body.scrollUrl !== undefined) {
+            page.scrollUrl = req.body.scrollUrl || '';
+            if (!page.files) page.files = {};
+            page.files.scroll = req.body.scrollUrl ? { url: req.body.scrollUrl } : undefined;
+        }
+
+        // When background is cleared (empty string), clear both legacy and files.background so template pages stay blank (e.g. kids_monthly)
+        if (req.body.backgroundUrl === '' || req.body.backgroundUrl === null) {
+            page.backgroundUrl = '';
+            page.backgroundType = 'image';
+            if (page.files && page.files.background) {
+                page.files.background = undefined;
+            }
+            if (page.content && page.content.backgroundUrl) {
+                page.content.backgroundUrl = undefined;
+            }
+            delete req.body.backgroundUrl;
+            delete req.body.backgroundType;
+        }
 
         Object.assign(page, req.body);
         const updatedPage = await page.save();
@@ -126,6 +152,35 @@ router.delete('/:id', async (req, res) => {
         await page.deleteOne();
         res.json({ message: 'Page deleted' });
     } catch (error) {
+        res.status(500).json({ message: error.message });
+    }
+});
+
+// POST clear all page backgrounds for a book (e.g. Kids Monthly template – keep prompts only)
+// Route: POST /api/pages/clear-backgrounds/book/:bookId
+router.post('/clear-backgrounds/book/:bookId', async (req, res) => {
+    try {
+        const bookId = req.params.bookId;
+        if (!bookId || !mongoose.Types.ObjectId.isValid(bookId) || String(bookId).length !== 24) {
+            return res.status(400).json({ message: 'Invalid bookId' });
+        }
+        const result = await Page.updateMany(
+            { bookId },
+            {
+                $set: {
+                    backgroundUrl: '',
+                    backgroundType: 'image',
+                },
+                $unset: {
+                    'files.background': 1,
+                    'content.backgroundUrl': 1,
+                },
+            }
+        );
+        const pages = await Page.find({ bookId }).sort({ pageNumber: 1 });
+        res.json({ message: 'Backgrounds cleared', modifiedCount: result.modifiedCount, pages });
+    } catch (error) {
+        console.error('Clear backgrounds error:', error.message);
         res.status(500).json({ message: error.message });
     }
 });

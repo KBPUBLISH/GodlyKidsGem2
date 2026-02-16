@@ -1,21 +1,40 @@
 # Render Deployment Fix
 
-## Issue
-Render is trying to run `node index.js` instead of `npm start`, causing the error:
+## Issue 1: "Missing script: start"
+
+If you see:
+```
+npm error Missing script: "start"
+```
+
+**Quick fix:** Set the start command directly so Render doesn’t rely on `npm start`:
+
+1. Go to [Render Dashboard](https://dashboard.render.com) → **godlykids-backend** → **Settings**
+2. Find **Start Command**
+3. Set it to: **`node src/index.js`**
+4. Save. Render will redeploy.
+
+After that, redeploy from **Manual Deploy** → **Deploy latest commit** if needed.
+
+---
+
+## Issue 2: Wrong start command (node index.js)
+
+Render is trying to run `node index.js` instead of the app entrypoint, causing:
 ```
 Error: Cannot find module '/opt/render/project/src/index.js'
 ```
 
 ## Solution
 
-The service needs to use `npm start` as the start command. You have two options:
+The service needs to run the app entrypoint. You have two options:
 
-### Option 1: Update Start Command in Render Dashboard (Quick Fix)
+### Option 1: Set Start Command in Render Dashboard (Quick Fix)
 
 1. Go to your Render dashboard
 2. Select the `godlykids-backend` service
 3. Go to **Settings** → **Start Command**
-4. Change it from `node index.js` to: `npm start`
+4. Set it to: **`node src/index.js`** (or `npm start` if package.json has a start script)
 5. Save changes
 6. Render will automatically redeploy
 

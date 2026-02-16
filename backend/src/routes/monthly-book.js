@@ -3,6 +3,7 @@ const router = express.Router();
 const mongoose = require('mongoose');
 const MonthlyBookTemplate = require('../models/MonthlyBookTemplate');
 const CustomMonthlyBook = require('../models/CustomMonthlyBook');
+const Book = require('../models/Book');
 const SavedCharacter = require('../models/SavedCharacter');
 const AppUser = require('../models/AppUser');
 
@@ -115,11 +116,11 @@ router.post('/create', async (req, res) => {
 /**
  * POST /api/monthly-book/create-from-book
  * Create a custom monthly book from a Book Builder book (bookType kids_monthly).
- * Body: userId, kidId, bookId, childName, childCharacterImageUrl?, hasTrialOrPaid?
+ * Body: userId, kidId, bookId, childName, childCharacterImageUrl?, characterStyleId?, bookStyleId?, hasTrialOrPaid?, narratorVoiceId?
  */
 router.post('/create-from-book', async (req, res) => {
     try {
-        const { userId: rawUserId, kidId, bookId: sourceBookId, childName, childCharacterImageUrl, hasTrialOrPaid } = req.body;
+        const { userId: rawUserId, kidId, bookId: sourceBookId, childName, childCharacterImageUrl, characterStyleId, bookStyleId, hasTrialOrPaid, narratorVoiceId } = req.body;
 
         if (!rawUserId || !kidId || !sourceBookId || !childName) {
             return res.status(400).json({
@@ -145,13 +146,18 @@ router.post('/create-from-book', async (req, res) => {
             });
         }
 
+        const charStyle = (characterStyleId && String(characterStyleId).trim()) || 'illustrated';
+        const bookStyle = (bookStyleId && String(bookStyleId).trim()) || charStyle;
         const customBook = await CustomMonthlyBook.create({
             userId,
             kidId,
             sourceBookId: new mongoose.Types.ObjectId(sourceBookId),
             childName: String(childName).trim(),
             childCharacterImageUrl: childCharacterImageUrl || null,
+            characterStyleId: charStyle,
+            bookStyleId: bookStyle,
             hasTrialOrPaid: Boolean(hasTrialOrPaid),
+            narratorVoiceId: narratorVoiceId || null,
             status: 'pending',
         });
 
@@ -172,6 +178,31 @@ router.post('/create-from-book', async (req, res) => {
 });
 
 /**
+ * POST /api/monthly-book/retry/:customMonthlyBookId
+ * Re-run generation for a book stuck in 'generating' (e.g. after crash). Resumes from the next page.
+ */
+router.post('/retry/:customMonthlyBookId', async (req, res) => {
+    try {
+        const { customMonthlyBookId } = req.params;
+        const custom = await CustomMonthlyBook.findById(customMonthlyBookId).lean();
+        if (!custom) {
+            return res.status(404).json({ success: false, error: 'Not found' });
+        }
+        if (custom.status !== 'generating') {
+            return res.status(400).json({ success: false, error: 'Can only retry a book that is currently generating. Status: ' + custom.status });
+        }
+        const { runMonthlyBookGeneration } = require('../jobs/monthlyBookGenerator');
+        runMonthlyBookGeneration(customMonthlyBookId).catch((err) => {
+            console.error('Monthly book retry error:', err);
+        });
+        res.status(202).json({ success: true, message: 'Retry started. Generation will resume from the next page.' });
+    } catch (err) {
+        console.error('Monthly book retry error:', err);
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+/**
  * GET /api/monthly-book/status/:customMonthlyBookId
  * Check status of a custom book (for polling or deep link).
  */
@@ -180,18 +211,26 @@ router.get('/status/:customMonthlyBookId', async (req, res) => {
         const { customMonthlyBookId } = req.params;
         const custom = await CustomMonthlyBook.findById(customMonthlyBookId)
             .populate('templateId', 'title')
-            .populate('bookId', 'title')
-            .populate('sourceBookId', 'title')
+            .populate('bookId', 'title files')
+            .populate('sourceBookId', 'title files')
             .lean();
         if (!custom) {
             return res.status(404).json({ success: false, error: 'Not found' });
         }
         const title = custom.bookId?.title || custom.templateId?.title || custom.sourceBookId?.title;
+        const coverImageUrl = custom.bookId?.files?.coverImage
+            || custom.sourceBookId?.files?.coverImage
+            || custom.sourceBookId?.coverImage
+            || null;
         res.json({
             success: true,
             status: custom.status,
             bookId: custom.bookId?._id || null,
             title: title || null,
+            coverImageUrl: coverImageUrl || null,
+            progressPage: custom.progressPage ?? 0,
+            progressTotalPages: custom.progressTotalPages ?? 0,
+            errorMessage: custom.errorMessage || null,
         });
     } catch (err) {
         console.error('Monthly book status error:', err);
@@ -201,41 +240,277 @@ router.get('/status/:customMonthlyBookId', async (req, res) => {
 
 /**
  * GET /api/monthly-book/my-books
- * List completed custom books for a user (for My Library).
- * Query: userId (required)
+ * List custom books for a user (for My Library). Optionally include in-progress.
+ * Query: userId (required), includeInProgress (optional). Optional fallbacks: email, deviceId.
+ * Tries userId first, then email, then deviceId so books show even if app sends a different identifier than at create time.
  */
 router.get('/my-books', async (req, res) => {
     try {
-        const { userId: rawUserId } = req.query;
-        if (!rawUserId) {
-            return res.status(400).json({ success: false, error: 'userId required' });
+        const { userId: rawUserId, email: rawEmail, deviceId: rawDeviceId, includeInProgress } = req.query;
+        if (!rawUserId && !rawEmail && !rawDeviceId) {
+            return res.status(400).json({ success: false, error: 'userId, email, or deviceId required' });
         }
-        const userId = await resolveUserId(rawUserId);
+        const candidates = [rawUserId, rawEmail, rawDeviceId].filter(Boolean);
+        let userId = null;
+        for (const raw of candidates) {
+            userId = await resolveUserId(raw);
+            if (userId) break;
+        }
         if (!userId) {
             return res.json({ success: true, books: [] });
         }
-        const list = await CustomMonthlyBook.find({ userId, status: 'completed' })
-            .populate('bookId', 'title files')
+        const includeAll = includeInProgress === '1' || includeInProgress === 'true';
+        const statusFilter = includeAll ? {} : { status: 'completed' };
+        const list = await CustomMonthlyBook.find({ userId, ...statusFilter })
+            .populate('bookId', 'title files status')
             .populate('templateId', 'title')
+            .populate('sourceBookId', 'title files')
             .sort({ createdAt: -1 })
             .limit(50)
             .lean();
 
-        const books = list
-            .filter((b) => b.bookId)
-            .map((b) => ({
+        // Exclude in-progress entries older than 24h so archived/deleted jobs don't show "Creating..." forever
+        const staleCutoff = new Date(Date.now() - 24 * 60 * 60 * 1000);
+        const listFiltered = list.filter((b) => {
+            if (b.status === 'pending' || b.status === 'generating') {
+                const created = b.createdAt ? new Date(b.createdAt) : null;
+                if (created && created < staleCutoff) return false;
+            }
+            return true;
+        });
+
+        const completedBookIds = listFiltered.filter((b) => b.status === 'completed' && b.bookId?._id && b.bookId?.status !== 'archived').map((b) => b.bookId._id);
+        let pageCountByBookId = {};
+        if (completedBookIds.length > 0) {
+            const counts = await Book.aggregate([
+                { $match: { _id: { $in: completedBookIds } } },
+                { $project: { pageCount: { $size: { $ifNull: ['$pages', []] } } } },
+            ]).exec();
+            counts.forEach((c) => { pageCountByBookId[String(c._id)] = c.pageCount; });
+        }
+
+        const books = listFiltered.map((b) => {
+            // Completed with a valid (non-archived, existing) book
+            if (b.status === 'completed' && b.bookId && b.bookId.status !== 'archived') {
+                const bookIdStr = String(b.bookId._id);
+                return {
+                    customMonthlyBookId: b._id,
+                    bookId: b.bookId._id,
+                    title: b.bookId.title,
+                    coverImageUrl: b.bookId?.files?.coverImage || b.bookId?.files?.cover?.url || null,
+                    childName: b.childName,
+                    createdAt: b.createdAt,
+                    status: 'completed',
+                    pageCount: pageCountByBookId[bookIdStr],
+                };
+            }
+            // Completed but book missing or archived → show as archived so frontend can hide or label
+            if (b.status === 'completed') {
+                const source = b.sourceBookId || b.templateId;
+                return {
+                    customMonthlyBookId: b._id,
+                    bookId: null,
+                    title: source?.title || 'Your story',
+                    coverImageUrl: source?.files?.coverImage || source?.coverImage || null,
+                    childName: b.childName,
+                    createdAt: b.createdAt,
+                    status: 'archived',
+                };
+            }
+            const source = b.sourceBookId || b.templateId;
+            const sourceTitle = source?.title || 'Your story';
+            const sourceCover = source?.files?.coverImage || source?.coverImage || null;
+            return {
                 customMonthlyBookId: b._id,
-                bookId: b.bookId._id,
-                title: b.bookId.title,
-                coverImageUrl: b.bookId?.files?.coverImage || b.bookId?.files?.cover?.url || null,
+                bookId: null,
+                title: sourceTitle,
+                coverImageUrl: sourceCover,
                 childName: b.childName,
                 createdAt: b.createdAt,
-            }));
+                status: b.status || 'pending',
+            };
+        });
 
         res.json({ success: true, books });
     } catch (err) {
         console.error('My monthly books error:', err);
         res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+/**
+ * GET /api/monthly-book/by-source?sourceBookId=...
+ * Portal: list kid-created books (CustomMonthlyBook) that used this Book as template.
+ * Returns completed books so you can view what kids created without changing the template.
+ */
+router.get('/by-source', async (req, res) => {
+    try {
+        const sourceBookId = req.query.sourceBookId;
+        if (!sourceBookId || !mongoose.Types.ObjectId.isValid(sourceBookId)) {
+            return res.status(400).json({ error: 'sourceBookId (valid ObjectId) is required' });
+        }
+        const list = await CustomMonthlyBook.find({
+            sourceBookId: new mongoose.Types.ObjectId(sourceBookId),
+            status: 'completed',
+            bookId: { $exists: true, $ne: null },
+        })
+            .populate('bookId', 'title files')
+            .sort({ createdAt: -1 })
+            .limit(200)
+            .lean();
+
+        const books = list.map((b) => ({
+            customMonthlyBookId: b._id,
+            bookId: b.bookId?._id,
+            title: b.bookId?.title || 'Story',
+            coverImageUrl: b.bookId?.files?.coverImage || b.bookId?.coverImage || null,
+            childName: b.childName,
+            createdAt: b.createdAt,
+        }));
+
+        res.json({ success: true, books });
+    } catch (err) {
+        console.error('Monthly book by-source error:', err);
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+/**
+ * Get Vertex AI access token and project ID from GCP credentials (same as monthly book image generation).
+ * Returns { accessToken, projectId } or null if not configured.
+ */
+async function getVertexForAnalyzeScene() {
+    const credentialsJson = process.env.GCS_CREDENTIALS_JSON || process.env.GOOGLE_SERVICE_ACCOUNT_JSON;
+    if (!credentialsJson) return null;
+    try {
+        const credentials = JSON.parse(credentialsJson);
+        const projectId = credentials.project_id;
+        if (!projectId) return null;
+        const { GoogleAuth } = require('google-auth-library');
+        const auth = new GoogleAuth({
+            credentials,
+            scopes: ['https://www.googleapis.com/auth/cloud-platform'],
+        });
+        const client = await auth.getClient();
+        const tokenResponse = await client.getAccessToken();
+        const accessToken = tokenResponse.token;
+        if (!accessToken) return null;
+        return { accessToken, projectId };
+    } catch (err) {
+        console.warn('analyze-scene-prompt: Vertex credentials error', err.message);
+        return null;
+    }
+}
+
+/**
+ * POST /api/monthly-book/analyze-scene-prompt
+ * Portal: analyze page text to produce an image prompt with setting/background and character consistency.
+ * Uses Vertex AI (Gemini 2.0 Flash) when GCP credentials are set, to avoid Consumer API region restrictions.
+ * Falls back to Consumer Gemini API (GEMINI_API_KEY) when Vertex is not available.
+ * Body: { pageText: string, bookId: string }
+ * Returns: { sceneDescription: string }
+ */
+router.post('/analyze-scene-prompt', async (req, res) => {
+    try {
+        const { pageText, bookId } = req.body;
+        if (!pageText || typeof pageText !== 'string') {
+            return res.status(400).json({ error: 'pageText is required' });
+        }
+
+        let characterConsistencyBlock = '';
+        if (bookId && mongoose.Types.ObjectId.isValid(bookId)) {
+            const book = await Book.findById(bookId).populate('featuredCharacterId').lean();
+            const featured = book?.featuredCharacterId;
+            if (featured && (featured.displayName || featured.internalTag)) {
+                const name = featured.displayName || featured.internalTag;
+                const stylePrompt = (featured.stylePrompt || '').trim();
+                const outfitHint = stylePrompt
+                    ? ` Use this appearance: ${stylePrompt.slice(0, 200)}${stylePrompt.length > 200 ? '...' : ''}.`
+                    : ' Keep the same clothing and appearance in every scene.';
+                characterConsistencyBlock = `\n\nCharacter consistency (important): Keep ${name} in the same clothing and appearance in every scene.${outfitHint}`;
+            }
+        }
+
+        const userPrompt = `You are helping create an image prompt for a single page of a children's storybook. The page text is below.
+
+PAGE TEXT:
+"""
+${pageText.slice(0, 2000)}
+"""
+
+Tasks:
+1. Analyze the text and write a short scene description suitable for generating one illustration. Answer: What is the background? What is the setting? (e.g. indoor/outdoor, location, time of day, mood.)
+2. Describe the scene in 2-4 sentences. Be specific about the setting and environment so an image model can draw it. Do not include dialogue or long narration—focus on what we SEE.
+3. If the text mentions a child or main character, you can refer to "the child" or use @child. For other named characters use their name (e.g. Jesus, Mary). Keep the same tone: warm, children's book, faith-friendly.
+4. Output ONLY the scene description. No labels like "Scene:" or "Setting:". Plain paragraph(s) that can be used as the image prompt.${characterConsistencyBlock}`;
+
+        const payload = {
+            contents: [{ role: 'user', parts: [{ text: userPrompt }] }],
+            generationConfig: { temperature: 0.4, maxOutputTokens: 512 },
+        };
+
+        // Prefer Vertex AI (explicit region) to avoid Consumer API "User location is not supported"
+        const vertex = await getVertexForAnalyzeScene();
+        if (vertex) {
+            const location = (process.env.VERTEX_AI_ANALYZE_SCENE_LOCATION || 'us-central1').trim();
+            const url = `https://${location}-aiplatform.googleapis.com/v1/projects/${vertex.projectId}/locations/${location}/publishers/google/models/gemini-2.0-flash:generateContent`;
+            const response = await fetch(url, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${vertex.accessToken}`,
+                },
+                body: JSON.stringify(payload),
+            });
+            if (response.ok) {
+                const data = await response.json();
+                const sceneDescription = data.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || '';
+                if (sceneDescription) {
+                    return res.json({ sceneDescription });
+                }
+            }
+            const errText = await response.text();
+            console.warn('analyze-scene-prompt: Vertex returned', response.status, errText.slice(0, 200));
+            // Fall through to Consumer API if Vertex failed (e.g. model not enabled)
+        }
+
+        // Fallback: Consumer Gemini API (can fail with "User location is not supported" from some regions)
+        const geminiKey = process.env.GEMINI_API_KEY;
+        if (!geminiKey) {
+            return res.status(503).json({
+                error: 'AI analysis not configured. Set GCS_CREDENTIALS_JSON (or GOOGLE_SERVICE_ACCOUNT_JSON) for Vertex AI, or GEMINI_API_KEY for Consumer Gemini.',
+            });
+        }
+
+        const response = await fetch(
+            `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${geminiKey}`,
+            {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload),
+            }
+        );
+
+        if (!response.ok) {
+            const errText = await response.text();
+            console.error('Gemini analyze-scene-prompt error:', response.status, errText);
+            const isLocationError = response.status === 400 && /user location is not supported/i.test(errText);
+            const errorMessage = isLocationError
+                ? 'Gemini API is not available from this server region. Use Vertex AI by setting GCS_CREDENTIALS_JSON (or GOOGLE_SERVICE_ACCOUNT_JSON) on the backend.'
+                : 'AI analysis failed';
+            return res.status(502).json({ error: errorMessage, details: errText.slice(0, 300) });
+        }
+
+        const data = await response.json();
+        const sceneDescription = data.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || '';
+        if (!sceneDescription) {
+            return res.status(502).json({ error: 'AI returned empty scene description' });
+        }
+
+        res.json({ sceneDescription });
+    } catch (err) {
+        console.error('analyze-scene-prompt error:', err);
+        res.status(500).json({ error: err.message || 'Failed to analyze scene' });
     }
 });
 

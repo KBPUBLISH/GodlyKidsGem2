@@ -49,13 +49,22 @@ router.post('/preview-voice', async (req, res) => {
             filenamePrefix: `preview_${voiceId.slice(0, 8)}`,
             stability: 0.5,
             similarityBoost: 0.75,
-            style: 0.2
+            style: 0.2,
+            returnBase64: true // Skip GCS so we don't call makePublic() (fails with uniform bucket-level access)
         });
         
+        if (result.audioBase64) {
+            return res.json({ audioBase64: result.audioBase64 });
+        }
         res.json({ audioUrl: result.url });
     } catch (err) {
         console.error('Error generating voice preview:', err);
-        res.status(500).json({ error: 'Failed to generate preview' });
+        const status = err.response?.status;
+        const message = err.message || 'Failed to generate preview';
+        res.status(status && status >= 400 && status < 600 ? status : 500).json({
+            error: message,
+            code: err.response?.data?.detail?.code || (err.response?.status === 401 ? 'UNAUTHORIZED' : undefined)
+        });
     }
 });
 

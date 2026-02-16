@@ -20,9 +20,11 @@ const WEB_BILLING_ENABLED = true;
 export const PREMIUM_ENTITLEMENT_ID = 'premium';
 
 /**
- * Product identifiers sent to RevenueCat (and thus to Google Play on Android / App Store on iOS).
- * Must exactly match RevenueCat Dashboard → Products (and Google Play product IDs).
+ * Product identifiers sent to RevenueCat.
+ * iOS (App Store) and Android (Google Play) use different product IDs — each platform must use its own.
  */
+
+/** Default / web — used when platform is not iOS or Android native. */
 export const PRODUCT_IDS = {
   ANNUAL: 'yearlymember:yearly',
   MONTHLY: 'godlykidsmonthly:monthly',
@@ -30,11 +32,18 @@ export const PRODUCT_IDS = {
 };
 
 /**
- * Android: Use the SAME identifiers as RevenueCat so the product matches.
- * RevenueCat Dashboard shows: godlykidsmonthly:monthly, yearlymember:yearly, lifetime.
- * Google Play has subscriptions "godlykidsmonthly" and "yearlymember" with base plans;
- * the full format (subscriptionId:basePlanId) is required for RevenueCat to resolve the product.
- * Fallback short form (PRODUCT_IDS_ANDROID_LEGACY) only if your RevenueCat products are configured that way.
+ * iOS (App Store): Product IDs from App Store Connect / RevenueCat.
+ * Must exactly match RevenueCat → App Store (e.g. Monthly Member, Yearly Member).
+ */
+export const PRODUCT_IDS_IOS: Record<string, string> = {
+  MONTHLY: 'kbpublish.godlykids.monthly',
+  ANNUAL: 'kbpublish.godlykids.yearly',
+  LIFETIME: 'kbpublish.godlykids.lifetime', // Add if you create a lifetime product in App Store Connect
+};
+
+/**
+ * Android (Google Play): Subscription IDs with base plan (subscriptionId:basePlanId).
+ * Must exactly match RevenueCat → Google Play and Play Console.
  */
 export const PRODUCT_IDS_ANDROID = {
   ANNUAL: 'yearlymember:yearly',
@@ -288,8 +297,10 @@ export const RevenueCatService = {
    * @param quickMode - if true, returns success quickly after triggering Apple sheet (optimistic)
    */
   purchase: async (productId: 'annual' | 'monthly' | 'lifetime', quickMode: boolean = true): Promise<{ success: boolean; error?: string }> => {
-    const isAndroid = /android/.test(navigator.userAgent.toLowerCase());
-    const ids = isAndroid ? PRODUCT_IDS_ANDROID : PRODUCT_IDS;
+    const ua = navigator.userAgent.toLowerCase();
+    const isAndroid = ua.includes('android');
+    const isIOS = (ua.includes('iphone') || ua.includes('ipad')) && (ua.includes('despia') || ua.includes('wkwebview'));
+    const ids = isAndroid ? PRODUCT_IDS_ANDROID : isIOS ? PRODUCT_IDS_IOS : PRODUCT_IDS;
     const rcProductId = productId === 'lifetime'
       ? ids.LIFETIME
       : productId === 'annual'
@@ -298,7 +309,7 @@ export const RevenueCatService = {
     const userId = getUserId();
     
     console.log('🛒 Initiating purchase via DeSpia URL scheme');
-    console.log('   Platform:', isAndroid ? 'Android' : 'iOS');
+    console.log('   Platform:', isAndroid ? 'Android' : isIOS ? 'iOS' : 'Web/default');
     console.log('   Product:', rcProductId);
     console.log('   User ID:', userId);
     console.log('   isNativeApp:', isNativeApp());

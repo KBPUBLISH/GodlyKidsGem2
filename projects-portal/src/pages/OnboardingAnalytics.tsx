@@ -287,7 +287,7 @@ const OnboardingAnalytics: React.FC = () => {
                         Track user journey through tutorial-first onboarding flow
                     </p>
                     <div className="mt-2 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 text-xs text-amber-800">
-                        <strong>Flow:</strong> Started → Account Created → Step 1 (Parent) → Step 2 (Family) → Step 3 (Goals) → Step 4 (Features) → Step 5 (Voice) → Step 6 (Paywall Shown) → Step 7 (Exit Paywall) / Step 8 (Start Trial) → Subscribed
+                        <strong>Flow:</strong> Started → … → Paywall Shown → Exit Paywall / Start Trial <strong>Button</strong> Clicked → Subscribed (app-reported) vs Subscribed (RevenueCat). &quot;Start Trial Button Clicked&quot; = in-app tap; &quot;Subscribed (RevenueCat)&quot; = actual trial/subscription activations from RevenueCat.
                     </div>
                 </div>
                 <div className="flex items-center gap-3">

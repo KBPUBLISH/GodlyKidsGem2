@@ -157,10 +157,14 @@ router.post('/revenuecat', async (req, res) => {
                     try {
                         const appUser = await AppUser.findOne(buildUserQuery(userId));
                         if (appUser) {
+                            const wasAlreadyActive = appUser.subscriptionStatus === 'active' || appUser.subscriptionStatus === 'trial';
                             appUser.subscriptionStatus = 'active';
                             appUser.subscriptionPlan = productId?.includes('yearly') || productId?.includes('annual') ? 'annual' : 
                                                        /lifetime/i.test(productId || '') ? 'lifetime' : 'monthly';
-                            appUser.subscriptionStartDate = new Date();
+                            // Only set subscriptionStartDate when user first becomes active (so analytics "Subscribed (RevenueCat)" = new activations)
+                            if (!wasAlreadyActive) {
+                                appUser.subscriptionStartDate = new Date();
+                            }
                             appUser.subscriptionEndDate = expirationDate ? new Date(expirationDate) : null;
                             await appUser.save();
                             console.log(`✅ Updated AppUser ${appUser._id} (${appUser.email || appUser.deviceId}) to active subscription`);

@@ -725,10 +725,17 @@ router.get('/onboarding', async (req, res) => {
         const skipped = eventCounts['skip_clicked'] || 0;
         const completed = eventCounts['onboarding_complete'] || 0;
         
-        // Total subscribed (from various events)
-        const totalSubscribed = subscribed + subscriptionStarted + trialStarted;
+        // Total subscribed (from app-reported events only - not RevenueCat)
+        const totalSubscribedApp = subscribed + subscriptionStarted + trialStarted;
+
+        // RevenueCat-backed: users who actually started a subscription in this period (webhook set subscriptionStartDate)
+        const subscribedRevenueCat = await AppUser.countDocuments({
+            subscriptionStatus: { $in: ['active', 'trial'] },
+            subscriptionStartDate: { $gte: startDate },
+        });
         
         // Build funnel data - Account first, then onboarding steps, then paywall
+        // Labels clarify: "Start Trial Button Clicked" = in-app tap, not trial activation; "Subscribed (app)" vs "Subscribed (RevenueCat)"
         const funnel = [
             { step: 'Started', count: started, rate: 100 },
             { step: 'Account Created', count: accountCreated || step6, rate: started > 0 ? Math.round(((accountCreated || step6) / started) * 100) : 0 },
@@ -739,8 +746,9 @@ router.get('/onboarding', async (req, res) => {
             { step: 'Step 5 (Voice)', count: step5, rate: started > 0 ? Math.round((step5 / started) * 100) : 0 },
             { step: 'Paywall Shown', count: paywallShown, rate: started > 0 ? Math.round((paywallShown / started) * 100) : 0 },
             { step: 'Exit Paywall (X)', count: paywallClosed, rate: paywallShown > 0 ? Math.round((paywallClosed / paywallShown) * 100) : 0 },
-            { step: 'Start Trial Clicked', count: paywallTrialClicked, rate: paywallShown > 0 ? Math.round((paywallTrialClicked / paywallShown) * 100) : 0 },
-            { step: 'Subscribed', count: totalSubscribed, rate: started > 0 ? Math.round((totalSubscribed / started) * 100) : 0 },
+            { step: 'Start Trial Button Clicked', count: paywallTrialClicked, rate: paywallShown > 0 ? Math.round((paywallTrialClicked / paywallShown) * 100) : 0 },
+            { step: 'Subscribed (app-reported)', count: totalSubscribedApp, rate: started > 0 ? Math.round((totalSubscribedApp / started) * 100) : 0 },
+            { step: 'Subscribed (RevenueCat)', count: subscribedRevenueCat, rate: started > 0 ? Math.round((subscribedRevenueCat / started) * 100) : 0 },
         ];
         
         // Detailed paywall funnel breakdown
@@ -753,7 +761,8 @@ router.get('/onboarding', async (req, res) => {
             { step: 'Purchase Started', count: paywallPurchaseStarted, rate: paywallParentGatePassed > 0 ? Math.round((paywallPurchaseStarted / paywallParentGatePassed) * 100) : 0 },
             { step: 'Purchase Error', count: paywallPurchaseError, rate: paywallPurchaseStarted > 0 ? Math.round((paywallPurchaseError / paywallPurchaseStarted) * 100) : 0 },
             { step: 'Purchase Cancelled', count: paywallPurchaseCancelled, rate: paywallPurchaseStarted > 0 ? Math.round((paywallPurchaseCancelled / paywallPurchaseStarted) * 100) : 0 },
-            { step: 'Subscribed', count: totalSubscribed, rate: paywallPurchaseStarted > 0 ? Math.round((totalSubscribed / paywallPurchaseStarted) * 100) : 0 },
+            { step: 'Subscribed (app-reported)', count: totalSubscribedApp, rate: paywallPurchaseStarted > 0 ? Math.round((totalSubscribedApp / paywallPurchaseStarted) * 100) : 0 },
+            { step: 'Subscribed (RevenueCat)', count: subscribedRevenueCat, rate: paywallPurchaseStarted > 0 ? Math.round((subscribedRevenueCat / paywallPurchaseStarted) * 100) : 0 },
         ];
         
         // Daily trends (last 14 days)
@@ -768,7 +777,7 @@ router.get('/onboarding', async (req, res) => {
                 date: dayStr,
                 started: dayData['onboarding_started'] || 0,
                 completed: dayData['onboarding_complete'] || 0,
-                subscribed: (dayData['subscription_started'] || 0) + (dayData['trial_started'] || 0),
+                subscribed: (dayData['subscription_started'] || 0) + (dayData['trial_started'] || 0) + (dayData['subscribed'] || 0),
                 skipped: dayData['skip_clicked'] || 0,
             });
         }

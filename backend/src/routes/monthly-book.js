@@ -4,6 +4,7 @@ const mongoose = require('mongoose');
 const MonthlyBookTemplate = require('../models/MonthlyBookTemplate');
 const CustomMonthlyBook = require('../models/CustomMonthlyBook');
 const Book = require('../models/Book');
+const Page = require('../models/Page');
 const SavedCharacter = require('../models/SavedCharacter');
 const AppUser = require('../models/AppUser');
 
@@ -117,15 +118,45 @@ router.post('/create', async (req, res) => {
  * POST /api/monthly-book/create-from-book
  * Create a custom monthly book from a Book Builder book (bookType kids_monthly).
  * Body: userId, kidId, bookId, childName, childCharacterImageUrl?, characterStyleId?, bookStyleId?, hasTrialOrPaid?, narratorVoiceId?
+ * Or: characters (array of 1–3 { name, characterImageUrl? }) instead of childName/childCharacterImageUrl; legacy fields set from first.
  */
 router.post('/create-from-book', async (req, res) => {
     try {
-        const { userId: rawUserId, kidId, bookId: sourceBookId, childName, childCharacterImageUrl, characterStyleId, bookStyleId, hasTrialOrPaid, narratorVoiceId } = req.body;
+        const { userId: rawUserId, kidId, bookId: sourceBookId, childName, childCharacterImageUrl, characterStyleId, bookStyleId, hasTrialOrPaid, narratorVoiceId, characters: charactersBody } = req.body;
 
-        if (!rawUserId || !kidId || !sourceBookId || !childName) {
+        const useCharacters = Array.isArray(charactersBody) && charactersBody.length >= 1 && charactersBody.length <= 3;
+        let primaryName, primaryImageUrl, charactersToStore;
+
+        if (useCharacters) {
+            const names = charactersBody.map(c => (c && c.name && String(c.name).trim()) || '').filter(Boolean);
+            if (names.length === 0) {
+                return res.status(400).json({
+                    success: false,
+                    error: 'characters must have at least one entry with a name',
+                });
+            }
+            primaryName = names[0];
+            primaryImageUrl = (charactersBody[0] && charactersBody[0].characterImageUrl) ? String(charactersBody[0].characterImageUrl).trim() : null;
+            charactersToStore = charactersBody.slice(0, 3).map(c => ({
+                name: String((c && c.name) || '').trim(),
+                characterImageUrl: (c && c.characterImageUrl) ? String(c.characterImageUrl).trim() : undefined,
+            }));
+        } else {
+            if (!rawUserId || !kidId || !sourceBookId || !childName) {
+                return res.status(400).json({
+                    success: false,
+                    error: 'Missing required fields: userId, kidId, bookId, childName',
+                });
+            }
+            primaryName = String(childName).trim();
+            primaryImageUrl = childCharacterImageUrl || null;
+            charactersToStore = undefined;
+        }
+
+        if (!rawUserId || !kidId || !sourceBookId) {
             return res.status(400).json({
                 success: false,
-                error: 'Missing required fields: userId, kidId, bookId, childName',
+                error: 'Missing required fields: userId, kidId, bookId',
             });
         }
 
@@ -148,18 +179,29 @@ router.post('/create-from-book', async (req, res) => {
 
         const charStyle = (characterStyleId && String(characterStyleId).trim()) || 'illustrated';
         const bookStyle = (bookStyleId && String(bookStyleId).trim()) || charStyle;
-        const customBook = await CustomMonthlyBook.create({
+        const hasTrialOrPaid = Boolean(hasTrialOrPaid);
+        const sourcePageCount = await Page.countDocuments({ bookId: sourceBook._id });
+        const progressTotalPages = hasTrialOrPaid
+            ? sourcePageCount
+            : Math.min(4, sourcePageCount);
+        const createPayload = {
             userId,
             kidId,
             sourceBookId: new mongoose.Types.ObjectId(sourceBookId),
-            childName: String(childName).trim(),
-            childCharacterImageUrl: childCharacterImageUrl || null,
+            childName: primaryName,
+            childCharacterImageUrl: primaryImageUrl || null,
             characterStyleId: charStyle,
             bookStyleId: bookStyle,
-            hasTrialOrPaid: Boolean(hasTrialOrPaid),
+            hasTrialOrPaid,
             narratorVoiceId: narratorVoiceId || null,
             status: 'pending',
-        });
+            progressPage: 0,
+            progressTotalPages: progressTotalPages || 1,
+        };
+        if (charactersToStore && charactersToStore.length > 0) {
+            createPayload.characters = charactersToStore;
+        }
+        const customBook = await CustomMonthlyBook.create(createPayload);
 
         const { runMonthlyBookGeneration } = require('../jobs/monthlyBookGenerator');
         runMonthlyBookGeneration(customBook._id).catch((err) => {

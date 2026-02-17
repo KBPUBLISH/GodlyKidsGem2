@@ -148,7 +148,10 @@ const pageSchema = new mongoose.Schema({
     imageSequenceDuration: { type: Number, default: 3 },
     // Animation effect for image sequence: 'none', 'panLeft', 'panRight', 'panUp', 'panDown', 'zoomIn', 'zoomOut', 'kenBurns'
     imageSequenceAnimation: { type: String, default: 'kenBurns' },
-    
+    // Single background image animation (e.g. Kids Monthly generated pages): same options as image sequence
+    backgroundImageAnimation: { type: String, default: 'kenBurns' },
+    backgroundImageAnimationDuration: { type: Number, default: 10 },
+
     // Legacy fields (for backward compatibility)
     imageUrl: { type: String },
     audioUrl: { type: String },

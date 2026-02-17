@@ -38,6 +38,11 @@ const customMonthlyBookSchema = new mongoose.Schema({
     childCharacterImageUrl: {
         type: String,
     },
+    // Multi-character (1–3): when set, generator uses these; childName/childCharacterImageUrl = first for legacy
+    characters: [{
+        name: { type: String, required: true },
+        characterImageUrl: { type: String },
+    }],
     // How the main character (kid) is drawn — from character creation or chosen here
     characterStyleId: {
         type: String,
@@ -65,6 +70,8 @@ const customMonthlyBookSchema = new mongoose.Schema({
         ref: 'Book',
         index: true,
     },
+    progressPage: { type: Number, default: 0 },
+    progressTotalPages: { type: Number, default: 0 },
     errorMessage: {
         type: String,
     },

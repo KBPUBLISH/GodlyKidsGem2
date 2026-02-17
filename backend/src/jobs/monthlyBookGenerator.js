@@ -908,6 +908,17 @@ async function runMonthlyBookGenerationFromBook(customMonthlyBookId, custom, sou
             } else if (audioTracks.length > 0) {
                 console.log(`MonthlyBookGenerator: [${bookIdShort}] Copying ${audioTracks.length} background music track(s), default index ${defaultAudioIndex}`);
             }
+            // Copy characterVoices from template so @Jesus, @Moses, etc. use the correct voices
+            const charVoices = Array.isArray(sourceBook.characterVoices) && sourceBook.characterVoices.length > 0
+                ? sourceBook.characterVoices.map((cv) => ({
+                    characterName: cv.characterName,
+                    voiceId: cv.voiceId,
+                    color: cv.color || undefined,
+                }))
+                : [];
+            if (charVoices.length > 0) {
+                console.log(`MonthlyBookGenerator: [${bookIdShort}] Copying ${charVoices.length} character voice(s):`, charVoices.map((c) => c.characterName).join(', '));
+            }
             book = await Book.create({
                 title: bookTitle,
                 author: sourceBook.author || 'GodlyKids',
@@ -926,6 +937,7 @@ async function runMonthlyBookGenerationFromBook(customMonthlyBookId, custom, sou
                 showCharacterOverlay: false,
                 defaultVoiceId: narratorVoiceId,
                 defaultNarratorVoiceId: narratorVoiceId,
+                characterVoices: charVoices,
             });
             await Page.create(toPageDoc(pagePayload, book._id));
             await CustomMonthlyBook.findByIdAndUpdate(customMonthlyBookId, { bookId: book._id, progressPage: pageNum });

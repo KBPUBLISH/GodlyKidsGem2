@@ -343,12 +343,43 @@ function parseTimeWindow(window) {
 
 // GET single book
 // Optional query: userId — if provided and this book is a Create Your Story book for that user, response includes isUserCreated: true
+// Optional query: share — if valid share token for this kid-created book, response includes allowSharedRead: true (recipient can read without subscription)
 // If id is not a Book id, tries CustomMonthlyBook id (same user) and returns the generated Book when completed.
 router.get('/:id', async (req, res) => {
     try {
         let book = await Book.findById(req.params.id);
         const rawUserId = req.query.userId || req.query.email || req.query.deviceId;
         const resolvedUserId = rawUserId ? await resolveUserIdForBooks(rawUserId) : null;
+        const shareToken = (req.query.share && String(req.query.share).trim()) || null;
+
+        // Shared link: validate token and return book with allowSharedRead (no userId required)
+        if (shareToken && book) {
+            const customByShare = await CustomMonthlyBook.findOne({
+                bookId: book._id,
+                shareToken,
+                status: 'completed',
+            }).select('_id childName childCharacterImageUrl bookStyleId characters').lean();
+            if (customByShare) {
+                const bookObj = book.toObject();
+                if (bookObj.files && bookObj.files.coverImage) {
+                    bookObj.coverImage = bookObj.files.coverImage;
+                } else if (!bookObj.files) {
+                    bookObj.files = { coverImage: bookObj.coverImage || null, images: [], videos: [], audio: [] };
+                }
+                bookObj.allowSharedRead = true;
+                bookObj.isUserCreated = true;
+                bookObj.createdForChildName = customByShare.childName || null;
+                bookObj.createdForAvatarUrl = customByShare.childCharacterImageUrl || null;
+                bookObj.createdWithStyleId = (customByShare.bookStyleId && String(customByShare.bookStyleId).trim()) || null;
+                if (customByShare.characters && customByShare.characters.length > 0) {
+                    bookObj.createdForCharacters = customByShare.characters.map(c => ({
+                        name: c.name,
+                        characterImageUrl: c.characterImageUrl || null,
+                    }));
+                }
+                return res.json(bookObj);
+            }
+        }
 
         // Fallback: id might be a CustomMonthlyBook id (e.g. link before redirect to bookId)
         if (!book && resolvedUserId) {

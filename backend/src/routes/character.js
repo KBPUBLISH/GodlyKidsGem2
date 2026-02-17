@@ -4,7 +4,7 @@ const crypto = require('crypto');
 const { bucket } = require('../config/storage');
 const { GoogleGenAI } = require('@google/genai');
 
-// Settings: where we place the character (waist-up portrait, default forest)
+// Settings: where we place the character (full body in scene, default forest)
 const SETTINGS = {
     forest: 'a sun-dappled enchanted forest with tall trees, soft moss, and gentle light filtering through leaves',
     meadow: 'a peaceful flower meadow with butterflies and blue sky',
@@ -19,35 +19,39 @@ const CLOTHING_PRESERVATION = " CRITICAL: Depict ONLY the clothing and accessori
 // Critical: preserve age, facial features. Do NOT turn adults into children.
 const AGE_AND_APPEARANCE_PRESERVATION = " CRITICAL — age and appearance: If the photo shows an ADULT (e.g. with beard, adult facial structure, or adult features), you MUST depict an ADULT—do NOT turn them into a child or kid. Preserve exact eye color from the photo (e.g. brown eyes stay brown, not blue). Preserve hair color and details (e.g. streaks, gray, style). Preserve beard, mustache, or facial hair if present.";
 
-// Framing: waist-up closeup (not full body) so the character reads well in the app porthole/avatar.
-const WAIST_UP_FRAMING = " Frame as a waist-up portrait: show the person from approximately waist to head (or chest to head). Do NOT show full body, legs, or feet. Close-up, waist-high profile, centered.";
+// Framing: full-body character so the person looks complete (not cropped at waist). Slightly close framing so the figure fills the frame.
+const FULL_BODY_FRAMING = " Frame as a full-body character: show the complete person from head to toe (or head to mid-calf at minimum) so they look like a whole person standing in the scene. Do NOT crop at the waist or show only a floating torso—the person must have a complete body with legs visible. Slightly close framing so the figure fills the frame nicely, centered, standing naturally.";
 
-// Style prompts: waist-up character in a setting. Selfie is reference for face, identity, age, clothing, and accessories.
+// Style prompts: full-body character in a setting. Selfie is reference for face, identity, age, clothing, and accessories.
 // {{SETTING}} is replaced with SETTINGS[settingId] (e.g. forest, meadow).
 const STYLE_PROMPTS = {
     pixar: {
-        prompt: "Using this photo as the only reference for this person's face, identity, age, clothing, and accessories, generate one image: the person as a character in Pixar 3D animated style, waist-up in {{SETTING}}. If the photo shows an adult (e.g. with beard), depict an adult—do not turn them into a child. Preserve exact eye color, hair (including streaks), and facial hair from the photo. Rounded features, vibrant colors, playful energy. Depict only the clothing and accessories visible in the photo; do not add any that are not in the photo." + AGE_AND_APPEARANCE_PRESERVATION + CLOTHING_PRESERVATION + WAIST_UP_FRAMING,
-        negativePrompt: "realistic, photograph, scary, dark, flat, full body, head to feet, turning adult into child"
+        prompt: "Using this photo as the only reference for this person's face, identity, age, clothing, and accessories, generate one image: the person as a character in Pixar 3D animated style, full body in {{SETTING}}. If the photo shows an adult (e.g. with beard), depict an adult—do not turn them into a child. Preserve exact eye color, hair (including streaks), and facial hair from the photo. Rounded features, vibrant colors, playful energy. Depict only the clothing and accessories visible in the photo; do not add any that are not in the photo." + AGE_AND_APPEARANCE_PRESERVATION + CLOTHING_PRESERVATION + FULL_BODY_FRAMING,
+        negativePrompt: "realistic, photograph, scary, dark, flat, cropped at waist, floating torso, head only, turning adult into child"
     },
     minecraft: {
-        prompt: "Using this photo as the only reference for this person's face, identity, age, clothing, and accessories, generate one image: the person as a Minecraft-style blocky character, waist-up in {{SETTING}}. If the photo shows an adult (e.g. with beard), depict an adult—do not turn them into a child. Preserve eye color, hair (including streaks), and beard in blocky form. Keep outfit recognizable but blocky—only what is in the photo; do not add hat or headphones unless in the photo." + AGE_AND_APPEARANCE_PRESERVATION + CLOTHING_PRESERVATION + WAIST_UP_FRAMING,
-        negativePrompt: "realistic, smooth, round, detailed photograph, blurry, full body, legs visible"
+        prompt: "Using this photo as the only reference for this person's face, identity, age, clothing, and accessories, generate one image: the person as a Minecraft-style blocky character, full body in {{SETTING}}. If the photo shows an adult (e.g. with beard), depict an adult—do not turn them into a child. Preserve eye color, hair (including streaks), and beard in blocky form. Keep outfit recognizable but blocky—only what is in the photo; do not add hat or headphones unless in the photo." + AGE_AND_APPEARANCE_PRESERVATION + CLOTHING_PRESERVATION + FULL_BODY_FRAMING,
+        negativePrompt: "realistic, smooth, round, detailed photograph, blurry, cropped at waist, floating torso"
+    },
+    anime: {
+        prompt: "Using this photo as the only reference for this person's face, identity, age, clothing, and accessories, generate one image: the person as a character in anime style, full body in {{SETTING}}. If the photo shows an adult (e.g. with beard), depict an adult—do not turn them into a child. Preserve exact eye color, hair (including streaks), and facial hair. Large expressive eyes, clean lines, vibrant colors, dynamic and expressive. Keep face and outfit the same as in the photo." + AGE_AND_APPEARANCE_PRESERVATION + CLOTHING_PRESERVATION + FULL_BODY_FRAMING,
+        negativePrompt: "realistic, photograph, scary, dark, villainous, cropped at waist, floating torso, turning adult into child"
     },
     disney: {
-        prompt: "Using this photo as the only reference for this person's face, identity, age, clothing, and accessories, generate one image: the person as a character in Disney 3D animated style, waist-up in {{SETTING}}. If the photo shows an adult (e.g. with beard), depict an adult—do not turn them into a child. Preserve exact eye color, hair (including streaks), and facial hair. Big sparkling eyes, smooth features, magical glow. Keep face and outfit the same as in the photo." + AGE_AND_APPEARANCE_PRESERVATION + CLOTHING_PRESERVATION + WAIST_UP_FRAMING,
-        negativePrompt: "realistic, photograph, scary, dark, villainous, full body, turning adult into child"
+        prompt: "Using this photo as the only reference for this person's face, identity, age, clothing, and accessories, generate one image: the person as a character in anime style, full body in {{SETTING}}. If the photo shows an adult (e.g. with beard), depict an adult—do not turn them into a child. Preserve exact eye color, hair (including streaks), and facial hair. Large expressive eyes, clean lines, vibrant colors, dynamic and expressive. Keep face and outfit the same as in the photo." + AGE_AND_APPEARANCE_PRESERVATION + CLOTHING_PRESERVATION + FULL_BODY_FRAMING,
+        negativePrompt: "realistic, photograph, scary, dark, villainous, cropped at waist, floating torso, turning adult into child"
     },
     lego: {
-        prompt: "Using this photo as the only reference for this person's face, identity, age, clothing, and accessories, generate one image: the person as a LEGO minifigure style character, waist-up in {{SETTING}}. If the photo shows an adult (e.g. with beard), depict an adult minifigure—do not turn them into a child. Preserve hair color and style (e.g. streaks) and suggest beard if present. Keep outfit recognizable in LEGO style—only what is in the photo; do not add hat or headphones unless in the photo." + AGE_AND_APPEARANCE_PRESERVATION + CLOTHING_PRESERVATION + WAIST_UP_FRAMING,
-        negativePrompt: "realistic skin tone, complex features, photograph, scary, full body minifigure with legs"
+        prompt: "Using this photo as the only reference for this person's face, identity, age, clothing, and accessories, generate one image: the person as a LEGO minifigure style character, full body in {{SETTING}}. If the photo shows an adult (e.g. with beard), depict an adult minifigure—do not turn them into a child. Preserve hair color and style (e.g. streaks) and suggest beard if present. Keep outfit recognizable in LEGO style—only what is in the photo; do not add hat or headphones unless in the photo." + AGE_AND_APPEARANCE_PRESERVATION + CLOTHING_PRESERVATION + FULL_BODY_FRAMING,
+        negativePrompt: "realistic skin tone, complex features, photograph, scary, cropped minifigure"
     },
     cartoon: {
-        prompt: "Using this photo as the only reference for this person's face, identity, age, clothing, and accessories, generate one image: the person as a cute 2D cartoon character, waist-up in {{SETTING}}. If the photo shows an adult (e.g. with beard), depict an adult—do not turn them into a child. Preserve exact eye color, hair (including streaks), and facial hair. Big expressive eyes, simplified features, bright colors. Depict only the clothing and accessories visible in the photo." + AGE_AND_APPEARANCE_PRESERVATION + CLOTHING_PRESERVATION + WAIST_UP_FRAMING,
-        negativePrompt: "realistic, 3D, photograph, scary, full body, turning adult into child"
+        prompt: "Using this photo as the only reference for this person's face, identity, age, clothing, and accessories, generate one image: the person as a cute 2D cartoon character, full body in {{SETTING}}. If the photo shows an adult (e.g. with beard), depict an adult—do not turn them into a child. Preserve exact eye color, hair (including streaks), and facial hair. Big expressive eyes, simplified features, bright colors. Depict only the clothing and accessories visible in the photo." + AGE_AND_APPEARANCE_PRESERVATION + CLOTHING_PRESERVATION + FULL_BODY_FRAMING,
+        negativePrompt: "realistic, 3D, photograph, scary, cropped at waist, floating torso, turning adult into child"
     },
     illustrated: {
-        prompt: "Using this photo as the only reference for this person's face, identity, age, clothing, and accessories, generate one image: the person as a character in children's book illustration style, waist-up in {{SETTING}}. If the photo shows an adult (e.g. with beard), depict an adult—do not turn them into a child. Preserve exact eye color, hair (including streaks), and facial hair. Soft watercolor textures, gentle colors, whimsical. Depict only the clothing and accessories visible in the photo." + AGE_AND_APPEARANCE_PRESERVATION + CLOTHING_PRESERVATION + WAIST_UP_FRAMING,
-        negativePrompt: "realistic, photograph, harsh colors, scary, full body, turning adult into child"
+        prompt: "Using this photo as the only reference for this person's face, identity, age, clothing, and accessories, generate one image: the person as a character in children's book illustration style, full body in {{SETTING}}. If the photo shows an adult (e.g. with beard), depict an adult—do not turn them into a child. Preserve exact eye color, hair (including streaks), and facial hair. Soft watercolor textures, gentle colors, whimsical. Depict only the clothing and accessories visible in the photo." + AGE_AND_APPEARANCE_PRESERVATION + CLOTHING_PRESERVATION + FULL_BODY_FRAMING,
+        negativePrompt: "realistic, photograph, harsh colors, scary, cropped at waist, floating torso, turning adult into child"
     }
 };
 
@@ -218,7 +222,8 @@ const generateCharacterFromPromptOnly = async (accessToken, projectId, styleId, 
         lego: "a friendly LEGO minifigure character, yellow skin, cheerful smile, toy-like appearance, studio lighting, family friendly",
         cartoon: "a friendly cartoon character with big expressive eyes, 2D animated style, bright colors, whimsical, for a storybook",
         illustrated: "a friendly character in children's book watercolor illustration style, soft colors, whimsical, storybook avatar",
-        disney: "a friendly character in Disney 3D animated style, big sparkling eyes, magical, heroic, family friendly",
+        anime: "a friendly character in anime style, large expressive eyes, clean lines, vibrant colors, dynamic and expressive, family friendly",
+        disney: "a friendly character in anime style, large expressive eyes, clean lines, vibrant colors, dynamic and expressive, family friendly",
         pixar: "a friendly character in Pixar 3D animated style, rounded features, playful, vibrant colors, for all ages"
     };
     const prompt = (customPrompt && customPrompt.trim()) ? customPrompt.trim() : (styleDescriptions[styleId] || styleDescriptions.illustrated);
@@ -278,7 +283,7 @@ const uploadToGCS = async (imageBase64, filename) => {
 };
 
 // POST /api/character/generate
-// Generate a waist-up character from a selfie, in the chosen style, placed in a setting (e.g. forest).
+// Generate a full-body character from a selfie, in the chosen style, placed in a setting (e.g. forest).
 router.post('/generate', async (req, res) => {
     try {
         const { imageBase64, styleId, childId, childName, settingId } = req.body;
@@ -295,9 +300,9 @@ router.post('/generate', async (req, res) => {
         }
 
         const setting = settingId && SETTINGS[settingId] ? settingId : DEFAULT_SETTING;
-        console.log(`🎨 Generating waist-up ${styleId} character in ${setting} for ${childName || 'child'}...`);
+        console.log(`🎨 Generating full-body ${styleId} character in ${setting} for ${childName || 'child'}...`);
 
-        // Generate the character image (waist-up in setting)
+        // Generate the character image (full body in setting)
         const generatedImageBase64 = await generateCharacterImage(imageBase64, styleId, setting);
 
         // Create unique filename

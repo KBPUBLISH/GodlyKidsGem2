@@ -13,12 +13,12 @@ const PLACEHOLDER_PAGE_IMAGE = 'https://picsum.photos/seed/story/800/600';
 /** User-selected main character style (e.g. Pixar) — used so the main character stays in that style, not biblical/Jesus style. */
 const MAIN_CHARACTER_STYLE_BY_ID = {
     pixar: 'Pixar 3D animated style, rounded features, playful, vibrant colors',
-    anime: 'Anime style, large expressive eyes, clean lines, vibrant colors, dynamic and expressive',
+    disney: 'Disney 2D animated style, flat or cel-shaded, not 3D—classic hand-drawn animation look, big expressive eyes, distinct from Pixar 3D',
     illustrated: "children's book watercolor illustration style, soft colors, whimsical",
     cartoon: '2D cartoon style, big expressive eyes, simplified features, bright colors',
     minecraft: 'Minecraft blocky voxel style, square features, pixelated',
     lego: 'LEGO minifigure style, yellow plastic, simple features',
-    disney: 'Anime style, large expressive eyes, clean lines, vibrant colors, dynamic and expressive', // backward compat
+    anime: 'Disney 2D animated style, flat or cel-shaded, not 3D—classic hand-drawn animation look, big expressive eyes, distinct from Pixar 3D', // backward compat
 };
 
 /** Cached Google auth token for Imagen (reused across page generations) */
@@ -467,6 +467,14 @@ async function generatePageImageWithVertexGemini(customBook, pageDoc, characterS
         }).join('. ')
         : '';
     const firstRefIsPerson = referenceImages.length > 0 && (referenceImages[0].label === 'the child' || referenceImages[0].label === 'child' || referenceImages[0].label === 'character 1');
+    // When user selected a book style (e.g. Pixar), enforce it for the ENTIRE image so we don't get cartoon/Disney 2D instead.
+    const hasWholeBookStyle = wholeBookStyleDesc && String(wholeBookStyleDesc).trim().length > 0;
+    const wholeImageStyleLock = hasWholeBookStyle
+        ? ` CRITICAL — Style: The ENTIRE image (all characters, background, and environment) MUST be rendered in this exact style: "${String(wholeBookStyleDesc).trim()}". Do NOT use a flat 2D cartoon style, 2D Disney animation style, or storybook watercolor illustration style. Use the selected style (e.g. Pixar 3D animated, with rounded volumes and 3D lighting) for the whole scene—consistent from page to page. `
+        : '';
+    const styleClosing = hasWholeBookStyle
+        ? `Render the entire image in the selected style above. Warm inviting colors, soft lighting, suitable for ages 4-12, Christian faith theme, no text in image. Vertical 9:16 composition.`
+        : `Children's book illustration style, warm inviting colors, soft lighting, suitable for ages 4-12, Christian faith theme, no text in image. Vertical 9:16 composition.`;
     // Use user-selected main character style (e.g. Pixar) when provided; otherwise fall back to characterStylePrompt.
     const styleForMain = (mainCharacterStyleDesc && mainCharacterStyleDesc.trim()) || (characterStylePrompt && characterStylePrompt.trim());
     const styleLock = styleForMain
@@ -480,17 +488,26 @@ async function generatePageImageWithVertexGemini(customBook, pageDoc, characterS
     const personConsistencyInstruction = firstRefIsPerson
         ? ` CRITICAL — character consistency: The person in reference Image 1 must look EXACTLY like the photo in every image: same face, same AGE (if adult with beard = draw adult with beard; do NOT turn them into a child), same eye color (e.g. brown eyes stay brown), same hair (including streaks or gray), same clothing, and only the accessories that appear in the reference (if the photo has no hat and no headphones, draw them with no hat and no headphones—do NOT add hats, caps, or headphones unless visible in the reference). Do NOT age them down, change eye color, remove beard, or replace their real outfit with costumes. If the reference is an adult, draw them at adult height (taller than children). Preserve identical appearance on every page.${styleLock}${heightConsistency} `
         : '';
+    // When multiple user characters: require ALL to appear on every page; never omit one.
+    const numUserRefs = referenceImages.length;
+    const allMustAppearInstruction = allRefsAreUserCharacters && numUserRefs >= 2
+        ? ` MANDATORY: You MUST include every person from the ${numUserRefs} reference images in this scene. All ${numUserRefs} people must be visible in the illustration—do not omit any character. If there are 2 reference images, show 2 people; if 3, show 3 people. Every reference image corresponds to one person who must appear. `
+        : '';
+    // Anti-artifacts for multi-user: no Jesus-like look, keep hat if in reference, no holding extra shoes, height from reference.
+    const multiUserAntiArtifacts = allRefsAreUserCharacters && numUserRefs >= 2
+        ? ` Do NOT draw any of these people in a classical religious, biblical, or Jesus-like style (no long wavy hair, serene beard, or saintly look). Each person must look like a normal modern person matching their reference photo—same face, hair style, and clothing. If a reference photo shows someone wearing a cap or hat, that person MUST be drawn wearing the cap/hat in the scene; do not omit it. Do NOT draw anyone holding or carrying an extra pair of shoes, sneakers, or footwear unless that exact detail is visible in their reference photo; if they are wearing shoes, do not show them holding another pair. Each person's height must match their reference—if the reference shows an adult, draw adult height; if a child, draw child height; do not arbitrarily make one person look like a religious figure or shrink them. `
+        : '';
     // When multiple reference images: they are DIFFERENT people — do not blend or mix; do not transfer accessories between them.
     const multiPersonInstruction = referenceImages.length >= 2
         ? allRefsAreUserCharacters
-            ? ` CRITICAL — these reference images are DIFFERENT people (e.g. two or three children). Do NOT blend, combine, or mix their faces or appearances. Each person must look ONLY like their own reference: Image 1 = first person—use ONLY Image 1 for their face, hair, clothing, and accessories (if they have no hat in Image 1, do not draw a hat on them; if they have headphones in Image 1, only that person has headphones). Image 2 = second person—use ONLY Image 2 for their appearance; do NOT give them the first person's hat, headphones, glasses, or any accessory from Image 1. Image 3 (if present) = third person—use ONLY Image 3; do NOT give them accessories from Image 1 or Image 2. Never transfer, swap, or copy accessories (hat, cap, headphones, glasses, jewelry) or clothing from one person to another. Each person keeps exactly what is visible in their own reference photo.${multiCharacterHeight} `
+            ? ` CRITICAL — these reference images are DIFFERENT people (e.g. two or three children). Do NOT blend, combine, or mix their faces or appearances. You MUST include all ${numUserRefs} people in this scene; do not omit any. Each person must look ONLY like their own reference: Image 1 = first person—use ONLY Image 1 for their face, hair, clothing, and accessories (if Image 1 has no cap, do not draw a cap on them; if Image 1 has a cap, ONLY the person from Image 1 may wear a cap—never put that cap on the person from Image 2 or 3). Image 2 = second person—use ONLY Image 2; do NOT give them the first person's hat, cap, headphones, or glasses. Image 3 (if present) = third person—use ONLY Image 3; do NOT give them accessories from Image 1 or 2. Never transfer, swap, or copy accessories (hat, cap, headphones, glasses) from one person to another. A hat/cap belongs only on the person whose reference photo shows a hat/cap; glasses only on the person whose reference shows glasses. Each person keeps exactly what is visible in their own reference photo.${multiCharacterHeight} `
             : ` CRITICAL — these reference images are DIFFERENT people. Do NOT blend, combine, or mix their faces or appearances. Image 1 = the main character (the kid/user): use ONLY Image 1 for that person's face, body, clothing, and accessories. Image 2 and any later images = other characters (e.g. Jesus, biblical figures): use ONLY their own reference image for each. Do NOT put the main character's clothing or accessories (e.g. hat, cap, headphones, modern clothes) on Jesus or any other character. Biblical and story characters must keep their own traditional appearance from their reference; only the person from Image 1 may have modern accessories if they appear in Image 1. Do not transfer features (beard, hair, skin, clothing, accessories) from one reference to another.${multiCharacterHeight} `
         : '';
     const geminiPrompt = referenceImages.length
         ? allRefsAreUserCharacters
-            ? `${personConsistencyInstruction}${multiPersonInstruction}Using the provided reference images (${refDescription}), generate one image: ${prompt} Remember: each person (Image 1, Image 2, Image 3) must match ONLY their own reference—same face, hair, clothing, and accessories as in that photo. Do not add hat or headphones to anyone unless visible in their own reference. Never put one person's accessories on another person. Place each character in the scene as described. Children's book illustration style, warm inviting colors, soft lighting, suitable for ages 4-12, Christian faith theme, no text in image. Vertical 9:16 composition.`
-            : `${personConsistencyInstruction}${multiPersonInstruction}Using the provided reference images (${refDescription}), generate one image: ${prompt} Remember: Image 1 (main character) only—same age, eye color, hair, clothing and accessories as in their photo (no hat/headphones unless in photo). Other characters (Image 2+) must look only like their own reference—never give them the main character's hat, headphones, or modern clothes. Place each character in the scene as described. Children's book illustration style, warm inviting colors, soft lighting, suitable for ages 4-12, Christian faith theme, no text in image. Vertical 9:16 composition.`
-        : `Generate one image: ${prompt} Children's book illustration style, warm inviting colors, soft lighting, suitable for ages 4-12, Christian faith theme, no text in image. Vertical 9:16 composition.`;
+            ? `${wholeImageStyleLock}${allMustAppearInstruction}${multiUserAntiArtifacts}${personConsistencyInstruction}${multiPersonInstruction}Using the provided reference images (${refDescription}), generate one image: ${prompt} Remember: all ${numUserRefs} people must appear in the scene. Each person (Image 1, Image 2, Image 3) must match ONLY their own reference—same face, hair, clothing, and accessories as in that photo. Do not add hat, cap, or headphones to anyone unless visible in their own reference; if their reference shows a hat, draw the hat. Never put one person's hat, glasses, or accessories on another person. Do not draw anyone holding an extra pair of shoes. Place each character in the scene as described. ${styleClosing}`
+            : `${wholeImageStyleLock}${personConsistencyInstruction}${multiPersonInstruction}Using the provided reference images (${refDescription}), generate one image: ${prompt} Remember: Image 1 (main character) only—same age, eye color, hair, clothing and accessories as in their photo (no hat/headphones unless in photo). Other characters (Image 2+) must look only like their own reference—never give them the main character's hat, headphones, or modern clothes. Place each character in the scene as described. ${styleClosing}`
+        : `Generate one image: ${prompt} ${styleClosing}`;
 
     const parts = [{ text: geminiPrompt }];
     for (const ref of referenceImages) {

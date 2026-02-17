@@ -380,8 +380,19 @@ router.get('/:id', async (req, res) => {
                 bookId: book._id,
                 userId: resolvedUserId,
                 status: 'completed',
-            }).select('_id').lean();
-            if (custom) bookObj.isUserCreated = true;
+            }).select('_id childName childCharacterImageUrl bookStyleId characters').lean();
+            if (custom) {
+                bookObj.isUserCreated = true;
+                bookObj.createdForChildName = custom.childName || null;
+                bookObj.createdForAvatarUrl = custom.childCharacterImageUrl || null;
+                bookObj.createdWithStyleId = (custom.bookStyleId && String(custom.bookStyleId).trim()) || null;
+                if (custom.characters && custom.characters.length > 0) {
+                    bookObj.createdForCharacters = custom.characters.map(c => ({
+                        name: c.name,
+                        characterImageUrl: c.characterImageUrl || null,
+                    }));
+                }
+            }
         }
 
         res.json(bookObj);

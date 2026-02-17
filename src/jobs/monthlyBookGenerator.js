@@ -60,17 +60,112 @@ function substituteChildName(text, childName) {
 
 /**
  * Recursively substitute {childName} in any string values (e.g. content.text, textBoxes[].text).
+ * Ensures content.textBoxes is populated from root textBoxes (portal legacy) when content.textBoxes is missing so generated pages never lose text.
  */
 function substituteChildNameInPage(pageDoc, childName) {
     const out = JSON.parse(JSON.stringify(pageDoc));
-    if (out.content?.text) out.content.text = substituteChildName(out.content.text, childName);
-    if (Array.isArray(out.content?.textBoxes)) {
-        out.content.textBoxes = out.content.textBoxes.map((box) => ({
+    if (!out.content) out.content = {};
+    if (out.content.text) out.content.text = substituteChildName(out.content.text, childName);
+    const sourceBoxes = Array.isArray(out.content.textBoxes) && out.content.textBoxes.length > 0
+        ? out.content.textBoxes
+        : Array.isArray(out.textBoxes) ? out.textBoxes : [];
+    if (sourceBoxes.length > 0) {
+        out.content.textBoxes = sourceBoxes.map((box) => ({
             ...box,
             text: substituteChildName(box.text, childName),
         }));
     }
     return out;
+}
+
+/**
+ * Get Vertex AI access for Gemini (text adaptation). Returns { accessToken, projectId } or null.
+ */
+async function getVertexForGemini() {
+    const credentialsJson = process.env.GCS_CREDENTIALS_JSON || process.env.GOOGLE_SERVICE_ACCOUNT_JSON;
+    if (!credentialsJson) return null;
+    try {
+        const credentials = JSON.parse(credentialsJson);
+        const projectId = credentials.project_id;
+        if (!projectId) return null;
+        const token = await getImagenAccessToken();
+        if (!token) return null;
+        return { accessToken: token, projectId };
+    } catch (err) {
+        console.warn('MonthlyBookGenerator: getVertexForGemini error', err.message);
+        return null;
+    }
+}
+
+/**
+ * Adapt a single page text segment for 1–3 characters. For 1 name, substitutes {childName}. For 2–3, calls Gemini to rewrite so all names are included naturally.
+ * @param {string} pageText - Raw template text (may contain {childName})
+ * @param {string[]} characterNames - 1–3 names
+ * @returns {Promise<string>} Adapted text
+ */
+async function adaptPageTextForCharacters(pageText, characterNames) {
+    if (!pageText || typeof pageText !== 'string') return pageText || '';
+    const names = Array.isArray(characterNames) ? characterNames.filter(Boolean) : [];
+    if (names.length === 0) return pageText;
+    if (names.length === 1) {
+        return substituteChildName(pageText, names[0]);
+    }
+    const namesList = names.length === 2 ? `${names[0]} and ${names[1]}` : `${names.slice(0, -1).join(', ')}, and ${names[names.length - 1]}`;
+    const userPrompt = `This is one page of a children's story. The following characters are in the story: ${names.join(', ')}.
+
+Rewrite the following text so it naturally includes all of them when appropriate (e.g. "Sarah and Jake went" for two characters, or "Sarah, Jake, and Emma" for three). Keep the same tone, length, and meaning. Vary phrasing so you don't repeat "X and Y" in every sentence. Output ONLY the rewritten text, no explanation or quotes.
+
+TEXT TO REWRITE:
+"""
+${pageText.slice(0, 2000)}
+"""`;
+
+    const payload = {
+        contents: [{ role: 'user', parts: [{ text: userPrompt }] }],
+        generationConfig: { temperature: 0.3, maxOutputTokens: 1024 },
+    };
+
+    const vertex = await getVertexForGemini();
+    if (vertex) {
+        const location = (process.env.VERTEX_AI_ANALYZE_SCENE_LOCATION || 'us-central1').trim();
+        const url = `https://${location}-aiplatform.googleapis.com/v1/projects/${vertex.projectId}/locations/${location}/publishers/google/models/gemini-2.0-flash:generateContent`;
+        try {
+            const response = await fetch(url, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${vertex.accessToken}`,
+                },
+                body: JSON.stringify(payload),
+            });
+            if (response.ok) {
+                const data = await response.json();
+                const adapted = data.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || '';
+                if (adapted) return adapted;
+            }
+        } catch (err) {
+            console.warn('MonthlyBookGenerator: adaptPageTextForCharacters Vertex error', err.message);
+        }
+    }
+
+    const geminiKey = process.env.GEMINI_API_KEY;
+    if (geminiKey) {
+        try {
+            const response = await fetch(
+                `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${geminiKey}`,
+                { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) }
+            );
+            if (response.ok) {
+                const data = await response.json();
+                const adapted = data.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || '';
+                if (adapted) return adapted;
+            }
+        } catch (err) {
+            console.warn('MonthlyBookGenerator: adaptPageTextForCharacters Gemini API error', err.message);
+        }
+    }
+
+    return substituteChildName(pageText, names[0]);
 }
 
 /**
@@ -175,7 +270,8 @@ async function buildScenePrompt(pageDoc, characterStylePrompt, childName, wholeB
         const styleBlock = useWholeBookStyle
             ? `The entire illustration—all characters and the environment—must be rendered in this style: ${String(wholeBookStyleDesc).trim()}.`
             : [characterStylePrompt, ...stylePrompts].filter(Boolean).join('. ');
-        const prompt = `${sceneForImage}. ${styleBlock}. Children's book illustration style, warm inviting colors, soft lighting, suitable for ages 4-12, Christian faith theme, no text in image.`;
+        const noExtras = "Only depict what is described; do not add objects, props, or symbols (e.g. keys, crowns, scrolls) unless explicitly mentioned.";
+        const prompt = `${sceneForImage}. ${styleBlock}. ${noExtras} Children's book illustration style, warm inviting colors, soft lighting, suitable for ages 4-12, Christian faith theme, no text in image.`;
         return { prompt, hasKidReference };
     }
     const text = pageDoc.content?.text || '';
@@ -187,18 +283,33 @@ async function buildScenePrompt(pageDoc, characterStylePrompt, childName, wholeB
     const stylePart = useWholeBookStyle
         ? `The entire illustration—all characters and the environment—must be rendered in this style: ${String(wholeBookStyleDesc).trim()}.`
         : characterStylePrompt;
-    const rawPrompt = `Scene for a children's story: ${contextForImage}. ${stylePart}.${childInScene} Children's book illustration style, warm inviting colors, soft lighting, suitable for ages 4-12, Christian faith theme, no text in image.`;
+    const noExtras = "Only depict what is described; do not add objects, props, or symbols (e.g. keys, crowns, scrolls) unless explicitly mentioned.";
+    const rawPrompt = `Scene for a children's story: ${contextForImage}. ${stylePart}.${childInScene} ${noExtras} Children's book illustration style, warm inviting colors, soft lighting, suitable for ages 4-12, Christian faith theme, no text in image.`;
     const prompt = neutralizeChildLanguageForImagePrompt(rawPrompt);
     return { prompt, hasKidReference: !!childName };
 }
 
 /**
- * Gather all reference images for a page: child character + portal characters (SavedCharacter with referenceImageUrl).
- * Returns [{ base64, label }] in order: child first (if present), then portal characters by referenceCharacterIds.
+ * Gather all reference images for a page: user characters (1–3) or single child + portal characters (SavedCharacter).
+ * Returns [{ base64, label }] in order: user characters first (as "character 1", "character 2", "character 3" or "the child"), then portal characters.
  */
 async function gatherPageReferenceImages(customBook, pageDoc) {
     const refs = [];
-    if (customBook.childCharacterImageUrl) {
+    const characters = customBook.characters && customBook.characters.length > 0 ? customBook.characters.slice(0, 3) : null;
+    if (characters && characters.length > 0) {
+        for (let i = 0; i < characters.length; i++) {
+            const c = characters[i];
+            const url = c && c.characterImageUrl ? c.characterImageUrl : null;
+            if (url) {
+                const base64 = await fetchImageAsBase64(url);
+                if (base64) {
+                    refs.push({ base64, label: characters.length === 1 ? 'the child' : `character ${i + 1}` });
+                } else {
+                    console.warn('MonthlyBookGenerator: Failed to fetch character', i + 1, 'reference image from', url?.slice(0, 80) + '...');
+                }
+            }
+        }
+    } else if (customBook.childCharacterImageUrl) {
         const childBase64 = await fetchImageAsBase64(customBook.childCharacterImageUrl);
         if (childBase64) {
             refs.push({ base64: childBase64, label: 'the child' });
@@ -308,10 +419,12 @@ async function generatePageImageWithVertexGemini(customBook, pageDoc, characterS
     const { prompt } = await buildScenePrompt(pageDoc, characterStylePrompt, customBook.childName, wholeBookStyleDesc);
     const referenceImages = await gatherPageReferenceImages(customBook, pageDoc);
 
-    const childRefIncluded = referenceImages.length > 0 && (referenceImages[0].label === 'the child' || referenceImages[0].label === 'child');
-    console.log('MonthlyBookGenerator: Page', pageNumber, 'sending', referenceImages.length, 'reference image(s); child reference included:', childRefIncluded);
-    if (customBook.childCharacterImageUrl && !childRefIncluded) {
-        console.warn('MonthlyBookGenerator: Page', pageNumber, '— child avatar URL set but reference image missing (fetch may have failed); image may not match user.');
+    const firstLabel = referenceImages.length > 0 ? referenceImages[0].label : '';
+    const childRefIncluded = firstLabel === 'the child' || firstLabel === 'child' || firstLabel === 'character 1';
+    console.log('MonthlyBookGenerator: Page', pageNumber, 'sending', referenceImages.length, 'reference image(s); child/first ref included:', childRefIncluded);
+    const hasUserCharacter = customBook.childCharacterImageUrl || (customBook.characters && customBook.characters.length > 0);
+    if (hasUserCharacter && !childRefIncluded) {
+        console.warn('MonthlyBookGenerator: Page', pageNumber, '— user character(s) set but reference image(s) missing (fetch may have failed); image may not match.');
     }
 
     // Log prompt preview for every page (including Page 1) so it's clear what prompt is used.
@@ -322,13 +435,13 @@ async function generatePageImageWithVertexGemini(customBook, pageDoc, characterS
     // Describe reference images so the model does not assume "child" — use age-neutral wording for the main character.
     const refDescription = referenceImages.length
         ? referenceImages.map((r, i) => {
-            const isFirstPerson = i === 0 && (r.label === 'the child' || r.label === 'child');
+            const isFirstPerson = i === 0 && (r.label === 'the child' || r.label === 'child' || r.label === 'character 1');
             return isFirstPerson
                 ? `Image ${i + 1}: the main character (match this person's exact age and appearance from the photo—only what is visible in the photo; do not add hat, cap, or headphones if not in the photo; if adult with beard depict adult, if child depict child; do not age down or change their features)`
                 : `Image ${i + 1}: ${r.label} (this is a different character—draw them ONLY from this reference; do not give them the main character's hat, headphones, or modern accessories)`;
         }).join('. ')
         : '';
-    const firstRefIsPerson = referenceImages.length > 0 && (referenceImages[0].label === 'the child' || referenceImages[0].label === 'child');
+    const firstRefIsPerson = referenceImages.length > 0 && (referenceImages[0].label === 'the child' || referenceImages[0].label === 'child' || referenceImages[0].label === 'character 1');
     // Use user-selected main character style (e.g. Pixar) when provided; otherwise fall back to characterStylePrompt.
     const styleForMain = (mainCharacterStyleDesc && mainCharacterStyleDesc.trim()) || (characterStylePrompt && characterStylePrompt.trim());
     const styleLock = styleForMain
@@ -629,6 +742,11 @@ async function runMonthlyBookGenerationFromBook(customMonthlyBookId, custom, sou
     }
     const pagesToProcess = sourcePages.slice(0, pageCount);
 
+    const characterNames = (custom.characters && custom.characters.length > 0)
+        ? custom.characters.map((c) => (c && c.name && String(c.name).trim()) || '').filter(Boolean)
+        : [custom.childName].filter(Boolean);
+    const multiCharacter = characterNames.length > 1;
+
     const isResume = custom.bookId && (custom.progressPage || 0) >= 1 && (custom.progressTotalPages || 0) > 0;
     let startIndex = 0;
     let book = null;
@@ -659,19 +777,24 @@ async function runMonthlyBookGenerationFromBook(customMonthlyBookId, custom, sou
 
     const bookIdShort = String(customMonthlyBookId).slice(-8);
 
-    const toPageDoc = (p, bid) => ({
-        bookId: bid,
-        pageNumber: p.pageNumber,
-        content: p.content || {},
-        files: p.files || {},
-        scrollUrl: p.scrollUrl || p.files?.scroll?.url || undefined,
-        isColoringPage: p.isColoringPage || false,
-        coloringEndModalOnly: p.coloringEndModalOnly !== false,
-        isWebViewPage: p.isWebViewPage || false,
-        webView: p.webView || {},
-        backgroundImageAnimation: p.backgroundImageAnimation ?? 'kenBurns',
-        backgroundImageAnimationDuration: p.backgroundImageAnimationDuration ?? 10,
-    });
+    const toPageDoc = (p, bid) => {
+        const content = p.content || {};
+        const textBoxes = (content.textBoxes && content.textBoxes.length > 0) ? content.textBoxes : (p.textBoxes || []);
+        return {
+            bookId: bid,
+            pageNumber: p.pageNumber,
+            content: { ...content, textBoxes },
+            files: p.files || {},
+            scrollUrl: p.scrollUrl || p.files?.scroll?.url || undefined,
+            isColoringPage: p.isColoringPage || false,
+            coloringEndModalOnly: p.coloringEndModalOnly !== false,
+            isWebViewPage: p.isWebViewPage || false,
+            webView: p.webView || {},
+            backgroundImageAnimation: p.backgroundImageAnimation ?? 'kenBurns',
+            backgroundImageAnimationDuration: p.backgroundImageAnimationDuration ?? 10,
+            textBoxes, // root-level so reader fallback (page.textBoxes) works
+        };
+    };
 
     for (let i = startIndex; i < pagesToProcess.length; i++) {
         const pageNum = i + 1;
@@ -690,7 +813,30 @@ async function runMonthlyBookGenerationFromBook(customMonthlyBookId, custom, sou
         const hasPortalPrompt = portalPrompt.length > 0;
         const preview = hasPortalPrompt ? ` "${portalPrompt.slice(0, 80)}${portalPrompt.length > 80 ? '...' : ''}"` : '';
         console.log(`MonthlyBookGenerator: Page ${pageNum}/${total} ${hasPortalPrompt ? 'using portal scene prompt' : 'using fallback from page text'}${preview}`);
-        const pageWithName = substituteChildNameInPage(pageDoc, custom.childName);
+
+        let pageWithName;
+        if (multiCharacter && characterNames.length > 1) {
+            const out = JSON.parse(JSON.stringify(pageDoc));
+            if (!out.content) out.content = {};
+            const sourceBoxes = Array.isArray(out.content.textBoxes) && out.content.textBoxes.length > 0
+                ? out.content.textBoxes
+                : Array.isArray(out.textBoxes) ? out.textBoxes : [];
+            if (out.content.text) {
+                out.content.text = await adaptPageTextForCharacters(out.content.text, characterNames);
+            }
+            if (sourceBoxes.length > 0) {
+                out.content.textBoxes = await Promise.all(
+                    sourceBoxes.map(async (box) => ({
+                        ...box,
+                        text: await adaptPageTextForCharacters(box.text || '', characterNames),
+                    }))
+                );
+            }
+            pageWithName = out;
+        } else {
+            pageWithName = substituteChildNameInPage(pageDoc, characterNames[0] || custom.childName);
+        }
+
         const backgroundUrl = await generatePageImageForBook(
             custom,
             pageDoc,

@@ -4,7 +4,7 @@ const crypto = require('crypto');
 const { bucket } = require('../config/storage');
 const { GoogleGenAI } = require('@google/genai');
 
-// Settings: where we place the full-body character (default forest)
+// Settings: where we place the character (waist-up portrait, default forest)
 const SETTINGS = {
     forest: 'a sun-dappled enchanted forest with tall trees, soft moss, and gentle light filtering through leaves',
     meadow: 'a peaceful flower meadow with butterflies and blue sky',
@@ -16,35 +16,38 @@ const DEFAULT_SETTING = 'forest';
 // Critical: preserve what the person is wearing so the avatar matches their real outfit. Do NOT add accessories that are not in the photo.
 const CLOTHING_PRESERVATION = " CRITICAL: Depict ONLY the clothing and accessories that are visible in the reference photo. Do NOT add hats, caps, headphones, glasses, or any other accessories unless they clearly appear in the photo. If the person has no hat and no headphones in the photo, draw them with no hat and no headphones. Keep the exact same outfit as in the photo. Do not replace with costumes, tunics, or fantasy outfits. Only the art style should change; the person's outfit must match the photo.";
 
-// Critical: preserve age, facial features, and height. Do NOT turn adults into children.
-const AGE_AND_APPEARANCE_PRESERVATION = " CRITICAL — age and appearance: If the photo shows an ADULT (e.g. with beard, adult facial structure, or adult features), you MUST depict an ADULT—do NOT turn them into a child or kid. Preserve exact eye color from the photo (e.g. brown eyes stay brown, not blue). Preserve hair color and details (e.g. streaks, gray, style). Preserve beard, mustache, or facial hair if present. Depict the person at appropriate height for their age: adult = adult height (taller), child = child height. Full body so proportions are clear.";
+// Critical: preserve age, facial features. Do NOT turn adults into children.
+const AGE_AND_APPEARANCE_PRESERVATION = " CRITICAL — age and appearance: If the photo shows an ADULT (e.g. with beard, adult facial structure, or adult features), you MUST depict an ADULT—do NOT turn them into a child or kid. Preserve exact eye color from the photo (e.g. brown eyes stay brown, not blue). Preserve hair color and details (e.g. streaks, gray, style). Preserve beard, mustache, or facial hair if present.";
 
-// Style prompts: full-body character in a setting (not just a portrait). Selfie is reference for face, identity, age, clothing, and accessories.
+// Framing: waist-up closeup (not full body) so the character reads well in the app porthole/avatar.
+const WAIST_UP_FRAMING = " Frame as a waist-up portrait: show the person from approximately waist to head (or chest to head). Do NOT show full body, legs, or feet. Close-up, waist-high profile, centered.";
+
+// Style prompts: waist-up character in a setting. Selfie is reference for face, identity, age, clothing, and accessories.
 // {{SETTING}} is replaced with SETTINGS[settingId] (e.g. forest, meadow).
 const STYLE_PROMPTS = {
     pixar: {
-        prompt: "Using this photo as the only reference for this person's face, identity, age, clothing, and accessories, generate one image: the person as a full-body character in Pixar 3D animated style, standing or walking in {{SETTING}}. If the photo shows an adult (e.g. with beard), depict an adult—do not turn them into a child. Preserve exact eye color, hair (including streaks), and facial hair from the photo. Use adult height if the person is an adult. Rounded features, vibrant colors, playful energy. Full body (head to feet visible). Depict only the clothing and accessories visible in the photo; do not add any that are not in the photo." + AGE_AND_APPEARANCE_PRESERVATION + CLOTHING_PRESERVATION,
-        negativePrompt: "realistic, photograph, scary, dark, flat, portrait only, close-up face only, turning adult into child"
+        prompt: "Using this photo as the only reference for this person's face, identity, age, clothing, and accessories, generate one image: the person as a character in Pixar 3D animated style, waist-up in {{SETTING}}. If the photo shows an adult (e.g. with beard), depict an adult—do not turn them into a child. Preserve exact eye color, hair (including streaks), and facial hair from the photo. Rounded features, vibrant colors, playful energy. Depict only the clothing and accessories visible in the photo; do not add any that are not in the photo." + AGE_AND_APPEARANCE_PRESERVATION + CLOTHING_PRESERVATION + WAIST_UP_FRAMING,
+        negativePrompt: "realistic, photograph, scary, dark, flat, full body, head to feet, turning adult into child"
     },
     minecraft: {
-        prompt: "Using this photo as the only reference for this person's face, identity, age, clothing, and accessories, generate one image: the person as a full-body Minecraft-style blocky character, standing in {{SETTING}}. If the photo shows an adult (e.g. with beard), depict an adult—do not turn them into a child. Preserve eye color, hair (including streaks), and beard in blocky form. Use adult height if the person is an adult. Full body (head to feet visible). Keep outfit recognizable but blocky—only what is in the photo; do not add hat or headphones unless in the photo." + AGE_AND_APPEARANCE_PRESERVATION + CLOTHING_PRESERVATION,
-        negativePrompt: "realistic, smooth, round, detailed photograph, blurry, portrait only, close-up only"
+        prompt: "Using this photo as the only reference for this person's face, identity, age, clothing, and accessories, generate one image: the person as a Minecraft-style blocky character, waist-up in {{SETTING}}. If the photo shows an adult (e.g. with beard), depict an adult—do not turn them into a child. Preserve eye color, hair (including streaks), and beard in blocky form. Keep outfit recognizable but blocky—only what is in the photo; do not add hat or headphones unless in the photo." + AGE_AND_APPEARANCE_PRESERVATION + CLOTHING_PRESERVATION + WAIST_UP_FRAMING,
+        negativePrompt: "realistic, smooth, round, detailed photograph, blurry, full body, legs visible"
     },
     disney: {
-        prompt: "Using this photo as the only reference for this person's face, identity, age, clothing, and accessories, generate one image: the person as a full-body character in Disney 3D animated style, standing or walking in {{SETTING}}. If the photo shows an adult (e.g. with beard), depict an adult—do not turn them into a child. Preserve exact eye color, hair (including streaks), and facial hair. Use adult height if the person is an adult. Big sparkling eyes, smooth features, magical glow. Full body (head to feet visible). Keep face and outfit the same as in the photo." + AGE_AND_APPEARANCE_PRESERVATION + CLOTHING_PRESERVATION,
-        negativePrompt: "realistic, photograph, scary, dark, villainous, portrait only, close-up only, turning adult into child"
+        prompt: "Using this photo as the only reference for this person's face, identity, age, clothing, and accessories, generate one image: the person as a character in Disney 3D animated style, waist-up in {{SETTING}}. If the photo shows an adult (e.g. with beard), depict an adult—do not turn them into a child. Preserve exact eye color, hair (including streaks), and facial hair. Big sparkling eyes, smooth features, magical glow. Keep face and outfit the same as in the photo." + AGE_AND_APPEARANCE_PRESERVATION + CLOTHING_PRESERVATION + WAIST_UP_FRAMING,
+        negativePrompt: "realistic, photograph, scary, dark, villainous, full body, turning adult into child"
     },
     lego: {
-        prompt: "Using this photo as the only reference for this person's face, identity, age, clothing, and accessories, generate one image: the person as a full-body LEGO minifigure style character, standing in {{SETTING}}. If the photo shows an adult (e.g. with beard), depict an adult minifigure—do not turn them into a child. Preserve hair color and style (e.g. streaks) and suggest beard if present. Full body visible. Keep outfit recognizable in LEGO style—only what is in the photo; do not add hat or headphones unless in the photo." + AGE_AND_APPEARANCE_PRESERVATION + CLOTHING_PRESERVATION,
-        negativePrompt: "realistic skin tone, complex features, photograph, scary, portrait only"
+        prompt: "Using this photo as the only reference for this person's face, identity, age, clothing, and accessories, generate one image: the person as a LEGO minifigure style character, waist-up in {{SETTING}}. If the photo shows an adult (e.g. with beard), depict an adult minifigure—do not turn them into a child. Preserve hair color and style (e.g. streaks) and suggest beard if present. Keep outfit recognizable in LEGO style—only what is in the photo; do not add hat or headphones unless in the photo." + AGE_AND_APPEARANCE_PRESERVATION + CLOTHING_PRESERVATION + WAIST_UP_FRAMING,
+        negativePrompt: "realistic skin tone, complex features, photograph, scary, full body minifigure with legs"
     },
     cartoon: {
-        prompt: "Using this photo as the only reference for this person's face, identity, age, clothing, and accessories, generate one image: the person as a full-body cute 2D cartoon character, standing in {{SETTING}}. If the photo shows an adult (e.g. with beard), depict an adult—do not turn them into a child. Preserve exact eye color, hair (including streaks), and facial hair. Use adult height if the person is an adult. Big expressive eyes, simplified features, bright colors. Full body (head to feet). Depict only the clothing and accessories visible in the photo." + AGE_AND_APPEARANCE_PRESERVATION + CLOTHING_PRESERVATION,
-        negativePrompt: "realistic, 3D, photograph, scary, portrait only, close-up only, turning adult into child"
+        prompt: "Using this photo as the only reference for this person's face, identity, age, clothing, and accessories, generate one image: the person as a cute 2D cartoon character, waist-up in {{SETTING}}. If the photo shows an adult (e.g. with beard), depict an adult—do not turn them into a child. Preserve exact eye color, hair (including streaks), and facial hair. Big expressive eyes, simplified features, bright colors. Depict only the clothing and accessories visible in the photo." + AGE_AND_APPEARANCE_PRESERVATION + CLOTHING_PRESERVATION + WAIST_UP_FRAMING,
+        negativePrompt: "realistic, 3D, photograph, scary, full body, turning adult into child"
     },
     illustrated: {
-        prompt: "Using this photo as the only reference for this person's face, identity, age, clothing, and accessories, generate one image: the person as a full-body character in children's book illustration style, standing in {{SETTING}}. If the photo shows an adult (e.g. with beard), depict an adult—do not turn them into a child. Preserve exact eye color, hair (including streaks), and facial hair. Use adult height if the person is an adult. Soft watercolor textures, gentle colors, whimsical. Full body visible. Depict only the clothing and accessories visible in the photo." + AGE_AND_APPEARANCE_PRESERVATION + CLOTHING_PRESERVATION,
-        negativePrompt: "realistic, photograph, harsh colors, scary, portrait only, close-up only, turning adult into child"
+        prompt: "Using this photo as the only reference for this person's face, identity, age, clothing, and accessories, generate one image: the person as a character in children's book illustration style, waist-up in {{SETTING}}. If the photo shows an adult (e.g. with beard), depict an adult—do not turn them into a child. Preserve exact eye color, hair (including streaks), and facial hair. Soft watercolor textures, gentle colors, whimsical. Depict only the clothing and accessories visible in the photo." + AGE_AND_APPEARANCE_PRESERVATION + CLOTHING_PRESERVATION + WAIST_UP_FRAMING,
+        negativePrompt: "realistic, photograph, harsh colors, scary, full body, turning adult into child"
     }
 };
 
@@ -167,7 +170,7 @@ const generateCharacterWithConsumerGemini = async (imageBase64, styleId, resolve
 };
 
 // Generate character: try Vertex Gemini (selfie + prompt) first, then consumer Gemini, then Vertex Imagen (text-only fallback).
-// settingId: optional, one of SETTINGS keys (default forest) — used to replace {{SETTING}} in the prompt for full-body-in-scene.
+// settingId: optional, one of SETTINGS keys (default forest) — used to replace {{SETTING}} in the prompt.
 const generateCharacterImage = async (imageBase64, styleId, settingId = null) => {
     const style = STYLE_PROMPTS[styleId];
     if (!style) {
@@ -275,7 +278,7 @@ const uploadToGCS = async (imageBase64, filename) => {
 };
 
 // POST /api/character/generate
-// Generate a full-body character from a selfie, in the chosen style, placed in a setting (e.g. forest).
+// Generate a waist-up character from a selfie, in the chosen style, placed in a setting (e.g. forest).
 router.post('/generate', async (req, res) => {
     try {
         const { imageBase64, styleId, childId, childName, settingId } = req.body;
@@ -292,9 +295,9 @@ router.post('/generate', async (req, res) => {
         }
 
         const setting = settingId && SETTINGS[settingId] ? settingId : DEFAULT_SETTING;
-        console.log(`🎨 Generating full-body ${styleId} character in ${setting} for ${childName || 'child'}...`);
+        console.log(`🎨 Generating waist-up ${styleId} character in ${setting} for ${childName || 'child'}...`);
 
-        // Generate the character image (full body in setting)
+        // Generate the character image (waist-up in setting)
         const generatedImageBase64 = await generateCharacterImage(imageBase64, styleId, setting);
 
         // Create unique filename

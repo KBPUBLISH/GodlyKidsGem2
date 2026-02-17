@@ -92,11 +92,18 @@ const STYLE_BASES = {
         displayName: 'Storybook',
         emoji: '📚'
     },
-    disney: {
-        base: 'Disney/Pixar 3D animated style character, big sparkling eyes, smooth features, magical glow, rounded features',
-        suffix: 'enchanting atmosphere, vibrant colors, transparent background, PNG',
+    anime: {
+        base: 'Anime style character, large expressive eyes, clean lines, vibrant colors, dynamic and expressive',
+        suffix: 'vibrant colors, transparent background, PNG',
         negativePrompt: 'realistic, photograph, scary, dark, villainous, flat, background',
-        displayName: 'Disney/Pixar',
+        displayName: 'Anime',
+        emoji: '✨'
+    },
+    disney: {
+        base: 'Anime style character, large expressive eyes, clean lines, vibrant colors, dynamic and expressive',
+        suffix: 'vibrant colors, transparent background, PNG',
+        negativePrompt: 'realistic, photograph, scary, dark, villainous, flat, background',
+        displayName: 'Anime',
         emoji: '✨'
     }
 };
@@ -281,7 +288,7 @@ router.get('/definitions', (req, res) => {
  * 
  * Body:
  * - selfieBase64: Base64 encoded selfie image
- * - styleId: Character style (minecraft, lego, cartoon, illustrated, disney, pixar)
+ * - styleId: Character style (minecraft, lego, cartoon, illustrated, anime, pixar; disney supported as alias)
  * - kidId: Child's profile ID
  * - kidName: Child's name (for logging)
  */

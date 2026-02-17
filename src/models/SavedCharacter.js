@@ -29,7 +29,7 @@ const savedCharacterSchema = new mongoose.Schema({
     // Style tag matching app CHARACTER_STYLES (pixar, minecraft, etc.)
     styleId: {
         type: String,
-        enum: ['pixar', 'minecraft', 'disney', 'lego', 'cartoon', 'illustrated'],
+        enum: ['pixar', 'minecraft', 'anime', 'lego', 'cartoon', 'illustrated', 'disney'],
         default: undefined,
     },
     // Style prompt for consistent appearance; optional when styleId is set (can derive from style)

@@ -13,11 +13,12 @@ const PLACEHOLDER_PAGE_IMAGE = 'https://picsum.photos/seed/story/800/600';
 /** User-selected main character style (e.g. Pixar) — used so the main character stays in that style, not biblical/Jesus style. */
 const MAIN_CHARACTER_STYLE_BY_ID = {
     pixar: 'Pixar 3D animated style, rounded features, playful, vibrant colors',
-    disney: 'Disney 3D animated style, big sparkling eyes, magical glow, expressive',
+    anime: 'Anime style, large expressive eyes, clean lines, vibrant colors, dynamic and expressive',
     illustrated: "children's book watercolor illustration style, soft colors, whimsical",
     cartoon: '2D cartoon style, big expressive eyes, simplified features, bright colors',
     minecraft: 'Minecraft blocky voxel style, square features, pixelated',
     lego: 'LEGO minifigure style, yellow plastic, simple features',
+    disney: 'Anime style, large expressive eyes, clean lines, vibrant colors, dynamic and expressive', // backward compat
 };
 
 /** Cached Google auth token for Imagen (reused across page generations) */

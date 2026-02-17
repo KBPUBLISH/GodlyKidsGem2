@@ -85,9 +85,16 @@ const customMonthlyBookSchema = new mongoose.Schema({
     // Notifications sent
     notificationSentAt: { type: Date },
     notification24hSentAt: { type: Date },
+    // Share link: secret token for read-only access without subscription (e.g. share with grandma)
+    shareToken: {
+        type: String,
+        sparse: true,
+        unique: true,
+    },
 }, { timestamps: true });
 
 customMonthlyBookSchema.index({ userId: 1, createdAt: -1 });
 customMonthlyBookSchema.index({ status: 1 });
+customMonthlyBookSchema.index({ bookId: 1, shareToken: 1 });
 
 module.exports = mongoose.model('CustomMonthlyBook', customMonthlyBookSchema);

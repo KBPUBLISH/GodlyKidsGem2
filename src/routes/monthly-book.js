@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const mongoose = require('mongoose');
+const crypto = require('crypto');
 const MonthlyBookTemplate = require('../models/MonthlyBookTemplate');
 const CustomMonthlyBook = require('../models/CustomMonthlyBook');
 const Book = require('../models/Book');
@@ -381,6 +382,52 @@ router.get('/my-books', async (req, res) => {
     } catch (err) {
         console.error('My monthly books error:', err);
         res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+/**
+ * POST /api/monthly-book/share
+ * Create or return a share link for a kid-created book. Only the owner (userId) can get the link.
+ * Body: { bookId, userId } (userId can be ObjectId, email, or deviceId)
+ * Returns: { shareUrl, shareToken } — client can build shareUrl as appBase/book/:bookId?share=:shareToken
+ */
+router.post('/share', async (req, res) => {
+    try {
+        const { bookId, userId: rawUserId } = req.body;
+        if (!bookId) {
+            return res.status(400).json({ success: false, error: 'bookId is required' });
+        }
+        if (!mongoose.Types.ObjectId.isValid(bookId)) {
+            return res.status(400).json({ success: false, error: 'Invalid bookId' });
+        }
+        const userId = await resolveUserId(rawUserId);
+        if (!userId) {
+            return res.status(400).json({ success: false, error: 'User not found. Sign in or provide userId.' });
+        }
+        const custom = await CustomMonthlyBook.findOne({
+            bookId: new mongoose.Types.ObjectId(bookId),
+            userId,
+            status: 'completed',
+        }).select('shareToken').lean();
+        if (!custom) {
+            return res.status(404).json({ success: false, error: 'Book not found or you do not own this Create Your Story book.' });
+        }
+        let shareToken = custom.shareToken;
+        if (!shareToken) {
+            shareToken = crypto.randomBytes(12).toString('hex');
+            await CustomMonthlyBook.updateOne(
+                { bookId: new mongoose.Types.ObjectId(bookId), userId },
+                { $set: { shareToken } }
+            );
+        }
+        res.json({
+            success: true,
+            shareToken,
+            shareUrl: null, // Client builds URL: `${appBase}/book/${bookId}?share=${shareToken}`
+        });
+    } catch (err) {
+        console.error('Monthly book share error:', err);
+        res.status(500).json({ success: false, error: err.message || 'Failed to create share link' });
     }
 });
 

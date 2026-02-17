@@ -3,8 +3,21 @@ const router = express.Router();
 const Book = require('../models/Book');
 const CustomMonthlyBook = require('../models/CustomMonthlyBook');
 const SavedCharacter = require('../models/SavedCharacter');
+const AppUser = require('../models/AppUser');
 const mongoose = require('mongoose');
 const { notifyNewBook } = require('../services/notificationService');
+
+/** Resolve userId query (ObjectId, email, or deviceId) to ObjectId for CustomMonthlyBook lookup. */
+async function resolveUserIdForBooks(userId) {
+    if (!userId) return null;
+    if (mongoose.Types.ObjectId.isValid(userId) && String(userId).length === 24) {
+        return new mongoose.Types.ObjectId(userId);
+    }
+    const user = await AppUser.findOne({
+        $or: [{ email: userId }, { deviceId: userId }],
+    }).select('_id').lean();
+    return user ? user._id : null;
+}
 
 /** Kid-created (Create Your Story) book IDs — excluded from main catalog, featured, trending, top-rated. */
 async function getGeneratedMonthlyBookIds() {
@@ -329,20 +342,33 @@ function parseTimeWindow(window) {
 }
 
 // GET single book
+// Optional query: userId — if provided and this book is a Create Your Story book for that user, response includes isUserCreated: true
 router.get('/:id', async (req, res) => {
     try {
         const book = await Book.findById(req.params.id);
         if (!book) return res.status(404).json({ message: 'Book not found' });
-        
+
         const bookObj = book.toObject();
         // Add coverImage at root level from files.coverImage for backward compatibility
         if (bookObj.files && bookObj.files.coverImage) {
             bookObj.coverImage = bookObj.files.coverImage;
         } else if (!bookObj.files) {
-            // If files doesn't exist (old data), keep coverImage as is
             bookObj.files = { coverImage: bookObj.coverImage || null, images: [], videos: [], audio: [] };
         }
-        
+
+        const rawUserId = req.query.userId || req.query.email || req.query.deviceId;
+        if (rawUserId) {
+            const resolvedUserId = await resolveUserIdForBooks(rawUserId);
+            if (resolvedUserId) {
+                const custom = await CustomMonthlyBook.findOne({
+                    bookId: book._id,
+                    userId: resolvedUserId,
+                    status: 'completed',
+                }).select('_id').lean();
+                if (custom) bookObj.isUserCreated = true;
+            }
+        }
+
         res.json(bookObj);
     } catch (error) {
         res.status(500).json({ message: error.message });

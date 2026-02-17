@@ -38,6 +38,10 @@ const customMonthlyBookSchema = new mongoose.Schema({
     childCharacterImageUrl: {
         type: String,
     },
+    // Original selfie image URL (uploaded when creating book; for before/after display)
+    childSelfieUrl: {
+        type: String,
+    },
     // Multi-character (1–3): when set, generator uses these; childName/childCharacterImageUrl = first for legacy
     characters: [{
         name: { type: String, required: true },

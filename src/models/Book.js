@@ -92,6 +92,16 @@ const bookSchema = new mongoose.Schema({
         default: [],
     },
     
+    // Global view count (incremented when a user opens the book)
+    viewCount: {
+        type: Number,
+        default: 0,
+    },
+    // Total read sessions (opens); used for analytics
+    totalReadSessions: {
+        type: Number,
+        default: 0,
+    },
     // Global read count (incremented when any user completes the book)
     readCount: {
         type: Number,

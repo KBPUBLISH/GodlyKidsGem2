@@ -83,6 +83,26 @@ router.post('/create', async (req, res) => {
             });
         }
 
+        const hasTrialOrPaidBool = Boolean(hasTrialOrPaid);
+        const appUser = await AppUser.findById(userId).select('email').lean();
+        const userEmail = (appUser && appUser.email) ? String(appUser.email).trim().toLowerCase() : '';
+        const limit = userEmail === MONTHLY_CREDITS_SPECIAL_EMAIL
+            ? MONTHLY_CREDITS_SPECIAL_LIMIT
+            : (hasTrialOrPaidBool ? MONTHLY_CREDITS_SUBSCRIBED : MONTHLY_CREDITS_DEFAULT);
+        const startMonth = startOfCurrentMonth();
+        const usedThisMonth = await CustomMonthlyBook.countDocuments({
+            userId,
+            createdAt: { $gte: startMonth },
+        });
+        if (usedThisMonth >= limit) {
+            return res.status(400).json({
+                success: false,
+                error: limit === 0
+                    ? 'Create Your Story is for subscribers. Subscribe to get one monthly credit.'
+                    : 'You've used your monthly story credit. Come back next month for another!',
+            });
+        }
+
         const template = await MonthlyBookTemplate.findById(templateId).populate('bibleCharacterId');
         if (!template || template.status !== 'published') {
             return res.status(400).json({ success: false, error: 'Invalid or unpublished template' });
@@ -169,6 +189,27 @@ router.post('/create-from-book', async (req, res) => {
             });
         }
 
+        // Monthly credits: special email = 100, subscribed = 1, else 0
+        const appUser = await AppUser.findById(userId).select('email').lean();
+        const userEmail = (appUser && appUser.email) ? String(appUser.email).trim().toLowerCase() : '';
+        const hasTrialOrPaidBool = Boolean(hasTrialOrPaid);
+        const limit = userEmail === MONTHLY_CREDITS_SPECIAL_EMAIL
+            ? MONTHLY_CREDITS_SPECIAL_LIMIT
+            : (hasTrialOrPaidBool ? MONTHLY_CREDITS_SUBSCRIBED : MONTHLY_CREDITS_DEFAULT);
+        const startMonth = startOfCurrentMonth();
+        const usedThisMonth = await CustomMonthlyBook.countDocuments({
+            userId,
+            createdAt: { $gte: startMonth },
+        });
+        if (usedThisMonth >= limit) {
+            return res.status(400).json({
+                success: false,
+                error: limit === 0
+                    ? 'Create Your Story is for subscribers. Subscribe to get one monthly credit.'
+                    : 'You’ve used your monthly story credit. Come back next month for another!',
+            });
+        }
+
         const Book = require('../models/Book');
         const sourceBook = await Book.findById(sourceBookId).populate('featuredCharacterId').lean();
         if (!sourceBook || sourceBook.bookType !== 'kids_monthly' || sourceBook.status !== 'published') {
@@ -180,7 +221,6 @@ router.post('/create-from-book', async (req, res) => {
 
         const charStyle = (characterStyleId && String(characterStyleId).trim()) || 'illustrated';
         const bookStyle = (bookStyleId && String(bookStyleId).trim()) || charStyle;
-        const hasTrialOrPaidBool = Boolean(hasTrialOrPaid);
         const sourcePageCount = await Page.countDocuments({ bookId: sourceBook._id });
         const progressTotalPages = hasTrialOrPaidBool
             ? sourcePageCount
@@ -281,6 +321,54 @@ router.get('/status/:customMonthlyBookId', async (req, res) => {
         });
     } catch (err) {
         console.error('Monthly book status error:', err);
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+/**
+ * Monthly credits: special-email gets 100, subscribed gets 1, else 0.
+ */
+const MONTHLY_CREDITS_SPECIAL_EMAIL = 'michealbouchard7@gmail.com';
+const MONTHLY_CREDITS_SUBSCRIBED = 1;
+const MONTHLY_CREDITS_DEFAULT = 0;
+const MONTHLY_CREDITS_SPECIAL_LIMIT = 100;
+
+function startOfCurrentMonth() {
+    const d = new Date();
+    d.setUTCDate(1);
+    d.setUTCHours(0, 0, 0, 0);
+    return d;
+}
+
+/**
+ * GET /api/monthly-book/credits
+ * Returns how many monthly book creations the user has used this calendar month.
+ * Query: userId (required). Optional fallbacks: email, deviceId.
+ * Response: { usedThisMonth }. Frontend computes limit (1 or 100 for special email) from subscription/email and displays "X of Y monthly credits available".
+ */
+router.get('/credits', async (req, res) => {
+    try {
+        const { userId: rawUserId, email: rawEmail, deviceId: rawDeviceId } = req.query;
+        const candidates = [rawUserId, rawEmail, rawDeviceId].filter(Boolean);
+        if (candidates.length === 0) {
+            return res.status(400).json({ success: false, error: 'userId, email, or deviceId required' });
+        }
+        let userId = null;
+        for (const raw of candidates) {
+            userId = await resolveUserId(raw);
+            if (userId) break;
+        }
+        if (!userId) {
+            return res.json({ success: true, usedThisMonth: 0 });
+        }
+        const startMonth = startOfCurrentMonth();
+        const usedThisMonth = await CustomMonthlyBook.countDocuments({
+            userId,
+            createdAt: { $gte: startMonth },
+        });
+        res.json({ success: true, usedThisMonth });
+    } catch (err) {
+        console.error('Monthly book credits error:', err);
         res.status(500).json({ success: false, error: err.message });
     }
 });

@@ -324,8 +324,8 @@ async function generatePageImageWithVertexGemini(customBook, pageDoc, characterS
         ? referenceImages.map((r, i) => {
             const isFirstPerson = i === 0 && (r.label === 'the child' || r.label === 'child');
             return isFirstPerson
-                ? `Image ${i + 1}: the main character (match this person's exact age and appearance from the photo in every scene—if they are an adult with beard or hat, depict an adult with beard or hat; if a child, depict a child; do not age down or change their features)`
-                : `Image ${i + 1}: ${r.label}`;
+                ? `Image ${i + 1}: the main character (match this person's exact age and appearance from the photo—only what is visible in the photo; do not add hat, cap, or headphones if not in the photo; if adult with beard depict adult, if child depict child; do not age down or change their features)`
+                : `Image ${i + 1}: ${r.label} (this is a different character—draw them ONLY from this reference; do not give them the main character's hat, headphones, or modern accessories)`;
         }).join('. ')
         : '';
     const firstRefIsPerson = referenceImages.length > 0 && (referenceImages[0].label === 'the child' || referenceImages[0].label === 'child');
@@ -336,14 +336,14 @@ async function generatePageImageWithVertexGemini(customBook, pageDoc, characterS
         : ` Do NOT draw the main character in a classical religious or biblical painting style; keep them in the selected storybook/animation style (e.g. Pixar, Disney, illustrated) on every page. `;
     const heightConsistency = ` The main character must appear at the SAME height and scale on every page. If the reference photo shows an ADULT, the main character must be drawn at ADULT height (clearly taller than any children in the scene). If the reference shows a child, use child height. Do not make the main character taller, shorter, or a different size from page to page—keep their scale consistent across all scenes. `;
     const personConsistencyInstruction = firstRefIsPerson
-        ? ` CRITICAL — character consistency: The person in reference Image 1 must look EXACTLY like the photo in every image: same face, same AGE (if adult with beard = draw adult with beard; do NOT turn them into a child), same eye color (e.g. brown eyes stay brown), same hair (including streaks or gray), same clothing, and same accessories (e.g. headphones, hoodie, hat). Do NOT age them down, change eye color, remove beard, remove accessories, or replace their real outfit with costumes. If the reference is an adult, draw them at adult height (taller than children). Preserve identical appearance on every page.${styleLock}${heightConsistency} `
+        ? ` CRITICAL — character consistency: The person in reference Image 1 must look EXACTLY like the photo in every image: same face, same AGE (if adult with beard = draw adult with beard; do NOT turn them into a child), same eye color (e.g. brown eyes stay brown), same hair (including streaks or gray), same clothing, and only the accessories that appear in the reference (if the photo has no hat and no headphones, draw them with no hat and no headphones—do NOT add hats, caps, or headphones unless visible in the reference). Do NOT age them down, change eye color, remove beard, or replace their real outfit with costumes. If the reference is an adult, draw them at adult height (taller than children). Preserve identical appearance on every page.${styleLock}${heightConsistency} `
         : '';
-    // When multiple reference images: they are DIFFERENT people — do not blend or mix their faces (e.g. main character vs Jesus).
+    // When multiple reference images: they are DIFFERENT people — do not blend or mix; do not put main character's accessories on biblical characters.
     const multiPersonInstruction = referenceImages.length >= 2
-        ? ` CRITICAL — these reference images are DIFFERENT people. Do NOT blend, combine, or mix their faces. The person in Image 1 must look ONLY like Image 1. The person in Image 2 (and any later images) must look ONLY like their own reference image. Keep each character's face and appearance strictly from their own photo; do not transfer features (beard, hair, skin) from one reference to the other. `
+        ? ` CRITICAL — these reference images are DIFFERENT people. Do NOT blend, combine, or mix their faces or appearances. Image 1 = the main character (the kid/user): use ONLY Image 1 for that person's face, body, clothing, and accessories. Image 2 and any later images = other characters (e.g. Jesus, biblical figures): use ONLY their own reference image for each. Do NOT put the main character's clothing or accessories (e.g. hat, cap, headphones, modern clothes) on Jesus or any other character. Biblical and story characters must keep their own traditional appearance from their reference; only the person from Image 1 may have modern accessories if they appear in Image 1. Do not transfer features (beard, hair, skin, clothing, accessories) from one reference to another. `
         : '';
     const geminiPrompt = referenceImages.length
-        ? `${personConsistencyInstruction}${multiPersonInstruction}Using the provided reference images (${refDescription}), generate one image: ${prompt} Remember: keep the main character identical to the reference photo—same age (adult with beard = adult, not child), same eye color, same hair (including streaks), same clothing and accessories. If they are an adult, draw them at adult height (taller than children). Do not replace their outfit with costumes or fantasy clothes. Place each character in the scene as described. Children's book illustration style, warm inviting colors, soft lighting, suitable for ages 4-12, Christian faith theme, no text in image. Vertical 9:16 composition.`
+        ? `${personConsistencyInstruction}${multiPersonInstruction}Using the provided reference images (${refDescription}), generate one image: ${prompt} Remember: Image 1 (main character) only—same age, eye color, hair, clothing and accessories as in their photo (no hat/headphones unless in photo). Other characters (Image 2+) must look only like their own reference—never give them the main character's hat, headphones, or modern clothes. Place each character in the scene as described. Children's book illustration style, warm inviting colors, soft lighting, suitable for ages 4-12, Christian faith theme, no text in image. Vertical 9:16 composition.`
         : `Generate one image: ${prompt} Children's book illustration style, warm inviting colors, soft lighting, suitable for ages 4-12, Christian faith theme, no text in image. Vertical 9:16 composition.`;
 
     const parts = [{ text: geminiPrompt }];
@@ -544,16 +544,16 @@ async function generateCoverImageForBook(customBook, sourceBook) {
             referenceImage: { bytesBase64Encoded: childImageBase64 },
             referenceType: 'REFERENCE_TYPE_SUBJECT',
             subjectImageConfig: {
-                subjectDescription: `The person in this photo (${childName}). Match their exact age and appearance: if they are an adult (e.g. with beard, hat), depict an adult; if a child, depict a child. Do not age them down. Include them in the scene with ${characterName}.`,
+                subjectDescription: `The person in this photo (${childName}). Match their exact age and appearance: if they are an adult (e.g. with beard), depict an adult; if a child, depict a child. Depict only the clothing and accessories visible in the photo—do not add hat or headphones unless they appear in the photo. Do not age them down. Include them in the scene with ${characterName}.`,
                 subjectType: 'SUBJECT_TYPE_PERSON',
             },
         });
     }
 
     const prompt = templateCoverBase64
-        ? `Recreate this book cover in the same style and composition. Feature the person [${subjectRefId || 1}] and ${characterName} (${characterStyle}). Depict the person exactly as in the reference photo—same age (adult or child), same features (beard, hat, etc.); do not age them down. Children's book illustration, Christian faith theme, ages 4-12, no text in image.`
+        ? `Recreate this book cover in the same style and composition. Feature the person [${subjectRefId || 1}] and ${characterName} (${characterStyle}). Depict the person exactly as in the reference photo—same age (adult or child), same features and clothing; do not add hat or headphones unless they appear in the reference; do not age them down. Children's book illustration, Christian faith theme, ages 4-12, no text in image.`
         : subjectRefId
-            ? `Children's book cover: The person [${subjectRefId}] and ${characterName} (${characterStyle}) standing together in a warm, magical storybook scene. Depict the person exactly as in the reference—same age and appearance (if adult with beard/hat, show adult with beard/hat). Both characters visible and friendly, side by side. Children's book illustration style, Christian faith theme, suitable for ages 4-12, no text in image.`
+            ? `Children's book cover: The person [${subjectRefId}] and ${characterName} (${characterStyle}) standing together in a warm, magical storybook scene. Depict the person exactly as in the reference—same age and appearance; only show accessories (e.g. hat, headphones) if they appear in the reference photo. Both characters visible and friendly, side by side. Children's book illustration style, Christian faith theme, suitable for ages 4-12, no text in image.`
             : `Children's book cover: ${childName} and ${characterName} (${characterStyle}) standing together in a warm, magical storybook scene. Both characters visible and friendly, side by side. Children's book illustration style, Christian faith theme, suitable for ages 4-12, no text in image.`;
 
     const instancesPayload = referenceImages.length

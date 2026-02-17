@@ -179,9 +179,9 @@ router.post('/create-from-book', async (req, res) => {
 
         const charStyle = (characterStyleId && String(characterStyleId).trim()) || 'illustrated';
         const bookStyle = (bookStyleId && String(bookStyleId).trim()) || charStyle;
-        const hasTrialOrPaid = Boolean(hasTrialOrPaid);
+        const hasTrialOrPaidBool = Boolean(hasTrialOrPaid);
         const sourcePageCount = await Page.countDocuments({ bookId: sourceBook._id });
-        const progressTotalPages = hasTrialOrPaid
+        const progressTotalPages = hasTrialOrPaidBool
             ? sourcePageCount
             : Math.min(4, sourcePageCount);
         const createPayload = {
@@ -192,7 +192,7 @@ router.post('/create-from-book', async (req, res) => {
             childCharacterImageUrl: primaryImageUrl || null,
             characterStyleId: charStyle,
             bookStyleId: bookStyle,
-            hasTrialOrPaid,
+            hasTrialOrPaid: hasTrialOrPaidBool,
             narratorVoiceId: narratorVoiceId || null,
             status: 'pending',
             progressPage: 0,

@@ -114,6 +114,9 @@ const PageEditor: React.FC = () => {
     const [imageSequence, setImageSequence] = useState<ImageSequenceItem[]>([]);
     const [imageSequenceDuration, setImageSequenceDuration] = useState(3); // seconds per image
     const [imageSequenceAnimation, setImageSequenceAnimation] = useState<string>('kenBurns'); // animation effect
+    // Single background image animation (Kids Monthly: applied to each generated page image)
+    const [backgroundImageAnimation, setBackgroundImageAnimation] = useState<string>('kenBurns');
+    const [backgroundImageAnimationDuration, setBackgroundImageAnimationDuration] = useState(10);
 
     // Previews
     const [backgroundPreview, setBackgroundPreview] = useState<string | null>(null);
@@ -148,6 +151,7 @@ const PageEditor: React.FC = () => {
     const [imagePromptFilter, setImagePromptFilter] = useState('');
     const [imagePromptStart, setImagePromptStart] = useState(0);
     const [imagePromptSelectedIndex, setImagePromptSelectedIndex] = useState(0);
+    const [analyzingScenePrompt, setAnalyzingScenePrompt] = useState(false);
     const imagePromptRef = useRef<HTMLTextAreaElement>(null);
     
     // TTS Cache clearing
@@ -582,6 +586,8 @@ const PageEditor: React.FC = () => {
         setUseImageSequence(page.useImageSequence || false);
         setImageSequenceDuration(page.imageSequenceDuration || 3);
         setImageSequenceAnimation(page.imageSequenceAnimation || 'kenBurns');
+        setBackgroundImageAnimation(page.backgroundImageAnimation ?? 'kenBurns');
+        setBackgroundImageAnimationDuration(page.backgroundImageAnimationDuration ?? 10);
         if (page.imageSequence && page.imageSequence.length > 0) {
             const loadedImages: ImageSequenceItem[] = page.imageSequence.map((img: any, idx: number) => ({
                 id: `loaded-img-${page._id}-${idx}`,
@@ -1034,6 +1040,8 @@ const PageEditor: React.FC = () => {
                 imageSequence: uploadedImageSequence,
                 imageSequenceDuration,
                 imageSequenceAnimation,
+                backgroundImageAnimation: bookType === 'kids_monthly' ? backgroundImageAnimation : undefined,
+                backgroundImageAnimationDuration: bookType === 'kids_monthly' ? backgroundImageAnimationDuration : undefined,
                 sceneDescription: sceneDescription.trim() || undefined, // Kids Monthly: prompt for on-demand background generation
                 referenceCharacterIds: referenceCharacterIds, // Kids Monthly: characters to reference on this page (empty array to clear)
             };
@@ -1377,48 +1385,88 @@ const PageEditor: React.FC = () => {
                         {bookType === 'kids_monthly' && (
                             <>
                                 <div className="space-y-2 pt-2 relative">
-                                    <div className="flex items-center justify-between gap-2">
+                                    <div className="flex items-center justify-between gap-2 flex-wrap">
                                         <label className="block text-xs font-semibold text-gray-600">Image prompt (optional)</label>
-                                        <button
-                                            type="button"
-                                            onClick={() => {
-                                                const raw = textBoxes
-                                                    .map(b => b.text)
-                                                    .filter(t => t && t.trim())
-                                                    .join(' ')
-                                                    .trim();
-                                                if (!raw) {
-                                                    setSceneDescription('');
+                                        <div className="flex items-center gap-2">
+                                            <button
+                                                type="button"
+                                                disabled={analyzingScenePrompt}
+                                                onClick={async () => {
+                                                    const raw = textBoxes
+                                                        .map(b => b.text)
+                                                        .filter(t => t && t.trim())
+                                                        .join(' ')
+                                                        .trim();
+                                                    if (!raw) {
+                                                        setSceneDescription('');
+                                                        setImagePromptSuggestionsOpen(false);
+                                                        return;
+                                                    }
+                                                    setAnalyzingScenePrompt(true);
+                                                    try {
+                                                        const res = await apiClient.post('/api/monthly-book/analyze-scene-prompt', {
+                                                            pageText: raw,
+                                                            bookId: bookId || undefined,
+                                                        });
+                                                        const desc = res.data?.sceneDescription?.trim();
+                                                        if (desc) setSceneDescription(desc);
+                                                    } catch (err: unknown) {
+                                                        const msg = err && typeof err === 'object' && 'response' in err
+                                                            ? (err as { response?: { data?: { error?: string } } }).response?.data?.error
+                                                            : (err as Error)?.message;
+                                                        console.error('Analyze scene prompt failed:', err);
+                                                        alert(msg || 'Failed to generate scene description. Try "Generate from page text" or type your own.');
+                                                    } finally {
+                                                        setAnalyzingScenePrompt(false);
+                                                    }
                                                     setImagePromptSuggestionsOpen(false);
-                                                    return;
-                                                }
-                                                // Replace any {childName}, {kidname}, {kid name}, etc. with @child (keep other placeholders)
-                                                const withChildTag = raw.replace(/\{([^}]+)\}/g, (_, key) => {
-                                                    const k = key.trim().toLowerCase().replace(/\s+/g, '');
-                                                    if (k === 'childname' || k === 'kidname' || k === 'child_name' || k === 'kid_name') return '@child';
-                                                    return `{${key}}`;
-                                                });
-                                                // Make it a scene-style image prompt: strip dialogue (quoted text) to keep narrative/action, collapse spaces
-                                                const withoutQuotes = withChildTag
-                                                    .replace(/"([^"]*)"/g, ' ')
-                                                    .replace(/'([^']*)'/g, ' ')
-                                                    .replace(/\s+/g, ' ')
-                                                    .trim();
-                                                const sceneText = withoutQuotes.length > 0 ? withoutQuotes : withChildTag.replace(/\s+/g, ' ').trim();
-                                                const asImagePrompt = sceneText.startsWith('Scene') || sceneText.startsWith('scene')
-                                                    ? sceneText
-                                                    : `Scene: ${sceneText}`;
-                                                const prompt = asImagePrompt.length > 400
-                                                    ? asImagePrompt.slice(0, 397) + '...'
-                                                    : asImagePrompt;
-                                                setSceneDescription(prompt);
-                                                setImagePromptSuggestionsOpen(false);
-                                            }}
-                                            className="flex items-center gap-1 px-2 py-1 text-xs font-medium text-indigo-600 hover:text-indigo-800 hover:bg-indigo-50 rounded transition"
-                                        >
-                                            <Type className="w-3.5 h-3.5" />
-                                            Generate from page text
-                                        </button>
+                                                }}
+                                                className="flex items-center gap-1 px-2 py-1 text-xs font-medium text-indigo-600 hover:text-indigo-800 hover:bg-indigo-50 rounded transition disabled:opacity-50"
+                                            >
+                                                {analyzingScenePrompt ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />}
+                                                Describe scene with AI
+                                            </button>
+                                            <button
+                                                type="button"
+                                                onClick={() => {
+                                                    const raw = textBoxes
+                                                        .map(b => b.text)
+                                                        .filter(t => t && t.trim())
+                                                        .join(' ')
+                                                        .trim();
+                                                    if (!raw) {
+                                                        setSceneDescription('');
+                                                        setImagePromptSuggestionsOpen(false);
+                                                        return;
+                                                    }
+                                                    // Replace any {childName}, {kidname}, {kid name}, etc. with @child (keep other placeholders)
+                                                    const withChildTag = raw.replace(/\{([^}]+)\}/g, (_, key) => {
+                                                        const k = key.trim().toLowerCase().replace(/\s+/g, '');
+                                                        if (k === 'childname' || k === 'kidname' || k === 'child_name' || k === 'kid_name') return '@child';
+                                                        return `{${key}}`;
+                                                    });
+                                                    // Make it a scene-style image prompt: strip dialogue (quoted text) to keep narrative/action, collapse spaces
+                                                    const withoutQuotes = withChildTag
+                                                        .replace(/"([^"]*)"/g, ' ')
+                                                        .replace(/'([^']*)'/g, ' ')
+                                                        .replace(/\s+/g, ' ')
+                                                        .trim();
+                                                    const sceneText = withoutQuotes.length > 0 ? withoutQuotes : withChildTag.replace(/\s+/g, ' ').trim();
+                                                    const asImagePrompt = sceneText.startsWith('Scene') || sceneText.startsWith('scene')
+                                                        ? sceneText
+                                                        : `Scene: ${sceneText}`;
+                                                    const prompt = asImagePrompt.length > 400
+                                                        ? asImagePrompt.slice(0, 397) + '...'
+                                                        : asImagePrompt;
+                                                    setSceneDescription(prompt);
+                                                    setImagePromptSuggestionsOpen(false);
+                                                }}
+                                                className="flex items-center gap-1 px-2 py-1 text-xs font-medium text-indigo-600 hover:text-indigo-800 hover:bg-indigo-50 rounded transition"
+                                            >
+                                                <Type className="w-3.5 h-3.5" />
+                                                Generate from page text
+                                            </button>
+                                        </div>
                                     </div>
                                     <textarea
                                         ref={imagePromptRef}
@@ -1510,11 +1558,48 @@ const PageEditor: React.FC = () => {
                                         );
                                     })()}
                                     <p className="text-xs text-gray-400">
-                                        Used when generating a personalized book for a child. Use “Generate from page text” to build a prompt from this page’s text ({'{childName}'} and {'{kidname}'} become <code className="bg-gray-100 px-1 rounded">@child</code>), or leave empty to use page text automatically.
+                                        Used when generating a personalized book for a child. Use “Describe scene with AI” to get a scene description from this page’s text, or “Generate from page text” to copy/trim the text ({'{childName}'} → <code className="bg-gray-100 px-1 rounded">@child</code>). Leave empty to use page text automatically.
                                     </p>
                                     <p className="text-xs text-gray-500 mt-1">
                                         Type <code className="bg-gray-100 px-1 rounded">@kid</code> or <code className="bg-gray-100 px-1 rounded">@child</code> for the child’s avatar (per child, from their device). Use the popup when you type <code className="bg-gray-100 px-1 rounded">@</code> to pick saved characters (e.g. @Noah, @disneyjesus). E.g. “@disneyjesus and @child are building a house.” Backgrounds are 9:16 portrait for mobile.
                                     </p>
+                                </div>
+
+                                {/* Background image animation (applied to each generated page image in the app) */}
+                                <div className="space-y-2 pt-3">
+                                    <label className="block text-xs font-semibold text-gray-600">Background image animation</label>
+                                    <p className="text-xs text-gray-400">Applied to the generated background image when the child reads the book (Ken Burns = pan + zoom).</p>
+                                    <div className="flex flex-wrap items-center gap-3">
+                                        <div className="flex items-center gap-2">
+                                            <label className="text-xs text-gray-600">Effect:</label>
+                                            <select
+                                                value={backgroundImageAnimation}
+                                                onChange={(e) => setBackgroundImageAnimation(e.target.value)}
+                                                className="px-2 py-1.5 text-sm border border-gray-200 rounded-lg bg-white"
+                                            >
+                                                <option value="kenBurns">Ken Burns (pan + zoom)</option>
+                                                <option value="zoomIn">Zoom In</option>
+                                                <option value="zoomOut">Zoom Out</option>
+                                                <option value="panLeft">Pan Left</option>
+                                                <option value="panRight">Pan Right</option>
+                                                <option value="panUp">Pan Up</option>
+                                                <option value="panDown">Pan Down</option>
+                                                <option value="none">None (static)</option>
+                                            </select>
+                                        </div>
+                                        <div className="flex items-center gap-2">
+                                            <label className="text-xs text-gray-600">Duration:</label>
+                                            <input
+                                                type="number"
+                                                min={1}
+                                                max={30}
+                                                value={backgroundImageAnimationDuration}
+                                                onChange={(e) => setBackgroundImageAnimationDuration(Math.max(1, Math.min(30, parseInt(e.target.value, 10) || 10)))}
+                                                className="w-14 px-2 py-1 text-sm border border-gray-200 rounded-lg"
+                                            />
+                                            <span className="text-xs text-gray-500">seconds</span>
+                                        </div>
+                                    </div>
                                 </div>
 
                                 {/* Reference characters for this page */}

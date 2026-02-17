@@ -99,7 +99,7 @@ router.post('/create', async (req, res) => {
                 success: false,
                 error: limit === 0
                     ? 'Create Your Story is for subscribers. Subscribe to get one monthly credit.'
-                    : 'You've used your monthly story credit. Come back next month for another!',
+                    : "You've used your monthly story credit. Come back next month for another!",
             });
         }
 
@@ -206,7 +206,7 @@ router.post('/create-from-book', async (req, res) => {
                 success: false,
                 error: limit === 0
                     ? 'Create Your Story is for subscribers. Subscribe to get one monthly credit.'
-                    : 'You’ve used your monthly story credit. Come back next month for another!',
+                    : "You've used your monthly story credit. Come back next month for another!",
             });
         }
 

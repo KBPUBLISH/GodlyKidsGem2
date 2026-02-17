@@ -489,7 +489,7 @@ async function generatePersonalizedSceneImage(storyId, childName, selfieBase64, 
         // Build the prompt for scene generation with child's character.
         // [1] references the subject reference image (required by Imagen API).
         const enhancedPrompt = `A child named ${childName} [1] in a Bible story scene. ${scenePrompt}. 
-        The child [1] is the main character in this scene. ${styleDesc}.
+        The child [1] is the main character in this scene—depict them only from reference [1]; do not add hat or headphones unless visible in the reference. Any other characters (e.g. biblical figures) must not be given the child's modern accessories (no headphones, caps on other figures). ${styleDesc}.
         Story context: ${storyContext}
         Children's book illustration style, warm inviting colors, soft lighting, 
         suitable for ages 4-12, peaceful atmosphere, Christian faith theme.
@@ -519,7 +519,7 @@ async function generatePersonalizedSceneImage(storyId, childName, selfieBase64, 
                             },
                             referenceType: 'REFERENCE_TYPE_SUBJECT',
                             subjectImageConfig: {
-                                subjectDescription: `A child named ${childName}, transform into ${styleDesc}`,
+                                subjectDescription: `The person in this photo (${childName}). Match their exact appearance; depict only clothing and accessories visible in the photo—do not add hat or headphones unless they appear in the photo. Transform into ${styleDesc}.`,
                                 subjectType: 'SUBJECT_TYPE_PERSON'
                             }
                         }]

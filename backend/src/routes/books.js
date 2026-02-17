@@ -460,7 +460,13 @@ router.post('/', async (req, res) => {
                 bookData.files.videos = req.body.files.videos;
             }
             if (req.body.files.audio) {
-                bookData.files.audio = req.body.files.audio;
+                bookData.files.audio = Array.isArray(req.body.files.audio)
+                    ? req.body.files.audio.slice(0, 3)
+                    : [];
+            }
+            if (req.body.files.defaultAudioIndex !== undefined) {
+                const idx = Math.max(0, Math.min(2, parseInt(req.body.files.defaultAudioIndex, 10) || 0));
+                bookData.files.defaultAudioIndex = idx;
             }
         }
 
@@ -529,7 +535,13 @@ router.put('/:id', async (req, res) => {
                 book.files.videos = req.body.files.videos;
             }
             if (req.body.files.audio !== undefined) {
-                book.files.audio = req.body.files.audio;
+                book.files.audio = Array.isArray(req.body.files.audio)
+                    ? req.body.files.audio.slice(0, 3)
+                    : [];
+            }
+            if (req.body.files.defaultAudioIndex !== undefined) {
+                const idx = Math.max(0, Math.min(2, parseInt(req.body.files.defaultAudioIndex, 10) || 0));
+                book.files.defaultAudioIndex = idx;
             }
             delete req.body.files; // Remove from body to avoid duplicate assignment
         }

@@ -58,6 +58,13 @@ const customMonthlyBookSchema = new mongoose.Schema({
         type: Boolean,
         default: false,
     },
+    // User-selected background music track (0, 1, or 2) from source book's up-to-3 tracks
+    backgroundMusicIndex: {
+        type: Number,
+        default: 0,
+        min: 0,
+        max: 2,
+    },
     status: {
         type: String,
         enum: ['pending', 'generating', 'completed', 'failed'],

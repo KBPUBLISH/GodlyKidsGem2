@@ -122,7 +122,7 @@ router.post('/create', async (req, res) => {
  */
 router.post('/create-from-book', async (req, res) => {
     try {
-        const { userId: rawUserId, kidId, bookId: sourceBookId, childName, childCharacterImageUrl, characterStyleId, bookStyleId, hasTrialOrPaid, narratorVoiceId, characters: charactersBody } = req.body;
+        const { userId: rawUserId, kidId, bookId: sourceBookId, childName, childCharacterImageUrl, characterStyleId, bookStyleId, hasTrialOrPaid, narratorVoiceId, backgroundMusicIndex, characters: charactersBody } = req.body;
 
         const useCharacters = Array.isArray(charactersBody) && charactersBody.length >= 1 && charactersBody.length <= 3;
         let primaryName, primaryImageUrl, charactersToStore;
@@ -184,6 +184,9 @@ router.post('/create-from-book', async (req, res) => {
         const progressTotalPages = hasTrialOrPaidBool
             ? sourcePageCount
             : Math.min(4, sourcePageCount);
+        const musicIdx = backgroundMusicIndex != null
+            ? Math.max(0, Math.min(2, parseInt(backgroundMusicIndex, 10) || 0))
+            : 0;
         const createPayload = {
             userId,
             kidId,
@@ -194,6 +197,7 @@ router.post('/create-from-book', async (req, res) => {
             bookStyleId: bookStyle,
             hasTrialOrPaid: hasTrialOrPaidBool,
             narratorVoiceId: narratorVoiceId || null,
+            backgroundMusicIndex: musicIdx,
             status: 'pending',
             progressPage: 0,
             progressTotalPages: progressTotalPages || 1,

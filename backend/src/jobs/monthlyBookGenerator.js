@@ -255,9 +255,17 @@ async function expandAtReferencesInScene(sceneDescription, referenceCharacterIds
  * Build scene prompt from page.sceneDescription or page content text + character style.
  * When sceneDescription is set, @Name is expanded for identity/description; @kid/@child flags the child's avatar for reference image.
  * When wholeBookStyleDesc is provided (user-selected style, e.g. Pixar), the entire illustration—all characters and environment—uses that style; template/saved character styles are not applied so the whole book is visually consistent.
+ * When characterNames has 2+ entries, the prompt explicitly asks to include all characters in the same scene (so multiple user-added characters appear together).
  * Returns { prompt, hasKidReference }.
  */
-async function buildScenePrompt(pageDoc, characterStylePrompt, childName, wholeBookStyleDesc) {
+async function buildScenePrompt(pageDoc, characterStylePrompt, childName, wholeBookStyleDesc, characterNames) {
+    const names = Array.isArray(characterNames) && characterNames.length >= 2
+        ? characterNames.filter(Boolean)
+        : [];
+    const multiCharacterInstruction = names.length >= 2
+        ? ` CRITICAL: Include ALL of these characters in the SAME scene together: ${names.join(', ')}. They are the people in the reference images—show them together in this single illustration, not separately.`
+        : '';
+
     const useWholeBookStyle = wholeBookStyleDesc && String(wholeBookStyleDesc).trim().length > 0;
     const scene = (pageDoc.sceneDescription || '').trim();
     if (scene) {
@@ -271,7 +279,7 @@ async function buildScenePrompt(pageDoc, characterStylePrompt, childName, wholeB
             ? `The entire illustration—all characters and the environment—must be rendered in this style: ${String(wholeBookStyleDesc).trim()}.`
             : [characterStylePrompt, ...stylePrompts].filter(Boolean).join('. ');
         const noExtras = "Only depict what is described; do not add objects, props, or symbols (e.g. keys, crowns, scrolls) unless explicitly mentioned.";
-        const prompt = `${sceneForImage}. ${styleBlock}. ${noExtras} Children's book illustration style, warm inviting colors, soft lighting, suitable for ages 4-12, Christian faith theme, no text in image.`;
+        const prompt = `${sceneForImage}. ${styleBlock}.${multiCharacterInstruction} ${noExtras} Children's book illustration style, warm inviting colors, soft lighting, suitable for ages 4-12, Christian faith theme, no text in image.`;
         return { prompt, hasKidReference };
     }
     const text = pageDoc.content?.text || '';
@@ -279,12 +287,14 @@ async function buildScenePrompt(pageDoc, characterStylePrompt, childName, wholeB
     const combined = (text + ' ' + fromBoxes).trim().slice(0, 200);
     const context = substituteChildName(combined, childName) || 'A gentle storybook scene';
     const contextForImage = neutralizeChildLanguageForImagePrompt(context);
-    const childInScene = childName ? ` Include ${childName} in the scene.` : '';
+    const childInScene = names.length >= 2
+        ? ` Include ${names.join(' and ')} in the scene together.`
+        : (childName ? ` Include ${childName} in the scene.` : '');
     const stylePart = useWholeBookStyle
         ? `The entire illustration—all characters and the environment—must be rendered in this style: ${String(wholeBookStyleDesc).trim()}.`
         : characterStylePrompt;
     const noExtras = "Only depict what is described; do not add objects, props, or symbols (e.g. keys, crowns, scrolls) unless explicitly mentioned.";
-    const rawPrompt = `Scene for a children's story: ${contextForImage}. ${stylePart}.${childInScene} ${noExtras} Children's book illustration style, warm inviting colors, soft lighting, suitable for ages 4-12, Christian faith theme, no text in image.`;
+    const rawPrompt = `Scene for a children's story: ${contextForImage}. ${stylePart}.${childInScene}${multiCharacterInstruction} ${noExtras} Children's book illustration style, warm inviting colors, soft lighting, suitable for ages 4-12, Christian faith theme, no text in image.`;
     const prompt = neutralizeChildLanguageForImagePrompt(rawPrompt);
     return { prompt, hasKidReference: !!childName };
 }
@@ -416,7 +426,10 @@ async function generatePageImageWithVertexGemini(customBook, pageDoc, characterS
         console.log('MonthlyBookGenerator: Vertex image model:', VERTEX_IMAGE_MODEL);
     }
 
-    const { prompt } = await buildScenePrompt(pageDoc, characterStylePrompt, customBook.childName, wholeBookStyleDesc);
+    const characterNames = (customBook.characters && customBook.characters.length > 0)
+        ? customBook.characters.map((c) => (c && c.name && String(c.name).trim()) || '').filter(Boolean)
+        : [customBook.childName].filter(Boolean);
+    const { prompt } = await buildScenePrompt(pageDoc, characterStylePrompt, customBook.childName, wholeBookStyleDesc, characterNames);
     const referenceImages = await gatherPageReferenceImages(customBook, pageDoc);
 
     const firstLabel = referenceImages.length > 0 ? referenceImages[0].label : '';
@@ -448,12 +461,16 @@ async function generatePageImageWithVertexGemini(customBook, pageDoc, characterS
         ? ` The main character (reference Image 1) MUST be drawn in this exact art style: "${styleForMain.trim()}". Do NOT draw the main character in a classical religious, biblical, or traditional Jesus painting style. Keep the main character in the selected style (e.g. Pixar 3D, Disney, illustrated) on every page—do not shift their look toward other characters' style. `
         : ` Do NOT draw the main character in a classical religious or biblical painting style; keep them in the selected storybook/animation style (e.g. Pixar, Disney, illustrated) on every page. `;
     const heightConsistency = ` The main character must appear at the SAME height and scale on every page. If the reference photo shows an ADULT, the main character must be drawn at ADULT height (clearly taller than any children in the scene). If the reference shows a child, use child height. Do not make the main character taller, shorter, or a different size from page to page—keep their scale consistent across all scenes. `;
+    // When multiple user characters (2–3 refs): keep realistic relative heights—adult taller than child, two adults similar height; no giant/tiny disproportion
+    const multiCharacterHeight = referenceImages.length >= 2
+        ? ` Draw all characters from the reference images at realistic, consistent relative heights. If one reference shows an adult and another a child, the adult must be clearly taller. If both (or all) are adults, draw them at similar height—do not make one character disproportionately large (giant) or small (tiny). Keep natural human proportions and scale between characters. `
+        : '';
     const personConsistencyInstruction = firstRefIsPerson
         ? ` CRITICAL — character consistency: The person in reference Image 1 must look EXACTLY like the photo in every image: same face, same AGE (if adult with beard = draw adult with beard; do NOT turn them into a child), same eye color (e.g. brown eyes stay brown), same hair (including streaks or gray), same clothing, and only the accessories that appear in the reference (if the photo has no hat and no headphones, draw them with no hat and no headphones—do NOT add hats, caps, or headphones unless visible in the reference). Do NOT age them down, change eye color, remove beard, or replace their real outfit with costumes. If the reference is an adult, draw them at adult height (taller than children). Preserve identical appearance on every page.${styleLock}${heightConsistency} `
         : '';
     // When multiple reference images: they are DIFFERENT people — do not blend or mix; do not put main character's accessories on biblical characters.
     const multiPersonInstruction = referenceImages.length >= 2
-        ? ` CRITICAL — these reference images are DIFFERENT people. Do NOT blend, combine, or mix their faces or appearances. Image 1 = the main character (the kid/user): use ONLY Image 1 for that person's face, body, clothing, and accessories. Image 2 and any later images = other characters (e.g. Jesus, biblical figures): use ONLY their own reference image for each. Do NOT put the main character's clothing or accessories (e.g. hat, cap, headphones, modern clothes) on Jesus or any other character. Biblical and story characters must keep their own traditional appearance from their reference; only the person from Image 1 may have modern accessories if they appear in Image 1. Do not transfer features (beard, hair, skin, clothing, accessories) from one reference to another. `
+        ? ` CRITICAL — these reference images are DIFFERENT people. Do NOT blend, combine, or mix their faces or appearances. Image 1 = the main character (the kid/user): use ONLY Image 1 for that person's face, body, clothing, and accessories. Image 2 and any later images = other characters (e.g. Jesus, biblical figures): use ONLY their own reference image for each. Do NOT put the main character's clothing or accessories (e.g. hat, cap, headphones, modern clothes) on Jesus or any other character. Biblical and story characters must keep their own traditional appearance from their reference; only the person from Image 1 may have modern accessories if they appear in Image 1. Do not transfer features (beard, hair, skin, clothing, accessories) from one reference to another.${multiCharacterHeight} `
         : '';
     const geminiPrompt = referenceImages.length
         ? `${personConsistencyInstruction}${multiPersonInstruction}Using the provided reference images (${refDescription}), generate one image: ${prompt} Remember: Image 1 (main character) only—same age, eye color, hair, clothing and accessories as in their photo (no hat/headphones unless in photo). Other characters (Image 2+) must look only like their own reference—never give them the main character's hat, headphones, or modern clothes. Place each character in the scene as described. Children's book illustration style, warm inviting colors, soft lighting, suitable for ages 4-12, Christian faith theme, no text in image. Vertical 9:16 composition.`
@@ -879,6 +896,18 @@ async function runMonthlyBookGenerationFromBook(customMonthlyBookId, custom, sou
                 || sourceBook.defaultVoiceId
                 || sourceBook.files?.defaultVoiceId
                 || null;
+            // Copy background music from template so generated book has same audio; reader uses files.audio[defaultAudioIndex].url
+            const sourceAudio = Array.isArray(sourceBook.files?.audio) ? sourceBook.files.audio : [];
+            const audioTracks = sourceAudio
+                .filter((t) => t && t.url)
+                .map((t) => ({ url: t.url, filename: t.filename || null, uploadedAt: t.uploadedAt || new Date() }));
+            const musicIdx = Math.max(0, Math.min((custom.backgroundMusicIndex ?? sourceBook.files?.defaultAudioIndex ?? 0), Math.max(0, audioTracks.length - 1)));
+            const defaultAudioIndex = audioTracks.length > 0 ? musicIdx : 0;
+            if (sourceAudio.length > 0 && audioTracks.length === 0) {
+                console.warn('MonthlyBookGenerator: Template book has files.audio but no valid URLs; background music will be missing.');
+            } else if (audioTracks.length > 0) {
+                console.log(`MonthlyBookGenerator: [${bookIdShort}] Copying ${audioTracks.length} background music track(s), default index ${defaultAudioIndex}`);
+            }
             book = await Book.create({
                 title: bookTitle,
                 author: sourceBook.author || 'GodlyKids',
@@ -890,9 +919,11 @@ async function runMonthlyBookGenerationFromBook(customMonthlyBookId, custom, sou
                     coverImage: coverUrl,
                     images: [],
                     videos: [],
-                    audio: [],
+                    audio: audioTracks,
+                    defaultAudioIndex,
                 },
-                showCharacterOverlay: sourceBook.showCharacterOverlay || false,
+                // Create Your Story: characters are already in the generated image; do not overlay a second character/photo
+                showCharacterOverlay: false,
                 defaultVoiceId: narratorVoiceId,
                 defaultNarratorVoiceId: narratorVoiceId,
             });

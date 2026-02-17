@@ -446,13 +446,24 @@ async function generatePageImageWithVertexGemini(customBook, pageDoc, characterS
     const { baseUrl, location } = getVertexImageEndpoint(pageIndex, attemptOffset || 0);
     console.log('MonthlyBookGenerator: Page', pageNumber, 'prompt:', promptPreview, 'location:', location + (attemptOffset ? ` (retry ${attemptOffset})` : ''));
 
+    // When 2–3 refs are all user characters (kids), each must keep ONLY their own appearance—no swapping accessories.
+    const isUserRef = (label) => /^(the child|child|character 1|character 2|character 3)$/i.test(String(label || '').trim());
+    const allRefsAreUserCharacters = referenceImages.length >= 2 && referenceImages.every((r) => isUserRef(r.label));
+    if (allRefsAreUserCharacters) {
+        console.log('MonthlyBookGenerator: Page', pageNumber, '— multiple user characters detected; enforcing per-person accessories (no hat/headphones swap).');
+    }
+
     // Describe reference images so the model does not assume "child" — use age-neutral wording for the main character.
     const refDescription = referenceImages.length
         ? referenceImages.map((r, i) => {
+            const imgNum = i + 1;
+            if (allRefsAreUserCharacters) {
+                return `Image ${imgNum}: ${r.label} — match this person ONLY from this reference photo. Draw only the face, hair, clothing, and accessories that are visible in THIS image. Do not add hat, cap, headphones, or glasses unless they appear in this photo. Do NOT give this person any accessory (hat, headphones, glasses, etc.) that appears on a different reference image—each person keeps only what is in their own photo.`;
+            }
             const isFirstPerson = i === 0 && (r.label === 'the child' || r.label === 'child' || r.label === 'character 1');
             return isFirstPerson
-                ? `Image ${i + 1}: the main character (match this person's exact age and appearance from the photo—only what is visible in the photo; do not add hat, cap, or headphones if not in the photo; if adult with beard depict adult, if child depict child; do not age down or change their features)`
-                : `Image ${i + 1}: ${r.label} (this is a different character—draw them ONLY from this reference; do not give them the main character's hat, headphones, or modern accessories)`;
+                ? `Image ${imgNum}: the main character (match this person's exact age and appearance from the photo—only what is visible in the photo; do not add hat, cap, or headphones if not in the photo; if adult with beard depict adult, if child depict child; do not age down or change their features)`
+                : `Image ${imgNum}: ${r.label} (this is a different character—draw them ONLY from this reference; do not give them the main character's hat, headphones, or modern accessories)`;
         }).join('. ')
         : '';
     const firstRefIsPerson = referenceImages.length > 0 && (referenceImages[0].label === 'the child' || referenceImages[0].label === 'child' || referenceImages[0].label === 'character 1');
@@ -469,12 +480,16 @@ async function generatePageImageWithVertexGemini(customBook, pageDoc, characterS
     const personConsistencyInstruction = firstRefIsPerson
         ? ` CRITICAL — character consistency: The person in reference Image 1 must look EXACTLY like the photo in every image: same face, same AGE (if adult with beard = draw adult with beard; do NOT turn them into a child), same eye color (e.g. brown eyes stay brown), same hair (including streaks or gray), same clothing, and only the accessories that appear in the reference (if the photo has no hat and no headphones, draw them with no hat and no headphones—do NOT add hats, caps, or headphones unless visible in the reference). Do NOT age them down, change eye color, remove beard, or replace their real outfit with costumes. If the reference is an adult, draw them at adult height (taller than children). Preserve identical appearance on every page.${styleLock}${heightConsistency} `
         : '';
-    // When multiple reference images: they are DIFFERENT people — do not blend or mix; do not put main character's accessories on biblical characters.
+    // When multiple reference images: they are DIFFERENT people — do not blend or mix; do not transfer accessories between them.
     const multiPersonInstruction = referenceImages.length >= 2
-        ? ` CRITICAL — these reference images are DIFFERENT people. Do NOT blend, combine, or mix their faces or appearances. Image 1 = the main character (the kid/user): use ONLY Image 1 for that person's face, body, clothing, and accessories. Image 2 and any later images = other characters (e.g. Jesus, biblical figures): use ONLY their own reference image for each. Do NOT put the main character's clothing or accessories (e.g. hat, cap, headphones, modern clothes) on Jesus or any other character. Biblical and story characters must keep their own traditional appearance from their reference; only the person from Image 1 may have modern accessories if they appear in Image 1. Do not transfer features (beard, hair, skin, clothing, accessories) from one reference to another.${multiCharacterHeight} `
+        ? allRefsAreUserCharacters
+            ? ` CRITICAL — these reference images are DIFFERENT people (e.g. two or three children). Do NOT blend, combine, or mix their faces or appearances. Each person must look ONLY like their own reference: Image 1 = first person—use ONLY Image 1 for their face, hair, clothing, and accessories (if they have no hat in Image 1, do not draw a hat on them; if they have headphones in Image 1, only that person has headphones). Image 2 = second person—use ONLY Image 2 for their appearance; do NOT give them the first person's hat, headphones, glasses, or any accessory from Image 1. Image 3 (if present) = third person—use ONLY Image 3; do NOT give them accessories from Image 1 or Image 2. Never transfer, swap, or copy accessories (hat, cap, headphones, glasses, jewelry) or clothing from one person to another. Each person keeps exactly what is visible in their own reference photo.${multiCharacterHeight} `
+            : ` CRITICAL — these reference images are DIFFERENT people. Do NOT blend, combine, or mix their faces or appearances. Image 1 = the main character (the kid/user): use ONLY Image 1 for that person's face, body, clothing, and accessories. Image 2 and any later images = other characters (e.g. Jesus, biblical figures): use ONLY their own reference image for each. Do NOT put the main character's clothing or accessories (e.g. hat, cap, headphones, modern clothes) on Jesus or any other character. Biblical and story characters must keep their own traditional appearance from their reference; only the person from Image 1 may have modern accessories if they appear in Image 1. Do not transfer features (beard, hair, skin, clothing, accessories) from one reference to another.${multiCharacterHeight} `
         : '';
     const geminiPrompt = referenceImages.length
-        ? `${personConsistencyInstruction}${multiPersonInstruction}Using the provided reference images (${refDescription}), generate one image: ${prompt} Remember: Image 1 (main character) only—same age, eye color, hair, clothing and accessories as in their photo (no hat/headphones unless in photo). Other characters (Image 2+) must look only like their own reference—never give them the main character's hat, headphones, or modern clothes. Place each character in the scene as described. Children's book illustration style, warm inviting colors, soft lighting, suitable for ages 4-12, Christian faith theme, no text in image. Vertical 9:16 composition.`
+        ? allRefsAreUserCharacters
+            ? `${personConsistencyInstruction}${multiPersonInstruction}Using the provided reference images (${refDescription}), generate one image: ${prompt} Remember: each person (Image 1, Image 2, Image 3) must match ONLY their own reference—same face, hair, clothing, and accessories as in that photo. Do not add hat or headphones to anyone unless visible in their own reference. Never put one person's accessories on another person. Place each character in the scene as described. Children's book illustration style, warm inviting colors, soft lighting, suitable for ages 4-12, Christian faith theme, no text in image. Vertical 9:16 composition.`
+            : `${personConsistencyInstruction}${multiPersonInstruction}Using the provided reference images (${refDescription}), generate one image: ${prompt} Remember: Image 1 (main character) only—same age, eye color, hair, clothing and accessories as in their photo (no hat/headphones unless in photo). Other characters (Image 2+) must look only like their own reference—never give them the main character's hat, headphones, or modern clothes. Place each character in the scene as described. Children's book illustration style, warm inviting colors, soft lighting, suitable for ages 4-12, Christian faith theme, no text in image. Vertical 9:16 composition.`
         : `Generate one image: ${prompt} Children's book illustration style, warm inviting colors, soft lighting, suitable for ages 4-12, Christian faith theme, no text in image. Vertical 9:16 composition.`;
 
     const parts = [{ text: geminiPrompt }];

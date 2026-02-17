@@ -102,6 +102,15 @@ const onboardingEventSchema = new mongoose.Schema({
             
             // First lesson paywall
             'first_lesson_paywall_shown', // Paywall shown after first lesson
+
+            // Dive into the Bible / Create Your Story (book building) funnel
+            'book_building_started',
+            'book_building_step_1_complete',
+            'book_building_step_2_complete',
+            'book_building_step_3_complete',
+            'book_building_step_4_complete',
+            'book_building_book_created',
+            'book_building_book_completed',
         ],
     },
     
@@ -109,6 +118,7 @@ const onboardingEventSchema = new mongoose.Schema({
     metadata: {
         step: Number,
         planType: String,           // 'annual' | 'monthly' | 'lifetime'
+        source: String,             // 'create-your-story' when paywall/convert from Dive into the Bible
         kidsCount: Number,
         voiceSelected: String,
         priorities: [String],       // Discipleship goals selected

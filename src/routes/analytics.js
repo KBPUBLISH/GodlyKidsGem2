@@ -890,6 +890,130 @@ router.get('/onboarding', async (req, res) => {
 });
 
 /**
+ * GET /api/analytics/onboarding/book-building
+ * Dive into the Bible / Create Your Story funnel and conversion analytics
+ * Query params: days (default 30)
+ */
+router.get('/onboarding/book-building', async (req, res) => {
+    try {
+        const days = parseInt(req.query.days) || 30;
+        const startDate = new Date();
+        startDate.setDate(startDate.getDate() - days);
+
+        const events = await OnboardingEvent.find({
+            createdAt: { $gte: startDate },
+            $or: [
+                { event: /^book_building_/ },
+                { event: { $in: ['paywall_shown', 'paywall_trial_clicked', 'paywall_parent_gate_shown', 'paywall_parent_gate_passed', 'paywall_purchase_started', 'paywall_purchase_error', 'paywall_purchase_cancelled', 'paywall_closed', 'subscribed', 'subscription_started', 'trial_started'] }, 'metadata.source': 'create-your-story' },
+            ],
+        }).lean();
+
+        const eventCounts = {};
+        const eventsByDay = {};
+        events.forEach((e) => {
+            eventCounts[e.event] = (eventCounts[e.event] || 0) + 1;
+            const day = e.createdAt.toISOString().split('T')[0];
+            if (!eventsByDay[day]) eventsByDay[day] = {};
+            eventsByDay[day][e.event] = (eventsByDay[day][e.event] || 0) + 1;
+        });
+
+        // Funnel: book building steps
+        const started = eventCounts['book_building_started'] || 0;
+        const step1 = eventCounts['book_building_step_1_complete'] || 0;
+        const step2 = eventCounts['book_building_step_2_complete'] || 0;
+        const step3 = eventCounts['book_building_step_3_complete'] || 0;
+        const step4 = eventCounts['book_building_step_4_complete'] || 0;
+        const bookCreated = eventCounts['book_building_book_created'] || 0;
+        const bookCompleted = eventCounts['book_building_book_completed'] || 0;
+
+        const funnel = [
+            { step: 'Started', stepKey: 'started', count: started, rate: 100 },
+            { step: 'Step 1 (Name & story)', stepKey: 'step_1', count: step1, rate: started > 0 ? Math.round((step1 / started) * 100) : 0 },
+            { step: 'Step 2 (Character)', stepKey: 'step_2', count: step2, rate: started > 0 ? Math.round((step2 / started) * 100) : 0 },
+            { step: 'Step 3 (Voice & music)', stepKey: 'step_3', count: step3, rate: started > 0 ? Math.round((step3 / started) * 100) : 0 },
+            { step: 'Step 4 (Create clicked)', stepKey: 'step_4', count: step4, rate: started > 0 ? Math.round((step4 / started) * 100) : 0 },
+            { step: 'Book created (API)', stepKey: 'book_created', count: bookCreated, rate: started > 0 ? Math.round((bookCreated / started) * 100) : 0 },
+            { step: 'Book completed', stepKey: 'book_completed', count: bookCompleted, rate: started > 0 ? Math.round((bookCompleted / started) * 100) : 0 },
+        ];
+
+        const dropoffs = [];
+        for (let i = 1; i < funnel.length; i++) {
+            const prev = funnel[i - 1];
+            const curr = funnel[i];
+            const dropped = prev.count - curr.count;
+            if (dropped > 0 && prev.count > 0) {
+                dropoffs.push({
+                    from: prev.step,
+                    to: curr.step,
+                    dropped,
+                    dropRate: Math.round((dropped / prev.count) * 100),
+                });
+            }
+        }
+        dropoffs.sort((a, b) => b.dropRate - a.dropRate);
+
+        // Conversion: from Create Your Story paywall
+        const paywallShown = events.filter((e) => e.event === 'paywall_shown' && e.metadata?.source === 'create-your-story').length;
+        const trialClicked = events.filter((e) => e.event === 'paywall_trial_clicked' && e.metadata?.source === 'create-your-story').length;
+        const trialStarted = events.filter((e) => e.event === 'trial_started' && e.metadata?.source === 'create-your-story').length;
+        const subscribed = events.filter((e) => e.event === 'subscribed' && e.metadata?.source === 'create-your-story').length;
+        const subscriptionStarted = events.filter((e) => e.event === 'subscription_started' && e.metadata?.source === 'create-your-story').length;
+        const totalSubscribed = trialStarted + subscribed + subscriptionStarted;
+
+        const byDay = {};
+        events.forEach((e) => {
+            const day = e.createdAt.toISOString().split('T')[0];
+            if (!byDay[day]) byDay[day] = { started: 0, step1: 0, step4: 0, bookCreated: 0, bookCompleted: 0, paywallShown: 0, trialClicked: 0, subscribed: 0 };
+            if (e.event === 'book_building_started') byDay[day].started++;
+            if (e.event === 'book_building_step_1_complete') byDay[day].step1++;
+            if (e.event === 'book_building_step_4_complete') byDay[day].step4++;
+            if (e.event === 'book_building_book_created') byDay[day].bookCreated++;
+            if (e.event === 'book_building_book_completed') byDay[day].bookCompleted++;
+            if (e.event === 'paywall_shown' && e.metadata?.source === 'create-your-story') byDay[day].paywallShown++;
+            if (e.event === 'paywall_trial_clicked' && e.metadata?.source === 'create-your-story') byDay[day].trialClicked++;
+            if (['subscribed', 'trial_started', 'subscription_started'].includes(e.event) && e.metadata?.source === 'create-your-story') byDay[day].subscribed++;
+        });
+        const dailyTrends = [];
+        const numDays = Math.min(days, 14);
+        for (let i = numDays - 1; i >= 0; i--) {
+            const date = new Date();
+            date.setDate(date.getDate() - i);
+            const dayStr = date.toISOString().split('T')[0];
+            const d = byDay[dayStr] || { started: 0, step1: 0, step4: 0, bookCreated: 0, bookCompleted: 0, paywallShown: 0, trialClicked: 0, subscribed: 0 };
+            dailyTrends.push({ date: dayStr, ...d });
+        }
+
+        res.json({
+            success: true,
+            period: { days, startDate: startDate.toISOString() },
+            summary: {
+                totalStarted: started,
+                totalBookCompleted: bookCompleted,
+                totalBookCreated: bookCreated,
+                completionRate: started > 0 ? Math.round((bookCompleted / started) * 100) : 0,
+                paywallShownFromFeature: paywallShown,
+                trialClickedFromFeature: trialClicked,
+                subscribedFromFeature: totalSubscribed,
+            },
+            funnel,
+            dropoffs: dropoffs.slice(0, 6),
+            conversion: {
+                paywallShown,
+                trialClicked,
+                trialStarted,
+                subscribed,
+                subscriptionStarted,
+                totalSubscribed,
+            },
+            dailyTrends,
+        });
+    } catch (error) {
+        console.error('Book building analytics error:', error);
+        res.status(500).json({ success: false, message: 'Failed to fetch book building analytics', error: error.message });
+    }
+});
+
+/**
  * POST /api/analytics/admin/add-coins
  * Add coins to a user by email (admin only)
  */

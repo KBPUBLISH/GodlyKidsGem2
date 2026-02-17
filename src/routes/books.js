@@ -358,7 +358,7 @@ router.get('/:id', async (req, res) => {
                 bookId: book._id,
                 shareToken,
                 status: 'completed',
-            }).select('_id childName childCharacterImageUrl bookStyleId characters').lean();
+            }).select('_id childName childCharacterImageUrl childSelfieUrl bookStyleId characters').lean();
             if (customByShare) {
                 const bookObj = book.toObject();
                 if (bookObj.files && bookObj.files.coverImage) {
@@ -370,6 +370,7 @@ router.get('/:id', async (req, res) => {
                 bookObj.isUserCreated = true;
                 bookObj.createdForChildName = customByShare.childName || null;
                 bookObj.createdForAvatarUrl = customByShare.childCharacterImageUrl || null;
+                bookObj.createdForSelfieUrl = customByShare.childSelfieUrl || null;
                 bookObj.createdWithStyleId = (customByShare.bookStyleId && String(customByShare.bookStyleId).trim()) || null;
                 if (customByShare.characters && customByShare.characters.length > 0) {
                     bookObj.createdForCharacters = customByShare.characters.map(c => ({
@@ -411,11 +412,12 @@ router.get('/:id', async (req, res) => {
                 bookId: book._id,
                 userId: resolvedUserId,
                 status: 'completed',
-            }).select('_id childName childCharacterImageUrl bookStyleId characters').lean();
+            }).select('_id childName childCharacterImageUrl childSelfieUrl bookStyleId characters').lean();
             if (custom) {
                 bookObj.isUserCreated = true;
                 bookObj.createdForChildName = custom.childName || null;
                 bookObj.createdForAvatarUrl = custom.childCharacterImageUrl || null;
+                bookObj.createdForSelfieUrl = custom.childSelfieUrl || null;
                 bookObj.createdWithStyleId = (custom.bookStyleId && String(custom.bookStyleId).trim()) || null;
                 if (custom.characters && custom.characters.length > 0) {
                     bookObj.createdForCharacters = custom.characters.map(c => ({

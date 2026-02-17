@@ -8,6 +8,7 @@ const Book = require('../models/Book');
 const Page = require('../models/Page');
 const SavedCharacter = require('../models/SavedCharacter');
 const AppUser = require('../models/AppUser');
+const { bucket } = require('../config/storage');
 
 /**
  * Normalize userId to a MongoDB ObjectId for CustomMonthlyBook (required by schema).
@@ -25,6 +26,27 @@ async function resolveUserId(userId) {
         ],
     }).select('_id').lean();
     return user ? user._id : null;
+}
+
+/** Upload selfie base64 to GCS; returns public URL or null on failure. */
+async function uploadSelfieToGCS(selfieBase64, customBookId) {
+    if (!bucket || !selfieBase64) return null;
+    try {
+        const base64Data = selfieBase64.replace(/^data:image\/\w+;base64,/, '');
+        const buffer = Buffer.from(base64Data, 'base64');
+        const filename = `monthly-book/selfies/${customBookId}_selfie.jpg`;
+        const file = bucket.file(filename);
+        await file.save(buffer, {
+            metadata: {
+                contentType: 'image/jpeg',
+                cacheControl: 'public, max-age=31536000',
+            },
+        });
+        return `https://storage.googleapis.com/${bucket.name}/${filename}`;
+    } catch (err) {
+        console.warn('Failed to upload selfie to GCS:', err.message);
+        return null;
+    }
 }
 
 /**
@@ -143,7 +165,7 @@ router.post('/create', async (req, res) => {
  */
 router.post('/create-from-book', async (req, res) => {
     try {
-        const { userId: rawUserId, kidId, bookId: sourceBookId, childName, childCharacterImageUrl, characterStyleId, bookStyleId, hasTrialOrPaid, narratorVoiceId, backgroundMusicIndex, characters: charactersBody } = req.body;
+        const { userId: rawUserId, kidId, bookId: sourceBookId, childName, childCharacterImageUrl, characterStyleId, bookStyleId, hasTrialOrPaid, narratorVoiceId, backgroundMusicIndex, characters: charactersBody, childSelfieBase64 } = req.body;
 
         const useCharacters = Array.isArray(charactersBody) && charactersBody.length >= 1 && charactersBody.length <= 3;
         let primaryName, primaryImageUrl, charactersToStore;
@@ -247,6 +269,13 @@ router.post('/create-from-book', async (req, res) => {
             createPayload.characters = charactersToStore;
         }
         const customBook = await CustomMonthlyBook.create(createPayload);
+
+        if (childSelfieBase64 && typeof childSelfieBase64 === 'string') {
+            const selfieUrl = await uploadSelfieToGCS(childSelfieBase64, customBook._id.toString());
+            if (selfieUrl) {
+                await CustomMonthlyBook.findByIdAndUpdate(customBook._id, { childSelfieUrl: selfieUrl });
+            }
+        }
 
         const { runMonthlyBookGeneration } = require('../jobs/monthlyBookGenerator');
         runMonthlyBookGeneration(customBook._id).catch((err) => {

@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
+import { Link } from 'react-router-dom';
 import { 
     Users, UserPlus, Coins, Baby, Calendar, TrendingUp, 
     Activity, Smartphone, Globe, Monitor, RefreshCw,
     ChevronDown, ChevronUp, Search, ArrowUpRight, ArrowDownRight,
-    BookOpen, Clock, Headphones, Music, Gamepad2, FileText, Mail
+    BookOpen, Clock, Headphones, Music, Gamepad2, FileText, Mail, BookMarked
 } from 'lucide-react';
 
 interface UserData {
@@ -358,6 +359,33 @@ const Dashboard: React.FC = () => {
                     </span>
                 </div>
             )}
+
+            {/* Kids Monthly quick access - Create Your Story templates & character design */}
+            <div className="mb-6 p-4 bg-indigo-50 border border-indigo-100 rounded-xl">
+                <h3 className="text-sm font-semibold text-indigo-800 mb-2 flex items-center gap-2">
+                    <BookMarked className="w-4 h-4" />
+                    Kids Monthly (Create Your Story)
+                </h3>
+                <div className="flex flex-wrap gap-3">
+                    <Link
+                        to="/monthly-books"
+                        className="inline-flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg text-sm font-medium hover:bg-indigo-700"
+                    >
+                        <BookOpen className="w-4 h-4" />
+                        Kids Monthly Book Character Design
+                    </Link>
+                    <Link
+                        to="/books"
+                        className="inline-flex items-center gap-2 px-4 py-2 bg-white border border-indigo-300 text-indigo-700 rounded-lg text-sm font-medium hover:bg-indigo-50"
+                    >
+                        <BookOpen className="w-4 h-4" />
+                        Books → set type &quot;Kids Monthly Book&quot; for templates
+                    </Link>
+                </div>
+                <p className="text-xs text-indigo-600/80 mt-2">
+                    Character Design = Noah, David, etc. Books = create a book, set Book type to &quot;Kids Monthly Book&quot;, publish → it appears in the app&apos;s Create Your Story.
+                </p>
+            </div>
 
             {/* Summary Cards - Row 1: Users & Engagement */}
             <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">

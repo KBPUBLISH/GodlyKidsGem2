@@ -194,10 +194,12 @@ const NotificationTemplates = {
 };
 
 /**
- * Send notification for new book
+ * Send notification for new book.
+ * Kids Monthly books are Create Your Story templates only — do not broadcast to the network.
  */
 const notifyNewBook = async (book) => {
     if (book.status !== 'published') return null;
+    if (book.bookType === 'kids_monthly') return null; // Only show in Create Your Story, no global notification
     const template = NotificationTemplates.newBook(book);
     return sendNotification(template);
 };

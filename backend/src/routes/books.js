@@ -417,7 +417,7 @@ router.post('/', async (req, res) => {
         const newBook = await book.save();
         console.log('Book created successfully:', newBook._id);
         
-        // Send notification if book is published
+        // Send notification if book is published (Kids Monthly books are excluded — Create Your Story only)
         if (newBook.status === 'published') {
             notifyNewBook(newBook).catch(err => console.error('Notification error:', err));
         }
@@ -541,7 +541,7 @@ router.put('/:id', async (req, res) => {
         const updatedBook = await book.save();
         console.log('Book after save - files.coverImage:', updatedBook.files?.coverImage);
         
-        // Send notification if book was just published (status changed to published)
+        // Send notification if book was just published (Kids Monthly excluded — Create Your Story only)
         if (!wasPublished && updatedBook.status === 'published') {
             notifyNewBook(updatedBook).catch(err => console.error('Notification error:', err));
         }

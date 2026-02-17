@@ -10,6 +10,7 @@ interface Book {
     author: string;
     status: string;
     coverImage?: string;
+    bookType?: string;
 }
 
 type TabView = 'list' | 'archived' | 'kidsMonthly' | 'analytics';
@@ -252,10 +253,17 @@ const Books: React.FC = () => {
                                         )}
                                         <h2 className="text-xl font-semibold text-gray-800">{book.title}</h2>
                                         <p className="text-gray-600">{book.author}</p>
-                                        <span className={`inline-block mt-4 px-3 py-1 rounded-full text-sm ${book.status === 'published' ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'
-                                            }`}>
-                                            {book.status}
-                                        </span>
+                                        <div className="flex flex-wrap items-center gap-2 mt-4">
+                                            <span className={`inline-block px-3 py-1 rounded-full text-sm ${book.status === 'published' ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'
+                                                }`}>
+                                                {book.status}
+                                            </span>
+                                            {book.bookType === 'kids_monthly' && (
+                                                <span className="inline-block px-3 py-1 rounded-full text-sm bg-indigo-100 text-indigo-800 font-medium">
+                                                    Kids Monthly
+                                                </span>
+                                            )}
+                                        </div>
                                     </div>
                                     <div className="mt-4 flex space-x-2 flex-wrap gap-2">
                                         <Link

@@ -149,7 +149,7 @@ const bookSchema = new mongoose.Schema({
                 default: [],
             },
             
-            // Audio files collection (for book-level audio)
+            // Audio files collection (for book-level background music, max 3 tracks)
             audio: {
                 type: [{
                     url: { type: String }, // URL to GCS: books/{bookId}/audio/filename
@@ -158,12 +158,20 @@ const bookSchema = new mongoose.Schema({
                 }],
                 default: [],
             },
+            // Index of which audio track is the main/default (0, 1, or 2). Used when reading; Create Your Story users can override.
+            defaultAudioIndex: {
+                type: Number,
+                default: 0,
+                min: 0,
+                max: 2,
+            },
         },
         default: () => ({
             coverImage: null,
             images: [],
             videos: [],
             audio: [],
+            defaultAudioIndex: 0,
         }),
     },
     

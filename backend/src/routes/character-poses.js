@@ -92,18 +92,18 @@ const STYLE_BASES = {
         displayName: 'Storybook',
         emoji: '📚'
     },
-    anime: {
-        base: 'Anime style character, large expressive eyes, clean lines, vibrant colors, dynamic and expressive',
+    disney: {
+        base: 'Disney 2D animated style character, flat or cel-shaded, not 3D—classic hand-drawn animation look, big expressive eyes, smooth lines',
         suffix: 'vibrant colors, transparent background, PNG',
-        negativePrompt: 'realistic, photograph, scary, dark, villainous, flat, background',
-        displayName: 'Anime',
+        negativePrompt: 'realistic, photograph, 3D render, Pixar style, scary, dark, villainous, background',
+        displayName: 'Disney 2D',
         emoji: '✨'
     },
-    disney: {
-        base: 'Anime style character, large expressive eyes, clean lines, vibrant colors, dynamic and expressive',
+    anime: {
+        base: 'Disney 2D animated style character, flat or cel-shaded, not 3D—classic hand-drawn animation look, big expressive eyes, smooth lines',
         suffix: 'vibrant colors, transparent background, PNG',
-        negativePrompt: 'realistic, photograph, scary, dark, villainous, flat, background',
-        displayName: 'Anime',
+        negativePrompt: 'realistic, photograph, 3D render, Pixar style, scary, dark, villainous, background',
+        displayName: 'Disney 2D',
         emoji: '✨'
     }
 };
@@ -288,7 +288,7 @@ router.get('/definitions', (req, res) => {
  * 
  * Body:
  * - selfieBase64: Base64 encoded selfie image
- * - styleId: Character style (minecraft, lego, cartoon, illustrated, anime, pixar; disney supported as alias)
+ * - styleId: Character style (minecraft, lego, cartoon, illustrated, disney, pixar; anime supported as alias for Disney 2D)
  * - kidId: Child's profile ID
  * - kidName: Child's name (for logging)
  */

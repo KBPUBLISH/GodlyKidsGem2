@@ -478,8 +478,8 @@ async function generatePersonalizedSceneImage(storyId, childName, selfieBase64, 
             lego: 'LEGO minifigure style, yellow skin, plastic look, brick aesthetic',
             cartoon: 'Cartoon animated style, big expressive eyes, Disney-like',
             illustrated: 'Children\'s book illustration style, soft watercolor, storybook',
-            anime: 'Anime style, large expressive eyes, clean lines, vibrant colors, expressive',
-            disney: 'Anime style, large expressive eyes, clean lines, vibrant colors, expressive'
+            disney: 'Disney 2D animated style, flat or cel-shaded, not 3D—classic hand-drawn animation, big expressive eyes',
+            anime: 'Disney 2D animated style, flat or cel-shaded, not 3D—classic hand-drawn animation, big expressive eyes'
         };
         
         const styleDesc = styleDescriptions[styleId] || styleDescriptions.illustrated;

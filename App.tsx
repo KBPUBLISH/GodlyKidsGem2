@@ -1255,11 +1255,12 @@ const App: React.FC = () => {
   }, [isDespia]);
 
   // Link user ID to DeSpia native OneSignal SDK on app boot (if already logged in)
+  // Use getUserIdForBackend() so it matches the id we send when creating a book (email/deviceId);
+  // backend sends "your story is ready" to this same id so app users get the notification.
   useEffect(() => {
     if (!isDespia) return;
     
-    const user = authService.getUser();
-    const userId = user?._id || user?.id;
+    const userId = authService.getUserIdForBackend();
     if (userId) {
       console.log('📱 Linking existing user to native OneSignal:', userId);
       DespiaService.setOneSignalUserId(userId);
@@ -1289,6 +1290,8 @@ const App: React.FC = () => {
       try {
         try { (window as any).__GK_TRACE__?.('notifications_init_start'); } catch {}
         await NotificationService.init();
+        const webUserId = authService.getUserIdForBackend();
+        if (webUserId) await NotificationService.setExternalUserId(webUserId);
         try { (window as any).__GK_TRACE__?.('notifications_init_done'); } catch {}
       } catch (e) {
         try { (window as any).__GK_TRACE__?.('notifications_init_error', { message: (e as any)?.message || String(e) }); } catch {}

@@ -3,6 +3,7 @@ import { Book, FeaturedEpisode, AmazonBook } from '../types';
 import { isValidBookId } from '../utils/bookUtils';
 import { authService } from './authService';
 import { DespiaService } from './despiaService';
+import NotificationService from './notificationService';
 
 // ============================================
 // LocalStorage-backed caching to survive WebView restarts
@@ -863,10 +864,12 @@ export const ApiService = {
           authService.setUser(data.user);
           console.log('✅ User data stored:', data.user);
           
-          // Link user ID to DeSpia native OneSignal SDK
-          const userId = data.user._id || data.user.id;
+          // Link same ID to OneSignal that we use for create-your-story (email/deviceId)
+          // so "your story is ready" notifications reach the app and web.
+          const userId = authService.getUserIdForBackend();
           if (userId) {
             DespiaService.setOneSignalUserId(userId);
+            await NotificationService.setExternalUserId(userId);
           }
         }
 
@@ -1169,7 +1172,7 @@ export const ApiService = {
       const data = await response.json();
       if (!data.success || !data.shareToken) return null;
       const origin = typeof window !== 'undefined' ? window.location.origin : '';
-      const path = `/read/${bookId}?share=${encodeURIComponent(data.shareToken)}`;
+      const path = `/book/${bookId}?share=${encodeURIComponent(data.shareToken)}`;
       const shareUrl = origin ? `${origin}${path}` : path;
       return { shareUrl, shareToken: data.shareToken };
     } catch (error) {

@@ -1,6 +1,6 @@
 
 import React, { useEffect, useState, useMemo } from 'react';
-import { useParams, useNavigate, useLocation } from 'react-router-dom';
+import { useParams, useNavigate, useLocation, useSearchParams } from 'react-router-dom';
 import { Heart, BookOpen, Crown, PlayCircle, Headphones, Disc, Lock, Globe, Bookmark, Plus, ArrowLeft, Share2 } from 'lucide-react';
 import { useBooks } from '../context/BooksContext';
 import { useUser } from '../context/UserContext';
@@ -51,7 +51,9 @@ const AUDIO_CHAPTERS = [
 const BookDetailPage: React.FC = () => {
   const { id: rawId } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  
+  const [searchParams] = useSearchParams();
+  const shareToken = searchParams.get('share') || undefined;
+
   // Clean the ID - when shared, extra text might be appended after the ID
   // MongoDB ObjectIds are 24 hex characters
   const id = useMemo(() => {
@@ -147,9 +149,9 @@ const BookDetailPage: React.FC = () => {
           const allBooks = await ApiService.getBooks();
           let found = allBooks.find(b => b.id === id);
           if (!found) {
-            // Not in catalog (e.g. newly created custom/monthly book) — fetch by ID with userId so backend can set isUserCreated
+            // Not in catalog (e.g. newly created custom/monthly book) — fetch by ID with userId so backend can set isUserCreated; shareToken allows shared-link access
             const userId = authService.getUserIdForBackend();
-            found = await ApiService.getBookById(id, userId);
+            found = await ApiService.getBookById(id, userId, shareToken || null);
             if (found) console.log('✅ Found book by ID (e.g. Create Your Story):', found.title);
           } else {
             console.log('✅ Found book from API list:', found.title);
@@ -189,7 +191,7 @@ const BookDetailPage: React.FC = () => {
     };
     
     findOrFetchBook();
-  }, [id, books, book]);
+  }, [id, books, book, shareToken]);
 
   // Load pinned coloring drawing ("fridge") for this book
   useEffect(() => {
@@ -265,7 +267,7 @@ const BookDetailPage: React.FC = () => {
 
       try {
         const userId = authService.getUserIdForBackend();
-        const fullBook = await ApiService.getBookById(id, userId);
+        const fullBook = await ApiService.getBookById(id, userId, shareToken || null);
         
         // Store members-only status for UI display (don't redirect - show locked button instead)
         const bookIsMembersOnly = (fullBook as any)?.isMembersOnly === true;
@@ -340,7 +342,7 @@ const BookDetailPage: React.FC = () => {
     };
 
     fetchBookDetails();
-  }, [id]);
+  }, [id, shareToken]);
 
   // Load read count and favorite count
   useEffect(() => {
@@ -452,7 +454,7 @@ const BookDetailPage: React.FC = () => {
       if (link?.shareUrl) {
         shareUrl = link.shareUrl;
       } else {
-        shareUrl = typeof window !== 'undefined' ? `${window.location.origin}/read/${id}` : `https://app.godlykids.com/read/${id}`;
+        shareUrl = typeof window !== 'undefined' ? `${window.location.origin}/book/${id}` : `https://app.godlykids.com/book/${id}`;
       }
     } else {
       shareUrl = typeof window !== 'undefined' ? `${window.location.origin}/book/${id}` : `https://app.godlykids.com/book/${id}`;
@@ -488,17 +490,26 @@ const BookDetailPage: React.FC = () => {
     return bookCompletionService.isBookCompleted(id);
   };
 
+  // Build reader URL so shared-link token is preserved when opening the book
+  const readUrl = (opts?: { page?: number; coloring?: string }) => {
+    const params = new URLSearchParams();
+    if (shareToken) params.set('share', shareToken);
+    if (opts?.page != null) params.set('page', String(opts.page));
+    if (opts?.coloring) params.set('coloring', opts.coloring);
+    const q = params.toString();
+    return q ? `/read/${id}?${q}` : `/read/${id}`;
+  };
+
   const handleContinue = () => {
     if (id && savedPageIndex !== null && savedPageIndex >= 0) {
       // Navigate with page number to resume from saved progress
-      // Use page number instead of continue=true for more reliable navigation
       const pageNum = savedPageIndex + 1; // Convert 0-based index to 1-based page number
       console.log(`📖 Continue reading: navigating to page ${pageNum} (savedPageIndex: ${savedPageIndex})`);
-      navigate(`/read/${id}?page=${pageNum}`);
+      navigate(readUrl({ page: pageNum }));
     } else {
       // No saved progress, just start from beginning
       console.log('📖 No saved progress, starting from beginning');
-      navigate(`/read/${id}`);
+      navigate(readUrl());
     }
   };
 
@@ -995,7 +1006,7 @@ const BookDetailPage: React.FC = () => {
                 ) : isLocked ? (
                   // Locked state - allow 3-page preview, then show paywall in reader
                   <button
-                    onClick={() => navigate(`/read/${id}`)}
+                    onClick={() => navigate(readUrl())}
                     className="flex-1 bg-gradient-to-b from-[#FFD700] to-[#FFA500] hover:from-[#FFE44D] hover:to-[#FFB733] text-[#5c2e0b] font-display font-bold text-xl py-3 rounded-2xl shadow-[0_4px_0_#B8860B] border-2 border-[#B8860B] active:translate-y-[4px] active:shadow-none transition-all text-center leading-none flex items-center justify-center gap-2"
                   >
                     <BookOpen size={20} />
@@ -1006,7 +1017,7 @@ const BookDetailPage: React.FC = () => {
                   // Normal unlocked state
                   <>
                     <button
-                      onClick={() => navigate(`/read/${id}`)}
+                      onClick={() => navigate(readUrl())}
                       className="flex-1 bg-[#FCEBB6] hover:bg-[#fff5cc] text-[#5c2e0b] font-display font-bold text-xl py-3 rounded-2xl shadow-[0_4px_0_#D4B483] border-2 border-[#D4B483] active:translate-y-[4px] active:shadow-none transition-all text-center leading-none"
                     >
                       {t('read')}
@@ -1149,7 +1160,7 @@ const BookDetailPage: React.FC = () => {
                                     analyticsService.gameOpen(game._id || `book_game_${index}`, game.title, id);
                                     setSelectedGame({ title: game.title, url: game.url });
                                   } else {
-                                    navigate(`/read/${id}`);
+                                    navigate(readUrl());
                                   }
                                 }}
                                 className={`${isUnlocked
@@ -1302,7 +1313,7 @@ const BookDetailPage: React.FC = () => {
                   onClick={() => {
                     if (!id) return;
                     // Allow access - the book reader handles 3-page preview limit
-                    navigate(`/read/${id}?coloring=${encodeURIComponent(pinnedDrawing.pageRef)}`);
+                    navigate(readUrl({ coloring: pinnedDrawing.pageRef }));
                   }}
                   className="bg-[#6da34d] hover:bg-[#7db85b] text-white text-sm font-bold py-2 px-5 rounded-full shadow-[0_3px_0_#3d5c2b] active:translate-y-[3px] active:shadow-none transition-all border border-[#ffffff20] flex items-center gap-2"
                 >
@@ -1370,7 +1381,7 @@ const BookDetailPage: React.FC = () => {
                     setShowDrawingModal(false);
                     if (!id) return;
                     // Allow access - the book reader handles 3-page preview limit
-                    navigate(`/read/${id}?coloring=${encodeURIComponent(pinnedDrawing.pageRef)}`);
+                    navigate(readUrl({ coloring: pinnedDrawing.pageRef }));
                   }}
                   className="mt-4 w-full bg-[#6da34d] hover:bg-[#7db85b] text-white font-bold py-3 rounded-xl shadow-[0_4px_0_#3d5c2b] active:translate-y-[4px] active:shadow-none transition-all flex items-center justify-center gap-2"
                 >

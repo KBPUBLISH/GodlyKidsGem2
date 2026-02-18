@@ -11,6 +11,11 @@ const customMonthlyBookSchema = new mongoose.Schema({
         required: true,
         index: true,
     },
+    // Raw identifier from client (email or deviceId) — used for push so OneSignal external_user_id matches
+    rawUserId: {
+        type: String,
+        required: false,
+    },
     kidId: {
         type: String,
         required: true,

@@ -105,9 +105,9 @@ router.post('/create', async (req, res) => {
             });
         }
 
-        const hasTrialOrPaidBool = Boolean(hasTrialOrPaid);
-        const appUser = await AppUser.findById(userId).select('email').lean();
+        const appUser = await AppUser.findById(userId).select('email subscriptionStatus').lean();
         const userEmail = (appUser && appUser.email) ? String(appUser.email).trim().toLowerCase() : '';
+        const hasTrialOrPaidBool = isSubscribedForCredits(appUser, hasTrialOrPaid);
         const limit = userEmail === MONTHLY_CREDITS_SPECIAL_EMAIL
             ? MONTHLY_CREDITS_SPECIAL_LIMIT
             : (hasTrialOrPaidBool ? MONTHLY_CREDITS_SUBSCRIBED : MONTHLY_CREDITS_DEFAULT);
@@ -211,10 +211,10 @@ router.post('/create-from-book', async (req, res) => {
             });
         }
 
-        // Monthly credits: special email = 100, subscribed = 1, else 0
-        const appUser = await AppUser.findById(userId).select('email').lean();
+        // Monthly credits: special email = 100, subscribed = 1, else 0. Backend verifies subscription from AppUser.
+        const appUser = await AppUser.findById(userId).select('email subscriptionStatus').lean();
         const userEmail = (appUser && appUser.email) ? String(appUser.email).trim().toLowerCase() : '';
-        const hasTrialOrPaidBool = Boolean(hasTrialOrPaid);
+        const hasTrialOrPaidBool = isSubscribedForCredits(appUser, hasTrialOrPaid);
         const limit = userEmail === MONTHLY_CREDITS_SPECIAL_EMAIL
             ? MONTHLY_CREDITS_SPECIAL_LIMIT
             : (hasTrialOrPaidBool ? MONTHLY_CREDITS_SUBSCRIBED : MONTHLY_CREDITS_DEFAULT);
@@ -362,6 +362,14 @@ const MONTHLY_CREDITS_SUBSCRIBED = 1;
 const MONTHLY_CREDITS_DEFAULT = 0;
 const MONTHLY_CREDITS_SPECIAL_LIMIT = 100;
 
+/** True if user gets monthly credits (subscribed). Uses AppUser.subscriptionStatus as source of truth; falls back to request for webhook delay. */
+function isSubscribedForCredits(appUser, hasTrialOrPaidFromRequest) {
+    if (!appUser) return Boolean(hasTrialOrPaidFromRequest);
+    const status = String(appUser.subscriptionStatus || '').toLowerCase();
+    const fromDb = status === 'active' || status === 'trial' || status === 'reverse_trial';
+    return fromDb || Boolean(hasTrialOrPaidFromRequest);
+}
+
 function startOfCurrentMonth() {
     const d = new Date();
     d.setUTCDate(1);
@@ -371,9 +379,9 @@ function startOfCurrentMonth() {
 
 /**
  * GET /api/monthly-book/credits
- * Returns how many monthly book creations the user has used this calendar month.
+ * Returns how many monthly book creations the user has used this calendar month and the limit.
  * Query: userId (required). Optional fallbacks: email, deviceId.
- * Response: { usedThisMonth }. Frontend computes limit (1 or 100 for special email) from subscription/email and displays "X of Y monthly credits available".
+ * Response: { usedThisMonth, limit }. Backend verifies subscription from AppUser; limit = 1 for subscribed, 0 for free, 100 for special email.
  */
 router.get('/credits', async (req, res) => {
     try {
@@ -388,14 +396,20 @@ router.get('/credits', async (req, res) => {
             if (userId) break;
         }
         if (!userId) {
-            return res.json({ success: true, usedThisMonth: 0 });
+            return res.json({ success: true, usedThisMonth: 0, limit: 0 });
         }
+        const appUser = await AppUser.findById(userId).select('email subscriptionStatus').lean();
+        const userEmail = (appUser && appUser.email) ? String(appUser.email).trim().toLowerCase() : '';
+        const isSubscribed = isSubscribedForCredits(appUser, false);
+        const limit = userEmail === MONTHLY_CREDITS_SPECIAL_EMAIL
+            ? MONTHLY_CREDITS_SPECIAL_LIMIT
+            : (isSubscribed ? MONTHLY_CREDITS_SUBSCRIBED : MONTHLY_CREDITS_DEFAULT);
         const startMonth = startOfCurrentMonth();
         const usedThisMonth = await CustomMonthlyBook.countDocuments({
             userId,
             createdAt: { $gte: startMonth },
         });
-        res.json({ success: true, usedThisMonth });
+        res.json({ success: true, usedThisMonth, limit });
     } catch (err) {
         console.error('Monthly book credits error:', err);
         res.status(500).json({ success: false, error: err.message });

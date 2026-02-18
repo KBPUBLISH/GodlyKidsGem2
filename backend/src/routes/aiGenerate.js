@@ -40,7 +40,7 @@ try {
 
 // Available art styles for playlist covers
 const ART_STYLES = [
-    { id: 'cartoon', name: 'Cartoon', description: 'Bright, colorful cartoon style', prompt: 'colorful cartoon illustration style, bold outlines, vibrant colors' },
+    { id: 'cartoon', name: 'Anime', description: 'Anime style', prompt: 'colorful cartoon illustration style, bold outlines, vibrant colors' },
     { id: 'watercolor', name: 'Watercolor', description: 'Soft watercolor painting', prompt: 'soft watercolor painting style, gentle colors, artistic brush strokes' },
     { id: 'pixel', name: 'Pixel Art', description: 'Retro pixel art style', prompt: 'pixel art style, retro 8-bit aesthetic, cute pixelated' },
     { id: 'storybook', name: 'Storybook', description: 'Classic children\'s book illustration', prompt: 'classic children\'s storybook illustration style, whimsical, magical' },

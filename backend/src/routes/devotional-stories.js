@@ -476,7 +476,7 @@ async function generatePersonalizedSceneImage(storyId, childName, selfieBase64, 
         const styleDescriptions = {
             minecraft: 'Minecraft blocky pixel art style, cubic shapes, 3D voxel',
             lego: 'LEGO minifigure style, yellow skin, plastic look, brick aesthetic',
-            cartoon: 'Cartoon animated style, big expressive eyes, Disney-like',
+            cartoon: 'Anime style, big expressive eyes, Disney-like',
             illustrated: 'Children\'s book illustration style, soft watercolor, storybook',
             disney: 'Disney 2D animated style, flat or cel-shaded, not 3D—classic hand-drawn animation, big expressive eyes',
             anime: 'Disney 2D animated style, flat or cel-shaded, not 3D—classic hand-drawn animation, big expressive eyes'

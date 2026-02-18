@@ -89,9 +89,14 @@ const CreateYourStoryPage: React.FC = () => {
     activityTrackingService.trackOnboardingEvent('book_building_started').catch(() => {});
   }, []);
 
+  // Pre-fill name from kid profile once; don't repopulate when user clears the field
+  const hasInitializedNameFromKidRef = useRef(false);
   useEffect(() => {
-    if (currentKid?.name && !childName) setChildName(currentKid.name);
-  }, [currentKid?.name, childName]);
+    if (currentKid?.name && !hasInitializedNameFromKidRef.current) {
+      setChildName(currentKid.name);
+      hasInitializedNameFromKidRef.current = true;
+    }
+  }, [currentKid?.name]);
 
   // Pre-fill character style from kid profile (how they created their avatar) when present
   useEffect(() => {

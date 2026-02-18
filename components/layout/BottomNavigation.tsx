@@ -13,7 +13,7 @@ const getTabFromPath = (pathname: string): string => {
   if (pathname === '/home' || pathname === '/') return 'explore';
   if (pathname === '/listen') return 'listen';
   if (pathname === '/read') return 'read';
-  if (pathname === '/library') return 'library';
+  if (pathname === '/library' || pathname.startsWith('/library/')) return 'library';
   if (pathname === '/giving') return 'give';
   return 'explore'; // Default to explore
 };

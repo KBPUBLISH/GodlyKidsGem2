@@ -160,6 +160,8 @@ const BookReaderPage: React.FC = () => {
     const location = useLocation();
     const fromDailySession = (location.state as any)?.fromDailySession || false;
     const [searchParams] = useSearchParams();
+    const readerShareToken = searchParams.get('share') || undefined;
+    const bookDetailUrl = bookId ? `/book/${bookId}${readerShareToken ? `?share=${encodeURIComponent(readerShareToken)}` : ''}` : '';
     const { setGameMode, setMusicPaused, currentPlaylist, isPlaying, togglePlayPause } = useAudio();
     const { isVoiceUnlocked, isSubscribed, kids, currentProfileId } = useUser();
     const { isTutorialActive, isStepActive, onPageSwipe, onBookEndModalOpen, onQuizStart, onBookQuizComplete, currentStep, goToStep } = useTutorial();
@@ -2142,7 +2144,12 @@ const BookReaderPage: React.FC = () => {
         }
     };
 
-    const handleTouchEnd = () => {
+    const handleTouchEnd = (e?: React.TouchEvent) => {
+        // On Android, touchmove can be throttled; use touchend position when available
+        if (e?.changedTouches?.length) {
+            touchEndX.current = e.changedTouches[0].clientX;
+            touchEndY.current = e.changedTouches[0].clientY;
+        }
         // Pull-to-refresh: Check if we should refresh (only when scroll is hidden)
         if (isPulling.current && pullDistance >= PULL_THRESHOLD && scrollState === 'hidden') {
             handleRefresh();
@@ -2154,8 +2161,9 @@ const BookReaderPage: React.FC = () => {
         const swipeThresholdX = 50; // Reduced for more responsive swiping
         const swipeThresholdY = 100; // Allow more vertical tolerance for natural swipes
         const minSwipeTime = 50; // Reduced min time for quick flicks
-        const maxSwipeTime = 600; // Faster swipes feel more responsive
-        
+        const isAndroid = /android/i.test(navigator.userAgent);
+        const maxSwipeTime = isAndroid ? 900 : 600; // Android: allow slower swipes (touch can be delayed)
+
         const diffX = touchStartX.current - touchEndX.current;
         const diffY = Math.abs(touchStartY.current - touchEndY.current);
         const swipeTime = Date.now() - touchStartTime.current;
@@ -2165,9 +2173,9 @@ const BookReaderPage: React.FC = () => {
         // 2. Vertical movement is minimal (primarily horizontal gesture)
         // 3. Swipe duration is within valid range (not too fast/accidental, not too slow)
         // 4. Not currently pulling to refresh
-        const isValidSwipe = Math.abs(diffX) > swipeThresholdX && 
-                             diffY < swipeThresholdY && 
-                             swipeTime > minSwipeTime && 
+        const isValidSwipe = Math.abs(diffX) > swipeThresholdX &&
+                             diffY < swipeThresholdY &&
+                             swipeTime > minSwipeTime &&
                              swipeTime < maxSwipeTime &&
                              pullDistance < 20; // Don't swipe if pulling to refresh
 
@@ -4013,8 +4021,8 @@ const BookReaderPage: React.FC = () => {
                     onClick={() => {
                         if (fromDailySession) {
                             navigate('/daily-session');
-                        } else if (bookId) {
-                            navigate(`/book/${bookId}`);
+                        } else if (bookDetailUrl) {
+                            navigate(bookDetailUrl);
                         } else {
                             navigate(-1);
                         }
@@ -4139,8 +4147,11 @@ const BookReaderPage: React.FC = () => {
                 </div>
             )}
 
-            {/* Top Toolbar - Clean and Compact */}
-            <div className="absolute top-0 left-0 right-0 h-14 flex items-center justify-between px-3 z-50 pointer-events-none">
+            {/* Top Toolbar - Clean and Compact; safe-area-top so Android status bar doesn't overlap */}
+            <div
+                className="absolute top-0 left-0 right-0 min-h-14 flex items-center justify-between px-3 z-50 pointer-events-none"
+                style={{ paddingTop: 'max(var(--safe-area-top, 0px), 28px)' }}
+            >
                 {/* Back Button - Hidden during tutorial to prevent skipping */}
                 {!isTutorialActive && (
                 <button
@@ -4154,9 +4165,9 @@ const BookReaderPage: React.FC = () => {
                             // Return to Daily Session if accessed from lesson (without completing)
                             navigate('/daily-session');
                         } else {
-                            // Navigate back to book detail page explicitly
-                            if (bookId) {
-                                navigate(`/book/${bookId}`);
+                            // Navigate back to book detail page (preserve share param so details show Featuring / before-after)
+                            if (bookDetailUrl) {
+                                navigate(bookDetailUrl);
                             } else {
                                 navigate(-1);
                             }
@@ -4539,7 +4550,8 @@ const BookReaderPage: React.FC = () => {
                 onClick={currentPage?.isWebViewPage ? undefined : handleBackgroundTap}
                 onTouchStart={currentPage?.isWebViewPage ? undefined : handleTouchStart}
                 onTouchMove={currentPage?.isWebViewPage ? undefined : handleTouchMove}
-                onTouchEnd={currentPage?.isWebViewPage ? undefined : handleTouchEnd}
+                onTouchEnd={currentPage?.isWebViewPage ? undefined : (e) => handleTouchEnd(e)}
+                onTouchCancel={currentPage?.isWebViewPage ? undefined : (e) => handleTouchEnd(e)}
             >
                 {/* Style for high-sheen 3D glossy white page curl animation */}
                 <style>{`
@@ -5219,7 +5231,7 @@ const BookReaderPage: React.FC = () => {
                                             e.stopPropagation();
                                             const shareText = `📚 Check out "${bookTitle}" on GodlyKids! I made this story!`;
                                             const link = await ApiService.getBookShareLink(bookId);
-                                            const shareUrl = link?.shareUrl || (typeof window !== 'undefined' ? `${window.location.origin}/read/${bookId}` : `https://app.godlykids.com/read/${bookId}`);
+                                            const shareUrl = link?.shareUrl || (typeof window !== 'undefined' ? `${window.location.origin}/book/${bookId}${readerShareToken ? `?share=${encodeURIComponent(readerShareToken)}` : ''}` : `https://app.godlykids.com/book/${bookId}${readerShareToken ? `?share=${encodeURIComponent(readerShareToken)}` : ''}`);
                                             if (navigator.share) {
                                                 try {
                                                     await navigator.share({
@@ -5305,7 +5317,7 @@ const BookReaderPage: React.FC = () => {
                                         <button
                                             onClick={(e) => {
                                                 e.stopPropagation();
-                                                navigate(`/book/${bookId}`);
+                                                navigate(bookDetailUrl || `/book/${bookId}`);
                                             }}
                                             className="bg-[#8B4513] hover:bg-[#A0522D] text-white p-4 rounded-xl font-bold shadow-lg border-b-4 border-[#5D4037] active:border-b-0 active:translate-y-1 transition-all flex items-center justify-center gap-2 group"
                                         >

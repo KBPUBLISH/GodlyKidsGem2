@@ -111,7 +111,7 @@ router.get('/', async (req, res) => {
         const books = await query.lean();
         
         // Map books to include coverImage for backward compatibility
-        const booksWithCoverImage = books.map(book => {
+        let booksWithCoverImage = books.map(book => {
             // Add coverImage at root level from files.coverImage for backward compatibility
             if (book.files && book.files.coverImage) {
                 book.coverImage = book.files.coverImage;
@@ -121,6 +121,32 @@ router.get('/', async (req, res) => {
             }
             return book;
         });
+
+        // Portal "Kids Monthly Books" tab: attach creator (app user) email and name for tracking
+        if (onlyGeneratedMonthly && booksWithCoverImage.length > 0) {
+            const bookIds = booksWithCoverImage.map(b => b._id);
+            const customBooks = await CustomMonthlyBook.find({ bookId: { $in: bookIds }, status: 'completed' })
+                .select('bookId userId')
+                .lean();
+            const userIds = [...new Set(customBooks.map(c => c.userId && c.userId.toString()).filter(Boolean))];
+            const users = await AppUser.find({ _id: { $in: userIds.map(id => new mongoose.Types.ObjectId(id)) } })
+                .select('email parentName')
+                .lean();
+            const userMap = Object.fromEntries(users.map(u => [u._id.toString(), { email: u.email || null, parentName: u.parentName || null }]));
+            const bookToUser = Object.fromEntries(
+                customBooks
+                    .filter(c => c.bookId && c.userId)
+                    .map(c => [c.bookId.toString(), userMap[c.userId.toString()] || {}])
+            );
+            booksWithCoverImage = booksWithCoverImage.map(book => {
+                const creator = bookToUser[book._id.toString()];
+                return {
+                    ...book,
+                    createdByEmail: creator?.email || null,
+                    createdByParentName: creator?.parentName || null,
+                };
+            });
+        }
         
         // Return with pagination metadata
         res.json({

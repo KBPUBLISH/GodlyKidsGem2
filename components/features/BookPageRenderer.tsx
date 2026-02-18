@@ -465,7 +465,8 @@ export const BookPageRenderer: React.FC<BookPageRendererProps> = ({
             style={{
                 // Lock background in place - prevent iOS overscroll/bounce
                 overscrollBehavior: 'none',
-                touchAction: 'pan-x', // Allow horizontal swipes only at container level
+                // pan-y only: vertical swipes change scroll state here; horizontal swipes bubble to parent for page turn (critical for Android / kids monthly books)
+                touchAction: 'pan-y',
                 position: 'relative',
             }}
             onClick={handleScrollClick}
@@ -964,6 +965,8 @@ export const BookPageRenderer: React.FC<BookPageRendererProps> = ({
                                     : `${box.fontSize || 24}px`,
                                 maxHeight: textMaxHeightStyle,
                                 overflowY: 'auto',
+                                // pan-y: only vertical scroll in this box; horizontal swipes bubble to parent for page turn (fixes Android)
+                                touchAction: 'pan-y',
                                 // Text shadow/glow for readability - color controlled by shadowColor setting
                                 textShadow: box.shadowColor === 'black'
                                     ? '0 0 8px rgba(0,0,0,0.9), 0 0 16px rgba(0,0,0,0.7), 1px 1px 4px rgba(0,0,0,0.8)'

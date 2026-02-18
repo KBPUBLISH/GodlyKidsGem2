@@ -179,10 +179,12 @@ const Header: React.FC<HeaderProps> = ({ isVisible, title = "GODLY KIDS" }) => {
           perspective: isAndroid ? undefined : '1000px'
         }}
       >
-        {/* Safe Area Spacer for iOS notch/status bar */}
+        {/* Safe Area Spacer for notch/status bar (iOS + Android/Despia: ensure minimum so buttons don't overlap) */}
         <div 
           className="bg-[#C4884A]" 
-          style={{ height: 'var(--safe-area-top, 0px)' }}
+          style={{ 
+            height: 'max(var(--safe-area-top, 0px), 28px)',
+          }}
         />
         
         {/* Top Rough Edge SVG */}

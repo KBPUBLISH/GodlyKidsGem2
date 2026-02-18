@@ -192,7 +192,28 @@ interface BookBuildingData {
         subscriptionStarted: number;
         totalSubscribed: number;
     };
-    dailyTrends: { date: string; started: number; step1: number; step4: number; bookCreated: number; bookCompleted: number; paywallShown: number; trialClicked: number; subscribed: number }[];
+    dailyTrends: {
+        date: string;
+        started: number;
+        step1: number;
+        step4: number;
+        bookCreated: number;
+        bookCompleted: number;
+        paywallShown: number;
+        trialClicked: number;
+        subscribed: number;
+        avatars?: number;
+        pages?: number;
+        costDollars?: number;
+        trialStarted?: number;
+    }[];
+    usage?: {
+        totalAvatars: number;
+        totalPages: number;
+        totalCostDollars: number;
+        costCentsPerImage: number;
+        totalTrialsStarted: number;
+    };
 }
 
 // API Base URL
@@ -1302,9 +1323,33 @@ const OnboardingAnalytics: React.FC = () => {
                     <div><span className="text-gray-500 text-sm">Subscribed (total)</span><p className="font-bold text-green-600">{bookBuildingData.conversion.totalSubscribed}</p></div>
                 </div>
             </div>
+            {bookBuildingData.usage && (
+                <div className="bg-white rounded-xl border border-gray-100 p-6 shadow-sm mt-6">
+                    <h3 className="text-lg font-semibold text-gray-800 mb-4">Usage & cost (Create Your Story)</h3>
+                    <p className="text-sm text-gray-500 mb-4">Image cost: {bookBuildingData.usage.costCentsPerImage}¢ per image (avatars + book pages). Totals for selected period.</p>
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
+                        <div className="bg-gray-50 rounded-lg p-4">
+                            <div className="text-gray-500 text-sm mb-1">Avatars created</div>
+                            <p className="text-2xl font-bold text-gray-900">{bookBuildingData.usage.totalAvatars.toLocaleString()}</p>
+                        </div>
+                        <div className="bg-gray-50 rounded-lg p-4">
+                            <div className="text-gray-500 text-sm mb-1">Pages built</div>
+                            <p className="text-2xl font-bold text-gray-900">{bookBuildingData.usage.totalPages.toLocaleString()}</p>
+                        </div>
+                        <div className="bg-amber-50 rounded-lg p-4">
+                            <div className="text-gray-500 text-sm mb-1">Total cost</div>
+                            <p className="text-2xl font-bold text-amber-700">${bookBuildingData.usage.totalCostDollars.toFixed(2)}</p>
+                        </div>
+                        <div className="bg-gray-50 rounded-lg p-4">
+                            <div className="text-gray-500 text-sm mb-1">Trials started</div>
+                            <p className="text-2xl font-bold text-blue-600">{bookBuildingData.usage.totalTrialsStarted.toLocaleString()}</p>
+                        </div>
+                    </div>
+                </div>
+            )}
             {bookBuildingData.dailyTrends && bookBuildingData.dailyTrends.length > 0 && (
                 <div className="bg-white rounded-xl border border-gray-100 p-6 shadow-sm mt-6">
-                    <h3 className="text-lg font-semibold text-gray-800 mb-4">Daily trend (started vs completed)</h3>
+                    <h3 className="text-lg font-semibold text-gray-800 mb-4">Daily trend (started vs completed & usage)</h3>
                     <div className="overflow-x-auto">
                         <table className="w-full text-sm">
                             <thead>
@@ -1314,6 +1359,10 @@ const OnboardingAnalytics: React.FC = () => {
                                     <th className="pb-2 pr-4">Step 4</th>
                                     <th className="pb-2 pr-4">Book created</th>
                                     <th className="pb-2 pr-4">Book completed</th>
+                                    <th className="pb-2 pr-4">Avatars</th>
+                                    <th className="pb-2 pr-4">Pages</th>
+                                    <th className="pb-2 pr-4">Cost</th>
+                                    <th className="pb-2 pr-4">Trials started</th>
                                     <th className="pb-2">Subscribed</th>
                                 </tr>
                             </thead>
@@ -1325,6 +1374,10 @@ const OnboardingAnalytics: React.FC = () => {
                                         <td className="py-2 pr-4">{d.step4}</td>
                                         <td className="py-2 pr-4">{d.bookCreated}</td>
                                         <td className="py-2 pr-4">{d.bookCompleted}</td>
+                                        <td className="py-2 pr-4">{typeof d.avatars === 'number' ? d.avatars : '—'}</td>
+                                        <td className="py-2 pr-4">{typeof d.pages === 'number' ? d.pages : '—'}</td>
+                                        <td className="py-2 pr-4">{typeof d.costDollars === 'number' ? `$${d.costDollars.toFixed(2)}` : '—'}</td>
+                                        <td className="py-2 pr-4">{typeof d.trialStarted === 'number' ? d.trialStarted : '—'}</td>
                                         <td className="py-2">{d.subscribed}</td>
                                     </tr>
                                 ))}

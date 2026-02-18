@@ -10,7 +10,7 @@ const STYLE_OPTIONS = [
     { id: 'minecraft', label: 'Minecraft' },
     { id: 'disney', label: 'Disney 2D' },
     { id: 'lego', label: 'LEGO' },
-    { id: 'cartoon', label: 'Cartoon' },
+    { id: 'cartoon', label: 'Anime' },
     { id: 'illustrated', label: 'Illustrated' },
 ];
 

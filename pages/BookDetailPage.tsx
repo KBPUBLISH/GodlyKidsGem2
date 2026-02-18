@@ -656,6 +656,29 @@ const BookDetailPage: React.FC = () => {
             );
           })()}
 
+          {/* Before & After (selfie → character) — visible on details so family/kids see it when opening shared link */}
+          {(book as any).isUserCreated && ((book as any).createdForSelfieUrl || (book as any).createdForAvatarUrl || ((book as any).createdForCharacters && (book as any).createdForCharacters[0]?.characterImageUrl)) && (
+            <div className="w-full max-w-sm flex items-center justify-center gap-2 sm:gap-3 py-2">
+              <div className="rounded-xl overflow-hidden border-2 border-[#5c2e0b]/40 shadow flex-shrink-0 -rotate-3 max-h-[72px] sm:max-h-[88px] aspect-square bg-[#5c2e0b]/10">
+                {(book as any).createdForSelfieUrl ? (
+                  <img src={(book as any).createdForSelfieUrl} alt="" className="w-full h-full object-cover" />
+                ) : (
+                  <img src="/assets/images/create-story-kid-photo.png" alt="" className="w-full h-full object-cover" />
+                )}
+              </div>
+              <img src="/assets/images/create-story-arrow.png" alt="" className="max-h-10 sm:max-h-12 w-auto object-contain flex-shrink-0" aria-hidden />
+              <div className="rounded-xl overflow-hidden border-2 border-[#5c2e0b]/40 shadow flex-shrink-0 rotate-3 max-h-[72px] sm:max-h-[88px] aspect-square bg-[#5c2e0b]/20">
+                {((book as any).createdForCharacters && (book as any).createdForCharacters[0]?.characterImageUrl) ? (
+                  <img src={(book as any).createdForCharacters[0].characterImageUrl} alt="" className="w-full h-full object-cover object-center" />
+                ) : (book as any).createdForAvatarUrl ? (
+                  <img src={(book as any).createdForAvatarUrl} alt="" className="w-full h-full object-cover object-center" />
+                ) : (
+                  <div className="w-full h-full flex items-center justify-center text-2xl" aria-hidden>👤</div>
+                )}
+              </div>
+            </div>
+          )}
+
           {/* Modal: expanded character images when user clicks "Featuring" badge */}
           {showCharacterExpandModal && (book as any).isUserCreated && (() => {
             const chars = (book as any).createdForCharacters as Array<{ name: string; characterImageUrl?: string | null }> | undefined;

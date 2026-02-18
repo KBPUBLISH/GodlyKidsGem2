@@ -23,7 +23,7 @@ interface CharacterStyleSelectorProps {
   confirmLabel?: string;
 }
 
-// Order: Pixar, Minecraft, Disney first (main styles); then LEGO, Cartoon, Illustrated.
+// Order: Pixar, Minecraft, Disney first (main styles); then LEGO, Anime, Illustrated.
 export const CHARACTER_STYLES: CharacterStyle[] = [
   {
     id: 'pixar',
@@ -59,8 +59,8 @@ export const CHARACTER_STYLES: CharacterStyle[] = [
   },
   {
     id: 'cartoon',
-    name: 'Cartoon',
-    description: '2D style in a scene',
+    name: 'Anime',
+    description: 'Anime style in a scene',
     previewEmoji: '🎨',
     gradient: 'from-[#FF6B6B] to-[#FF8E53]',
     borderColor: 'border-[#FF4757]'

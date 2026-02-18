@@ -11,6 +11,9 @@ interface Book {
     status: string;
     coverImage?: string;
     bookType?: string;
+    /** Creator of kid-created book (Kids Monthly tab only) */
+    createdByEmail?: string | null;
+    createdByParentName?: string | null;
 }
 
 type TabView = 'list' | 'archived' | 'kidsMonthly' | 'analytics';
@@ -252,7 +255,18 @@ const Books: React.FC = () => {
                                             </div>
                                         )}
                                         <h2 className="text-xl font-semibold text-gray-800">{book.title}</h2>
-                                        <p className="text-gray-600">{book.author}</p>
+                                        {isKidsMonthly && (book.createdByEmail != null || book.createdByParentName != null) ? (
+                                            <div className="text-gray-600 text-sm space-y-0.5">
+                                                <p className="font-medium text-gray-700">Created by</p>
+                                                <p>
+                                                    {book.createdByParentName && book.createdByEmail
+                                                        ? `${book.createdByParentName} (${book.createdByEmail})`
+                                                        : book.createdByParentName || book.createdByEmail || '—'}
+                                                </p>
+                                            </div>
+                                        ) : (
+                                            <p className="text-gray-600">{book.author}</p>
+                                        )}
                                         <div className="flex flex-wrap items-center gap-2 mt-4">
                                             <span className={`inline-block px-3 py-1 rounded-full text-sm ${book.status === 'published' ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'
                                                 }`}>

@@ -79,10 +79,10 @@ const STYLE_BASES = {
         emoji: '🧱'
     },
     cartoon: {
-        base: 'cute 2D cartoon character, big expressive eyes, simplified features, animated style',
+        base: 'cute 2D cartoon character, big expressive eyes, simplified features, animated style', // UI label: Anime
         suffix: 'clean lines, bright colors, transparent background, PNG',
         negativePrompt: 'realistic, 3D, photograph, scary, complex shading, background',
-        displayName: 'Cartoon',
+        displayName: 'Anime',
         emoji: '🎨'
     },
     illustrated: {

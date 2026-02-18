@@ -11,7 +11,7 @@ import StormySeaError from '../components/ui/StormySeaError';
 import DailyRewardModal from '../components/features/DailyRewardModal';
 import ChallengeGameModal from '../components/features/ChallengeGameModal';
 import PrayerGameModal from '../components/features/PrayerGameModal';
-import ReviewPromptModal, { shouldShowReviewPrompt } from '../components/features/ReviewPromptModal';
+import { shouldShowReviewPrompt, requestNativeReview } from '../components/features/ReviewPromptModal';
 import EmailSignupModal from '../components/features/EmailSignupModal';
 import SurveyPopup, { shouldShowSurvey } from '../components/features/SurveyPopup';
 import TutorialPromptModal, { shouldShowTutorialPrompt, markTutorialPromptShown } from '../components/modals/TutorialPromptModal';
@@ -99,7 +99,6 @@ const HomePage: React.FC = () => {
   const [showDailyReward, setShowDailyReward] = useState(false);
   const [showChallengeGame, setShowChallengeGame] = useState(false);
   const [showPrayerGame, setShowPrayerGame] = useState(false);
-  const [showReviewPrompt, setShowReviewPrompt] = useState(false);
   const [showEmailSignup, setShowEmailSignup] = useState(false);
   const [showSurvey, setShowSurvey] = useState(false);
   const [showTutorialPrompt, setShowTutorialPrompt] = useState(false);
@@ -331,14 +330,13 @@ const HomePage: React.FC = () => {
   // Use sessionStorage so it persists across component remounts
   const FETCH_DEBOUNCE_MS = 120000; // Don't refetch within 2 minutes
 
-  // Check if we should show the review prompt (after user has been in app for a while)
+  // Trigger native iOS/Android review prompt directly (no custom modal) after ~1 min
   useEffect(() => {
-    // Wait about a minute before showing review prompt - let user explore first
     const timer = setTimeout(() => {
       try {
         if (shouldShowReviewPrompt()) {
-          console.log('🌟 Showing review prompt on home page!');
-          setShowReviewPrompt(true);
+          console.log('🌟 Triggering native review prompt');
+          requestNativeReview();
         }
       } catch (e) {
         console.error('Review prompt error:', e);
@@ -350,11 +348,9 @@ const HomePage: React.FC = () => {
 
   // Check if we should show the survey popup (after 7 days of use)
   useEffect(() => {
-    // Longer delay - show survey after user has been on page a bit
     const timer = setTimeout(() => {
       try {
-        // Don't show if review prompt is showing
-        if (!showReviewPrompt && shouldShowSurvey()) {
+        if (shouldShowSurvey()) {
           console.log('📊 Showing survey popup!');
           setShowSurvey(true);
         }
@@ -364,7 +360,7 @@ const HomePage: React.FC = () => {
     }, 5000); // 5 second delay after page load
     
     return () => clearTimeout(timer);
-  }, [showReviewPrompt]);
+  }, []);
 
   // Show tutorial prompt for new users after a brief moment
   useEffect(() => {
@@ -389,8 +385,7 @@ const HomePage: React.FC = () => {
     
     const timer = setTimeout(() => {
       try {
-        // Don't show if other modals are showing
-        if (!showReviewPrompt && !showSurvey && shouldShowTutorialPrompt()) {
+        if (!showSurvey && shouldShowTutorialPrompt()) {
           console.log('🎓 Showing tutorial prompt!');
           // Track that we showed the prompt
           activityTrackingService.trackTutorialStep('tutorial_prompt_shown', {});
@@ -402,7 +397,7 @@ const HomePage: React.FC = () => {
     }, delay);
     
     return () => clearTimeout(timer);
-  }, [isTutorialActive, showReviewPrompt, showSurvey]);
+  }, [isTutorialActive, showSurvey]);
 
   // Show email signup popup for web users after 30 seconds
   // DISABLED: Pausing email popup during tutorial development
@@ -1070,11 +1065,6 @@ const HomePage: React.FC = () => {
       <PrayerGameModal
         isOpen={showPrayerGame}
         onClose={() => setShowPrayerGame(false)}
-      />
-
-      <ReviewPromptModal
-        isOpen={showReviewPrompt}
-        onReviewSubmitted={() => setShowReviewPrompt(false)}
       />
 
       <EmailSignupModal

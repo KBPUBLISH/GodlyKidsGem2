@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { 
     TrendingUp, Users, UserPlus, Crown, XCircle, RefreshCw,
     ChevronRight, Calendar, BarChart3, ArrowDownRight, ArrowUpRight,
@@ -228,6 +229,7 @@ const getApiBase = () => {
 const API_BASE = getApiBase();
 
 const OnboardingAnalytics: React.FC = () => {
+    const navigate = useNavigate();
     const [data, setData] = useState<OnboardingData | null>(null);
     const [tutorialData, setTutorialData] = useState<TutorialData | null>(null);
     const [preferencesData, setPreferencesData] = useState<PreferencesData | null>(null);
@@ -1283,11 +1285,23 @@ const OnboardingAnalytics: React.FC = () => {
                     Book building funnel
                 </h3>
                 <div className="space-y-3">
-                    {bookBuildingData.funnel.map((step, idx) => (
+                    {bookBuildingData.funnel.map((step, idx) => {
+                        const isStep2 = step.stepKey === 'step_2';
+                        return (
                         <div key={step.stepKey || step.step} className="flex items-center gap-4">
                             <div className="w-44 text-sm font-medium text-gray-700 flex items-center gap-2">
                                 <span className="w-6 h-6 rounded-full bg-amber-100 text-amber-700 text-xs flex items-center justify-center font-bold">{idx + 1}</span>
-                                <span className="truncate" title={step.step}>{step.step}</span>
+                                {isStep2 ? (
+                                    <button
+                                        onClick={() => navigate(`/onboarding-analytics/kids-characters?days=${days}`)}
+                                        className="truncate text-left hover:text-amber-600 hover:underline focus:outline-none focus:ring-1 focus:ring-amber-500 rounded"
+                                        title="View kid characters created"
+                                    >
+                                        {step.step}
+                                    </button>
+                                ) : (
+                                    <span className="truncate" title={step.step}>{step.step}</span>
+                                )}
                             </div>
                             <div className="flex-1 bg-gray-100 rounded-full h-8 overflow-hidden relative">
                                 <div className="h-full bg-gradient-to-r from-amber-500 to-amber-600 rounded-full transition-all duration-500" style={{ width: `${step.rate}%` }} />
@@ -1296,7 +1310,7 @@ const OnboardingAnalytics: React.FC = () => {
                                 </div>
                             </div>
                         </div>
-                    ))}
+                    ); })}
                 </div>
             </div>
             {bookBuildingData.dropoffs.length > 0 && (
@@ -1327,10 +1341,15 @@ const OnboardingAnalytics: React.FC = () => {
                 <div className="bg-white rounded-xl border border-gray-100 p-6 shadow-sm mt-6">
                     <h3 className="text-lg font-semibold text-gray-800 mb-4">Usage & cost (Create Your Story)</h3>
                     <p className="text-sm text-gray-500 mb-4">Image cost: {bookBuildingData.usage.costCentsPerImage}¢ per image (avatars + book pages). Totals for selected period.</p>
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
+                    <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-4">
                         <div className="bg-gray-50 rounded-lg p-4">
                             <div className="text-gray-500 text-sm mb-1">Avatars created</div>
                             <p className="text-2xl font-bold text-gray-900">{bookBuildingData.usage.totalAvatars.toLocaleString()}</p>
+                        </div>
+                        <div className="bg-amber-50/70 rounded-lg p-4">
+                            <div className="text-gray-500 text-sm mb-1">Character cost</div>
+                            <p className="text-2xl font-bold text-amber-700">${(bookBuildingData.usage.totalAvatars * bookBuildingData.usage.costCentsPerImage / 100).toFixed(2)}</p>
+                            <p className="text-xs text-gray-500 mt-0.5">Avatars × {bookBuildingData.usage.costCentsPerImage}¢</p>
                         </div>
                         <div className="bg-gray-50 rounded-lg p-4">
                             <div className="text-gray-500 text-sm mb-1">Pages built</div>

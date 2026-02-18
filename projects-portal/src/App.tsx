@@ -30,6 +30,7 @@ import FeaturedContent from './pages/FeaturedContent';
 import NewUserWelcome from './pages/NewUserWelcome';
 import AnalyticsDashboard from './pages/AnalyticsDashboard';
 import OnboardingAnalytics from './pages/OnboardingAnalytics';
+import KidsMonthlyCharactersPage from './pages/KidsMonthlyCharactersPage';
 import Radio from './pages/Radio';
 import RadioHosts from './pages/RadioHosts';
 import RadioLibrary from './pages/RadioLibrary';
@@ -119,6 +120,7 @@ function App() {
             <Route path="new-user-welcome" element={<NewUserWelcome />} />
             <Route path="analytics" element={<AnalyticsDashboard />} />
             <Route path="onboarding-analytics" element={<OnboardingAnalytics />} />
+            <Route path="onboarding-analytics/kids-characters" element={<KidsMonthlyCharactersPage />} />
             <Route path="radio" element={<Radio />} />
             <Route path="radio/hosts" element={<RadioHosts />} />
             <Route path="radio/library" element={<RadioLibrary />} />

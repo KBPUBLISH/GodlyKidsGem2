@@ -1052,6 +1052,61 @@ router.get('/onboarding/book-building', async (req, res) => {
 });
 
 /**
+ * GET /api/analytics/onboarding/kids-characters
+ * List kid characters from Create Your Story / Kids Monthly books (CustomMonthlyBook).
+ * Query params: days (default 30)
+ */
+router.get('/onboarding/kids-characters', async (req, res) => {
+    try {
+        const days = parseInt(req.query.days) || 30;
+        const startDate = new Date();
+        startDate.setDate(startDate.getDate() - days);
+
+        const books = await CustomMonthlyBook.find({ createdAt: { $gte: startDate } })
+            .select('childName childCharacterImageUrl childSelfieUrl characters createdAt')
+            .sort({ createdAt: -1 })
+            .limit(500)
+            .lean();
+
+        const characters = [];
+        for (const b of books) {
+            if (b.childCharacterImageUrl) {
+                characters.push({
+                    name: b.childName || 'Unknown',
+                    imageUrl: b.childCharacterImageUrl,
+                    selfieUrl: b.childSelfieUrl || null,
+                    bookId: b._id,
+                    createdAt: b.createdAt,
+                    type: 'main',
+                });
+            }
+            (b.characters || []).forEach((c) => {
+                if (c.characterImageUrl) {
+                    characters.push({
+                        name: c.name || 'Character',
+                        imageUrl: c.characterImageUrl,
+                        selfieUrl: null,
+                        bookId: b._id,
+                        createdAt: b.createdAt,
+                        type: 'extra',
+                    });
+                }
+            });
+        }
+
+        res.json({
+            success: true,
+            period: { days, startDate: startDate.toISOString() },
+            total: characters.length,
+            characters,
+        });
+    } catch (error) {
+        console.error('Kids characters analytics error:', error);
+        res.status(500).json({ success: false, message: 'Failed to fetch kids characters', error: error.message });
+    }
+});
+
+/**
  * POST /api/analytics/admin/add-coins
  * Add coins to a user by email (admin only)
  */

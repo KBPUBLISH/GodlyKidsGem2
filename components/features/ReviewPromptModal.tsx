@@ -1,145 +1,33 @@
-import React, { useState } from 'react';
-import { Heart, X } from 'lucide-react';
 import { Capacitor } from '@capacitor/core';
 import { DespiaService } from '../../services/despiaService';
 
-interface ReviewPromptModalProps {
-  isOpen: boolean;
-  onReviewSubmitted: () => void;
-}
-
-const ReviewPromptModal: React.FC<ReviewPromptModalProps> = ({ isOpen, onReviewSubmitted }) => {
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [showThankYou, setShowThankYou] = useState(false);
-
-  // Handle X button click - dismiss and don't show for 2 weeks
-  const handleDismiss = () => {
-    localStorage.setItem('godlykids_review_dismissed', 'true');
-    localStorage.setItem('godlykids_review_dismissed_date', new Date().toISOString());
-    console.log('🌟 Review prompt dismissed - will not show for 2 weeks');
-    onReviewSubmitted();
-  };
-
-  const handleLeaveReview = async () => {
-    setIsSubmitting(true);
-    
-    try {
-      console.log('🌟 Review button clicked');
-      
-      // Check if we're in DeSpia native app
-      if (DespiaService.isNative()) {
-        // DeSpia native app - use the proper despia() function
-        console.log('🌟 DeSpia native detected, requesting review...');
-        DespiaService.requestReview();
-        console.log('🌟 DeSpia review request sent!');
-      } else if (Capacitor.isNativePlatform()) {
-        // Capacitor native app (non-DeSpia)
-        try {
-          const { RateApp } = await import('capacitor-rate-app');
-          console.log('🌟 RateApp plugin loaded, requesting review...');
-          await RateApp.requestReview();
-          console.log('🌟 Native review request sent!');
-        } catch (e) {
-          console.log('🌟 RateApp plugin not available:', e);
-          // Try webkit as last resort for iOS
-          if ((window as any).webkit?.messageHandlers?.requestReview) {
-            (window as any).webkit.messageHandlers.requestReview.postMessage({});
-            console.log('🌟 Webkit review request sent');
-          }
+/**
+ * Trigger the native iOS/Android in-app review dialog directly.
+ * No custom modal - just the system review prompt.
+ */
+export const requestNativeReview = async (): Promise<void> => {
+  try {
+    if (DespiaService.isNative()) {
+      console.log('🌟 DeSpia native: requesting review...');
+      DespiaService.requestReview();
+    } else if (Capacitor.isNativePlatform()) {
+      try {
+        const { RateApp } = await import('capacitor-rate-app');
+        await RateApp.requestReview();
+      } catch (e) {
+        if ((window as any).webkit?.messageHandlers?.requestReview) {
+          (window as any).webkit.messageHandlers.requestReview.postMessage({});
         }
-      } else {
-        // Web - can't show native review dialog
-        console.log('🌟 Web mode - no native review API available');
       }
-      
-      // Mark review as submitted in localStorage
-      localStorage.setItem('godlykids_review_prompted', 'true');
-      localStorage.setItem('godlykids_review_date', new Date().toISOString());
-      
-      // Show thank you message briefly
-      setShowThankYou(true);
-      
-      // Close after short delay
-      setTimeout(() => {
-        setShowThankYou(false);
-        onReviewSubmitted();
-      }, 1500);
-      
-    } catch (error) {
-      console.error('🌟 Error requesting review:', error);
-      // Still close the modal on error
-      onReviewSubmitted();
-    } finally {
-      setIsSubmitting(false);
     }
-  };
-
-  if (!isOpen) return null;
-
-  return (
-    <div className="fixed inset-0 z-[10000] flex items-center justify-center p-6">
-      {/* Backdrop - No click to close */}
-      <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" />
-      
-      {/* Simple Modal Content */}
-      <div className="relative bg-gradient-to-b from-[#5c2e0b] to-[#3E1F07] rounded-2xl p-6 mx-4 max-w-xs w-full border-2 border-[#8B4513] shadow-2xl animate-in zoom-in-95 duration-200">
-        
-        {/* Close X Button - More visible */}
-        <button
-          onClick={handleDismiss}
-          className="absolute top-2 right-2 w-8 h-8 flex items-center justify-center bg-black/30 rounded-full text-white/80 hover:bg-black/50 hover:text-white transition-all"
-          aria-label="Close"
-        >
-          <X className="w-5 h-5" strokeWidth={2.5} />
-        </button>
-        
-        {showThankYou ? (
-          /* Thank You State */
-          <div className="text-center py-4">
-            <div className="w-16 h-16 mx-auto mb-3 rounded-full bg-gradient-to-br from-[#FFD700] to-[#FFA500] flex items-center justify-center">
-              <Heart className="w-8 h-8 text-[#5c2e0b]" fill="#5c2e0b" />
-            </div>
-            <h2 className="text-xl font-display font-bold text-[#FFD700] mb-1">
-              Thank You! 💛
-            </h2>
-            <p className="text-[#eecaa0] text-sm">
-              Your support means everything!
-            </p>
-          </div>
-        ) : (
-          /* Simple Review Request */
-          <div className="text-center">
-            {/* Simple emoji icon */}
-            <div className="text-5xl mb-3">💛</div>
-
-            {/* Title */}
-            <h2 className="text-xl font-display font-bold text-white mb-2">
-              Enjoying Godly Kids?
-            </h2>
-
-            {/* Message */}
-            <p className="text-[#d4b896] text-sm mb-5">
-              Your review helps other families discover us!
-            </p>
-
-            {/* Simple Review Button */}
-            <button
-              onClick={handleLeaveReview}
-              disabled={isSubmitting}
-              className="w-full py-3.5 bg-gradient-to-b from-[#FFD700] to-[#FFA500] text-[#3E1F07] font-display font-bold text-base rounded-xl shadow-lg border-b-4 border-[#B8860B] transition-all active:scale-95 active:border-b-0 disabled:opacity-70"
-            >
-              {isSubmitting ? 'Opening...' : 'Leave a Review'}
-            </button>
-          </div>
-        )}
-      </div>
-    </div>
-  );
+    localStorage.setItem('godlykids_review_prompted', 'true');
+    localStorage.setItem('godlykids_review_date', new Date().toISOString());
+  } catch (error) {
+    console.warn('Review request:', error);
+  }
 };
 
-export default ReviewPromptModal;
-
-// Helper function to check if we should show the review prompt
+// Helper function to check if we should trigger the native review prompt
 // NOTE: This is for the standalone review prompt (NOT the tutorial review step)
 // The tutorial has its own review prompt at the 'review_prompt' step
 export const shouldShowReviewPrompt = (): boolean => {

@@ -1,11 +1,10 @@
 import React, { useEffect, useCallback, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { Capacitor } from '@capacitor/core';
 import { X } from 'lucide-react';
 import TutorialSpotlight from './TutorialSpotlight';
 import { useTutorial, TutorialStep } from '../../context/TutorialContext';
 import WoodButton from '../ui/WoodButton';
-import { DespiaService } from '../../services/despiaService';
+import { requestNativeReview } from '../features/ReviewPromptModal';
 import CreateAccountModal from '../modals/CreateAccountModal';
 
 // Check if user has an account (auth token or email stored)
@@ -503,21 +502,11 @@ const OnboardingTutorial: React.FC = () => {
         );
 
       case 'review_prompt':
-        return (
-          <TutorialSpotlight
-            title=""
-            description=""
-            isVisible={true}
-            popupPosition="center"
-            customContent={
-              <ReviewPromptContent onNext={() => {
-                nextStep(); // Advance to tutorial_complete
-                navigate('/home'); // Navigate to explore page
-              }} />
-            }
-            requiresElementClick={false}
-          />
-        );
+        // Trigger native iOS/Android review directly (no custom modal), then advance
+        requestNativeReview();
+        nextStep();
+        navigate('/home');
+        return null;
 
       case 'explore_pause':
         // No popup - let user explore freely for 10 seconds
@@ -587,93 +576,6 @@ const OnboardingTutorial: React.FC = () => {
         }}
       />
     </>
-  );
-};
-
-// Review prompt content - triggers native review dialog
-const ReviewPromptContent: React.FC<{ onNext: () => void }> = ({ onNext }) => {
-  const [isSubmitting, setIsSubmitting] = useState(false);
-
-  const handleClose = () => {
-    // Mark as prompted so it doesn't show again
-    localStorage.setItem('godlykids_review_prompted', 'true');
-    localStorage.setItem('godlykids_review_date', new Date().toISOString());
-    onNext();
-  };
-
-  const handleLeaveReview = async () => {
-    setIsSubmitting(true);
-    
-    try {
-      console.log('🌟 Tutorial review button clicked');
-      
-      // Check if we're in DeSpia native app
-      if (DespiaService.isNative()) {
-        console.log('🌟 DeSpia native detected, requesting review...');
-        DespiaService.requestReview();
-      } else if (Capacitor.isNativePlatform()) {
-        // Capacitor native app
-        try {
-          const { RateApp } = await import('capacitor-rate-app');
-          console.log('🌟 RateApp plugin loaded, requesting review...');
-          await RateApp.requestReview();
-        } catch (e) {
-          console.log('🌟 RateApp plugin not available:', e);
-          // Try webkit for iOS
-          if ((window as any).webkit?.messageHandlers?.requestReview) {
-            (window as any).webkit.messageHandlers.requestReview.postMessage({});
-          }
-        }
-      } else {
-        console.log('🌟 Web mode - no native review API');
-      }
-      
-      // Mark review as prompted
-      localStorage.setItem('godlykids_review_prompted', 'true');
-      localStorage.setItem('godlykids_review_date', new Date().toISOString());
-      
-    } catch (error) {
-      console.error('🌟 Error requesting review:', error);
-    } finally {
-      setIsSubmitting(false);
-      // Continue to next step after a brief delay
-      setTimeout(onNext, 500);
-    }
-  };
-
-  return (
-    <div className="text-center relative">
-      {/* Close X Button */}
-      <button
-        onClick={handleClose}
-        className="absolute -top-2 -right-2 w-8 h-8 flex items-center justify-center bg-black/40 rounded-full text-white/80 hover:bg-black/60 hover:text-white transition-all z-10"
-        aria-label="Close"
-      >
-        <X className="w-5 h-5" strokeWidth={2.5} />
-      </button>
-      
-      <div className="mb-4 flex justify-center gap-1">
-        <span className="text-3xl">⭐</span>
-        <span className="text-3xl">⭐</span>
-        <span className="text-3xl">⭐</span>
-        <span className="text-3xl">⭐</span>
-        <span className="text-3xl">⭐</span>
-      </div>
-      <h3 className="text-[#FFD700] font-display font-bold text-xl mb-2">
-        What Do You Think?
-      </h3>
-      <p className="text-white/90 text-sm leading-relaxed mb-4">
-        We'd love to hear your feedback! Your review helps other families discover faith-filled content for their kids.
-      </p>
-      <WoodButton 
-        variant="gold" 
-        onClick={handleLeaveReview} 
-        className="w-full py-3"
-        disabled={isSubmitting}
-      >
-        {isSubmitting ? 'Opening...' : 'Leave a Review ⭐'}
-      </WoodButton>
-    </div>
   );
 };
 

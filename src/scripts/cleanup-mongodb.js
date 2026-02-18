@@ -143,12 +143,12 @@ async function cleanupMongoDB() {
             console.log('✅ All books have valid categories\n');
         }
 
-        // 6. Clean up TTS cache
+        // 6. Clean up TTS cache (no time-based expiry - only remove invalid entries)
         console.log('🔍 Checking TTS cache...');
         const ttsEntries = await TTSCache.find({});
         console.log(`🎵 Found ${ttsEntries.length} TTS cache entries`);
 
-        // Remove entries with missing audio URLs
+        // Remove only entries with missing audio URLs. Do not delete by createdAt/age.
         const invalidTTS = ttsEntries.filter(entry => !entry.audioUrl);
         if (invalidTTS.length > 0) {
             const invalidIds = invalidTTS.map(e => e._id);

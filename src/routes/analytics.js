@@ -1,8 +1,11 @@
 const express = require('express');
 const router = express.Router();
+const mongoose = require('mongoose');
 const AppUser = require('../models/AppUser');
 const User = require('../models/User');
 const OnboardingEvent = require('../models/OnboardingEvent');
+const CustomMonthlyBook = require('../models/CustomMonthlyBook');
+const Page = require('../models/Page');
 const TutorialEvent = require('../models/TutorialEvent');
 const EmailSubscriber = require('../models/EmailSubscriber');
 const GamePlayEvent = require('../models/GamePlayEvent');
@@ -963,7 +966,7 @@ router.get('/onboarding/book-building', async (req, res) => {
         const byDay = {};
         events.forEach((e) => {
             const day = e.createdAt.toISOString().split('T')[0];
-            if (!byDay[day]) byDay[day] = { started: 0, step1: 0, step4: 0, bookCreated: 0, bookCompleted: 0, paywallShown: 0, trialClicked: 0, subscribed: 0 };
+            if (!byDay[day]) byDay[day] = { started: 0, step1: 0, step4: 0, bookCreated: 0, bookCompleted: 0, paywallShown: 0, trialClicked: 0, trialStarted: 0, subscribed: 0 };
             if (e.event === 'book_building_started') byDay[day].started++;
             if (e.event === 'book_building_step_1_complete') byDay[day].step1++;
             if (e.event === 'book_building_step_4_complete') byDay[day].step4++;
@@ -971,17 +974,45 @@ router.get('/onboarding/book-building', async (req, res) => {
             if (e.event === 'book_building_book_completed') byDay[day].bookCompleted++;
             if (e.event === 'paywall_shown' && e.metadata?.source === 'create-your-story') byDay[day].paywallShown++;
             if (e.event === 'paywall_trial_clicked' && e.metadata?.source === 'create-your-story') byDay[day].trialClicked++;
+            if (e.event === 'trial_started' && e.metadata?.source === 'create-your-story') byDay[day].trialStarted++;
             if (['subscribed', 'trial_started', 'subscription_started'].includes(e.event) && e.metadata?.source === 'create-your-story') byDay[day].subscribed++;
         });
+
+        // Usage & cost: avatars created (1 + extra characters per CustomMonthlyBook), pages built (Page docs for kid-created books), $0.04/image
+        const COST_CENTS_PER_IMAGE = 4;
+        const generatedBookIds = await CustomMonthlyBook.find({ bookId: { $exists: true, $ne: null } }).distinct('bookId').lean();
+        const avatarAgg = await CustomMonthlyBook.aggregate([
+            { $match: { createdAt: { $gte: startDate } } },
+            { $project: { date: { $dateToString: { format: '%Y-%m-%d', date: '$createdAt' } }, n: { $add: [1, { $size: { $ifNull: ['$characters', []] } }] } } },
+            { $group: { _id: '$date', avatars: { $sum: '$n' } } },
+        ]);
+        const pagesAgg = generatedBookIds.length > 0
+            ? await Page.aggregate([
+                { $match: { bookId: { $in: generatedBookIds.map(id => new mongoose.Types.ObjectId(id)) }, createdAt: { $gte: startDate } } },
+                { $group: { _id: { $dateToString: { format: '%Y-%m-%d', date: '$createdAt' } }, pages: { $sum: 1 } } },
+            ])
+            : [];
+        const avatarsByDay = Object.fromEntries((avatarAgg || []).map((r) => [r._id, r.avatars]));
+        const pagesByDay = Object.fromEntries((pagesAgg || []).map((r) => [r._id, r.pages]));
+        let totalAvatars = 0;
+        let totalPages = 0;
         const dailyTrends = [];
-        const numDays = Math.min(days, 14);
+        const numDays = Math.min(days, 90);
         for (let i = numDays - 1; i >= 0; i--) {
             const date = new Date();
             date.setDate(date.getDate() - i);
             const dayStr = date.toISOString().split('T')[0];
-            const d = byDay[dayStr] || { started: 0, step1: 0, step4: 0, bookCreated: 0, bookCompleted: 0, paywallShown: 0, trialClicked: 0, subscribed: 0 };
-            dailyTrends.push({ date: dayStr, ...d });
+            const d = byDay[dayStr] || { started: 0, step1: 0, step4: 0, bookCreated: 0, bookCompleted: 0, paywallShown: 0, trialClicked: 0, trialStarted: 0, subscribed: 0 };
+            const avatars = avatarsByDay[dayStr] || 0;
+            const pages = pagesByDay[dayStr] || 0;
+            totalAvatars += avatars;
+            totalPages += pages;
+            const imagesToday = avatars + pages;
+            const costDollars = Math.round((imagesToday * COST_CENTS_PER_IMAGE) / 100 * 100) / 100;
+            dailyTrends.push({ date: dayStr, ...d, avatars, pages, costDollars, trialStarted: d.trialStarted });
         }
+        const totalImages = totalAvatars + totalPages;
+        const totalCostDollars = Math.round((totalImages * COST_CENTS_PER_IMAGE) / 100 * 100) / 100;
 
         res.json({
             success: true,
@@ -1006,6 +1037,13 @@ router.get('/onboarding/book-building', async (req, res) => {
                 totalSubscribed,
             },
             dailyTrends,
+            usage: {
+                totalAvatars,
+                totalPages,
+                totalCostDollars,
+                costCentsPerImage: COST_CENTS_PER_IMAGE,
+                totalTrialsStarted: events.filter((e) => e.event === 'trial_started' && e.metadata?.source === 'create-your-story').length,
+            },
         });
     } catch (error) {
         console.error('Book building analytics error:', error);

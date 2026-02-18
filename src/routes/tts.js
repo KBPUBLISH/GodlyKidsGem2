@@ -55,6 +55,12 @@ const saveAudioFile = async (buffer, filename, bookId = null, pageNumber = null)
     }
 };
 
+/** Normalize text for cache key so minor whitespace/trim differences don't cause cache misses. */
+const normalizeTextForCache = (str) => {
+    if (typeof str !== 'string') return '';
+    return str.trim().replace(/\s+/g, ' ');
+};
+
 const saveLocal = (buffer, gcsPath) => {
     return new Promise((resolve, reject) => {
         const localPath = path.join(uploadsDir, gcsPath);
@@ -165,12 +171,13 @@ router.post('/generate', async (req, res) => {
             console.log(`📄 Generating TTS for book ${bookId}, page ${pageNumber}${textBoxIndex !== undefined ? `, textbox ${textBoxIndex}` : ''}`);
         }
 
-        // Include language in cache key for multilingual support
-        const cacheKey = languageCode && languageCode !== 'en' 
-            ? `${text}${voiceId}${languageCode}` 
-            : `${text}${voiceId}`;
-        
-        // 1. Check Cache
+        // Cache key: normalized text + voiceId + language (when not en). No TTL - cache is permanent to save ElevenLabs credits.
+        const normalizedText = normalizeTextForCache(text);
+        const cacheKey = languageCode && languageCode !== 'en'
+            ? `${normalizedText}${voiceId}${languageCode}`
+            : `${normalizedText}${voiceId}`;
+
+        // 1. Check Cache (permanent - entries are never expired by time)
         const textHash = crypto.createHash('md5').update(cacheKey).digest('hex');
         const cached = await TTSCache.findOne({ textHash, voiceId });
 

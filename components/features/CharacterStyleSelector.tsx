@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Check, Sparkles, Wand2 } from 'lucide-react';
+import { Check, Sparkles, Wand2, Loader2 } from 'lucide-react';
 import WoodButton from '../ui/WoodButton';
 
 export interface CharacterStyle {
@@ -28,7 +28,7 @@ export const CHARACTER_STYLES: CharacterStyle[] = [
   {
     id: 'pixar',
     name: 'Pixar',
-    description: 'Full body in a forest scene',
+    description: 'Full body on a ship deck',
     previewEmoji: '🎬',
     gradient: 'from-[#11998E] to-[#38EF7D]',
     borderColor: 'border-[#00B894]'
@@ -36,7 +36,7 @@ export const CHARACTER_STYLES: CharacterStyle[] = [
   {
     id: 'minecraft',
     name: 'Minecraft',
-    description: 'Blocky style in a forest',
+    description: 'Blocky style on a ship deck',
     previewEmoji: '🟫',
     gradient: 'from-[#7B5B3A] to-[#5D4427]',
     borderColor: 'border-[#8B6914]'
@@ -44,7 +44,7 @@ export const CHARACTER_STYLES: CharacterStyle[] = [
   {
     id: 'disney',
     name: 'Disney',
-    description: '3D magic in a forest',
+    description: '2D Disney style on a ship deck',
     previewEmoji: '✨',
     gradient: 'from-[#667EEA] to-[#764BA2]',
     borderColor: 'border-[#5B52CC]'
@@ -113,7 +113,7 @@ const CharacterStyleSelector: React.FC<CharacterStyleSelectorProps> = ({
             <div>
               <h2 className="text-xl font-bold text-white">Choose Your Style</h2>
               <p className="text-white/80 text-sm">
-                You’ll appear full-body in a fun scene (like a forest), {childName}!
+                You’ll appear full-body on a ship deck, {childName}!
               </p>
             </div>
           </div>
@@ -177,14 +177,11 @@ const CharacterStyleSelector: React.FC<CharacterStyleSelectorProps> = ({
         {/* Generating State */}
         {isGenerating && (
           <div className="px-6 pb-4">
-            <div className="flex items-center justify-center gap-3 py-4 px-6 bg-gradient-to-r from-[#667EEA] to-[#764BA2] rounded-xl">
-              <div className="relative">
-                <Sparkles className="w-6 h-6 text-white animate-pulse" />
-                <div className="absolute inset-0 animate-spin">
-                  <Sparkles className="w-6 h-6 text-[#FFD700] opacity-50" />
-                </div>
+            <div className="flex items-center justify-center gap-4 py-5 px-6 bg-gradient-to-r from-[#667EEA] to-[#764BA2] rounded-xl">
+              <div className="flex-shrink-0">
+                <Loader2 className="w-10 h-10 text-[#FFD700] animate-spin" aria-hidden />
               </div>
-              <div className="text-white">
+              <div className="text-white text-left min-w-0">
                 <p className="font-bold">Creating your character...</p>
                 <p className="text-sm text-white/80">This takes about 10 seconds</p>
               </div>
@@ -223,7 +220,7 @@ const CharacterStyleSelector: React.FC<CharacterStyleSelectorProps> = ({
         {!isGenerating && (
           <div className="px-6 pb-6">
             <p className="text-center text-white/50 text-xs">
-              We’ll place you full-body in a scene (e.g. forest) in your chosen style — not just a portrait!
+              We’ll place you full-body on a ship deck in your chosen style — not just a portrait!
             </p>
           </div>
         )}

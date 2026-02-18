@@ -169,6 +169,32 @@ interface TutorialData {
     dailyTrends: DailyTrend[];
 }
 
+/** Dive into the Bible / Create Your Story book-building funnel & conversion */
+interface BookBuildingData {
+    success: boolean;
+    period: { days: number; startDate: string };
+    summary: {
+        totalStarted: number;
+        totalBookCompleted: number;
+        totalBookCreated: number;
+        completionRate: number;
+        paywallShownFromFeature: number;
+        trialClickedFromFeature: number;
+        subscribedFromFeature: number;
+    };
+    funnel: FunnelStep[];
+    dropoffs: TutorialDropoff[];
+    conversion: {
+        paywallShown: number;
+        trialClicked: number;
+        trialStarted: number;
+        subscribed: number;
+        subscriptionStarted: number;
+        totalSubscribed: number;
+    };
+    dailyTrends: { date: string; started: number; step1: number; step4: number; bookCreated: number; bookCompleted: number; paywallShown: number; trialClicked: number; subscribed: number }[];
+}
+
 // API Base URL
 const getApiBase = () => {
     let base = import.meta.env.VITE_API_BASE_URL || 'https://backendgk2-0.onrender.com';
@@ -186,22 +212,24 @@ const OnboardingAnalytics: React.FC = () => {
     const [preferencesData, setPreferencesData] = useState<PreferencesData | null>(null);
     const [retentionData, setRetentionData] = useState<RetentionData | null>(null);
     const [surveyData, setSurveyData] = useState<SurveyData | null>(null);
+    const [bookBuildingData, setBookBuildingData] = useState<BookBuildingData | null>(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [days, setDays] = useState(7);
-    const [activeTab, setActiveTab] = useState<'onboarding' | 'tutorial' | 'firstLesson' | 'retention' | 'survey'>('onboarding');
+    const [activeTab, setActiveTab] = useState<'onboarding' | 'tutorial' | 'firstLesson' | 'bookBuilding' | 'retention' | 'survey'>('onboarding');
 
     const fetchData = async () => {
         setLoading(true);
         setError(null);
         try {
-            // Fetch onboarding, tutorial, preferences, retention, and survey data in parallel
-            const [onboardingRes, tutorialRes, preferencesRes, retentionRes, surveyRes] = await Promise.all([
+            // Fetch onboarding, tutorial, preferences, retention, survey, and book-building data in parallel
+            const [onboardingRes, tutorialRes, preferencesRes, retentionRes, surveyRes, bookBuildingRes] = await Promise.all([
                 fetch(`${API_BASE}/analytics/onboarding?days=${days}`),
                 fetch(`${API_BASE}/analytics/tutorial?days=${days}`),
                 fetch(`${API_BASE}/analytics/onboarding/preferences?days=${days}`),
                 fetch(`${API_BASE}/analytics/retention?days=${Math.max(days, 30)}`), // At least 30 days for retention
                 fetch(`${API_BASE}/survey/analytics?days=${days}`),
+                fetch(`${API_BASE}/analytics/onboarding/book-building?days=${days}`),
             ]);
             
             const onboardingResult = await onboardingRes.json();
@@ -209,6 +237,7 @@ const OnboardingAnalytics: React.FC = () => {
             const preferencesResult = await preferencesRes.json();
             const retentionResult = await retentionRes.json();
             const surveyResult = await surveyRes.json();
+            const bookBuildingResult = await bookBuildingRes.json();
             
             if (onboardingResult.success) {
                 setData(onboardingResult);
@@ -224,6 +253,9 @@ const OnboardingAnalytics: React.FC = () => {
             }
             if (surveyResult.success) {
                 setSurveyData(surveyResult);
+            }
+            if (bookBuildingResult.success) {
+                setBookBuildingData(bookBuildingResult);
             }
             
             if (!onboardingResult.success && !tutorialResult.success) {
@@ -359,6 +391,24 @@ const OnboardingAnalytics: React.FC = () => {
                         {data?.firstLesson && data.firstLesson.summary.totalStarted > 0 && (
                             <span className="bg-blue-100 text-blue-700 text-xs px-2 py-0.5 rounded-full">
                                 {data.firstLesson.summary.completionRate}%
+                            </span>
+                        )}
+                    </span>
+                </button>
+                <button
+                    onClick={() => setActiveTab('bookBuilding')}
+                    className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                        activeTab === 'bookBuilding'
+                            ? 'bg-white text-indigo-600 shadow-sm'
+                            : 'text-gray-600 hover:text-gray-800'
+                    }`}
+                >
+                    <span className="flex items-center gap-2">
+                        <BookOpen className="w-4 h-4" />
+                        Kids Monthly Books Flow
+                        {bookBuildingData && bookBuildingData.summary.totalStarted > 0 && (
+                            <span className="bg-amber-100 text-amber-700 text-xs px-2 py-0.5 rounded-full">
+                                {bookBuildingData.summary.totalStarted}
                             </span>
                         )}
                     </span>
@@ -1178,6 +1228,119 @@ const OnboardingAnalytics: React.FC = () => {
                     <PlayCircle className="w-12 h-12 text-gray-300 mx-auto mb-4" />
                     <p className="text-gray-500">No first lesson data available yet</p>
                     <p className="text-gray-400 text-sm mt-2">First lesson analytics will appear once users start the daily session flow</p>
+                </div>
+            )}
+
+            {/* ============ BOOK BUILDING (Dive into the Bible) TAB ============ */}
+            {activeTab === 'bookBuilding' && bookBuildingData && (
+            <>
+            <div className="bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mb-4 text-amber-800 text-sm">
+                <strong>Dive into the Bible</strong> — Create Your Story flow: started → steps 1–4 → book created → book completed. Conversion counts are users who saw the paywall / clicked trial / subscribed <em>from this feature</em> (source: create-your-story).
+            </div>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+                <div className="bg-white rounded-xl border border-gray-100 p-4 shadow-sm">
+                    <div className="text-gray-500 text-sm mb-1">Started</div>
+                    <p className="text-2xl font-bold text-gray-900">{bookBuildingData.summary.totalStarted.toLocaleString()}</p>
+                </div>
+                <div className="bg-white rounded-xl border border-gray-100 p-4 shadow-sm">
+                    <div className="text-gray-500 text-sm mb-1">Books completed</div>
+                    <p className="text-2xl font-bold text-green-600">{bookBuildingData.summary.totalBookCompleted.toLocaleString()}</p>
+                    <p className="text-xs text-gray-400">{bookBuildingData.summary.completionRate}% of started</p>
+                </div>
+                <div className="bg-white rounded-xl border border-gray-100 p-4 shadow-sm">
+                    <div className="text-gray-500 text-sm mb-1">Trial clicked (from feature)</div>
+                    <p className="text-2xl font-bold text-blue-600">{bookBuildingData.summary.trialClickedFromFeature.toLocaleString()}</p>
+                </div>
+                <div className="bg-white rounded-xl border border-gray-100 p-4 shadow-sm">
+                    <div className="text-gray-500 text-sm mb-1">Subscribed (from feature)</div>
+                    <p className="text-2xl font-bold text-indigo-600">{bookBuildingData.summary.subscribedFromFeature.toLocaleString()}</p>
+                </div>
+            </div>
+            <div className="bg-white rounded-xl border border-gray-100 p-6 shadow-sm mb-6">
+                <h3 className="text-lg font-semibold text-gray-800 mb-4 flex items-center gap-2">
+                    <ChevronRight className="w-5 h-5 text-amber-600" />
+                    Book building funnel
+                </h3>
+                <div className="space-y-3">
+                    {bookBuildingData.funnel.map((step, idx) => (
+                        <div key={step.stepKey || step.step} className="flex items-center gap-4">
+                            <div className="w-44 text-sm font-medium text-gray-700 flex items-center gap-2">
+                                <span className="w-6 h-6 rounded-full bg-amber-100 text-amber-700 text-xs flex items-center justify-center font-bold">{idx + 1}</span>
+                                <span className="truncate" title={step.step}>{step.step}</span>
+                            </div>
+                            <div className="flex-1 bg-gray-100 rounded-full h-8 overflow-hidden relative">
+                                <div className="h-full bg-gradient-to-r from-amber-500 to-amber-600 rounded-full transition-all duration-500" style={{ width: `${step.rate}%` }} />
+                                <div className="absolute inset-0 flex items-center justify-center">
+                                    <span className="text-sm font-semibold text-gray-700">{step.count.toLocaleString()} ({step.rate}%)</span>
+                                </div>
+                            </div>
+                        </div>
+                    ))}
+                </div>
+            </div>
+            {bookBuildingData.dropoffs.length > 0 && (
+                <div className="bg-white rounded-xl border border-gray-100 p-6 shadow-sm mb-6">
+                    <h3 className="text-lg font-semibold text-gray-800 mb-4 flex items-center gap-2">
+                        <ArrowDownRight className="w-5 h-5 text-red-500" />
+                        Top drop-offs
+                    </h3>
+                    <div className="space-y-2">
+                        {bookBuildingData.dropoffs.map((d, i) => (
+                            <div key={i} className="flex justify-between items-center text-sm">
+                                <span className="text-gray-700">{d.from} → {d.to}</span>
+                                <span className="font-semibold text-red-600">{d.dropped} ({d.dropRate}%)</span>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            )}
+            <div className="bg-white rounded-xl border border-gray-100 p-6 shadow-sm">
+                <h3 className="text-lg font-semibold text-gray-800 mb-4">Conversion (from Create Your Story paywall)</h3>
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                    <div><span className="text-gray-500 text-sm">Paywall shown</span><p className="font-bold text-gray-900">{bookBuildingData.conversion.paywallShown}</p></div>
+                    <div><span className="text-gray-500 text-sm">Trial clicked</span><p className="font-bold text-blue-600">{bookBuildingData.conversion.trialClicked}</p></div>
+                    <div><span className="text-gray-500 text-sm">Subscribed (total)</span><p className="font-bold text-green-600">{bookBuildingData.conversion.totalSubscribed}</p></div>
+                </div>
+            </div>
+            {bookBuildingData.dailyTrends && bookBuildingData.dailyTrends.length > 0 && (
+                <div className="bg-white rounded-xl border border-gray-100 p-6 shadow-sm mt-6">
+                    <h3 className="text-lg font-semibold text-gray-800 mb-4">Daily trend (started vs completed)</h3>
+                    <div className="overflow-x-auto">
+                        <table className="w-full text-sm">
+                            <thead>
+                                <tr className="text-left text-gray-500 border-b">
+                                    <th className="pb-2 pr-4">Date</th>
+                                    <th className="pb-2 pr-4">Started</th>
+                                    <th className="pb-2 pr-4">Step 4</th>
+                                    <th className="pb-2 pr-4">Book created</th>
+                                    <th className="pb-2 pr-4">Book completed</th>
+                                    <th className="pb-2">Subscribed</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {bookBuildingData.dailyTrends.map((d) => (
+                                    <tr key={d.date} className="border-b border-gray-100">
+                                        <td className="py-2 pr-4 font-medium">{formatDate(d.date)}</td>
+                                        <td className="py-2 pr-4">{d.started}</td>
+                                        <td className="py-2 pr-4">{d.step4}</td>
+                                        <td className="py-2 pr-4">{d.bookCreated}</td>
+                                        <td className="py-2 pr-4">{d.bookCompleted}</td>
+                                        <td className="py-2">{d.subscribed}</td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            )}
+            </>
+            )}
+
+            {activeTab === 'bookBuilding' && !bookBuildingData?.success && (
+                <div className="bg-gray-50 rounded-xl p-12 text-center">
+                    <BookOpen className="w-12 h-12 text-gray-300 mx-auto mb-4" />
+                    <p className="text-gray-500">No book building data yet</p>
+                    <p className="text-gray-400 text-sm mt-2">Dive into the Bible / Create Your Story events will appear once users start the flow</p>
                 </div>
             )}
 

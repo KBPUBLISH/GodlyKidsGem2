@@ -16,7 +16,8 @@ interface SavedCharacter {
 const STYLE_LABELS: Record<string, string> = {
     pixar: 'Pixar',
     minecraft: 'Minecraft',
-    disney: 'Disney',
+    disney: 'Disney 2D',
+    anime: 'Disney 2D',
     lego: 'LEGO',
     cartoon: 'Cartoon',
     illustrated: 'Illustrated',

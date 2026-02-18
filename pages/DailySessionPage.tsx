@@ -3,7 +3,6 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { X, Check, ChevronRight, Play, BookOpen, MessageCircle, Camera, Sparkles } from 'lucide-react';
 import PrayerGameModal from '../components/features/PrayerGameModal';
 import SessionCelebrationModal from '../components/modals/SessionCelebrationModal';
-import ReverseTrialOfferModal from '../components/modals/ReverseTrialOfferModal';
 import DiscussionQuestionsModal from '../components/modals/DiscussionQuestionsModal';
 import DailyVerseModal from '../components/modals/DailyVerseModal';
 import SelfieCapture from '../components/features/SelfieCapture';
@@ -105,7 +104,7 @@ const DailySessionPage: React.FC = () => {
     updateKid,
     switchProfile,
   } = useUser();
-  const { isPremium, reverseTrial } = useSubscription();
+  const { isPremium } = useSubscription();
   
   // Get current kid's age for age-aware AI content
   const currentKid = kids.find(k => k.id === currentProfileId);
@@ -118,7 +117,6 @@ const DailySessionPage: React.FC = () => {
   const [showPrayerModal, setShowPrayerModal] = useState(false);
   const [showDiscussionModal, setShowDiscussionModal] = useState(false);
   const [showCelebration, setShowCelebration] = useState(false);
-  const [showReverseTrialOffer, setShowReverseTrialOffer] = useState(false);
   const [recommendedBook, setRecommendedBook] = useState<any>(null);
   const [bookContent, setBookContent] = useState<string>(''); // Story text for discussion questions
   const [discussionQuestions, setDiscussionQuestions] = useState<any[]>([]); // Pre-generated questions
@@ -769,30 +767,12 @@ const DailySessionPage: React.FC = () => {
   // Handle celebration close
   const handleCelebrationClose = () => {
     setShowCelebration(false);
-    
-    // Check if this is user's first completed session and they're not premium
     const sessionHistory = getSessionHistory();
     const isFirstSession = sessionHistory.length <= 1; // Current session just got archived
-    const isEligibleForTrial = reverseTrial?.eligible && !isPremium;
-    
     if (isFirstSession && !isPremium) {
-      // Navigate to paywall first - if they dismiss, they'll see reverse trial offer
-      navigate('/paywall', { 
-        state: { 
-          source: 'first_session_complete',
-          showReverseTrialOnClose: isEligibleForTrial,
-          childName: childName
-        } 
-      });
+      navigate('/paywall', { state: { source: 'first_session_complete' } });
       return;
-    } else {
-      navigate('/home');
     }
-  };
-  
-  // Handle reverse trial offer close
-  const handleReverseTrialOfferClose = () => {
-    setShowReverseTrialOffer(false);
     navigate('/home');
   };
 
@@ -2015,13 +1995,6 @@ const DailySessionPage: React.FC = () => {
         session={session}
       />
       
-      {/* Reverse Trial Offer Modal - Shows after first session */}
-      <ReverseTrialOfferModal
-        isOpen={showReverseTrialOffer}
-        onClose={handleReverseTrialOfferClose}
-        childName={childName}
-      />
-
       {/* Selfie Capture Modal */}
       <SelfieCapture
         isOpen={showSelfieCapture}

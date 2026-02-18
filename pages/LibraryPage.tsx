@@ -1,18 +1,19 @@
 
 import React, { useState, useRef, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import BookCard from '../components/ui/BookCard';
 import Header from '../components/layout/Header';
 import SectionTitle from '../components/ui/SectionTitle';
 import { useBooks } from '../context/BooksContext';
-import { Search, ChevronDown, Music, BookOpen, Clock, Heart, ListMusic, Plus, Trash2 } from 'lucide-react';
+import { Search, ChevronDown, Music, BookOpen, Clock, Heart, ListMusic, Plus, Trash2, Loader2 } from 'lucide-react';
 import { libraryService } from '../services/libraryService';
 import { favoritesService } from '../services/favoritesService';
 import { readingProgressService } from '../services/readingProgressService';
 import { playHistoryService } from '../services/playHistoryService';
-import { getApiBaseUrl } from '../services/apiService';
+import { getApiBaseUrl, getMonthlyBookBaseUrl } from '../services/apiService';
 import { userPlaylistService, UserPlaylist } from '../services/userPlaylistService';
 import { authService } from '../services/authService';
+import { FEATURE_CREATE_YOUR_STORY } from '../constants';
 
 const ageOptions = ['All Ages', '3+', '4+', '5+', '6+', '7+', '8+', '9+', '10+'];
 
@@ -25,8 +26,21 @@ interface Playlist {
   items: any[];
 }
 
+/** From GET /api/monthly-book/my-books (Create Your Story) */
+interface MyMonthlyBook {
+  customMonthlyBookId: string;
+  bookId: string | null;
+  title: string;
+  coverImageUrl: string | null;
+  childName?: string;
+  createdAt: string;
+  status: 'pending' | 'generating' | 'completed' | 'failed' | 'archived';
+  pageCount?: number;
+}
+
 const LibraryPage: React.FC = () => {
   const navigate = useNavigate();
+  const location = useLocation();
   const { books, loading } = useBooks();
   const [isHeaderVisible, setIsHeaderVisible] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
@@ -36,6 +50,8 @@ const LibraryPage: React.FC = () => {
   const [playlistsLoading, setPlaylistsLoading] = useState(true);
   const [userPlaylists, setUserPlaylists] = useState<UserPlaylist[]>([]);
   const [userPlaylistsLoading, setUserPlaylistsLoading] = useState(true);
+  const [myMonthlyBooks, setMyMonthlyBooks] = useState<MyMonthlyBook[]>([]);
+  const [myMonthlyBooksLoading, setMyMonthlyBooksLoading] = useState(false);
   const ageDropdownRef = useRef<HTMLDivElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const lastScrollY = useRef(0);
@@ -101,6 +117,116 @@ const LibraryPage: React.FC = () => {
     };
     fetchUserPlaylists();
   }, []);
+
+  // Fetch user's Create Your Story books (completed + in-progress). Refetch when user lands on Library and when page becomes visible again.
+  const fetchMyMonthlyBooksRef = useRef<() => Promise<void>>(null);
+  useEffect(() => {
+    if (!FEATURE_CREATE_YOUR_STORY || location.pathname !== '/library') return;
+    const userId = authService.getUserIdForBackend();
+    if (!userId) {
+      setMyMonthlyBooksLoading(false);
+      return;
+    }
+    const user = authService.getUser();
+    const email = (user?.email || (typeof localStorage !== 'undefined' && localStorage.getItem('godlykids_user_email')))?.trim?.() || '';
+    const deviceId = (typeof localStorage !== 'undefined' && (localStorage.getItem('godlykids_device_id') || localStorage.getItem('device_id')))?.trim?.() || '';
+    const fetchMyMonthlyBooks = async () => {
+      try {
+        setMyMonthlyBooksLoading(true);
+        const base = getMonthlyBookBaseUrl();
+        const params = new URLSearchParams({ userId, includeInProgress: '1' });
+        if (email && email !== userId) params.set('email', email);
+        if (deviceId && deviceId !== userId && deviceId !== email) params.set('deviceId', deviceId);
+        const res = await fetch(`${base}/monthly-book/my-books?${params.toString()}`);
+        const data = await res.json().catch(() => ({}));
+        if (data.success && Array.isArray(data.books)) {
+          setMyMonthlyBooks(data.books);
+        }
+      } catch (e) {
+        console.error('Error fetching my monthly books:', e);
+      } finally {
+        setMyMonthlyBooksLoading(false);
+      }
+    };
+    fetchMyMonthlyBooksRef.current = fetchMyMonthlyBooks;
+    fetchMyMonthlyBooks();
+  }, [location.pathname]);
+
+  // Refetch my books when user returns to this tab/page so in-progress and newly completed books are visible.
+  useEffect(() => {
+    if (!FEATURE_CREATE_YOUR_STORY || location.pathname !== '/library') return;
+    const onVisible = () => {
+      if (document.visibilityState === 'visible' && fetchMyMonthlyBooksRef.current) {
+        fetchMyMonthlyBooksRef.current();
+      }
+    };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => document.removeEventListener('visibilitychange', onVisible);
+  }, [location.pathname]);
+
+  // When coming from Create Your Story or "Find in Library" on book detail: refetch My Books then scroll to My Books.
+  const myBooksSectionRef = useRef<HTMLDivElement>(null);
+  const didScrollToMyBooks = useRef(false);
+  useEffect(() => {
+    if (location.pathname !== '/library') {
+      didScrollToMyBooks.current = false;
+      return;
+    }
+    if (!FEATURE_CREATE_YOUR_STORY) return;
+    const state = location.state as any;
+    const shouldScroll = state?.fromCreateYourStory || state?.fromCreating || state?.scrollToMyBooks;
+    if (!shouldScroll) return;
+    // Refetch when coming from create flow so the new book appears; for scrollToMyBooks just scroll
+    if (state?.fromCreateYourStory || state?.fromCreating) {
+      if (fetchMyMonthlyBooksRef.current) fetchMyMonthlyBooksRef.current();
+    }
+    const refetchT = setTimeout(() => {
+      if (fetchMyMonthlyBooksRef.current) fetchMyMonthlyBooksRef.current();
+    }, 800);
+    if (didScrollToMyBooks.current) return () => clearTimeout(refetchT);
+    didScrollToMyBooks.current = true;
+    const scrollT = setTimeout(() => {
+      myBooksSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 400);
+    return () => {
+      clearTimeout(refetchT);
+      clearTimeout(scrollT);
+    };
+  }, [location.pathname, location.state]);
+
+  // Poll My Books when there are in-progress books or a sessionStorage placeholder so the list updates when a book completes.
+  useEffect(() => {
+    if (!FEATURE_CREATE_YOUR_STORY || location.pathname !== '/library' || !fetchMyMonthlyBooksRef.current) return;
+    const hasInProgress = myMonthlyBooks.some((b) => b.status === 'pending' || b.status === 'generating');
+    let hasStoredPlaceholder = false;
+    try {
+      const raw = sessionStorage.getItem('godlykids_last_creating_book');
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        const age = Date.now() - (parsed?.createdAt || 0);
+        hasStoredPlaceholder = !!parsed?.customMonthlyBookId && age > 0 && age < 2 * 60 * 60 * 1000;
+      }
+    } catch (_) {}
+    if (!hasInProgress && !hasStoredPlaceholder) return;
+    const interval = setInterval(() => {
+      if (fetchMyMonthlyBooksRef.current) fetchMyMonthlyBooksRef.current();
+    }, 15000);
+    return () => clearInterval(interval);
+  }, [location.pathname, myMonthlyBooks]);
+
+  // Clear sessionStorage placeholder when the book appears from the API so we don't show a duplicate.
+  useEffect(() => {
+    if (!FEATURE_CREATE_YOUR_STORY || myMonthlyBooks.length === 0) return;
+    try {
+      const raw = sessionStorage.getItem('godlykids_last_creating_book');
+      if (!raw) return;
+      const parsed = JSON.parse(raw);
+      const id = parsed?.customMonthlyBookId;
+      if (id && myMonthlyBooks.some((b) => b.customMonthlyBookId === id)) {
+        sessionStorage.removeItem('godlykids_last_creating_book');
+      }
+    } catch (_) {}
+  }, [myMonthlyBooks]);
 
   // Close age dropdown when clicking outside
   useEffect(() => {
@@ -320,24 +446,7 @@ const LibraryPage: React.FC = () => {
       <Header isVisible={isHeaderVisible} title="MY LIBRARY" />
 
       <div className="px-4 pt-28 pb-52">
-        {/* Create Your Story - front and center CTA */}
-        <div
-          onClick={() => navigate('/create-your-story')}
-          className="mb-6 rounded-2xl overflow-hidden border-2 border-amber-400/60 bg-gradient-to-br from-amber-600/40 to-amber-800/50 shadow-xl active:scale-[0.98] transition-transform"
-        >
-          <div className="p-4 flex items-center gap-4">
-            <div className="w-14 h-14 rounded-xl bg-amber-500/30 flex items-center justify-center shrink-0">
-              <BookOpen className="w-8 h-8 text-amber-200" />
-            </div>
-            <div className="flex-1 min-w-0">
-              <h2 className="text-white font-bold text-lg">Create your story</h2>
-              <p className="text-amber-100/90 text-sm mt-0.5">Enter the Bible with your own adventure. Once a month, a new story with you in it.</p>
-            </div>
-            <ChevronDown className="w-5 h-5 text-amber-200 rotate-[-90deg] shrink-0" />
-          </div>
-        </div>
-
-        {/* Search Bar with Age Filter */}
+        {/* Search + Age Filter - first at top */}
         <div className="flex gap-2 mb-4">
           <div className="relative flex-1">
             <div className="absolute inset-y-0 left-3 flex items-center pointer-events-none">
@@ -362,7 +471,6 @@ const LibraryPage: React.FC = () => {
               <ChevronDown className={`w-4 h-4 transition-transform ${showAgeDropdown ? 'rotate-180' : ''}`} />
             </button>
             
-            {/* Age Dropdown Menu */}
             {showAgeDropdown && (
               <div className="absolute top-full right-0 mt-2 bg-black/95 backdrop-blur-md rounded-xl border border-white/20 shadow-2xl z-50 min-w-[120px] max-h-[300px] overflow-y-auto">
                 <div className="py-2">
@@ -386,20 +494,150 @@ const LibraryPage: React.FC = () => {
           </div>
         </div>
 
+        {/* Dive into The Bible - at top of My Library */}
+        {FEATURE_CREATE_YOUR_STORY && (
+          <button
+            type="button"
+            onClick={() => navigate('/create-your-story')}
+            className="block w-full max-w-md mx-auto mb-6 p-0 border-0 bg-transparent focus:outline-none focus:ring-2 focus:ring-amber-400 focus:ring-offset-2 rounded-2xl transition-transform active:scale-[0.98]"
+            aria-label="Start Story Adventure - Create your story"
+          >
+            <img
+              src="/assets/images/dive-into-bible-button.png"
+              alt="Dive into The Bible - Start Story Adventure"
+              className="w-full h-auto block rounded-2xl shadow-[0_4px_12px_rgba(0,0,0,0.08),0_8px_24px_rgba(0,0,0,0.06)]"
+            />
+          </button>
+        )}
+
+        {/* My Books (Create Your Story) */}
+        {FEATURE_CREATE_YOUR_STORY && (() => {
+          const stateCreatingBook = (location.state as any)?.creatingBook as { customMonthlyBookId: string; title: string; coverImageUrl: string | null } | undefined;
+          let storedCreatingBook: { customMonthlyBookId: string; title: string; coverImageUrl: string | null; createdAt: number } | null = null;
+          try {
+            const raw = typeof sessionStorage !== 'undefined' && sessionStorage.getItem('godlykids_last_creating_book');
+            if (raw) {
+              const parsed = JSON.parse(raw);
+              const age = Date.now() - (parsed.createdAt || 0);
+              if (parsed.customMonthlyBookId && age > 0 && age < 2 * 60 * 60 * 1000) storedCreatingBook = parsed;
+            }
+          } catch (_) {}
+          const fromState = stateCreatingBook?.customMonthlyBookId && !myMonthlyBooks.some((b) => b.customMonthlyBookId === stateCreatingBook.customMonthlyBookId)
+            ? { customMonthlyBookId: stateCreatingBook.customMonthlyBookId, bookId: null, title: stateCreatingBook.title, coverImageUrl: stateCreatingBook.coverImageUrl, status: 'generating' as const, createdAt: new Date().toISOString() }
+            : null;
+          const fromStorage = storedCreatingBook && !myMonthlyBooks.some((b) => b.customMonthlyBookId === storedCreatingBook!.customMonthlyBookId) && (!fromState || fromState.customMonthlyBookId !== storedCreatingBook.customMonthlyBookId)
+            ? { customMonthlyBookId: storedCreatingBook.customMonthlyBookId, bookId: null, title: storedCreatingBook.title, coverImageUrl: storedCreatingBook.coverImageUrl, status: 'generating' as const, createdAt: new Date(storedCreatingBook.createdAt).toISOString() }
+            : null;
+          const displayBooks: MyMonthlyBook[] = [
+            ...(fromState ? [fromState] : []),
+            ...(fromStorage ? [fromStorage] : []),
+            ...myMonthlyBooks.filter((b) => b.status !== 'archived'),
+          ].filter((b, i, arr) => arr.findIndex((x) => x.customMonthlyBookId === b.customMonthlyBookId) === i);
+          return (
+          <div className="mb-8" ref={myBooksSectionRef} data-my-books-section>
+            <SectionTitle title="My Books" />
+            {myMonthlyBooksLoading && displayBooks.length === 0 ? (
+              <div className="py-6 text-center text-white/60 text-sm">Loading your books...</div>
+            ) : (
+              <div className="w-screen overflow-x-auto no-scrollbar pb-4 -mx-4">
+                <div className="flex space-x-3 px-4">
+                  {/* Create your story - same style as Create New Playlist */}
+                  <div
+                    className="flex-shrink-0 w-[42vw] md:w-[30vw] lg:w-[23vw] max-w-[200px] cursor-pointer"
+                    onClick={() => navigate('/create-your-story')}
+                  >
+                    <div className="bg-gradient-to-br from-amber-600/30 to-amber-800/30 backdrop-blur-sm rounded-2xl overflow-hidden shadow-lg border-2 border-dashed border-amber-400/50 hover:border-amber-400 hover:shadow-2xl hover:scale-105 transition-all group">
+                      <div className="aspect-square flex items-center justify-center">
+                        <div className="text-center">
+                          <div className="w-16 h-16 mx-auto rounded-full bg-amber-500/30 flex items-center justify-center mb-2 group-hover:bg-amber-500/50 transition-colors">
+                            <Plus className="w-8 h-8 text-amber-300" />
+                          </div>
+                          <p className="text-amber-200 font-bold text-sm">Create your story</p>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                  {displayBooks.map((item) => (
+                    <div
+                      key={item.customMonthlyBookId}
+                      className="flex-shrink-0 w-[42vw] md:w-[30vw] lg:w-[23vw] max-w-[200px]"
+                    >
+                      {item.status === 'completed' && item.bookId ? (
+                        <div className="relative">
+                          <BookCard
+                            book={{
+                              id: item.bookId,
+                              title: item.title,
+                              coverUrl: item.coverImageUrl || '',
+                              author: item.childName,
+                            } as any}
+                            onClick={(id) => navigate(`/book/${id}`, { state: { from: '/library' } })}
+                          />
+                        </div>
+                      ) : item.status === 'failed' ? (
+                        <div className="bg-white/10 backdrop-blur-sm rounded-2xl overflow-hidden border-2 border-red-400/40">
+                          <div className="aspect-square relative bg-gradient-to-br from-red-900/40 to-amber-900/30 flex flex-col items-center justify-center p-3">
+                            <BookOpen className="w-12 h-12 text-red-300/80" />
+                            <span className="text-red-200 text-sm font-bold text-center mt-2">Couldn’t create</span>
+                            <span className="text-red-200/80 text-xs text-center mt-1">Try again with &quot;Create your story&quot;</span>
+                          </div>
+                          <div className="p-2">
+                            <p className="text-white font-medium text-sm truncate">{item.title}</p>
+                            <p className="text-red-300/80 text-xs">Creation failed · try again</p>
+                          </div>
+                        </div>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => navigate(`/library/creating/${item.customMonthlyBookId}`)}
+                          className="w-full text-left bg-white/10 backdrop-blur-sm rounded-2xl overflow-hidden border-2 border-amber-400/30 hover:border-amber-400/50 active:scale-[0.98] transition-all"
+                        >
+                          <div className="aspect-square relative bg-gradient-to-br from-amber-900/40 to-amber-800/30">
+                            {item.coverImageUrl ? (
+                              <img
+                                src={item.coverImageUrl}
+                                alt=""
+                                className="w-full h-full object-cover opacity-80"
+                              />
+                            ) : (
+                              <div className="w-full h-full flex items-center justify-center">
+                                <BookOpen className="w-12 h-12 text-amber-200/60" />
+                              </div>
+                            )}
+                            <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/60 gap-2">
+                              <Loader2 className="w-10 h-10 text-amber-300 animate-spin" aria-hidden />
+                              <span className="text-amber-200 text-sm font-bold text-center px-2">Creating your story...</span>
+                            </div>
+                          </div>
+                          <div className="p-2">
+                            <p className="text-white font-medium text-sm truncate">{item.title}</p>
+                            <p className="text-amber-200/80 text-xs">Usually 5–10 min · tap to see progress</p>
+                          </div>
+                        </button>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+          );
+        })()}
+
+        {/* My Playlists */}
+        <section className="mb-6">
+          <SectionTitle 
+            title="My Playlists" 
+            icon="🎶"
+            color="#E040FB"
+          />
+          {renderUserPlaylistRow()}
+        </section>
+
         {isLoading ? (
           <div className="text-white font-display text-center mt-10">Checking backpack...</div>
         ) : (
           <>
-            {/* My Playlists Section - ALWAYS show at the top so users can create playlists */}
-            <section className="mb-6">
-              <SectionTitle 
-                title="My Playlists" 
-                icon="🎶"
-                color="#E040FB"
-              />
-              {renderUserPlaylistRow()}
-            </section>
-
             {/* Favorite Books Section */}
             {filteredFavoriteBooks.length > 0 && (
               <section className="mb-6">

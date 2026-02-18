@@ -73,6 +73,7 @@ interface Page {
     scrollOffsetY?: number; // Vertical offset from bottom in percentage (default 0)
     scrollOffsetX?: number; // Horizontal offset from center in percentage (default 0)
     scrollWidth?: number; // Width as percentage (default 100 = full width)
+    scrollOpacity?: number; // 0–100: transparency of scroll (100 = opaque)
     // Video sequence - multiple videos that play in order
     useVideoSequence?: boolean;
     videoSequence?: VideoSequenceItem[];
@@ -83,6 +84,7 @@ interface Page {
     imageSequenceAnimation?: string; // animation effect type
     textBoxes?: TextBox[]; // Legacy: some pages may have textBoxes at root
     content?: {
+        text?: string; // Fallback when textBoxes is empty (e.g. some Create Your Story pages)
         textBoxes?: TextBox[]; // Primary location of textBoxes from DB
     };
     files?: {
@@ -169,7 +171,8 @@ const BookReaderPage: React.FC = () => {
     // Premium preview state
     const [isBookPremium, setIsBookPremium] = useState(false);
     const [showPreviewLimitModal, setShowPreviewLimitModal] = useState(false);
-    const [scrollState, setScrollState] = useState<ScrollState>('max'); // Default to max (60%) - matches portal editing view
+    const [scrollState, setScrollState] = useState<ScrollState>('max'); // Default to max (60%) - matches portal editing view; kid monthly books start at 'mid' (25%)
+    const [isKidMonthlyBook, setIsKidMonthlyBook] = useState(false);
     const [bookTitle, setBookTitle] = useState<string>('Book');
     const [bookOrientation, setBookOrientation] = useState<'portrait' | 'landscape'>('portrait');
     const [invalidBookId, setInvalidBookId] = useState(false);
@@ -305,86 +308,130 @@ const BookReaderPage: React.FC = () => {
     const isSequentialPlaybackRef = useRef(false); // True when playing all text boxes in sequence
     
     /**
+     * Normalize all quote characters to straight " so "@Cristina dialogue" matches
+     * regardless of smart/curly quotes from Word, portal, or OS.
+     * Includes: " " (U+201C/U+201D), „ ", « », fullwidth ＂, and other variants.
+     */
+    const normalizeQuotesForVoice = (t: string): string =>
+        t
+            .replace(/[\u201C\u201D\u201E\u201F\u2033\u2036\u00AB\u00BB\uFF02""„«»〝〞＂❝❞⹂〟‟″‶]/g, '"')
+            .replace(/[\u2018\u2019\u201A\u201B\u2032\u2035''‚‹›＇❛❜‛′‵]/g, "'");
+
+    /**
      * Get the voice ID to use for a given text, handling @Character tags
      * 
      * SUPPORTED FORMATS:
-     * 1. "@Moses Let my people go!"  ← Tag INSIDE quotes (preferred) - Moses reads only the quoted text
-     * 2. @Moses "Let my people go!"  ← Tag OUTSIDE quotes - Moses reads only the quoted text
+     * 1. "@Moses Let my people go!"  ← Tag INSIDE quotes
+     * 2. @Moses "Let my people go!"  ← Tag OUTSIDE quotes
+     * 3. @Cristina Keep your feet on the ground!  ← No quotes: character speaks until .!?
      * 
-     * The @Character tag MUST be paired with quotes to define exactly what the character says.
-     * Text without quotes = narrator reads it.
-     * 
-     * Voice Priority:
-     * 1. @Character tag with quotes -> Use character's assigned voice (FIXED)
-     * 2. No tag -> Use narrator voice (defaultNarratorVoiceId or user's selected voice)
+     * Voice Priority: quoted formats first, then unquoted @Name &lt;sentence&gt;, else narrator.
      */
     const getVoiceForText = (text: string): { voiceId: string; cleanText: string; characterName?: string } => {
+        const normalized = normalizeQuotesForVoice(text);
+
         // Pattern 1: Tag INSIDE quotes - "@Moses Let my people go!"
-        // This is the PREFERRED format - cleaner and more intuitive
-        const insideQuotesMatch = text.match(/"@(\w+)\s+([^"]+)"/);
-        
+        const insideRe = /"@([\w-]+)\s+([^"]+)"/;
+        const insideQuotesMatch = normalized.match(insideRe);
         if (insideQuotesMatch) {
-            const [fullMatch, charName, dialogueText] = insideQuotesMatch;
-            const character = characterVoices.find(c => 
+            const [, charName, dialogueText] = insideQuotesMatch;
+            const character = characterVoices.find(c =>
                 c.characterName.toLowerCase() === charName.toLowerCase()
             );
-            
-            // Clean text: keep only the dialogue (remove tag, keep rest of text for display)
-            const cleanText = text
-                .replace(/"@\w+\s+([^"]+)"/g, '"$1"') // Replace "@Name text" with just "text"
+            const cleanText = normalized
+                .replace(/"@[\w-]+\s+([^"]+)"/g, '"$1"')
                 .replace(/\s+/g, ' ')
                 .trim();
-            
             if (character && character.voiceId) {
                 console.log(`🎭 Character voice (inside quotes): "@${charName} ${dialogueText}" -> voice: ${character.voiceId}`);
-                return { 
-                    voiceId: character.voiceId, 
-                    cleanText,
-                    characterName: character.characterName
-                };
+                return { voiceId: character.voiceId, cleanText, characterName: character.characterName };
             }
             console.warn(`⚠️ Character @${charName} not found, using narrator voice`);
             return { voiceId: effectiveNarratorVoiceId, cleanText };
         }
-        
+
         // Pattern 2: Tag OUTSIDE quotes - @Moses "Let my people go!"
-        const outsideQuotesMatch = text.match(/@(\w+)\s+"([^"]+)"/);
-        
+        const outsideRe = /@([\w-]+)\s+"([^"]+)"/;
+        const outsideQuotesMatch = normalized.match(outsideRe);
         if (outsideQuotesMatch) {
-            const [fullMatch, charName, quotedText] = outsideQuotesMatch;
-            const character = characterVoices.find(c => 
+            const [, charName, quotedText] = outsideQuotesMatch;
+            const character = characterVoices.find(c =>
                 c.characterName.toLowerCase() === charName.toLowerCase()
             );
-            
-            // Clean text: remove @tag but keep the quoted text
-            const cleanText = text
-                .replace(/@\w+\s+"([^"]+)"/g, '"$1"') // Replace @Name "text" with just "text"
+            const cleanText = normalized
+                .replace(/@[\w-]+\s+"([^"]+)"/g, '"$1"')
                 .replace(/\s+/g, ' ')
                 .trim();
-            
             if (character && character.voiceId) {
                 console.log(`🎭 Character voice (outside quotes): @${charName} "${quotedText}" -> voice: ${character.voiceId}`);
-                return { 
-                    voiceId: character.voiceId, 
-                    cleanText,
-                    characterName: character.characterName
-                };
+                return { voiceId: character.voiceId, cleanText, characterName: character.characterName };
             }
             console.warn(`⚠️ Character @${charName} not found, using narrator voice`);
             return { voiceId: effectiveNarratorVoiceId, cleanText };
         }
-        
-        // No @Character tag with quotes - narrator reads everything
-        // NOTE: @Character without quotes is IGNORED (use quotes to define dialogue!)
-        const cleanText = text
-            .replace(/@\w+\s*/g, '') // Remove any stray @tags (they're malformed without quotes)
+
+        // Pattern 1b: Tag INSIDE single quotes - '@Jesus Come meet my mother!'
+        const insideSingleRe = /'@([\w-]+)\s+([^']+)'/;
+        const insideSingleMatch = normalized.match(insideSingleRe);
+        if (insideSingleMatch) {
+            const [, charName, dialogueText] = insideSingleMatch;
+            const character = characterVoices.find(c =>
+                c.characterName.toLowerCase() === charName.toLowerCase()
+            );
+            const cleanText = normalized
+                .replace(/'@[\w-]+\s+([^']+)'/g, '"$1"')
+                .replace(/\s+/g, ' ')
+                .trim();
+            if (character && character.voiceId) {
+                console.log(`🎭 Character voice (inside single quotes): '@${charName} ${dialogueText}' -> voice: ${character.voiceId}`);
+                return { voiceId: character.voiceId, cleanText, characterName: character.characterName };
+            }
+            console.warn(`⚠️ Character @${charName} not found, using narrator voice`);
+            return { voiceId: effectiveNarratorVoiceId, cleanText };
+        }
+
+        // Pattern 2b: Tag OUTSIDE single quotes - @Jesus 'Come meet my mother!'
+        const outsideSingleRe = /@([\w-]+)\s+'([^']+)'/;
+        const outsideSingleMatch = normalized.match(outsideSingleRe);
+        if (outsideSingleMatch) {
+            const [, charName, quotedText] = outsideSingleMatch;
+            const character = characterVoices.find(c =>
+                c.characterName.toLowerCase() === charName.toLowerCase()
+            );
+            const cleanText = normalized
+                .replace(/@[\w-]+\s+'([^']+)'/g, '"$1"')
+                .replace(/\s+/g, ' ')
+                .trim();
+            if (character && character.voiceId) {
+                console.log(`🎭 Character voice (outside single quotes): @${charName} '${quotedText}' -> voice: ${character.voiceId}`);
+                return { voiceId: character.voiceId, cleanText, characterName: character.characterName };
+            }
+            console.warn(`⚠️ Character @${charName} not found, using narrator voice`);
+            return { voiceId: effectiveNarratorVoiceId, cleanText };
+        }
+
+        // Pattern 3: Unquoted - @Cristina Keep your feet on the ground! (only when whole text is this one line)
+        const unquotedRe = /^\s*@([\w-]+)\s+([^.?!]+[.?!])\s*$/;
+        const unquotedMatch = normalized.trim().match(unquotedRe);
+        if (unquotedMatch) {
+            const [, charName, sentence] = unquotedMatch;
+            const character = characterVoices.find(c =>
+                c.characterName.toLowerCase() === charName.toLowerCase()
+            );
+            if (character && character.voiceId) {
+                console.log(`🎭 Character voice (unquoted): @${charName} "${sentence}" -> voice: ${character.voiceId}`);
+                return { voiceId: character.voiceId, cleanText: sentence.trim(), characterName: character.characterName };
+            }
+            console.warn(`⚠️ Character @${charName} not found, using narrator voice`);
+            return { voiceId: effectiveNarratorVoiceId, cleanText: sentence.trim() };
+        }
+
+        // No @Character tag - narrator reads everything
+        const cleanText = normalized
+            .replace(/@[\w-]+\s*/g, '')
             .replace(/\s+/g, ' ')
             .trim();
-        
-        return { 
-            voiceId: effectiveNarratorVoiceId, 
-            cleanText 
-        };
+        return { voiceId: effectiveNarratorVoiceId, cleanText };
     };
     
     /**
@@ -409,21 +456,17 @@ const BookReaderPage: React.FC = () => {
     const parseTextIntoSegments = (text: string): TextSegment[] => {
         const segments: TextSegment[] = [];
         
-        // Normalize quotes first - convert ALL types of quotes to straight quotes
-        // Include fullwidth, CJK, and other Unicode quote variants
-        const normalizedText = text
-            .replace(/[""„«»「」『』〝〞＂❝❞⹂〟‟″‶]/g, '"')  // ALL double quote variants
-            .replace(/[''‚‹›「」＇❛❜‛′‵]/g, "'"); // ALL single quote variants
-        
-        console.log('🔄 Normalized text:', normalizedText.substring(0, 100) + '...');
+        // Use same normalizer as getVoiceForText so "@Cristina dialogue" always matches
+        const normalizedText = normalizeQuotesForVoice(text);
+        console.log('🔄 Normalized text:', normalizedText.substring(0, 100) + (normalizedText.length > 100 ? '...' : ''));
         
         // Debug: Check if regex can find patterns
         // Pattern 1: @Name "text"
-        const testMatch1 = normalizedText.match(/@(\w+)\s*"([^"]+)"/);
+        const testMatch1 = normalizedText.match(/@([\w-]+)\s*"([^"]+)"/);
         console.log('🧪 Pattern 1 (@Name "text"):', testMatch1 ? `Found: @${testMatch1[1]} "${testMatch1[2].substring(0, 20)}..."` : 'NO MATCH');
         
         // Pattern 2: "@Name text"
-        const testMatch2 = normalizedText.match(/"@(\w+)\s+([^"]+)"/);
+        const testMatch2 = normalizedText.match(/"@([\w-]+)\s+([^"]+)"/);
         console.log('🧪 Pattern 2 ("@Name text"):', testMatch2 ? `Found: @${testMatch2[1]} "${testMatch2[2].substring(0, 20)}..."` : 'NO MATCH');
         
         // Debug: Show character codes around first "@
@@ -444,19 +487,20 @@ const BookReaderPage: React.FC = () => {
             console.log('🔬 Context around @:', `"${beforeAt}" + "${afterAt}"`)
         }
         
-        // Combined regex to match both formats:
-        // 1. @Character "dialogue" - tag outside quotes
-        // 2. "@Character dialogue" - tag inside quotes
-        const characterPattern = /(?:@(\w+)\s*"([^"]+)"|"@(\w+)\s+([^"]+)")/g;
+        // Combined regex: double and single-quoted formats ([\w-]+ allows names like Mary-Jane)
+        // 1. @Name "text"  2. "@Name text"  3. @Name 'text'  4. '@Name text'
+        const characterPattern = /(?:@([\w-]+)\s*"([^"]+)"|"@([\w-]+)\s+([^"]+)"|@([\w-]+)\s*'([^']+)'|'@([\w-]+)\s+([^']+)')/g;
         
         let lastIndex = 0;
         let match: RegExpExecArray | null;
         let cleanTextIndex = 0; // Track position in cleaned text for highlighting
         
-        // First pass: build cleaned text to calculate indices
+        // First pass: build cleaned text to calculate indices (strip character tags to quoted dialogue only)
         const cleanedText = normalizedText
-            .replace(/@(\w+)\s*"([^"]+)"/g, '"$2"')  // @Name "text" -> "text"
-            .replace(/"@(\w+)\s+([^"]+)"/g, '"$2"') // "@Name text" -> "text"
+            .replace(/@([\w-]+)\s*"([^"]+)"/g, '"$2"')
+            .replace(/"@([\w-]+)\s+([^"]+)"/g, '"$2"')
+            .replace(/@([\w-]+)\s*'([^']+)'/g, '"$2"')
+            .replace(/'@([\w-]+)\s+([^']+)'/g, '"$2"')
             .replace(/\s+/g, ' ')
             .trim();
         
@@ -483,11 +527,9 @@ const BookReaderPage: React.FC = () => {
                 });
             }
             
-            // Determine which pattern matched
-            // match[1] and match[2] are for @Name "text" pattern
-            // match[3] and match[4] are for "@Name text" pattern
-            const charName = match[1] || match[3];
-            const dialogueText = match[2] || match[4];
+            // Which pattern matched: groups 1,2 = @Name "text"; 3,4 = "@Name text"; 5,6 = @Name 'text'; 7,8 = '@Name text'
+            const charName = match[1] || match[3] || match[5] || match[7];
+            const dialogueText = match[2] || match[4] || match[6] || match[8];
             
             if (charName && dialogueText) {
                 // Find the character voice
@@ -521,7 +563,7 @@ const BookReaderPage: React.FC = () => {
         const remainingText = normalizedText.slice(lastIndex).trim();
         if (remainingText) {
             const cleanRemainingText = remainingText
-                .replace(/@\w+\s*/g, '') // Remove stray @tags
+                .replace(/@[\w-]+\s*/g, '') // Remove stray @tags
                 .replace(/\s+/g, ' ')
                 .trim();
             
@@ -541,8 +583,8 @@ const BookReaderPage: React.FC = () => {
         
         // If no segments were created (no character tags), create single narrator segment
         if (segments.length === 0) {
-            const cleanText = text
-                .replace(/@\w+\s*/g, '') // Remove any stray @tags
+            const cleanText = normalizedText
+                .replace(/@[\w-]+\s*/g, '') // Remove any stray @tags
                 .replace(/\s+/g, ' ')
                 .trim();
             
@@ -570,10 +612,13 @@ const BookReaderPage: React.FC = () => {
      * Used for displaying text in the UI without the voice markup.
      */
     const getCleanDisplayText = (text: string): string => {
-        return text
-            .replace(/@(\w+)\s*"([^"]+)"/g, '"$2"')  // @Name "text" -> "text"
-            .replace(/"@(\w+)\s+([^"]+)"/g, '"$2"') // "@Name text" -> "text"
-            .replace(/@\w+\s*/g, '') // Remove stray @tags
+        const normalized = normalizeQuotesForVoice(text);
+        return normalized
+            .replace(/@([\w-]+)\s*"([^"]+)"/g, '"$2"')
+            .replace(/"@([\w-]+)\s+([^"]+)"/g, '"$2"')
+            .replace(/@([\w-]+)\s*'([^']+)'/g, '"$2"')
+            .replace(/'@([\w-]+)\s+([^']+)'/g, '"$2"')
+            .replace(/@[\w-]+\s*/g, '')
             .replace(/\s+/g, ' ')
             .trim();
     };
@@ -983,11 +1028,16 @@ const BookReaderPage: React.FC = () => {
         const fetchBookData = async () => {
             if (!bookId) return;
             try {
-                const book = await ApiService.getBookById(bookId);
+                const userId = authService.getUserIdForBackend();
+                const shareToken = searchParams.get('share') || undefined;
+                const book = await ApiService.getBookById(bookId, userId, shareToken || null);
                 
-                // Check if book is members-only - allow preview instead of blocking
+                // Shared link: recipient can read full book without subscription
+                const allowSharedRead = (book as any)?.allowSharedRead === true;
                 const bookIsMembersOnly = (book as any)?.isMembersOnly === true;
-                if (bookIsMembersOnly && !isSubscribed && !isTutorialActive) {
+                if (allowSharedRead) {
+                    setIsBookPremium(false);
+                } else if (bookIsMembersOnly && !isSubscribed && !isTutorialActive) {
                     console.log('📖 Premium book detected - allowing 3 page preview');
                     setIsBookPremium(true);
                 } else {
@@ -1035,9 +1085,15 @@ const BookReaderPage: React.FC = () => {
                     const orientation = rawData?.orientation || (book as any)?.orientation || 'portrait';
                     setBookOrientation(orientation);
                     console.log('📖 Book orientation:', orientation);
-                    
-                    // Check if book should show character overlay
-                    const hasCharacterOverlay = rawData?.showCharacterOverlay || (book as any)?.showCharacterOverlay || false;
+                    // Kid monthly (Create Your Story) books: start scroll at 25% height
+                    const kidMonthly = rawData?.bookType === 'kids_monthly' || (book as any)?.isUserCreated === true;
+                    setIsKidMonthlyBook(!!kidMonthly);
+                    if (kidMonthly) {
+                        setScrollState('mid');
+                        scrollStateRef.current = 'mid';
+                    }
+                    // Check if book should show character overlay (never for Create Your Story: characters are already in the art)
+                    const hasCharacterOverlay = !kidMonthly && (rawData?.showCharacterOverlay || (book as any)?.showCharacterOverlay || false);
                     setShowCharacterOverlay(hasCharacterOverlay);
                     if (hasCharacterOverlay) {
                         console.log('🎭 Book has character overlay enabled');
@@ -1102,7 +1158,8 @@ const BookReaderPage: React.FC = () => {
                 const files = rawData?.files || (book as any)?.files;
 
                 if (files?.audio && Array.isArray(files.audio) && files.audio.length > 0) {
-                    const musicUrl = files.audio[0].url;
+                    const defaultIdx = Math.max(0, Math.min(files.defaultAudioIndex ?? 0, files.audio.length - 1));
+                    const musicUrl = files.audio[defaultIdx]?.url;
                     if (musicUrl) {
                         console.log('🎵 Found book music:', musicUrl);
                         setHasBookMusic(true);
@@ -1181,7 +1238,7 @@ const BookReaderPage: React.FC = () => {
             // Resume app music
             setMusicPaused(false);
         };
-    }, [bookId, setGameMode, setMusicPaused, ensureBookMusicGraph, resumeBookMusicContext]); // Removed bookMusicEnabled from dependencies
+    }, [bookId, searchParams, setGameMode, setMusicPaused, ensureBookMusicGraph, resumeBookMusicContext]); // searchParams for ?share= token
 
     // Ref to track current audio for cleanup (avoids stale closure issues)
     const currentAudioRef = useRef<HTMLAudioElement | null>(null);
@@ -2164,18 +2221,32 @@ const BookReaderPage: React.FC = () => {
         // Check both locations: content.textBoxes (primary) and textBoxes (legacy)
         // IMPORTANT: Empty array [] is truthy, so check length explicitly
         const contentTextBoxes = page.content?.textBoxes;
-        const sourceTextBoxes = (contentTextBoxes && contentTextBoxes.length > 0) 
-            ? contentTextBoxes 
+        let sourceTextBoxes = (contentTextBoxes && contentTextBoxes.length > 0)
+            ? contentTextBoxes
             : page.textBoxes;
+        // Fallback: if page has content.text but no textBoxes (e.g. some Create Your Story pages), show it as one box
+        const contentText = page.content?.text;
+        if ((!sourceTextBoxes || sourceTextBoxes.length === 0) && contentText && String(contentText).trim()) {
+            sourceTextBoxes = [{
+                text: String(contentText).trim(),
+                x: 50,
+                y: 50,
+                width: 85,
+                fontSize: 24,
+                fontFamily: 'Patrick Hand',
+                color: '#4a3b2a',
+                alignment: 'center',
+            }];
+        }
         if (!sourceTextBoxes || sourceTextBoxes.length === 0) return [];
-        
+
         if (selectedLanguage === 'en') {
             return sourceTextBoxes;
         }
-        
+
         const cacheKey = `${page._id}_${selectedLanguage}`;
         const cached = translatedContent.get(cacheKey);
-        
+
         return sourceTextBoxes.map((tb, index) => {
             const translatedText = cached?.textBoxes?.[index]?.translatedText || tb.text;
             return { ...tb, text: translatedText };
@@ -3082,7 +3153,17 @@ const BookReaderPage: React.FC = () => {
             };
             
             audio.onerror = (e) => {
-                console.error(`Audio error for segment ${segmentIdx + 1}:`, e);
+                const media = e.target as HTMLAudioElement;
+                const err = media?.error;
+                const code = err?.code;
+                const message = err?.message || '';
+                const codeMeaning = code === 1 ? 'aborted' : code === 2 ? 'network' : code === 3 ? 'decode' : code === 4 ? 'src not supported' : 'unknown';
+                console.error(`Audio error for segment ${segmentIdx + 1}:`, {
+                    code,
+                    codeMeaning,
+                    message: message || '(no message)',
+                    src: media?.src ? media.src.slice(0, 80) + '...' : '(no src)',
+                });
                 // Try next segment
                 const nextSegmentIdx = segmentIdx + 1;
                 if (nextSegmentIdx < allSegments.length && playbackId === multiSegmentPlaybackIdRef.current) {
@@ -4679,6 +4760,10 @@ const BookReaderPage: React.FC = () => {
                                     ...currentPage,
                                     // Use translated textBoxes if available
                                     textBoxes: getTranslatedTextBoxes(currentPage),
+                                    // Kid monthly books: start scroll at 25% height when page doesn't specify
+                                    ...(isKidMonthlyBook && currentPage && (currentPage.scrollMidHeight == null)
+                                        ? { scrollMidHeight: 25 }
+                                        : {}),
                                 }}
                                 activeTextBoxIndex={activeTextBoxIndex}
                                 scrollState={scrollState}
@@ -5126,6 +5211,47 @@ const BookReaderPage: React.FC = () => {
                                     <RotateCcw className="w-5 h-5 group-hover:-rotate-180 transition-transform duration-500" />
                                     Read Again
                                 </button>
+
+                                {/* Share your book - only for kid-created (Create Your Story) books */}
+                                {isKidMonthlyBook && bookId && (
+                                    <button
+                                        onClick={async (e) => {
+                                            e.stopPropagation();
+                                            const shareText = `📚 Check out "${bookTitle}" on GodlyKids! I made this story!`;
+                                            const link = await ApiService.getBookShareLink(bookId);
+                                            const shareUrl = link?.shareUrl || (typeof window !== 'undefined' ? `${window.location.origin}/read/${bookId}` : `https://app.godlykids.com/read/${bookId}`);
+                                            if (navigator.share) {
+                                                try {
+                                                    await navigator.share({
+                                                        title: `${bookTitle} - GodlyKids`,
+                                                        text: shareText,
+                                                        url: shareUrl,
+                                                    });
+                                                } catch (err) {
+                                                    if ((err as Error).name !== 'AbortError') {
+                                                        try {
+                                                            await navigator.clipboard.writeText(`${shareText}\n\n🔗 ${shareUrl}`);
+                                                            alert('📋 Link copied! Share it with family—they can read your book without a subscription.');
+                                                        } catch (_) {
+                                                            prompt('Copy this link to share:', shareUrl);
+                                                        }
+                                                    }
+                                                }
+                                            } else {
+                                                try {
+                                                    await navigator.clipboard.writeText(`${shareText}\n\n🔗 ${shareUrl}`);
+                                                    alert('📋 Link copied! Share it with family—they can read your book without a subscription.');
+                                                } catch (_) {
+                                                    prompt('Copy this link to share:', shareUrl);
+                                                }
+                                            }
+                                        }}
+                                        className="bg-[#00ACC1] hover:bg-[#0097A7] text-white p-4 rounded-xl font-bold shadow-lg border-b-4 border-[#00838F] active:border-b-0 active:translate-y-1 transition-all flex items-center justify-center gap-2 group"
+                                    >
+                                        <Share2 className="w-5 h-5 group-hover:scale-110 transition-transform" />
+                                        Share your book with a family member
+                                    </button>
+                                )}
 
                                 {fromDailySession ? (
                                     <>

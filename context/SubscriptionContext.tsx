@@ -22,6 +22,10 @@ interface SubscriptionContextType {
   
   // Actions
   checkPremiumStatus: () => Promise<boolean>;
+  /** Check premium without updating state (use for paywall gate to avoid re-render/layout shift) */
+  getPremiumStatus: () => Promise<boolean>;
+  /** Check premium via backend only (no localStorage). Use for Create Your Story gate so stale cache cannot bypass paywall. */
+  getPremiumStatusStrict: () => Promise<boolean>;
   purchase: (plan: 'annual' | 'monthly' | 'lifetime') => Promise<{ success: boolean; error?: string }>;
   restorePurchases: () => Promise<{ success: boolean; error?: string }>;
   startReverseTrial: () => Promise<{ success: boolean; error?: string }>;
@@ -318,7 +322,7 @@ export const SubscriptionProvider: React.FC<SubscriptionProviderProps> = ({ chil
     };
   }, [isInitialized, isPremium, checkSubscriptionFromAllSources]);
 
-  // Check premium status from all sources
+  // Check premium status from all sources (updates state)
   const checkPremiumStatus = useCallback(async (): Promise<boolean> => {
     try {
       const hasPremium = await checkSubscriptionFromAllSources();
@@ -329,6 +333,33 @@ export const SubscriptionProvider: React.FC<SubscriptionProviderProps> = ({ chil
       return false;
     }
   }, [checkSubscriptionFromAllSources]);
+
+  // Get premium status without updating state (avoids re-render; use for paywall gate)
+  const getPremiumStatus = useCallback((): Promise<boolean> => {
+    return checkSubscriptionFromAllSources().catch(() => false);
+  }, [checkSubscriptionFromAllSources]);
+
+  // Backend-only premium check (no localStorage). Use for Create Your Story so stale cache cannot bypass paywall.
+  const getPremiumStatusStrict = useCallback(async (): Promise<boolean> => {
+    const userIds = getAllUserIds();
+    const apiBaseUrl = getApiBaseUrl();
+    if (userIds.length === 0) return false;
+    for (const userId of userIds) {
+      try {
+        const response = await fetch(`${apiBaseUrl}/api/webhooks/purchase-status/${encodeURIComponent(userId)}`, {
+          method: 'GET',
+          headers: { 'Content-Type': 'application/json' },
+        });
+        if (response.ok) {
+          const data = await response.json();
+          if (data.isPremium) return true;
+        }
+      } catch {
+        // continue to next identifier
+      }
+    }
+    return false;
+  }, []);
 
   // Purchase a subscription
   const purchase = useCallback(async (plan: 'annual' | 'monthly' | 'lifetime'): Promise<{ success: boolean; error?: string }> => {
@@ -521,6 +552,8 @@ export const SubscriptionProvider: React.FC<SubscriptionProviderProps> = ({ chil
     isNativeApp,
     reverseTrial,
     checkPremiumStatus,
+    getPremiumStatus,
+    getPremiumStatusStrict,
     purchase,
     restorePurchases,
     startReverseTrial,

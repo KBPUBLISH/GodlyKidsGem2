@@ -62,6 +62,7 @@ interface PageData {
     scrollOffsetY?: number; // Vertical offset from bottom in percentage (default 0)
     scrollOffsetX?: number; // Horizontal offset from center in percentage (default 0)
     scrollWidth?: number; // Width as percentage (default 100 = full width)
+    scrollOpacity?: number; // 0–100: transparency of scroll overlay (100 = opaque)
     soundEffectUrl?: string;
     // Background audio - extracted video audio or ambient sound that loops with the page
     // Plays as separate <audio> element so it can layer with TTS (unlike video audio on iOS)
@@ -74,6 +75,9 @@ interface PageData {
     imageSequence?: ImageSequenceItem[];
     imageSequenceDuration?: number; // seconds per image (default 3)
     imageSequenceAnimation?: 'none' | 'panLeft' | 'panRight' | 'panUp' | 'panDown' | 'zoomIn' | 'zoomOut' | 'kenBurns'; // animation effect
+    // Single background image animation (e.g. Kids Monthly generated pages)
+    backgroundImageAnimation?: 'none' | 'panLeft' | 'panRight' | 'panUp' | 'panDown' | 'zoomIn' | 'zoomOut' | 'kenBurns';
+    backgroundImageAnimationDuration?: number; // seconds (default 10)
     // Character overlay settings (from AI or manual)
     characterOverlay?: CharacterOverlay;
 }
@@ -705,20 +709,81 @@ export const BookPageRenderer: React.FC<BookPageRendererProps> = ({
                         }}
                     />
                 ) : page.backgroundUrl ? (
-                    <img
-                        src={page.backgroundUrl}
-                        alt={`Page ${page.pageNumber}`}
-                        className="w-full h-full object-cover"
-                        loading="eager"
-                        style={{
-                            // Lock image in place
-                            position: 'absolute',
-                            top: 0,
-                            left: 0,
-                            width: '100%',
-                            height: '100%',
-                        }}
-                    />
+                    (() => {
+                        const bgAnim = page.backgroundImageAnimation ?? 'kenBurns';
+                        const bgDuration = page.backgroundImageAnimationDuration ?? 10;
+                        const useAnimation = bgAnim && bgAnim !== 'none' && bgDuration > 0;
+                        const getSingleImageAnimationStyle = (): React.CSSProperties => {
+                            if (!useAnimation) return {};
+                            const base: React.CSSProperties = {
+                                animationDuration: `${bgDuration}s`,
+                                animationTimingFunction: 'ease-in-out',
+                                animationFillMode: 'forwards',
+                                animationIterationCount: 'infinite',
+                                animationDirection: 'alternate',
+                            };
+                            switch (bgAnim) {
+                                case 'zoomIn': return { ...base, animationName: 'imageZoomIn' };
+                                case 'zoomOut': return { ...base, animationName: 'imageZoomOut' };
+                                case 'panLeft': return { ...base, animationName: 'imagePanLeft' };
+                                case 'panRight': return { ...base, animationName: 'imagePanRight' };
+                                case 'panUp': return { ...base, animationName: 'imagePanUp' };
+                                case 'panDown': return { ...base, animationName: 'imagePanDown' };
+                                case 'kenBurns': return { ...base, animationName: 'imageKenBurns1' };
+                                default: return {};
+                            }
+                        };
+                        return (
+                            <div className="absolute inset-0 w-full h-full overflow-hidden">
+                                <img
+                                    src={page.backgroundUrl}
+                                    alt={`Page ${page.pageNumber}`}
+                                    className="w-full h-full object-cover"
+                                    loading="eager"
+                                    style={{
+                                        position: 'absolute',
+                                        top: 0,
+                                        left: 0,
+                                        minWidth: useAnimation ? '110%' : '100%',
+                                        minHeight: useAnimation ? '110%' : '100%',
+                                        ...(useAnimation ? { left: '-5%', top: '-5%', ...getSingleImageAnimationStyle() } : { width: '100%', height: '100%' }),
+                                    }}
+                                />
+                                {useAnimation && (
+                                    <style>{`
+                                        @keyframes imageZoomIn {
+                                            from { transform: scale(1) translate(0, 0); }
+                                            to { transform: scale(1.15) translate(0, 0); }
+                                        }
+                                        @keyframes imageZoomOut {
+                                            from { transform: scale(1.15) translate(0, 0); }
+                                            to { transform: scale(1) translate(0, 0); }
+                                        }
+                                        @keyframes imagePanLeft {
+                                            from { transform: scale(1.1) translateX(3%); }
+                                            to { transform: scale(1.1) translateX(-3%); }
+                                        }
+                                        @keyframes imagePanRight {
+                                            from { transform: scale(1.1) translateX(-3%); }
+                                            to { transform: scale(1.1) translateX(3%); }
+                                        }
+                                        @keyframes imagePanUp {
+                                            from { transform: scale(1.1) translateY(3%); }
+                                            to { transform: scale(1.1) translateY(-3%); }
+                                        }
+                                        @keyframes imagePanDown {
+                                            from { transform: scale(1.1) translateY(-3%); }
+                                            to { transform: scale(1.1) translateY(3%); }
+                                        }
+                                        @keyframes imageKenBurns1 {
+                                            from { transform: scale(1) translate(0, 0); }
+                                            to { transform: scale(1.12) translate(-2%, -1%); }
+                                        }
+                                    `}</style>
+                                )}
+                            </div>
+                        );
+                    })()
                 ) : null}
             </div>
 
@@ -792,6 +857,7 @@ export const BookPageRenderer: React.FC<BookPageRendererProps> = ({
                         src={page.scrollUrl}
                         alt="Scroll background"
                         className="w-full h-full object-fill pointer-events-none"
+                        style={{ opacity: (page.scrollOpacity != null ? page.scrollOpacity : 100) / 100 }}
                     />
                 </div>
             )}

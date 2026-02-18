@@ -1,11 +1,10 @@
 
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { Check, X, Loader2, RefreshCw, AlertCircle, CheckCircle, Mail, UserPlus, Bell, Lock, Calendar, CreditCard } from 'lucide-react';
+import { Check, X, Loader2, RefreshCw, AlertCircle, CheckCircle, Mail, UserPlus, Bell, Lock, Calendar, CreditCard, ChevronDown, ChevronUp } from 'lucide-react';
 import { useUser } from '../context/UserContext';
 import { useSubscription } from '../context/SubscriptionContext';
 import ParentGateModal from '../components/features/ParentGateModal';
-import ReverseTrialOfferModal from '../components/modals/ReverseTrialOfferModal';
 import { authService } from '../services/authService';
 import { getApiBaseUrl } from '../services/apiService';
 import { facebookPixelService } from '../services/facebookPixelService';
@@ -58,12 +57,8 @@ const PaywallPage: React.FC = () => {
   // Check if close button should be hidden (from tutorial timer expiry)
   const hideCloseButton = (location.state as any)?.hideCloseButton === true;
   
-  // Check if coming from first session complete - show reverse trial modal on close
-  const showReverseTrialOnClose = (location.state as any)?.showReverseTrialOnClose === true;
-  const childNameFromState = (location.state as any)?.childName || '';
+  const fromState = (location.state as any)?.from as string | undefined;
   
-  // State for showing reverse trial modal
-  const [showReverseTrialModal, setShowReverseTrialModal] = useState(false);
   const { 
     isLoading, 
     isPremium,
@@ -71,10 +66,17 @@ const PaywallPage: React.FC = () => {
     purchase, 
     restorePurchases,
     reverseTrial,
-    startReverseTrial,
   } = useSubscription();
+
+  // Show "You've Got a Gift!" toast when coming from reverse-trial activation or when state requests it
+  const showReverseTrialToast = (location.state as any)?.showReverseTrialToast === true
+    || (reverseTrial?.isActive && fromState === 'create-your-story');
+
+  // Always use Create Your Story paywall: hero image, no lifetime, 12 custom books for annual
+  const isCreateYourStoryPaywall = true;
   
   const [selectedPlan, setSelectedPlan] = useState<'annual' | 'monthly' | 'lifetime'>('annual');
+  const [planSelectorExpanded, setPlanSelectorExpanded] = useState(false);
   const [showParentGate, setShowParentGate] = useState(false);
   const [isPurchasing, setIsPurchasing] = useState(false);
   const [isRestoring, setIsRestoring] = useState(false);
@@ -84,8 +86,6 @@ const PaywallPage: React.FC = () => {
     message: string;
   } | null>(null);
   
-  // Reverse trial state
-  const [showReverseTrialToast, setShowReverseTrialToast] = useState(false);
   const [isClosing, setIsClosing] = useState(false); // Prevent auto-navigation during close
   
   // Trial reminder toggle state - check notification permission
@@ -168,14 +168,14 @@ const PaywallPage: React.FC = () => {
   // Get personalized name
   const firstName = getUserFirstName();
   
-  // Track paywall view for analytics
+  // Track paywall view for analytics (include source when from Dive into the Bible)
   useEffect(() => {
     // Facebook Pixel
     facebookPixelService.init();
     facebookPixelService.trackPaywallView();
     // Onboarding funnel tracking
-    activityTrackingService.trackOnboardingEvent('paywall_shown');
-  }, []);
+    activityTrackingService.trackOnboardingEvent('paywall_shown', isCreateYourStoryPaywall ? { source: 'create-your-story' } : undefined);
+  }, [isCreateYourStoryPaywall]);
 
   // If user already has premium, redirect to home
   // But don't auto-redirect if we're already handling the close flow
@@ -250,48 +250,51 @@ const PaywallPage: React.FC = () => {
     
     // Track trial button clicked
     console.log('🔘 Start Trial button clicked, plan:', selectedPlan);
-    activityTrackingService.trackOnboardingEvent('paywall_trial_clicked', { planType: selectedPlan });
+    activityTrackingService.trackOnboardingEvent('paywall_trial_clicked', { planType: selectedPlan, ...(isCreateYourStoryPaywall && { source: 'create-your-story' }) });
     
     // Check if user has an account - require account before purchase
     if (!hasAccount()) {
       console.log('⚠️ No account found, showing account required modal');
-      activityTrackingService.trackOnboardingEvent('paywall_account_required', { planType: selectedPlan });
+      activityTrackingService.trackOnboardingEvent('paywall_account_required', { planType: selectedPlan, ...(isCreateYourStoryPaywall && { source: 'create-your-story' }) });
       setShowAccountRequired(true);
       return;
     }
     
     // Show parent gate before processing
     console.log('🔐 Account found, showing parent gate');
-    activityTrackingService.trackOnboardingEvent('paywall_parent_gate_shown', { planType: selectedPlan });
+    activityTrackingService.trackOnboardingEvent('paywall_parent_gate_shown', { planType: selectedPlan, ...(isCreateYourStoryPaywall && { source: 'create-your-story' }) });
     setShowParentGate(true);
   };
 
   const handleGateSuccess = async () => {
     console.log('✅ Parent gate passed, starting purchase flow');
-    activityTrackingService.trackOnboardingEvent('paywall_parent_gate_passed', { planType: selectedPlan });
+    activityTrackingService.trackOnboardingEvent('paywall_parent_gate_passed', { planType: selectedPlan, ...(isCreateYourStoryPaywall && { source: 'create-your-story' }) });
     
     setShowParentGate(false);
     setIsPurchasing(true);
     setError(null);
+
+    // Create Your Story paywall has no lifetime option - use annual if somehow lifetime was selected
+    const effectivePlan = isCreateYourStoryPaywall && selectedPlan === 'lifetime' ? 'annual' : selectedPlan;
     
     // Facebook Pixel - Track checkout initiation
-    const price = selectedPlan === 'lifetime' ? lifetimeSalePrice : selectedPlan === 'annual' ? 39.99 : 5.99;
-    facebookPixelService.trackInitiateCheckout(selectedPlan, price);
+    const price = effectivePlan === 'lifetime' ? lifetimeSalePrice : effectivePlan === 'annual' ? 39.99 : 5.99;
+    facebookPixelService.trackInitiateCheckout(effectivePlan, price);
     
     // Track purchase attempt
-    activityTrackingService.trackOnboardingEvent('paywall_purchase_started', { planType: selectedPlan });
+    activityTrackingService.trackOnboardingEvent('paywall_purchase_started', { planType: effectivePlan, ...(isCreateYourStoryPaywall && { source: 'create-your-story' }) });
 
     try {
-      console.log('💳 Calling purchase() with plan:', selectedPlan);
-      const result = await purchase(selectedPlan);
+      console.log('💳 Calling purchase() with plan:', effectivePlan);
+      const result = await purchase(effectivePlan);
       console.log('💳 Purchase result:', result);
 
       if (result.success) {
         // Wrap all tracking in try-catch to prevent crashes
         try {
           // Facebook Pixel - Track successful purchase
-          facebookPixelService.trackPurchase(selectedPlan, price);
-          facebookPixelService.trackSubscribe(selectedPlan, price);
+          facebookPixelService.trackPurchase(effectivePlan, price);
+          facebookPixelService.trackSubscribe(effectivePlan, price);
         } catch (fbError) {
           console.warn('⚠️ Facebook Pixel tracking error:', fbError);
         }
@@ -311,7 +314,7 @@ const PaywallPage: React.FC = () => {
         
         try {
           // Track successful subscription
-          activityTrackingService.trackOnboardingEvent('subscribed', { planType: selectedPlan });
+          activityTrackingService.trackOnboardingEvent('subscribed', { planType: selectedPlan, ...(isCreateYourStoryPaywall && { source: 'create-your-story' }) });
         } catch (trackError) {
           console.warn('⚠️ Activity tracking error:', trackError);
         }
@@ -321,15 +324,15 @@ const PaywallPage: React.FC = () => {
         navigate('/home');
       } else if (result.error && result.error !== 'Purchase cancelled') {
         console.error('❌ Purchase failed:', result.error);
-        activityTrackingService.trackOnboardingEvent('paywall_purchase_error', { planType: selectedPlan, error: result.error });
+        activityTrackingService.trackOnboardingEvent('paywall_purchase_error', { planType: selectedPlan, error: result.error, ...(isCreateYourStoryPaywall && { source: 'create-your-story' }) });
         setError(result.error);
       } else {
         console.log('⏸️ Purchase cancelled by user');
-        activityTrackingService.trackOnboardingEvent('paywall_purchase_cancelled', { planType: selectedPlan });
+        activityTrackingService.trackOnboardingEvent('paywall_purchase_cancelled', { planType: selectedPlan, ...(isCreateYourStoryPaywall && { source: 'create-your-story' }) });
       }
     } catch (err: any) {
       console.error('Purchase error:', err);
-      activityTrackingService.trackOnboardingEvent('paywall_purchase_error', { planType: selectedPlan, error: err.message });
+      activityTrackingService.trackOnboardingEvent('paywall_purchase_error', { planType: selectedPlan, error: err.message, ...(isCreateYourStoryPaywall && { source: 'create-your-story' }) });
       setError(err.message || 'An error occurred during purchase');
     } finally {
       setIsPurchasing(false);
@@ -481,75 +484,15 @@ const PaywallPage: React.FC = () => {
     return () => clearInterval(interval);
   }, []);
 
-  // Handle paywall close - offer reverse trial if eligible
-  const handlePaywallClose = async () => {
-    // Prevent auto-navigation from useEffect while we handle the close
+  // Handle paywall close - return to previous screen or home
+  const handlePaywallClose = () => {
     setIsClosing(true);
-    
-    console.log('🚪 Paywall close clicked', { 
-      reverseTrial, 
-      isPremium,
-      eligible: reverseTrial?.eligible,
-      showReverseTrialOnClose 
-    });
-    
-    try {
-      // Track paywall closed (don't await to prevent blocking)
-      activityTrackingService.trackOnboardingEvent('paywall_closed').catch(() => {});
-      
-      // Check if coming from first session AND eligible for reverse trial
-      // Show the modal to let user choose instead of auto-starting
-      if (showReverseTrialOnClose && reverseTrial?.eligible && !isPremium) {
-        console.log('🎁 Showing reverse trial modal...');
-        activityTrackingService.trackOnboardingEvent('reverse_trial_offered', {
-          source: 'paywall_close_first_session'
-        }).catch(() => {});
-        
-        // Show the reverse trial modal instead of auto-starting
-        setShowReverseTrialModal(true);
-        return;
-      }
-      
-      // Original behavior for non-first-session closes
-      const hasAccount = !!(localStorage.getItem('godlykids_auth_token') || localStorage.getItem('godlykids_user_email'));
-      
-      if (reverseTrial?.eligible && !isPremium && hasAccount) {
-        console.log('🎁 User eligible for reverse trial - starting...');
-        activityTrackingService.trackOnboardingEvent('reverse_trial_offered').catch(() => {});
-        
-        try {
-          const result = await startReverseTrial();
-          console.log('🎁 Reverse trial result:', result);
-          
-          if (result?.success) {
-            console.log('✅ Reverse trial started! Navigating to premium onboarding...');
-            activityTrackingService.trackOnboardingEvent('reverse_trial_started').catch(() => {});
-            
-            // Navigate to premium onboarding flow to show what they've unlocked
-            navigate('/premium-onboarding', { replace: true });
-            return;
-          } else {
-            console.log('❌ Reverse trial failed:', result?.error);
-          }
-        } catch (trialError) {
-          console.error('Error starting reverse trial:', trialError);
-          // Continue to navigate home even if trial fails
-        }
-      }
-      
-      // If not eligible or trial start failed, just navigate home
-      navigate('/home');
-    } catch (error) {
-      console.error('Error in handlePaywallClose:', error);
-      // Ensure navigation happens even if there's an error
+    activityTrackingService.trackOnboardingEvent('paywall_closed', isCreateYourStoryPaywall ? { source: 'create-your-story' } : undefined).catch(() => {});
+    if (fromState === 'create-your-story') {
+      navigate('/create-your-story', { replace: true });
+    } else {
       navigate('/home');
     }
-  };
-  
-  // Handle reverse trial modal close
-  const handleReverseTrialModalClose = () => {
-    setShowReverseTrialModal(false);
-    navigate('/home');
   };
 
   return (
@@ -588,9 +531,20 @@ const PaywallPage: React.FC = () => {
           </button>
         </div>
 
-        <div className="flex-1 flex flex-col items-center px-5 pb-8 relative z-10">
-            
-            {/* Main Title */}
+        {/* Hero image for Create Your Story paywall - full width, outside padded content */}
+        {isCreateYourStoryPaywall && (
+          <div className="w-full flex-shrink-0 relative z-10">
+            <img
+              src="/assets/images/paywall-hero.png"
+              alt="Create Your Own Bible Adventure - Enter the Bible and make it personal"
+              className="w-full h-auto object-cover object-top block"
+            />
+          </div>
+        )}
+
+        <div className={`flex-1 flex flex-col items-center px-3 pb-8 relative z-10 w-full max-w-xl mx-auto ${isCreateYourStoryPaywall ? 'pt-2' : ''}`}>
+            {/* Main Title - hidden on Create Your Story (simpler paywall) */}
+            {!isCreateYourStoryPaywall && (
             <div className="text-center mb-6">
               <h1 className="text-[#1e1b4b] font-display font-extrabold text-2xl leading-tight mb-2">
                 Free full access to
@@ -599,9 +553,10 @@ const PaywallPage: React.FC = () => {
                 Godly Kids Plus
               </h2>
             </div>
+            )}
 
-            {/* Timeline Cards */}
-            <div className="flex gap-3 w-full max-w-sm mb-6">
+            {/* Timeline Cards - Today, Day 5, Day 7 */}
+            <div className="flex gap-3 w-full mb-5">
               {/* Today */}
               <div className="flex-1 bg-gradient-to-b from-[#6366f1] to-[#4f46e5] rounded-2xl p-4 text-white shadow-lg shadow-indigo-200">
                 <div className="w-10 h-10 bg-white/20 rounded-full flex items-center justify-center mb-3 mx-auto">
@@ -637,7 +592,7 @@ const PaywallPage: React.FC = () => {
             </div>
 
             {/* Trial Reminder Toggle */}
-            <div className="w-full max-w-sm bg-white rounded-2xl px-4 py-3 shadow-sm border border-gray-100 mb-6">
+            <div className="w-full bg-white rounded-2xl px-4 py-3 shadow-sm border border-gray-100 mb-6 mt-3">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
                   <Bell size={20} className={trialReminderEnabled ? 'text-[#6366f1]' : 'text-gray-400'} />
@@ -663,11 +618,75 @@ const PaywallPage: React.FC = () => {
               )}
             </div>
 
-            {/* Pricing Section */}
-            <div className="w-full max-w-sm space-y-3 mb-5">
+            {/* CTA + trial summary above plan selector (Create Your Story paywall only) */}
+            {isCreateYourStoryPaywall && (
+              <>
+                <button
+                  onClick={handleSubscribeClick}
+                  disabled={isPurchasing || isRestoring || isLoading}
+                  className="w-full font-bold text-lg py-4 rounded-2xl shadow-lg active:scale-[0.98] transition-all mb-3 disabled:opacity-70 disabled:cursor-not-allowed bg-gradient-to-r from-[#6366f1] to-[#4f46e5] text-white shadow-indigo-200/50"
+                >
+                  {isPurchasing ? (
+                    <span className="flex items-center justify-center gap-2">
+                      <Loader2 className="w-5 h-5 animate-spin" />
+                      Processing...
+                    </span>
+                  ) : (
+                    <span>Continue</span>
+                  )}
+                </button>
+                <div className="mb-6">
+                  <div className="flex items-center gap-2 text-green-600 mb-1">
+                    <Check size={18} strokeWidth={3} />
+                    <span className="font-semibold text-sm">No payment now!</span>
+                  </div>
+                  <p className="text-gray-500 text-xs text-center">
+                    7-day free trial, then {selectedPlan === 'annual' ? `$${annualPrice}/year` : `$${monthlyPrice}/month`}. Cancel anytime.
+                  </p>
+                </div>
+              </>
+            )}
+
+            {/* Pricing Section - collapsed on Create Your Story until tapped */}
+            <div className="w-full space-y-3 mb-5">
+              {isCreateYourStoryPaywall && !planSelectorExpanded ? (
+                <button
+                  type="button"
+                  onClick={() => setPlanSelectorExpanded(true)}
+                  className="w-full rounded-2xl border-2 border-[#6366f1] bg-[#eef2ff] p-4 flex items-center justify-between cursor-pointer transition-all hover:shadow-md"
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="w-6 h-6 rounded-full border-2 bg-[#6366f1] border-[#6366f1] flex items-center justify-center">
+                      <Check size={14} className="text-white" strokeWidth={3} />
+                    </div>
+                    <div className="text-left">
+                      <p className="font-bold text-[#1e1b4b]">
+                        {selectedPlan === 'annual' ? 'Annual' : 'Monthly'}
+                      </p>
+                      <p className="text-xs text-gray-500">
+                        {selectedPlan === 'annual'
+                          ? `$${annualPrice} USD/year • 12 free custom books`
+                          : `$${monthlyPrice} USD/month • Cancel anytime`}
+                      </p>
+                    </div>
+                  </div>
+                  <ChevronDown size={20} className="text-[#6366f1]" />
+                </button>
+              ) : (
+                <>
+                  {isCreateYourStoryPaywall && planSelectorExpanded && (
+                    <button
+                      type="button"
+                      onClick={() => setPlanSelectorExpanded(false)}
+                      className="w-full flex items-center justify-center gap-1 text-[#6366f1] text-sm font-medium py-1 mb-1"
+                    >
+                      <ChevronUp size={16} />
+                      Collapse
+                    </button>
+                  )}
               {/* Annual Option */}
               <div 
-                onClick={() => setSelectedPlan('annual')}
+                onClick={() => { setSelectedPlan('annual'); if (isCreateYourStoryPaywall) setPlanSelectorExpanded(false); }}
                 className={`relative w-full rounded-2xl border-2 overflow-hidden cursor-pointer transition-all ${
                   selectedPlan === 'annual' 
                   ? 'bg-[#eef2ff] border-[#6366f1] shadow-md' 
@@ -690,7 +709,7 @@ const PaywallPage: React.FC = () => {
                   
                   <div className="flex-1">
                     <p className="font-bold text-[#1e1b4b]">Annual</p>
-                    <p className="text-xs text-gray-500">${annualMonthly}/month • Billed yearly</p>
+                    <p className="text-xs text-gray-500">${annualMonthly}/month • Billed yearly • 12 free custom books</p>
                   </div>
                   
                   <div className="text-right">
@@ -702,7 +721,7 @@ const PaywallPage: React.FC = () => {
 
               {/* Monthly Option */}
               <div 
-                onClick={() => setSelectedPlan('monthly')}
+                onClick={() => { setSelectedPlan('monthly'); if (isCreateYourStoryPaywall) setPlanSelectorExpanded(false); }}
                 className={`relative w-full rounded-2xl border-2 overflow-hidden cursor-pointer transition-all ${
                   selectedPlan === 'monthly' 
                   ? 'bg-[#eef2ff] border-[#6366f1] shadow-md' 
@@ -727,8 +746,11 @@ const PaywallPage: React.FC = () => {
                   </div>
                 </div>
               </div>
+              </>
+              )}
 
-              {/* Lifetime Option with Timer */}
+              {/* Lifetime Option - hidden on Create Your Story paywall */}
+              {!isCreateYourStoryPaywall && (
               <div 
                 onClick={() => setSelectedPlan('lifetime')}
                 className={`relative w-full rounded-2xl border-2 overflow-hidden cursor-pointer transition-all ${
@@ -783,24 +805,17 @@ const PaywallPage: React.FC = () => {
                   </div>
                 </div>
               </div>
+              )}
             </div>
 
-            {/* Pricing Summary */}
-            <p className="text-center text-[#6366f1] font-medium text-sm mb-4">
-              {selectedPlan === 'lifetime' ? (
-                <>
-                  <span className="text-[#dc2626]">Special offer: ${lifetimeSalePrice} USD</span> <span className="text-gray-400 line-through text-xs">${lifetimeOriginalPrice} USD</span>
-                  <br />
-                  <span className="text-gray-500 font-normal">One-time payment. Yours forever!</span>
-                </>
-              ) : (
-                <>
-                  Try 7 days for free, then {selectedPlan === 'annual' ? `$${annualPrice} USD/year` : `$${monthlyPrice} USD/month`}.
-                  <br />
-                  <span className="text-gray-500 font-normal">No commitment. Cancel anytime.</span>
-                </>
-              )}
-            </p>
+            {/* Pricing Summary - only for lifetime (subscription summary moved below CTA) */}
+            {selectedPlan === 'lifetime' && (
+              <p className="text-center text-[#6366f1] font-medium text-sm mb-4">
+                <span className="text-[#dc2626]">Special offer: ${lifetimeSalePrice} USD</span> <span className="text-gray-400 line-through text-xs">${lifetimeOriginalPrice} USD</span>
+                <br />
+                <span className="text-gray-500 font-normal">One-time payment. Yours forever!</span>
+              </p>
+            )}
 
             {/* Error Messages */}
             {error && (
@@ -838,14 +853,15 @@ const PaywallPage: React.FC = () => {
               </div>
             )}
 
-            {/* CTA Button */}
+            {/* CTA Button - not shown on Create Your Story (moved above plan selector) */}
+            {!isCreateYourStoryPaywall && (
             <button 
               onClick={handleSubscribeClick}
               disabled={isPurchasing || isRestoring || isLoading}
-              className={`w-full max-w-sm font-bold text-lg py-4 rounded-2xl shadow-lg active:scale-[0.98] transition-all mb-3 disabled:opacity-70 disabled:cursor-not-allowed ${
+              className={`w-full font-bold text-lg py-4 rounded-2xl shadow-lg active:scale-[0.98] transition-all mb-3 disabled:opacity-70 disabled:cursor-not-allowed ${
                 selectedPlan === 'lifetime'
                   ? 'bg-gradient-to-r from-[#dc2626] to-[#ef4444] text-white shadow-red-200/50'
-                  : 'bg-gradient-to-r from-[#fbbf24] to-[#f59e0b] text-[#1e1b4b] shadow-amber-200/50'
+                  : 'bg-gradient-to-r from-[#6366f1] to-[#4f46e5] text-white shadow-indigo-200/50'
               }`}
             >
               {isPurchasing ? (
@@ -866,17 +882,23 @@ const PaywallPage: React.FC = () => {
                 </span>
               )}
             </button>
+            )}
 
-            {/* No Payment Now Badge - only show for subscription plans */}
-            {selectedPlan !== 'lifetime' && (
-              <div className="flex items-center gap-2 text-green-600 mb-6">
-                <Check size={18} strokeWidth={3} />
-                <span className="font-semibold text-sm">No payment now!</span>
+            {/* No payment + trial summary - only for subscription plans, not on Create Your Story (moved above) */}
+            {!isCreateYourStoryPaywall && selectedPlan !== 'lifetime' && (
+              <div className="mb-6">
+                <div className="flex items-center gap-2 text-green-600 mb-1">
+                  <Check size={18} strokeWidth={3} />
+                  <span className="font-semibold text-sm">No payment now!</span>
+                </div>
+                <p className="text-gray-500 text-xs text-center">
+                  7-day free trial, then {selectedPlan === 'annual' ? `$${annualPrice}/year` : `$${monthlyPrice}/month`}. Cancel anytime.
+                </p>
               </div>
             )}
             
             {/* Lifetime badge */}
-            {selectedPlan === 'lifetime' && (
+            {selectedPlan === 'lifetime' && !isCreateYourStoryPaywall && (
               <div className="flex items-center gap-2 text-[#dc2626] mb-6">
                 <Check size={18} strokeWidth={3} />
                 <span className="font-semibold text-sm">🔥 {lifetimeDiscount}% off • Limited time only!</span>
@@ -884,32 +906,29 @@ const PaywallPage: React.FC = () => {
             )}
 
             {/* How to Cancel Section */}
-            <div className="w-full max-w-sm bg-white rounded-2xl p-4 border border-gray-100 shadow-sm mb-6">
+            <div className="w-full bg-white rounded-2xl p-4 border border-gray-100 shadow-sm mb-6">
               <h3 className="font-bold text-[#1e1b4b] mb-2">How can I cancel?</h3>
               <p className="text-gray-600 text-sm leading-relaxed">
                 It's easy! Open your phone Settings, tap your name, then tap Subscriptions and choose Godly Kids. Tap Cancel Subscription. Done!
               </p>
             </div>
 
-            {/* Features Grid */}
-            <div className="w-full max-w-sm grid grid-cols-2 gap-3 mb-6">
+            {/* Perks */}
+            <div className="w-full space-y-3 mb-6">
               {[
-                { icon: "📖", text: "Bible Stories" },
-                { icon: "🎮", text: "Learning Games" },
-                { icon: "🎧", text: "Audio Lessons" },
-                { icon: "📝", text: "Fun Quizzes" },
-                { icon: "🏆", text: "Rewards System" },
-                { icon: "🔒", text: "100% Ad-Free" },
+                { icon: "📚", text: "12 Free Custom Books for personalized learning fun" },
+                { icon: "📖", text: "Unlimited Access to 150+ books with word highlighting" },
+                { icon: "🎮", text: "15+ Bible Games and Learning Exercises to enhance memorization" },
               ].map((feature, i) => (
-                <div key={i} className="flex items-center gap-2 bg-white rounded-xl px-3 py-2 border border-gray-100">
-                  <span className="text-lg">{feature.icon}</span>
+                <div key={i} className="flex items-center gap-3 bg-white rounded-xl px-4 py-3 border border-gray-100">
+                  <span className="text-xl shrink-0">{feature.icon}</span>
                   <span className="text-sm font-medium text-[#1e1b4b]">{feature.text}</span>
                 </div>
               ))}
             </div>
 
             {/* Fine Print */}
-            <p className="text-gray-400 text-[10px] text-center px-4 max-w-sm leading-relaxed">
+            <p className="text-gray-400 text-[10px] text-center px-4 w-full leading-relaxed">
               Free trial for 7 days, then subscription automatically renews unless cancelled at least 24-hours before the trial ends. Cancel anytime in App Store or Google Play.
             </p>
         </div>
@@ -1049,12 +1068,6 @@ const PaywallPage: React.FC = () => {
           </div>
         )}
 
-        {/* Reverse Trial Offer Modal - Shows when user closes paywall after first session */}
-        <ReverseTrialOfferModal
-          isOpen={showReverseTrialModal}
-          onClose={handleReverseTrialModalClose}
-          childName={childNameFromState}
-        />
     </div>
   );
 };

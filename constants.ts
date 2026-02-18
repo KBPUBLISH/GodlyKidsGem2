@@ -117,6 +117,12 @@ export const MOCK_BOOKS: Book[] = [
   }
 ];
 
+/** Feature flag: show Create Your Story (Kids Monthly) in Library and Home. Override with VITE_FEATURE_CREATE_YOUR_STORY (default: true). */
+export const FEATURE_CREATE_YOUR_STORY =
+  typeof import.meta !== 'undefined' && (import.meta as any).env?.VITE_FEATURE_CREATE_YOUR_STORY !== undefined
+    ? (import.meta as any).env.VITE_FEATURE_CREATE_YOUR_STORY === 'true' || (import.meta as any).env.VITE_FEATURE_CREATE_YOUR_STORY === true
+    : true;
+
 // API Base URL - can be overridden with VITE_API_BASE_URL environment variable
 export const API_BASE_URL =
   typeof import.meta !== "undefined" && (import.meta as any).env?.VITE_API_BASE_URL

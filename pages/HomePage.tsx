@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import SectionTitle from '../components/ui/SectionTitle';
 import BookCard from '../components/ui/BookCard';
@@ -18,6 +18,7 @@ import TutorialPromptModal, { shouldShowTutorialPrompt, markTutorialPromptShown 
 import { useTutorial } from '../context/TutorialContext';
 import { Key, Brain, Heart, Video, Lock, Check, Play, CheckCircle, Clock, Coins, BookOpen, Sparkles, ChevronRight } from 'lucide-react';
 import { ApiService } from '../services/apiService';
+import { authService } from '../services/authService';
 import { 
   isCompleted, 
   isLocked, 
@@ -38,6 +39,7 @@ import { getPreferenceTags, getSavedPreferences } from './InterestSelectionPage'
 import { isSessionCompletedToday, getSessionStreak, hasSessionToday } from '../services/dailySessionService';
 import DailyLessonWidget from '../components/features/DailyLessonWidget';
 import PremiumBadge from '../components/ui/PremiumBadge';
+import { FEATURE_CREATE_YOUR_STORY } from '../constants';
 
 // Helper to format date as YYYY-MM-DD in local time
 const formatLocalDateKey = (d: Date): string => {
@@ -109,7 +111,11 @@ const HomePage: React.FC = () => {
   const [showCoinReward, setShowCoinReward] = useState(false);
   const [coinRewardAmount, setCoinRewardAmount] = useState(0);
   const [coinRewardSource, setCoinRewardSource] = useState('');
-  
+
+  // Monthly Create Your Story credits (used this month; limit 1 or 100 for special email). Limit from backend when available.
+  const [monthlyCreditsUsed, setMonthlyCreditsUsed] = useState<number | null>(null);
+  const [monthlyCreditsLimit, setMonthlyCreditsLimit] = useState<number | null>(null);
+
   // Clear any old game engagement localStorage on mount (legacy cleanup)
   useEffect(() => {
     localStorage.removeItem('memory_game_engaged');
@@ -128,6 +134,29 @@ const HomePage: React.FC = () => {
       return () => clearTimeout(timer);
     }
   }, [isTutorialActive, currentStep, onReturnToExplore]);
+
+  // Load monthly Create Your Story credits when feature is on (and refetch when returning to page)
+  const refreshMonthlyCredits = useCallback(async () => {
+    if (!FEATURE_CREATE_YOUR_STORY) return;
+    const data = await ApiService.getMonthlyBookCredits();
+    if (data) {
+      setMonthlyCreditsUsed(data.usedThisMonth);
+      if (typeof data.limit === 'number') setMonthlyCreditsLimit(data.limit);
+    }
+  }, []);
+  useEffect(() => {
+    if (!FEATURE_CREATE_YOUR_STORY) return;
+    let cancelled = false;
+    refreshMonthlyCredits().then(() => {});
+    return () => { cancelled = true; };
+  }, [FEATURE_CREATE_YOUR_STORY, refreshMonthlyCredits]);
+  // Refetch credits when user returns to this page (e.g. after creating a story)
+  useEffect(() => {
+    if (!FEATURE_CREATE_YOUR_STORY) return;
+    const handleVisibility = () => { if (document.visibilityState === 'visible') refreshMonthlyCredits(); };
+    document.addEventListener('visibilitychange', handleVisibility);
+    return () => document.removeEventListener('visibilitychange', handleVisibility);
+  }, [FEATURE_CREATE_YOUR_STORY, refreshMonthlyCredits]);
 
   // Fix scroll lock: Reset body overflow when page mounts (in case modal left it stuck)
   useEffect(() => {
@@ -1100,6 +1129,37 @@ const HomePage: React.FC = () => {
 
         {/* 📚 Daily Lessons Widget */}
         <DailyLessonWidget />
+
+        {/* Dive into The Bible - Create Your Story: caption, credits, then Start Story Adventure button */}
+        {FEATURE_CREATE_YOUR_STORY && (() => {
+          const userEmail = (authService.getUser()?.email || (typeof localStorage !== 'undefined' ? localStorage.getItem('godlykids_user_email') : null) || '').trim().toLowerCase();
+          const limit = monthlyCreditsLimit ?? (userEmail === 'michealbouchard7@gmail.com' ? 100 : (isSubscribed ? 1 : 0));
+          const used = monthlyCreditsUsed ?? 0;
+          const remaining = Math.max(0, limit - used);
+          const creditsLabel = limit === 0 ? '0 of 1 monthly credits available' : `${remaining} of ${limit} monthly credit${limit === 1 ? '' : 's'} available`;
+          return (
+            <div className="w-full max-w-md mx-auto mt-6">
+              <p className="text-center text-white/95 font-display font-bold text-base mb-1 px-2">
+                Once a month, create your own story
+              </p>
+              <p className="text-center text-white/80 text-sm mb-3 px-2">
+                {creditsLabel}
+              </p>
+              <button
+                type="button"
+                onClick={() => navigate('/create-your-story')}
+                className="block w-full p-0 border-0 bg-transparent focus:outline-none focus:ring-2 focus:ring-amber-400 focus:ring-offset-2 rounded-2xl transition-transform active:scale-[0.98]"
+                aria-label="Start Story Adventure - Create your story"
+              >
+                <img
+                  src="/assets/images/dive-into-bible-button.png"
+                  alt="Dive into The Bible - Start Story Adventure"
+                  className="w-full h-auto block rounded-2xl shadow-[0_4px_12px_rgba(0,0,0,0.08),0_8px_24px_rgba(0,0,0,0.06)]"
+                />
+              </button>
+            </div>
+          );
+        })()}
 
         {/* 🎬 Video Devotional Activities */}
         {(() => {

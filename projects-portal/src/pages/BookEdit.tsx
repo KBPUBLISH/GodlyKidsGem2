@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Plus, Upload, X, Music, Gamepad2, Globe, Trash2, Video, Volume2, Gift } from 'lucide-react';
+import { Plus, Upload, X, Music, Gamepad2, Globe, Trash2, Video, Volume2, Gift, Star } from 'lucide-react';
 import apiClient from '../services/apiClient';
 import ContentAnalytics from '../components/ContentAnalytics';
 
@@ -38,6 +38,7 @@ const BookEdit: React.FC = () => {
     const fileInputRef = useRef<HTMLInputElement>(null);
     const dropZoneRef = useRef<HTMLDivElement>(null);
     const [audioFiles, setAudioFiles] = useState<Array<{ url: string; filename: string; uploadedAt?: string }>>([]);
+    const [defaultAudioIndex, setDefaultAudioIndex] = useState<number>(0);
     const [audioUploadVolume, setAudioUploadVolume] = useState<number>(0.4); // 40% default attenuation on upload
     const [uploadingAudio, setUploadingAudio] = useState(false);
     const [reprocessingAudioIndex, setReprocessingAudioIndex] = useState<number | null>(null);
@@ -107,12 +108,14 @@ const BookEdit: React.FC = () => {
                     setSelectedCategories([b.category]);
                 }
                 
-                // Load audio files
+                // Load audio files (max 3) and default track
                 if (b.files && b.files.audio && Array.isArray(b.files.audio)) {
-                    setAudioFiles(b.files.audio);
+                    setAudioFiles(b.files.audio.slice(0, 3));
                 } else {
                     setAudioFiles([]);
                 }
+                const defIdx = b.files?.defaultAudioIndex ?? 0;
+                setDefaultAudioIndex(Math.max(0, Math.min(2, defIdx)));
                 
                 // Load associated games
                 if (b.games && Array.isArray(b.games)) {
@@ -309,7 +312,10 @@ const BookEdit: React.FC = () => {
             alert('Please select an audio file');
             return;
         }
-
+        if (audioFiles.length >= 3) {
+            alert('Maximum 3 background music tracks. Remove one to add another.');
+            return;
+        }
         if (!bookId) {
             alert('Book ID is required');
             return;
@@ -328,13 +334,13 @@ const BookEdit: React.FC = () => {
                 }
             );
             
-            // Add new audio file to the list
+            // Add new audio file to the list (max 3 tracks)
             const newAudio = {
                 url: response.data.url,
                 filename: response.data.filename || file.name,
                 uploadedAt: new Date().toISOString(),
             };
-            setAudioFiles([...audioFiles, newAudio]);
+            setAudioFiles(prev => prev.length >= 3 ? prev : [...prev, newAudio]);
         } catch (error: any) {
             console.error('Audio upload failed:', error);
             let errorMessage = 'Failed to upload audio file';
@@ -367,7 +373,12 @@ const BookEdit: React.FC = () => {
     };
 
     const handleRemoveAudio = (index: number) => {
-        setAudioFiles(audioFiles.filter((_, i) => i !== index));
+        setAudioFiles(prev => prev.filter((_, i) => i !== index));
+        setDefaultAudioIndex(prev => {
+            if (prev === index) return 0;
+            if (prev > index) return Math.max(0, prev - 1);
+            return prev;
+        });
     };
 
     const handleReprocessAudio = async (index: number) => {
@@ -479,6 +490,7 @@ const BookEdit: React.FC = () => {
                 files: {
                     coverImage: coverImage || null,
                     audio: audioFiles,
+                    defaultAudioIndex: Math.max(0, Math.min(defaultAudioIndex, audioFiles.length - 1)),
                 },
                 games: selectedGames,
                 bookGames: bookGames,
@@ -859,7 +871,7 @@ const BookEdit: React.FC = () => {
                         Background Music
                     </label>
                     <p className="text-xs text-gray-500 mb-3">
-                        Upload audio files to play as background music in the book reader. The first file will be used by default.
+                        Upload up to 3 audio tracks for background music. Select one as the main track (plays by default). In Create Your Story, users can choose which track they want for their story.
                     </p>
 
                     {/* Upload Volume Attenuation */}
@@ -900,10 +912,19 @@ const BookEdit: React.FC = () => {
                                     className="flex items-center justify-between p-3 bg-gray-50 rounded-lg border border-gray-200"
                                 >
                                     <div className="flex items-center gap-3 flex-1 min-w-0">
+                                        <button
+                                            type="button"
+                                            onClick={() => setDefaultAudioIndex(index)}
+                                            className={`p-1 rounded transition-colors flex-shrink-0 ${defaultAudioIndex === index ? 'text-amber-500' : 'text-gray-400 hover:text-amber-400'}`}
+                                            title={defaultAudioIndex === index ? 'Main track (plays by default)' : 'Set as main track'}
+                                        >
+                                            <Star className={`w-5 h-5 ${defaultAudioIndex === index ? 'fill-current' : ''}`} />
+                                        </button>
                                         <Music className="w-5 h-5 text-indigo-600 flex-shrink-0" />
                                         <div className="flex-1 min-w-0">
                                             <p className="text-sm font-medium text-gray-900 truncate">
                                                 {audio.filename}
+                                                {defaultAudioIndex === index && <span className="ml-1 text-amber-600 text-xs">(main)</span>}
                                             </p>
                                             {audio.uploadedAt && (
                                                 <p className="text-xs text-gray-500">
@@ -941,8 +962,12 @@ const BookEdit: React.FC = () => {
                         </div>
                     )}
                     
-                    {/* Upload Audio Button */}
-                    <div className="border-2 border-dashed border-gray-300 rounded-lg p-4 text-center hover:border-indigo-400 transition-colors">
+                    {/* Upload Audio Button - disabled when 3 tracks */}
+                    <div className={`border-2 border-dashed rounded-lg p-4 text-center transition-colors ${
+                        audioFiles.length >= 3
+                            ? 'border-gray-200 bg-gray-50 cursor-not-allowed'
+                            : 'border-gray-300 hover:border-indigo-400'
+                    }`}>
                         <input
                             ref={audioInputRef}
                             type="file"
@@ -950,17 +975,18 @@ const BookEdit: React.FC = () => {
                             onChange={handleAudioSelect}
                             className="hidden"
                             id="audio-upload"
+                            disabled={audioFiles.length >= 3}
                         />
                         <label
-                            htmlFor="audio-upload"
-                            className="cursor-pointer flex flex-col items-center gap-2"
+                            htmlFor={audioFiles.length >= 3 ? undefined : 'audio-upload'}
+                            className={`flex flex-col items-center gap-2 ${audioFiles.length >= 3 ? 'cursor-not-allowed' : 'cursor-pointer'}`}
                         >
-                            <Music className={`w-8 h-8 ${uploadingAudio ? 'text-indigo-500 animate-pulse' : 'text-gray-400'}`} />
+                            <Music className={`w-8 h-8 ${uploadingAudio ? 'text-indigo-500 animate-pulse' : audioFiles.length >= 3 ? 'text-gray-300' : 'text-gray-400'}`} />
                             <span className="text-sm text-gray-600">
-                                {uploadingAudio ? 'Uploading...' : 'Click to upload audio file'}
+                                {uploadingAudio ? 'Uploading...' : audioFiles.length >= 3 ? 'Maximum 3 tracks' : 'Click to upload audio file'}
                             </span>
                             <span className="text-xs text-gray-500">
-                                MP3, WAV, M4A up to 50MB
+                                MP3, WAV, M4A up to 50MB {audioFiles.length > 0 && `(${audioFiles.length}/3)`}
                             </span>
                         </label>
                     </div>

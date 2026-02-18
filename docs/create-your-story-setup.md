@@ -113,8 +113,18 @@ So that the **portal** repo (and Netlify) get your latest portal code:
 
 1. **Commit** all changes.
 2. From the **repo root**, run:  
-   **`./scripts/push-portal-subtree.sh main`**
+   **`./scripts/push-portal-subtree.sh main`**  
+   This splits `projects-portal/` from main and pushes to the `portal` remote (portalgk2.0). The split step can take a few minutes.
 3. Netlify will build and deploy from the portal repo.
+
+**GitHub credentials:** To use macOS Keychain so push works without re-entering your password, set:  
+`git config --global credential.helper osxkeychain`
+
+**If push fails in IDE (e.g. "Device not configured"):** Run the push **in your own Terminal** so Keychain can supply credentials. If the subtree split already completed but push failed, run:  
+`./scripts/push-portal-push-only.sh`  
+Otherwise run `./scripts/push-portal-subtree.sh main` in Terminal.
+
+**Note:** The **portal** deploys on **Netlify** (not Render). Render is for the backend. Pushing to the portal remote (portalgk2.0) triggers Netlify; ensure the Netlify site is connected to that repo and branch `main`.
 
 ---
 

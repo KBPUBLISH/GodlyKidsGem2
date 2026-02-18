@@ -1,5 +1,27 @@
 # Backend deploy to Render
 
+## One script (subtree → BackendGK2.0 → Render)
+
+There is **one script** that does everything: split the `backend/` folder, push it to the BackendGK2.0 repo, and Render deploys from that repo (auto or manual).
+
+```bash
+# From repo root (recommended)
+cd /path/to/GodlyKidsGem2
+./scripts/push-backend-subtree.sh main
+```
+
+You can run it from **any directory** as long as you use the full path to the script:
+
+```bash
+/path/to/GodlyKidsGem2/scripts/push-backend-subtree.sh main
+```
+
+**Why it sometimes fails:** The **push** step uses Git over SSH. In Cursor/IDE the SSH agent often isn’t available (“Device not configured”), so the push fails even though the subtree split worked. **Fix:** Run the same command in **Terminal.app** (or iTerm) on your Mac so Keychain can supply your GitHub credentials. The script is idempotent: if a previous run left a `backend-split` branch, the script removes it and runs the split again, so you can retry safely.
+
+**Summary:** One script → subtree split → push to BackendGK2.0 → Render deploys (or Manual Deploy once).
+
+---
+
 ## Which repo does Render use?
 
 **Check in Render:** Dashboard → **godlykids-backend** → **Settings** → **Build & Deploy** → **Repository**.
@@ -30,12 +52,20 @@ This splits `backend/` and pushes to the `backend` remote (BackendGK2.0) as `mai
   2. Open the **godlykids-backend** service
   3. **Manual Deploy** → **Deploy latest commit**
 
-## 3. If Render still doesn’t deploy
+## 3. If Render fails with "Missing script: start"
+
+Set **Start Command** in Render so it doesn't depend on `npm start`:
+
+1. Render Dashboard → **godlykids-backend** → **Settings** → **Start Command**
+2. Set to: **`node src/index.js`**
+3. Save and redeploy (Manual Deploy → Deploy latest commit).
+
+## 4. If Render still doesn’t deploy
 
 - **Repo:** In Render → **Settings** → confirm the connected repo is **KBPUBLISH/BackendGK2.0** (not GodlyKidsGem2).
 - **Branch:** Branch should be **main** (or whatever you pushed).
 - **Root directory:** Leave blank (BackendGK2.0 repo root is the backend code).
-- **Build / Start:** Build command `npm install`, start command `npm start` (see `backend/render.yaml`).
+- **Build / Start:** Build command `npm install`, start command **`node src/index.js`** (avoids "Missing script: start"; or `npm start` if package.json has it).
 
 **If Render is connected to GodlyKidsGem2 with Root Directory = `backend`:**  
 Then the subtree push to BackendGK2.0 does nothing for Render. Pushing to **origin** (e.g. `git push origin main`) is what triggers the deploy. No need to run `push-backend-subtree.sh` for Render in that case.

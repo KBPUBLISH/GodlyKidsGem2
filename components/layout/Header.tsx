@@ -25,7 +25,7 @@ const Header: React.FC<HeaderProps> = ({ isVisible, title = "GODLY KIDS" }) => {
   const location = useLocation();
   const { coins, equippedAvatar, equippedFrame, equippedHat, equippedBody, equippedLeftArm, equippedRightArm, equippedLegs, isSubscribed, headOffset } = useUser();
   const { isStepActive, nextStep, isTutorialActive, currentStep } = useTutorial();
-  const { reverseTrial, isPremium } = useSubscription();
+  const { isPremium } = useSubscription();
   const [isShopOpen, setIsShopOpen] = useState(false);
   const [isDetailOpen, setIsDetailOpen] = useState(false);
   const [isCoinHistoryOpen, setIsCoinHistoryOpen] = useState(false);
@@ -261,21 +261,6 @@ const Header: React.FC<HeaderProps> = ({ isVisible, title = "GODLY KIDS" }) => {
                 />
               </div>
             </div>
-            
-            {/* Reverse Trial PRO Badge - Show next to avatar */}
-            {reverseTrial.isActive && (
-              <button
-                onClick={() => navigate('/trial-stats')}
-                className="ml-2 bg-gradient-to-r from-amber-400 to-amber-500 px-2.5 py-1 rounded-lg border border-amber-600 shadow-md flex items-center gap-1.5 hover:shadow-lg active:scale-95 transition-all"
-              >
-                <Crown size={14} className="text-amber-800" />
-                <span className="text-amber-900 font-bold text-xs">
-                  {reverseTrial.daysRemaining} {reverseTrial.daysRemaining === 1 ? 'day' : 'days'} left
-                </span>
-                <div className="w-px h-3.5 bg-amber-600/40 mx-0.5" />
-                <span className="text-amber-800 font-extrabold text-xs tracking-wide">PRO</span>
-              </button>
-            )}
             
             {/* Lifetime Deal Timer - Show next to avatar if deal is active and not subscribed */}
             {dealTimeRemaining && !isSubscribed && (

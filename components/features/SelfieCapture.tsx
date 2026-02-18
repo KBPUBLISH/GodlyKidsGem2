@@ -7,6 +7,8 @@ interface SelfieCaptureProps {
   onCapture: (imageBase64: string) => void;
   onClose: () => void;
   childName?: string;
+  /** Optional port-window/porthole overlay image (e.g. circular frame); user positions face in the center */
+  frameOverlayImageUrl?: string;
 }
 
 type CaptureState = 'preview' | 'countdown' | 'captured' | 'error';
@@ -15,7 +17,8 @@ const SelfieCapture: React.FC<SelfieCaptureProps> = ({
   isOpen,
   onCapture,
   onClose,
-  childName = 'there'
+  childName = 'there',
+  frameOverlayImageUrl
 }) => {
   const [state, setState] = useState<CaptureState>('preview');
   const [countdown, setCountdown] = useState(3);
@@ -220,11 +223,33 @@ const SelfieCapture: React.FC<SelfieCaptureProps> = ({
               </WoodButton>
             </div>
           ) : state === 'captured' && capturedImage ? (
-            <img
-              src={capturedImage}
-              alt="Captured selfie"
-              className="w-full h-full object-cover"
-            />
+            <>
+              <img
+                src={capturedImage}
+                alt="Captured selfie"
+                className="w-full h-full object-cover"
+              />
+              {/* Wood + port window overlay on review (match capture view when using porthole) */}
+              {frameOverlayImageUrl && (
+                <>
+                  <div
+                    className="absolute inset-0 pointer-events-none bg-cover bg-center"
+                    style={{
+                      backgroundImage: 'url(/assets/images/create-story-style-background.png)',
+                      WebkitMaskImage: 'radial-gradient(circle at center, transparent 58%, black 58%)',
+                      maskImage: 'radial-gradient(circle at center, transparent 58%, black 58%)',
+                    }}
+                    aria-hidden
+                  />
+                  <img
+                    src={frameOverlayImageUrl}
+                    alt=""
+                    aria-hidden
+                    className="absolute inset-0 w-full h-full object-contain object-center pointer-events-none"
+                  />
+                </>
+              )}
+            </>
           ) : (
             <>
               <video
@@ -234,17 +259,38 @@ const SelfieCapture: React.FC<SelfieCaptureProps> = ({
                 muted
                 className={`w-full h-full object-cover ${facingMode === 'user' ? 'scale-x-[-1]' : ''}`}
               />
+
+              {/* Wood texture outside the port window (only when using porthole overlay) */}
+              {frameOverlayImageUrl && (
+                <div
+                  className="absolute inset-0 pointer-events-none bg-cover bg-center"
+                  style={{
+                    backgroundImage: 'url(/assets/images/create-story-style-background.png)',
+                    WebkitMaskImage: 'radial-gradient(circle at center, transparent 58%, black 58%)',
+                    maskImage: 'radial-gradient(circle at center, transparent 58%, black 58%)',
+                  }}
+                  aria-hidden
+                />
+              )}
               
-              {/* Camera overlay guide */}
-              <div className="absolute inset-0 pointer-events-none">
-                {/* Face guide circle */}
-                <div className="absolute inset-[15%] border-4 border-white/30 rounded-full" />
-                
-                {/* Corner guides */}
-                <div className="absolute top-[10%] left-[10%] w-8 h-8 border-l-4 border-t-4 border-[#FFD700] rounded-tl-lg" />
-                <div className="absolute top-[10%] right-[10%] w-8 h-8 border-r-4 border-t-4 border-[#FFD700] rounded-tr-lg" />
-                <div className="absolute bottom-[10%] left-[10%] w-8 h-8 border-l-4 border-b-4 border-[#FFD700] rounded-bl-lg" />
-                <div className="absolute bottom-[10%] right-[10%] w-8 h-8 border-r-4 border-b-4 border-[#FFD700] rounded-br-lg" />
+              {/* Camera overlay: port-window image when provided, else simple circle + corner guides */}
+              <div className="absolute inset-0 pointer-events-none flex items-center justify-center">
+                {frameOverlayImageUrl ? (
+                  <img
+                    src={frameOverlayImageUrl}
+                    alt=""
+                    aria-hidden
+                    className="w-full h-full object-contain object-center"
+                  />
+                ) : (
+                  <>
+                    <div className="absolute inset-[15%] border-4 border-white/30 rounded-full" />
+                    <div className="absolute top-[10%] left-[10%] w-8 h-8 border-l-4 border-t-4 border-[#FFD700] rounded-tl-lg" />
+                    <div className="absolute top-[10%] right-[10%] w-8 h-8 border-r-4 border-t-4 border-[#FFD700] rounded-tr-lg" />
+                    <div className="absolute bottom-[10%] left-[10%] w-8 h-8 border-l-4 border-b-4 border-[#FFD700] rounded-bl-lg" />
+                    <div className="absolute bottom-[10%] right-[10%] w-8 h-8 border-r-4 border-b-4 border-[#FFD700] rounded-br-lg" />
+                  </>
+                )}
               </div>
 
               {/* Countdown overlay */}

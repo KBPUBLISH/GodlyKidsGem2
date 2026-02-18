@@ -122,5 +122,24 @@ export const authService = {
       return null;
     }
   },
+
+  /**
+   * Single source of truth for the identifier sent to backend (monthly-book create, my-books, etc.).
+   * Prefer email then deviceId so backend resolveUserId() can find AppUser (it looks up by email or deviceId only).
+   * Fallbacks: localStorage (godlykids_user_email, device ids), then user._id / user.id.
+   */
+  getUserIdForBackend: (): string | null => {
+    const user = authService.getUser();
+    const raw =
+      user?.email
+      || (user as any)?.deviceId
+      || (typeof localStorage !== 'undefined' && localStorage.getItem('godlykids_user_email'))
+      || (typeof localStorage !== 'undefined' && localStorage.getItem('godlykids_device_id'))
+      || (typeof localStorage !== 'undefined' && localStorage.getItem('device_id'))
+      || (user as any)?._id
+      || (user as any)?.id;
+    if (raw == null || String(raw).trim() === '') return null;
+    return String(raw).trim();
+  },
 };
 

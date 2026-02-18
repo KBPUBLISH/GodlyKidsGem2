@@ -498,11 +498,11 @@ router.get('/my-books', async (req, res) => {
                 };
             }
             const source = b.sourceBookId || b.templateId;
-            const sourceTitle = source?.title || 'Your story';
-            const sourceCover = source?.files?.coverImage || source?.coverImage || null;
+            const sourceTitle = b.bookId?.title || source?.title || 'Your story';
+            const sourceCover = b.bookId?.files?.coverImage || b.bookId?.files?.cover?.url || source?.files?.coverImage || source?.coverImage || null;
             return {
                 customMonthlyBookId: b._id,
-                bookId: null,
+                bookId: b.bookId?._id || null,
                 title: sourceTitle,
                 coverImageUrl: sourceCover,
                 childName: b.childName,
@@ -561,6 +561,40 @@ router.post('/share', async (req, res) => {
     } catch (err) {
         console.error('Monthly book share error:', err);
         res.status(500).json({ success: false, error: err.message || 'Failed to create share link' });
+    }
+});
+
+/**
+ * GET /api/monthly-book/by-book/:bookId
+ * Check if this bookId is linked to an in-progress CustomMonthlyBook (generating).
+ * Used by BookDetailPage to show loading overlay and retry when user lands on /book/:id for a book still generating.
+ */
+router.get('/by-book/:bookId', async (req, res) => {
+    try {
+        const { bookId } = req.params;
+        if (!bookId || !mongoose.Types.ObjectId.isValid(bookId)) {
+            return res.status(400).json({ success: false, error: 'Valid bookId required' });
+        }
+        const custom = await CustomMonthlyBook.findOne({
+            bookId: new mongoose.Types.ObjectId(bookId),
+            status: { $in: ['pending', 'generating'] },
+        })
+            .select('_id status progressPage progressTotalPages')
+            .lean();
+        if (!custom) {
+            return res.json({ success: true, inProgress: false });
+        }
+        res.json({
+            success: true,
+            inProgress: true,
+            customMonthlyBookId: custom._id,
+            status: custom.status,
+            progressPage: custom.progressPage ?? 0,
+            progressTotalPages: custom.progressTotalPages ?? 0,
+        });
+    } catch (err) {
+        console.error('Monthly book by-book error:', err);
+        res.status(500).json({ success: false, error: err.message });
     }
 });
 

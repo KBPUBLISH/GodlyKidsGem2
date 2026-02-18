@@ -132,6 +132,7 @@ router.post('/create', async (req, res) => {
 
         const customBook = await CustomMonthlyBook.create({
             userId,
+            rawUserId: rawUserId ? String(rawUserId).trim() : undefined,
             kidId,
             templateId,
             childName: String(childName).trim(),
@@ -252,6 +253,7 @@ router.post('/create-from-book', async (req, res) => {
             : 0;
         const createPayload = {
             userId,
+            rawUserId: rawUserId ? String(rawUserId).trim() : undefined,
             kidId,
             sourceBookId: new mongoose.Types.ObjectId(sourceBookId),
             childName: primaryName,

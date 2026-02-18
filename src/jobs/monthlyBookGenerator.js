@@ -994,8 +994,9 @@ async function runMonthlyBookGenerationFromBook(customMonthlyBookId, custom, sou
 
     const notificationTitle = '✨ Your story is ready!';
     const notificationMessage = `${custom.childName}, your story is ready to read!`;
+    const notificationUserId = (custom.rawUserId && String(custom.rawUserId).trim()) || (custom.userId && custom.userId.toString());
     await sendNotificationToUser({
-        userId: custom.userId,
+        userId: notificationUserId,
         title: notificationTitle,
         message: notificationMessage,
         url: `/book/${book._id}`,
@@ -1127,8 +1128,9 @@ async function runMonthlyBookGeneration(customMonthlyBookId) {
 
         const notificationTitle = '✨ Your story is ready!';
         const notificationMessage = `${custom.childName}, your adventure with ${bibleCharacter.displayName} is ready!`;
+        const notificationUserId = (custom.rawUserId && String(custom.rawUserId).trim()) || (custom.userId && custom.userId.toString());
         await sendNotificationToUser({
-            userId: custom.userId,
+            userId: notificationUserId,
             title: notificationTitle,
             message: notificationMessage,
             url: `/book/${book._id}`,

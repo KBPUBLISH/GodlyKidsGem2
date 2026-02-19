@@ -750,6 +750,7 @@ const CreateYourStoryPage: React.FC = () => {
                           alt={style.name}
                           className="w-full h-auto aspect-[3/4] object-contain object-top block"
                         />
+                        <span className="block text-center text-white font-semibold text-sm mt-1">{style.name}</span>
                       </button>
                     ))}
                   </div>

@@ -1154,6 +1154,7 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const isDailySession = location.pathname === '/daily-session';
   const isPremiumOnboarding = location.pathname === '/premium-onboarding';
   const isTrialStats = location.pathname === '/trial-stats';
+  const isBookCreating = location.pathname.startsWith('/library/creating/');
 
   // Standalone pages that don't need the app chrome (background, navigation, etc.)
   const isStandalonePage = isParentQuiz || isSharePage || isReadyToJumpIn || isDailySession || isPremiumOnboarding || isTrialStats;
@@ -1183,13 +1184,13 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
       <MiniPlayer />
 
       {/* Only show BottomNavigation on main tab pages */}
-      {!isLanding && !isSignIn && !isOnboarding && !isWelcome && !isReadyToJumpIn && !isBookDetail && !isPlayer && !isProfile && !isCreateProfile && !isEditProfile && !isPaywall && !isSettings && !isBookReader && !isAudioPage && !isLessonPage && !isGamePage && !isResetPassword && !isBookSeries && !isCreatePlaylist && !isMyPlaylist && !isDailySession && !isPremiumOnboarding && <BottomNavigation />}
+      {!isLanding && !isSignIn && !isOnboarding && !isWelcome && !isReadyToJumpIn && !isBookDetail && !isPlayer && !isProfile && !isCreateProfile && !isEditProfile && !isPaywall && !isSettings && !isBookReader && !isAudioPage && !isLessonPage && !isGamePage && !isResetPassword && !isBookSeries && !isCreatePlaylist && !isMyPlaylist && !isDailySession && !isPremiumOnboarding && !isBookCreating && <BottomNavigation />}
 
       {/* Onboarding Tutorial Overlay */}
       <OnboardingTutorial />
       
       {/* Bottom Safe Area Spacer - for pages without BottomNavigation */}
-      {(isBookDetail || isPlayer || isProfile || isCreateProfile || isEditProfile || isPaywall || isSettings || isBookReader || isAudioPage || isLessonPage || isBookSeries || isCreatePlaylist || isMyPlaylist) && (
+      {(isBookDetail || isPlayer || isProfile || isCreateProfile || isEditProfile || isPaywall || isSettings || isBookReader || isAudioPage || isLessonPage || isBookSeries || isCreatePlaylist || isMyPlaylist || isBookCreating) && (
         <div 
           className="w-full bg-transparent pointer-events-none" 
           style={{ height: 'var(--safe-area-bottom, 0px)' }}

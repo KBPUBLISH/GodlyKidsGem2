@@ -1,14 +1,14 @@
 
 import React, { useEffect, useState, useMemo } from 'react';
 import { useParams, useNavigate, useLocation, useSearchParams } from 'react-router-dom';
-import { Heart, BookOpen, Crown, PlayCircle, Headphones, Disc, Lock, Globe, Bookmark, Plus, ArrowLeft, Share2 } from 'lucide-react';
+import { Heart, BookOpen, Crown, PlayCircle, Headphones, Disc, Lock, Globe, Bookmark, Plus, ArrowLeft, Share2, Loader2 } from 'lucide-react';
 import { useBooks } from '../context/BooksContext';
 import { useUser } from '../context/UserContext';
 import { Book } from '../types';
 import { readingProgressService } from '../services/readingProgressService';
 import { useAudio } from '../context/AudioContext';
 import { useLanguage } from '../context/LanguageContext';
-import { ApiService } from '../services/apiService';
+import { ApiService, getMonthlyBookBaseUrl } from '../services/apiService';
 import { readCountService } from '../services/readCountService';
 import { bookCompletionService } from '../services/bookCompletionService';
 import { favoritesService } from '../services/favoritesService';
@@ -95,6 +95,14 @@ const BookDetailPage: React.FC = () => {
   const [showDrawingModal, setShowDrawingModal] = useState(false);
   const [showCharacterExpandModal, setShowCharacterExpandModal] = useState(false);
   const [expandedCharacterIndex, setExpandedCharacterIndex] = useState<number | null>(null);
+
+  // Generation in progress (Create Your Story) — show overlay with progress and retry
+  const [genStatus, setGenStatus] = useState<{
+    customMonthlyBookId: string;
+    progressPage: number;
+    progressTotalPages: number;
+  } | null>(null);
+  const [genRetrying, setGenRetrying] = useState(false);
 
   // Voice reward info
   const [rewardVoice, setRewardVoice] = useState<{ voiceId: string; name: string; characterImage?: string } | null>(null);
@@ -192,6 +200,79 @@ const BookDetailPage: React.FC = () => {
     
     findOrFetchBook();
   }, [id, books, book, shareToken]);
+
+  // Discover if this book is still generating (from state or by-book API)
+  useEffect(() => {
+    if (!id || !book) return;
+    const state = location.state as { customMonthlyBookId?: string; isGenerating?: boolean } | null;
+    if (state?.customMonthlyBookId && state?.isGenerating) {
+      // We have state from Library — fetch status once to populate genStatus (polling is in next effect)
+      const fetchStatus = async () => {
+        try {
+          const res = await fetch(`${getMonthlyBookBaseUrl()}/monthly-book/status/${state.customMonthlyBookId}`);
+          const data = await res.json().catch(() => ({}));
+          if (data.success && data.status !== 'completed' && data.status !== 'failed') {
+            setGenStatus({
+              customMonthlyBookId: state.customMonthlyBookId!,
+              progressPage: data.progressPage ?? 0,
+              progressTotalPages: data.progressTotalPages ?? 0,
+            });
+          }
+        } catch {
+          // ignore
+        }
+      };
+      fetchStatus();
+      return;
+    }
+    // No state — check by-book API in case user landed directly on /book/:id
+    const checkByBook = async () => {
+      try {
+        const res = await fetch(`${getMonthlyBookBaseUrl()}/monthly-book/by-book/${id}`);
+        const data = await res.json().catch(() => ({}));
+        if (data.success && data.inProgress && data.customMonthlyBookId) {
+          setGenStatus({
+            customMonthlyBookId: data.customMonthlyBookId,
+            progressPage: data.progressPage ?? 0,
+            progressTotalPages: data.progressTotalPages ?? 0,
+          });
+        }
+      } catch {
+        // ignore
+      }
+    };
+    checkByBook();
+  }, [id, book, location.state]);
+
+  // Poll generation status when we have customMonthlyBookId
+  useEffect(() => {
+    if (!genStatus?.customMonthlyBookId) return;
+    const fetchStatus = async () => {
+      try {
+        const res = await fetch(`${getMonthlyBookBaseUrl()}/monthly-book/status/${genStatus.customMonthlyBookId}`);
+        const data = await res.json().catch(() => ({}));
+        if (data.success) {
+          if (data.status === 'completed' || data.status === 'failed') {
+            setGenStatus(null);
+            return;
+          }
+          setGenStatus((prev) =>
+            prev
+              ? {
+                  ...prev,
+                  progressPage: data.progressPage ?? 0,
+                  progressTotalPages: data.progressTotalPages ?? 0,
+                }
+              : null
+          );
+        }
+      } catch {
+        // ignore
+      }
+    };
+    const interval = setInterval(fetchStatus, 2500);
+    return () => clearInterval(interval);
+  }, [genStatus?.customMonthlyBookId]);
 
   // Load pinned coloring drawing ("fridge") for this book
   useEffect(() => {
@@ -531,7 +612,42 @@ const BookDetailPage: React.FC = () => {
 
   return (
     // Opaque background to hide panorama
-    <div className="flex flex-col h-full overflow-y-auto no-scrollbar bg-[#fdf6e3]">
+    <div className="flex flex-col h-full overflow-y-auto no-scrollbar bg-[#fdf6e3] relative">
+
+      {/* Generation in progress overlay — same layout as BookDetailPage, loading over the content */}
+      {genStatus && (
+        <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-black/70 px-6">
+          <div className="rounded-2xl overflow-hidden border-2 border-amber-400/40 bg-gradient-to-b from-amber-900/90 to-amber-950/90 shadow-xl max-w-sm w-full p-6 text-center">
+            <Loader2 className="w-16 h-16 text-amber-300 animate-spin mx-auto mb-4" aria-hidden />
+            <p className="text-amber-200 font-bold text-lg mb-1">
+              Page {genStatus.progressPage + 1} of {genStatus.progressTotalPages} in progress
+            </p>
+            <p className="text-amber-200/80 text-sm mb-4">
+              {genStatus.progressPage > 0 ? `${genStatus.progressPage} page${genStatus.progressPage === 1 ? '' : 's'} done. ` : ''}
+              Creating your story...
+            </p>
+            <button
+              type="button"
+              disabled={genRetrying}
+              onClick={async () => {
+                setGenRetrying(true);
+                try {
+                  const res = await fetch(`${getMonthlyBookBaseUrl()}/monthly-book/retry/${genStatus.customMonthlyBookId}`, { method: 'POST' });
+                  const data = await res.json().catch(() => ({}));
+                  if (data.success) {
+                    setGenStatus((prev) => prev ? { ...prev, progressPage: prev.progressPage } : null);
+                  }
+                } finally {
+                  setGenRetrying(false);
+                }
+              }}
+              className="text-amber-300 hover:text-amber-200 text-sm underline disabled:opacity-50"
+            >
+              {genRetrying ? 'Retrying…' : 'Generation stuck? Tap to resume from next page'}
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* TOP SECTION - WOOD BACKGROUND */}
       {/* Full width, removed margins and top rounded corners */}

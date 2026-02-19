@@ -54,6 +54,11 @@ const BookCreatingPage: React.FC = () => {
       navigate(`/book/${status.bookId}`, { replace: true });
       return;
     }
+    // Once we have a bookId, redirect to book detail page (shows same overlay there)
+    if (status.bookId && (status.status === 'pending' || status.status === 'generating')) {
+      navigate(`/book/${status.bookId}`, { replace: true, state: { customMonthlyBookId, isGenerating: true } });
+      return;
+    }
     if (status.status === 'failed' || status.status === 'completed') return;
     const interval = setInterval(fetchStatus, 2500);
     return () => clearInterval(interval);

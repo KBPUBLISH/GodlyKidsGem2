@@ -153,7 +153,13 @@ const KidsMonthlyPage: React.FC = () => {
                 ) : (
                   <button
                     type="button"
-                    onClick={() => navigate(`/library/creating/${item.customMonthlyBookId}`)}
+                    onClick={() => {
+                      if (item.bookId) {
+                        navigate(`/book/${item.bookId}`, { state: { customMonthlyBookId: item.customMonthlyBookId, isGenerating: true } });
+                      } else {
+                        navigate(`/library/creating/${item.customMonthlyBookId}`);
+                      }
+                    }}
                     className="w-full text-left bg-white/10 backdrop-blur-sm rounded-2xl overflow-hidden border-2 border-amber-400/30 hover:border-amber-400/50 active:scale-[0.98] transition-all"
                   >
                     <div className="aspect-square relative bg-gradient-to-br from-amber-900/40 to-amber-800/30">

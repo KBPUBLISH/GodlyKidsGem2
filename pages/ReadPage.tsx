@@ -361,7 +361,7 @@ const ReadPage: React.FC = () => {
                   <button
                     key={book.id || `top-${i}`}
                     onClick={() => navigate(`/book/${book.id}`, { state: { from: '/read' } })}
-                    className="flex-shrink-0 w-[120px] group cursor-pointer select-none focus:outline-none"
+                    className="flex-shrink-0 w-[150px] group cursor-pointer select-none focus:outline-none"
                   >
                     <div className="relative aspect-[3/4] rounded-xl overflow-hidden border-2 border-amber-400/40 shadow-lg group-hover:border-amber-400/70 group-hover:scale-105 transition-all">
                       <div className="absolute top-1 left-1 w-6 h-6 rounded-full bg-amber-500 text-white text-xs font-bold flex items-center justify-center z-10 shadow-md">

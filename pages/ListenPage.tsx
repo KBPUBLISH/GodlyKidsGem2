@@ -428,7 +428,7 @@ const ListenPage: React.FC = () => {
                   <button
                     key={playlist._id || `top-audio-${i}`}
                     onClick={() => navigate(`/audio/playlist/${playlist._id}`)}
-                    className="flex-shrink-0 w-[120px] group cursor-pointer select-none focus:outline-none"
+                    className="flex-shrink-0 w-[150px] group cursor-pointer select-none focus:outline-none"
                   >
                     <div className="relative aspect-square rounded-xl overflow-hidden border-2 border-purple-400/40 shadow-lg group-hover:border-purple-400/70 group-hover:scale-105 transition-all">
                       <div className="absolute top-1 left-1 w-6 h-6 rounded-full bg-purple-500 text-white text-xs font-bold flex items-center justify-center z-10 shadow-md">

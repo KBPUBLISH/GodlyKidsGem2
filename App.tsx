@@ -1151,7 +1151,7 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     if (!isNewLayoutPage || !shouldShowLayoutRating()) return;
     const timer = setTimeout(() => {
       setShowLayoutRating(true);
-    }, 5000); // 5 seconds after landing so user sees the layout first
+    }, 20000); // 20 seconds after landing so user sees the layout first
     return () => clearTimeout(timer);
   }, [location.pathname]);
 

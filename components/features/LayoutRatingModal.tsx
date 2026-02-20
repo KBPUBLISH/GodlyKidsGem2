@@ -41,8 +41,8 @@ const LayoutRatingModal: React.FC<LayoutRatingModalProps> = ({
     return () => document.body.removeAttribute('data-modal-open');
   }, [isOpen]);
 
-  const handleSubmit = async () => {
-    if (rating === null) return;
+  const handleSubmit = async (r: number) => {
+    if (r === null) return;
     setSubmitting(true);
 
     try {
@@ -58,13 +58,13 @@ const LayoutRatingModal: React.FC<LayoutRatingModalProps> = ({
           userId,
           email,
           surveyType: 'layout_rating',
-          rating,
+          rating: r,
           metadata: { platform },
         }),
       });
 
       // Track in onboarding analytics
-      await activityTrackingService.trackOnboardingEvent('layout_rating_submitted', { rating });
+      await activityTrackingService.trackOnboardingEvent('layout_rating_submitted', { rating: r });
 
       markLayoutRatingShown();
       setSubmitted(true);
@@ -97,7 +97,7 @@ const LayoutRatingModal: React.FC<LayoutRatingModalProps> = ({
           </button>
         </div>
 
-        <div className="p-6">
+        <div className="p-6 overflow-visible">
           {!submitted ? (
             <div className="space-y-5">
               <p className="text-amber-900 text-center font-medium">
@@ -107,37 +107,32 @@ const LayoutRatingModal: React.FC<LayoutRatingModalProps> = ({
                 1 = Not at all, 5 = Love it!
               </p>
 
-              <div className="flex justify-center gap-2">
+              <div className="flex justify-center items-center gap-1.5 sm:gap-2 px-4 w-full box-border">
                 {[1, 2, 3, 4, 5].map((star) => (
                   <button
                     key={star}
-                    onClick={() => setRating(star)}
-                    className={`p-3 rounded-xl transition-all ${
+                    onClick={() => {
+                      setRating(star);
+                      handleSubmit(star);
+                    }}
+                    disabled={submitting}
+                    className={`flex-shrink-0 p-2 sm:p-2.5 rounded-xl transition-all ${
                       rating !== null && star <= rating
-                        ? 'bg-amber-500 text-white scale-110'
+                        ? 'bg-amber-500 text-white scale-105'
                         : 'bg-white border-2 border-amber-200 text-amber-900 hover:border-amber-400'
-                    }`}
+                    } ${submitting ? 'opacity-70 pointer-events-none' : ''}`}
                   >
                     <Star
-                      className={`w-8 h-8 ${
+                      className={`w-6 h-6 sm:w-7 sm:h-7 ${
                         rating !== null && star <= rating ? 'fill-current' : ''
                       }`}
                     />
                   </button>
                 ))}
               </div>
-
-              <button
-                onClick={handleSubmit}
-                disabled={rating === null || submitting}
-                className={`w-full py-4 font-bold rounded-xl transition-all shadow-lg ${
-                  rating !== null && !submitting
-                    ? 'bg-gradient-to-r from-amber-500 to-orange-500 text-white hover:from-amber-600 hover:to-orange-600'
-                    : 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                }`}
-              >
-                {submitting ? 'Sending...' : 'Submit'}
-              </button>
+              {submitting && (
+                <p className="text-amber-600 text-sm text-center">Sending...</p>
+              )}
             </div>
           ) : (
             <div className="space-y-5 text-center py-6">

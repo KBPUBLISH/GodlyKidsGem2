@@ -252,22 +252,7 @@ const HomePage: React.FC = () => {
   const [selectedDayIndex, setSelectedDayIndex] = useState<number>(getSelectedDay());
   const todayIndex = getTodayIndex();
   
-  // Welcome video state - plays once per app session when returning to home
-  // Disabled on Android due to video playback issues
-  const [showWelcomeVideo, setShowWelcomeVideo] = useState(() => {
-    // Check if running on Android
-    const ua = navigator.userAgent.toLowerCase();
-    const isAndroid = ua.includes('android');
-    
-    // Disable welcome video on Android
-    if (isAndroid) {
-      return false;
-    }
-    
-    const hasShownThisSession = sessionStorage.getItem('godlykids_welcome_shown');
-    return !hasShownThisSession;
-  });
-  const welcomeVideoRef = useRef<HTMLVideoElement>(null);
+  // Welcome video moved to Explore page (WorldPage) - plays once per session, header hidden until done
   
   // Explore categories state - initialize from cache if available
   const [exploreCategories, setExploreCategories] = useState<any[]>(() => getCached('categories'));
@@ -685,22 +670,6 @@ const HomePage: React.FC = () => {
     navigate(`/lesson/${lesson._id}`);
   };
 
-  // Handle welcome video end - mark as shown and hide video
-  const handleWelcomeVideoEnd = () => {
-    sessionStorage.setItem('godlykids_welcome_shown', 'true');
-    setShowWelcomeVideo(false);
-  };
-
-  // Auto-play welcome video when component mounts
-  useEffect(() => {
-    if (showWelcomeVideo && welcomeVideoRef.current) {
-      welcomeVideoRef.current.play().catch(() => {
-        // If autoplay fails (browser policy), skip the video
-        handleWelcomeVideoEnd();
-      });
-    }
-  }, [showWelcomeVideo]);
-
   // Fetch explore categories
   const fetchExploreCategories = async () => {
     try {
@@ -1094,28 +1063,6 @@ const HomePage: React.FC = () => {
       />
 
       <div className="px-4 pt-28 space-y-2 pb-52">
-
-        {/* Welcome Video - Plays once per session above Week's Progress */}
-        {showWelcomeVideo && (
-          <div className="flex flex-col items-center mb-4">
-            <div className="relative aspect-[9/16] w-32 sm:w-40 md:w-48 max-w-[200px] rounded-lg overflow-hidden bg-transparent">
-              <video
-                ref={welcomeVideoRef}
-                src="/assets/videos/welcome.mp4"
-                className="w-full h-full object-contain bg-transparent"
-                autoPlay
-                muted
-                playsInline
-                onEnded={handleWelcomeVideoEnd}
-                onError={handleWelcomeVideoEnd}
-                style={{ backgroundColor: 'transparent' }}
-              />
-            </div>
-            <p className="mt-3 text-white font-display font-bold text-lg text-center">
-              Hi Explorer! Let's Dive in. 🌊
-            </p>
-          </div>
-        )}
 
         {/* 📚 Daily Lessons Widget */}
         <DailyLessonWidget />

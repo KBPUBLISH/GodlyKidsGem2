@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect, lazy, Suspense } from 'react';
+import React, { useState, useCallback, useEffect, useRef, lazy, Suspense } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import Header from '../components/layout/Header';
 import ChallengeGameModal from '../components/features/ChallengeGameModal';
@@ -34,6 +34,8 @@ const FIREFLIES = [
  * Persistent island layer rendered in Layout — never unmounts.
  * Visibility toggled by route so the island stays locked in place.
  */
+const WELCOME_VIDEO_KEY = 'godlykids_welcome_shown';
+
 export const PersistentWorldIsland: React.FC = () => {
   const location = useLocation();
   const navigate = useNavigate();
@@ -42,6 +44,30 @@ export const PersistentWorldIsland: React.FC = () => {
   const [showVerseModal, setShowVerseModal] = useState(false);
   const [showChallengeGame, setShowChallengeGame] = useState(false);
   const [isZoomingIn, setIsZoomingIn] = useState(false);
+
+  // Welcome video - plays once per app session when first visiting Explore; hide header until done
+  const [showWelcomeVideo, setShowWelcomeVideo] = useState(false);
+  const welcomeVideoRef = useRef<HTMLVideoElement>(null);
+
+  const handleWelcomeVideoEnd = useCallback(() => {
+    sessionStorage.setItem(WELCOME_VIDEO_KEY, 'true');
+    setShowWelcomeVideo(false);
+  }, []);
+
+  useEffect(() => {
+    if (!isVisible) return;
+    const ua = navigator.userAgent.toLowerCase();
+    if (ua.includes('android')) return;
+    if (sessionStorage.getItem(WELCOME_VIDEO_KEY)) return;
+    setShowWelcomeVideo(true);
+  }, [isVisible]);
+
+  useEffect(() => {
+    if (!isVisible || !showWelcomeVideo) return;
+    const video = welcomeVideoRef.current;
+    if (!video) return;
+    video.play().catch(() => handleWelcomeVideoEnd());
+  }, [isVisible, showWelcomeVideo, handleWelcomeVideoEnd]);
 
   useEffect(() => {
     if (showVerseModal || showChallengeGame) {
@@ -77,7 +103,38 @@ export const PersistentWorldIsland: React.FC = () => {
         transition: 'opacity 0.15s ease-out',
       }}
     >
-      <Header isVisible={isVisible} title="EXPLORE" />
+      <Header isVisible={isVisible && !showWelcomeVideo} title="EXPLORE" />
+
+      {/* Welcome video - full-screen, plays once per session; header hidden until done */}
+      {showWelcomeVideo && isVisible && (
+        <div
+          className="fixed inset-0 flex flex-col items-center justify-start pt-[6%] z-[100]"
+          style={{ backgroundColor: 'rgba(0, 0, 0, 0.2)' }}
+        >
+          <div className="relative aspect-[9/16] w-32 sm:w-[154px] md:w-[179px] max-w-[192px] rounded-xl overflow-hidden">
+            <video
+              ref={welcomeVideoRef}
+              src="/assets/videos/welcome.mp4"
+              className="w-full h-full object-contain"
+              autoPlay
+              muted
+              playsInline
+              onEnded={handleWelcomeVideoEnd}
+              onError={handleWelcomeVideoEnd}
+            />
+          </div>
+          <p className="mt-4 text-white font-display font-bold text-lg text-center px-4">
+            Hi Explorer! Let&apos;s Dive in. 🌊
+          </p>
+          <button
+            type="button"
+            onClick={handleWelcomeVideoEnd}
+            className="mt-2 text-white/70 text-sm underline"
+          >
+            Skip
+          </button>
+        </div>
+      )}
 
       {/* Drifting sky clouds */}
       <div className="absolute inset-0 pointer-events-none overflow-hidden" style={{ zIndex: 0 }} aria-hidden>

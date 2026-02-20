@@ -248,7 +248,7 @@ const BottomNavigation: React.FC = () => {
       {showWheelHint && (
         <div 
           className={`absolute z-[50] pointer-events-auto transition-all duration-500 ease-in-out ${
-            isPlayerActive ? 'bottom-[144px] md:bottom-[180px]' : 'bottom-[216px] md:bottom-[234px]'
+            isPlayerActive ? 'bottom-[48px] md:bottom-[55px]' : 'bottom-[70px] md:bottom-[78px]'
           }`}
           onClick={dismissHint}
         >

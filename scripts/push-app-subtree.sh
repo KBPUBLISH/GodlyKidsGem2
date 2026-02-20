@@ -10,7 +10,7 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 cd "$ROOT"
 
-TARGET_BRANCH="${1:-app2.0gk}"
+TARGET_BRANCH="${1:-main}"
 SOURCE_BRANCH="${2:-main}"
 REMOTE="app"
 

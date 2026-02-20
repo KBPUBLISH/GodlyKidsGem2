@@ -323,14 +323,17 @@ const BottomNavigation: React.FC = () => {
         className={`absolute z-[39] w-[317px] h-[317px] origin-center pointer-events-none select-none flex items-center justify-center transition-all duration-500 ease-in-out ${isPlayerActive ? 'bottom-[-70px]' : 'bottom-[-90px]'
           }`}
       >
-        {/* Invisible circular hit area for drag — full wheel so rim/base/hub all respond to swipe */}
+        {/* Large hit area for drag — extends beyond wheel so swipes register easily */}
         <div
           ref={hitAreaRef}
-          className="absolute inset-0 pointer-events-auto"
+          className="absolute pointer-events-auto"
           style={{
-            clipPath: 'circle(95% at 50% 50%)',
+            inset: '-24px',
             cursor: isDragging ? 'grabbing' : 'grab',
             touchAction: 'none',
+            WebkitTouchCallout: 'none',
+            WebkitUserSelect: 'none',
+            userSelect: 'none',
           }}
           onTouchStart={handleTouchStart}
           onTouchMove={handleTouchMove}
@@ -342,10 +345,11 @@ const BottomNavigation: React.FC = () => {
           onMouseLeave={onEnd}
         />
         <div
-          className="w-full h-full relative will-change-transform"
+          className="w-full h-full relative will-change-transform pointer-events-auto"
           style={{
             transform: `rotate(${visualRotation}deg)`,
             transition: isDragging ? 'none' : 'transform 1.2s cubic-bezier(0.22, 0.61, 0.36, 1)',
+            touchAction: 'manipulation',
           }}
         >
           {/* SVG Wheel */}
@@ -548,16 +552,18 @@ const BottomNavigation: React.FC = () => {
 
             const isActive = activeTab === item.id;
 
-            return (
-              <button
-                key={item.id}
-                onClick={(e) => {
+            const handleIconPress = (e: React.MouseEvent | React.PointerEvent) => {
                   e.stopPropagation();
-                  if (totalMoveRef.current < 5) {
+                  e.preventDefault();
+                  if (totalMoveRef.current < 8) {
                     handleNav(item.id, item.path);
                   }
-                }}
-                className="absolute w-14 h-14 -ml-7 -mt-7 flex flex-col items-center justify-center z-20 transition-transform outline-none pointer-events-auto"
+                };
+                return (
+              <button
+                key={item.id}
+                onClick={handleIconPress}
+                className="absolute w-16 h-16 -ml-8 -mt-8 flex flex-col items-center justify-center z-30 transition-transform outline-none pointer-events-auto touch-manipulation min-w-[44px] min-h-[44px]"
                 style={{
                   left: `${x}px`,
                   top: `${y}px`,

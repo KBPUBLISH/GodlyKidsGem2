@@ -804,7 +804,7 @@ const ReadPage: React.FC = () => {
         <div className="fixed inset-0 wp-fade-dark pointer-events-none" style={{ zIndex: 100 }} />
       )}
 
-      <div className="flex-1 flex flex-col items-center justify-center gap-4 pointer-events-none" style={{ zIndex: 3, paddingTop: '14%' }}>
+      <div className="flex-1 flex flex-col items-center justify-center gap-4 pointer-events-none" style={{ zIndex: 3, paddingTop: '20%' }}>
         <div className="relative pointer-events-auto" style={{ width: 'min(240px, 65vw)', maxWidth: 270 }}>
           {/* Pulse rings — behind the island image */}
           <div className="absolute pointer-events-none" style={{ zIndex: 1, inset: '-4% -4%', bottom: '0%' }}>

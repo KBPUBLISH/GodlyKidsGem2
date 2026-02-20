@@ -892,7 +892,7 @@ const ListenPage: React.FC = () => {
           </button>
         </div>
 
-        <div className="flex-1 flex flex-col items-center justify-center gap-4" style={{ zIndex: 2 }}>
+        <div className="flex-1 flex flex-col items-center justify-center gap-4" style={{ zIndex: 2, paddingTop: '8%' }}>
           <div
             className={`relative ${isZoomingIn ? 'listen-island-zoom-in' : ''}`}
             style={{ width: 'min(203px, 55vw)', maxWidth: 235, transformOrigin: 'center 40%', willChange: 'transform, opacity' }}

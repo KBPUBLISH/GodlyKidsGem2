@@ -130,6 +130,11 @@ interface SurveyData {
     analytics: {
         totalResponses: number;
         dateRange: { start: string; end: string; days: number };
+        layoutRating?: {
+            totalResponses: number;
+            averageScore: number | null;
+            distribution: Record<number, number>;
+        };
         contentPreferences: {
             games: number;
             books: number;
@@ -1649,6 +1654,53 @@ const OnboardingAnalytics: React.FC = () => {
                     <p className="text-xs text-gray-400 mt-1">Score 9-10 (would refer)</p>
                 </div>
             </div>
+
+            {/* Layout Rating - "How do you like the new layout?" 1-5 */}
+            {surveyData.analytics.layoutRating && surveyData.analytics.layoutRating.totalResponses > 0 && (
+            <div className="bg-white rounded-xl border border-gray-200 p-6">
+                <h3 className="text-lg font-semibold text-gray-800 mb-4 flex items-center gap-2">
+                    <Star className="w-5 h-5 text-amber-500" />
+                    New Layout Rating
+                </h3>
+                <p className="text-gray-500 text-sm mb-4">&quot;How do you like the new layout?&quot; (1–5)</p>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div className="bg-amber-50 rounded-lg p-4 border border-amber-100">
+                        <p className="text-sm text-gray-500">Total Responses</p>
+                        <p className="text-2xl font-bold text-amber-700">
+                            {surveyData.analytics.layoutRating.totalResponses}
+                        </p>
+                    </div>
+                    <div className="bg-amber-50 rounded-lg p-4 border border-amber-100">
+                        <p className="text-sm text-gray-500">Average Score</p>
+                        <p className="text-2xl font-bold text-amber-700">
+                            {surveyData.analytics.layoutRating.averageScore != null
+                                ? `${surveyData.analytics.layoutRating.averageScore.toFixed(1)} / 5`
+                                : '—'}
+                        </p>
+                    </div>
+                </div>
+                <div className="mt-4">
+                    <p className="text-sm text-gray-600 mb-2">Distribution</p>
+                    <div className="flex items-end gap-2 h-24">
+                        {[1, 2, 3, 4, 5].map(score => {
+                            const count = surveyData.analytics.layoutRating!.distribution[score] || 0;
+                            const maxCount = Math.max(...Object.values(surveyData.analytics.layoutRating!.distribution), 1);
+                            const height = (count / maxCount) * 100;
+                            return (
+                                <div key={score} className="flex-1 flex flex-col items-center">
+                                    <span className="text-xs text-gray-500 mb-1">{count}</span>
+                                    <div
+                                        className="w-full rounded-t bg-amber-500 transition-all"
+                                        style={{ height: `${Math.max(height, 4)}%` }}
+                                    />
+                                    <span className="text-xs font-medium mt-2 text-gray-600">{score}</span>
+                                </div>
+                            );
+                        })}
+                    </div>
+                </div>
+            </div>
+            )}
 
             {/* Content Preferences */}
             <div className="bg-white rounded-xl border border-gray-200 p-6">

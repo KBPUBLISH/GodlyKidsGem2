@@ -929,6 +929,7 @@ import { metaAttributionService } from './services/metaAttributionService';
 import DemoTimer from './components/features/DemoTimer';
 import ReadyToJumpInPage from './pages/ReadyToJumpInPage';
 import OnboardingTutorial from './components/features/OnboardingTutorial';
+import LayoutRatingModal, { shouldShowLayoutRating } from './components/features/LayoutRatingModal';
 import { TutorialProvider, useTutorial } from './context/TutorialContext';
 
 // --- ASSETS & HELPERS ---
@@ -1142,6 +1143,17 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const prevPathRef = useRef(location.pathname);
   const [isTransitioning, setIsTransitioning] = useState(false);
   const fadeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [showLayoutRating, setShowLayoutRating] = useState(false);
+
+  // Show "How do you like the new layout?" pop-up on first visit to /world or /home
+  useEffect(() => {
+    const isNewLayoutPage = location.pathname === '/world' || location.pathname === '/home';
+    if (!isNewLayoutPage || !shouldShowLayoutRating()) return;
+    const timer = setTimeout(() => {
+      setShowLayoutRating(true);
+    }, 5000); // 5 seconds after landing so user sees the layout first
+    return () => clearTimeout(timer);
+  }, [location.pathname]);
 
   useEffect(() => {
     try {
@@ -1247,6 +1259,15 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
 
       {/* Onboarding Tutorial Overlay */}
       <OnboardingTutorial />
+
+      {/* Layout rating pop-up - "How do you like the new layout?" */}
+      <LayoutRatingModal
+        isOpen={showLayoutRating}
+        onClose={() => setShowLayoutRating(false)}
+        userId={localStorage.getItem('godlykids_user_email') || localStorage.getItem('godlykids_device_id') || 'anonymous'}
+        email={localStorage.getItem('godlykids_user_email') || undefined}
+        platform={/despia/i.test(navigator.userAgent) ? (/iphone|ipad/i.test(navigator.userAgent) ? 'ios' : 'android') : 'web'}
+      />
       
       {/* Bottom Safe Area Spacer - for pages without BottomNavigation */}
       {(isBookDetail || isPlayer || isProfile || isCreateProfile || isEditProfile || isPaywall || isSettings || isBookReader || isAudioPage || isLessonPage || isLessonsPage || isBookSeries || isCreatePlaylist || isMyPlaylist || isBookCreating) && (

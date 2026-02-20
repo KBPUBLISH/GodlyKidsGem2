@@ -637,6 +637,7 @@ class ActivityTrackingService {
       voiceSelected?: string;
       email?: string;  // For account_created event
       source?: string; // e.g. 'create-your-story' when paywall from Dive into the Bible
+      rating?: number; // 1-5 for layout_rating_submitted
     }
   ): Promise<void> {
     try {

@@ -79,7 +79,7 @@ const BookDetailPage: React.FC = () => {
   const [imageError, setImageError] = useState(false);
   const [savedPageIndex, setSavedPageIndex] = useState<number | null>(null);
   const [bookGames, setBookGames] = useState<Array<{ _id?: string; title: string; url: string; coverImage?: string; description?: string }>>([]);
-  const [associatedGames, setAssociatedGames] = useState<Array<{ gameId: string; name: string; url?: string; coverImage?: string; gameType?: 'modal' | 'webview' }>>([]);
+  const [associatedGames, setAssociatedGames] = useState<Array<{ gameId: string; name: string; url?: string; coverImage?: string; logo?: string; gameType?: 'modal' | 'webview' }>>([]);
   const [totalPages, setTotalPages] = useState<number>(0);
   const [selectedGame, setSelectedGame] = useState<{ title: string; url: string } | null>(null);
   const [showChallengeGame, setShowChallengeGame] = useState(false);
@@ -103,6 +103,18 @@ const BookDetailPage: React.FC = () => {
     progressTotalPages: number;
   } | null>(null);
   const [genRetrying, setGenRetrying] = useState(false);
+  const [retryCooldownTick, setRetryCooldownTick] = useState(0);
+
+  const GEN_RETRY_COOLDOWN_MS = 120000; // 2 minutes between retry clicks
+  const retryCooldownKey = genStatus ? `godlykids_gen_retry_${genStatus.customMonthlyBookId}` : '';
+  const lastRetryAt = retryCooldownKey ? parseInt(localStorage.getItem(retryCooldownKey) || '0', 10) : 0;
+  const retryCooldownRemaining = lastRetryAt ? Math.max(0, GEN_RETRY_COOLDOWN_MS - (Date.now() - lastRetryAt)) : 0;
+
+  useEffect(() => {
+    if (retryCooldownRemaining <= 0) return;
+    const t = setInterval(() => setRetryCooldownTick((n) => n + 1), 1000);
+    return () => clearInterval(t);
+  }, [retryCooldownRemaining, retryCooldownTick]);
 
   // Voice reward info
   const [rewardVoice, setRewardVoice] = useState<{ voiceId: string; name: string; characterImage?: string } | null>(null);
@@ -628,8 +640,11 @@ const BookDetailPage: React.FC = () => {
             </p>
             <button
               type="button"
-              disabled={genRetrying}
+              disabled={genRetrying || retryCooldownRemaining > 0}
               onClick={async () => {
+                if (retryCooldownRemaining > 0) return;
+                localStorage.setItem(retryCooldownKey, String(Date.now()));
+                setRetryCooldownTick((n) => n + 1);
                 setGenRetrying(true);
                 try {
                   const res = await fetch(`${getMonthlyBookBaseUrl()}/monthly-book/retry/${genStatus.customMonthlyBookId}`, { method: 'POST' });
@@ -643,7 +658,11 @@ const BookDetailPage: React.FC = () => {
               }}
               className="text-amber-300 hover:text-amber-200 text-sm underline disabled:opacity-50"
             >
-              {genRetrying ? 'Retrying…' : 'Generation stuck? Tap to resume from next page'}
+              {genRetrying
+                ? 'Retrying…'
+                : retryCooldownRemaining > 0
+                  ? `Try again in ${Math.ceil(retryCooldownRemaining / 1000)}s`
+                  : 'Generation stuck? Tap to resume from next page'}
             </button>
           </div>
         </div>
@@ -1185,8 +1204,10 @@ const BookDetailPage: React.FC = () => {
                       >
                         <div className="absolute inset-0 opacity-40 bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-[#70380d] to-transparent"></div>
 
-                        <div className="w-20 h-14 bg-[#87CEEB] rounded-lg overflow-hidden relative shrink-0 border-2 border-white/10 shadow-inner z-10">
-                          {game.coverImage ? (
+                        <div className="w-20 h-14 bg-[#87CEEB] rounded-xl overflow-hidden relative shrink-0 border-2 border-white/10 shadow-inner z-10">
+                          {game.logo ? (
+                            <img src={game.logo} className="w-full h-full object-cover" alt={game.name} />
+                          ) : game.coverImage ? (
                             <img src={game.coverImage} className="w-full h-full object-cover" alt={game.name} />
                           ) : (
                             <div className="w-full h-full bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center">

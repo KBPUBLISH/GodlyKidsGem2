@@ -1997,6 +1997,17 @@ const HomePage: React.FC = () => {
                         <div className={`absolute inset-0 bg-gradient-to-br ${isLocked ? 'from-[#8B4513] to-[#5c2e0b]' : 'from-[#4CAF50] to-[#2E7D32]'}`} />
                       )}
                       
+                      {/* Game Logo */}
+                      {game.logo && !isLocked && (
+                        <div className="absolute inset-0 flex items-center justify-center z-[5] pointer-events-none">
+                          <img
+                            src={game.logo}
+                            alt={`${game.name} logo`}
+                            className="w-[60%] h-auto max-h-[40%] object-contain rounded-2xl drop-shadow-[0_4px_12px_rgba(0,0,0,0.4)]"
+                          />
+                        </div>
+                      )}
+
                       {/* Age Rating Badge - Always show */}
                       {game.ageRating && (
                         <div className="absolute top-2 left-2 bg-blue-500/90 backdrop-blur-sm text-white text-xs font-bold px-2 py-1 rounded-full z-20 shadow-lg">

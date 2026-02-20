@@ -371,7 +371,7 @@ const generateFilePath = (bookId, type, filename, pageNumber = null) => {
     // Structure: books/{bookId}/{type}/filename
     // Special case: if bookId is "games", use games/{type}/filename
     // Special case: if bookId is "lessons", use lessons/{lessonId}/{type}/filename
-    // type can be: cover, pages, scroll, audio, game-cover, video, thumbnail
+    // type can be: cover, pages, scroll, audio, game-cover, game-logo, video, thumbnail
     const timestamp = Date.now();
     const sanitizedFilename = filename.replace(/[^a-zA-Z0-9.-]/g, '_');
 
@@ -434,8 +434,8 @@ router.post('/image', upload.single('file'), async (req, res) => {
         // Check if using organized structure
         if (bookId && type) {
             // Validate type
-            if (!['cover', 'pages', 'scroll', 'audio', 'game-cover', 'thumbnail', 'character', 'image-sequence'].includes(type)) {
-                return res.status(400).json({ message: 'type must be one of: cover, pages, scroll, audio, game-cover, thumbnail, character, image-sequence' });
+            if (!['cover', 'pages', 'scroll', 'audio', 'game-cover', 'game-logo', 'thumbnail', 'character', 'image-sequence'].includes(type)) {
+                return res.status(400).json({ message: 'type must be one of: cover, pages, scroll, audio, game-cover, game-logo, thumbnail, character, image-sequence' });
             }
             
             // Special handling for lessons

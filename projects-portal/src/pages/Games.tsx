@@ -10,6 +10,7 @@ interface Game {
     description?: string;
     url?: string;
     coverImage?: string;
+    logo?: string;
     showInDailyTasks?: boolean;
     gameType?: 'modal' | 'webview';
     settings?: any;
@@ -37,6 +38,7 @@ const Games: React.FC = () => {
         description: '',
         url: '',
         coverImage: '',
+        logo: '',
         gameType: 'webview' as 'modal' | 'webview',
         enabled: true,
         showInDailyTasks: true,
@@ -51,8 +53,12 @@ const Games: React.FC = () => {
     });
     const [uploadingCover, setUploadingCover] = useState(false);
     const [uploadingEditCover, setUploadingEditCover] = useState(false);
+    const [uploadingLogo, setUploadingLogo] = useState(false);
+    const [uploadingEditLogo, setUploadingEditLogo] = useState(false);
     const coverInputRef = useRef<HTMLInputElement>(null);
     const editCoverInputRef = useRef<HTMLInputElement>(null);
+    const logoInputRef = useRef<HTMLInputElement>(null);
+    const editLogoInputRef = useRef<HTMLInputElement>(null);
 
     useEffect(() => {
         fetchGames();
@@ -124,9 +130,10 @@ const Games: React.FC = () => {
             name: game.name,
             description: game.description || '',
             enabled: game.enabled,
-            showInDailyTasks: game.showInDailyTasks !== false, // Default to true
+            showInDailyTasks: game.showInDailyTasks !== false,
             url: game.url || '',
             coverImage: game.coverImage || '',
+            logo: game.logo || '',
             gameType: game.gameType || 'modal',
             rewards: game.rewards || {
                 threeStars: 50,
@@ -180,6 +187,7 @@ const Games: React.FC = () => {
                 description: '',
                 url: '',
                 coverImage: '',
+                logo: '',
                 gameType: 'webview',
                 enabled: true,
                 showInDailyTasks: true,
@@ -255,9 +263,18 @@ const Games: React.FC = () => {
                         }`}
                     >
                         <div className="flex justify-between items-start mb-4">
-                            <div>
-                                <h3 className="text-xl font-bold text-gray-800">{game.name}</h3>
-                                <p className="text-sm text-gray-500 mt-1">ID: {game.gameId}</p>
+                            <div className="flex items-center gap-3">
+                                {game.logo ? (
+                                    <img src={game.logo} alt={`${game.name} logo`} className="w-12 h-12 object-cover rounded-xl border border-gray-200 flex-shrink-0" />
+                                ) : (
+                                    <div className="w-12 h-12 rounded-xl bg-gray-100 flex items-center justify-center flex-shrink-0">
+                                        <Gamepad2 className="w-6 h-6 text-gray-400" />
+                                    </div>
+                                )}
+                                <div>
+                                    <h3 className="text-xl font-bold text-gray-800">{game.name}</h3>
+                                    <p className="text-sm text-gray-500 mt-1">ID: {game.gameId}</p>
+                                </div>
                             </div>
                             <button
                                 onClick={() => handleToggleEnabled(game)}
@@ -465,6 +482,82 @@ const Games: React.FC = () => {
                                 </>
                             )}
 
+                            {/* Game Logo - available for all game types */}
+                            <div>
+                                <label className="block text-sm font-semibold text-gray-700 mb-2">
+                                    Game Logo <span className="text-xs text-gray-500">(displayed in the app with rounded corners)</span>
+                                </label>
+                                {formData.logo && (
+                                    <div className="mb-2 relative inline-block">
+                                        <img
+                                            src={formData.logo}
+                                            alt="Game logo"
+                                            className="w-20 h-20 object-cover rounded-2xl border-2 border-gray-300"
+                                        />
+                                        <button
+                                            type="button"
+                                            onClick={() => {
+                                                setFormData({ ...formData, logo: '' });
+                                                if (editLogoInputRef.current) {
+                                                    editLogoInputRef.current.value = '';
+                                                }
+                                            }}
+                                            className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1 hover:bg-red-600 transition-colors"
+                                        >
+                                            <X className="w-3 h-3" />
+                                        </button>
+                                    </div>
+                                )}
+                                <div className="border-2 border-dashed border-gray-300 rounded-lg p-3 text-center hover:border-indigo-400 transition-colors">
+                                    <input
+                                        ref={editLogoInputRef}
+                                        type="file"
+                                        accept="image/*"
+                                        onChange={async (e) => {
+                                            const file = e.target.files?.[0];
+                                            if (file) {
+                                                setUploadingEditLogo(true);
+                                                const uploadFormData = new FormData();
+                                                uploadFormData.append('file', file);
+                                                try {
+                                                    const response = await apiClient.post(
+                                                        `/api/upload/image?bookId=games&type=game-logo`,
+                                                        uploadFormData,
+                                                        { headers: { 'Content-Type': 'multipart/form-data' } }
+                                                    );
+                                                    setFormData({ ...formData, logo: response.data.url });
+                                                } catch (error) {
+                                                    console.error('Failed to upload logo:', error);
+                                                    alert('Failed to upload logo');
+                                                } finally {
+                                                    setUploadingEditLogo(false);
+                                                }
+                                            }
+                                        }}
+                                        className="hidden"
+                                        id="logo-upload-edit"
+                                    />
+                                    <label
+                                        htmlFor="logo-upload-edit"
+                                        className="cursor-pointer flex flex-col items-center gap-2"
+                                    >
+                                        <Upload className={`w-6 h-6 ${uploadingEditLogo ? 'text-indigo-500 animate-pulse' : 'text-gray-400'}`} />
+                                        <span className="text-xs text-gray-600">
+                                            {uploadingEditLogo ? 'Uploading...' : 'Upload game logo'}
+                                        </span>
+                                    </label>
+                                </div>
+                                <p className="text-xs text-gray-500 mt-2">
+                                    Or enter a URL: <input
+                                        type="url"
+                                        value={formData.logo || ''}
+                                        onChange={(e) => setFormData({ ...formData, logo: e.target.value })}
+                                        placeholder="https://example.com/game-logo.png"
+                                        className="ml-2 px-2 py-1 border border-gray-300 rounded text-xs w-64"
+                                    />
+                                </p>
+                            </div>
+
                             <div className="flex items-center gap-2">
                                 <input
                                     type="checkbox"
@@ -636,6 +729,7 @@ const Games: React.FC = () => {
                                         description: '',
                                         url: '',
                                         coverImage: '',
+                                        logo: '',
                                         gameType: 'webview',
                                         enabled: true,
                                         showInDailyTasks: true,
@@ -800,6 +894,82 @@ const Games: React.FC = () => {
                                 </>
                             )}
 
+                            {/* Game Logo - available for all game types */}
+                            <div>
+                                <label className="block text-sm font-semibold text-gray-700 mb-2">
+                                    Game Logo <span className="text-xs text-gray-500">(displayed in the app with rounded corners)</span>
+                                </label>
+                                {newGame.logo && (
+                                    <div className="mb-2 relative inline-block">
+                                        <img
+                                            src={newGame.logo}
+                                            alt="Game logo"
+                                            className="w-20 h-20 object-cover rounded-2xl border-2 border-gray-300"
+                                        />
+                                        <button
+                                            type="button"
+                                            onClick={() => {
+                                                setNewGame({ ...newGame, logo: '' });
+                                                if (logoInputRef.current) {
+                                                    logoInputRef.current.value = '';
+                                                }
+                                            }}
+                                            className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1 hover:bg-red-600 transition-colors"
+                                        >
+                                            <X className="w-3 h-3" />
+                                        </button>
+                                    </div>
+                                )}
+                                <div className="border-2 border-dashed border-gray-300 rounded-lg p-3 text-center hover:border-indigo-400 transition-colors">
+                                    <input
+                                        ref={logoInputRef}
+                                        type="file"
+                                        accept="image/*"
+                                        onChange={async (e) => {
+                                            const file = e.target.files?.[0];
+                                            if (file) {
+                                                setUploadingLogo(true);
+                                                const formData = new FormData();
+                                                formData.append('file', file);
+                                                try {
+                                                    const response = await apiClient.post(
+                                                        `/api/upload/image?bookId=games&type=game-logo`,
+                                                        formData,
+                                                        { headers: { 'Content-Type': 'multipart/form-data' } }
+                                                    );
+                                                    setNewGame({ ...newGame, logo: response.data.url });
+                                                } catch (error) {
+                                                    console.error('Failed to upload logo:', error);
+                                                    alert('Failed to upload logo');
+                                                } finally {
+                                                    setUploadingLogo(false);
+                                                }
+                                            }
+                                        }}
+                                        className="hidden"
+                                        id="logo-upload-new"
+                                    />
+                                    <label
+                                        htmlFor="logo-upload-new"
+                                        className="cursor-pointer flex flex-col items-center gap-2"
+                                    >
+                                        <Upload className={`w-6 h-6 ${uploadingLogo ? 'text-indigo-500 animate-pulse' : 'text-gray-400'}`} />
+                                        <span className="text-xs text-gray-600">
+                                            {uploadingLogo ? 'Uploading...' : 'Upload game logo'}
+                                        </span>
+                                    </label>
+                                </div>
+                                <p className="text-xs text-gray-500 mt-2">
+                                    Or enter a URL: <input
+                                        type="url"
+                                        value={newGame.logo}
+                                        onChange={(e) => setNewGame({ ...newGame, logo: e.target.value })}
+                                        placeholder="https://example.com/game-logo.png"
+                                        className="ml-2 px-2 py-1 border border-gray-300 rounded text-xs w-64"
+                                    />
+                                </p>
+                            </div>
+
                             <div className="flex items-center gap-2">
                                 <input
                                     type="checkbox"
@@ -947,6 +1117,7 @@ const Games: React.FC = () => {
                                         description: '',
                                         url: '',
                                         coverImage: '',
+                                        logo: '',
                                         gameType: 'webview',
                                         enabled: true,
                                         showInDailyTasks: true,

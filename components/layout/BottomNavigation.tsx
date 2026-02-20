@@ -345,11 +345,10 @@ const BottomNavigation: React.FC = () => {
           onMouseLeave={onEnd}
         />
         <div
-          className="w-full h-full relative will-change-transform pointer-events-auto"
+          className="w-full h-full relative will-change-transform pointer-events-none"
           style={{
             transform: `rotate(${visualRotation}deg)`,
             transition: isDragging ? 'none' : 'transform 1.2s cubic-bezier(0.22, 0.61, 0.36, 1)',
-            touchAction: 'manipulation',
           }}
         >
           {/* SVG Wheel */}

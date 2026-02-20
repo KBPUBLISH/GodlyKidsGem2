@@ -920,23 +920,30 @@ router.get('/onboarding/book-building', async (req, res) => {
             eventsByDay[day][e.event] = (eventsByDay[day][e.event] || 0) + 1;
         });
 
-        // Funnel: book building steps
+        // Funnel: book building steps (landed vs completed for each step)
         const started = eventCounts['book_building_started'] || 0;
         const step1 = eventCounts['book_building_step_1_complete'] || 0;
+        const step2Started = eventCounts['book_building_step_2_started'] || 0;
+        const charGenerated = eventCounts['book_building_character_generated'] || 0;
         const step2 = eventCounts['book_building_step_2_complete'] || 0;
+        const step3Started = eventCounts['book_building_step_3_started'] || 0;
         const step3 = eventCounts['book_building_step_3_complete'] || 0;
+        const step4Started = eventCounts['book_building_step_4_started'] || 0;
         const step4 = eventCounts['book_building_step_4_complete'] || 0;
         const bookCreated = eventCounts['book_building_book_created'] || 0;
         const bookCompleted = eventCounts['book_building_book_completed'] || 0;
 
+        const pct = (n) => started > 0 ? Math.round((n / started) * 100) : 0;
         const funnel = [
             { step: 'Started', stepKey: 'started', count: started, rate: 100 },
-            { step: 'Step 1 (Name & story)', stepKey: 'step_1', count: step1, rate: started > 0 ? Math.round((step1 / started) * 100) : 0 },
-            { step: 'Step 2 (Character)', stepKey: 'step_2', count: step2, rate: started > 0 ? Math.round((step2 / started) * 100) : 0 },
-            { step: 'Step 3 (Voice & music)', stepKey: 'step_3', count: step3, rate: started > 0 ? Math.round((step3 / started) * 100) : 0 },
-            { step: 'Step 4 (Create clicked)', stepKey: 'step_4', count: step4, rate: started > 0 ? Math.round((step4 / started) * 100) : 0 },
-            { step: 'Book created (API)', stepKey: 'book_created', count: bookCreated, rate: started > 0 ? Math.round((bookCreated / started) * 100) : 0 },
-            { step: 'Book completed', stepKey: 'book_completed', count: bookCompleted, rate: started > 0 ? Math.round((bookCompleted / started) * 100) : 0 },
+            { step: 'Step 1 (Name & story)', stepKey: 'step_1', count: step1, rate: pct(step1) },
+            { step: 'Step 2 landed (Character)', stepKey: 'step_2_started', count: step2Started || step1, rate: pct(step2Started || step1) },
+            { step: 'Character generated', stepKey: 'char_generated', count: charGenerated, rate: pct(charGenerated) },
+            { step: 'Step 2 complete', stepKey: 'step_2', count: step2, rate: pct(step2) },
+            { step: 'Step 3 (Voice & music)', stepKey: 'step_3', count: step3, rate: pct(step3) },
+            { step: 'Step 4 (Create clicked)', stepKey: 'step_4', count: step4, rate: pct(step4) },
+            { step: 'Book created (API)', stepKey: 'book_created', count: bookCreated, rate: pct(bookCreated) },
+            { step: 'Book completed', stepKey: 'book_completed', count: bookCompleted, rate: pct(bookCompleted) },
         ];
 
         const dropoffs = [];

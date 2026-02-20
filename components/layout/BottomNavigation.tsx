@@ -170,21 +170,31 @@ const BottomNavigation: React.FC = () => {
     setDragRotation(startRotationRef.current + delta);
   };
 
+  const TAP_THRESHOLD = 12; // degrees of movement below which we treat as tap
+
   const onEnd = () => {
     if (!isDragging) return;
     setIsDragging(false);
 
     if (dragRotation !== null) {
-      // Positive rotation maps to index
-      const rawIndex = dragRotation / ITEM_ANGLE;
-      let index = Math.round(rawIndex);
-
-      if (index < 0) index = 0;
-      if (index > 4) index = 4;
-
-      const targetItem = navItems.find(i => i.index === index);
-      if (targetItem) {
-        handleNav(targetItem.id, targetItem.path);
+      if (totalMoveRef.current < TAP_THRESHOLD) {
+        // Tap: find which item was at the touch position and navigate there
+        const R = startRotationRef.current;
+        const touchAngle = startAngleRef.current;
+        const rawIndex = (R - touchAngle - 90) / ITEM_ANGLE;
+        let index = Math.round(rawIndex);
+        if (index < 0) index = 0;
+        if (index > 3) index = 3;
+        const targetItem = navItems.find(i => i.index === index);
+        if (targetItem) handleNav(targetItem.id, targetItem.path);
+      } else {
+        // Swipe: snap to nearest item
+        const rawIndex = dragRotation / ITEM_ANGLE;
+        let index = Math.round(rawIndex);
+        if (index < 0) index = 0;
+        if (index > 3) index = 3;
+        const targetItem = navItems.find(i => i.index === index);
+        if (targetItem) handleNav(targetItem.id, targetItem.path);
       }
     }
     setDragRotation(null);
@@ -323,27 +333,6 @@ const BottomNavigation: React.FC = () => {
         className={`absolute z-[39] w-[317px] h-[317px] origin-center pointer-events-none select-none flex items-center justify-center transition-all duration-500 ease-in-out ${isPlayerActive ? 'bottom-[-70px]' : 'bottom-[-90px]'
           }`}
       >
-        {/* Large hit area for drag — extends beyond wheel so swipes register easily */}
-        <div
-          ref={hitAreaRef}
-          className="absolute pointer-events-auto"
-          style={{
-            inset: '-24px',
-            cursor: isDragging ? 'grabbing' : 'grab',
-            touchAction: 'none',
-            WebkitTouchCallout: 'none',
-            WebkitUserSelect: 'none',
-            userSelect: 'none',
-          }}
-          onTouchStart={handleTouchStart}
-          onTouchMove={handleTouchMove}
-          onTouchEnd={onEnd}
-          onTouchCancel={onEnd}
-          onMouseDown={handleMouseDown}
-          onMouseMove={handleMouseMove}
-          onMouseUp={onEnd}
-          onMouseLeave={onEnd}
-        />
         <div
           className="w-full h-full relative will-change-transform pointer-events-none"
           style={{
@@ -551,18 +540,10 @@ const BottomNavigation: React.FC = () => {
 
             const isActive = activeTab === item.id;
 
-            const handleIconPress = (e: React.MouseEvent | React.PointerEvent) => {
-                  e.stopPropagation();
-                  e.preventDefault();
-                  if (totalMoveRef.current < 8) {
-                    handleNav(item.id, item.path);
-                  }
-                };
-                return (
+            return (
               <button
                 key={item.id}
-                onClick={handleIconPress}
-                className="absolute w-16 h-16 -ml-8 -mt-8 flex flex-col items-center justify-center z-30 transition-transform outline-none pointer-events-auto touch-manipulation min-w-[44px] min-h-[44px]"
+                className="absolute w-16 h-16 -ml-8 -mt-8 flex flex-col items-center justify-center z-20 transition-transform outline-none pointer-events-none touch-manipulation min-w-[44px] min-h-[44px]"
                 style={{
                   left: `${x}px`,
                   top: `${y}px`,
@@ -594,6 +575,27 @@ const BottomNavigation: React.FC = () => {
             );
           })}
         </div>
+        {/* Hit area on top — receives all touches (wheel + buttons); tap vs swipe handled in onEnd */}
+        <div
+          ref={hitAreaRef}
+          className="absolute pointer-events-auto z-50"
+          style={{
+            inset: '-24px',
+            cursor: isDragging ? 'grabbing' : 'grab',
+            touchAction: 'none',
+            WebkitTouchCallout: 'none',
+            WebkitUserSelect: 'none',
+            userSelect: 'none',
+          }}
+          onTouchStart={handleTouchStart}
+          onTouchMove={handleTouchMove}
+          onTouchEnd={onEnd}
+          onTouchCancel={onEnd}
+          onMouseDown={handleMouseDown}
+          onMouseMove={handleMouseMove}
+          onMouseUp={onEnd}
+          onMouseLeave={onEnd}
+        />
       </div>
       
       {/* CSS for wheel hint animation */}

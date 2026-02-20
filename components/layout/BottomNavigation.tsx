@@ -233,11 +233,11 @@ const BottomNavigation: React.FC = () => {
       <div
         className="absolute z-[35] pointer-events-none overflow-hidden rounded-t-[2rem] transition-all duration-500 ease-in-out"
         style={{
-          width: 376,
+          width: '100%',
+          left: 0,
+          right: 0,
           height: 218,
           bottom: isPlayerActive ? -60 : -80,
-          left: '50%',
-          marginLeft: -188,
           backgroundImage: 'url(/assets/images/wheel-background-wood.png)',
           backgroundSize: 'cover',
           backgroundPosition: 'center bottom',

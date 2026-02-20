@@ -287,7 +287,7 @@ const GamesPage: React.FC = () => {
       {hasCompleteAvatar && (
         <div
           className={`absolute ${isParrotFlying ? 'games-avatar-flying' : 'games-avatar-perched'}`}
-          style={{ zIndex: 4, top: '22%', left: '50%', cursor: 'pointer' }}
+          style={{ zIndex: 4, top: '30%', left: '50%', cursor: 'pointer' }}
           onClick={() => {
             if (!isParrotFlying) {
               setIsParrotFlying(true);
@@ -300,9 +300,17 @@ const GamesPage: React.FC = () => {
           }}
         >
           <style>{`
-            .games-avatar-perched .animate-arm-sway-left,
-            .games-avatar-perched .animate-arm-sway-right { animation: none !important; }
             .games-avatar-perched { transform: translateX(-50%) translateY(0); }
+            .games-avatar-perched [class*="animate-arm-sway-left"] { animation: gamesPerchFlapLeft 2s ease-in-out infinite !important; transform-origin: right center !important; }
+            .games-avatar-perched [class*="animate-arm-sway-right"] { animation: gamesPerchFlapRight 2s ease-in-out infinite !important; transform-origin: left center !important; }
+            @keyframes gamesPerchFlapLeft {
+              0%, 100% { transform: rotate(0deg); }
+              50% { transform: rotate(12deg); }
+            }
+            @keyframes gamesPerchFlapRight {
+              0%, 100% { transform: rotate(0deg); }
+              50% { transform: rotate(-12deg); }
+            }
 
             .games-avatar-flying .animate-arm-sway-left,
             .games-avatar-flying .animate-arm-sway-right { animation: none !important; }

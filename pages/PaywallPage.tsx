@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { Check, X, Loader2, RefreshCw, AlertCircle, CheckCircle, Mail, UserPlus, Bell, Lock, Calendar, CreditCard, ChevronDown, ChevronUp } from 'lucide-react';
+import { Check, X, Loader2, RefreshCw, AlertCircle, CheckCircle, Mail, UserPlus, Bell, ChevronDown, ChevronUp } from 'lucide-react';
 import { useUser } from '../context/UserContext';
 import { useSubscription } from '../context/SubscriptionContext';
 import ParentGateModal from '../components/features/ParentGateModal';
@@ -555,67 +555,51 @@ const PaywallPage: React.FC = () => {
             </div>
             )}
 
-            {/* Timeline Cards - Today, Day 5, Day 7 */}
-            <div className="flex gap-3 w-full mb-5">
-              {/* Today */}
-              <div className="flex-1 bg-gradient-to-b from-[#6366f1] to-[#4f46e5] rounded-2xl p-4 text-white shadow-lg shadow-indigo-200">
-                <div className="w-10 h-10 bg-white/20 rounded-full flex items-center justify-center mb-3 mx-auto">
-                  <Lock size={20} className="text-white" />
-                </div>
-                <p className="font-bold text-sm text-center">Today</p>
-                <p className="text-[11px] text-white/80 text-center mt-1 leading-tight">
-                  Full access to all content
-                </p>
-              </div>
-              
-              {/* Day 5 */}
-              <div className="flex-1 bg-white rounded-2xl p-4 border border-gray-100 shadow-sm">
-                <div className="w-10 h-10 bg-[#fef3c7] rounded-full flex items-center justify-center mb-3 mx-auto">
-                  <Bell size={20} className="text-[#f59e0b]" />
-                </div>
-                <p className="font-bold text-sm text-[#1e1b4b] text-center">Day 5</p>
-                <p className="text-[11px] text-gray-500 text-center mt-1 leading-tight">
-                  Reminder about trial ending
-                </p>
-              </div>
-              
-              {/* Day 7 */}
-              <div className="flex-1 bg-white rounded-2xl p-4 border border-gray-100 shadow-sm">
-                <div className="w-10 h-10 bg-[#dbeafe] rounded-full flex items-center justify-center mb-3 mx-auto">
-                  <CreditCard size={20} className="text-[#3b82f6]" />
-                </div>
-                <p className="font-bold text-sm text-[#1e1b4b] text-center">Day 7</p>
-                <p className="text-[11px] text-gray-500 text-center mt-1 leading-tight">
-                  Billing starts. Cancel anytime before.
-                </p>
-              </div>
+            {/* Trial Reminder - compact text + toggle */}
+            <div className="flex items-center justify-between w-full mb-5">
+              <span className="text-[#1e1b4b] text-sm font-medium">
+                Trial Reminder Day 5 {trialReminderEnabled ? 'Enabled' : 'Disabled'}
+              </span>
+              <button
+                onClick={handleNotificationToggle}
+                className={`w-12 h-7 rounded-full transition-colors relative flex-shrink-0 ml-3 ${
+                  trialReminderEnabled ? 'bg-[#6366f1]' : 'bg-gray-300'
+                }`}
+              >
+                <div className={`absolute top-1 w-5 h-5 bg-white rounded-full shadow-md transition-transform ${
+                  trialReminderEnabled ? 'translate-x-6' : 'translate-x-1'
+                }`} />
+              </button>
             </div>
+            {notificationsAllowed === false && !isDespiaNative() && (
+              <p className="text-xs text-gray-500 mb-4 -mt-3">
+                Enable notifications in your device settings to receive trial reminders.
+              </p>
+            )}
 
-            {/* Trial Reminder Toggle */}
-            <div className="w-full bg-white rounded-2xl px-4 py-3 shadow-sm border border-gray-100 mb-6 mt-3">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <Bell size={20} className={trialReminderEnabled ? 'text-[#6366f1]' : 'text-gray-400'} />
-                  <span className="font-semibold text-[#1e1b4b] text-sm">
-                    Trial reminder {trialReminderEnabled ? 'enabled' : 'disabled'}
-                  </span>
+            {/* Features & Benefits */}
+            <div className="w-full space-y-3 mb-6">
+              <h3 className="font-bold text-[#1e1b4b] text-base mb-2">What's included</h3>
+              {[
+                { icon: '📚', title: 'Bible Curriculum', desc: 'Complete Christian education' },
+                { icon: '✝️', title: 'Scripture Memory', desc: 'Learn verses through play' },
+                { icon: '📖', title: 'Bible Story Library', desc: 'Animated lessons & devotionals' },
+                { icon: '🎧', title: 'Audio Learning Center', desc: 'Scripture songs & audiobooks' },
+                { icon: '✨', title: 'Interactive Quizzes', desc: 'Test comprehension & earn rewards' },
+                { icon: '🎤', title: 'Read-Along Narration', desc: 'Multiple voices to choose from' },
+                { icon: '👨‍👩‍👧‍👦', title: 'Family Profiles (Up to 5)', desc: 'Each child gets their own progress' },
+                { icon: '📋', title: 'Report Cards', desc: 'Track learning & earning for each kid' },
+                { icon: '📝', title: '12 Free Custom Books', desc: 'Personalized Bible adventures' },
+              ].map((feature, i) => (
+                <div key={i} className="flex items-center gap-3 bg-white rounded-xl px-4 py-3 border border-gray-100 shadow-sm">
+                  <span className="text-2xl shrink-0">{feature.icon}</span>
+                  <div className="flex-1 min-w-0">
+                    <p className="font-semibold text-[#1e1b4b] text-sm">{feature.title}</p>
+                    <p className="text-xs text-gray-500">{feature.desc}</p>
+                  </div>
+                  <Check size={18} className="text-[#6366f1] shrink-0" strokeWidth={3} />
                 </div>
-                <button
-                  onClick={handleNotificationToggle}
-                  className={`w-12 h-7 rounded-full transition-colors relative ${
-                    trialReminderEnabled ? 'bg-[#6366f1]' : 'bg-gray-300'
-                  }`}
-                >
-                  <div className={`absolute top-1 w-5 h-5 bg-white rounded-full shadow-md transition-transform ${
-                    trialReminderEnabled ? 'translate-x-6' : 'translate-x-1'
-                  }`} />
-                </button>
-              </div>
-              {notificationsAllowed === false && !isDespiaNative() && (
-                <p className="text-xs text-gray-500 mt-2">
-                  Enable notifications in your device settings to receive trial reminders.
-                </p>
-              )}
+              ))}
             </div>
 
             {/* CTA + trial summary above plan selector (Create Your Story paywall only) */}
@@ -969,7 +953,7 @@ const PaywallPage: React.FC = () => {
                 <button
                   onClick={() => {
                     setShowAccountRequired(false);
-                    navigate('/onboarding');
+                    navigate('/onboarding', { state: { returnToAccountStep: true } });
                   }}
                   className="w-full bg-gradient-to-r from-[#6366f1] to-[#4f46e5] text-white font-bold py-3 px-4 rounded-xl shadow-lg flex items-center justify-center gap-2 mb-3"
                 >

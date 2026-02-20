@@ -482,7 +482,7 @@ const NewUserWelcomePage: React.FC = () => {
 
 export default NewUserWelcomePage;
 
-// Helper to check if welcome screen should be shown
+// Helper to check if welcome screen should be shown (disabled - no welcome popup)
 export const shouldShowWelcome = (): boolean => {
-  return !localStorage.getItem('godlykids_welcome_seen');
+  return false;
 };

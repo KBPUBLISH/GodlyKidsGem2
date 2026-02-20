@@ -1,8 +1,6 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { activityTrackingService } from '../services/activityTrackingService';
-import { hasCompletedAnySession } from '../services/dailySessionService';
-import CreateAccountModal from '../components/modals/CreateAccountModal';
 import { ApiService } from '../services/apiService';
 
 const STORAGE_KEY = 'godly_kids_data_v6';
@@ -114,7 +112,6 @@ const LandingPage: React.FC = () => {
   const navigate = useNavigate();
   const [isChecking, setIsChecking] = useState(true);
   const [imageLoaded, setImageLoaded] = useState(false);
-  const [showAccountModal, setShowAccountModal] = useState(false);
 
   // Check if user has already completed onboarding
   useEffect(() => {
@@ -175,22 +172,9 @@ const LandingPage: React.FC = () => {
 
   const handleStartExplore = () => {
     activityTrackingService.trackOnboardingEvent('splash_explore_clicked');
-    
-    // Check if user has completed at least one session but doesn't have an account
-    // If so, require account creation before continuing
-    const hasCompletedFirstLesson = hasCompletedAnySession();
-    const hasAccount = hasUserAccount();
-    
-    if (hasCompletedFirstLesson && !hasAccount) {
-      // Show account creation modal
-      setShowAccountModal(true);
-      return;
-    }
-    
-    // Skip welcome page - go directly to explore
-    localStorage.setItem('godlykids_welcome_seen', 'true');
-    // Go to the explore/home page
-    navigate('/world');
+
+    // Bring user to onboarding flow
+    navigate('/onboarding');
   };
 
   const handleSignIn = () => {
@@ -344,24 +328,6 @@ const LandingPage: React.FC = () => {
         </button>
       </div>
       
-      {/* Account Creation Modal - shown after first lesson */}
-      {showAccountModal && (
-        <CreateAccountModal
-          isOpen={true}
-          navigateToOnboarding={false}
-          onClose={() => {
-            setShowAccountModal(false);
-          }}
-          onAccountCreated={() => {
-            setShowAccountModal(false);
-            // After creating account, go to explore page
-            navigate('/world');
-          }}
-          onSignIn={() => {
-            navigate('/signin', { state: { returnTo: '/world' } });
-          }}
-        />
-      )}
     </div>
   );
 };

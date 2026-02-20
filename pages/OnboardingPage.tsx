@@ -684,11 +684,13 @@ const OnboardingPage: React.FC = () => {
   
   // Check if we should skip directly to paywall step (from tutorial - for subscription)
   const skipToPaywall = (location.state as any)?.skipToPaywall === true;
+  // When paywall needs account - go straight to create account step, preserving all prior data
+  const returnToAccountStep = (location.state as any)?.returnToAccountStep === true;
   // NEW FLOW: Check if coming from tutorial with account already created
   const fromTutorial = (location.state as any)?.fromTutorial === true;
   const skipAccountStep = (location.state as any)?.skipAccountStep === true;
   
-  const [step, setStep] = useState<1 | 2 | 3 | 4 | 5 | 6>(skipToPaywall ? 6 : 1); // Steps: 1=Parent, 2=Family, 3=Goals, 4=Features, 5=Voice, 6=Account
+  const [step, setStep] = useState<1 | 2 | 3 | 4 | 5 | 6>(returnToAccountStep || skipToPaywall ? 6 : 1); // Steps: 1=Parent, 2=Family, 3=Goals, 4=Features, 5=Voice, 6=Account
   const [isPurchasing, setIsPurchasing] = useState(false);
   const [isRestoring, setIsRestoring] = useState(false);
   const [purchaseError, setPurchaseError] = useState<string | null>(null);
@@ -775,6 +777,30 @@ const OnboardingPage: React.FC = () => {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // When returning from paywall to create account, hydrate state from localStorage and context
+  // so parent, family, goals, features, voice are preserved - only showing the create account step
+  useEffect(() => {
+    if (!returnToAccountStep) return;
+    try {
+      const storedPriorities = localStorage.getItem('godlykids_discipleship_priorities');
+      if (storedPriorities) {
+        const parsed = JSON.parse(storedPriorities);
+        if (Array.isArray(parsed)) setSelectedPriorities(parsed);
+      }
+      const storedFeatures = localStorage.getItem('godlykids_feature_interests');
+      if (storedFeatures) {
+        const parsed = JSON.parse(storedFeatures);
+        if (Array.isArray(parsed)) setSelectedFeatures(parsed);
+      }
+      const storedVoice = localStorage.getItem('godlykids_default_voice');
+      if (storedVoice) setSelectedVoiceId(storedVoice);
+      if (parentName) setPName(parentName);
+      if (equippedAvatar) setPAvatar(equippedAvatar);
+    } catch (e) {
+      console.warn('Could not hydrate onboarding state:', e);
+    }
+  }, [returnToAccountStep, parentName, equippedAvatar]);
 
   // --- HANDLERS ---
 
@@ -2173,6 +2199,21 @@ const OnboardingPage: React.FC = () => {
                   'CREATE FREE ACCOUNT'
                 )}
               </WoodButton>
+              
+              {/* Skip Button */}
+              <button
+                type="button"
+                onClick={() => {
+                  playClick();
+                  activityTrackingService.trackOnboardingEvent('account_skipped');
+                  activityTrackingService.trackOnboardingEvent('onboarding_complete');
+                  activityTrackingService.resetOnboardingSession();
+                  navigate('/paywall', { state: { fromOnboarding: true } });
+                }}
+                className="w-full mt-3 py-3 text-[#eecaa0]/80 text-sm font-medium hover:text-[#FFD700] hover:underline transition-colors"
+              >
+                SKIP
+              </button>
             </div>
             
             {/* Trust Badges */}

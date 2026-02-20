@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useLayoutEffect, useRef, useCallback } from 'react';
 import { useParams, useNavigate, useSearchParams, useLocation } from 'react-router-dom';
 import { ChevronLeft, ChevronRight, X, Play, Pause, Volume2, Mic, Check, Music, Home, Heart, Star, RotateCcw, Lock, Sparkles, HelpCircle, Share2, Copy, Smartphone, Grid3X3, Loader2, Globe, BookOpen, SkipForward, FileText, RefreshCw, Crown } from 'lucide-react';
 import { ApiService } from '../services/apiService';
@@ -1262,13 +1262,16 @@ const BookReaderPage: React.FC = () => {
         }
     }, [bookId]);
 
-    // Helper function to stop all book audio
+    // Helper function to stop all book audio (call on unmount/navigate-away)
     const stopAllBookAudio = useCallback(() => {
         console.log('📖 Stopping ALL book audio');
         // Stop TTS narration
         if (currentAudioRef.current) {
-            currentAudioRef.current.pause();
-            currentAudioRef.current.src = '';
+            try {
+                currentAudioRef.current.pause();
+                currentAudioRef.current.src = '';
+                currentAudioRef.current.load?.();
+            } catch (e) { }
         }
         // Stop multi-segment TTS audio
         if (multiSegmentAudioRef.current) {
@@ -1280,6 +1283,7 @@ const BookReaderPage: React.FC = () => {
                 multiSegmentAudioRef.current.onpause = null;
                 multiSegmentAudioRef.current.onerror = null;
                 multiSegmentAudioRef.current.src = '';
+                multiSegmentAudioRef.current.load?.();
                 multiSegmentAudioRef.current = null;
             } catch (e) {
                 console.warn('Error stopping multi-segment audio:', e);
@@ -1290,8 +1294,11 @@ const BookReaderPage: React.FC = () => {
         multiSegmentPlaybackIdRef.current += 1; // Invalidate any in-flight segments
         // Stop book background music
         if (bookBackgroundMusicRef.current) {
-            bookBackgroundMusicRef.current.pause();
-            bookBackgroundMusicRef.current.src = '';
+            try {
+                bookBackgroundMusicRef.current.pause();
+                bookBackgroundMusicRef.current.src = '';
+                bookBackgroundMusicRef.current.load?.();
+            } catch (e) { }
         }
         // Reset state
         setPlaying(false);
@@ -1317,16 +1324,16 @@ const BookReaderPage: React.FC = () => {
     
 
     // Effect: Stop TTS audio when component unmounts OR when navigating away
-    useEffect(() => {
+    // useLayoutEffect ensures cleanup runs synchronously before paint (critical for iOS)
+    useLayoutEffect(() => {
         // Listen for beforeunload (page refresh/close)
         const handleBeforeUnload = () => {
             stopAllBookAudio();
         };
         window.addEventListener('beforeunload', handleBeforeUnload);
-        
+
         // Listen for hash changes (React Router navigation with HashRouter)
         const handleHashChange = () => {
-            // If we're no longer on a book reader page, stop audio
             if (!window.location.hash.includes('/read/')) {
                 console.log('📖 Navigated away from book reader - stopping audio');
                 stopAllBookAudio();
@@ -1334,13 +1341,23 @@ const BookReaderPage: React.FC = () => {
         };
         window.addEventListener('hashchange', handleHashChange);
 
+        // Listen for popstate (back/forward) - may fire before unmount
+        const handlePopState = () => {
+            if (!window.location.hash.includes('/read/')) {
+                console.log('📖 PopState - left book reader, stopping audio');
+                stopAllBookAudio();
+            }
+        };
+        window.addEventListener('popstate', handlePopState);
+
         return () => {
             console.log('📖 BookReaderPage - Stopping TTS audio on unmount');
             window.removeEventListener('beforeunload', handleBeforeUnload);
             window.removeEventListener('hashchange', handleHashChange);
+            window.removeEventListener('popstate', handlePopState);
             stopAllBookAudio();
         };
-    }, [stopAllBookAudio]); // Include stopAllBookAudio in deps
+    }, [stopAllBookAudio]);
 
     // Effect: Stop audio when page becomes hidden (user switches tabs/apps)
     // Book music should NOT play in background - only playlists should do that

@@ -205,8 +205,8 @@ const BottomNavigation: React.FC = () => {
   }, []);
   const handleMouseMove = (e: React.MouseEvent) => onMove(e.clientX, e.clientY);
 
-  const WHEEL_SIZE = 288;
-  const RADIUS = 83;
+  const WHEEL_SIZE = 317;  /* 10% larger than 288 */
+  const RADIUS = 91;      /* 10% larger than 83 */
   const CENTER = WHEEL_SIZE / 2;
 
   // Positive target rotation
@@ -233,11 +233,11 @@ const BottomNavigation: React.FC = () => {
       <div
         className="absolute z-[35] pointer-events-none overflow-hidden rounded-t-[2rem] transition-all duration-500 ease-in-out"
         style={{
-          width: 342,
-          height: 198,
+          width: 376,
+          height: 218,
           bottom: isPlayerActive ? -60 : -80,
           left: '50%',
-          marginLeft: -171,
+          marginLeft: -188,
           backgroundImage: 'url(/assets/images/wheel-background-wood.png)',
           backgroundSize: 'cover',
           backgroundPosition: 'center bottom',
@@ -300,8 +300,8 @@ const BottomNavigation: React.FC = () => {
       <div
         className={`absolute rounded-full pointer-events-none transition-all duration-500 ease-in-out ${isPlayerActive ? 'bottom-[-65px]' : 'bottom-[-85px]'}`}
         style={{
-          width: 279,
-          height: 279,
+          width: 307,
+          height: 307,
           background: 'radial-gradient(ellipse at center, rgba(0,0,0,0.55) 0%, rgba(0,0,0,0.3) 40%, transparent 70%)',
           filter: 'blur(12px)',
           zIndex: 37,
@@ -310,8 +310,8 @@ const BottomNavigation: React.FC = () => {
       <div
         className={`absolute rounded-full pointer-events-none transition-all duration-500 ease-in-out ${isPlayerActive ? 'bottom-[-80px]' : 'bottom-[-100px]'}`}
         style={{
-          width: 324,
-          height: 180,
+          width: 356,
+          height: 198,
           background: 'radial-gradient(ellipse at center, rgba(0,0,0,0.4) 0%, rgba(0,0,0,0.15) 50%, transparent 75%)',
           filter: 'blur(20px)',
           zIndex: 36,
@@ -320,7 +320,7 @@ const BottomNavigation: React.FC = () => {
 
       <div
         ref={wheelRef}
-        className={`absolute z-[39] w-[288px] h-[288px] origin-center pointer-events-none select-none flex items-center justify-center transition-all duration-500 ease-in-out ${isPlayerActive ? 'bottom-[-70px]' : 'bottom-[-90px]'
+        className={`absolute z-[39] w-[317px] h-[317px] origin-center pointer-events-none select-none flex items-center justify-center transition-all duration-500 ease-in-out ${isPlayerActive ? 'bottom-[-70px]' : 'bottom-[-90px]'
           }`}
       >
         {/* Invisible circular hit area for drag — sits behind the wheel so buttons stay clickable */}

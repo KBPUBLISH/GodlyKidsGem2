@@ -15,8 +15,15 @@ const surveyResponseSchema = new mongoose.Schema({
     // Survey type
     surveyType: {
         type: String,
-        enum: ['weekly_feedback', 'nps', 'feature_request', 'exit_survey'],
+        enum: ['weekly_feedback', 'nps', 'feature_request', 'exit_survey', 'layout_rating'],
         default: 'weekly_feedback',
+    },
+    
+    // Layout rating (1-5, for surveyType: 'layout_rating')
+    rating: {
+        type: Number,
+        min: 1,
+        max: 5,
     },
     
     // Content preference questions (multi-select)

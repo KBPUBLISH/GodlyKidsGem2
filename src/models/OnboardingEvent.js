@@ -111,6 +111,7 @@ const onboardingEventSchema = new mongoose.Schema({
             'book_building_step_4_complete',
             'book_building_book_created',
             'book_building_book_completed',
+            'layout_rating_submitted',
         ],
     },
     
@@ -137,6 +138,7 @@ const onboardingEventSchema = new mongoose.Schema({
         duration: Number,           // Session duration in seconds/minutes
         coinsEarned: Number,        // Coins earned for a specific step
         stepType: String,           // Type of step (prayer, devotional, book)
+        rating: Number,             // Layout rating 1-5 for layout_rating_submitted
     },
     
     createdAt: {

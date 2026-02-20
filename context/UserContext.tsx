@@ -178,7 +178,7 @@ const UserContext = createContext<UserContextType>({
   equippedRightArm: null,
   equippedLegs: null,
   equippedAnimation: 'anim-breathe',
-  equippedBackground: '/assets/images/panorama-background.jpg',
+  equippedBackground: '/assets/images/panorama-background.png',
   setEquippedBackground: () => {},
   equippedLeftArmRotation: 0,
   equippedRightArmRotation: 0,
@@ -363,8 +363,12 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [equippedWheel, setEquippedWheel] = useState<string | null>(saved?.equippedWheel ?? null);
   const [equippedPet, setEquippedPet] = useState<string | null>(saved?.equippedPet ?? null);
   
-  // Background customization
-  const [equippedBackground, setEquippedBackground] = useState<string>(saved?.equippedBackground ?? '/assets/images/panorama-background.jpg');
+  // Background customization - migrate legacy .jpg path to .png
+  const defaultBg = '/assets/images/panorama-background.png';
+  const rawBg = saved?.equippedBackground ?? defaultBg;
+  const [equippedBackground, setEquippedBackground] = useState<string>(
+    rawBg === '/assets/images/panorama-background.jpg' ? defaultBg : rawBg
+  );
   
   // Rotation State (Defaults to 0)
   const [equippedLeftArmRotation, setEquippedLeftArmRotation] = useState<number>(saved?.equippedLeftArmRotation ?? 0);
@@ -1229,8 +1233,8 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
       case 'frame': setEquippedFrame(value); break;
       case 'hat': setEquippedHat(value); break;
       case 'body': setEquippedBody(value); break;
-      case 'leftArm': setEquippedLeftArm(value); break;
-      case 'rightArm': setEquippedRightArm(value); break;
+      case 'leftArm': setEquippedLeftArm(value); setLeftArmScale(2); break;
+      case 'rightArm': setEquippedRightArm(value); setRightArmScale(2); break;
       case 'legs': setEquippedLegs(value); break;
       case 'animation': setEquippedAnimation(value); break;
       case 'background': setEquippedBackground(value); break;

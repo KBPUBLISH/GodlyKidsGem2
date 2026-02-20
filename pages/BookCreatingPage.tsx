@@ -18,6 +18,8 @@ interface StatusResponse {
   errorMessage?: string | null;
 }
 
+const GEN_RETRY_COOLDOWN_MS = 120000; // 2 minutes between retry clicks
+
 const BookCreatingPage: React.FC = () => {
   const { customMonthlyBookId } = useParams<{ customMonthlyBookId: string }>();
   const navigate = useNavigate();
@@ -25,6 +27,11 @@ const BookCreatingPage: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [retrying, setRetrying] = useState(false);
+  const [retryCooldownTick, setRetryCooldownTick] = useState(0);
+
+  const retryCooldownKey = customMonthlyBookId ? `godlykids_gen_retry_${customMonthlyBookId}` : '';
+  const lastRetryAt = retryCooldownKey ? parseInt(localStorage.getItem(retryCooldownKey) || '0', 10) : 0;
+  const retryCooldownRemaining = lastRetryAt ? Math.max(0, GEN_RETRY_COOLDOWN_MS - (Date.now() - lastRetryAt)) : 0;
 
   const fetchStatus = useCallback(async () => {
     if (!customMonthlyBookId) return;
@@ -47,6 +54,12 @@ const BookCreatingPage: React.FC = () => {
   useEffect(() => {
     fetchStatus();
   }, [fetchStatus]);
+
+  useEffect(() => {
+    if (retryCooldownRemaining <= 0) return;
+    const t = setInterval(() => setRetryCooldownTick((n) => n + 1), 1000);
+    return () => clearInterval(t);
+  }, [retryCooldownRemaining, retryCooldownTick]);
 
   useEffect(() => {
     if (!customMonthlyBookId || !status) return;
@@ -218,9 +231,11 @@ const BookCreatingPage: React.FC = () => {
               <div className="text-center mt-4">
                 <button
                   type="button"
-                  disabled={retrying}
+                  disabled={retrying || retryCooldownRemaining > 0}
                   onClick={async () => {
-                    if (!customMonthlyBookId) return;
+                    if (!customMonthlyBookId || retryCooldownRemaining > 0) return;
+                    localStorage.setItem(retryCooldownKey, String(Date.now()));
+                    setRetryCooldownTick((n) => n + 1);
                     setRetrying(true);
                     try {
                       const res = await fetch(`${getMonthlyBookBaseUrl()}/monthly-book/retry/${customMonthlyBookId}`, { method: 'POST' });
@@ -234,7 +249,11 @@ const BookCreatingPage: React.FC = () => {
                   }}
                   className="text-amber-300 hover:text-amber-200 text-sm underline disabled:opacity-50"
                 >
-                  {retrying ? 'Retrying…' : 'Generation stuck? Tap to resume from next page'}
+                  {retrying
+                    ? 'Retrying…'
+                    : retryCooldownRemaining > 0
+                      ? `Try again in ${Math.ceil(retryCooldownRemaining / 1000)}s`
+                      : 'Generation stuck? Tap to resume from next page'}
                 </button>
               </div>
             )}

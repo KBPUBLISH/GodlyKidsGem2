@@ -55,71 +55,34 @@ const BookCard: React.FC<BookCardProps> = ({ book, onClick }) => {
   };
 
   return (
-    <div 
-      onClick={() => {
-        // Always allow clicking to see book details - button will be locked there
-        onClick(book.id);
-      }}
-      className={`bg-white/10 backdrop-blur-sm rounded-2xl overflow-hidden shadow-lg border-2 border-white/20 hover:shadow-2xl hover:scale-105 transition-all cursor-pointer group ${isLocked ? 'opacity-80' : ''}`}
+    <button
+      type="button"
+      onClick={() => onClick(book.id)}
+      className="w-full cursor-pointer select-none focus:outline-none group text-left"
     >
-      {/* Cover Image - Same structure as AudioPage */}
-      <div className="aspect-square bg-gradient-to-br from-indigo-500 to-purple-600 relative overflow-hidden">
-        <img 
-          src={getImageSrc()} 
-          alt={book.title} 
-          className={`w-full h-full object-cover group-hover:scale-110 transition-transform duration-300 ${isLocked ? 'filter brightness-75' : ''}`}
+      <div className={`relative aspect-square rounded-xl overflow-hidden border-2 border-white/20 shadow-lg group-hover:border-white/40 group-hover:scale-105 transition-all ${isLocked ? 'opacity-80' : ''}`}>
+        <img
+          src={getImageSrc()}
+          alt={book.title}
+          className={`w-full h-full object-cover ${isLocked ? 'brightness-75' : ''}`}
           loading="lazy"
           onError={handleImageError}
         />
-        
-        {/* Lock Overlay for Members Only Content */}
         {isLocked && (
           <div className="absolute inset-0 bg-black/40 flex items-center justify-center z-10">
-            <div className="bg-black/70 rounded-full p-3 border-2 border-[#FFD700]">
-              <Lock size={24} className="text-[#FFD700]" />
+            <div className="bg-black/70 rounded-full p-2 border-2 border-[#FFD700]">
+              <Lock size={18} className="text-[#FFD700]" />
             </div>
           </div>
         )}
-        
-        {/* Members Only Badge - Only show if user is NOT subscribed */}
         {isMembersOnly && !isSubscribed && (
-          <PremiumBadge className="absolute top-2 right-2 z-20" />
-        )}
-        
-        {/* Gradient overlay at bottom */}
-        <div className="absolute inset-x-0 bottom-0 h-1/3 bg-gradient-to-t from-black/70 to-transparent"></div>
-
-        {/* Level Badge */}
-        <div className="absolute bottom-2 left-2 bg-black/60 backdrop-blur-sm text-white text-xs font-bold px-2 py-1 rounded-md border border-white/20">
-          {book.level}
-        </div>
-
-        {/* Stats Badge - Likes only */}
-        {(book as any).likeCount > 0 && (
-          <div className="absolute top-2 left-2">
-            <div className="bg-black/60 backdrop-blur-sm text-white text-[10px] font-medium px-1.5 py-0.5 rounded flex items-center gap-1">
-              <Heart size={10} className="text-red-400" />
-              {(book as any).likeCount}
-            </div>
-          </div>
-        )}
-
-        {/* Type Icon */}
-        <div className="absolute bottom-2 right-2 bg-white/90 text-blue-900 p-1.5 rounded-full shadow-md">
-          {book.isAudio ? <Headphones size={16} /> : <BookOpen size={16} />}
-        </div>
-      </div>
-      
-      {/* Info - Same structure as AudioPage */}
-      <div className="p-2">
-        <h3 className="text-white text-sm font-bold mb-0.5 truncate font-display">
-          {translatedTitle}
-        </h3>
-        {book.author && (
-          <p className="text-white/70 text-xs">{book.author}</p>
+          <PremiumBadge className="absolute top-1.5 right-1.5 z-20" />
         )}
       </div>
-    </div>
+      <p className="text-white text-[11px] font-display font-bold mt-1.5 truncate text-center">
+        {translatedTitle}
+      </p>
+    </button>
   );
 };
 

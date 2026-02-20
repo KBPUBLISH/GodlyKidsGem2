@@ -1,11 +1,12 @@
 
-import React, { useMemo, useEffect, useState } from 'react';
+import React, { useMemo, useEffect, useState, useRef, useCallback } from 'react';
 import { HashRouter, Routes, Route, useLocation, Navigate, useNavigate } from 'react-router-dom';
 import LandingPage from './pages/LandingPage';
 import SignInPage from './pages/SignInPage';
 import ResetPasswordPage from './pages/ResetPasswordPage';
 import OnboardingPage from './pages/OnboardingPage';
 import HomePage from './pages/HomePage';
+import WorldPage, { PersistentWorldIsland } from './pages/WorldPage';
 import ReferralPromptModal from './components/features/ReferralPromptModal';
 import CreateAccountModal from './components/modals/CreateAccountModal';
 import ReverseTrialExpiredModal from './components/modals/ReverseTrialExpiredModal';
@@ -200,7 +201,7 @@ if (!(window as any).__GK_APP_BOOTED__) {
             // Store the current route so we can restore it properly
             // Skip game routes - they have query params that won't survive force quit
             try {
-              const currentHash = window.location.hash || '#/home';
+              const currentHash = window.location.hash || '#/world';
               if (!currentHash.includes('/game')) {
                 localStorage.setItem('gk_last_route', currentHash);
               }
@@ -596,7 +597,7 @@ import PaymentSuccessPage from './pages/PaymentSuccessPage';
 import SharePlaylistPage from './pages/SharePlaylistPage';
 import ShareBookPage from './pages/ShareBookPage';
 import ParentQuizPage from './pages/ParentQuizPage';
-import GivingPage from './pages/GivingPage';
+import GamesPage from './pages/GamesPage';
 import InterestSelectionPage from './pages/InterestSelectionPage';
 import DailySessionPage from './pages/DailySessionPage';
 
@@ -629,8 +630,9 @@ const isUserAuthenticated = (): boolean => {
 const TUTORIAL_VALID_ROUTES: Record<string, string[]> = {
   '/welcome': ['welcome_book_tap'],
   '/read': ['book_controls_intro', 'book_swipe_intro', 'book_swipe_1', 'book_swipe_2', 'book_swipe_3', 'book_end_quiz', 'quiz_in_progress'],
-  '/home': ['coins_highlight', 'coins_popup_open', 'report_card_highlight', 'report_card_open', 'shop_highlight', 'shop_open', 'navigate_to_give', 'navigate_to_explore', 'devotional_highlight', 'navigate_to_books', 'navigate_to_audio', 'tutorial_complete', 'explore_pause', 'paywall'],
-  '/giving': ['navigate_to_give', 'campaign_highlight', 'give_button_highlight', 'donation_complete'],
+  '/home': ['coins_highlight', 'coins_popup_open', 'report_card_highlight', 'report_card_open', 'shop_highlight', 'shop_open', 'navigate_to_games', 'navigate_to_explore', 'devotional_highlight', 'navigate_to_books', 'navigate_to_audio', 'tutorial_complete', 'explore_pause', 'paywall'],
+  '/world': ['coins_highlight', 'coins_popup_open', 'report_card_highlight', 'report_card_open', 'shop_highlight', 'shop_open', 'navigate_to_games', 'navigate_to_explore', 'devotional_highlight', 'navigate_to_books', 'navigate_to_audio', 'tutorial_complete', 'explore_pause', 'paywall'],
+  '/games': ['navigate_to_games'],
   '/listen': ['navigate_to_audio', 'audiobook_highlight', 'review_prompt'],
   '/read-page': ['navigate_to_books'], // /read page (book list)
 };
@@ -762,15 +764,15 @@ const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) =
         // Will redirect to onboarding via navigateToOnboarding={true}
       }}
       onSignIn={() => {
-        navigate('/signin', { state: { returnTo: window.location.hash.replace('#', '') || '/home' } });
+        navigate('/signin', { state: { returnTo: window.location.hash.replace('#', '') || '/world' } });
       }}
     />
   );
 };
 
-// Home page wrapper - shows welcome screen for new users who completed onboarding
-// Also shows save progress prompt for guests who have consumed content
-const HomePageWithWelcomeCheck: React.FC = () => {
+// Explore page wrapper - shows welcome screen for new users, save progress prompt for guests
+// Renders WorldPage (island buttons) as the main explore view
+const WorldPageWithWelcomeCheck: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const [showSaveProgressModal, setShowSaveProgressModal] = useState(false);
@@ -881,7 +883,7 @@ const HomePageWithWelcomeCheck: React.FC = () => {
   
   return (
     <>
-      <HomePage />
+      <WorldPage />
       {showSaveProgressModal && (
         <SaveProgressModal
           isOpen={true}
@@ -895,7 +897,7 @@ const HomePageWithWelcomeCheck: React.FC = () => {
           }}
           onSignIn={() => {
             setShowSaveProgressModal(false);
-            navigate('/signin', { state: { returnTo: '/home' } });
+            navigate('/signin', { state: { returnTo: '/world' } });
           }}
         />
       )}
@@ -982,6 +984,34 @@ const CloudSVG: React.FC<{ width: number; opacity?: number; flip?: boolean }> = 
   </svg>
 );
 
+const PRELOAD_IMAGES = [
+  '/assets/images/daily-adventure-island.png',
+  '/assets/images/volcano-island.png',
+  '/assets/images/wooden-raft.png',
+  '/assets/images/island-button.png',
+  '/assets/images/headphone-island.png',
+  '/assets/images/music-island.png',
+  '/assets/images/music-note-orange.png',
+  '/assets/images/music-note-purple.png',
+  '/assets/images/music-note-yellow.png',
+  '/assets/images/audio-adventure-button.png',
+  '/assets/images/scholar-island.png',
+  '/assets/images/scholar-island-button.png',
+  '/assets/images/whirlpool.png',
+  '/assets/images/book-island.png',
+  '/assets/images/bible-raft.png',
+];
+
+const AssetPreloader: React.FC = () => {
+  useEffect(() => {
+    PRELOAD_IMAGES.forEach(src => {
+      const img = new Image();
+      img.src = src;
+    });
+  }, []);
+  return null;
+};
+
 // The Panorama Background Component
 const PanoramaBackground: React.FC = () => {
   const location = useLocation();
@@ -993,11 +1023,11 @@ const PanoramaBackground: React.FC = () => {
     if (path === '/') return 0;
     if (path === '/signin') return 0;
     if (path === '/onboarding') return 0;
-    if (path === '/home') return 1;
+    if (path === '/home' || path === '/world') return 1;
     if (path === '/listen') return 2;
     if (path === '/read') return 3;
     if (path === '/library') return 4;
-    if (path === '/giving') return 5;
+    if (path === '/games') return 5;
     if (path === '/audio' || path.startsWith('/audio/')) return 2; // Use same as listen
     if (path === '/lessons' || path.startsWith('/lesson/')) return 1; // Use same as home/explore
     if (path.startsWith('/book/')) return 5;
@@ -1027,8 +1057,11 @@ const PanoramaBackground: React.FC = () => {
         Translates horizontally based on current page.
       */}
       <div
-        className="absolute top-0 bottom-0 left-0 w-[600vw] h-full transition-transform duration-1000 ease-in-out will-change-transform"
-        style={{ transform: `translateX(-${activeIndex * 100}vw)` }}
+        className="absolute top-0 bottom-0 left-0 w-[600vw] h-full will-change-transform"
+        style={{
+          transform: `translateX(-${activeIndex * 100}vw)`,
+          transition: 'transform 2.5s cubic-bezier(0.22, 0.61, 0.36, 1)',
+        }}
       >
         {/* ==============================================
              BACKGROUND IMAGE LAYER
@@ -1039,7 +1072,7 @@ const PanoramaBackground: React.FC = () => {
           style={{
             backgroundImage: `url(${equippedBackground})`,
             backgroundSize: 'auto 100%',
-            backgroundPosition: 'left bottom',
+            backgroundPosition: 'left top',
             backgroundRepeat: 'repeat-x'
           }}
         >
@@ -1102,29 +1135,45 @@ const ReferralPromptWrapper: React.FC<{ children: React.ReactNode }> = ({ childr
   );
 };
 
+const MAIN_NAV_PAGES = ['/world', '/home', '/listen', '/read', '/games'];
+
 const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const location = useLocation();
+  const prevPathRef = useRef(location.pathname);
+  const [isTransitioning, setIsTransitioning] = useState(false);
+  const fadeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   useEffect(() => {
     try {
       (window as any).__GK_TRACE__?.('route_change', { path: location.pathname, hash: location.hash, search: location.search });
       
-      // Track page visit for analytics (how far users get in the app)
       activityTrackingService.trackPageVisit(location.pathname);
       
-      // DESPIA FIX: Save current route for restoration after soft-close/reopen
-      // This allows us to restore the user to their last location when the app returns from background
-      // SKIP saving game routes - they have query params that won't work after force quit
       if ((window as any).__GK_IS_DESPIA__ && location.pathname && location.pathname !== '/') {
-        // Don't save game routes since they require query params
         if (location.pathname.startsWith('/game')) {
           console.log('📱 Despia: Skipping route save for game page');
-          localStorage.removeItem('gk_last_route'); // Clear any previous game route
+          localStorage.removeItem('gk_last_route');
         } else {
           const routeToSave = `#${location.pathname}${location.search || ''}`;
           localStorage.setItem('gk_last_route', routeToSave);
         }
       }
     } catch {}
+
+    const wasMainPage = MAIN_NAV_PAGES.includes(prevPathRef.current);
+    const isMainPage = MAIN_NAV_PAGES.includes(location.pathname);
+    const pathChanged = prevPathRef.current !== location.pathname;
+    prevPathRef.current = location.pathname;
+
+    if (wasMainPage && isMainPage && pathChanged) {
+      if (fadeTimerRef.current) clearTimeout(fadeTimerRef.current);
+      setIsTransitioning(true);
+      fadeTimerRef.current = setTimeout(() => setIsTransitioning(false), 1000);
+    }
+
+    return () => {
+      if (fadeTimerRef.current) clearTimeout(fadeTimerRef.current);
+    };
   }, [location.pathname, location.hash, location.search]);
   
   // Check if running in Despia native runtime for safe area handling
@@ -1142,6 +1191,7 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const isBookReader = location.pathname.startsWith('/read/');
   const isAudioPage = location.pathname.startsWith('/audio/');
   const isLessonPage = location.pathname.startsWith('/lesson/');
+  const isLessonsPage = location.pathname === '/lessons';
   const isGamePage = location.pathname === '/game';
   const isResetPassword = location.pathname === '/reset-password';
   const isBookSeries = location.pathname.startsWith('/book-series/');
@@ -1168,6 +1218,12 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     <div className="relative h-screen w-full overflow-hidden text-white flex flex-col">
 
       <PanoramaBackground />
+      <AssetPreloader />
+
+      {/* Persistent island layer — always mounted, visibility toggled by route */}
+      <div style={{ opacity: isTransitioning ? 0 : 1, transition: isTransitioning ? 'none' : 'opacity 0.4s ease-in-out' }}>
+        <PersistentWorldIsland />
+      </div>
 
       {/* Content Wrapper - safe area padding applied here so background is unaffected */}
       <div 
@@ -1175,6 +1231,9 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
         style={{
           paddingLeft: 'var(--safe-area-left, 0px)',
           paddingRight: 'var(--safe-area-right, 0px)',
+          pointerEvents: (location.pathname === '/world' || location.pathname === '/home') ? 'none' : 'auto',
+          opacity: isTransitioning ? 0 : 1,
+          transition: isTransitioning ? 'none' : 'opacity 0.4s ease-in-out',
         }}
       >
         {children}
@@ -1184,13 +1243,13 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
       <MiniPlayer />
 
       {/* Only show BottomNavigation on main tab pages */}
-      {!isLanding && !isSignIn && !isOnboarding && !isWelcome && !isReadyToJumpIn && !isBookDetail && !isPlayer && !isProfile && !isCreateProfile && !isEditProfile && !isPaywall && !isSettings && !isBookReader && !isAudioPage && !isLessonPage && !isGamePage && !isResetPassword && !isBookSeries && !isCreatePlaylist && !isMyPlaylist && !isDailySession && !isPremiumOnboarding && !isBookCreating && <BottomNavigation />}
+      {(location.pathname === '/world' || location.pathname === '/home' || location.pathname === '/listen' || location.pathname === '/read' || location.pathname === '/games') && <BottomNavigation />}
 
       {/* Onboarding Tutorial Overlay */}
       <OnboardingTutorial />
       
       {/* Bottom Safe Area Spacer - for pages without BottomNavigation */}
-      {(isBookDetail || isPlayer || isProfile || isCreateProfile || isEditProfile || isPaywall || isSettings || isBookReader || isAudioPage || isLessonPage || isBookSeries || isCreatePlaylist || isMyPlaylist || isBookCreating) && (
+      {(isBookDetail || isPlayer || isProfile || isCreateProfile || isEditProfile || isPaywall || isSettings || isBookReader || isAudioPage || isLessonPage || isLessonsPage || isBookSeries || isCreatePlaylist || isMyPlaylist || isBookCreating) && (
         <div 
           className="w-full bg-transparent pointer-events-none" 
           style={{ height: 'var(--safe-area-bottom, 0px)' }}
@@ -1237,7 +1296,7 @@ const App: React.FC = () => {
               console.log('📱 Despia: User not authenticated, going to landing page');
               window.location.hash = '#/';
             } else {
-              const targetRoute = lastRoute || '#/home';
+              const targetRoute = lastRoute || '#/world';
               console.log('📱 Despia: Restoring route to:', targetRoute);
               window.location.hash = targetRoute;
             }
@@ -1375,7 +1434,9 @@ const App: React.FC = () => {
                   <Route path="/interests" element={<InterestSelectionPage />} />
                   <Route path="/daily-session" element={<DailySessionPage />} />
                   {/* BROWSING PAGES - No account required, users can explore freely */}
-                  <Route path="/home" element={<HomePageWithWelcomeCheck />} />
+                  <Route path="/world" element={<WorldPageWithWelcomeCheck />} />
+                  {/* /home redirects to /world so island buttons are the main explore view */}
+                  <Route path="/home" element={<Navigate to="/world" replace />} />
                   <Route path="/listen" element={<ListenPage />} />
                   <Route path="/read" element={<ReadPage />} />
                   <Route path="/library/creating/:customMonthlyBookId" element={<BookCreatingPage />} />
@@ -1394,7 +1455,7 @@ const App: React.FC = () => {
                   <Route path="/create-playlist" element={<ProtectedRoute><CreatePlaylistPage /></ProtectedRoute>} />
                   <Route path="/lessons" element={<ProtectedRoute><LessonsPage /></ProtectedRoute>} />
                   <Route path="/lesson/:lessonId" element={<ProtectedRoute><LessonPlayerPage /></ProtectedRoute>} />
-                  <Route path="/giving" element={<ProtectedRoute><GivingPage /></ProtectedRoute>} />
+                  <Route path="/games" element={<GamesPage />} />
                   <Route path="/profile" element={<ProfileSelectionPage />} />
                   <Route path="/create-profile" element={<CreateProfilePage />} />
                   <Route path="/edit-profile" element={<EditProfilePage />} />
@@ -1404,8 +1465,8 @@ const App: React.FC = () => {
                   <Route path="/settings" element={<ProtectedRoute><SettingsPage /></ProtectedRoute>} />
                   <Route path="/demo/video-lesson" element={<VideoLessonDemo />} />
                   <Route path="/game" element={<ProtectedRoute><GameWebViewPage /></ProtectedRoute>} />
-                  {/* Catch-all route - redirect to landing if not authenticated, home if authenticated */}
-                  <Route path="*" element={isUserAuthenticated() ? <Navigate to="/home" replace /> : <Navigate to="/" replace />} />
+                  {/* Catch-all route - redirect to landing if not authenticated, world (explore) if authenticated */}
+                  <Route path="*" element={isUserAuthenticated() ? <Navigate to="/world" replace /> : <Navigate to="/" replace />} />
                 </Routes>
               </Layout>
               </ReferralPromptWrapper>

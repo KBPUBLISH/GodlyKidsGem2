@@ -93,7 +93,7 @@ const AvatarCompositor: React.FC<AvatarCompositorProps> = ({
       };
 
   // Adjusted offsets for narrower arm containers
-  const DEFAULT_ARM_TOP = 15; 
+  const DEFAULT_ARM_TOP = -5; 
   const DEFAULT_ARM_SIDE = -25; // Adjusted for 44% width
   const DEFAULT_LEGS_TOP = 85;
   const DEFAULT_LEGS_LEFT = 50; // Centered horizontally

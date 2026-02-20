@@ -151,7 +151,7 @@ const LandingPage: React.FC = () => {
             navigate('/profile', { replace: true });
           } else {
             console.log('👤 User signed in (no kids), redirecting to home...');
-            navigate('/home', { replace: true });
+            navigate('/world', { replace: true });
           }
           return;
         }
@@ -190,7 +190,7 @@ const LandingPage: React.FC = () => {
     // Skip welcome page - go directly to explore
     localStorage.setItem('godlykids_welcome_seen', 'true');
     // Go to the explore/home page
-    navigate('/home');
+    navigate('/world');
   };
 
   const handleSignIn = () => {
@@ -355,10 +355,10 @@ const LandingPage: React.FC = () => {
           onAccountCreated={() => {
             setShowAccountModal(false);
             // After creating account, go to explore page
-            navigate('/home');
+            navigate('/world');
           }}
           onSignIn={() => {
-            navigate('/signin', { state: { returnTo: '/home' } });
+            navigate('/signin', { state: { returnTo: '/world' } });
           }}
         />
       )}

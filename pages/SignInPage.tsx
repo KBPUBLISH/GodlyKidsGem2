@@ -120,7 +120,7 @@ const SignInPage: React.FC = () => {
         localStorage.setItem('godlykids_welcome_seen', 'true');
         // Navigate to home
         window.dispatchEvent(new Event('authTokenUpdated'));
-        setTimeout(() => navigate('/home'), 100);
+        setTimeout(() => navigate('/world'), 100);
       } else {
         setLegacyError(data.msg || data.message || 'Migration failed. Please try again.');
       }
@@ -209,9 +209,9 @@ const SignInPage: React.FC = () => {
           window.dispatchEvent(new Event('authTokenUpdated'));
           // Small delay to ensure token is stored before navigation
           setTimeout(() => {
-            navigate('/home');
+            navigate('/world');
             // Force a page refresh to ensure books reload
-            window.location.hash = '#/home';
+            window.location.hash = '#/world';
           }, 100);
         }
       } else if ((result as any).code === 'LEGACY_ACCOUNT') {

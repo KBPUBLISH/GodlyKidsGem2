@@ -235,7 +235,7 @@ const OnboardingTutorial: React.FC = () => {
   // Validate tutorial step matches current page to prevent mismatched states
   const isOnWelcomePage = currentPath === '/welcome';
   const isOnBookReader = currentPath.startsWith('/read/');
-  const isOnHomePage = currentPath === '/home';
+  const isOnExplorePage = currentPath === '/home' || currentPath === '/world';
 
   // Book-related steps should only show on book reader
   const bookSteps: TutorialStep[] = ['book_controls_intro', 'book_swipe_intro', 'book_swipe_1', 'book_swipe_2', 'book_swipe_3', 'book_end_quiz', 'quiz_in_progress'];
@@ -250,7 +250,7 @@ const OnboardingTutorial: React.FC = () => {
 
   // Home-based steps (lesson button, coins, report card, shop) should only show on home page
   const homeSteps: TutorialStep[] = ['lesson_button_highlight', 'coins_highlight', 'coins_popup_open', 'report_card_highlight', 'report_card_open', 'shop_highlight', 'shop_open', 'devotional_highlight'];
-  if (homeSteps.includes(currentStep) && !isOnHomePage) {
+  if (homeSteps.includes(currentStep) && !isOnExplorePage) {
     return null;
   }
   
@@ -261,7 +261,7 @@ const OnboardingTutorial: React.FC = () => {
   }
   
   // Tutorial complete should only show on explore/home page
-  if (currentStep === 'tutorial_complete' && !isOnHomePage) {
+  if (currentStep === 'tutorial_complete' && !isOnExplorePage) {
     return null;
   }
 
@@ -505,7 +505,7 @@ const OnboardingTutorial: React.FC = () => {
         // Trigger native iOS/Android review directly (no custom modal), then advance
         requestNativeReview();
         nextStep();
-        navigate('/home');
+        navigate('/world');
         return null;
 
       case 'explore_pause':
@@ -572,7 +572,7 @@ const OnboardingTutorial: React.FC = () => {
         }}
         onSignIn={() => {
           setShowAccountCreation(false);
-          navigate('/signin', { state: { returnTo: '/home' } });
+          navigate('/signin', { state: { returnTo: '/world' } });
         }}
       />
     </>

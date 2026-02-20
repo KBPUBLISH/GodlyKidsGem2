@@ -121,7 +121,7 @@ const SHOP_ANIMATIONS: ShopItem[] = [
 // Background themes - purchasable with gold coins
 const SHOP_BACKGROUNDS: ShopItem[] = [
     // Default (free - already owned by everyone)
-    { id: 'bg1', name: 'Ocean Paradise', price: 0, type: 'background', value: '/assets/images/panorama-background.jpg' },
+    { id: 'bg1', name: 'Ocean Paradise', price: 0, type: 'background', value: '/assets/images/panorama-background.png' },
     // Purchasable backgrounds (non-premium - anyone can buy with coins)
     { id: 'bg6', name: 'Tropical Beach', price: 250, type: 'background', value: '/assets/images/bg-beach.jpg' },
     { id: 'bg7', name: 'Golden Sunrise', price: 300, type: 'background', value: '/assets/images/bg-sunrise.jpg' },
@@ -313,16 +313,16 @@ const ShopModal: React.FC<ShopModalProps> = ({ isOpen, onClose, initialTab, hide
     if (!isOpen) return null;
 
     const handleBuy = (item: ShopItem) => {
-        // For voices, use the unlock system
         if (item.type === 'voice') {
             if (coins >= item.price) {
-                // Deduct coins and unlock voice
-                purchaseItem(item); // This handles coin deduction
-                unlockVoice(item.value); // Unlock the voice
-                console.log(`🎤 Voice unlocked via shop: ${item.name}`);
+                purchaseItem(item);
+                unlockVoice(item.value);
             }
         } else {
-            purchaseItem(item);
+            const success = purchaseItem(item);
+            if (success) {
+                handleEquip(item);
+            }
         }
     };
 
@@ -388,12 +388,12 @@ const ShopModal: React.FC<ShopModalProps> = ({ isOpen, onClose, initialTab, hide
                 handleEquip(item);
             }
         } else if (item.isPremium && !isSubscribed) {
-            // Premium item requires subscription
             handleClose();
             navigate('/paywall');
         } else if (coins < item.price && item.price > 0) {
-            // Not enough coins - redirect to Gold Coins page to earn more via referrals
             setShowCoinHistory(true);
+        } else {
+            handleBuy(item);
         }
     };
 
@@ -712,36 +712,28 @@ const ShopModal: React.FC<ShopModalProps> = ({ isOpen, onClose, initialTab, hide
             <div className="relative w-full max-w-md h-[90vh] bg-[#f3e5ab] rounded-3xl border-4 border-[#8B4513] shadow-2xl animate-in zoom-in-95 slide-in-from-bottom-5 overflow-hidden flex flex-col">
 
                 {/* Header */}
-                <div className="bg-[#5c2e0b] p-4 flex justify-between items-center border-b-4 border-[#3E1F07] relative z-10 shadow-md shrink-0">
-                    <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 bg-[#8B4513] rounded-full flex items-center justify-center border-2 border-[#CD853F] shadow-md">
-                            <ShoppingBag size={20} className="text-[#FFD700]" />
-                        </div>
-                        <div className="leading-tight">
-                            <h2 className="font-display font-bold text-white text-lg tracking-wide">Builder Shop</h2>
-                            <span className="text-[#eecaa0] text-[10px] font-bold uppercase tracking-wider">Create your monster!</span>
-                        </div>
-                    </div>
+                <div className="bg-[#5c2e0b] px-3 py-2 flex justify-between items-center border-b-2 border-[#3E1F07] relative z-10 shadow-md shrink-0">
+                    <h2 className="font-display font-bold text-white text-sm tracking-wide">Builder Shop</h2>
 
                     <button 
                         onClick={() => setShowCoinHistory(true)}
-                        className="flex items-center gap-2 bg-black/40 hover:bg-black/50 px-3 py-1.5 rounded-full border border-[#FFD700]/30 shadow-inner transition-colors cursor-pointer active:scale-95"
+                        className="flex items-center gap-1.5 bg-black/40 hover:bg-black/50 px-2.5 py-1 rounded-full border border-[#FFD700]/30 shadow-inner transition-colors cursor-pointer active:scale-95"
                         title="View coin history & earn more"
                     >
-                        <div className="w-5 h-5 rounded-full bg-[#FFD700] border border-[#B8860B] flex items-center justify-center text-[#B8860B] font-bold text-[10px]">$</div>
-                        <span className="text-[#FFD700] font-bold font-display text-lg">{coins}</span>
+                        <div className="w-4 h-4 rounded-full bg-[#FFD700] border border-[#B8860B] flex items-center justify-center text-[#B8860B] font-bold text-[8px]">$</div>
+                        <span className="text-[#FFD700] font-bold font-display text-sm">{coins}</span>
                     </button>
 
                     {!hideCloseButton && (
-                        <button onClick={handleClose} className="ml-2 text-[#eecaa0] hover:text-white active:scale-95 transition-transform">
-                            <X size={24} />
+                        <button onClick={handleClose} className="text-[#eecaa0] hover:text-white active:scale-95 transition-transform">
+                            <X size={20} />
                         </button>
                     )}
                 </div>
 
                 {/* Preview Area (Live updates) */}
                 <div
-                    className={`w-full relative shrink-0 shadow-inner overflow-hidden flex flex-col items-center transition-all duration-500 ease-in-out bg-cover bg-center ${isMenuMinimized ? 'flex-1' : 'h-[20rem] shrink-0'}`}
+                    className={`w-full relative shrink-0 shadow-inner overflow-hidden flex flex-col items-center transition-all duration-500 ease-in-out bg-cover bg-center ${(isMenuMinimized || (isBuilderMode && selectedPart)) ? 'flex-1' : 'h-[16rem] shrink-0'}`}
                     style={{ backgroundImage: `url('/assets/images/dressing-room.jpg')` }}
                     onClick={() => setIsMenuMinimized(!isMenuMinimized)}
                 >
@@ -794,7 +786,25 @@ const ShopModal: React.FC<ShopModalProps> = ({ isOpen, onClose, initialTab, hide
 
                     {/* The Compositor */}
                     <div
-                        className={`w-40 h-40 relative z-20 transition-all duration-500 ease-in-out mt-10 ${isMenuMinimized ? 'scale-125 mt-20' : ''}`}
+                        className="w-40 h-40 relative z-20"
+                        style={{
+                            transition: 'all 0.5s ease-in-out',
+                            transform: isBuilderMode && selectedPart
+                                ? 'scale(0.8)'
+                                : isMenuMinimized
+                                    ? 'scale(1.25)'
+                                    : 'scale(0.5)',
+                            marginTop: isBuilderMode && selectedPart
+                                ? '4rem'
+                                : isMenuMinimized
+                                    ? 'auto'
+                                    : '2rem',
+                            marginBottom: isBuilderMode && selectedPart
+                                ? 'auto'
+                                : isMenuMinimized
+                                    ? 'auto'
+                                    : '0',
+                        }}
                     >
                         {/* Wrapper now only sizes; Compositor handles frame */}
                         <div className="w-full h-full relative">
@@ -828,21 +838,13 @@ const ShopModal: React.FC<ShopModalProps> = ({ isOpen, onClose, initialTab, hide
                                 frameClass={equippedFrame} // Pass frame
                             />
                         </div>
-                        {/* Tip */}
-                        {isBuilderMode && !selectedPart && (
-                            <div className="absolute -bottom-12 left-0 right-0 text-center animate-bounce">
-                                <span className="text-[#FFD700] text-[10px] font-bold bg-black/60 px-2 py-1 rounded-full">
-                                    Tap parts to edit!
-                                </span>
-                            </div>
-                        )}
                     </div>
                 </div>
 
                 {/* Menu Container - Swipeable */}
                 <div 
                     ref={menuContainerRef}
-                    className={`flex flex-col bg-[#f3e5ab] border-t-4 border-[#8B4513] rounded-t-3xl -mt-6 relative z-20 shadow-[0_-10px_40px_rgba(0,0,0,0.4)] transition-all duration-500 ease-in-out ${isMenuMinimized ? 'h-auto shrink-0' : 'flex-1 min-h-0'}`}
+                    className={`flex flex-col bg-[#f3e5ab] border-t-4 border-[#8B4513] rounded-t-3xl -mt-6 relative z-20 shadow-[0_-10px_40px_rgba(0,0,0,0.4)] transition-all duration-500 ease-in-out ${(isMenuMinimized || (isBuilderMode && selectedPart)) ? 'h-auto shrink-0' : 'flex-1 min-h-0'}`}
                     onTouchStart={(e) => {
                         touchStartY.current = e.touches[0].clientY;
                         touchStartTime.current = Date.now();
@@ -935,7 +937,7 @@ const ShopModal: React.FC<ShopModalProps> = ({ isOpen, onClose, initialTab, hide
 
                     {/* Scrollable Items Content - Touch-friendly scrolling */}
                     <div 
-                        className={`overflow-y-auto overscroll-contain p-4 bg-[#f3e5ab] relative transition-all duration-500 ${isMenuMinimized ? 'h-0 p-0 opacity-0 pointer-events-none' : 'flex-1 opacity-100'}`}
+                        className={`overflow-y-auto overscroll-contain p-4 bg-[#f3e5ab] relative transition-all duration-500 ${(isMenuMinimized || (isBuilderMode && selectedPart)) ? 'h-0 p-0 opacity-0 pointer-events-none' : 'flex-1 opacity-100'}`}
                         style={{ WebkitOverflowScrolling: 'touch' }}
                         onTouchStart={(e) => e.stopPropagation()} // Prevent menu swipe when scrolling items
                     >
@@ -975,60 +977,57 @@ const ShopModal: React.FC<ShopModalProps> = ({ isOpen, onClose, initialTab, hide
 
                 {/* Builder Controls Overlay */}
                 {isBuilderMode && selectedPart && (
-                    <div className="absolute bottom-0 left-0 right-0 bg-[#2b1d13] border-t-4 border-[#8B4513] p-6 rounded-t-3xl z-50 animate-in slide-in-from-bottom-10 shadow-[0_-10px_40px_rgba(0,0,0,0.5)]">
+                    <div className="absolute bottom-0 left-0 right-0 bg-[#2b1d13] border-t-4 border-[#8B4513] p-4 rounded-t-3xl z-50 animate-in slide-in-from-bottom-10 shadow-[0_-10px_40px_rgba(0,0,0,0.5)]">
 
-                        <div className="flex justify-between items-center mb-4">
+                        <div className="flex justify-between items-center mb-3">
                             <div className="flex items-center gap-2">
-                                <div className="bg-[#FFD700] w-2 h-6 rounded-full"></div>
-                                <span className="text-white font-display font-bold text-lg uppercase tracking-wider">
+                                <div className="bg-[#FFD700] w-2 h-5 rounded-full"></div>
+                                <span className="text-white font-display font-bold text-sm uppercase tracking-wider">
                                     Adjust {selectedPart === 'legs' ? 'Legs' : selectedPart === 'leftArm' ? 'Left Wing' : selectedPart === 'rightArm' ? 'Right Wing' : selectedPart === 'head' ? 'Head' : selectedPart === 'hat' ? 'Hat' : 'Body'}
                                 </span>
                             </div>
                             <button
                                 onClick={() => setSelectedPart(null)}
-                                className="bg-white/10 p-2 rounded-full text-white/70 hover:bg-red-500 hover:text-white transition-colors"
+                                className="bg-white/10 p-1.5 rounded-full text-white/70 hover:bg-red-500 hover:text-white transition-colors"
                             >
-                                <X size={20} />
+                                <X size={18} />
                             </button>
                         </div>
 
-                        <div className="flex justify-between items-start gap-2 px-2">
-                            <div className="flex flex-col gap-1 items-center flex-shrink-0">
-                                <span className="text-[10px] text-[#eecaa0]/60 font-bold uppercase tracking-wider">Move</span>
-                                <div className="grid grid-cols-2 gap-1">
-                                    <button onClick={() => updateOffset('x', -2)} className="w-10 h-10 bg-[#3E1F07] rounded-lg text-[#eecaa0] hover:bg-[#5c2e0b] active:scale-95 border-b-2 border-[#2a1505] flex items-center justify-center"><MoveHorizontal size={16} className="rotate-180" /></button>
-                                    <button onClick={() => updateOffset('x', 2)} className="w-10 h-10 bg-[#3E1F07] rounded-lg text-[#eecaa0] hover:bg-[#5c2e0b] active:scale-95 border-b-2 border-[#2a1505] flex items-center justify-center"><MoveHorizontal size={16} /></button>
-                                    <button onClick={() => updateOffset('y', -2)} className="w-10 h-10 bg-[#3E1F07] rounded-lg text-[#eecaa0] hover:bg-[#5c2e0b] active:scale-95 border-b-2 border-[#2a1505] flex items-center justify-center"><ArrowUpToLine size={16} /></button>
-                                    <button onClick={() => updateOffset('y', 2)} className="w-10 h-10 bg-[#3E1F07] rounded-lg text-[#eecaa0] hover:bg-[#5c2e0b] active:scale-95 border-b-2 border-[#2a1505] flex items-center justify-center"><ArrowDownToLine size={16} /></button>
+                        <div className="flex justify-between items-start gap-1.5 px-0">
+                            <div className="flex flex-col gap-0.5 items-center flex-shrink-0">
+                                <span className="text-[9px] text-[#eecaa0]/60 font-bold uppercase tracking-wider">Move</span>
+                                <div className="grid grid-cols-2 gap-0.5">
+                                    <button onClick={() => updateOffset('x', -2)} className="w-8 h-8 bg-[#3E1F07] rounded-lg text-[#eecaa0] hover:bg-[#5c2e0b] active:scale-95 border-b-2 border-[#2a1505] flex items-center justify-center"><MoveHorizontal size={14} className="rotate-180" /></button>
+                                    <button onClick={() => updateOffset('x', 2)} className="w-8 h-8 bg-[#3E1F07] rounded-lg text-[#eecaa0] hover:bg-[#5c2e0b] active:scale-95 border-b-2 border-[#2a1505] flex items-center justify-center"><MoveHorizontal size={14} /></button>
+                                    <button onClick={() => updateOffset('y', -2)} className="w-8 h-8 bg-[#3E1F07] rounded-lg text-[#eecaa0] hover:bg-[#5c2e0b] active:scale-95 border-b-2 border-[#2a1505] flex items-center justify-center"><ArrowUpToLine size={14} /></button>
+                                    <button onClick={() => updateOffset('y', 2)} className="w-8 h-8 bg-[#3E1F07] rounded-lg text-[#eecaa0] hover:bg-[#5c2e0b] active:scale-95 border-b-2 border-[#2a1505] flex items-center justify-center"><ArrowDownToLine size={14} /></button>
                                 </div>
                             </div>
 
-                            {/* Rotation Controls (Not for Head/Body) */}
                             {selectedPart !== 'head' && selectedPart !== 'body' && (
                                 <>
-                                    <div className="w-px h-20 bg-white/10 flex-shrink-0"></div>
+                                    <div className="w-px h-16 bg-white/10 flex-shrink-0"></div>
 
-                                    <div className="flex flex-col gap-1 items-center flex-shrink-0">
-                                        <span className="text-[10px] text-[#eecaa0]/60 font-bold uppercase tracking-wider">Rotate</span>
-                                        <div className="flex gap-1 items-center">
-                                            <button onClick={() => updateRotation(-5)} className="w-11 h-11 bg-[#3E1F07] rounded-lg text-[#eecaa0] hover:bg-[#5c2e0b] active:scale-95 border-b-2 border-[#2a1505] flex items-center justify-center"><RotateCcw size={18} /></button>
-                                            <button onClick={() => updateRotation(5)} className="w-11 h-11 bg-[#3E1F07] rounded-lg text-[#eecaa0] hover:bg-[#5c2e0b] active:scale-95 border-b-2 border-[#2a1505] flex items-center justify-center"><RotateCw size={18} /></button>
+                                    <div className="flex flex-col gap-0.5 items-center flex-shrink-0">
+                                        <span className="text-[9px] text-[#eecaa0]/60 font-bold uppercase tracking-wider">Rotate</span>
+                                        <div className="flex gap-0.5 items-center">
+                                            <button onClick={() => updateRotation(-5)} className="w-8 h-8 bg-[#3E1F07] rounded-lg text-[#eecaa0] hover:bg-[#5c2e0b] active:scale-95 border-b-2 border-[#2a1505] flex items-center justify-center"><RotateCcw size={14} /></button>
+                                            <button onClick={() => updateRotation(5)} className="w-8 h-8 bg-[#3E1F07] rounded-lg text-[#eecaa0] hover:bg-[#5c2e0b] active:scale-95 border-b-2 border-[#2a1505] flex items-center justify-center"><RotateCw size={14} /></button>
                                         </div>
                                     </div>
                                 </>
                             )}
 
-                            {/* Scale Controls (All Parts) */}
-                            <div className="w-px h-20 bg-white/10 flex-shrink-0"></div>
+                            <div className="w-px h-16 bg-white/10 flex-shrink-0"></div>
 
-                            <div className="flex flex-col gap-1 items-center flex-shrink-0">
-                                <span className="text-[10px] text-[#eecaa0]/60 font-bold uppercase tracking-wider">Scale</span>
-                                <div className="flex gap-1 items-center">
-                                    <button onClick={() => updateScale(-1)} className="w-11 h-11 bg-[#3E1F07] rounded-lg text-[#eecaa0] hover:bg-[#5c2e0b] active:scale-95 border-b-2 border-[#2a1505] flex items-center justify-center" title="Make Smaller"><ZoomOut size={18} /></button>
-                                    <button onClick={() => updateScale(1)} className="w-11 h-11 bg-[#3E1F07] rounded-lg text-[#eecaa0] hover:bg-[#5c2e0b] active:scale-95 border-b-2 border-[#2a1505] flex items-center justify-center" title="Make Bigger"><ZoomIn size={18} /></button>
+                            <div className="flex flex-col gap-0.5 items-center flex-shrink-0">
+                                <span className="text-[9px] text-[#eecaa0]/60 font-bold uppercase tracking-wider">Scale</span>
+                                <div className="flex gap-0.5 items-center">
+                                    <button onClick={() => updateScale(-1)} className="w-8 h-8 bg-[#3E1F07] rounded-lg text-[#eecaa0] hover:bg-[#5c2e0b] active:scale-95 border-b-2 border-[#2a1505] flex items-center justify-center" title="Make Smaller"><ZoomOut size={14} /></button>
+                                    <button onClick={() => updateScale(1)} className="w-8 h-8 bg-[#3E1F07] rounded-lg text-[#eecaa0] hover:bg-[#5c2e0b] active:scale-95 border-b-2 border-[#2a1505] flex items-center justify-center" title="Make Bigger"><ZoomIn size={14} /></button>
                                 </div>
-                                {/* Display current scale percentage */}
-                                <span className="text-[10px] text-[#eecaa0] font-bold">
+                                <span className="text-[9px] text-[#eecaa0] font-bold">
                                     {(() => {
                                         let currentScale = 1;
                                         if (selectedPart === 'leftArm') currentScale = leftArmScale;
@@ -1042,31 +1041,29 @@ const ShopModal: React.FC<ShopModalProps> = ({ isOpen, onClose, initialTab, hide
                                 </span>
                             </div>
 
-                            {/* Spread Controls (Legs Only) */}
                             {selectedPart === 'legs' && (
                                 <>
-                                    <div className="w-px h-20 bg-white/10 flex-shrink-0"></div>
+                                    <div className="w-px h-16 bg-white/10 flex-shrink-0"></div>
 
-                                    <div className="flex flex-col gap-1 items-center flex-shrink-0">
-                                        <span className="text-[10px] text-[#eecaa0]/60 font-bold uppercase tracking-wider">Spread</span>
-                                        <div className="flex gap-1 items-center">
+                                    <div className="flex flex-col gap-0.5 items-center flex-shrink-0">
+                                        <span className="text-[9px] text-[#eecaa0]/60 font-bold uppercase tracking-wider">Spread</span>
+                                        <div className="flex gap-0.5 items-center">
                                             <button 
                                                 onClick={() => setLegsSpread(Math.max(0.7, legsSpread - 0.05))} 
-                                                className="w-11 h-11 bg-[#3E1F07] rounded-lg text-[#eecaa0] hover:bg-[#5c2e0b] active:scale-95 border-b-2 border-[#2a1505] flex items-center justify-center" 
+                                                className="w-8 h-8 bg-[#3E1F07] rounded-lg text-[#eecaa0] hover:bg-[#5c2e0b] active:scale-95 border-b-2 border-[#2a1505] flex items-center justify-center" 
                                                 title="Closer Together"
                                             >
-                                                <ArrowLeftRight size={18} className="scale-x-75" />
+                                                <ArrowLeftRight size={14} className="scale-x-75" />
                                             </button>
                                             <button 
                                                 onClick={() => setLegsSpread(Math.min(1.5, legsSpread + 0.05))} 
-                                                className="w-11 h-11 bg-[#3E1F07] rounded-lg text-[#eecaa0] hover:bg-[#5c2e0b] active:scale-95 border-b-2 border-[#2a1505] flex items-center justify-center" 
+                                                className="w-8 h-8 bg-[#3E1F07] rounded-lg text-[#eecaa0] hover:bg-[#5c2e0b] active:scale-95 border-b-2 border-[#2a1505] flex items-center justify-center" 
                                                 title="Further Apart"
                                             >
-                                                <ArrowLeftRight size={18} className="scale-x-125" />
+                                                <ArrowLeftRight size={14} className="scale-x-125" />
                                             </button>
                                         </div>
-                                        {/* Display current spread percentage */}
-                                        <span className="text-[10px] text-[#eecaa0] font-bold">
+                                        <span className="text-[9px] text-[#eecaa0] font-bold">
                                             {Math.round(legsSpread * 100)}%
                                         </span>
                                     </div>

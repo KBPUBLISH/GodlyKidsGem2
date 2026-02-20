@@ -314,7 +314,10 @@ const CreateYourStoryPage: React.FC = () => {
       const url = data.characterAvatarUrl || data.imageUrl;
       if (url) {
         setAvatarUrl(url);
-        if (!data.fallback) setError(null);
+        if (!data.fallback) {
+          setError(null);
+          activityTrackingService.trackOnboardingEvent('book_building_character_generated').catch(() => {});
+        }
       } else {
         setError(data.error || data.message || 'Could not create your character. Try again.');
       }
@@ -385,7 +388,10 @@ const CreateYourStoryPage: React.FC = () => {
       const url = data.characterAvatarUrl || data.imageUrl;
       if (url) {
         setAvatarUrl(url);
-        if (!data.fallback) setError(null);
+        if (!data.fallback) {
+          setError(null);
+          activityTrackingService.trackOnboardingEvent('book_building_character_generated').catch(() => {});
+        }
       } else {
         setError(data.error || data.message || 'Could not create your character. Try again.');
       }
@@ -578,6 +584,7 @@ const CreateYourStoryPage: React.FC = () => {
           style={{ animation: 'screen-flash 0.55s ease-out forwards' }}
           onAnimationEnd={() => {
             activityTrackingService.trackOnboardingEvent('book_building_step_1_complete').catch(() => {});
+            activityTrackingService.trackOnboardingEvent('book_building_step_2_started').catch(() => {});
             setIsFlashTransition(false);
             setStep(2);
           }}
@@ -977,6 +984,7 @@ const CreateYourStoryPage: React.FC = () => {
                       type="button"
                       onClick={() => {
                         activityTrackingService.trackOnboardingEvent('book_building_step_2_complete').catch(() => {});
+                        activityTrackingService.trackOnboardingEvent('book_building_step_3_started').catch(() => {});
                         setStep(3);
                       }}
                       disabled={!avatarUrl}
@@ -1188,6 +1196,7 @@ const CreateYourStoryPage: React.FC = () => {
                     type="button"
                     onClick={() => {
                       activityTrackingService.trackOnboardingEvent('book_building_step_3_complete').catch(() => {});
+                      activityTrackingService.trackOnboardingEvent('book_building_step_4_started').catch(() => {});
                       setStep(4);
                     }}
                     disabled={!selectedBookId}

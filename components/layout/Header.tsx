@@ -38,6 +38,13 @@ const Header: React.FC<HeaderProps> = ({ isVisible, title = "GODLY KIDS" }) => {
     const ua = navigator.userAgent.toLowerCase();
     return /android/.test(ua);
   });
+
+  // iOS Despia detection — hide header on iOS native since Apple provides status bar
+  const [isIOS] = useState(() => {
+    if (typeof navigator === 'undefined') return false;
+    const ua = navigator.userAgent.toLowerCase();
+    return ua.includes('despia') && (ua.includes('iphone') || ua.includes('ipad'));
+  });
   
   // Force repaint on Android after mount
   const [androidReady, setAndroidReady] = useState(!isAndroid);
@@ -105,7 +112,7 @@ const Header: React.FC<HeaderProps> = ({ isVisible, title = "GODLY KIDS" }) => {
       setIsReportCardOpen(false);
     }
     // When tutorial advances past shop_open, close shop modal
-    if (currentStep === 'navigate_to_give' && isShopOpen) {
+    if (currentStep === 'navigate_to_games' && isShopOpen) {
       setIsShopOpen(false);
     }
   }, [currentStep, isCoinHistoryOpen, isReportCardOpen, isShopOpen]);
@@ -149,7 +156,7 @@ const Header: React.FC<HeaderProps> = ({ isVisible, title = "GODLY KIDS" }) => {
   const handleShopClose = () => {
     setIsShopOpen(false);
     if (isStepActive('shop_open')) {
-      nextStep(); // Advance to navigate_to_give
+      nextStep(); // Advance to navigate_to_games
     }
     // Dispatch event for referral prompt (existing behavior)
     window.dispatchEvent(new CustomEvent('godlykids_shop_closed'));
@@ -163,6 +170,8 @@ const Header: React.FC<HeaderProps> = ({ isVisible, title = "GODLY KIDS" }) => {
       window.history.replaceState({}, document.title);
     }
   }, [location.state]);
+
+  if (isIOS) return null;
 
   return (
     <>

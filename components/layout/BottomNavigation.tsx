@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useRef, useCallback } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { Compass, Headphones, BookOpen, Library, Heart } from 'lucide-react';
+import { Compass, Headphones, BookOpen, Gamepad2 } from 'lucide-react';
 import { useAudio } from '../../context/AudioContext';
 import { useLanguage } from '../../context/LanguageContext';
 import { useTutorial } from '../../context/TutorialContext';
@@ -10,11 +10,10 @@ const WHEEL_HINT_KEY = 'godlykids_wheel_hint_shown';
 
 // Helper to get initial tab from pathname
 const getTabFromPath = (pathname: string): string => {
-  if (pathname === '/home' || pathname === '/') return 'explore';
+  if (pathname === '/world' || pathname === '/home' || pathname === '/') return 'explore';
   if (pathname === '/listen') return 'listen';
   if (pathname === '/read') return 'read';
-  if (pathname === '/library' || pathname.startsWith('/library/')) return 'library';
-  if (pathname === '/giving') return 'give';
+  if (pathname === '/games') return 'games';
   return 'explore'; // Default to explore
 };
 
@@ -34,11 +33,10 @@ const BottomNavigation: React.FC = () => {
   
   // Navigation items for wheel
   const navItems = [
-    { id: 'explore', label: t('explore'), icon: Compass, path: '/home', index: 0 },
+    { id: 'explore', label: t('explore'), icon: Compass, path: '/world', index: 0 },
     { id: 'listen', label: t('listen'), icon: Headphones, path: '/listen', index: 1 },
     { id: 'read', label: t('read'), icon: BookOpen, path: '/read', index: 2 },
-    { id: 'library', label: t('library'), icon: Library, path: '/library', index: 3 },
-    { id: 'give', label: t('give') || 'Give', icon: Heart, path: '/giving', index: 4 },
+    { id: 'games', label: 'Games', icon: Gamepad2, path: '/games', index: 3 },
   ];
   
   // Programmatic navigation for tutorial
@@ -49,7 +47,7 @@ const BottomNavigation: React.FC = () => {
       setActiveTab(tabId);
       navigate(item.path);
     }
-  }, [activeTab, navigate, playTab, navItems]);
+  }, [activeTab, navigate, playTab]);
   
   // Listen for tutorial navigation events
   useEffect(() => {
@@ -113,11 +111,8 @@ const BottomNavigation: React.FC = () => {
   const handleNav = (id: string, path: string) => {
     if (activeTab === id) return;
     
-    // If tutorial is active and user manually navigates (not via tutorial auto-navigation),
-    // mark tutorial as skipped so account creation modal will show
-    if (isTutorialActive && currentStep !== 'navigate_to_give' && currentStep !== 'navigate_to_explore' && 
+    if (isTutorialActive && currentStep !== 'navigate_to_games' && currentStep !== 'navigate_to_explore' && 
         currentStep !== 'navigate_to_books' && currentStep !== 'navigate_to_audio') {
-      console.log('🚪 User exited tutorial by navigating to:', path);
       skipTutorial();
     }
     
@@ -200,17 +195,18 @@ const BottomNavigation: React.FC = () => {
   const handleMouseDown = (e: React.MouseEvent) => onStart(e.clientX, e.clientY);
   const handleMouseMove = (e: React.MouseEvent) => onMove(e.clientX, e.clientY);
 
-  const WHEEL_SIZE = 400;
-  const RADIUS = 115;
+  const WHEEL_SIZE = 288;
+  const RADIUS = 83;
   const CENTER = WHEEL_SIZE / 2;
 
   // Positive target rotation
   const targetRotation = (activeItem.index * ITEM_ANGLE);
   const visualRotation = isDragging && dragRotation !== null ? dragRotation : targetRotation;
 
-  // Hide when modal is open or on Create Your Story flow
-  const hideForCreateStory = location.pathname === '/create-your-story';
-  if (isHidden || hideForCreateStory) {
+  // Only show on allowed main tab pages
+  const allowedPages = ['/world', '/home', '/listen', '/read', '/games'];
+  const isAllowedPage = allowedPages.includes(location.pathname);
+  if (isHidden || !isAllowedPage) {
     return null;
   }
 
@@ -223,11 +219,26 @@ const BottomNavigation: React.FC = () => {
       }}
     >
 
+      {/* Wood plank background behind wheel */}
+      <div
+        className="absolute z-[35] pointer-events-none overflow-hidden rounded-t-[2rem] transition-all duration-500 ease-in-out"
+        style={{
+          width: 342,
+          height: 198,
+          bottom: isPlayerActive ? -60 : -80,
+          left: '50%',
+          marginLeft: -171,
+          backgroundImage: 'url(/assets/images/wheel-background-wood.png)',
+          backgroundSize: 'cover',
+          backgroundPosition: 'center bottom',
+        }}
+      />
+
       {/* Wheel Hint for New Users */}
       {showWheelHint && (
         <div 
           className={`absolute z-[50] pointer-events-auto transition-all duration-500 ease-in-out ${
-            isPlayerActive ? 'bottom-[180px] md:bottom-[220px]' : 'bottom-[100px] md:bottom-[140px]'
+            isPlayerActive ? 'bottom-[144px] md:bottom-[180px]' : 'bottom-[216px] md:bottom-[234px]'
           }`}
           onClick={dismissHint}
         >
@@ -269,36 +280,59 @@ const BottomNavigation: React.FC = () => {
 
       {/* Active Indicator Jewel */}
       <div
-        className={`absolute z-[45] animate-bounce duration-[2000ms] transition-all duration-500 ease-in-out ${isPlayerActive ? 'bottom-[215px] md:bottom-[255px]' : 'bottom-[135px] md:bottom-[175px]'
+        className={`absolute z-[45] animate-bounce duration-[2000ms] transition-all duration-500 ease-in-out ${isPlayerActive ? 'bottom-[126px] md:bottom-[153px]' : 'bottom-[180px] md:bottom-[198px]'
           }`}
       >
         <div className="w-0 h-0 border-l-[8px] border-l-transparent border-r-[8px] border-r-transparent border-t-[12px] border-t-[#FFD700]"></div>
       </div>
 
-      {/* Static CSS Shadow */}
+      {/* Layered shadow behind wheel for depth */}
       <div
-        className={`absolute w-[340px] h-[340px] rounded-full bg-black/40 blur-xl pointer-events-none md:scale-[1.25] transition-all duration-500 ease-in-out ${isPlayerActive ? 'bottom-[-115px] md:bottom-[-120px]' : 'bottom-[-195px] md:bottom-[-200px]'
-          }`}
-      ></div>
+        className={`absolute rounded-full pointer-events-none transition-all duration-500 ease-in-out ${isPlayerActive ? 'bottom-[-65px]' : 'bottom-[-85px]'}`}
+        style={{
+          width: 279,
+          height: 279,
+          background: 'radial-gradient(ellipse at center, rgba(0,0,0,0.55) 0%, rgba(0,0,0,0.3) 40%, transparent 70%)',
+          filter: 'blur(12px)',
+          zIndex: 37,
+        }}
+      />
+      <div
+        className={`absolute rounded-full pointer-events-none transition-all duration-500 ease-in-out ${isPlayerActive ? 'bottom-[-80px]' : 'bottom-[-100px]'}`}
+        style={{
+          width: 324,
+          height: 180,
+          background: 'radial-gradient(ellipse at center, rgba(0,0,0,0.4) 0%, rgba(0,0,0,0.15) 50%, transparent 75%)',
+          filter: 'blur(20px)',
+          zIndex: 36,
+        }}
+      />
 
       <div
         ref={wheelRef}
-        className={`absolute w-[400px] h-[400px] md:scale-[1.25] origin-center pointer-events-auto touch-none select-none flex items-center justify-center transition-all duration-500 ease-in-out ${isPlayerActive ? 'bottom-[-110px] md:bottom-[-115px]' : 'bottom-[-190px] md:bottom-[-195px]'
+        className={`absolute z-[39] w-[288px] h-[288px] origin-center pointer-events-none select-none flex items-center justify-center transition-all duration-500 ease-in-out ${isPlayerActive ? 'bottom-[-70px]' : 'bottom-[-90px]'
           }`}
-        onTouchStart={handleTouchStart}
-        onTouchMove={handleTouchMove}
-        onTouchEnd={onEnd}
-        onMouseDown={handleMouseDown}
-        onMouseMove={handleMouseMove}
-        onMouseUp={onEnd}
-        onMouseLeave={onEnd}
       >
+        {/* Invisible circular hit area for drag — sits behind the wheel so buttons stay clickable */}
+        <div
+          className="absolute inset-0 pointer-events-auto touch-none"
+          style={{
+            clipPath: 'circle(42% at 50% 58%)',
+            cursor: isDragging ? 'grabbing' : 'grab',
+          }}
+          onTouchStart={handleTouchStart}
+          onTouchMove={handleTouchMove}
+          onTouchEnd={onEnd}
+          onMouseDown={handleMouseDown}
+          onMouseMove={handleMouseMove}
+          onMouseUp={onEnd}
+          onMouseLeave={onEnd}
+        />
         <div
           className="w-full h-full relative will-change-transform"
           style={{
             transform: `rotate(${visualRotation}deg)`,
-            transition: isDragging ? 'none' : 'transform 0.5s cubic-bezier(0.2, 0.8, 0.2, 1)',
-            cursor: isDragging ? 'grabbing' : 'grab'
+            transition: isDragging ? 'none' : 'transform 1.2s cubic-bezier(0.22, 0.61, 0.36, 1)',
           }}
         >
           {/* SVG Wheel */}

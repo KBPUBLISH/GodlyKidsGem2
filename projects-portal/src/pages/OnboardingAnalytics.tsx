@@ -1286,12 +1286,12 @@ const OnboardingAnalytics: React.FC = () => {
                 </h3>
                 <div className="space-y-3">
                     {bookBuildingData.funnel.map((step, idx) => {
-                        const isStep2 = step.stepKey === 'step_2';
+                        const isCharLink = step.stepKey === 'char_generated' || step.stepKey === 'step_2' || step.stepKey === 'step_2_started';
                         return (
                         <div key={step.stepKey || step.step} className="flex items-center gap-4">
                             <div className="w-44 text-sm font-medium text-gray-700 flex items-center gap-2">
                                 <span className="w-6 h-6 rounded-full bg-amber-100 text-amber-700 text-xs flex items-center justify-center font-bold">{idx + 1}</span>
-                                {isStep2 ? (
+                                {isCharLink ? (
                                     <button
                                         onClick={() => navigate(`/onboarding-analytics/kids-characters?days=${days}`)}
                                         className="truncate text-left hover:text-amber-600 hover:underline focus:outline-none focus:ring-1 focus:ring-amber-500 rounded"
@@ -1342,15 +1342,21 @@ const OnboardingAnalytics: React.FC = () => {
                     <h3 className="text-lg font-semibold text-gray-800 mb-4">Usage & cost (Create Your Story)</h3>
                     <p className="text-sm text-gray-500 mb-4">Image cost: {bookBuildingData.usage.costCentsPerImage}¢ per image (avatars + book pages). Totals for selected period.</p>
                     <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-4">
-                        <div className="bg-gray-50 rounded-lg p-4">
-                            <div className="text-gray-500 text-sm mb-1">Avatars created</div>
+                        <button
+                            onClick={() => navigate(`/onboarding-analytics/kids-characters?days=${days}`)}
+                            className="bg-gray-50 rounded-lg p-4 text-left hover:bg-gray-100 hover:ring-2 hover:ring-amber-300 transition-all cursor-pointer group"
+                        >
+                            <div className="text-gray-500 text-sm mb-1 group-hover:text-amber-600 transition-colors">Avatars created →</div>
                             <p className="text-2xl font-bold text-gray-900">{bookBuildingData.usage.totalAvatars.toLocaleString()}</p>
-                        </div>
-                        <div className="bg-amber-50/70 rounded-lg p-4">
-                            <div className="text-gray-500 text-sm mb-1">Character cost</div>
+                        </button>
+                        <button
+                            onClick={() => navigate(`/onboarding-analytics/kids-characters?days=${days}`)}
+                            className="bg-amber-50/70 rounded-lg p-4 text-left hover:bg-amber-100 hover:ring-2 hover:ring-amber-300 transition-all cursor-pointer group"
+                        >
+                            <div className="text-gray-500 text-sm mb-1 group-hover:text-amber-600 transition-colors">Character cost →</div>
                             <p className="text-2xl font-bold text-amber-700">${(bookBuildingData.usage.totalAvatars * bookBuildingData.usage.costCentsPerImage / 100).toFixed(2)}</p>
                             <p className="text-xs text-gray-500 mt-0.5">Avatars × {bookBuildingData.usage.costCentsPerImage}¢</p>
-                        </div>
+                        </button>
                         <div className="bg-gray-50 rounded-lg p-4">
                             <div className="text-gray-500 text-sm mb-1">Pages built</div>
                             <p className="text-2xl font-bold text-gray-900">{bookBuildingData.usage.totalPages.toLocaleString()}</p>

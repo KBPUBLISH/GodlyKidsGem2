@@ -80,6 +80,7 @@ import App from './App';
       /^\/book-series\/[^/]+$/,                    // /book-series/:seriesId
       /^\/lessons$/,
       /^\/home$/,
+      /^\/world$/,
       /^\/listen$/,
       /^\/read$/,
       /^\/signin$/,
@@ -87,7 +88,7 @@ import App from './App';
       /^\/onboarding$/,
       /^\/paywall$/,
       /^\/library$/,
-      /^\/giving$/,
+      /^\/games$/,
       /^\/settings$/,
       /^\/profile$/,
     ];

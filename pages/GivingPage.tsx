@@ -413,8 +413,48 @@ const GivingPage: React.FC = () => {
             onScroll={handleScroll}
         >
             {/* Animation Styles */}
-            <style>{modalAnimationStyles}</style>
-            
+            <style>{modalAnimationStyles}{`
+              .sky-cloud { left: -200px; }
+              .sky-cloud-1 { animation: sky-cloud-flow 80s linear infinite; }
+              .sky-cloud-2 { animation: sky-cloud-flow 65s linear infinite; animation-delay: -20s; }
+              .sky-cloud-3 { animation: sky-cloud-flow 100s linear infinite; animation-delay: -55s; }
+              .sky-cloud-4 { animation: sky-cloud-flow 70s linear infinite; animation-delay: -38s; }
+              .sky-cloud-5 { animation: sky-cloud-flow 90s linear infinite; animation-delay: -65s; }
+              @keyframes sky-cloud-flow {
+                from { transform: translateX(0); }
+                to   { transform: translateX(calc(100vw + 400px)); }
+              }
+            `}</style>
+
+            {/* Drifting sky clouds */}
+            <div className="absolute inset-0 pointer-events-none overflow-hidden" style={{ zIndex: 0 }} aria-hidden>
+              <div className="sky-cloud sky-cloud-1" style={{ position: 'absolute', top: '3%' }}>
+                <svg width="160" viewBox="0 0 240 70" fill="none" style={{ opacity: 0.18 }}>
+                  <ellipse cx="40" cy="42" rx="36" ry="20" fill="white" /><ellipse cx="95" cy="32" rx="50" ry="28" fill="white" /><ellipse cx="155" cy="36" rx="44" ry="24" fill="white" /><ellipse cx="205" cy="44" rx="30" ry="18" fill="white" /><rect x="38" y="38" width="168" height="22" rx="11" fill="white" />
+                </svg>
+              </div>
+              <div className="sky-cloud sky-cloud-2" style={{ position: 'absolute', top: '7%' }}>
+                <svg width="110" viewBox="0 0 150 120" fill="none" style={{ opacity: 0.14 }}>
+                  <ellipse cx="75" cy="36" rx="34" ry="30" fill="white" /><ellipse cx="48" cy="62" rx="38" ry="26" fill="white" /><ellipse cx="105" cy="58" rx="36" ry="24" fill="white" /><ellipse cx="75" cy="78" rx="52" ry="22" fill="white" />
+                </svg>
+              </div>
+              <div className="sky-cloud sky-cloud-3" style={{ position: 'absolute', top: '1%' }}>
+                <svg width="80" viewBox="0 0 130 40" fill="none" style={{ opacity: 0.10 }}>
+                  <ellipse cx="30" cy="22" rx="26" ry="14" fill="white" /><ellipse cx="70" cy="18" rx="34" ry="16" fill="white" /><ellipse cx="105" cy="22" rx="22" ry="12" fill="white" />
+                </svg>
+              </div>
+              <div className="sky-cloud sky-cloud-4" style={{ position: 'absolute', top: '11%' }}>
+                <svg width="130" viewBox="0 0 190 80" fill="none" style={{ opacity: 0.15 }}>
+                  <ellipse cx="50" cy="50" rx="42" ry="22" fill="white" /><ellipse cx="110" cy="35" rx="55" ry="30" fill="white" /><ellipse cx="160" cy="48" rx="28" ry="20" fill="white" /><rect x="42" y="44" width="118" height="20" rx="10" fill="white" />
+                </svg>
+              </div>
+              <div className="sky-cloud sky-cloud-5" style={{ position: 'absolute', top: '5%' }}>
+                <svg width="55" viewBox="0 0 80 50" fill="none" style={{ opacity: 0.12 }}>
+                  <ellipse cx="40" cy="26" rx="30" ry="20" fill="white" /><ellipse cx="24" cy="32" rx="18" ry="12" fill="white" /><ellipse cx="56" cy="34" rx="16" ry="11" fill="white" />
+                </svg>
+              </div>
+            </div>
+
             {/* Standard Header */}
             <Header isVisible={headerVisible} />
             

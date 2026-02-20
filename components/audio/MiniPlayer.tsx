@@ -40,6 +40,11 @@ const MiniPlayer: React.FC = () => {
         return null;
     }
 
+    // Hide when on Listen page with Music Island playlist active (widget shown on island instead)
+    if (location.pathname === '/listen' && currentPlaylist.title?.toLowerCase().includes('bible bit')) {
+        return null;
+    }
+
     const currentTrack = currentPlaylist.items[currentTrackIndex];
     if (!currentTrack) return null;
 

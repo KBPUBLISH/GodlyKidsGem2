@@ -634,7 +634,8 @@ export const ApiService = {
 
       if (response.ok) {
         const data = await response.json();
-        const result = Array.isArray(data) ? data : [];
+        const raw = Array.isArray(data) ? data : [];
+        const result = raw.map(transformBook);
         console.log(`📚 Trending books loaded: ${result.length} items`);
         return result;
       }
@@ -1804,6 +1805,31 @@ export const ApiService = {
     } catch (error) {
       console.error('❌ Failed to report planner progress:', error);
       return false;
+    }
+  },
+
+  // Games API - Get all enabled games
+  getEnabledGames: async (): Promise<any[]> => {
+    const cacheKey = 'enabled_games';
+    const cached = getCached<any[]>(cacheKey);
+    if (cached) return cached;
+
+    try {
+      const baseUrl = getApiBaseUrl();
+      const response = await fetchWithTimeout(`${baseUrl}games/enabled`, {
+        method: 'GET',
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        const result = Array.isArray(data) ? data : [];
+        setCache(cacheKey, result);
+        return result;
+      }
+      return [];
+    } catch (error) {
+      console.error('Failed to fetch enabled games:', error);
+      return [];
     }
   },
 

@@ -443,9 +443,21 @@ const LibraryPage: React.FC = () => {
       onScroll={handleScroll}
       className="flex flex-col h-full overflow-y-auto no-scrollbar relative"
     >
-      <Header isVisible={isHeaderVisible} title="MY LIBRARY" />
+      {/* Back button */}
+      <div className="sticky top-0 z-30 flex items-center px-3 pt-3 pb-2" style={{ paddingTop: 'calc(var(--safe-area-top, 0px) + 12px)' }}>
+        <button
+          type="button"
+          onClick={() => navigate('/read')}
+          className="flex items-center gap-1 text-white font-semibold text-sm bg-black/30 backdrop-blur-sm px-3 py-1.5 rounded-full active:scale-95 transition-transform"
+        >
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
+          Back
+        </button>
+        <span className="flex-1 text-center text-white font-extrabold text-lg tracking-wide" style={{ textShadow: '0 1px 4px rgba(0,0,0,0.5)' }}>MY LIBRARY</span>
+        <div style={{ width: 65 }} />
+      </div>
 
-      <div className="px-4 pt-28 pb-52">
+      <div className="px-4 pt-2 pb-52">
         {/* Search + Age Filter - first at top */}
         <div className="flex gap-2 mb-4">
           <div className="relative flex-1">

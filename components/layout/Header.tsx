@@ -39,12 +39,6 @@ const Header: React.FC<HeaderProps> = ({ isVisible, title = "GODLY KIDS" }) => {
     return /android/.test(ua);
   });
 
-  // iOS Despia detection — hide header on iOS native since Apple provides status bar
-  const [isIOS] = useState(() => {
-    if (typeof navigator === 'undefined') return false;
-    const ua = navigator.userAgent.toLowerCase();
-    return ua.includes('despia') && (ua.includes('iphone') || ua.includes('ipad'));
-  });
   
   // Force repaint on Android after mount
   const [androidReady, setAndroidReady] = useState(!isAndroid);
@@ -170,8 +164,6 @@ const Header: React.FC<HeaderProps> = ({ isVisible, title = "GODLY KIDS" }) => {
       window.history.replaceState({}, document.title);
     }
   }, [location.state]);
-
-  if (isIOS) return null;
 
   return (
     <>

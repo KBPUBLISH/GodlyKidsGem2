@@ -10,7 +10,8 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 cd "$ROOT"
 
-BRANCH="${1:-main}"
+TARGET_BRANCH="${1:-app2.0gk}"
+SOURCE_BRANCH="${2:-main}"
 REMOTE="app"
 
 echo "Repo root: $ROOT"
@@ -30,8 +31,8 @@ echo ""
 # 2) Use macOS Keychain for GitHub credentials (HTTPS)
 git config --global credential.helper osxkeychain 2>/dev/null || true
 
-echo "→ Pushing $BRANCH to $REMOTE/$BRANCH (using Keychain for GitHub credentials)..."
-if ! git push "$REMOTE" "$BRANCH:$BRANCH"; then
+echo "→ Pushing $SOURCE_BRANCH to $REMOTE/$TARGET_BRANCH (using Keychain for GitHub credentials)..."
+if ! git push "$REMOTE" "$SOURCE_BRANCH:$TARGET_BRANCH" --force; then
     echo ""
     echo "PUSH FAILED. Common causes:"
     echo "  • Run this script from Terminal.app (not Cursor/IDE) so Keychain can authenticate."

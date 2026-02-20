@@ -312,7 +312,7 @@ const ReadPage: React.FC = () => {
             <img
               src={SCHOLAR_ISLAND}
               alt="Scholar Island"
-              className="w-[55vw] max-w-[240px] h-auto object-contain drop-shadow-[0_4px_16px_rgba(0,0,0,0.35)]"
+              className="w-[55vw] max-w-[240px] h-auto object-contain"
             />
             {/* Blur overlay that fades in as user scrolls */}
             <div
@@ -726,7 +726,7 @@ const ReadPage: React.FC = () => {
             style={{ marginTop: '-42%', zIndex: 2 }}
           >
             {/* Label button on top of raft */}
-            <div className={`relative w-full drop-shadow-[0_3px_6px_rgba(0,0,0,0.4)] pointer-events-none ${isBtnPopping ? 'wp-btn-pop' : ''}`} style={{ marginBottom: '-2px', opacity: isWhirlpoolActive ? 0 : undefined }}>
+            <div className={`relative w-full pointer-events-none ${isBtnPopping ? 'wp-btn-pop' : ''}`} style={{ marginBottom: '-2px', opacity: isWhirlpoolActive ? 0 : undefined }}>
               <img src={ISLAND_BUTTON} alt="" className="w-full h-auto rounded-xl" />
               <span
                 className="absolute inset-0 flex items-center justify-center font-extrabold text-white"
@@ -743,7 +743,7 @@ const ReadPage: React.FC = () => {
             <img
               src={BIBLE_RAFT}
               alt="Enter the Bible"
-              className="w-full h-auto object-contain drop-shadow-[0_2px_8px_rgba(0,0,0,0.3)]"
+              className="w-full h-auto object-contain"
             />
           </div>
         </button>
@@ -754,7 +754,7 @@ const ReadPage: React.FC = () => {
         className="absolute"
         style={{ zIndex: 2, left: '2%', top: '14%', width: '39vw', maxWidth: 195 }}
       >
-        <div className="relative w-[65%] mx-auto mb-1 pointer-events-none drop-shadow-[0_3px_6px_rgba(0,0,0,0.4)]">
+        <div className="relative w-[65%] mx-auto mb-1 pointer-events-none">
           <img src={ISLAND_BUTTON} alt="" className="w-full h-auto rounded-xl" />
           <span
             className="absolute inset-0 flex items-center justify-center font-extrabold text-white"
@@ -793,7 +793,7 @@ const ReadPage: React.FC = () => {
             <img
               src={BOOK_ISLAND}
               alt="My Library"
-              className="w-full h-auto object-contain drop-shadow-[0_4px_14px_rgba(0,0,0,0.35)]"
+              className="w-full h-auto object-contain"
             />
           </button>
         </div>
@@ -831,14 +831,14 @@ const ReadPage: React.FC = () => {
             <img
               src={SCHOLAR_ISLAND}
               alt="Scholar Island"
-              className="w-full h-auto object-contain drop-shadow-[0_4px_16px_rgba(0,0,0,0.35)]"
+              className="w-full h-auto object-contain"
             />
           </button>
           {/* Scholar Island label button */}
           <button
             type="button"
             onClick={() => setShowContent(true)}
-            className="relative block mx-auto overflow-hidden rounded-2xl drop-shadow-[0_4px_12px_rgba(0,0,0,0.3)] cursor-pointer select-none focus:outline-none transition-transform active:scale-95"
+            className="relative block mx-auto overflow-hidden rounded-2xl cursor-pointer select-none focus:outline-none transition-transform active:scale-95"
             style={{ zIndex: 5, width: '80%', marginTop: -8 }}
             aria-label="Open Book Library"
           >

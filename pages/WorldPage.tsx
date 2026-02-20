@@ -10,8 +10,8 @@ const DAILY_ADVENTURE_ISLAND = '/assets/images/daily-adventure-island.png';
 const VOLCANO_ISLAND = '/assets/images/volcano-island.png';
 const ISLAND_BUTTON = '/assets/images/island-button.png';
 
-const ISLAND_WIDTH = 218;   /* ~5% smaller */
-const ISLAND_MAX_WIDTH = 248;
+const ISLAND_WIDTH = 240;   /* ~10% larger than before */
+const ISLAND_MAX_WIDTH = 273;
 
 const FIREFLIES = [
   { x: 20, y: 70, drift: -20, dur: 3.8, delay: 0, size: 8 },
@@ -187,7 +187,7 @@ export const PersistentWorldIsland: React.FC = () => {
           style={{ top: '-24px', width: '75%', zIndex: 2 }}
           aria-label="Open Memory Bible Challenge"
         >
-          <div className="relative w-full drop-shadow-[0_3px_6px_rgba(0,0,0,0.4)]">
+          <div className="relative w-full">
             <img src={ISLAND_BUTTON} alt="" className="w-full h-auto rounded-xl" />
             <span
               className="absolute inset-0 flex items-center justify-center font-extrabold text-white whitespace-nowrap"
@@ -215,7 +215,7 @@ export const PersistentWorldIsland: React.FC = () => {
           <img
             src="/assets/images/wooden-raft.png"
             alt="Daily Chest"
-            className="w-full h-auto relative drop-shadow-[0_3px_12px_rgba(0,0,0,0.35)]"
+            className="w-full h-auto relative"
           />
         </button>
 
@@ -275,7 +275,7 @@ export const PersistentWorldIsland: React.FC = () => {
           <img
             src={VOLCANO_ISLAND}
             alt="Volcano Island"
-            className="w-full h-auto object-contain drop-shadow-[0_4px_14px_rgba(0,0,0,0.4)]"
+            className="w-full h-auto object-contain"
           />
         </button>
 
@@ -317,7 +317,7 @@ export const PersistentWorldIsland: React.FC = () => {
       </div>
 
       {/* Island centered on screen */}
-      <div className="relative flex-1 min-h-0 overflow-auto flex items-center justify-center" style={{ zIndex: 10, paddingTop: '10%' }}>
+      <div className="relative flex-1 min-h-0 overflow-auto flex items-center justify-center" style={{ zIndex: 10, paddingTop: '18%' }}>
         <div
           className={`relative flex-shrink-0 ${isZoomingIn ? 'island-zoom-in' : ''}`}
           style={{ width: `min(${ISLAND_WIDTH}px, 85vw)`, maxWidth: ISLAND_MAX_WIDTH, transformOrigin: 'center 40%', willChange: 'transform, opacity' }}
@@ -353,7 +353,7 @@ export const PersistentWorldIsland: React.FC = () => {
             <img
               src={DAILY_ADVENTURE_ISLAND}
               alt="Daily Adventure"
-              className="w-full h-auto object-contain drop-shadow-[0_4px_16px_rgba(0,0,0,0.35)]"
+              className="w-full h-auto object-contain"
             />
           </button>
 

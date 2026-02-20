@@ -118,7 +118,7 @@ const GamesPage: React.FC = () => {
             <img
               src={WARRIOR_ISLAND}
               alt="Game Warrior Island"
-              className="w-[55vw] max-w-[240px] h-auto object-contain drop-shadow-[0_4px_16px_rgba(0,0,0,0.35)]"
+              className="w-[55vw] max-w-[240px] h-auto object-contain"
             />
             <div
               className="absolute inset-0"
@@ -381,7 +381,7 @@ const GamesPage: React.FC = () => {
             <img
               src={WARRIOR_ISLAND}
               alt="Warrior Island"
-              className="w-full h-auto drop-shadow-[0_6px_20px_rgba(0,0,0,0.3)]"
+              className="w-full h-auto"
               draggable={false}
             />
           </button>
@@ -391,7 +391,7 @@ const GamesPage: React.FC = () => {
         <button
           type="button"
           onClick={handleIslandClick}
-          className="relative cursor-pointer select-none focus:outline-none overflow-hidden rounded-2xl drop-shadow-[0_4px_12px_rgba(0,0,0,0.3)]"
+          className="relative cursor-pointer select-none focus:outline-none overflow-hidden rounded-2xl"
           style={{ width: 'min(194px, 53vw)', maxWidth: 223, marginTop: -20 }}
           aria-label="Game Warrior Island"
         >

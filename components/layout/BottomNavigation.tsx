@@ -127,6 +127,7 @@ const BottomNavigation: React.FC = () => {
   const [dragRotation, setDragRotation] = useState<number | null>(null);
   const [isDragging, setIsDragging] = useState(false);
   const wheelRef = useRef<HTMLDivElement>(null);
+  const hitAreaRef = useRef<HTMLDivElement>(null);
   const startAngleRef = useRef(0);
   const startRotationRef = useRef(0);
   const totalMoveRef = useRef(0);
@@ -193,6 +194,15 @@ const BottomNavigation: React.FC = () => {
   const handleTouchStart = (e: React.TouchEvent) => onStart(e.touches[0].clientX, e.touches[0].clientY);
   const handleTouchMove = (e: React.TouchEvent) => onMove(e.touches[0].clientX, e.touches[0].clientY);
   const handleMouseDown = (e: React.MouseEvent) => onStart(e.clientX, e.clientY);
+
+  // Attach non-passive touch listeners so preventDefault works (stops scroll from stealing the gesture)
+  useEffect(() => {
+    const el = hitAreaRef.current;
+    if (!el) return;
+    const preventDefault = (e: TouchEvent) => e.preventDefault();
+    el.addEventListener('touchmove', preventDefault, { passive: false });
+    return () => el.removeEventListener('touchmove', preventDefault);
+  }, []);
   const handleMouseMove = (e: React.MouseEvent) => onMove(e.clientX, e.clientY);
 
   const WHEEL_SIZE = 288;
@@ -315,14 +325,17 @@ const BottomNavigation: React.FC = () => {
       >
         {/* Invisible circular hit area for drag — sits behind the wheel so buttons stay clickable */}
         <div
-          className="absolute inset-0 pointer-events-auto touch-none"
+          ref={hitAreaRef}
+          className="absolute inset-0 pointer-events-auto"
           style={{
-            clipPath: 'circle(42% at 50% 58%)',
+            clipPath: 'circle(55% at 50% 50%)',
             cursor: isDragging ? 'grabbing' : 'grab',
+            touchAction: 'none',
           }}
           onTouchStart={handleTouchStart}
           onTouchMove={handleTouchMove}
           onTouchEnd={onEnd}
+          onTouchCancel={onEnd}
           onMouseDown={handleMouseDown}
           onMouseMove={handleMouseMove}
           onMouseUp={onEnd}

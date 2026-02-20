@@ -379,7 +379,7 @@ const ListenPage: React.FC = () => {
             <img
               src={HEADPHONE_ISLAND}
               alt="Audio Adventure"
-              className="w-[55vw] max-w-[240px] h-auto object-contain drop-shadow-[0_4px_16px_rgba(0,0,0,0.35)]"
+              className="w-[55vw] max-w-[240px] h-auto object-contain"
             />
             {/* Blur overlay that fades in as user scrolls */}
             <div
@@ -933,7 +933,7 @@ const ListenPage: React.FC = () => {
               <img
                 src={HEADPHONE_ISLAND}
                 alt="Listen Island"
-                className="w-full h-auto object-contain drop-shadow-[0_4px_16px_rgba(0,0,0,0.35)]"
+                className="w-full h-auto object-contain"
               />
             </button>
           </div>
@@ -942,7 +942,7 @@ const ListenPage: React.FC = () => {
           <button
             type="button"
             onClick={handleIslandClick}
-            className="cursor-pointer select-none focus:outline-none overflow-hidden rounded-2xl drop-shadow-[0_4px_12px_rgba(0,0,0,0.3)]"
+            className="cursor-pointer select-none focus:outline-none overflow-hidden rounded-2xl"
             style={{ width: 'min(194px, 53vw)', maxWidth: 223, marginTop: -20 }}
             aria-label="Audio Adventure Island"
           >

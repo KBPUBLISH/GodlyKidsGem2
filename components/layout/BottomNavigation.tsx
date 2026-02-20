@@ -323,12 +323,12 @@ const BottomNavigation: React.FC = () => {
         className={`absolute z-[39] w-[317px] h-[317px] origin-center pointer-events-none select-none flex items-center justify-center transition-all duration-500 ease-in-out ${isPlayerActive ? 'bottom-[-70px]' : 'bottom-[-90px]'
           }`}
       >
-        {/* Invisible circular hit area for drag — sits behind the wheel so buttons stay clickable */}
+        {/* Invisible circular hit area for drag — full wheel so rim/base/hub all respond to swipe */}
         <div
           ref={hitAreaRef}
           className="absolute inset-0 pointer-events-auto"
           style={{
-            clipPath: 'circle(55% at 50% 50%)',
+            clipPath: 'circle(95% at 50% 50%)',
             cursor: isDragging ? 'grabbing' : 'grab',
             touchAction: 'none',
           }}

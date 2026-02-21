@@ -392,7 +392,7 @@ async function generatePersonalizedCover(storyId, childName, coverPrompt, charac
         // Create prompt that incorporates the story context
         const enhancedPrompt = `${coverPrompt.replace(/\{childName\}/g, childName)}. 
         Children's book cover style, vibrant colors, whimsical, age-appropriate, 
-        inspiring, Christian faith theme, warm lighting, magical atmosphere.`;
+        inspiring, warm lighting, magical atmosphere.`;
         
         const response = await fetch(
             `https://us-central1-aiplatform.googleapis.com/v1/projects/${projectId}/locations/us-central1/publishers/google/models/imagen-3.0-generate-001:predict`,
@@ -493,8 +493,8 @@ async function generatePersonalizedSceneImage(storyId, childName, selfieBase64, 
         The child [1] is the main character in this scene—depict them only from reference [1]; do not add hat or headphones unless visible in the reference. Any other characters (e.g. biblical figures) must not be given the child's modern accessories (no headphones, caps on other figures). ${styleDesc}.
         Story context: ${storyContext}
         Children's book illustration style, warm inviting colors, soft lighting, 
-        suitable for ages 4-12, peaceful atmosphere, Christian faith theme.
-        Wide scene showing environment with the child [1] as focal point.`;
+        suitable for ages 4-12, peaceful atmosphere.
+        Wide scene showing environment with the child [1] as focal point. Only include biblical characters that are explicitly mentioned in the scene prompt—do not add Jesus, prophets, or angels unless they are specifically part of this scene description.`;
         
         console.log(`🎨 Generating personalized scene with style: ${styleId}`);
         
@@ -737,8 +737,8 @@ router.post('/:id/generate-scene', async (req, res) => {
         
         const enhancedPrompt = `${basePrompt}. 
         Children's book illustration style, beautiful warm colors, inviting scene, 
-        Bible story setting, soft lighting, suitable for children ages 4-12, 
-        no text overlays, peaceful atmosphere, Christian faith theme.`;
+        soft lighting, suitable for children ages 4-12, 
+        no text overlays, peaceful atmosphere. Only include biblical characters that are explicitly mentioned in the base prompt—do not add Jesus, prophets, or angels unless they are specifically named in the story.`;
         
         console.log(`🎨 Generating scene image for story "${story.title}"...`);
         console.log(`📝 Prompt: ${enhancedPrompt.slice(0, 200)}...`);

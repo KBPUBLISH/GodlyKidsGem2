@@ -279,8 +279,8 @@ async function buildScenePrompt(pageDoc, characterStylePrompt, childName, wholeB
         const styleBlock = useWholeBookStyle
             ? `The entire illustration—all characters and the environment—must be rendered in this style: ${String(wholeBookStyleDesc).trim()}.`
             : [characterStylePrompt, ...stylePrompts].filter(Boolean).join('. ');
-        const noExtras = "Only depict what is described; do not add objects, props, or symbols (e.g. keys, crowns, scrolls) unless explicitly mentioned.";
-        const prompt = `${sceneForImage}. ${styleBlock}.${multiCharacterInstruction} ${noExtras} Children's book illustration style, warm inviting colors, soft lighting, suitable for ages 4-12, Christian faith theme, no text in image.`;
+        const noExtras = "Only depict what is described; do not add objects, props, or symbols (e.g. keys, crowns, scrolls) unless explicitly mentioned. Do not add biblical characters (e.g. Jesus, prophets, angels) unless explicitly named in the scene description.";
+        const prompt = `${sceneForImage}. ${styleBlock}.${multiCharacterInstruction} ${noExtras} Children's book illustration style, warm inviting colors, soft lighting, suitable for ages 4-12, no text in image.`;
         return { prompt, hasKidReference };
     }
     const text = pageDoc.content?.text || '';
@@ -294,8 +294,8 @@ async function buildScenePrompt(pageDoc, characterStylePrompt, childName, wholeB
     const stylePart = useWholeBookStyle
         ? `The entire illustration—all characters and the environment—must be rendered in this style: ${String(wholeBookStyleDesc).trim()}.`
         : characterStylePrompt;
-    const noExtras = "Only depict what is described; do not add objects, props, or symbols (e.g. keys, crowns, scrolls) unless explicitly mentioned.";
-    const rawPrompt = `Scene for a children's story: ${contextForImage}. ${stylePart}.${childInScene}${multiCharacterInstruction} ${noExtras} Children's book illustration style, warm inviting colors, soft lighting, suitable for ages 4-12, Christian faith theme, no text in image.`;
+    const noExtras = "Only depict what is described; do not add objects, props, or symbols (e.g. keys, crowns, scrolls) unless explicitly mentioned. Do not add biblical characters (e.g. Jesus, prophets, angels) unless explicitly named in the scene description.";
+    const rawPrompt = `Scene for a children's story: ${contextForImage}. ${stylePart}.${childInScene}${multiCharacterInstruction} ${noExtras} Children's book illustration style, warm inviting colors, soft lighting, suitable for ages 4-12, no text in image.`;
     const prompt = neutralizeChildLanguageForImagePrompt(rawPrompt);
     return { prompt, hasKidReference: !!childName };
 }
@@ -473,8 +473,8 @@ async function generatePageImageWithVertexGemini(customBook, pageDoc, characterS
         ? ` CRITICAL — Style: The ENTIRE image (all characters, background, and environment) MUST be rendered in this exact style: "${String(wholeBookStyleDesc).trim()}". Do NOT use a flat 2D cartoon style, 2D Disney animation style, or storybook watercolor illustration style. Use the selected style (e.g. Pixar 3D animated, with rounded volumes and 3D lighting) for the whole scene—consistent from page to page. `
         : '';
     const styleClosing = hasWholeBookStyle
-        ? `Render the entire image in the selected style above. Warm inviting colors, soft lighting, suitable for ages 4-12, Christian faith theme, no text in image. Vertical 9:16 composition.`
-        : `Children's book illustration style, warm inviting colors, soft lighting, suitable for ages 4-12, Christian faith theme, no text in image. Vertical 9:16 composition.`;
+        ? `Render the entire image in the selected style above. Warm inviting colors, soft lighting, suitable for ages 4-12, no text in image. Vertical 9:16 composition. Do not add biblical characters (e.g. Jesus, prophets, angels) unless explicitly named in the prompt.`
+        : `Children's book illustration style, warm inviting colors, soft lighting, suitable for ages 4-12, no text in image. Vertical 9:16 composition. Do not add biblical characters (e.g. Jesus, prophets, angels) unless explicitly named in the prompt.`;
     // Use user-selected main character style (e.g. Pixar) when provided; otherwise fall back to characterStylePrompt.
     const styleForMain = (mainCharacterStyleDesc && mainCharacterStyleDesc.trim()) || (characterStylePrompt && characterStylePrompt.trim());
     const styleLock = styleForMain

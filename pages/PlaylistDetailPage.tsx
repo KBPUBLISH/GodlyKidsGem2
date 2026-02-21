@@ -499,7 +499,7 @@ const PlaylistDetailPage: React.FC = () => {
                 <div className="relative z-20 flex justify-between items-center px-4 pt-6 pb-2">
                     {/* Back Button */}
                     <button
-                        onClick={() => navigate('/listen')}
+                        onClick={() => navigate(-1)}
                         className="w-10 h-10 bg-black/40 backdrop-blur-sm rounded-full border-2 border-white/30 flex items-center justify-center transform transition-transform active:scale-95 hover:bg-black/60"
                     >
                         <ChevronLeft size={24} className="text-white" />

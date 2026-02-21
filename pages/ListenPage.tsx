@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import BookCard from '../components/ui/BookCard';
 import Header from '../components/layout/Header';
+import FeaturedCarousel from '../components/ui/FeaturedCarousel';
 import { useBooks } from '../context/BooksContext';
 import { useUser } from '../context/UserContext';
 import { useAudio } from '../context/AudioContext';
@@ -86,6 +87,7 @@ const ListenPage: React.FC = () => {
   const [isZoomingIn, setIsZoomingIn] = useState(false);
   const [topAudio, setTopAudio] = useState<Playlist[]>([]);
   const [featuredAudio, setFeaturedAudio] = useState<Playlist[]>([]);
+  const [featuredCarouselItems, setFeaturedCarouselItems] = useState<any[]>([]);
   const [continueListening, setContinueListening] = useState<Playlist[]>([]);
 
   const handleIslandClick = useCallback(() => {
@@ -197,6 +199,14 @@ const ListenPage: React.FC = () => {
       }
     };
     fetchTopAudio();
+
+    ApiService.getFeaturedAudioContent().then(items => {
+      setFeaturedCarouselItems(items.map(item => ({
+        ...item,
+        id: item._id || item.id,
+        coverUrl: item.coverUrl || item.coverImage || item.files?.coverImage || '',
+      })));
+    }).catch(() => {});
   }, []);
 
   // Build top 10 by combining featured + regular playlists
@@ -403,6 +413,41 @@ const ListenPage: React.FC = () => {
           >
             {/* Spacer so island is visible initially */}
             <div style={{ height: '260px' }} />
+
+          {/* Featured Audio Carousel */}
+          {featuredCarouselItems.length > 0 && (
+            <div className="mb-4">
+              <div className="relative py-2 mb-3 mx-[-2px]">
+                <div
+                  className="absolute inset-0 rounded-r-xl shadow-lg transform -skew-x-6 origin-bottom-left border-t-2 border-b-4"
+                  style={{
+                    backgroundColor: '#8B4513',
+                    backgroundImage: `repeating-linear-gradient(90deg, transparent, transparent 50px, rgba(0,0,0,0.1) 50px, rgba(0,0,0,0.1) 53px), linear-gradient(to bottom, #8B5A2B, #654321)`,
+                    borderColor: '#A0522D',
+                    borderBottomColor: '#5c2e0b',
+                  }}
+                />
+                <h3 className="relative z-10 text-white font-display text-lg tracking-wide px-6 drop-shadow-md flex items-center gap-2">
+                  <span className="text-xl">⭐</span> Featured Audio
+                </h3>
+                <div className="absolute top-1/2 left-2 w-2 h-2 bg-[#4a3728] rounded-full shadow-inner -translate-y-1/2 opacity-80" />
+                <div className="absolute top-1/2 right-2 w-2 h-2 bg-[#4a3728] rounded-full shadow-inner -translate-y-1/2 opacity-80" />
+              </div>
+              <div className="px-2">
+              <FeaturedCarousel
+                books={featuredCarouselItems}
+                onBookClick={(id, isPlaylist, isAmazonBook, amazonUrl) => {
+                  const item = featuredCarouselItems.find(i => (i._id || i.id) === id);
+                  if (item?._itemType === 'episode' && item._playlistId != null) {
+                    navigate(`/audio/playlist/${item._playlistId}/play/${item._trackIndex ?? 0}`);
+                  } else if (isPlaylist || item?._itemType === 'playlist') {
+                    navigate(`/audio/playlist/${id}`);
+                  }
+                }}
+              />
+              </div>
+            </div>
+          )}
 
           {/* Top 10 Audiobooks */}
           {topAudio.length > 0 && (

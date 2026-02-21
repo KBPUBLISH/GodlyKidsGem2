@@ -3,6 +3,7 @@ import React, { useState, useRef, useEffect, useMemo, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom';
 import BookCard from '../components/ui/BookCard';
 import Header from '../components/layout/Header';
+import FeaturedCarousel from '../components/ui/FeaturedCarousel';
 import { useBooks } from '../context/BooksContext';
 import { useUser } from '../context/UserContext';
 import { ApiService } from '../services/apiService';
@@ -85,6 +86,7 @@ const ReadPage: React.FC = () => {
   const [isCategoriesExpanded, setIsCategoriesExpanded] = useState(false);
   const [bookSeries, setBookSeries] = useState<any[]>([]);
   const [topBooks, setTopBooks] = useState<any[]>([]);
+  const [featuredCarouselBooks, setFeaturedCarouselBooks] = useState<any[]>([]);
   const [continueReading, setContinueReading] = useState<any[]>([]);
   const [isWhirlpoolActive, setIsWhirlpoolActive] = useState(false);
   const [isBtnPopping, setIsBtnPopping] = useState(false);
@@ -192,6 +194,14 @@ const ReadPage: React.FC = () => {
       }
     };
     fetchTopBooks();
+
+    ApiService.getFeaturedBooks().then(items => {
+      setFeaturedCarouselBooks(items.map((b: any) => ({
+        ...b,
+        id: b._id || b.id,
+        coverUrl: b.coverUrl || b.coverImage || b.files?.coverImage || '',
+      })));
+    }).catch(() => {});
 
     const recentIds = readingProgressService.getRecentlyReadBookIds(10);
     if (recentIds.length > 0 && books.length > 0) {
@@ -336,6 +346,36 @@ const ReadPage: React.FC = () => {
           >
             {/* Spacer so island is visible initially */}
             <div style={{ height: '260px' }} />
+
+          {/* Featured Books Carousel */}
+          {featuredCarouselBooks.length > 0 && (
+            <div className="mb-4">
+              <div className="relative py-2 mb-3 mx-[-2px]">
+                <div
+                  className="absolute inset-0 rounded-r-xl shadow-lg transform -skew-x-6 origin-bottom-left border-t-2 border-b-4"
+                  style={{
+                    backgroundColor: '#8B4513',
+                    backgroundImage: `repeating-linear-gradient(90deg, transparent, transparent 50px, rgba(0,0,0,0.1) 50px, rgba(0,0,0,0.1) 53px), linear-gradient(to bottom, #8B5A2B, #654321)`,
+                    borderColor: '#A0522D',
+                    borderBottomColor: '#5c2e0b',
+                  }}
+                />
+                <h3 className="relative z-10 text-white font-display text-lg tracking-wide px-6 drop-shadow-md flex items-center gap-2">
+                  <span className="text-xl">⭐</span> Featured Books
+                </h3>
+                <div className="absolute top-1/2 left-2 w-2 h-2 bg-[#4a3728] rounded-full shadow-inner -translate-y-1/2 opacity-80" />
+                <div className="absolute top-1/2 right-2 w-2 h-2 bg-[#4a3728] rounded-full shadow-inner -translate-y-1/2 opacity-80" />
+              </div>
+              <div className="px-2">
+              <FeaturedCarousel
+                books={featuredCarouselBooks}
+                onBookClick={(id) => {
+                  navigate(`/book/${id}`);
+                }}
+              />
+              </div>
+            </div>
+          )}
 
           {/* Top 10 Books */}
           {topBooks.length > 0 && (

@@ -152,7 +152,7 @@ const WoodButton: React.FC<{ onClick: (e: React.MouseEvent) => void; icon: React
 );
 
 // Premium preview constants
-const BOOK_PREVIEW_PAGES = 3; // Allow 3 page preview for premium books
+const BOOK_PREVIEW_PAGES = 5; // Allow 5 page preview for premium books
 
 const BookReaderPage: React.FC = () => {
     const { bookId } = useParams<{ bookId: string }>();
@@ -1040,7 +1040,7 @@ const BookReaderPage: React.FC = () => {
                 if (allowSharedRead) {
                     setIsBookPremium(false);
                 } else if (bookIsMembersOnly && !isSubscribed && !isTutorialActive) {
-                    console.log('📖 Premium book detected - allowing 3 page preview');
+                    console.log('📖 Premium book detected - allowing 5 page preview');
                     setIsBookPremium(true);
                 } else {
                     setIsBookPremium(false);
@@ -1300,6 +1300,25 @@ const BookReaderPage: React.FC = () => {
                 bookBackgroundMusicRef.current.load?.();
             } catch (e) { }
         }
+        // Disconnect and close book music AudioContext/WebAudio graph
+        try {
+            if (bookMusicSourceRef.current) {
+                bookMusicSourceRef.current.disconnect();
+                bookMusicSourceRef.current = null;
+            }
+            if (bookMusicGainRef.current) {
+                bookMusicGainRef.current.disconnect();
+                bookMusicGainRef.current = null;
+            }
+            if (bookMusicCtxRef.current) {
+                bookMusicCtxRef.current.close?.();
+                bookMusicCtxRef.current = null;
+            }
+            bookMusicWebAudioReadyRef.current = false;
+            bookMusicConnectedElRef.current = null;
+        } catch (e) {
+            console.warn('Error cleaning up book music WebAudio:', e);
+        }
         // Reset state
         setPlaying(false);
         playingRef.current = false;
@@ -1548,19 +1567,30 @@ const BookReaderPage: React.FC = () => {
                     // Specific page requested (e.g., from Continue button)
                     const pageNum = parseInt(pageParam, 10);
                     if (!isNaN(pageNum) && pageNum >= 1 && pageNum <= data.length) {
-                        const pageIndex = pageNum - 1; // Convert to 0-based
+                        let pageIndex = pageNum - 1; // Convert to 0-based
+                        // Enforce preview limit for non-subscribed users on premium books
+                        if (bookIsMembersOnly && !isSubscribed && pageIndex >= BOOK_PREVIEW_PAGES) {
+                            console.log(`📖 Preview limit enforced: redirecting from page ${pageNum} to page ${BOOK_PREVIEW_PAGES}`);
+                            pageIndex = BOOK_PREVIEW_PAGES - 1;
+                        }
                         setCurrentPageIndex(pageIndex);
                         currentPageIndexRef.current = pageIndex;
-                        console.log(`📖 Navigated to page ${pageNum} from URL param`);
+                        console.log(`📖 Navigated to page ${pageIndex + 1} from URL param`);
                     }
                 } else if (continueParam === 'true') {
                     // Continue reading - load saved progress
                     const progress = readingProgressService.getProgress(bookId);
                     console.log('📖 Continue reading - progress data:', progress);
                     if (progress && progress.currentPageIndex >= 0 && progress.currentPageIndex < data.length) {
-                        setCurrentPageIndex(progress.currentPageIndex);
-                        currentPageIndexRef.current = progress.currentPageIndex;
-                        console.log(`📖 Restored reading progress: Page ${progress.currentPageIndex + 1} of ${data.length}`);
+                        let pageIndex = progress.currentPageIndex;
+                        // Enforce preview limit for non-subscribed users on premium books
+                        if (bookIsMembersOnly && !isSubscribed && pageIndex >= BOOK_PREVIEW_PAGES) {
+                            console.log(`📖 Preview limit enforced: redirecting from saved page ${pageIndex + 1} to page ${BOOK_PREVIEW_PAGES}`);
+                            pageIndex = BOOK_PREVIEW_PAGES - 1;
+                        }
+                        setCurrentPageIndex(pageIndex);
+                        currentPageIndexRef.current = pageIndex;
+                        console.log(`📖 Restored reading progress: Page ${pageIndex + 1} of ${data.length}`);
                     } else {
                         console.log('📖 No valid progress found, starting from page 1');
                     }
@@ -4038,10 +4068,14 @@ const BookReaderPage: React.FC = () => {
                     onClick={() => {
                         if (fromDailySession) {
                             navigate('/daily-session');
-                        } else if (bookDetailUrl) {
-                            navigate(bookDetailUrl);
                         } else {
-                            navigate(-1);
+                            // Always navigate back to book detail page
+                            const detailUrl = bookDetailUrl || (bookId ? `/book/${bookId}` : null);
+                            if (detailUrl) {
+                                navigate(detailUrl);
+                            } else {
+                                navigate('/read');
+                            }
                         }
                     }}
                     className="bg-indigo-600 px-4 py-2 rounded hover:bg-indigo-700 transition"
@@ -4182,11 +4216,14 @@ const BookReaderPage: React.FC = () => {
                             // Return to Daily Session if accessed from lesson (without completing)
                             navigate('/daily-session');
                         } else {
-                            // Navigate back to book detail page (preserve share param so details show Featuring / before-after)
-                            if (bookDetailUrl) {
-                                navigate(bookDetailUrl);
+                            // Always navigate back to book detail page (shows book info and library)
+                            // Preserve share param so details show Featuring / before-after
+                            const detailUrl = bookDetailUrl || (bookId ? `/book/${bookId}` : null);
+                            if (detailUrl) {
+                                navigate(detailUrl);
                             } else {
-                                navigate(-1);
+                                // Fallback to /read (library) if no book ID
+                                navigate('/read');
                             }
                         }
                     }}
@@ -5087,11 +5124,19 @@ const BookReaderPage: React.FC = () => {
                                 {pages.map((page, index) => {
                                     const isCurrentPage = index === currentPageIndex;
                                     const isTheEnd = page.id === 'the-end';
+                                    const isLocked = isBookPremium && !isSubscribed && index >= BOOK_PREVIEW_PAGES;
                                     
                                     return (
                                         <button
                                             key={page.id || index}
                                             onClick={() => {
+                                                // Enforce preview limit for non-subscribed users on premium books
+                                                if (isBookPremium && !isSubscribed && index >= BOOK_PREVIEW_PAGES) {
+                                                    console.log(`📖 Preview limit enforced: cannot navigate to page ${index + 1}`);
+                                                    setShowPageSelector(false);
+                                                    setShowPreviewLimitModal(true);
+                                                    return;
+                                                }
                                                 // Update both state AND ref so audio plays from correct page
                                                 setCurrentPageIndex(index);
                                                 currentPageIndexRef.current = index;
@@ -5104,20 +5149,25 @@ const BookReaderPage: React.FC = () => {
                                                 setWordAlignment(null);
                                                 wordAlignmentRef.current = null;
                                             }}
-                                            className={`relative aspect-square rounded-xl transition-all active:scale-95 flex items-center justify-center ${
-                                                isCurrentPage 
-                                                    ? 'bg-[#FFD700] text-[#3E2723] shadow-lg scale-105 ring-2 ring-[#FFA000]' 
-                                                    : 'bg-[#8B4513]/20 text-[#5D4037] hover:bg-[#8B4513]/40'
+                                            disabled={isLocked}
+                                            className={`relative aspect-square rounded-xl transition-all flex items-center justify-center ${
+                                                isLocked
+                                                    ? 'bg-gray-400/20 text-gray-400 cursor-not-allowed'
+                                                    : isCurrentPage 
+                                                        ? 'bg-[#FFD700] text-[#3E2723] shadow-lg scale-105 ring-2 ring-[#FFA000] active:scale-95' 
+                                                        : 'bg-[#8B4513]/20 text-[#5D4037] hover:bg-[#8B4513]/40 active:scale-95'
                                             }`}
                                         >
-                                            {isTheEnd ? (
+                                            {isLocked ? (
+                                                <Lock className="w-5 h-5" />
+                                            ) : isTheEnd ? (
                                                 <span className="font-bold text-sm">END</span>
                                             ) : (
                                                 <span className="font-bold text-xl">{index + 1}</span>
                                             )}
                                             
                                             {/* Current Page Indicator */}
-                                            {isCurrentPage && (
+                                            {isCurrentPage && !isLocked && (
                                                 <div className="absolute -top-1 -right-1 bg-[#4CAF50] rounded-full p-0.5 shadow">
                                                     <Check className="w-3 h-3 text-white" />
                                                 </div>
@@ -5627,10 +5677,15 @@ const BookReaderPage: React.FC = () => {
                                     🌟 Unlock Full Access
                                 </button>
                                 <button
-                                    onClick={() => setShowPreviewLimitModal(false)}
+                                    onClick={() => {
+                                        setShowPreviewLimitModal(false);
+                                        // Navigate back to book detail page
+                                        const detailUrl = bookDetailUrl || (bookId ? `/book/${bookId}` : '/read');
+                                        navigate(detailUrl);
+                                    }}
                                     className="w-full bg-white/10 text-white/70 font-medium px-8 py-3 rounded-xl hover:bg-white/20 transition-colors"
                                 >
-                                    Keep Reading Preview
+                                    Back to Book Details
                                 </button>
                             </div>
                             

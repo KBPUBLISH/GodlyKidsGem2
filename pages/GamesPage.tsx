@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { Gamepad2, Lock } from 'lucide-react';
 import { ApiService } from '../services/apiService';
 import { useUser } from '../context/UserContext';
+import { useSubscription } from '../context/SubscriptionContext';
 import AvatarCompositor from '../components/avatar/AvatarCompositor';
 
 const WARRIOR_ISLAND = '/assets/images/warrior-island.png';
@@ -25,6 +26,7 @@ interface GameItem {
 
 const GamesPage: React.FC = () => {
   const navigate = useNavigate();
+  const { isPremium } = useSubscription();
   const {
     coins, spendCoins,
     equippedAvatar, equippedHat, equippedBody, equippedLeftArm, equippedRightArm, equippedLegs,
@@ -85,6 +87,13 @@ const GamesPage: React.FC = () => {
   };
 
   const handleGameClick = (game: GameItem) => {
+    // If game is locked and user is not premium, go to paywall
+    if (game.isPurchasable && !isPremium) {
+      navigate('/paywall');
+      return;
+    }
+    
+    // Otherwise, play the game
     if (game.url) {
       navigate(`/game?url=${encodeURIComponent(game.url)}&name=${encodeURIComponent(game.name)}`);
     } else {

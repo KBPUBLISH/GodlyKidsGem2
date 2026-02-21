@@ -546,8 +546,33 @@ export const ApiService = {
     }
   },
 
-  // Get featured episodes (individual playlist items marked as featured)
-  // No cache so portal edits show up in the app immediately
+  getFeaturedAudioContent: async (): Promise<any[]> => {
+    try {
+      const [playlists, episodes] = await Promise.all([
+        ApiService.getFeaturedPlaylists(),
+        ApiService.getFeaturedEpisodes(),
+      ]);
+      const combined: any[] = [
+        ...playlists.map(p => ({ ...p, _itemType: 'playlist' as const })),
+        ...episodes.map(e => ({
+          ...e,
+          _id: `episode_${e.playlist._id}_${e.itemIndex}`,
+          _itemType: 'episode' as const,
+          title: e.title,
+          coverImage: e.coverImage || e.playlist?.coverImage,
+          coverUrl: e.coverImage || e.playlist?.coverImage,
+          _playlistId: e.playlist._id,
+          _trackIndex: e.itemIndex,
+        })),
+      ];
+      combined.sort((a, b) => (a.featuredOrder ?? 0) - (b.featuredOrder ?? 0));
+      return combined;
+    } catch (error) {
+      console.warn("Failed to fetch featured audio content:", error);
+      return [];
+    }
+  },
+
   getFeaturedEpisodes: async (): Promise<FeaturedEpisode[]> => {
     try {
       const baseUrl = getApiBaseUrl();

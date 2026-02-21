@@ -121,7 +121,7 @@ const SHOP_ANIMATIONS: ShopItem[] = [
 // Background themes - purchasable with gold coins
 const SHOP_BACKGROUNDS: ShopItem[] = [
     // Default (free - already owned by everyone)
-    { id: 'bg1', name: 'Ocean Paradise', price: 0, type: 'background', value: '/assets/images/panorama-background.png' },
+    { id: 'bg1', name: 'Ocean Paradise', price: 0, type: 'background', value: '/assets/images/panorama-background.webp' },
     // Purchasable backgrounds (non-premium - anyone can buy with coins)
     { id: 'bg6', name: 'Tropical Beach', price: 250, type: 'background', value: '/assets/images/bg-beach.jpg' },
     { id: 'bg7', name: 'Golden Sunrise', price: 300, type: 'background', value: '/assets/images/bg-sunrise.jpg' },

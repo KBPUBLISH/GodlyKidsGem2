@@ -798,10 +798,10 @@ const BookDetailPage: React.FC = () => {
                 {(book as any).createdForSelfieUrl ? (
                   <img src={(book as any).createdForSelfieUrl} alt="" className="w-full h-full object-cover" />
                 ) : (
-                  <img src="/assets/images/create-story-kid-photo.png" alt="" className="w-full h-full object-cover" />
+                  <img src="/assets/images/create-story-kid-photo.webp" alt="" className="w-full h-full object-cover" />
                 )}
               </div>
-              <img src="/assets/images/create-story-arrow.png" alt="" className="max-h-10 sm:max-h-12 w-auto object-contain flex-shrink-0" aria-hidden />
+              <img src="/assets/images/create-story-arrow.webp" alt="" className="max-h-10 sm:max-h-12 w-auto object-contain flex-shrink-0" aria-hidden />
               <div className="rounded-xl overflow-hidden border-2 border-[#5c2e0b]/40 shadow flex-shrink-0 rotate-3 max-h-[72px] sm:max-h-[88px] aspect-square bg-[#5c2e0b]/20">
                 {((book as any).createdForCharacters && (book as any).createdForCharacters[0]?.characterImageUrl) ? (
                   <img src={(book as any).createdForCharacters[0].characterImageUrl} alt="" className="w-full h-full object-cover object-center" />
@@ -850,7 +850,7 @@ const BookDetailPage: React.FC = () => {
                         />
                       ) : (
                         <img
-                          src="/assets/images/create-story-kid-photo.png"
+                          src="/assets/images/create-story-kid-photo.webp"
                           alt=""
                           aria-hidden
                           className="w-full h-full object-cover"
@@ -858,7 +858,7 @@ const BookDetailPage: React.FC = () => {
                       )}
                     </div>
                     <img
-                      src="/assets/images/create-story-arrow.png"
+                      src="/assets/images/create-story-arrow.webp"
                       alt=""
                       aria-hidden
                       className="max-h-[48px] sm:max-h-[56px] w-auto object-contain flex-shrink-0"

@@ -539,11 +539,11 @@ const CreateYourStoryPage: React.FC = () => {
   const isPickStoryStep = !submitted && step === 3;
   const isStep4 = !submitted && step === 4;
   const pageBg = isScreenOne
-    ? { backgroundImage: 'url(/assets/images/create-story-screen1-background.png)', backgroundSize: 'cover', backgroundPosition: 'center' }
+    ? { backgroundImage: 'url(/assets/images/create-story-screen1-background.webp)', backgroundSize: 'cover', backgroundPosition: 'center' }
     : isStyleStep || isPickStoryStep
-      ? { backgroundImage: 'url(/assets/images/create-story-style-background.png)', backgroundSize: 'cover', backgroundPosition: 'center' }
+      ? { backgroundImage: 'url(/assets/images/create-story-style-background.webp)', backgroundSize: 'cover', backgroundPosition: 'center' }
       : isStep4
-        ? { backgroundImage: 'url(/assets/images/create-story-stage-background.png)', backgroundSize: 'cover', backgroundPosition: 'center' }
+        ? { backgroundImage: 'url(/assets/images/create-story-stage-background.webp)', backgroundSize: 'cover', backgroundPosition: 'center' }
         : undefined;
   return (
     <div
@@ -632,7 +632,7 @@ const CreateYourStoryPage: React.FC = () => {
                     </h2>
                   ) : (
                     <img
-                      src="/assets/images/create-story-header.png"
+                      src="/assets/images/create-story-header.webp"
                       alt="Jump into the Bible! Create your own Story!"
                       className="max-w-[280px] w-full block"
                       onError={() => setStep1HeaderImageError(true)}
@@ -641,7 +641,7 @@ const CreateYourStoryPage: React.FC = () => {
                 </div>
                 <div
                   className="relative w-full max-w-7xl mx-auto bg-no-repeat bg-center bg-contain min-h-[280px] flex items-center justify-center py-8 px-6 sm:px-10 flex-shrink-0 -mt-12"
-                  style={{ backgroundImage: 'url(/assets/images/create-story-cloud-input.png)' }}
+                  style={{ backgroundImage: 'url(/assets/images/create-story-cloud-input.webp)' }}
                 >
                   <input
                     type="text"
@@ -690,7 +690,7 @@ const CreateYourStoryPage: React.FC = () => {
                     </span>
                   ) : (
                     <img
-                      src="/assets/images/create-story-next-button.png"
+                      src="/assets/images/create-story-next-button.webp"
                       alt="Next"
                       className="max-w-[210px] w-full h-auto object-contain"
                       onError={() => setStep1NextImageError(true)}
@@ -709,7 +709,7 @@ const CreateYourStoryPage: React.FC = () => {
               <div className="flex flex-col items-center min-h-[100dvh] w-full pt-6 -mb-12">
                 <div className="flex justify-center flex-shrink-0">
                   <img
-                    src="/assets/images/create-story-you-are-the-character.png"
+                    src="/assets/images/create-story-you-are-the-character.webp"
                     alt=""
                     aria-hidden
                     className="max-w-[340px] w-full h-auto block"
@@ -723,19 +723,19 @@ const CreateYourStoryPage: React.FC = () => {
                     </p>
                     <div className="flex-shrink-0 flex items-end justify-center gap-2 sm:gap-3 mt-2 mb-4">
                       <img
-                        src="/assets/images/create-story-kid-photo.png"
+                        src="/assets/images/create-story-kid-photo.webp"
                         alt=""
                         aria-hidden
                         className="max-h-[100px] sm:max-h-[120px] w-auto object-contain -rotate-6"
                       />
                       <img
-                        src="/assets/images/create-story-arrow.png"
+                        src="/assets/images/create-story-arrow.webp"
                         alt=""
                         aria-hidden
                         className="max-h-[64px] sm:max-h-[80px] w-auto object-contain flex-shrink-0"
                       />
                       <img
-                        src="/assets/images/create-story-port-character.png"
+                        src="/assets/images/create-story-port-character.webp"
                         alt=""
                         aria-hidden
                         className="max-h-[100px] sm:max-h-[120px] w-auto object-contain rotate-6"
@@ -753,7 +753,7 @@ const CreateYourStoryPage: React.FC = () => {
                         type="button"
                       >
                         <img
-                          src={`/assets/images/create-story-style-${style.id}.png`}
+                          src={`/assets/images/create-story-style-${style.id}.webp`}
                           alt={style.name}
                           className="w-full h-auto aspect-[3/4] object-contain object-top block"
                         />
@@ -787,7 +787,7 @@ const CreateYourStoryPage: React.FC = () => {
                               />
                             </div>
                             <img
-                              src="/assets/images/create-story-arrow.png"
+                              src="/assets/images/create-story-arrow.webp"
                               alt=""
                               aria-hidden
                               className="max-h-[64px] sm:max-h-[80px] w-auto object-contain flex-shrink-0"
@@ -808,7 +808,7 @@ const CreateYourStoryPage: React.FC = () => {
                         )}
                         <div className="relative w-full max-w-[320px] aspect-square mx-auto">
                           <img
-                            src="/assets/images/create-story-selfie-frame.png"
+                            src="/assets/images/create-story-selfie-frame.webp"
                             alt=""
                             aria-hidden
                             className="absolute inset-0 w-full h-full object-contain pointer-events-none"
@@ -863,7 +863,7 @@ const CreateYourStoryPage: React.FC = () => {
                               <>
                                 <div className="relative w-full max-w-[200px] aspect-square mx-auto">
                                   <img
-                                    src="/assets/images/create-story-selfie-frame.png"
+                                    src="/assets/images/create-story-selfie-frame.webp"
                                     alt=""
                                     aria-hidden
                                     className="absolute inset-0 w-full h-full object-contain pointer-events-none"
@@ -928,7 +928,7 @@ const CreateYourStoryPage: React.FC = () => {
                         </div>
                         <div className="relative w-full max-w-[320px] aspect-square mx-auto">
                         <img
-                          src="/assets/images/create-story-selfie-frame.png"
+                          src="/assets/images/create-story-selfie-frame.webp"
                           alt=""
                           aria-hidden
                           className="absolute inset-0 w-full h-full object-contain pointer-events-none"
@@ -1249,7 +1249,7 @@ const CreateYourStoryPage: React.FC = () => {
                     <div
                       className="fixed inset-0 z-[5] bg-cover bg-center pointer-events-none"
                       style={{
-                        backgroundImage: 'url(/assets/images/create-story-curtain.png)',
+                        backgroundImage: 'url(/assets/images/create-story-curtain.webp)',
                         backgroundPosition: 'center 28%',
                         animation: 'curtain-reveal 1.4s ease-out forwards',
                       }}
@@ -1273,7 +1273,7 @@ const CreateYourStoryPage: React.FC = () => {
                       </p>
                       <div className="flex justify-center w-full">
                         <img
-                          src="/assets/images/create-story-ready-text.png"
+                          src="/assets/images/create-story-ready-text.webp"
                           alt="Ready to create your story!"
                           className="max-w-[min(320px,85vw)] w-full h-auto"
                         />
@@ -1287,7 +1287,7 @@ const CreateYourStoryPage: React.FC = () => {
                       key="curtain-close"
                       className="fixed inset-0 z-[5] bg-cover bg-center pointer-events-none"
                       style={{
-                        backgroundImage: 'url(/assets/images/create-story-curtain.png)',
+                        backgroundImage: 'url(/assets/images/create-story-curtain.webp)',
                         animation: 'curtain-close 1s ease-out forwards',
                       }}
                       aria-hidden
@@ -1424,7 +1424,7 @@ const CreateYourStoryPage: React.FC = () => {
           setEditingExtraIndex(null);
         }}
         childName={editingExtraIndex !== null ? (extraCharacters[editingExtraIndex]?.name || 'Character') : (childName || 'there')}
-        frameOverlayImageUrl="/assets/images/create-story-selfie-porthole-overlay.png"
+        frameOverlayImageUrl="/assets/images/create-story-selfie-porthole-overlay.webp"
       />
 
       <CharacterStyleSelector

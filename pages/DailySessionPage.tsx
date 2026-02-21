@@ -36,14 +36,14 @@ import { isValidBookId } from '../utils/bookUtils';
 
 // Learning goals options with character block images
 const LEARNING_GOALS = [
-  { id: 'courage', label: 'Courage', emoji: '🦁', color: 'from-orange-500 to-red-600', image: '/daily-session/blocks/courage.png' },
-  { id: 'faith', label: 'Faith', emoji: '🙏', color: 'from-purple-500 to-indigo-600', image: '/daily-session/blocks/faith.png' },
-  { id: 'gratitude', label: 'Gratitude', emoji: '💝', color: 'from-pink-500 to-rose-600', image: '/daily-session/blocks/gratitude.png' },
-  { id: 'love', label: 'Love', emoji: '❤️', color: 'from-red-500 to-pink-600', image: '/daily-session/blocks/love.png' },
-  { id: 'obedience', label: 'Obedience', emoji: '👂', color: 'from-blue-500 to-cyan-600', image: '/daily-session/blocks/obedience.png' },
-  { id: 'self-control', label: 'Self-Control', emoji: '🎯', color: 'from-green-500 to-emerald-600', image: '/daily-session/blocks/selfcontrol.png' },
-  { id: 'theology', label: 'Theology', emoji: '✝️', color: 'from-amber-500 to-orange-600', image: '/daily-session/blocks/theology.png' },
-  { id: 'wisdom', label: 'Wisdom', emoji: '🦉', color: 'from-indigo-500 to-purple-600', image: '/daily-session/blocks/wisdom.png' },
+  { id: 'courage', label: 'Courage', emoji: '🦁', color: 'from-orange-500 to-red-600', image: '/daily-session/blocks/courage.webp' },
+  { id: 'faith', label: 'Faith', emoji: '🙏', color: 'from-purple-500 to-indigo-600', image: '/daily-session/blocks/faith.webp' },
+  { id: 'gratitude', label: 'Gratitude', emoji: '💝', color: 'from-pink-500 to-rose-600', image: '/daily-session/blocks/gratitude.webp' },
+  { id: 'love', label: 'Love', emoji: '❤️', color: 'from-red-500 to-pink-600', image: '/daily-session/blocks/love.webp' },
+  { id: 'obedience', label: 'Obedience', emoji: '👂', color: 'from-blue-500 to-cyan-600', image: '/daily-session/blocks/obedience.webp' },
+  { id: 'self-control', label: 'Self-Control', emoji: '🎯', color: 'from-green-500 to-emerald-600', image: '/daily-session/blocks/selfcontrol.webp' },
+  { id: 'theology', label: 'Theology', emoji: '✝️', color: 'from-amber-500 to-orange-600', image: '/daily-session/blocks/theology.webp' },
+  { id: 'wisdom', label: 'Wisdom', emoji: '🦉', color: 'from-indigo-500 to-purple-600', image: '/daily-session/blocks/wisdom.webp' },
 ];
 
 // Wing animation CSS

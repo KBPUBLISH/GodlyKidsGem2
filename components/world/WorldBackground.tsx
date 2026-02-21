@@ -1,8 +1,8 @@
 import React from 'react';
 
 /** Default world background - use custom /world-background.png in public/ when provided, else panorama */
-const DEFAULT_WORLD_BACKGROUND = '/world-background.png';
-const FALLBACK_BACKGROUND = '/assets/images/panorama-background.png';
+const DEFAULT_WORLD_BACKGROUND = '/world-background.webp';
+const FALLBACK_BACKGROUND = '/assets/images/panorama-background.webp';
 
 export interface WorldBackgroundProps {
   /** Optional custom background URL. Defaults to /world-background.png */

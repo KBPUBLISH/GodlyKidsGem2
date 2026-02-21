@@ -6,8 +6,8 @@ import { useUser } from '../context/UserContext';
 import { useSubscription } from '../context/SubscriptionContext';
 import AvatarCompositor from '../components/avatar/AvatarCompositor';
 
-const WARRIOR_ISLAND = '/assets/images/warrior-island.png';
-const ISLAND_BUTTON = '/assets/images/island-button.png';
+const WARRIOR_ISLAND = '/assets/images/warrior-island.webp';
+const ISLAND_BUTTON = '/assets/images/island-button.webp';
 
 interface GameItem {
   _id?: string;

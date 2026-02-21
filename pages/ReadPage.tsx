@@ -41,12 +41,12 @@ const CATEGORY_CONFIG: Record<string, { icon: any; bgColor: string }> = {
   'default': { icon: Crown, bgColor: 'from-slate-400 to-slate-600' },
 };
 
-const SCHOLAR_ISLAND = '/assets/images/scholar-island.png';
-const WHIRLPOOL = '/assets/images/whirlpool.png';
-const BOOK_ISLAND = '/assets/images/book-island.png';
-const BIBLE_RAFT = '/assets/images/bible-raft.png';
-const SCHOLAR_BUTTON = '/assets/images/scholar-island-button.png';
-const ISLAND_BUTTON = '/assets/images/island-button.png';
+const SCHOLAR_ISLAND = '/assets/images/scholar-island.webp';
+const WHIRLPOOL = '/assets/images/whirlpool.webp';
+const BOOK_ISLAND = '/assets/images/book-island.webp';
+const BIBLE_RAFT = '/assets/images/bible-raft.webp';
+const SCHOLAR_BUTTON = '/assets/images/scholar-island-button.webp';
+const ISLAND_BUTTON = '/assets/images/island-button.webp';
 
 const SeriesCard: React.FC<{ series: any; onClick: () => void; isSubscribed?: boolean }> = ({ series, onClick, isSubscribed }) => (
   <button type="button" onClick={onClick} className="w-full cursor-pointer select-none focus:outline-none group text-left">

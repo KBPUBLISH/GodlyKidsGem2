@@ -235,7 +235,7 @@ const SelfieCapture: React.FC<SelfieCaptureProps> = ({
                   <div
                     className="absolute inset-0 pointer-events-none bg-cover bg-center"
                     style={{
-                      backgroundImage: 'url(/assets/images/create-story-style-background.png)',
+                      backgroundImage: 'url(/assets/images/create-story-style-background.webp)',
                       WebkitMaskImage: 'radial-gradient(circle at center, transparent 58%, black 58%)',
                       maskImage: 'radial-gradient(circle at center, transparent 58%, black 58%)',
                     }}
@@ -265,7 +265,7 @@ const SelfieCapture: React.FC<SelfieCaptureProps> = ({
                 <div
                   className="absolute inset-0 pointer-events-none bg-cover bg-center"
                   style={{
-                    backgroundImage: 'url(/assets/images/create-story-style-background.png)',
+                    backgroundImage: 'url(/assets/images/create-story-style-background.webp)',
                     WebkitMaskImage: 'radial-gradient(circle at center, transparent 58%, black 58%)',
                     maskImage: 'radial-gradient(circle at center, transparent 58%, black 58%)',
                   }}

@@ -208,7 +208,7 @@ const LandingPage: React.FC = () => {
         
         {/* Family Image */}
         <img 
-          src="/splash-family.jpg" 
+          src="/splash-family.webp" 
           alt="Parent and child learning together"
           className={`w-full h-full object-cover object-top transition-opacity duration-500 ${imageLoaded ? 'opacity-100' : 'opacity-0'}`}
           onLoad={() => setImageLoaded(true)}

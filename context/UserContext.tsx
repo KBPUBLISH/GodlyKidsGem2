@@ -178,7 +178,7 @@ const UserContext = createContext<UserContextType>({
   equippedRightArm: null,
   equippedLegs: null,
   equippedAnimation: 'anim-breathe',
-  equippedBackground: '/assets/images/panorama-background.png',
+  equippedBackground: '/assets/images/panorama-background.webp',
   setEquippedBackground: () => {},
   equippedLeftArmRotation: 0,
   equippedRightArmRotation: 0,
@@ -363,11 +363,10 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [equippedWheel, setEquippedWheel] = useState<string | null>(saved?.equippedWheel ?? null);
   const [equippedPet, setEquippedPet] = useState<string | null>(saved?.equippedPet ?? null);
   
-  // Background customization - migrate legacy .jpg path to .png
-  const defaultBg = '/assets/images/panorama-background.png';
+  const defaultBg = '/assets/images/panorama-background.webp';
   const rawBg = saved?.equippedBackground ?? defaultBg;
   const [equippedBackground, setEquippedBackground] = useState<string>(
-    rawBg === '/assets/images/panorama-background.jpg' ? defaultBg : rawBg
+    rawBg === '/assets/images/panorama-background.jpg' || rawBg === '/assets/images/panorama-background.png' ? defaultBg : rawBg
   );
   
   // Rotation State (Defaults to 0)

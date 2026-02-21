@@ -85,7 +85,7 @@ const BookCreatingPage: React.FC = () => {
   if (loading && !status) {
     return (
       <>
-        <div className="fixed inset-0 z-0 bg-cover bg-center pointer-events-none" style={{ backgroundImage: 'url(/assets/images/create-story-curtain.png)' }} aria-hidden />
+        <div className="fixed inset-0 z-0 bg-cover bg-center pointer-events-none" style={{ backgroundImage: 'url(/assets/images/create-story-curtain.webp)' }} aria-hidden />
         <Header isVisible={true} title="MY LIBRARY" />
         <div className="relative z-10 flex flex-col min-h-full items-center justify-center px-4 pt-24">
           <Loader2 className="w-12 h-12 text-amber-400 animate-spin mb-4" />
@@ -98,7 +98,7 @@ const BookCreatingPage: React.FC = () => {
   if (error && !status) {
     return (
       <>
-        <div className="fixed inset-0 z-0 bg-cover bg-center pointer-events-none" style={{ backgroundImage: 'url(/assets/images/create-story-curtain.png)' }} aria-hidden />
+        <div className="fixed inset-0 z-0 bg-cover bg-center pointer-events-none" style={{ backgroundImage: 'url(/assets/images/create-story-curtain.webp)' }} aria-hidden />
         <Header isVisible={true} title="MY LIBRARY" />
         <div className="relative z-10 flex flex-col min-h-full items-center justify-center px-4 pt-24">
           <AlertCircle className="w-12 h-12 text-red-400 mb-4" />
@@ -126,7 +126,7 @@ const BookCreatingPage: React.FC = () => {
       {/* Theatrical curtain background (same as Create Your Story creating view) */}
       <div
         className="fixed inset-0 z-0 bg-cover bg-center pointer-events-none"
-        style={{ backgroundImage: 'url(/assets/images/create-story-curtain.png)' }}
+        style={{ backgroundImage: 'url(/assets/images/create-story-curtain.webp)' }}
         aria-hidden
       />
       <Header isVisible={true} title="MY LIBRARY" />

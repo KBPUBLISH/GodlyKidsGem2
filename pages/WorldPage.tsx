@@ -6,9 +6,9 @@ import { activityTrackingService } from '../services/activityTrackingService';
 
 const DailyVerseModal = lazy(() => import('../components/modals/DailyVerseModal'));
 
-const DAILY_ADVENTURE_ISLAND = '/assets/images/daily-adventure-island.png';
-const VOLCANO_ISLAND = '/assets/images/volcano-island.png';
-const ISLAND_BUTTON = '/assets/images/island-button.png';
+const DAILY_ADVENTURE_ISLAND = '/assets/images/daily-adventure-island.webp';
+const VOLCANO_ISLAND = '/assets/images/volcano-island.webp';
+const ISLAND_BUTTON = '/assets/images/island-button.webp';
 
 const ISLAND_WIDTH = 240;   /* ~10% larger than before */
 const ISLAND_MAX_WIDTH = 273;
@@ -270,7 +270,7 @@ export const PersistentWorldIsland: React.FC = () => {
           aria-label="Open Memory Bible Challenge"
         >
           <img
-            src="/assets/images/wooden-raft.png"
+            src="/assets/images/wooden-raft.webp"
             alt="Daily Chest"
             className="w-full h-auto relative"
           />

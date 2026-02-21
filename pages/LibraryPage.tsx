@@ -515,7 +515,7 @@ const LibraryPage: React.FC = () => {
             aria-label="Start Story Adventure - Create your story"
           >
             <img
-              src="/assets/images/dive-into-bible-button.png"
+              src="/assets/images/dive-into-bible-button.webp"
               alt="Dive into The Bible - Start Story Adventure"
               className="w-full h-auto block rounded-2xl shadow-[0_4px_12px_rgba(0,0,0,0.08),0_8px_24px_rgba(0,0,0,0.06)]"
             />

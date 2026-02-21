@@ -248,7 +248,7 @@ const BottomNavigation: React.FC = () => {
           right: 0,
           height: 218,
           bottom: isPlayerActive ? -60 : -80,
-          backgroundImage: 'url(/assets/images/wheel-background-wood.png)',
+          backgroundImage: 'url(/assets/images/wheel-background-wood.webp)',
           backgroundSize: 'cover',
           backgroundPosition: 'center bottom',
         }}

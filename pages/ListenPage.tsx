@@ -60,8 +60,8 @@ interface CategoryData {
   icon?: string;
 }
 
-const HEADPHONE_ISLAND = '/assets/images/headphone-island.png';
-const MUSIC_ISLAND = '/assets/images/music-island.png';
+const HEADPHONE_ISLAND = '/assets/images/headphone-island.webp';
+const MUSIC_ISLAND = '/assets/images/music-island.webp';
 
 const ListenPage: React.FC = () => {
 
@@ -960,13 +960,13 @@ const ListenPage: React.FC = () => {
             {/* Floating music notes */}
             <div className="absolute pointer-events-none overflow-visible" style={{ zIndex: 3, left: '10%', right: '10%', top: '-15%', bottom: '0%' }}>
               {/* Left side notes */}
-              <img src="/assets/images/music-note-orange.png" alt="" className="absolute listen-note-float" style={{ width: 20, left: '0%', top: '15%', animationDelay: '0s' }} />
-              <img src="/assets/images/music-note-purple.png" alt="" className="absolute listen-note-float" style={{ width: 15, left: '8%', top: '40%', animationDelay: '2s' }} />
-              <img src="/assets/images/music-note-yellow.png" alt="" className="absolute listen-note-float" style={{ width: 17, left: '15%', top: '5%', animationDelay: '3.2s' }} />
+              <img src="/assets/images/music-note-orange.webp" alt="" className="absolute listen-note-float" style={{ width: 20, left: '0%', top: '15%', animationDelay: '0s' }} />
+              <img src="/assets/images/music-note-purple.webp" alt="" className="absolute listen-note-float" style={{ width: 15, left: '8%', top: '40%', animationDelay: '2s' }} />
+              <img src="/assets/images/music-note-yellow.webp" alt="" className="absolute listen-note-float" style={{ width: 17, left: '15%', top: '5%', animationDelay: '3.2s' }} />
               {/* Right side notes */}
-              <img src="/assets/images/music-note-yellow.png" alt="" className="absolute listen-note-float" style={{ width: 18, right: '0%', top: '12%', animationDelay: '1s' }} />
-              <img src="/assets/images/music-note-orange.png" alt="" className="absolute listen-note-float" style={{ width: 14, right: '10%', top: '38%', animationDelay: '2.8s' }} />
-              <img src="/assets/images/music-note-purple.png" alt="" className="absolute listen-note-float" style={{ width: 16, right: '5%', top: '0%', animationDelay: '0.6s' }} />
+              <img src="/assets/images/music-note-yellow.webp" alt="" className="absolute listen-note-float" style={{ width: 18, right: '0%', top: '12%', animationDelay: '1s' }} />
+              <img src="/assets/images/music-note-orange.webp" alt="" className="absolute listen-note-float" style={{ width: 14, right: '10%', top: '38%', animationDelay: '2.8s' }} />
+              <img src="/assets/images/music-note-purple.webp" alt="" className="absolute listen-note-float" style={{ width: 16, right: '5%', top: '0%', animationDelay: '0.6s' }} />
             </div>
             <button
               type="button"
@@ -992,7 +992,7 @@ const ListenPage: React.FC = () => {
             aria-label="Audio Adventure Island"
           >
             <img
-              src="/assets/images/audio-adventure-button.png"
+              src="/assets/images/audio-adventure-button.webp"
               alt="Audio Adventure Island"
               className="w-full h-auto object-contain rounded-2xl"
             />

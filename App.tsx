@@ -1,5 +1,5 @@
 
-import React, { useMemo, useEffect, useState, useRef, useCallback } from 'react';
+import React, { useMemo, useEffect, useLayoutEffect, useState, useRef, useCallback } from 'react';
 import { HashRouter, Routes, Route, useLocation, Navigate, useNavigate } from 'react-router-dom';
 import LandingPage from './pages/LandingPage';
 import SignInPage from './pages/SignInPage';
@@ -987,21 +987,21 @@ const CloudSVG: React.FC<{ width: number; opacity?: number; flip?: boolean }> = 
 );
 
 const PRELOAD_IMAGES = [
-  '/assets/images/daily-adventure-island.png',
-  '/assets/images/volcano-island.png',
-  '/assets/images/wooden-raft.png',
-  '/assets/images/island-button.png',
-  '/assets/images/headphone-island.png',
-  '/assets/images/music-island.png',
-  '/assets/images/music-note-orange.png',
-  '/assets/images/music-note-purple.png',
-  '/assets/images/music-note-yellow.png',
-  '/assets/images/audio-adventure-button.png',
-  '/assets/images/scholar-island.png',
-  '/assets/images/scholar-island-button.png',
-  '/assets/images/whirlpool.png',
-  '/assets/images/book-island.png',
-  '/assets/images/bible-raft.png',
+  '/assets/images/daily-adventure-island.webp',
+  '/assets/images/volcano-island.webp',
+  '/assets/images/wooden-raft.webp',
+  '/assets/images/island-button.webp',
+  '/assets/images/headphone-island.webp',
+  '/assets/images/music-island.webp',
+  '/assets/images/music-note-orange.webp',
+  '/assets/images/music-note-purple.webp',
+  '/assets/images/music-note-yellow.webp',
+  '/assets/images/audio-adventure-button.webp',
+  '/assets/images/scholar-island.webp',
+  '/assets/images/scholar-island-button.webp',
+  '/assets/images/whirlpool.webp',
+  '/assets/images/book-island.webp',
+  '/assets/images/bible-raft.webp',
 ];
 
 const AssetPreloader: React.FC = () => {
@@ -1201,23 +1201,9 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     }
   }, []);
 
-  useEffect(() => {
-    try {
-      (window as any).__GK_TRACE__?.('route_change', { path: location.pathname, hash: location.hash, search: location.search });
-      
-      activityTrackingService.trackPageVisit(location.pathname);
-      
-      if ((window as any).__GK_IS_DESPIA__ && location.pathname && location.pathname !== '/') {
-        if (location.pathname.startsWith('/game')) {
-          console.log('📱 Despia: Skipping route save for game page');
-          localStorage.removeItem('gk_last_route');
-        } else {
-          const routeToSave = `#${location.pathname}${location.search || ''}`;
-          localStorage.setItem('gk_last_route', routeToSave);
-        }
-      }
-    } catch {}
-
+  // Transition detection runs in useLayoutEffect so the new page starts hidden
+  // before the browser paints — prevents the one-frame flash of incoming content.
+  useLayoutEffect(() => {
     const wasMainPage = MAIN_NAV_PAGES.includes(prevPathRef.current);
     const isMainPage = MAIN_NAV_PAGES.includes(location.pathname);
     const pathChanged = prevPathRef.current !== location.pathname;
@@ -1232,6 +1218,22 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     return () => {
       if (fadeTimerRef.current) clearTimeout(fadeTimerRef.current);
     };
+  }, [location.pathname]);
+
+  useEffect(() => {
+    try {
+      (window as any).__GK_TRACE__?.('route_change', { path: location.pathname, hash: location.hash, search: location.search });
+      activityTrackingService.trackPageVisit(location.pathname);
+      if ((window as any).__GK_IS_DESPIA__ && location.pathname && location.pathname !== '/') {
+        if (location.pathname.startsWith('/game')) {
+          console.log('📱 Despia: Skipping route save for game page');
+          localStorage.removeItem('gk_last_route');
+        } else {
+          const routeToSave = `#${location.pathname}${location.search || ''}`;
+          localStorage.setItem('gk_last_route', routeToSave);
+        }
+      }
+    } catch {}
   }, [location.pathname, location.hash, location.search]);
   
   // Check if running in Despia native runtime for safe area handling

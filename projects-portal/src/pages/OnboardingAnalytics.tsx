@@ -222,6 +222,36 @@ interface BookBuildingData {
     };
 }
 
+/** Global paywall analytics (all sources) */
+interface PaywallData {
+    success: boolean;
+    period: { days: number; startDate: string };
+    summary: {
+        paywallShown: number;
+        trialClicked: number;
+        totalSubscribed: number;
+        conversionRate: number;
+        purchaseError: number;
+        purchaseCancelled: number;
+        paywallClosed: number;
+    };
+    funnel: FunnelStep[];
+    sourceBreakdown: Record<string, {
+        paywallShown: number;
+        trialClicked: number;
+        subscribed: number;
+    }>;
+    dailyTrends: {
+        date: string;
+        paywallShown: number;
+        trialClicked: number;
+        subscribed: number;
+        purchaseError: number;
+        purchaseCancelled: number;
+        paywallClosed: number;
+    }[];
+}
+
 // API Base URL
 const getApiBase = () => {
     let base = import.meta.env.VITE_API_BASE_URL || 'https://backendgk2-0.onrender.com';
@@ -241,6 +271,7 @@ const OnboardingAnalytics: React.FC = () => {
     const [retentionData, setRetentionData] = useState<RetentionData | null>(null);
     const [surveyData, setSurveyData] = useState<SurveyData | null>(null);
     const [bookBuildingData, setBookBuildingData] = useState<BookBuildingData | null>(null);
+    const [paywallData, setPaywallData] = useState<PaywallData | null>(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [days, setDays] = useState(7);
@@ -251,13 +282,14 @@ const OnboardingAnalytics: React.FC = () => {
         setError(null);
         try {
             // Fetch onboarding, tutorial, preferences, retention, survey, and book-building data in parallel
-            const [onboardingRes, tutorialRes, preferencesRes, retentionRes, surveyRes, bookBuildingRes] = await Promise.all([
+            const [onboardingRes, tutorialRes, preferencesRes, retentionRes, surveyRes, bookBuildingRes, paywallRes] = await Promise.all([
                 fetch(`${API_BASE}/analytics/onboarding?days=${days}`),
                 fetch(`${API_BASE}/analytics/tutorial?days=${days}`),
                 fetch(`${API_BASE}/analytics/onboarding/preferences?days=${days}`),
                 fetch(`${API_BASE}/analytics/retention?days=${Math.max(days, 30)}`), // At least 30 days for retention
                 fetch(`${API_BASE}/survey/analytics?days=${days}`),
                 fetch(`${API_BASE}/analytics/onboarding/book-building?days=${days}`),
+                fetch(`${API_BASE}/analytics/paywall?days=${days}`),
             ]);
             
             const onboardingResult = await onboardingRes.json();
@@ -266,6 +298,7 @@ const OnboardingAnalytics: React.FC = () => {
             const retentionResult = await retentionRes.json();
             const surveyResult = await surveyRes.json();
             const bookBuildingResult = await bookBuildingRes.json();
+            const paywallResult = await paywallRes.json();
             
             if (onboardingResult.success) {
                 setData(onboardingResult);
@@ -284,6 +317,9 @@ const OnboardingAnalytics: React.FC = () => {
             }
             if (bookBuildingResult.success) {
                 setBookBuildingData(bookBuildingResult);
+            }
+            if (paywallResult.success) {
+                setPaywallData(paywallResult);
             }
             
             if (!onboardingResult.success && !tutorialResult.success) {
@@ -437,6 +473,24 @@ const OnboardingAnalytics: React.FC = () => {
                         {bookBuildingData && bookBuildingData.summary.totalStarted > 0 && (
                             <span className="bg-amber-100 text-amber-700 text-xs px-2 py-0.5 rounded-full">
                                 {bookBuildingData.summary.totalStarted}
+                            </span>
+                        )}
+                    </span>
+                </button>
+                <button
+                    onClick={() => setActiveTab('paywall')}
+                    className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                        activeTab === 'paywall'
+                            ? 'bg-white text-indigo-600 shadow-sm'
+                            : 'text-gray-600 hover:text-gray-800'
+                    }`}
+                >
+                    <span className="flex items-center gap-2">
+                        <Crown className="w-4 h-4" />
+                        Paywall
+                        {paywallData && paywallData.summary.paywallShown > 0 && (
+                            <span className="bg-green-100 text-green-700 text-xs px-2 py-0.5 rounded-full">
+                                {paywallData.summary.conversionRate}%
                             </span>
                         )}
                     </span>
@@ -1417,6 +1471,72 @@ const OnboardingAnalytics: React.FC = () => {
                 </div>
             )}
             </>
+            )}
+
+            {/* ============ PAYWALL TAB ============ */}
+            {activeTab === 'paywall' && paywallData && (
+            <>
+            <div className="bg-white rounded-xl border border-gray-100 p-6 shadow-sm mb-6">
+                <h3 className="text-lg font-semibold text-gray-800 mb-4">Summary</h3>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                    <div><span className="text-gray-500 text-sm">Paywall shown</span><p className="text-2xl font-bold text-gray-900">{paywallData.summary.paywallShown.toLocaleString()}</p></div>
+                    <div><span className="text-gray-500 text-sm">Trial clicked</span><p className="text-2xl font-bold text-blue-600">{paywallData.summary.trialClicked.toLocaleString()}</p></div>
+                    <div><span className="text-gray-500 text-sm">Subscribed</span><p className="text-2xl font-bold text-green-600">{paywallData.summary.totalSubscribed.toLocaleString()}</p></div>
+                    <div><span className="text-gray-500 text-sm">Conversion rate</span><p className="text-2xl font-bold text-purple-600">{paywallData.summary.conversionRate}%</p></div>
+                </div>
+                <div className="grid grid-cols-3 gap-4 mt-4 pt-4 border-t border-gray-200">
+                    <div><span className="text-gray-500 text-sm">Closed</span><p className="font-semibold text-gray-700">{paywallData.summary.paywallClosed.toLocaleString()}</p></div>
+                    <div><span className="text-gray-500 text-sm">Cancelled</span><p className="font-semibold text-orange-600">{paywallData.summary.purchaseCancelled.toLocaleString()}</p></div>
+                    <div><span className="text-gray-500 text-sm">Errors</span><p className="font-semibold text-red-600">{paywallData.summary.purchaseError.toLocaleString()}</p></div>
+                </div>
+            </div>
+            <div className="bg-white rounded-xl border border-gray-100 p-6 shadow-sm mb-6">
+                <h3 className="text-lg font-semibold text-gray-800 mb-4 flex items-center gap-2">
+                    <ChevronRight className="w-5 h-5 text-green-600" />
+                    Paywall funnel
+                </h3>
+                <div className="space-y-3">
+                    {paywallData.funnel.map((step, idx) => (
+                        <div key={step.stepKey || step.step} className="flex items-center gap-4">
+                            <div className="w-44 text-sm font-medium text-gray-700 flex items-center gap-2">
+                                <span className="w-6 h-6 rounded-full bg-green-100 text-green-700 text-xs flex items-center justify-center font-bold">{idx + 1}</span>
+                                <span className="truncate" title={step.step}>{step.step}</span>
+                            </div>
+                            <div className="flex-1 bg-gray-100 rounded-full h-8 overflow-hidden relative">
+                                <div className="h-full bg-gradient-to-r from-green-500 to-green-600 rounded-full transition-all duration-500" style={{ width: `${step.rate}%` }} />
+                                <div className="absolute inset-0 flex items-center justify-center">
+                                    <span className="text-sm font-semibold text-gray-700">{step.count.toLocaleString()} ({step.rate}%)</span>
+                                </div>
+                            </div>
+                        </div>
+                    ))}
+                </div>
+            </div>
+            <div className="bg-white rounded-xl border border-gray-100 p-6 shadow-sm mb-6">
+                <h3 className="text-lg font-semibold text-gray-800 mb-4">Paywall sources</h3>
+                <p className="text-sm text-gray-500 mb-4">Breakdown by where users encountered the paywall.</p>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    {Object.entries(paywallData.sourceBreakdown).map(([source, data]) => (
+                        <div key={source} className="bg-gray-50 rounded-lg p-4 border border-gray-200">
+                            <div className="font-semibold text-gray-900 mb-2 capitalize">{source}</div>
+                            <div className="space-y-1 text-sm">
+                                <div className="flex justify-between"><span className="text-gray-600">Shown:</span><span className="font-medium">{data.paywallShown}</span></div>
+                                <div className="flex justify-between"><span className="text-gray-600">Clicked:</span><span className="font-medium text-blue-600">{data.trialClicked}</span></div>
+                                <div className="flex justify-between"><span className="text-gray-600">Subscribed:</span><span className="font-medium text-green-600">{data.subscribed}</span></div>
+                                <div className="flex justify-between pt-1 border-t border-gray-300"><span className="text-gray-600">Conversion:</span><span className="font-semibold">{data.paywallShown > 0 ? Math.round((data.subscribed / data.paywallShown) * 100) : 0}%</span></div>
+                            </div>
+                        </div>
+                    ))}
+                </div>
+            </div>
+            </>
+            )}
+
+            {activeTab === 'paywall' && !paywallData?.success && (
+                <div className="bg-gray-50 rounded-xl p-12 text-center">
+                    <Crown className="w-16 h-16 mx-auto mb-4 text-gray-300" />
+                    <p className="text-gray-500">No paywall analytics data available for the selected period.</p>
+                </div>
             )}
 
             {activeTab === 'bookBuilding' && !bookBuildingData?.success && (

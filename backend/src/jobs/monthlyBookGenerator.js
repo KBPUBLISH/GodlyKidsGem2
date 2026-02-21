@@ -112,9 +112,13 @@ async function adaptPageTextForCharacters(pageText, characterNames) {
         return substituteChildName(pageText, names[0]);
     }
     const namesList = names.length === 2 ? `${names[0]} and ${names[1]}` : `${names.slice(0, -1).join(', ')}, and ${names[names.length - 1]}`;
-    const userPrompt = `This is one page of a children's story. The following characters are in the story: ${names.join(', ')}.
+    const userPrompt = `This is one page of a children's Bible story. The kids in the story are: ${namesList}.
 
-Rewrite the following text so it naturally includes all of them when appropriate (e.g. "Sarah and Jake went" for two characters, or "Sarah, Jake, and Emma" for three). Keep the same tone, length, and meaning. Vary phrasing so you don't repeat "X and Y" in every sentence. Output ONLY the rewritten text, no explanation or quotes.
+The text below uses {childName} as a placeholder for the kids' names. Replace every {childName} placeholder with the kids' names (${namesList}), naturally varying which kid is mentioned. For two kids, alternate or group them (e.g. "${names[0]} and ${names[1]} walked together"). For three, vary who is mentioned each sentence.
+
+CRITICAL: Do NOT change any other names that already appear in the text. Biblical and story character names (like David, Goliath, Moses, Jesus, Mary, Joseph, Daniel, Jonah, Noah, Esther, Ruth, Abraham, etc.) must remain EXACTLY as written. Only replace {childName} placeholders — never swap a biblical character's name with a kid's name.
+
+Keep the same tone, length, and meaning. Output ONLY the rewritten text, no explanation or quotes.
 
 TEXT TO REWRITE:
 """
@@ -769,7 +773,7 @@ async function generateCoverImageForBook(customBook, sourceBook) {
  * Run monthly book generation from a Book Builder book (sourceBookId).
  * Loads Book + Pages, substitutes {childName}, generates background images, creates new Book.
  */
-async function runMonthlyBookGenerationFromBook(customMonthlyBookId, custom, sourceBook) {
+async function runMonthlyBookGenerationFromBook(customMonthlyBookId, custom, sourceBook, generationNonce) {
     const character = sourceBook.featuredCharacterId || {};
     const characterStylePrompt = character.stylePrompt || 'children\'s book illustration style';
     // Main character (kid) style — how the kid is drawn (e.g. Lego); from character creation or book flow.
@@ -851,6 +855,14 @@ async function runMonthlyBookGenerationFromBook(customMonthlyBookId, custom, sou
     };
 
     for (let i = startIndex; i < pagesToProcess.length; i++) {
+        // Check if a newer generation (retry) has taken over — if so, stop gracefully
+        if (generationNonce) {
+            const fresh = await CustomMonthlyBook.findById(customMonthlyBookId).select('generationNonce status').lean();
+            if (!fresh || fresh.status === 'completed' || fresh.status === 'failed' || (fresh.generationNonce && fresh.generationNonce !== generationNonce)) {
+                console.log(`MonthlyBookGenerator: [${bookIdShort}] Nonce changed or status terminal — another process took over. Stopping. (ours=${generationNonce}, current=${fresh?.generationNonce})`);
+                return;
+            }
+        }
         const pageNum = i + 1;
         const total = pagesToProcess.length;
         console.log(`MonthlyBookGenerator: [${bookIdShort}] Starting page ${pageNum}/${total} (loop index ${i})`);
@@ -1023,12 +1035,12 @@ async function runMonthlyBookGeneration(customMonthlyBookId) {
         console.log('MonthlyBookGenerator: Skipping completed/failed', customMonthlyBookId, custom.status);
         return;
     }
+    const nonce = crypto.randomBytes(8).toString('hex');
     if (custom.status === 'pending' || isResume) {
         if (custom.status === 'pending') {
-            // Claim the job so only one worker processes this book (avoid concurrent runs skipping/duplicating pages)
             const updated = await CustomMonthlyBook.findOneAndUpdate(
                 { _id: customMonthlyBookId, status: 'pending' },
-                { $set: { status: 'generating' } },
+                { $set: { status: 'generating', generationNonce: nonce } },
                 { new: true }
             );
             if (!updated) {
@@ -1037,9 +1049,10 @@ async function runMonthlyBookGeneration(customMonthlyBookId) {
             }
             custom = updated;
         } else {
-            // Resuming: re-fetch to get latest progressPage
+            // Atomically set our nonce so any previous generation process detects it changed and stops
+            await CustomMonthlyBook.findByIdAndUpdate(customMonthlyBookId, { $set: { generationNonce: nonce } });
             custom = await CustomMonthlyBook.findById(customMonthlyBookId).populate('templateId').lean();
-            console.log('MonthlyBookGenerator: Resuming', customMonthlyBookId, 'from page', custom.progressPage + 1, 'of', custom.progressTotalPages);
+            console.log('MonthlyBookGenerator: Resuming', customMonthlyBookId, 'from page', custom.progressPage + 1, 'of', custom.progressTotalPages, 'nonce', nonce);
         }
     } else {
         console.log('MonthlyBookGenerator: Skipping', customMonthlyBookId, custom.status);
@@ -1050,7 +1063,7 @@ async function runMonthlyBookGeneration(customMonthlyBookId) {
         if (custom.sourceBookId) {
             const sourceBook = await Book.findById(custom.sourceBookId).populate('featuredCharacterId').lean();
             if (!sourceBook) throw new Error('Source book not found');
-            await runMonthlyBookGenerationFromBook(customMonthlyBookId, custom, sourceBook);
+            await runMonthlyBookGenerationFromBook(customMonthlyBookId, custom, sourceBook, nonce);
             return;
         }
 
@@ -1076,6 +1089,13 @@ async function runMonthlyBookGeneration(customMonthlyBookId) {
         const bookTitle = `${custom.childName}'s Adventure with ${bibleCharacter.displayName}`;
         const pages = [];
         for (let i = 0; i < pagesToGenerate.length; i++) {
+            if (nonce) {
+                const fresh = await CustomMonthlyBook.findById(customMonthlyBookId).select('generationNonce status').lean();
+                if (!fresh || fresh.status === 'completed' || fresh.status === 'failed' || (fresh.generationNonce && fresh.generationNonce !== nonce)) {
+                    console.log('MonthlyBookGenerator: Template flow — nonce changed, stopping.');
+                    return;
+                }
+            }
             const tp = pagesToGenerate[i];
             const pageText = substituteChildName(tp.text, custom.childName);
             const backgroundUrl = await generatePageImage(custom, tp, bibleCharacter, i);

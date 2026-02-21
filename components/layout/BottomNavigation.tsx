@@ -170,7 +170,7 @@ const BottomNavigation: React.FC = () => {
     setDragRotation(startRotationRef.current + delta);
   };
 
-  const TAP_THRESHOLD = 12; // degrees of movement below which we treat as tap
+  const TAP_THRESHOLD = 22; // degrees of movement below which we treat as tap
 
   const onEnd = () => {
     if (!isDragging) return;
@@ -543,29 +543,28 @@ const BottomNavigation: React.FC = () => {
             return (
               <button
                 key={item.id}
-                className="absolute w-16 h-16 -ml-8 -mt-8 flex flex-col items-center justify-center z-20 transition-transform outline-none pointer-events-none touch-manipulation min-w-[44px] min-h-[44px]"
+                className="absolute w-11 h-11 -ml-[22px] -mt-[22px] flex flex-col items-center justify-center z-20 transition-transform outline-none pointer-events-none touch-manipulation"
                 style={{
                   left: `${x}px`,
                   top: `${y}px`,
-                  // Counter-rotate icon so it stays upright while wheel spins
-                  transform: `rotate(${-visualRotation}deg) scale(${isActive ? 1.1 : 0.9})`,
+                  transform: `rotate(${-visualRotation}deg) scale(${isActive ? 1.15 : 0.92})`,
                 }}
               >
-                <div className={`absolute inset-0 rounded-full border-4 border-[#B8860B] bg-[#3d1e03] shadow-sm transition-colors ${isActive ? 'border-[#FFD700]' : ''}`}></div>
+                <div className={`absolute inset-0 rounded-full border-[3px] border-[#B8860B] bg-[#3d1e03] shadow-sm transition-colors ${isActive ? 'border-[#FFD700]' : ''}`}></div>
 
                 <div
                   className={`
-                    relative z-10 w-10 h-10 rounded-full flex items-center justify-center
+                    relative z-10 w-8 h-8 rounded-full flex items-center justify-center
                     ${isActive ? 'text-[#FFD700]' : 'text-[#cd853f]'}
                     `}
                 >
-                  <item.icon size={isActive ? 22 : 18} strokeWidth={2.5} />
+                  <item.icon size={isActive ? 20 : 16} strokeWidth={2.5} />
                 </div>
 
                 <span
                   className={`
-                    absolute top-12 w-24 text-center
-                    text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full
+                    absolute top-10 w-20 text-center
+                    text-[9px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded-full
                     ${isActive ? 'text-[#FFD700] bg-black/60 backdrop-blur-sm' : 'hidden'}
                     `}
                 >

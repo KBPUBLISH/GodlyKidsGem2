@@ -88,6 +88,7 @@ const customMonthlyBookSchema = new mongoose.Schema({
     },
     progressPage: { type: Number, default: 0 },
     progressTotalPages: { type: Number, default: 0 },
+    generationNonce: { type: String, default: '' },
     errorMessage: {
         type: String,
     },

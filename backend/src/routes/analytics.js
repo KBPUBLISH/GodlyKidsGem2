@@ -2355,4 +2355,182 @@ router.get('/retention', async (req, res) => {
     }
 });
 
+/**
+ * GET /api/analytics/lesson-retention
+ * Lesson-specific retention: DAU, recurring vs first-time users, cohort retention, top lessons.
+ * Query params: days (default 30)
+ */
+router.get('/lesson-retention', async (req, res) => {
+    try {
+        const AnalyticsEvent = require('../models/AnalyticsEvent');
+        const days = parseInt(req.query.days) || 30;
+        const now = new Date();
+        const startDate = new Date(now);
+        startDate.setDate(startDate.getDate() - days);
+
+        const lessonEvents = await AnalyticsEvent.find({
+            eventType: { $in: ['lesson_view', 'lesson_complete'] },
+            createdAt: { $gte: startDate },
+        }).select('userId eventType targetId targetTitle createdAt').lean();
+
+        // --- Daily Active Lesson Users (DAU) + recurring vs first-time ---
+        // Track first-ever lesson date per user (across all time, not just window)
+        const allTimeLessonUsers = await AnalyticsEvent.aggregate([
+            { $match: { eventType: { $in: ['lesson_view', 'lesson_complete'] } } },
+            { $group: { _id: '$userId', firstLessonDate: { $min: '$createdAt' } } },
+        ]);
+        const userFirstLessonDate = new Map();
+        allTimeLessonUsers.forEach(u => userFirstLessonDate.set(u._id, u.firstLessonDate));
+
+        const dailyMap = {};
+        const userLessonDays = {};
+
+        lessonEvents.forEach(e => {
+            const day = e.createdAt.toISOString().split('T')[0];
+            if (!dailyMap[day]) dailyMap[day] = { viewers: new Set(), completers: new Set(), newUsers: new Set(), returningUsers: new Set() };
+            dailyMap[day].viewers.add(e.userId);
+            if (e.eventType === 'lesson_complete') dailyMap[day].completers.add(e.userId);
+
+            if (!userLessonDays[e.userId]) userLessonDays[e.userId] = new Set();
+            userLessonDays[e.userId].add(day);
+        });
+
+        // Classify new vs returning per day
+        Object.entries(dailyMap).forEach(([day, data]) => {
+            data.viewers.forEach(userId => {
+                const firstDate = userFirstLessonDate.get(userId);
+                const firstDay = firstDate ? firstDate.toISOString().split('T')[0] : day;
+                if (firstDay === day) {
+                    data.newUsers.add(userId);
+                } else {
+                    data.returningUsers.add(userId);
+                }
+            });
+        });
+
+        const dailyTrends = Object.entries(dailyMap)
+            .sort(([a], [b]) => a.localeCompare(b))
+            .map(([date, d]) => ({
+                date,
+                activeUsers: d.viewers.size,
+                completions: d.completers.size,
+                newUsers: d.newUsers.size,
+                returningUsers: d.returningUsers.size,
+                returningPct: d.viewers.size > 0 ? Math.round((d.returningUsers.size / d.viewers.size) * 100) : 0,
+            }));
+
+        // --- Lesson-specific cohort retention ---
+        // Group users by the first day they did a lesson (within window)
+        const windowUserFirstDay = {};
+        lessonEvents.forEach(e => {
+            const day = e.createdAt.toISOString().split('T')[0];
+            if (!windowUserFirstDay[e.userId] || day < windowUserFirstDay[e.userId]) {
+                windowUserFirstDay[e.userId] = day;
+            }
+        });
+
+        const retentionDays = [1, 3, 7, 14, 30];
+        const cohortByDay = {};
+        Object.entries(windowUserFirstDay).forEach(([userId, firstDay]) => {
+            if (!cohortByDay[firstDay]) cohortByDay[firstDay] = [];
+            cohortByDay[firstDay].push(userId);
+        });
+
+        const cohortRetention = Object.entries(cohortByDay)
+            .sort(([a], [b]) => a.localeCompare(b))
+            .map(([date, users]) => {
+                const cohortSize = users.length;
+                const retention = {};
+                retentionDays.forEach(retDay => {
+                    const daysSinceCohort = Math.floor((now - new Date(date)) / (1000 * 60 * 60 * 24));
+                    if (daysSinceCohort < retDay) {
+                        retention[`day${retDay}`] = null;
+                        return;
+                    }
+                    const targetDate = new Date(date);
+                    targetDate.setDate(targetDate.getDate() + retDay);
+                    const targetDay = targetDate.toISOString().split('T')[0];
+                    const retained = users.filter(uid => userLessonDays[uid]?.has(targetDay)).length;
+                    retention[`day${retDay}`] = Math.round((retained / cohortSize) * 100);
+                });
+                return { date, cohortSize, ...retention };
+            });
+
+        // Average retention across cohorts
+        const avgRetention = {};
+        retentionDays.forEach(retDay => {
+            const key = `day${retDay}`;
+            const valid = cohortRetention.filter(c => c[key] !== null);
+            avgRetention[key] = valid.length > 0
+                ? Math.round(valid.reduce((s, c) => s + c[key], 0) / valid.length)
+                : null;
+        });
+
+        // --- Top lessons by unique users ---
+        const lessonMap = {};
+        lessonEvents.forEach(e => {
+            if (!e.targetId) return;
+            if (!lessonMap[e.targetId]) lessonMap[e.targetId] = { title: e.targetTitle || e.targetId, views: new Set(), completions: new Set() };
+            lessonMap[e.targetId].views.add(e.userId);
+            if (e.eventType === 'lesson_complete') lessonMap[e.targetId].completions.add(e.userId);
+        });
+        const topLessons = Object.entries(lessonMap)
+            .map(([id, d]) => ({
+                lessonId: id,
+                title: d.title,
+                uniqueViewers: d.views.size,
+                uniqueCompleters: d.completions.size,
+                completionRate: d.views.size > 0 ? Math.round((d.completions.size / d.views.size) * 100) : 0,
+            }))
+            .sort((a, b) => b.uniqueViewers - a.uniqueViewers)
+            .slice(0, 15);
+
+        // --- Summary ---
+        const totalUniqueUsers = new Set(lessonEvents.map(e => e.userId)).size;
+        const totalCompletions = lessonEvents.filter(e => e.eventType === 'lesson_complete').length;
+        const uniqueCompleters = new Set(lessonEvents.filter(e => e.eventType === 'lesson_complete').map(e => e.userId)).size;
+        const multiDayUsers = Object.values(userLessonDays).filter(days => days.size > 1).length;
+        const avgDaysPerUser = totalUniqueUsers > 0
+            ? +(Object.values(userLessonDays).reduce((s, d) => s + d.size, 0) / totalUniqueUsers).toFixed(1)
+            : 0;
+
+        // Weekly active lesson users (WAU)
+        const weeklyMap = {};
+        lessonEvents.forEach(e => {
+            const d = new Date(e.createdAt);
+            const weekStart = new Date(d);
+            weekStart.setDate(weekStart.getDate() - weekStart.getDay());
+            const weekKey = weekStart.toISOString().split('T')[0];
+            if (!weeklyMap[weekKey]) weeklyMap[weekKey] = new Set();
+            weeklyMap[weekKey].add(e.userId);
+        });
+        const weeklyTrends = Object.entries(weeklyMap)
+            .sort(([a], [b]) => a.localeCompare(b))
+            .map(([weekStart, users]) => ({ weekStart, activeUsers: users.size }));
+
+        res.json({
+            success: true,
+            period: { days, startDate: startDate.toISOString() },
+            summary: {
+                totalUniqueUsers,
+                totalCompletions,
+                uniqueCompleters,
+                completionRate: totalUniqueUsers > 0 ? Math.round((uniqueCompleters / totalUniqueUsers) * 100) : 0,
+                multiDayUsers,
+                multiDayPct: totalUniqueUsers > 0 ? Math.round((multiDayUsers / totalUniqueUsers) * 100) : 0,
+                avgDaysPerUser,
+                avgRetention,
+            },
+            dailyTrends,
+            weeklyTrends,
+            cohortRetention: cohortRetention.slice(-14),
+            topLessons,
+            retentionDays,
+        });
+    } catch (error) {
+        console.error('Lesson retention analytics error:', error);
+        res.status(500).json({ success: false, message: 'Failed to fetch lesson retention analytics', error: error.message });
+    }
+});
+
 module.exports = router;

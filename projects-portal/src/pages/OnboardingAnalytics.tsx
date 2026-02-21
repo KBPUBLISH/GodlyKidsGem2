@@ -252,6 +252,39 @@ interface PaywallData {
     }[];
 }
 
+interface LessonRetentionData {
+    success: boolean;
+    period: { days: number; startDate: string };
+    summary: {
+        totalUniqueUsers: number;
+        totalCompletions: number;
+        uniqueCompleters: number;
+        completionRate: number;
+        multiDayUsers: number;
+        multiDayPct: number;
+        avgDaysPerUser: number;
+        avgRetention: Record<string, number | null>;
+    };
+    dailyTrends: {
+        date: string;
+        activeUsers: number;
+        completions: number;
+        newUsers: number;
+        returningUsers: number;
+        returningPct: number;
+    }[];
+    weeklyTrends: { weekStart: string; activeUsers: number }[];
+    cohortRetention: (Record<string, number | null> & { date: string; cohortSize: number })[];
+    topLessons: {
+        lessonId: string;
+        title: string;
+        uniqueViewers: number;
+        uniqueCompleters: number;
+        completionRate: number;
+    }[];
+    retentionDays: number[];
+}
+
 // API Base URL
 const getApiBase = () => {
     let base = import.meta.env.VITE_API_BASE_URL || 'https://backendgk2-0.onrender.com';
@@ -275,21 +308,23 @@ const OnboardingAnalytics: React.FC = () => {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [days, setDays] = useState(7);
-    const [activeTab, setActiveTab] = useState<'onboarding' | 'tutorial' | 'firstLesson' | 'bookBuilding' | 'retention' | 'survey'>('onboarding');
+    const [lessonRetentionData, setLessonRetentionData] = useState<LessonRetentionData | null>(null);
+    const [activeTab, setActiveTab] = useState<'onboarding' | 'tutorial' | 'firstLesson' | 'bookBuilding' | 'paywall' | 'retention' | 'lessonRetention' | 'survey'>('onboarding');
 
     const fetchData = async () => {
         setLoading(true);
         setError(null);
         try {
             // Fetch onboarding, tutorial, preferences, retention, survey, and book-building data in parallel
-            const [onboardingRes, tutorialRes, preferencesRes, retentionRes, surveyRes, bookBuildingRes, paywallRes] = await Promise.all([
+            const [onboardingRes, tutorialRes, preferencesRes, retentionRes, surveyRes, bookBuildingRes, paywallRes, lessonRetRes] = await Promise.all([
                 fetch(`${API_BASE}/analytics/onboarding?days=${days}`),
                 fetch(`${API_BASE}/analytics/tutorial?days=${days}`),
                 fetch(`${API_BASE}/analytics/onboarding/preferences?days=${days}`),
-                fetch(`${API_BASE}/analytics/retention?days=${Math.max(days, 30)}`), // At least 30 days for retention
+                fetch(`${API_BASE}/analytics/retention?days=${Math.max(days, 30)}`),
                 fetch(`${API_BASE}/survey/analytics?days=${days}`),
                 fetch(`${API_BASE}/analytics/onboarding/book-building?days=${days}`),
                 fetch(`${API_BASE}/analytics/paywall?days=${days}`),
+                fetch(`${API_BASE}/analytics/lesson-retention?days=${days}`),
             ]);
             
             const onboardingResult = await onboardingRes.json();
@@ -299,6 +334,7 @@ const OnboardingAnalytics: React.FC = () => {
             const surveyResult = await surveyRes.json();
             const bookBuildingResult = await bookBuildingRes.json();
             const paywallResult = await paywallRes.json();
+            const lessonRetResult = await lessonRetRes.json();
             
             if (onboardingResult.success) {
                 setData(onboardingResult);
@@ -320,6 +356,9 @@ const OnboardingAnalytics: React.FC = () => {
             }
             if (paywallResult.success) {
                 setPaywallData(paywallResult);
+            }
+            if (lessonRetResult.success) {
+                setLessonRetentionData(lessonRetResult);
             }
             
             if (!onboardingResult.success && !tutorialResult.success) {
@@ -509,6 +548,24 @@ const OnboardingAnalytics: React.FC = () => {
                         {retentionData && retentionData.summary.avgRetention.day7 !== null && (
                             <span className="bg-purple-100 text-purple-700 text-xs px-2 py-0.5 rounded-full">
                                 D7: {retentionData.summary.avgRetention.day7}%
+                            </span>
+                        )}
+                    </span>
+                </button>
+                <button
+                    onClick={() => setActiveTab('lessonRetention')}
+                    className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                        activeTab === 'lessonRetention'
+                            ? 'bg-white text-indigo-600 shadow-sm'
+                            : 'text-gray-600 hover:text-gray-800'
+                    }`}
+                >
+                    <span className="flex items-center gap-2">
+                        <BookOpen className="w-4 h-4" />
+                        Lesson Retention
+                        {lessonRetentionData && lessonRetentionData.summary.multiDayPct > 0 && (
+                            <span className="bg-teal-100 text-teal-700 text-xs px-2 py-0.5 rounded-full">
+                                {lessonRetentionData.summary.multiDayPct}% recurring
                             </span>
                         )}
                     </span>
@@ -1959,6 +2016,172 @@ const OnboardingAnalytics: React.FC = () => {
                 </div>
             </div>
             </>
+            )}
+
+            {/* ============ LESSON RETENTION TAB ============ */}
+            {activeTab === 'lessonRetention' && lessonRetentionData && (
+            <>
+            {/* Summary Cards */}
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <div className="bg-white rounded-xl p-4 shadow-sm border border-gray-100">
+                    <p className="text-xs text-gray-500 uppercase tracking-wide">Unique Lesson Users</p>
+                    <p className="text-2xl font-bold text-gray-800 mt-1">{lessonRetentionData.summary.totalUniqueUsers}</p>
+                </div>
+                <div className="bg-white rounded-xl p-4 shadow-sm border border-gray-100">
+                    <p className="text-xs text-gray-500 uppercase tracking-wide">Completions</p>
+                    <p className="text-2xl font-bold text-gray-800 mt-1">{lessonRetentionData.summary.totalCompletions}</p>
+                    <p className="text-xs text-gray-400 mt-1">{lessonRetentionData.summary.uniqueCompleters} unique ({lessonRetentionData.summary.completionRate}%)</p>
+                </div>
+                <div className="bg-white rounded-xl p-4 shadow-sm border border-gray-100">
+                    <p className="text-xs text-gray-500 uppercase tracking-wide">Multi-Day Users</p>
+                    <p className="text-2xl font-bold text-teal-600 mt-1">{lessonRetentionData.summary.multiDayUsers}</p>
+                    <p className="text-xs text-gray-400 mt-1">{lessonRetentionData.summary.multiDayPct}% of lesson users</p>
+                </div>
+                <div className="bg-white rounded-xl p-4 shadow-sm border border-gray-100">
+                    <p className="text-xs text-gray-500 uppercase tracking-wide">Avg Days / User</p>
+                    <p className="text-2xl font-bold text-gray-800 mt-1">{lessonRetentionData.summary.avgDaysPerUser}</p>
+                </div>
+            </div>
+
+            {/* Avg Retention Rates */}
+            {lessonRetentionData.summary.avgRetention && (
+            <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-100">
+                <h3 className="text-lg font-semibold text-gray-800 mb-4">Lesson Retention (avg across cohorts)</h3>
+                <div className="flex flex-wrap gap-3">
+                    {lessonRetentionData.retentionDays.map(d => {
+                        const val = lessonRetentionData.summary.avgRetention[`day${d}`];
+                        const color = val === null ? 'bg-gray-100 text-gray-400' : val >= 30 ? 'bg-green-100 text-green-700' : val >= 15 ? 'bg-yellow-100 text-yellow-700' : 'bg-red-100 text-red-700';
+                        return (
+                            <div key={d} className={`rounded-lg px-4 py-3 text-center min-w-[80px] ${color}`}>
+                                <p className="text-xs font-medium opacity-70">Day {d}</p>
+                                <p className="text-xl font-bold">{val !== null ? `${val}%` : '—'}</p>
+                            </div>
+                        );
+                    })}
+                </div>
+            </div>
+            )}
+
+            {/* Daily Trends: Active, New vs Returning */}
+            <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-100">
+                <h3 className="text-lg font-semibold text-gray-800 mb-4">Daily Lesson Users</h3>
+                <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                        <thead>
+                            <tr className="text-left text-gray-500 border-b">
+                                <th className="pb-2 pr-4">Date</th>
+                                <th className="pb-2 pr-4 text-right">Active</th>
+                                <th className="pb-2 pr-4 text-right">Completions</th>
+                                <th className="pb-2 pr-4 text-right">New</th>
+                                <th className="pb-2 pr-4 text-right">Returning</th>
+                                <th className="pb-2 text-right">Returning %</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {lessonRetentionData.dailyTrends.slice(-14).map(d => (
+                                <tr key={d.date} className="border-b border-gray-50 hover:bg-gray-50">
+                                    <td className="py-2 pr-4 text-gray-600">{new Date(d.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</td>
+                                    <td className="py-2 pr-4 text-right font-medium">{d.activeUsers}</td>
+                                    <td className="py-2 pr-4 text-right">{d.completions}</td>
+                                    <td className="py-2 pr-4 text-right text-blue-600">{d.newUsers}</td>
+                                    <td className="py-2 pr-4 text-right text-teal-600">{d.returningUsers}</td>
+                                    <td className="py-2 text-right">
+                                        <span className={`px-2 py-0.5 rounded text-xs font-medium ${d.returningPct >= 40 ? 'bg-green-100 text-green-700' : d.returningPct >= 20 ? 'bg-yellow-100 text-yellow-700' : 'bg-gray-100 text-gray-500'}`}>
+                                            {d.returningPct}%
+                                        </span>
+                                    </td>
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            {/* Weekly Active Lesson Users */}
+            {lessonRetentionData.weeklyTrends.length > 0 && (
+            <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-100">
+                <h3 className="text-lg font-semibold text-gray-800 mb-4">Weekly Active Lesson Users (WAU)</h3>
+                <div className="flex flex-wrap gap-3">
+                    {lessonRetentionData.weeklyTrends.map(w => (
+                        <div key={w.weekStart} className="bg-indigo-50 rounded-lg px-4 py-3 text-center min-w-[100px]">
+                            <p className="text-xs text-indigo-500">{new Date(w.weekStart).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</p>
+                            <p className="text-xl font-bold text-indigo-700">{w.activeUsers}</p>
+                        </div>
+                    ))}
+                </div>
+            </div>
+            )}
+
+            {/* Cohort Retention Table */}
+            {lessonRetentionData.cohortRetention.length > 0 && (
+            <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-100">
+                <h3 className="text-lg font-semibold text-gray-800 mb-4">Lesson Retention by Cohort</h3>
+                <p className="text-xs text-gray-400 mb-3">Users grouped by the day they first used a lesson. % who returned on Day N.</p>
+                <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                        <thead>
+                            <tr className="text-left text-gray-500 border-b">
+                                <th className="pb-2 pr-4">Cohort Date</th>
+                                <th className="pb-2 pr-4 text-right">Users</th>
+                                {lessonRetentionData.retentionDays.map(d => (
+                                    <th key={d} className="pb-2 pr-2 text-right">D{d}</th>
+                                ))}
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {lessonRetentionData.cohortRetention.map(c => (
+                                <tr key={c.date} className="border-b border-gray-50 hover:bg-gray-50">
+                                    <td className="py-2 pr-4 text-gray-600">{new Date(c.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</td>
+                                    <td className="py-2 pr-4 text-right font-medium">{c.cohortSize}</td>
+                                    {lessonRetentionData.retentionDays.map(d => {
+                                        const val = c[`day${d}`] as number | null;
+                                        const bg = val === null ? '' : val >= 30 ? 'bg-green-100 text-green-700' : val >= 15 ? 'bg-yellow-100 text-yellow-700' : val > 0 ? 'bg-red-50 text-red-600' : 'text-gray-300';
+                                        return (
+                                            <td key={d} className={`py-2 pr-2 text-right text-xs font-medium rounded ${bg}`}>
+                                                {val !== null ? `${val}%` : '—'}
+                                            </td>
+                                        );
+                                    })}
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            )}
+
+            {/* Top Lessons */}
+            {lessonRetentionData.topLessons.length > 0 && (
+            <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-100">
+                <h3 className="text-lg font-semibold text-gray-800 mb-4">Top Lessons by Engagement</h3>
+                <div className="space-y-3">
+                    {lessonRetentionData.topLessons.map((l, i) => (
+                        <div key={l.lessonId} className="flex items-center gap-3">
+                            <span className="text-gray-400 text-sm w-6 text-right">{i + 1}.</span>
+                            <div className="flex-1 min-w-0">
+                                <p className="text-sm font-medium text-gray-700 truncate">{l.title}</p>
+                                <div className="flex gap-3 text-xs text-gray-400 mt-0.5">
+                                    <span>{l.uniqueViewers} viewers</span>
+                                    <span>{l.uniqueCompleters} completers</span>
+                                </div>
+                            </div>
+                            <span className={`px-2 py-1 rounded text-xs font-medium ${l.completionRate >= 60 ? 'bg-green-100 text-green-700' : l.completionRate >= 30 ? 'bg-yellow-100 text-yellow-700' : 'bg-gray-100 text-gray-500'}`}>
+                                {l.completionRate}% completion
+                            </span>
+                        </div>
+                    ))}
+                </div>
+            </div>
+            )}
+            </>
+            )}
+
+            {activeTab === 'lessonRetention' && !lessonRetentionData && (
+                <div className="bg-gray-50 rounded-xl p-12 text-center">
+                    <BookOpen className="w-12 h-12 text-gray-300 mx-auto mb-4" />
+                    <p className="text-gray-500">No lesson retention data available yet</p>
+                    <p className="text-gray-400 text-sm mt-2">Lesson engagement data will appear here once users start interacting with lessons</p>
+                </div>
             )}
 
             {activeTab === 'survey' && !surveyData && (

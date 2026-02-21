@@ -8,6 +8,7 @@ import OnboardingPage from './pages/OnboardingPage';
 import HomePage from './pages/HomePage';
 import WorldPage, { PersistentWorldIsland } from './pages/WorldPage';
 import ReferralPromptModal from './components/features/ReferralPromptModal';
+import LifetimeOfferModal from './components/features/LifetimeOfferModal';
 import CreateAccountModal from './components/modals/CreateAccountModal';
 import ReverseTrialExpiredModal from './components/modals/ReverseTrialExpiredModal';
 import SaveProgressModal from './components/modals/SaveProgressModal';
@@ -1138,12 +1139,17 @@ const ReferralPromptWrapper: React.FC<{ children: React.ReactNode }> = ({ childr
 
 const MAIN_NAV_PAGES = ['/world', '/home', '/listen', '/read', '/games'];
 
+const LIFETIME_OFFER_STAGE_KEY = 'godlykids_lifetime_offer_stage';
+const LIFETIME_OFFER_SESSION_KEY = 'godlykids_lifetime_offer_session_checked';
+
 const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const location = useLocation();
   const prevPathRef = useRef(location.pathname);
   const [isTransitioning, setIsTransitioning] = useState(false);
   const fadeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [showLayoutRating, setShowLayoutRating] = useState(false);
+  const [lifetimeOfferVariant, setLifetimeOfferVariant] = useState<'first' | 'final' | null>(null);
+  const lifetimeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Show "How do you like the new layout?" pop-up on first visit to /world or /home
   useEffect(() => {
@@ -1151,9 +1157,49 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     if (!isNewLayoutPage || !shouldShowLayoutRating()) return;
     const timer = setTimeout(() => {
       setShowLayoutRating(true);
-    }, 20000); // 20 seconds after landing so user sees the layout first
+    }, 20000);
     return () => clearTimeout(timer);
   }, [location.pathname]);
+
+  // --- Lifetime offer popup: first offer (30s after paywall close) ---
+  useEffect(() => {
+    const isPremium = localStorage.getItem('godlykids_premium') === 'true';
+    if (isPremium) return;
+
+    const stage = localStorage.getItem(LIFETIME_OFFER_STAGE_KEY);
+    // When user navigates away from /paywall and stage is 'ready', start 30s timer
+    if (prevPathRef.current === '/paywall' && location.pathname !== '/paywall' && stage === 'ready') {
+      if (lifetimeTimerRef.current) clearTimeout(lifetimeTimerRef.current);
+      lifetimeTimerRef.current = setTimeout(() => {
+        // Re-check premium and stage in case anything changed
+        if (localStorage.getItem('godlykids_premium') === 'true') return;
+        if (localStorage.getItem(LIFETIME_OFFER_STAGE_KEY) !== 'ready') return;
+        setLifetimeOfferVariant('first');
+      }, 30000);
+    }
+    return () => {
+      if (lifetimeTimerRef.current) clearTimeout(lifetimeTimerRef.current);
+    };
+  }, [location.pathname]);
+
+  // --- Lifetime offer popup: final offer (on fresh app open) ---
+  useEffect(() => {
+    const isPremium = localStorage.getItem('godlykids_premium') === 'true';
+    if (isPremium) return;
+    // Only run once per session
+    if (sessionStorage.getItem(LIFETIME_OFFER_SESSION_KEY)) return;
+    sessionStorage.setItem(LIFETIME_OFFER_SESSION_KEY, 'true');
+
+    const stage = localStorage.getItem(LIFETIME_OFFER_STAGE_KEY);
+    if (stage === 'shown_first') {
+      // Show final offer after a brief delay so the app settles
+      const timer = setTimeout(() => {
+        if (localStorage.getItem('godlykids_premium') === 'true') return;
+        setLifetimeOfferVariant('final');
+      }, 2000);
+      return () => clearTimeout(timer);
+    }
+  }, []);
 
   useEffect(() => {
     try {
@@ -1268,6 +1314,14 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
         email={localStorage.getItem('godlykids_user_email') || undefined}
         platform={/despia/i.test(navigator.userAgent) ? (/iphone|ipad/i.test(navigator.userAgent) ? 'ios' : 'android') : 'web'}
       />
+
+      {/* Lifetime offer popup (shown after paywall dismissal) */}
+      {lifetimeOfferVariant && (
+        <LifetimeOfferModal
+          variant={lifetimeOfferVariant}
+          onClose={() => setLifetimeOfferVariant(null)}
+        />
+      )}
       
       {/* Bottom Safe Area Spacer - for pages without BottomNavigation */}
       {(isBookDetail || isPlayer || isProfile || isCreateProfile || isEditProfile || isPaywall || isSettings || isBookReader || isAudioPage || isLessonPage || isLessonsPage || isBookSeries || isCreatePlaylist || isMyPlaylist || isBookCreating) && (

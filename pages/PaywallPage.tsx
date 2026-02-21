@@ -488,6 +488,14 @@ const PaywallPage: React.FC = () => {
   const handlePaywallClose = () => {
     setIsClosing(true);
     activityTrackingService.trackOnboardingEvent('paywall_closed', isCreateYourStoryPaywall ? { source: 'create-your-story' } : undefined).catch(() => {});
+
+    // Seed the lifetime offer popup: if the user hasn't already progressed past this stage, mark as ready
+    const stage = localStorage.getItem('godlykids_lifetime_offer_stage');
+    if (!stage || stage === 'none') {
+      localStorage.setItem('godlykids_lifetime_offer_stage', 'ready');
+      localStorage.setItem('godlykids_lifetime_offer_ready_at', Date.now().toString());
+    }
+
     if (fromState === 'create-your-story') {
       navigate('/create-your-story', { replace: true });
     } else {

@@ -1059,6 +1059,140 @@ router.get('/onboarding/book-building', async (req, res) => {
 });
 
 /**
+ * GET /api/analytics/paywall
+ * Global paywall funnel and conversion analytics (all sources)
+ * Query params: days (default 30)
+ */
+router.get('/paywall', async (req, res) => {
+    try {
+        const days = parseInt(req.query.days) || 30;
+        const startDate = new Date();
+        startDate.setDate(startDate.getDate() - days);
+
+        // Fetch all paywall-related events
+        const events = await OnboardingEvent.find({
+            createdAt: { $gte: startDate },
+            event: { 
+                $in: [
+                    'paywall_shown', 
+                    'paywall_trial_clicked', 
+                    'paywall_account_required',
+                    'paywall_parent_gate_shown', 
+                    'paywall_parent_gate_passed',
+                    'paywall_purchase_started',
+                    'paywall_purchase_error',
+                    'paywall_purchase_cancelled',
+                    'paywall_closed',
+                    'subscribed',
+                    'trial_started',
+                    'subscription_started'
+                ]
+            },
+        }).lean();
+
+        // Count events
+        const eventCounts = {};
+        events.forEach(e => {
+            eventCounts[e.event] = (eventCounts[e.event] || 0) + 1;
+        });
+
+        const paywallShown = eventCounts['paywall_shown'] || 0;
+        const trialClicked = eventCounts['paywall_trial_clicked'] || 0;
+        const accountRequired = eventCounts['paywall_account_required'] || 0;
+        const gateShown = eventCounts['paywall_parent_gate_shown'] || 0;
+        const gatePassed = eventCounts['paywall_parent_gate_passed'] || 0;
+        const purchaseStarted = eventCounts['paywall_purchase_started'] || 0;
+        const purchaseError = eventCounts['paywall_purchase_error'] || 0;
+        const purchaseCancelled = eventCounts['paywall_purchase_cancelled'] || 0;
+        const paywallClosed = eventCounts['paywall_closed'] || 0;
+        const subscribed = eventCounts['subscribed'] || 0;
+        const trialStarted = eventCounts['trial_started'] || 0;
+        const subscriptionStarted = eventCounts['subscription_started'] || 0;
+
+        const totalSubscribed = subscribed + trialStarted + subscriptionStarted;
+
+        const pct = (n) => paywallShown > 0 ? Math.round((n / paywallShown) * 100) : 0;
+
+        // Funnel steps
+        const funnel = [
+            { step: 'Paywall shown', stepKey: 'paywall_shown', count: paywallShown, rate: 100 },
+            { step: 'Start Trial clicked', stepKey: 'trial_clicked', count: trialClicked, rate: pct(trialClicked) },
+            { step: 'Account check passed', stepKey: 'account_passed', count: trialClicked - accountRequired, rate: pct(trialClicked - accountRequired) },
+            { step: 'Parent gate shown', stepKey: 'gate_shown', count: gateShown, rate: pct(gateShown) },
+            { step: 'Parent gate passed', stepKey: 'gate_passed', count: gatePassed, rate: pct(gatePassed) },
+            { step: 'Purchase started', stepKey: 'purchase_started', count: purchaseStarted, rate: pct(purchaseStarted) },
+            { step: 'Subscribed', stepKey: 'subscribed', count: totalSubscribed, rate: pct(totalSubscribed) },
+        ];
+
+        // Breakdown by source
+        const sourceBreakdown = {};
+        events.forEach(e => {
+            const source = e.metadata?.source || 'general';
+            if (!sourceBreakdown[source]) {
+                sourceBreakdown[source] = {
+                    paywallShown: 0,
+                    trialClicked: 0,
+                    subscribed: 0,
+                };
+            }
+            if (e.event === 'paywall_shown') sourceBreakdown[source].paywallShown++;
+            if (e.event === 'paywall_trial_clicked') sourceBreakdown[source].trialClicked++;
+            if (['subscribed', 'trial_started', 'subscription_started'].includes(e.event)) sourceBreakdown[source].subscribed++;
+        });
+
+        // Daily trends
+        const byDay = {};
+        events.forEach(e => {
+            const day = e.createdAt.toISOString().split('T')[0];
+            if (!byDay[day]) {
+                byDay[day] = { 
+                    paywallShown: 0, 
+                    trialClicked: 0, 
+                    subscribed: 0,
+                    purchaseError: 0,
+                    purchaseCancelled: 0,
+                    paywallClosed: 0,
+                };
+            }
+            if (e.event === 'paywall_shown') byDay[day].paywallShown++;
+            if (e.event === 'paywall_trial_clicked') byDay[day].trialClicked++;
+            if (['subscribed', 'trial_started', 'subscription_started'].includes(e.event)) byDay[day].subscribed++;
+            if (e.event === 'paywall_purchase_error') byDay[day].purchaseError++;
+            if (e.event === 'paywall_purchase_cancelled') byDay[day].purchaseCancelled++;
+            if (e.event === 'paywall_closed') byDay[day].paywallClosed++;
+        });
+
+        const dailyTrends = Object.keys(byDay).sort().map(date => ({
+            date,
+            ...byDay[date],
+        }));
+
+        res.json({
+            success: true,
+            period: {
+                days,
+                startDate: startDate.toISOString().split('T')[0],
+            },
+            summary: {
+                paywallShown,
+                trialClicked,
+                totalSubscribed,
+                conversionRate: pct(totalSubscribed),
+                purchaseError,
+                purchaseCancelled,
+                paywallClosed,
+            },
+            funnel,
+            sourceBreakdown,
+            dailyTrends,
+        });
+    } catch (error) {
+        console.error('Paywall analytics error:', error);
+        res.status(500).json({ success: false, message: 'Failed to fetch paywall analytics', error: error.message });
+    }
+});
+
+/**
  * GET /api/analytics/onboarding/kids-characters
  * List kid characters from Create Your Story / Kids Monthly books (CustomMonthlyBook).
  * Query params: days (default 30)

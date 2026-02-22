@@ -504,6 +504,40 @@ router.post('/image', upload.single('file'), async (req, res) => {
     }
 });
 
+// Get signed URL for direct browser-to-GCS upload (avoids ERR_INSUFFICIENT_RESOURCES on large files)
+// POST body: { bookId, type, contentType, filename, songId? }
+// Returns: { uploadUrl, publicUrl } - browser PUTs file to uploadUrl, then uses publicUrl
+router.post('/signed-url', async (req, res) => {
+    try {
+        const { bookId, type, contentType, filename, songId } = req.body;
+        if (!bookId || !type || !contentType || !filename) {
+            return res.status(400).json({ message: 'bookId, type, contentType, filename required' });
+        }
+        if (!bucket || !process.env.GCS_BUCKET_NAME) {
+            return res.status(503).json({ message: 'GCS not configured' });
+        }
+        if (!['video', 'audio', 'cover'].includes(type)) {
+            return res.status(400).json({ message: 'type must be video, audio, or cover' });
+        }
+        const effectiveBookId = (bookId === 'karaoke' && songId) ? `karaoke/${songId}` : bookId;
+        const filePath = generateFilePath(effectiveBookId, type, filename);
+        const safeContentType = /^[a-z0-9][a-z0-9+.-]*\/[a-z0-9][a-z0-9+.-]*$/i.test(contentType)
+            ? contentType : 'application/octet-stream';
+        const [uploadUrl] = await bucket.file(filePath).getSignedUrl({
+            version: 'v4',
+            action: 'write',
+            expires: Date.now() + 60 * 60 * 1000,
+            contentType: safeContentType,
+        });
+        const publicUrl = `https://storage.googleapis.com/${bucket.name}/${filePath}`;
+        console.log('Signed URL for direct upload:', { filePath, type });
+        res.json({ uploadUrl, publicUrl });
+    } catch (err) {
+        console.error('Signed URL error:', err);
+        res.status(500).json({ message: err.message || 'Failed to generate signed URL' });
+    }
+});
+
 // Upload video endpoint with organized structure
 // Query params: bookId (optional), type (optional: pages|scroll), pageNumber (optional, for pages)
 // If bookId/type not provided, falls back to simple videos/ folder

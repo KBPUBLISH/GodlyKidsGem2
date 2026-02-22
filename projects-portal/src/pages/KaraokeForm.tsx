@@ -1,0 +1,507 @@
+import React, { useState, useEffect, useRef } from 'react';
+import { useParams, useNavigate } from 'react-router-dom';
+import { ArrowLeft, Save, Upload, Mic, Plus, Trash2 } from 'lucide-react';
+import apiClient from '../services/apiClient';
+import { getMediaUrl } from '../services/apiClient';
+
+interface LyricLine {
+    text: string;
+    startTime: number;
+    endTime: number;
+}
+
+interface FormData {
+    title: string;
+    description: string;
+    coverImage: string;
+    videoUrl: string;
+    backgroundAudioUrl: string;
+    duration: number;
+    lyrics: LyricLine[];
+    status: 'draft' | 'published';
+    order: number;
+    minAge?: number;
+    isMembersOnly: boolean;
+    goalTags: string[];
+}
+
+const GOAL_TAGS = [
+    { id: 'courage', label: '🦁 Courage' },
+    { id: 'faith', label: '🙏 Faith' },
+    { id: 'gratitude', label: '💝 Gratitude' },
+    { id: 'love', label: '❤️ Love' },
+    { id: 'obedience', label: '👂 Obedience' },
+    { id: 'self-control', label: '🎯 Self-Control' },
+    { id: 'theology', label: '✝️ Theology' },
+    { id: 'wisdom', label: '🦉 Wisdom' },
+];
+
+const KaraokeForm: React.FC = () => {
+    const { id } = useParams<{ id: string }>();
+    const navigate = useNavigate();
+    const [loading, setLoading] = useState(false);
+    const [fetching, setFetching] = useState(!!id);
+    const [uploadingCover, setUploadingCover] = useState(false);
+    const [uploadingVideo, setUploadingVideo] = useState(false);
+    const [uploadingAudio, setUploadingAudio] = useState(false);
+    const coverInputRef = useRef<HTMLInputElement>(null);
+    const videoInputRef = useRef<HTMLInputElement>(null);
+    const audioInputRef = useRef<HTMLInputElement>(null);
+
+    const [formData, setFormData] = useState<FormData>({
+        title: '',
+        description: '',
+        coverImage: '',
+        videoUrl: '',
+        backgroundAudioUrl: '',
+        duration: 0,
+        lyrics: [],
+        status: 'draft',
+        order: 0,
+        isMembersOnly: false,
+        goalTags: [],
+    });
+
+    const songId = id && id !== 'new' ? id : 'temp';
+    const bookIdForUpload = id && id !== 'new' ? `karaoke/${id}` : 'karaoke';
+
+    useEffect(() => {
+        if (id && id !== 'new') {
+            fetchSong();
+        } else {
+            setFetching(false);
+        }
+    }, [id]);
+
+    const fetchSong = async () => {
+        try {
+            const response = await apiClient.get(`/api/karaoke/${id}`);
+            const s = response.data;
+            setFormData({
+                title: s.title || '',
+                description: s.description || '',
+                coverImage: s.coverImage || '',
+                videoUrl: s.videoUrl || '',
+                backgroundAudioUrl: s.backgroundAudioUrl || '',
+                duration: s.duration || 0,
+                lyrics: Array.isArray(s.lyrics) ? s.lyrics : [],
+                status: s.status || 'draft',
+                order: s.order ?? 0,
+                minAge: s.minAge,
+                isMembersOnly: s.isMembersOnly || false,
+                goalTags: Array.isArray(s.goalTags) ? s.goalTags : [],
+            });
+        } catch (error) {
+            console.error('Error fetching song:', error);
+            alert('Failed to load song');
+            navigate('/karaoke');
+        } finally {
+            setFetching(false);
+        }
+    };
+
+    const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
+        const { name, value, type } = e.target;
+        const checked = (e.target as HTMLInputElement).checked;
+        setFormData(prev => ({
+            ...prev,
+            [name]: type === 'checkbox' ? checked : (name === 'duration' || name === 'order' || name === 'minAge' ? (value ? Number(value) : undefined) : value),
+        }));
+    };
+
+    const handleCoverUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file?.type.startsWith('image/')) {
+            alert('Please select an image file');
+            return;
+        }
+        setUploadingCover(true);
+        const fd = new FormData();
+        fd.append('file', file);
+        try {
+            const res = await apiClient.post(`/api/upload/image?bookId=${bookIdForUpload}&type=cover&songId=${songId}`, fd, {
+                headers: { 'Content-Type': 'multipart/form-data' },
+            });
+            setFormData(prev => ({ ...prev, coverImage: res.data.url }));
+        } catch (err) {
+            console.error('Cover upload failed:', err);
+            alert('Failed to upload cover image');
+        } finally {
+            setUploadingCover(false);
+            if (coverInputRef.current) coverInputRef.current.value = '';
+        }
+    };
+
+    const handleVideoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file?.type.startsWith('video/')) {
+            alert('Please select a video file');
+            return;
+        }
+        setUploadingVideo(true);
+        const fd = new FormData();
+        fd.append('file', file);
+        try {
+            const res = await apiClient.post(`/api/upload/video?bookId=${bookIdForUpload}&type=video`, fd, {
+                headers: { 'Content-Type': 'multipart/form-data' },
+                timeout: 300000,
+            });
+            setFormData(prev => ({ ...prev, videoUrl: res.data.url }));
+            // Try to get duration
+            const video = document.createElement('video');
+            video.src = res.data.url;
+            video.onloadedmetadata = () => {
+                setFormData(prev => ({ ...prev, duration: Math.round(video.duration) || prev.duration }));
+            };
+        } catch (err) {
+            console.error('Video upload failed:', err);
+            alert('Failed to upload video');
+        } finally {
+            setUploadingVideo(false);
+            if (videoInputRef.current) videoInputRef.current.value = '';
+        }
+    };
+
+    const handleAudioUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file?.type.startsWith('audio/') && !['.mp3', '.wav', '.m4a', '.ogg'].includes(file?.name?.slice(-5) || '')) {
+            alert('Please select an audio file');
+            return;
+        }
+        setUploadingAudio(true);
+        const fd = new FormData();
+        fd.append('file', file!);
+        try {
+            const res = await apiClient.post(`/api/upload/audio?bookId=${bookIdForUpload}&type=audio`, fd, {
+                headers: { 'Content-Type': 'multipart/form-data' },
+                timeout: 120000,
+            });
+            setFormData(prev => ({ ...prev, backgroundAudioUrl: res.data.url }));
+        } catch (err) {
+            console.error('Audio upload failed:', err);
+            alert('Failed to upload background audio');
+        } finally {
+            setUploadingAudio(false);
+            if (audioInputRef.current) audioInputRef.current.value = '';
+        }
+    };
+
+    const addLyric = () => {
+        setFormData(prev => ({
+            ...prev,
+            lyrics: [...prev.lyrics, { text: '', startTime: 0, endTime: 0 }],
+        }));
+    };
+
+    const updateLyric = (index: number, field: keyof LyricLine, value: string | number) => {
+        setFormData(prev => ({
+            ...prev,
+            lyrics: prev.lyrics.map((l, i) =>
+                i === index ? { ...l, [field]: value } : l
+            ),
+        }));
+    };
+
+    const removeLyric = (index: number) => {
+        setFormData(prev => ({
+            ...prev,
+            lyrics: prev.lyrics.filter((_, i) => i !== index),
+        }));
+    };
+
+    const handleGoalTagToggle = (tagId: string) => {
+        setFormData(prev => ({
+            ...prev,
+            goalTags: prev.goalTags.includes(tagId)
+                ? prev.goalTags.filter(t => t !== tagId)
+                : [...prev.goalTags, tagId],
+        }));
+    };
+
+    const handleSubmit = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!formData.title.trim()) {
+            alert('Please enter a title');
+            return;
+        }
+        setLoading(true);
+        try {
+            const payload = {
+                title: formData.title.trim(),
+                description: formData.description.trim() || undefined,
+                coverImage: formData.coverImage || undefined,
+                videoUrl: formData.videoUrl || undefined,
+                backgroundAudioUrl: formData.backgroundAudioUrl || undefined,
+                duration: formData.duration || 0,
+                lyrics: formData.lyrics,
+                status: formData.status,
+                order: formData.order,
+                minAge: formData.minAge,
+                isMembersOnly: formData.isMembersOnly,
+                goalTags: formData.goalTags,
+            };
+            if (id && id !== 'new') {
+                await apiClient.put(`/api/karaoke/${id}`, payload);
+            } else {
+                await apiClient.post('/api/karaoke', payload);
+            }
+            navigate('/karaoke');
+        } catch (error) {
+            console.error('Error saving song:', error);
+            alert('Failed to save song');
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    if (fetching) {
+        return (
+            <div className="flex justify-center items-center h-64">
+                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600"></div>
+            </div>
+        );
+    }
+
+    return (
+        <div>
+            <div className="flex items-center gap-4 mb-6">
+                <button
+                    onClick={() => navigate('/karaoke')}
+                    className="p-2 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+                >
+                    <ArrowLeft className="w-5 h-5" />
+                </button>
+                <h1 className="text-2xl font-bold text-gray-800">
+                    {id && id !== 'new' ? 'Edit Karaoke Song' : 'Create Karaoke Song'}
+                </h1>
+            </div>
+
+            <form onSubmit={handleSubmit} className="space-y-6 max-w-4xl">
+                <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 space-y-4">
+                    <h2 className="text-lg font-semibold text-gray-800">Basic Info</h2>
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Title *</label>
+                        <input
+                            type="text"
+                            name="title"
+                            value={formData.title}
+                            onChange={handleChange}
+                            className="w-full border border-gray-300 rounded-lg px-3 py-2"
+                            placeholder="Song title"
+                            required
+                        />
+                    </div>
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
+                        <textarea
+                            name="description"
+                            value={formData.description}
+                            onChange={handleChange}
+                            className="w-full border border-gray-300 rounded-lg px-3 py-2"
+                            rows={2}
+                            placeholder="Optional description"
+                        />
+                    </div>
+                    <div className="grid grid-cols-2 gap-4">
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">Status</label>
+                            <select
+                                name="status"
+                                value={formData.status}
+                                onChange={handleChange}
+                                className="w-full border border-gray-300 rounded-lg px-3 py-2"
+                            >
+                                <option value="draft">Draft</option>
+                                <option value="published">Published</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">Order</label>
+                            <input
+                                type="number"
+                                name="order"
+                                value={formData.order}
+                                onChange={handleChange}
+                                className="w-full border border-gray-300 rounded-lg px-3 py-2"
+                                min={0}
+                            />
+                        </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                        <input
+                            type="checkbox"
+                            id="isMembersOnly"
+                            name="isMembersOnly"
+                            checked={formData.isMembersOnly}
+                            onChange={handleChange}
+                            className="rounded"
+                        />
+                        <label htmlFor="isMembersOnly" className="text-sm text-gray-700">Members only</label>
+                    </div>
+                </div>
+
+                <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 space-y-4">
+                    <h2 className="text-lg font-semibold text-gray-800">Media</h2>
+
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Cover Image</label>
+                        <div className="flex items-center gap-4">
+                            {formData.coverImage && (
+                                <img src={getMediaUrl(formData.coverImage)} alt="Cover" className="w-24 h-24 object-cover rounded-lg" />
+                            )}
+                            <div>
+                                <input ref={coverInputRef} type="file" accept="image/*" onChange={handleCoverUpload} className="hidden" id="cover-upload" />
+                                <label
+                                    htmlFor="cover-upload"
+                                    className={`inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-gray-300 cursor-pointer hover:bg-gray-50 ${uploadingCover ? 'opacity-60' : ''}`}
+                                >
+                                    <Upload className="w-4 h-4" />
+                                    {uploadingCover ? 'Uploading...' : 'Upload cover'}
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Video (karaoke-style with lyric prompts)</label>
+                        <div className="flex items-center gap-4">
+                            {formData.videoUrl && (
+                                <video src={getMediaUrl(formData.videoUrl)} controls className="max-w-xs max-h-32 rounded" />
+                            )}
+                            <div>
+                                <input ref={videoInputRef} type="file" accept="video/*" onChange={handleVideoUpload} className="hidden" id="video-upload" />
+                                <label
+                                    htmlFor="video-upload"
+                                    className={`inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-gray-300 cursor-pointer hover:bg-gray-50 ${uploadingVideo ? 'opacity-60' : ''}`}
+                                >
+                                    <Upload className="w-4 h-4" />
+                                    {uploadingVideo ? 'Uploading...' : 'Upload video'}
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Background Audio (for recording/mix)</label>
+                        <div className="flex items-center gap-4">
+                            {formData.backgroundAudioUrl && (
+                                <audio src={getMediaUrl(formData.backgroundAudioUrl)} controls className="max-w-md" />
+                            )}
+                            <div>
+                                <input ref={audioInputRef} type="file" accept="audio/*" onChange={handleAudioUpload} className="hidden" id="audio-upload" />
+                                <label
+                                    htmlFor="audio-upload"
+                                    className={`inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-gray-300 cursor-pointer hover:bg-gray-50 ${uploadingAudio ? 'opacity-60' : ''}`}
+                                >
+                                    <Upload className="w-4 h-4" />
+                                    {uploadingAudio ? 'Uploading...' : 'Upload audio'}
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Duration (seconds)</label>
+                        <input
+                            type="number"
+                            name="duration"
+                            value={formData.duration || ''}
+                            onChange={handleChange}
+                            className="w-32 border border-gray-300 rounded-lg px-3 py-2"
+                            min={0}
+                            placeholder="Auto from video"
+                        />
+                    </div>
+                </div>
+
+                <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 space-y-4">
+                    <div className="flex justify-between items-center">
+                        <h2 className="text-lg font-semibold text-gray-800">Lyrics</h2>
+                        <button type="button" onClick={addLyric} className="text-indigo-600 hover:text-indigo-700 flex items-center gap-1 text-sm">
+                            <Plus className="w-4 h-4" />
+                            Add line
+                        </button>
+                    </div>
+                    <p className="text-sm text-gray-500">Lyrics with start/end times in seconds for karaoke highlighting.</p>
+                    {formData.lyrics.length === 0 ? (
+                        <p className="text-gray-400 text-sm">No lyrics yet. Add lines with text and timing.</p>
+                    ) : (
+                        <div className="space-y-2 max-h-64 overflow-y-auto">
+                            {formData.lyrics.map((lyric, i) => (
+                                <div key={i} className="flex gap-2 items-center p-2 bg-gray-50 rounded">
+                                    <input
+                                        type="text"
+                                        value={lyric.text}
+                                        onChange={e => updateLyric(i, 'text', e.target.value)}
+                                        placeholder="Lyric text"
+                                        className="flex-1 border border-gray-200 rounded px-2 py-1 text-sm"
+                                    />
+                                    <input
+                                        type="number"
+                                        value={lyric.startTime}
+                                        onChange={e => updateLyric(i, 'startTime', Number(e.target.value) || 0)}
+                                        placeholder="Start"
+                                        className="w-20 border border-gray-200 rounded px-2 py-1 text-sm"
+                                        step={0.1}
+                                        min={0}
+                                    />
+                                    <input
+                                        type="number"
+                                        value={lyric.endTime}
+                                        onChange={e => updateLyric(i, 'endTime', Number(e.target.value) || 0)}
+                                        placeholder="End"
+                                        className="w-20 border border-gray-200 rounded px-2 py-1 text-sm"
+                                        step={0.1}
+                                        min={0}
+                                    />
+                                    <button type="button" onClick={() => removeLyric(i)} className="p-1 text-red-600 hover:bg-red-50 rounded">
+                                        <Trash2 className="w-4 h-4" />
+                                    </button>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+                </div>
+
+                <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 space-y-4">
+                    <h2 className="text-lg font-semibold text-gray-800">Goal Tags</h2>
+                    <div className="flex flex-wrap gap-2">
+                        {GOAL_TAGS.map(t => (
+                            <button
+                                key={t.id}
+                                type="button"
+                                onClick={() => handleGoalTagToggle(t.id)}
+                                className={`px-3 py-1.5 rounded-full text-sm font-medium transition-colors ${formData.goalTags.includes(t.id)
+                                    ? 'bg-indigo-100 text-indigo-700'
+                                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                                    }`}
+                            >
+                                {t.label}
+                            </button>
+                        ))}
+                    </div>
+                </div>
+
+                <div className="flex gap-4">
+                    <button
+                        type="submit"
+                        disabled={loading}
+                        className="bg-indigo-600 text-white px-6 py-2 rounded-lg hover:bg-indigo-700 disabled:opacity-50 flex items-center gap-2"
+                    >
+                        <Save className="w-5 h-5" />
+                        {loading ? 'Saving...' : 'Save'}
+                    </button>
+                    <button
+                        type="button"
+                        onClick={() => navigate('/karaoke')}
+                        className="px-6 py-2 border border-gray-300 rounded-lg hover:bg-gray-50"
+                    >
+                        Cancel
+                    </button>
+                </div>
+            </form>
+        </div>
+    );
+};
+
+export default KaraokeForm;

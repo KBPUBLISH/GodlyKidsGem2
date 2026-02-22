@@ -2039,8 +2039,9 @@ const BookReaderPage: React.FC = () => {
                     if (nextIndex >= pages.length - 1) {
                         // Mark book as completed (unlocks games permanently)
                         bookCompletionService.markBookCompleted(bookId);
-                        // Increment read count when book is completed
+                        // Increment read count locally and in backend for content analytics
                         readCountService.incrementReadCount(bookId);
+                        ApiService.incrementBookReadCount(bookId).catch(() => {});
                         // Track book completion analytics
                         analyticsService.bookReadComplete(bookId, bookTitle);
                         // Unlock reward voice if book has one
@@ -3193,6 +3194,7 @@ const BookReaderPage: React.FC = () => {
                             if (bookId) {
                                 bookCompletionService.markBookCompleted(bookId);
                                 readCountService.incrementReadCount(bookId);
+                                ApiService.incrementBookReadCount(bookId).catch(() => {});
                                 analyticsService.bookReadComplete(bookId, bookTitle);
                                 handleUnlockRewardVoice();
                             }
@@ -3803,6 +3805,7 @@ const BookReaderPage: React.FC = () => {
                                 if (bookId) {
                                     bookCompletionService.markBookCompleted(bookId);
                                     readCountService.incrementReadCount(bookId);
+                                    ApiService.incrementBookReadCount(bookId).catch(() => {});
                                     // Track book completion analytics
                                     analyticsService.bookReadComplete(bookId, bookTitle);
                                     // Unlock reward voice if book has one
@@ -3911,6 +3914,7 @@ const BookReaderPage: React.FC = () => {
                                 if (bookId) {
                                     bookCompletionService.markBookCompleted(bookId);
                                     readCountService.incrementReadCount(bookId);
+                                    ApiService.incrementBookReadCount(bookId).catch(() => {});
                                     // Track book completion analytics
                                     analyticsService.bookReadComplete(bookId, bookTitle);
                                 }

@@ -103,11 +103,20 @@ const onboardingEventSchema = new mongoose.Schema({
             // First lesson paywall
             'first_lesson_paywall_shown', // Paywall shown after first lesson
 
+            // Lifetime offer popup (after paywall close / 1 min on app / app reopen)
+            'lifetime_popup_shown',
+            'lifetime_popup_clicked',
+            'lifetime_popup_dismissed',
+
             // Dive into the Bible / Create Your Story (book building) funnel
             'book_building_started',
             'book_building_step_1_complete',
+            'book_building_step_2_started',
+            'book_building_character_generated',
             'book_building_step_2_complete',
+            'book_building_step_3_started',
             'book_building_step_3_complete',
+            'book_building_step_4_started',
             'book_building_step_4_complete',
             'book_building_book_created',
             'book_building_book_completed',

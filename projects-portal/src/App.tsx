@@ -46,6 +46,8 @@ import BackgroundMusicLibrary from './pages/BackgroundMusicLibrary';
 import StoryBackgroundLibrary from './pages/StoryBackgroundLibrary';
 import MonthlyBookTemplates from './pages/MonthlyBookTemplates';
 import MonthlyBookTemplateForm from './pages/MonthlyBookTemplateForm';
+import KaraokeManagement from './pages/KaraokeManagement';
+import KaraokeForm from './pages/KaraokeForm';
 
 // Godly Hub - Creator Portal
 import CreatorLogin from './pages/CreatorLogin';
@@ -139,6 +141,9 @@ function App() {
             <Route path="monthly-books" element={<MonthlyBookTemplates />} />
             <Route path="monthly-books/new" element={<MonthlyBookTemplateForm />} />
             <Route path="monthly-books/edit/:id" element={<MonthlyBookTemplateForm />} />
+            <Route path="karaoke" element={<KaraokeManagement />} />
+            <Route path="karaoke/new" element={<KaraokeForm />} />
+            <Route path="karaoke/edit/:id" element={<KaraokeForm />} />
             
             {/* Godly Hub Admin */}
             <Route path="hub/creators" element={<HubCreators />} />

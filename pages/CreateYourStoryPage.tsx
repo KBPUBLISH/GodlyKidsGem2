@@ -314,10 +314,9 @@ const CreateYourStoryPage: React.FC = () => {
       const url = data.characterAvatarUrl || data.imageUrl;
       if (url) {
         setAvatarUrl(url);
-        if (!data.fallback) {
-          setError(null);
-          activityTrackingService.trackOnboardingEvent('book_building_character_generated').catch(() => {});
-        }
+        setError(null);
+        // Track character generated (including fallback) so funnel matches: user got a character to proceed
+        activityTrackingService.trackOnboardingEvent('book_building_character_generated').catch(() => {});
       } else {
         setError(data.error || data.message || 'Could not create your character. Try again.');
       }
@@ -388,10 +387,9 @@ const CreateYourStoryPage: React.FC = () => {
       const url = data.characterAvatarUrl || data.imageUrl;
       if (url) {
         setAvatarUrl(url);
-        if (!data.fallback) {
-          setError(null);
-          activityTrackingService.trackOnboardingEvent('book_building_character_generated').catch(() => {});
-        }
+        setError(null);
+        // Track character generated (including fallback) so funnel matches: user got a character to proceed
+        activityTrackingService.trackOnboardingEvent('book_building_character_generated').catch(() => {});
       } else {
         setError(data.error || data.message || 'Could not create your character. Try again.');
       }

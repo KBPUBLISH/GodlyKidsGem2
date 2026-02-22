@@ -1352,58 +1352,65 @@ router.get('/content', async (req, res) => {
                     $group: {
                         _id: '$contentId',
                         totalPagesRead: { $sum: '$pagesViewed' },
-                        avgPagesRead: { $avg: '$pagesViewed' },
-                        readingSessions: { $sum: { $cond: [{ $ne: ['$isEngagementUpdate', true] }, 1, 0] } },
-                        avgCompletion: { $avg: '$completionPercent' },
+                        readingSessions: { $sum: 1 },
+                        completions: { $sum: { $cond: [{ $gte: ['$completionPercent', 90] }, 1, 0] } },
+                        avgCompletion: { $avg: { $cond: [{ $gt: ['$completionPercent', 0] }, '$completionPercent', null] } },
                         maxCompletion: { $max: '$completionPercent' },
                     }
                 }
             ]);
             
             // Create a map of reading metrics by book ID
+            // avgPagesRead = totalPagesRead / sessions (consistent: 47 total pages ÷ 5 sessions = 9.4 avg)
             const readingMetricsMap = new Map();
             readingMetricsAgg.forEach(e => {
+                const sessions = e.readingSessions || 0;
+                const total = e.totalPagesRead || 0;
+                const avgPages = sessions > 0 ? total / sessions : 0;
                 readingMetricsMap.set(e._id.toString(), {
-                    totalPagesRead: e.totalPagesRead || 0,
-                    avgPagesRead: Math.round((e.avgPagesRead || 0) * 10) / 10, // Round to 1 decimal
-                    readingSessions: e.readingSessions || 0,
+                    totalPagesRead: total,
+                    avgPagesRead: Math.round(avgPages * 10) / 10,
+                    readingSessions: sessions,
+                    completions: e.completions || 0,
                     avgCompletion: Math.round(e.avgCompletion || 0),
                     maxCompletion: Math.round(e.maxCompletion || 0),
                 });
             });
-            
+
+            // Unified logic: use PlayEvent for sessions/pages; Book counts as fallback for "all" time.
+            // PlayEvent has 30-day TTL so "all" time Book.viewCount/readCount may exceed PlayEvent totals.
             if (startDate) {
-                // Merge with book data for time-filtered view
+                // Time-filtered: all metrics from PlayEvent (only data we have for the window)
                 results.books = books.map(book => {
                     const stats = readingMetricsMap.get(book._id.toString()) || { 
-                        totalPagesRead: 0, avgPagesRead: 0, readingSessions: 0, avgCompletion: 0, maxCompletion: 0 
+                        totalPagesRead: 0, avgPagesRead: 0, readingSessions: 0, completions: 0, avgCompletion: 0, maxCompletion: 0 
                     };
                     return {
                         ...book,
-                        // For time-filtered view, use play event counts
                         viewCount: stats.readingSessions,
-                        readCount: stats.readingSessions,
+                        readCount: stats.completions,
                         averageCompletionRate: stats.avgCompletion,
-                        // New reading metrics
                         totalPagesRead: stats.totalPagesRead,
                         avgPagesRead: stats.avgPagesRead,
                         readingSessions: stats.readingSessions,
-                        // Keep other counts as-is (they're cumulative)
-                        likeCount: 0, // Would need separate event tracking
-                        favoriteCount: 0,
+                        likeCount: book.likeCount || 0,
+                        favoriteCount: book.favoriteCount || 0,
                     };
                 });
             } else {
-                // All time - use stored counts but add reading metrics
+                // All time: Book counts (viewCount, readCount) + PlayEvent pages (last 30d due to TTL)
                 results.books = books.map(book => {
                     const stats = readingMetricsMap.get(book._id.toString()) || { 
-                        totalPagesRead: 0, avgPagesRead: 0, readingSessions: 0, avgCompletion: 0, maxCompletion: 0 
+                        totalPagesRead: 0, avgPagesRead: 0, readingSessions: 0, completions: 0, avgCompletion: 0, maxCompletion: 0 
                     };
                     return {
                         ...book,
+                        viewCount: book.viewCount || 0,
+                        readCount: book.readCount || 0,
                         totalPagesRead: stats.totalPagesRead,
                         avgPagesRead: stats.avgPagesRead,
                         readingSessions: stats.readingSessions,
+                        averageCompletionRate: stats.avgCompletion || book.averageCompletionRate || 0,
                     };
                 });
             }

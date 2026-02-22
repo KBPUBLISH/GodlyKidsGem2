@@ -599,6 +599,8 @@ import SharePlaylistPage from './pages/SharePlaylistPage';
 import ShareBookPage from './pages/ShareBookPage';
 import ParentQuizPage from './pages/ParentQuizPage';
 import GamesPage from './pages/GamesPage';
+import KaraokePage from './pages/KaraokePage';
+import KaraokePlayerPage from './pages/KaraokePlayerPage';
 import InterestSelectionPage from './pages/InterestSelectionPage';
 import DailySessionPage from './pages/DailySessionPage';
 
@@ -1298,6 +1300,7 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const isPremiumOnboarding = location.pathname === '/premium-onboarding';
   const isTrialStats = location.pathname === '/trial-stats';
   const isBookCreating = location.pathname.startsWith('/library/creating/');
+  const isKaraokePage = location.pathname === '/karaoke' || location.pathname.startsWith('/karaoke/');
 
   // Standalone pages that don't need the app chrome (background, navigation, etc.)
   const isStandalonePage = isParentQuiz || isSharePage || isReadyToJumpIn || isDailySession || isPremiumOnboarding || isTrialStats;
@@ -1359,7 +1362,7 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
       )}
       
       {/* Bottom Safe Area Spacer - for pages without BottomNavigation */}
-      {(isBookDetail || isPlayer || isProfile || isCreateProfile || isEditProfile || isPaywall || isSettings || isBookReader || isAudioPage || isLessonPage || isLessonsPage || isBookSeries || isCreatePlaylist || isMyPlaylist || isBookCreating) && (
+      {(isBookDetail || isPlayer || isProfile || isCreateProfile || isEditProfile || isPaywall || isSettings || isBookReader || isAudioPage || isLessonPage || isLessonsPage || isBookSeries || isCreatePlaylist || isMyPlaylist || isBookCreating || isKaraokePage) && (
         <div 
           className="w-full bg-transparent pointer-events-none" 
           style={{ height: 'var(--safe-area-bottom, 0px)' }}
@@ -1566,6 +1569,8 @@ const App: React.FC = () => {
                   <Route path="/lessons" element={<ProtectedRoute><LessonsPage /></ProtectedRoute>} />
                   <Route path="/lesson/:lessonId" element={<ProtectedRoute><LessonPlayerPage /></ProtectedRoute>} />
                   <Route path="/games" element={<GamesPage />} />
+                  <Route path="/karaoke" element={<KaraokePage />} />
+                  <Route path="/karaoke/:id" element={<KaraokePlayerPage />} />
                   <Route path="/profile" element={<ProfileSelectionPage />} />
                   <Route path="/create-profile" element={<CreateProfilePage />} />
                   <Route path="/edit-profile" element={<EditProfilePage />} />

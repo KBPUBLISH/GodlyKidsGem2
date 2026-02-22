@@ -875,6 +875,10 @@ router.post('/audio', upload.single('file'), async (req, res) => {
             // Special handling for playlists
             if (bookId === 'playlists') {
                 filePath = `playlists/audio/${Date.now()}_${req.file.originalname.replace(/[^a-zA-Z0-9.-]/g, '_')}`;
+            } else if (bookId === 'karaoke') {
+                // Karaoke: bookId=karaoke&type=audio&songId=xyz -> karaoke/xyz/audio/...
+                const songId = req.query.songId || 'temp';
+                filePath = generateFilePath(`karaoke/${songId}`, 'audio', req.file.originalname);
             } else {
                 // Generate organized file path for books
                 filePath = generateFilePath(bookId, 'audio', req.file.originalname);

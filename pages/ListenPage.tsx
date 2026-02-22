@@ -62,6 +62,7 @@ interface CategoryData {
 
 const HEADPHONE_ISLAND = '/assets/images/headphone-island.webp';
 const MUSIC_ISLAND = '/assets/images/music-island.webp';
+const KARAOKE_RAFT = '/assets/images/karaoke-raft.webp';
 
 const ListenPage: React.FC = () => {
 
@@ -366,6 +367,15 @@ const ListenPage: React.FC = () => {
   if (showContent) {
     return (
       <div className="fixed inset-0 z-[100] flex flex-col overflow-hidden">
+        <style>{`
+          .karaoke-raft-drift { animation: karaoke-raft-drift 5s ease-in-out infinite; will-change: transform; }
+          @keyframes karaoke-raft-drift {
+            0%, 100% { transform: translate(0, 0) rotate(-0.5deg); }
+            25%      { transform: translate(3px, -2px) rotate(0.5deg); }
+            50%      { transform: translate(-2px, 3px) rotate(-0.3deg); }
+            75%      { transform: translate(2px, 2px) rotate(0.4deg); }
+          }
+        `}</style>
         {/* Semi-transparent overlay so ocean panorama shows through */}
         <div className="absolute inset-0 bg-black/20" />
 
@@ -384,6 +394,16 @@ const ListenPage: React.FC = () => {
 
         {/* Island + scrollable content wrapper */}
         <div className="relative flex-1 overflow-hidden">
+          {/* Karaoke raft — back right, behind the island (click to go to Karaoke) */}
+          <button
+            type="button"
+            onClick={() => navigate('/karaoke')}
+            className="absolute karaoke-raft-drift cursor-pointer select-none focus:outline-none hover:opacity-100 active:scale-95 transition-all"
+            style={{ zIndex: 15, right: '2%', top: '12%', width: '22vw', maxWidth: 110, opacity: 0.88 }}
+            aria-label="Go to Karaoke"
+          >
+            <img src={KARAOKE_RAFT} alt="" className="w-full h-auto object-contain drop-shadow-[0_4px_12px_rgba(0,0,0,0.3)] pointer-events-none" />
+          </button>
           {/* Fixed island behind content */}
           <div className="absolute top-0 left-0 right-0 flex justify-center pt-12 pointer-events-none" style={{ zIndex: 4 }}>
             <img
@@ -825,6 +845,21 @@ const ListenPage: React.FC = () => {
           <div className="absolute bottom-0 left-0 right-0 h-[25%]" style={{ background: 'linear-gradient(to top, rgba(0,40,80,0.10), transparent)' }} />
         </div>
 
+        {/* Karaoke raft — back right, behind the islands (click to go to Karaoke) */}
+        <button
+          type="button"
+          onClick={() => navigate('/karaoke')}
+          className="absolute transition-opacity duration-300 karaoke-raft-drift cursor-pointer select-none focus:outline-none hover:opacity-100 active:scale-95"
+          style={{ zIndex: 10, right: '2%', top: '18%', width: '26vw', maxWidth: 130, opacity: isZoomingIn ? 0 : 0.92 }}
+          aria-label="Go to Karaoke"
+        >
+          <img
+            src={KARAOKE_RAFT}
+            alt=""
+            className="w-full h-auto object-contain drop-shadow-[0_4px_12px_rgba(0,0,0,0.3)] pointer-events-none"
+          />
+        </button>
+
         {/* Music Notes Island — back left */}
         <div className="absolute transition-opacity duration-300" style={{ zIndex: 3, left: '3%', top: '20%', width: '28vw', maxWidth: 140, opacity: isZoomingIn ? 0 : 1 }}>
           {/* Pulse rings — multi-color: green, orange, purple */}
@@ -1033,6 +1068,17 @@ const ListenPage: React.FC = () => {
             20%  { opacity: 1; }
             60%  { opacity: 0.6; }
             100% { transform: scale(0.95); opacity: 0; }
+          }
+
+          .karaoke-raft-drift {
+            animation: karaoke-raft-drift 5s ease-in-out infinite;
+            will-change: transform;
+          }
+          @keyframes karaoke-raft-drift {
+            0%, 100% { transform: translate(0, 0) rotate(-0.5deg); }
+            25%      { transform: translate(3px, -2px) rotate(0.5deg); }
+            50%      { transform: translate(-2px, 3px) rotate(-0.3deg); }
+            75%      { transform: translate(2px, 2px) rotate(0.4deg); }
           }
 
           .listen-note-float {

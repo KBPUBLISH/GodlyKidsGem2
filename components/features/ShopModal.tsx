@@ -7,7 +7,8 @@ import { X, ShoppingBag, Check, Trash2, Crown, Wrench, Play, Pause, ArrowUpToLin
 import { useUser, ShopItem, SavedCharacter } from '../../context/UserContext';
 import AvatarCompositor from '../avatar/AvatarCompositor';
 import { AVATAR_ASSETS } from '../avatar/AvatarAssets';
-import { ApiService } from '../../services/apiService';
+import { ApiService, getMonthlyBookBaseUrl } from '../../services/apiService';
+import { authService } from '../../services/authService';
 import { filterVisibleVoices } from '../../services/voiceManagementService';
 import CoinHistoryModal from './CoinHistoryModal';
 import { useLanguage } from '../../context/LanguageContext';
@@ -312,11 +313,29 @@ const ShopModal: React.FC<ShopModalProps> = ({ isOpen, onClose, initialTab, hide
 
     if (!isOpen) return null;
 
-    const handleBuy = (item: ShopItem) => {
+    const handleBuy = async (item: ShopItem) => {
         if (item.type === 'voice') {
             if (coins >= item.price) {
                 purchaseItem(item);
                 unlockVoice(item.value);
+                // Persist to backend so unlock survives refresh and syncs across devices
+                const userId = authService.getUserIdForBackend();
+                if (userId) {
+                    try {
+                        const base = getMonthlyBookBaseUrl();
+                        const res = await fetch(`${base}/voices/unlock`, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ userId, voiceId: item.value }),
+                        });
+                        const data = await res.json();
+                        if (!data.success && !data.alreadyUnlocked) {
+                            console.warn('Shop: voice unlock API failed', data);
+                        }
+                    } catch (err) {
+                        console.warn('Shop: voice unlock API error', err);
+                    }
+                }
             }
         } else {
             const success = purchaseItem(item);

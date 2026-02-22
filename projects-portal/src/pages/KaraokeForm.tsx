@@ -158,12 +158,27 @@ async function uploadViaSignedUrl(
     return { url: publicUrl };
 }
 
-/** Use chunked for large files, single PUT for small ones */
+/** Use chunked for large files, single PUT for small ones (video only - audio uses FormData) */
 async function uploadMedia(bookId: string, type: 'video' | 'audio', file: File, songId?: string): Promise<{ url: string }> {
     if (file.size > CHUNK_THRESHOLD) {
         return uploadViaChunked(bookId, type, file, songId);
     }
     return uploadViaSignedUrl(bookId, type, file, songId);
+}
+
+/** Upload audio via backend (FormData) - same path as BookEdit background music. Avoids CORS issues with direct-to-GCS. */
+async function uploadAudioViaFormData(songId: string, file: File): Promise<{ url: string }> {
+    const formData = new FormData();
+    formData.append('file', file);
+    const params = new URLSearchParams({ bookId: 'karaoke', type: 'audio', songId });
+    const res = await fetch(`${API_BASE()}/api/upload/audio?${params}`, {
+        method: 'POST',
+        body: formData,
+    });
+    if (!res.ok) throw new Error(await res.text().catch(() => `Upload failed: ${res.status}`));
+    const data = await res.json();
+    if (!data?.url) throw new Error('No URL in response');
+    return data;
 }
 
 interface LyricLine {
@@ -413,9 +428,9 @@ const KaraokeForm: React.FC = () => {
         }
         uploadLockRef.current = true;
         setUploadingAudio(true);
-        // Always use direct-to-GCS for audio (same as video) - avoids ERR_INSUFFICIENT_RESOURCES
+        // Use FormData upload via backend (same path as BookEdit) - avoids CORS/direct-to-GCS failures
         try {
-            const data = await uploadMedia(bookIdForUpload, 'audio', file, songId);
+            const data = await uploadAudioViaFormData(songId, file);
             setFormData(prev => ({ ...prev, backgroundAudioUrl: data.url }));
         } catch (err) {
             console.error('Audio upload failed:', err);

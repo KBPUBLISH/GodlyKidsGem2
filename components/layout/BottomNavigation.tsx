@@ -131,6 +131,7 @@ const BottomNavigation: React.FC = () => {
   const startAngleRef = useRef(0);
   const startRotationRef = useRef(0);
   const totalMoveRef = useRef(0);
+  const lastTouchEndRef = useRef(0); // Prevent double fire: touch + synthesized mouse on mobile
 
   const getAngle = (clientX: number, clientY: number) => {
     if (!wheelRef.current) return 0;
@@ -203,7 +204,15 @@ const BottomNavigation: React.FC = () => {
   // Event Listeners
   const handleTouchStart = (e: React.TouchEvent) => onStart(e.touches[0].clientX, e.touches[0].clientY);
   const handleTouchMove = (e: React.TouchEvent) => onMove(e.touches[0].clientX, e.touches[0].clientY);
-  const handleMouseDown = (e: React.MouseEvent) => onStart(e.clientX, e.clientY);
+  const handleTouchEnd = (e: React.TouchEvent) => {
+    e.preventDefault();
+    lastTouchEndRef.current = Date.now();
+    onEnd();
+  };
+  const handleMouseDown = (e: React.MouseEvent) => {
+    if (Date.now() - lastTouchEndRef.current < 400) return; // Ignore synthesized mouse after touch
+    onStart(e.clientX, e.clientY);
+  };
 
   // Attach non-passive touch listeners so preventDefault works (stops scroll from stealing the gesture)
   useEffect(() => {
@@ -588,8 +597,8 @@ const BottomNavigation: React.FC = () => {
           }}
           onTouchStart={handleTouchStart}
           onTouchMove={handleTouchMove}
-          onTouchEnd={onEnd}
-          onTouchCancel={onEnd}
+          onTouchEnd={handleTouchEnd}
+          onTouchCancel={handleTouchEnd}
           onMouseDown={handleMouseDown}
           onMouseMove={handleMouseMove}
           onMouseUp={onEnd}

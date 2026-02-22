@@ -26,6 +26,66 @@ async function uploadViaFetch(endpoint: string, body: globalThis.FormData, timeo
     return data;
 }
 
+/** XHR upload for large files - avoids fetch's ERR_INSUFFICIENT_RESOURCES on Chrome */
+async function uploadViaXHR(endpoint: string, body: globalThis.FormData, timeoutMs = 300000): Promise<{ url: string }> {
+    return new Promise((resolve, reject) => {
+        const xhr = new XMLHttpRequest();
+        const url = `${API_BASE()}${endpoint}`;
+        const timeoutId = setTimeout(() => {
+            xhr.abort();
+            reject(new Error('Upload timed out'));
+        }, timeoutMs);
+        xhr.onload = () => {
+            clearTimeout(timeoutId);
+            if (xhr.status >= 200 && xhr.status < 300) {
+                try {
+                    const data = JSON.parse(xhr.responseText);
+                    if (data?.url) resolve(data);
+                    else reject(new Error('No URL in response'));
+                } catch {
+                    reject(new Error('Invalid response'));
+                }
+            } else {
+                reject(new Error(xhr.responseText || `Upload failed: ${xhr.status}`));
+            }
+        };
+        xhr.onerror = () => {
+            clearTimeout(timeoutId);
+            reject(new Error('Network error'));
+        };
+        xhr.onabort = () => {
+            clearTimeout(timeoutId);
+            reject(new Error('Upload aborted'));
+        };
+        xhr.open('POST', url);
+        xhr.send(body);
+    });
+}
+
+/** Get video duration from local file (avoids re-fetching 30MB+ after upload) */
+function getVideoDurationFromFile(file: File): Promise<number> {
+    return new Promise((resolve) => {
+        const video = document.createElement('video');
+        video.preload = 'metadata';
+        const url = URL.createObjectURL(file);
+        video.onloadedmetadata = () => {
+            URL.revokeObjectURL(url);
+            const dur = Math.round(video.duration);
+            video.src = '';
+            video.load();
+            resolve(dur > 0 ? dur : 0);
+        };
+        video.onerror = () => {
+            URL.revokeObjectURL(url);
+            video.src = '';
+            resolve(0);
+        };
+        video.src = url;
+    });
+}
+
+const LARGE_FILE_THRESHOLD = 10 * 1024 * 1024; // 10MB - use XHR above this
+
 interface LyricLine {
     text: string;
     startTime: number;
@@ -235,20 +295,27 @@ const KaraokeForm: React.FC = () => {
         }
         uploadLockRef.current = true;
         setUploadingVideo(true);
-        const fd = new FormData();
-        fd.append('file', file);
+        // Get duration from local file first (avoids re-fetching 30MB+ after upload = ERR_INSUFFICIENT_RESOURCES)
+        const duration = await getVideoDurationFromFile(file);
+        const endpoint = `/api/upload/video?bookId=${bookIdForUpload}&type=video`;
+        const doUpload = () => {
+            const fd = new FormData();
+            fd.append('file', file);
+            return uploadViaXHR(endpoint, fd, 300000);
+        };
         try {
-            const data = await uploadViaFetch(`/api/upload/video?bookId=${bookIdForUpload}&type=video`, fd, 300000);
-            setFormData(prev => ({ ...prev, videoUrl: data.url }));
-            const video = document.createElement('video');
-            video.preload = 'metadata';
-            video.onloadedmetadata = () => {
-                setFormData(prev => ({ ...prev, duration: Math.round(video.duration) || prev.duration }));
-                video.src = '';
-                video.load();
-            };
-            video.onerror = () => { video.src = ''; video.load(); };
-            video.src = data.url;
+            await new Promise((r) => setTimeout(r, 300)); // Brief delay to reduce resource contention
+            let data: { url: string };
+            try {
+                data = await doUpload();
+            } catch (err) {
+                const msg = String((err as Error)?.message || err);
+                if ((msg.includes('ERR_INSUFFICIENT_RESOURCES') || msg.includes('Failed to fetch') || msg.includes('Network error')) && file.size > LARGE_FILE_THRESHOLD) {
+                    await new Promise((r) => setTimeout(r, 3000)); // Retry after 3s
+                    data = await doUpload();
+                } else throw err;
+            }
+            setFormData(prev => ({ ...prev, videoUrl: data.url, duration: duration || prev.duration }));
         } catch (err) {
             console.error('Video upload failed:', err);
             showUploadError('video', err);
@@ -280,10 +347,25 @@ const KaraokeForm: React.FC = () => {
         }
         uploadLockRef.current = true;
         setUploadingAudio(true);
-        const fd = new FormData();
-        fd.append('file', file);
+        const endpoint = `/api/upload/audio?bookId=${bookIdForUpload}&type=audio`;
+        const useXHR = file.size > LARGE_FILE_THRESHOLD;
+        const doUpload = () => {
+            const fd = new FormData();
+            fd.append('file', file);
+            return useXHR ? uploadViaXHR(endpoint, fd, 120000) : uploadViaFetch(endpoint, fd, 120000);
+        };
         try {
-            const data = await uploadViaFetch(`/api/upload/audio?bookId=${bookIdForUpload}&type=audio`, fd, 120000);
+            if (useXHR) await new Promise((r) => setTimeout(r, 300));
+            let data: { url: string };
+            try {
+                data = await doUpload();
+            } catch (err) {
+                const msg = String((err as Error)?.message || err);
+                if ((msg.includes('ERR_INSUFFICIENT_RESOURCES') || msg.includes('Failed to fetch') || msg.includes('Network error')) && file.size > LARGE_FILE_THRESHOLD) {
+                    await new Promise((r) => setTimeout(r, 3000));
+                    data = await doUpload();
+                } else throw err;
+            }
             setFormData(prev => ({ ...prev, backgroundAudioUrl: data.url }));
         } catch (err) {
             console.error('Audio upload failed:', err);

@@ -226,6 +226,12 @@ router.post('/link-email', async (req, res) => {
             if (deviceUser.kidProfiles?.length) {
                 existingEmailUser.kidProfiles = deviceUser.kidProfiles;
             }
+            // Preserve premium from device user if they purchased before creating account
+            if (deviceUser.subscriptionStatus === 'active') {
+                existingEmailUser.subscriptionStatus = 'active';
+                existingEmailUser.subscriptionPlan = deviceUser.subscriptionPlan || existingEmailUser.subscriptionPlan;
+                existingEmailUser.subscriptionStartDate = deviceUser.subscriptionStartDate || existingEmailUser.subscriptionStartDate;
+            }
             existingEmailUser.deviceId = deviceId; // Link device to email account
             existingEmailUser.lastActiveAt = new Date();
             await existingEmailUser.save();

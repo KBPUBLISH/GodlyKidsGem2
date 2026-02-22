@@ -4,6 +4,28 @@ import { ArrowLeft, Save, Upload, Plus, Trash2 } from 'lucide-react';
 import apiClient from '../services/apiClient';
 import { getMediaUrl } from '../services/apiClient';
 
+const MAX_VIDEO_SIZE_MB = 80;
+const MAX_VIDEO_BYTES = MAX_VIDEO_SIZE_MB * 1024 * 1024;
+const MAX_AUDIO_SIZE_MB = 30;
+const MAX_AUDIO_BYTES = MAX_AUDIO_SIZE_MB * 1024 * 1024;
+
+const API_BASE = () => import.meta.env.VITE_API_BASE_URL || 'https://backendgk2-0.onrender.com';
+
+async function uploadViaFetch(endpoint: string, formData: FormData, timeoutMs = 120000): Promise<{ url: string }> {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+    const res = await fetch(`${API_BASE()}${endpoint}`, {
+        method: 'POST',
+        body: formData,
+        signal: controller.signal,
+    });
+    clearTimeout(timeoutId);
+    if (!res.ok) throw new Error(await res.text().catch(() => `Upload failed: ${res.status}`));
+    const data = await res.json();
+    if (!data?.url) throw new Error('No URL in response');
+    return data;
+}
+
 interface LyricLine {
     text: string;
     startTime: number;
@@ -25,6 +47,52 @@ interface FormData {
     goalTags: string[];
 }
 
+/** Resize/compress image to avoid ERR_INSUFFICIENT_RESOURCES with large uploads */
+async function resizeImageForUpload(file: File, maxSize = 600, quality = 0.75): Promise<File> {
+    if (file.size < 200 * 1024) return file; // Skip if already under 200KB
+    return new Promise((resolve, reject) => {
+        const img = new Image();
+        const url = URL.createObjectURL(file);
+        img.onload = () => {
+            URL.revokeObjectURL(url);
+            const w = img.width;
+            const h = img.height;
+            if (w <= maxSize && h <= maxSize) {
+                resolve(file);
+                return;
+            }
+            const scale = maxSize / Math.max(w, h);
+            const cw = Math.round(w * scale);
+            const ch = Math.round(h * scale);
+            const canvas = document.createElement('canvas');
+            canvas.width = cw;
+            canvas.height = ch;
+            const ctx = canvas.getContext('2d');
+            if (!ctx) {
+                resolve(file);
+                return;
+            }
+            ctx.drawImage(img, 0, 0, cw, ch);
+            canvas.toBlob(
+                (blob) => {
+                    if (!blob) {
+                        resolve(file);
+                        return;
+                    }
+                    resolve(new File([blob], file.name.replace(/\.[^.]+$/, '.jpg'), { type: 'image/jpeg' }));
+                },
+                'image/jpeg',
+                quality
+            );
+        };
+        img.onerror = () => {
+            URL.revokeObjectURL(url);
+            resolve(file);
+        };
+        img.src = url;
+    });
+}
+
 const GOAL_TAGS = [
     { id: 'courage', label: '🦁 Courage' },
     { id: 'faith', label: '🙏 Faith' },
@@ -44,6 +112,7 @@ const KaraokeForm: React.FC = () => {
     const [uploadingCover, setUploadingCover] = useState(false);
     const [uploadingVideo, setUploadingVideo] = useState(false);
     const [uploadingAudio, setUploadingAudio] = useState(false);
+    const uploadLockRef = useRef(false); // Prevent concurrent uploads (causes ERR_INSUFFICIENT_RESOURCES)
     const coverInputRef = useRef<HTMLInputElement>(null);
     const videoInputRef = useRef<HTMLInputElement>(null);
     const audioInputRef = useRef<HTMLInputElement>(null);
@@ -109,26 +178,42 @@ const KaraokeForm: React.FC = () => {
         }));
     };
 
+    const showUploadError = (type: string, err: unknown) => {
+        const msg = err instanceof Error ? err.message : String(err);
+        const isResources = msg.includes('ERR_INSUFFICIENT_RESOURCES') || msg.includes('Failed to fetch') || msg.includes('AbortError');
+        alert(isResources
+            ? `Upload failed (browser ran out of resources). Try: 1) Close other tabs and refresh, 2) Upload one file at a time, 3) Use smaller/compressed files.`
+            : `Failed to upload ${type}: ${msg}`
+        );
+    };
+
     const handleCoverUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
         if (!file?.type.startsWith('image/')) {
             alert('Please select an image file');
             return;
         }
+        if (uploadLockRef.current) {
+            alert('Please wait for the current upload to finish.');
+            e.target.value = '';
+            return;
+        }
+        uploadLockRef.current = true;
         setUploadingCover(true);
-        const fd = new FormData();
-        fd.append('file', file);
         try {
-            const res = await apiClient.post(`/api/upload/image?bookId=${bookIdForUpload}&type=cover&songId=${songId}`, fd, {
-                headers: { 'Content-Type': 'multipart/form-data' },
-            });
-            setFormData(prev => ({ ...prev, coverImage: res.data.url }));
+            const resized = await resizeImageForUpload(file);
+            const fd = new FormData();
+            fd.append('file', resized);
+            const data = await uploadViaFetch(`/api/upload/image?bookId=${bookIdForUpload}&type=cover&songId=${songId}`, fd, 60000);
+            setFormData(prev => ({ ...prev, coverImage: data.url }));
         } catch (err) {
             console.error('Cover upload failed:', err);
-            alert('Failed to upload cover image');
+            showUploadError('cover image', err);
         } finally {
             setUploadingCover(false);
+            uploadLockRef.current = false;
             if (coverInputRef.current) coverInputRef.current.value = '';
+            e.target.value = '';
         }
     };
 
@@ -138,51 +223,76 @@ const KaraokeForm: React.FC = () => {
             alert('Please select a video file');
             return;
         }
+        if (file.size > MAX_VIDEO_BYTES) {
+            alert(`Video must be under ${MAX_VIDEO_SIZE_MB}MB. Your file is ${(file.size / 1024 / 1024).toFixed(1)}MB. Please compress it first.`);
+            e.target.value = '';
+            return;
+        }
+        if (uploadLockRef.current) {
+            alert('Please wait for the current upload to finish.');
+            e.target.value = '';
+            return;
+        }
+        uploadLockRef.current = true;
         setUploadingVideo(true);
         const fd = new FormData();
         fd.append('file', file);
         try {
-            const res = await apiClient.post(`/api/upload/video?bookId=${bookIdForUpload}&type=video`, fd, {
-                headers: { 'Content-Type': 'multipart/form-data' },
-                timeout: 300000,
-            });
-            setFormData(prev => ({ ...prev, videoUrl: res.data.url }));
-            // Try to get duration
+            const data = await uploadViaFetch(`/api/upload/video?bookId=${bookIdForUpload}&type=video`, fd, 300000);
+            setFormData(prev => ({ ...prev, videoUrl: data.url }));
             const video = document.createElement('video');
-            video.src = res.data.url;
+            video.preload = 'metadata';
             video.onloadedmetadata = () => {
                 setFormData(prev => ({ ...prev, duration: Math.round(video.duration) || prev.duration }));
+                video.src = '';
+                video.load();
             };
+            video.onerror = () => { video.src = ''; video.load(); };
+            video.src = data.url;
         } catch (err) {
             console.error('Video upload failed:', err);
-            alert('Failed to upload video');
+            showUploadError('video', err);
         } finally {
             setUploadingVideo(false);
+            uploadLockRef.current = false;
             if (videoInputRef.current) videoInputRef.current.value = '';
+            e.target.value = '';
         }
     };
 
     const handleAudioUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
-        if (!file?.type.startsWith('audio/') && !['.mp3', '.wav', '.m4a', '.ogg'].includes(file?.name?.slice(-5) || '')) {
-            alert('Please select an audio file');
+        if (!file) return;
+        const ext = (file.name || '').toLowerCase().slice(-4);
+        if (!file.type.startsWith('audio/') && !['.mp3', '.wav', '.m4a', '.ogg'].includes(ext) && !file.name?.toLowerCase().endsWith('.mp3')) {
+            alert('Please select an audio file (MP3, WAV, M4A, OGG)');
             return;
         }
+        if (file.size > MAX_AUDIO_BYTES) {
+            alert(`Audio must be under ${MAX_AUDIO_SIZE_MB}MB. Your file is ${(file.size / 1024 / 1024).toFixed(1)}MB.`);
+            e.target.value = '';
+            return;
+        }
+        if (uploadLockRef.current) {
+            alert('Please wait for the current upload to finish.');
+            e.target.value = '';
+            return;
+        }
+        uploadLockRef.current = true;
         setUploadingAudio(true);
         const fd = new FormData();
-        fd.append('file', file!);
+        fd.append('file', file);
         try {
-            const res = await apiClient.post(`/api/upload/audio?bookId=${bookIdForUpload}&type=audio`, fd, {
-                headers: { 'Content-Type': 'multipart/form-data' },
-                timeout: 120000,
-            });
-            setFormData(prev => ({ ...prev, backgroundAudioUrl: res.data.url }));
+            const data = await uploadViaFetch(`/api/upload/audio?bookId=${bookIdForUpload}&type=audio`, fd, 120000);
+            setFormData(prev => ({ ...prev, backgroundAudioUrl: data.url }));
         } catch (err) {
             console.error('Audio upload failed:', err);
-            alert('Failed to upload background audio');
+            showUploadError('audio', err);
         } finally {
             setUploadingAudio(false);
+            uploadLockRef.current = false;
             if (audioInputRef.current) audioInputRef.current.value = '';
+            e.target.value = '';
         }
     };
 
@@ -350,10 +460,10 @@ const KaraokeForm: React.FC = () => {
                                 <img src={getMediaUrl(formData.coverImage)} alt="Cover" className="w-24 h-24 object-cover rounded-lg" />
                             )}
                             <div>
-                                <input ref={coverInputRef} type="file" accept="image/*" onChange={handleCoverUpload} className="hidden" id="cover-upload" />
+                                <input ref={coverInputRef} type="file" accept="image/*" onChange={handleCoverUpload} className="hidden" id="cover-upload" disabled={uploadingCover || uploadingVideo || uploadingAudio} />
                                 <label
-                                    htmlFor="cover-upload"
-                                    className={`inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-gray-300 cursor-pointer hover:bg-gray-50 ${uploadingCover ? 'opacity-60' : ''}`}
+                                    htmlFor={uploadingCover || uploadingVideo || uploadingAudio ? undefined : 'cover-upload'}
+                                    className={`inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-gray-300 ${uploadingCover || uploadingVideo || uploadingAudio ? 'opacity-60 cursor-not-allowed' : 'cursor-pointer hover:bg-gray-50'}`}
                                 >
                                     <Upload className="w-4 h-4" />
                                     {uploadingCover ? 'Uploading...' : 'Upload cover'}
@@ -369,10 +479,10 @@ const KaraokeForm: React.FC = () => {
                                 <video src={getMediaUrl(formData.videoUrl)} controls className="max-w-xs max-h-32 rounded" />
                             )}
                             <div>
-                                <input ref={videoInputRef} type="file" accept="video/*" onChange={handleVideoUpload} className="hidden" id="video-upload" />
+                                <input ref={videoInputRef} type="file" accept="video/*" onChange={handleVideoUpload} className="hidden" id="video-upload" disabled={uploadingCover || uploadingVideo || uploadingAudio} />
                                 <label
-                                    htmlFor="video-upload"
-                                    className={`inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-gray-300 cursor-pointer hover:bg-gray-50 ${uploadingVideo ? 'opacity-60' : ''}`}
+                                    htmlFor={uploadingCover || uploadingVideo || uploadingAudio ? undefined : 'video-upload'}
+                                    className={`inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-gray-300 ${uploadingCover || uploadingVideo || uploadingAudio ? 'opacity-60 cursor-not-allowed' : 'cursor-pointer hover:bg-gray-50'}`}
                                 >
                                     <Upload className="w-4 h-4" />
                                     {uploadingVideo ? 'Uploading...' : 'Upload video'}
@@ -388,10 +498,10 @@ const KaraokeForm: React.FC = () => {
                                 <audio src={getMediaUrl(formData.backgroundAudioUrl)} controls className="max-w-md" />
                             )}
                             <div>
-                                <input ref={audioInputRef} type="file" accept="audio/*" onChange={handleAudioUpload} className="hidden" id="audio-upload" />
+                                <input ref={audioInputRef} type="file" accept="audio/*" onChange={handleAudioUpload} className="hidden" id="audio-upload" disabled={uploadingCover || uploadingVideo || uploadingAudio} />
                                 <label
-                                    htmlFor="audio-upload"
-                                    className={`inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-gray-300 cursor-pointer hover:bg-gray-50 ${uploadingAudio ? 'opacity-60' : ''}`}
+                                    htmlFor={uploadingCover || uploadingVideo || uploadingAudio ? undefined : 'audio-upload'}
+                                    className={`inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-gray-300 ${uploadingCover || uploadingVideo || uploadingAudio ? 'opacity-60 cursor-not-allowed' : 'cursor-pointer hover:bg-gray-50'}`}
                                 >
                                     <Upload className="w-4 h-4" />
                                     {uploadingAudio ? 'Uploading...' : 'Upload audio'}

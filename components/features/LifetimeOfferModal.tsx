@@ -128,7 +128,7 @@ const LifetimeOfferModal: React.FC<LifetimeOfferModalProps> = ({ variant, onClos
 
             {/* Title */}
             <h2 className="text-2xl font-extrabold text-white mb-1">
-              {variant === 'first' ? 'Special Offer Just for You!' : 'Your Final Offer'}
+              {variant === 'first' ? 'Special Offer Just for You!' : 'Last Offer'}
             </h2>
             <p className="text-indigo-200 text-sm mb-5">
               {variant === 'first'

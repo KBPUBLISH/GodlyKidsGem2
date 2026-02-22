@@ -1162,23 +1162,42 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     return () => clearTimeout(timer);
   }, [location.pathname]);
 
-  // --- Lifetime offer popup: first offer (30s after paywall close) ---
+  // --- Lifetime offer popup: first offer (1 minute after user spends time on app) ---
+  const LIFETIME_FIRST_MAIN_PAGE_KEY = 'godlykids_lifetime_first_main_page_at';
   useEffect(() => {
-    const wasPrevPaywall = prevPathForOfferRef.current === '/paywall';
     prevPathForOfferRef.current = location.pathname;
 
     const isPremium = localStorage.getItem('godlykids_premium') === 'true';
     if (isPremium) return;
 
     const stage = localStorage.getItem(LIFETIME_OFFER_STAGE_KEY);
-    if (wasPrevPaywall && location.pathname !== '/paywall' && stage === 'ready') {
-      if (lifetimeTimerRef.current) clearTimeout(lifetimeTimerRef.current);
-      lifetimeTimerRef.current = setTimeout(() => {
-        if (localStorage.getItem('godlykids_premium') === 'true') return;
-        if (localStorage.getItem(LIFETIME_OFFER_STAGE_KEY) !== 'ready') return;
-        setLifetimeOfferVariant('first');
-      }, 30000);
+    if (stage === 'shown_first' || stage === 'done') return;
+
+    const isMainPage = MAIN_NAV_PAGES.includes(location.pathname);
+    if (!isMainPage) return;
+
+    let firstAt = parseInt(sessionStorage.getItem(LIFETIME_FIRST_MAIN_PAGE_KEY) || '0', 10);
+    if (!firstAt) {
+      firstAt = Date.now();
+      sessionStorage.setItem(LIFETIME_FIRST_MAIN_PAGE_KEY, firstAt.toString());
     }
+    const elapsed = Date.now() - firstAt;
+    const remaining = Math.max(0, 60000 - elapsed);
+
+    if (lifetimeTimerRef.current) clearTimeout(lifetimeTimerRef.current);
+    lifetimeTimerRef.current = setTimeout(() => {
+      if (localStorage.getItem('godlykids_premium') === 'true') return;
+      const currentStage = localStorage.getItem(LIFETIME_OFFER_STAGE_KEY);
+      if (currentStage === 'shown_first' || currentStage === 'done') return;
+      if (!localStorage.getItem('godlykids_lifetime_deal_start')) {
+        localStorage.setItem('godlykids_lifetime_deal_start', Date.now().toString());
+      }
+      if (!currentStage || currentStage === 'none') {
+        localStorage.setItem(LIFETIME_OFFER_STAGE_KEY, 'ready');
+      }
+      setLifetimeOfferVariant('first');
+    }, remaining);
+
     return () => {
       if (lifetimeTimerRef.current) clearTimeout(lifetimeTimerRef.current);
     };

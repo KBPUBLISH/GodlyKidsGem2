@@ -66,6 +66,7 @@ const PaywallPage: React.FC = () => {
     purchase, 
     restorePurchases,
     reverseTrial,
+    checkPremiumStatus,
   } = useSubscription();
 
   // Show "You've Got a Gift!" toast when coming from reverse-trial activation or when state requests it
@@ -291,7 +292,36 @@ const PaywallPage: React.FC = () => {
       console.log('💳 Purchase result:', result);
 
       if (result.success) {
-        // Wrap all tracking in try-catch to prevent crashes
+        // CRITICAL: Verify with backend before granting premium. DeSpia/RevenueCat may fire
+        // success before the user double-clicks to confirm in Apple/Google. Backend only
+        // gets the webhook after payment is actually processed.
+        const userId = localStorage.getItem('godlykids_user_email') || localStorage.getItem('godlykids_device_id') || 'anonymous';
+        const baseUrl = getApiBaseUrl();
+        let backendConfirmed = false;
+        for (let attempt = 0; attempt < 5; attempt++) {
+          try {
+            const statusRes = await fetch(`${baseUrl}/api/webhooks/purchase-status/${encodeURIComponent(userId)}`);
+            if (statusRes.ok) {
+              const statusData = await statusRes.json();
+              if (statusData.isPremium) {
+                backendConfirmed = true;
+                break;
+              }
+            }
+          } catch {
+            // Network error - retry
+          }
+          if (attempt < 4) await new Promise(r => setTimeout(r, 2000));
+        }
+        if (!backendConfirmed) {
+          console.warn('⚠️ Purchase reported success but backend has no premium - payment not completed or webhook delayed');
+          localStorage.removeItem('godlykids_premium'); // Undo any premature grant from DeSpia callback
+          await checkPremiumStatus(); // Force context to re-read and clear premium state
+          setError('Payment not yet confirmed. Please complete the purchase in the App Store (double-tap to confirm), or tap Restore Purchases once done.');
+          return;
+        }
+
+        // Backend confirmed premium - safe to grant
         try {
           // Facebook Pixel - Track successful purchase
           facebookPixelService.trackPurchase(effectivePlan, price);
@@ -433,9 +463,9 @@ const PaywallPage: React.FC = () => {
 
   // Calculate prices and savings
   const monthlyPrice = 5.99;
-  const annualPrice = 19.99;
-  const lifetimeOriginalPrice = 39.99;
-  const lifetimeSalePrice = 19.99;
+  const annualPrice = 39.99;  // Main paywall: annual subscription
+  const lifetimeOriginalPrice = 69.99;  // Lifetime (exit deal only) - was $69.99, sale $19.99
+  const lifetimeSalePrice = 19.99;      // Only shown in LifetimeOfferModal (exit paywall deal)
   const lifetimeDiscount = Math.round(((lifetimeOriginalPrice - lifetimeSalePrice) / lifetimeOriginalPrice) * 100);
   const annualMonthly = (annualPrice / 12).toFixed(2);
   const savings = Math.round(((monthlyPrice * 12 - annualPrice) / (monthlyPrice * 12)) * 100);
@@ -629,7 +659,7 @@ const PaywallPage: React.FC = () => {
                   </div>
                   <p className="text-gray-500 text-xs text-center">
                     {selectedPlan === 'annual'
-                      ? `7-day free trial, then $${annualPrice} one-time payment for lifetime access. No recurring charges.`
+                      ? `7-day free trial, then $${annualPrice}/year. Cancel anytime.`
                       : `7-day free trial, then $${monthlyPrice}/month. Cancel anytime.`}
                   </p>
                 </div>
@@ -654,7 +684,7 @@ const PaywallPage: React.FC = () => {
                       </p>
                       <p className="text-xs text-gray-500">
                         {selectedPlan === 'annual'
-                          ? `$${annualPrice} USD one-time • lifetime access • 12 free custom books`
+                          ? `$${annualPrice}/year • 12 free custom books`
                           : `$${monthlyPrice} USD/month • Cancel anytime`}
                       </p>
                     </div>
@@ -673,7 +703,7 @@ const PaywallPage: React.FC = () => {
                       Collapse
                     </button>
                   )}
-              {/* Lifetime Deal Option (was annual) */}
+              {/* Annual Membership - main paywall */}
               <div 
                 onClick={() => { setSelectedPlan('annual'); if (isCreateYourStoryPaywall) setPlanSelectorExpanded(false); }}
                 className={`relative w-full rounded-2xl border-2 overflow-hidden cursor-pointer transition-all ${
@@ -697,14 +727,13 @@ const PaywallPage: React.FC = () => {
                   </div>
                   
                   <div className="flex-1">
-                    <p className="font-bold text-[#1e1b4b]">Lifetime Access</p>
-                    <p className="text-xs text-gray-500">One-time payment — <span className="font-semibold text-green-600">not a subscription</span></p>
+                    <p className="font-bold text-[#1e1b4b]">Annual</p>
+                    <p className="text-xs text-gray-500">7-day free trial, then <span className="font-semibold text-green-600">$39.99/year</span></p>
                   </div>
                   
                   <div className="text-right">
-                    <p className="text-xs text-gray-400 line-through">$39.99/yr</p>
-                    <p className="font-extrabold text-xl text-[#1e1b4b]">${annualPrice} <span className="text-sm font-medium">USD</span></p>
-                    <p className="text-[10px] text-green-600 font-semibold">One-time payment — forever</p>
+                    <p className="font-extrabold text-xl text-[#1e1b4b]">${annualPrice}<span className="text-sm font-medium">/yr</span></p>
+                    <p className="text-[10px] text-green-600 font-semibold">12 free custom books</p>
                   </div>
                 </div>
               </div>
@@ -875,11 +904,11 @@ const PaywallPage: React.FC = () => {
               <div className="mb-6">
                 <div className="flex items-center gap-2 text-green-600 mb-1">
                   <Check size={18} strokeWidth={3} />
-                  <span className="font-semibold text-sm">{selectedPlan === 'annual' ? 'Not a subscription!' : 'No payment now!'}</span>
+                  <span className="font-semibold text-sm">No payment now!</span>
                 </div>
                 <p className="text-gray-500 text-xs text-center">
                   {selectedPlan === 'annual'
-                    ? `Instead of $39.99/year, pay just $${annualPrice} once — lifetime access, no recurring charges.`
+                    ? `7-day free trial, then $${annualPrice}/year. Cancel anytime.`
                     : `7-day free trial, then $${monthlyPrice}/month. Cancel anytime.`}
                 </p>
               </div>

@@ -4,19 +4,12 @@ import { X, Loader2, Clock, Sparkles, Crown, Check, Shield } from 'lucide-react'
 import { useSubscription } from '../../context/SubscriptionContext';
 import { useUser } from '../../context/UserContext';
 import { activityTrackingService } from '../../services/activityTrackingService';
-import { authService } from '../../services/authService';
 import ParentGateModal from './ParentGateModal';
 
 const LIFETIME_OFFER_STAGE_KEY = 'godlykids_lifetime_offer_stage';
 const LIFETIME_OFFER_TIMER_END_KEY = 'godlykids_lifetime_offer_timer_end';
 
 const TIMER_DURATION_MS = 30 * 60 * 1000; // 30 minutes
-
-const hasAccount = (): boolean => {
-  const userEmail = localStorage.getItem('godlykids_user_email');
-  const user = authService.getUser();
-  return !!(userEmail || user?.email);
-};
 
 interface LifetimeOfferModalProps {
   variant: 'first' | 'final';
@@ -82,11 +75,7 @@ const LifetimeOfferModal: React.FC<LifetimeOfferModalProps> = ({ variant, onClos
     setError(null);
     activityTrackingService.trackOnboardingEvent('lifetime_popup_clicked', { variant }).catch(() => {});
 
-    if (!hasAccount()) {
-      navigate('/paywall', { state: { from: 'lifetime-offer' } });
-      onClose();
-      return;
-    }
+    // No account required - go straight to payment. User can create account later; purchase syncs by email/device.
     setShowParentGate(true);
   };
 

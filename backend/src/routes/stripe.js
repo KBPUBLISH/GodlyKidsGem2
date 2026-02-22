@@ -150,45 +150,54 @@ router.post('/webhook', express.raw({ type: 'application/json' }), async (req, r
       const session = event.data.object;
       console.log('✅ Checkout completed:', session.id);
       
-      // Get user ID from metadata
+      // Get user ID from metadata (email, deviceId, or 'anonymous' for guest)
       const userId = session.metadata?.userId;
       const plan = session.metadata?.plan;
+      // Guest purchases: Stripe collects email in checkout; use it so premium syncs when they create account later
+      const customerEmail = (session.customer_details?.email || session.customer_email || '').toLowerCase().trim();
+      const effectiveUserId = (userId && userId !== 'anonymous') ? userId : (customerEmail || null);
       
-      if (userId && userId !== 'anonymous') {
+      if (effectiveUserId) {
         // Update user's premium status in database
         try {
           const User = require('../models/User');
           const AppUser = require('../models/AppUser');
-          const normalizedUserId = typeof userId === 'string' && userId.includes('@') ? userId.toLowerCase().trim() : userId;
+          const normalizedUserId = typeof effectiveUserId === 'string' && effectiveUserId.includes('@') ? effectiveUserId.toLowerCase().trim() : effectiveUserId;
 
           // Update User collection (auth users)
-          await User.findOneAndUpdate(
-            { $or: [{ email: normalizedUserId }, { _id: userId }] },
-            { isPremium: true, subscriptionPlan: plan },
-            { upsert: false }
-          );
+          if (normalizedUserId.includes('@')) {
+            await User.findOneAndUpdate(
+              { email: normalizedUserId },
+              { isPremium: true, subscriptionPlan: plan },
+              { upsert: false }
+            );
+          }
 
           // Update AppUser collection - use subscriptionStatus (not isPremium; AppUser schema uses subscriptionStatus)
           let appUser = await AppUser.findOne({
-            $or: [{ email: normalizedUserId }, { deviceId: userId }]
+            $or: [
+              { email: normalizedUserId },
+              { deviceId: normalizedUserId }
+            ]
           });
           if (appUser) {
             appUser.subscriptionStatus = 'active';
             appUser.subscriptionStartDate = appUser.subscriptionStartDate || new Date();
             appUser.subscriptionPlan = plan;
+            if (normalizedUserId.includes('@')) appUser.email = normalizedUserId;
             await appUser.save();
           } else {
-            // User paid but has no AppUser - create one so they get premium (e.g. web-only flow)
+            // User paid but has no AppUser - create one so they get premium (guest flow; syncs when they sign up)
             appUser = await AppUser.create({
               email: normalizedUserId.includes('@') ? normalizedUserId : undefined,
-              deviceId: normalizedUserId.includes('@') ? undefined : userId,
+              deviceId: normalizedUserId.includes('@') ? undefined : normalizedUserId,
               subscriptionStatus: 'active',
               subscriptionStartDate: new Date(),
               subscriptionPlan: plan,
             });
           }
 
-          console.log(`✅ Updated premium status for user: ${userId}`);
+          console.log(`✅ Updated premium status for user: ${effectiveUserId}`);
         } catch (dbError) {
           console.error('❌ Database update error:', dbError);
         }

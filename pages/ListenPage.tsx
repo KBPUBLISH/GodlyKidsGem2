@@ -408,8 +408,8 @@ const ListenPage: React.FC = () => {
           <div
             ref={scrollRef}
             onScroll={handleScroll}
-            className="relative h-full overflow-y-auto no-scrollbar pb-12"
-            style={{ zIndex: 5 }}
+            className="relative h-full overflow-y-auto overflow-x-hidden no-scrollbar pb-12"
+            style={{ zIndex: 5, overscrollBehavior: 'contain' }}
           >
             {/* Spacer so island is visible initially */}
             <div style={{ height: '260px' }} />

@@ -341,8 +341,8 @@ const ReadPage: React.FC = () => {
           <div
             ref={scrollRef}
             onScroll={handleScroll}
-            className="relative h-full overflow-y-auto no-scrollbar pb-12"
-            style={{ zIndex: 5 }}
+            className="relative h-full overflow-y-auto overflow-x-hidden no-scrollbar pb-12"
+            style={{ zIndex: 5, overscrollBehavior: 'contain' }}
           >
             {/* Spacer so island is visible initially */}
             <div style={{ height: '260px' }} />
@@ -864,7 +864,7 @@ const ReadPage: React.FC = () => {
           <button
             type="button"
             onClick={() => setShowContent(true)}
-            className="relative w-full cursor-pointer select-none transition-transform active:scale-95 hover:scale-[1.02] focus:outline-none rounded-2xl"
+            className="relative w-full cursor-pointer select-none transition-transform active:scale-95 active:translate-y-2 hover:scale-[1.02] focus:outline-none rounded-2xl"
             style={{ zIndex: 2, marginTop: '-10%' }}
             aria-label="Open Book Library"
           >
@@ -878,7 +878,7 @@ const ReadPage: React.FC = () => {
           <button
             type="button"
             onClick={() => setShowContent(true)}
-            className="relative block mx-auto overflow-hidden rounded-2xl cursor-pointer select-none focus:outline-none transition-transform active:scale-95"
+            className="relative block mx-auto overflow-hidden rounded-2xl cursor-pointer select-none focus:outline-none transition-transform active:scale-95 active:translate-y-1"
             style={{ zIndex: 5, width: '80%', marginTop: -8 }}
             aria-label="Open Book Library"
           >

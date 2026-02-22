@@ -257,8 +257,9 @@ const PaywallPage: React.FC = () => {
     console.log('🔘 Start Trial button clicked, plan:', selectedPlan);
     activityTrackingService.trackOnboardingEvent('paywall_trial_clicked', { planType: selectedPlan, ...(isCreateYourStoryPaywall && { source: 'create-your-story' }) });
     
-    // Check if user has an account - require account before purchase
-    if (!hasAccount()) {
+    // Lifetime purchase from deal: no account required. User can create account later; purchase syncs by email/device.
+    const isLifetimeDealFlow = fromState === 'lifetime-offer' && selectedPlan === 'lifetime';
+    if (!isLifetimeDealFlow && !hasAccount()) {
       console.log('⚠️ No account found, showing account required modal');
       activityTrackingService.trackOnboardingEvent('paywall_account_required', { planType: selectedPlan, ...(isCreateYourStoryPaywall && { source: 'create-your-story' }) });
       setShowAccountRequired(true);

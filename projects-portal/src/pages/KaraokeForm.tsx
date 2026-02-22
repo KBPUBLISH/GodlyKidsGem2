@@ -84,7 +84,43 @@ function getVideoDurationFromFile(file: File): Promise<number> {
     });
 }
 
-const LARGE_FILE_THRESHOLD = 10 * 1024 * 1024; // 10MB - use XHR above this
+const LARGE_FILE_THRESHOLD = 10 * 1024 * 1024; // 10MB
+const DIRECT_UPLOAD_THRESHOLD = 15 * 1024 * 1024; // 15MB - use direct-to-GCS above this (avoids ERR_INSUFFICIENT_RESOURCES)
+
+/** Direct browser-to-GCS upload via signed URL - bypasses backend, avoids Chrome resource limits */
+async function uploadViaSignedUrl(
+    bookId: string,
+    type: 'video' | 'audio',
+    file: File,
+    songId?: string,
+    timeoutMs = 300000
+): Promise<{ url: string }> {
+    const res = await fetch(`${API_BASE()}/api/upload/signed-url`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            bookId,
+            type,
+            contentType: file.type || 'application/octet-stream',
+            filename: file.name,
+            songId: songId || undefined,
+        }),
+    });
+    if (!res.ok) throw new Error(await res.text().catch(() => `Failed to get upload URL: ${res.status}`));
+    const { uploadUrl, publicUrl } = await res.json();
+    if (!uploadUrl || !publicUrl) throw new Error('Invalid signed URL response');
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+    const putRes = await fetch(uploadUrl, {
+        method: 'PUT',
+        headers: { 'Content-Type': file.type || 'application/octet-stream' },
+        body: file,
+        signal: controller.signal,
+    });
+    clearTimeout(timeoutId);
+    if (!putRes.ok) throw new Error(`Upload failed: ${putRes.status} ${await putRes.text().catch(() => '')}`);
+    return { url: publicUrl };
+}
 
 interface LyricLine {
     text: string;
@@ -295,26 +331,12 @@ const KaraokeForm: React.FC = () => {
         }
         uploadLockRef.current = true;
         setUploadingVideo(true);
-        // Get duration from local file first (avoids re-fetching 30MB+ after upload = ERR_INSUFFICIENT_RESOURCES)
+        // Get duration from local file first (avoids re-fetching 30MB+ after upload)
         const duration = await getVideoDurationFromFile(file);
-        const endpoint = `/api/upload/video?bookId=${bookIdForUpload}&type=video`;
-        const doUpload = () => {
-            const fd = new FormData();
-            fd.append('file', file);
-            return uploadViaXHR(endpoint, fd, 300000);
-        };
+        // Always use direct-to-GCS for video: browser uploads to storage.googleapis.com, not through backend.
+        // This avoids ERR_INSUFFICIENT_RESOURCES when proxying 30MB+ through Render.
         try {
-            await new Promise((r) => setTimeout(r, 300)); // Brief delay to reduce resource contention
-            let data: { url: string };
-            try {
-                data = await doUpload();
-            } catch (err) {
-                const msg = String((err as Error)?.message || err);
-                if ((msg.includes('ERR_INSUFFICIENT_RESOURCES') || msg.includes('Failed to fetch') || msg.includes('Network error')) && file.size > LARGE_FILE_THRESHOLD) {
-                    await new Promise((r) => setTimeout(r, 3000)); // Retry after 3s
-                    data = await doUpload();
-                } else throw err;
-            }
+            const data = await uploadViaSignedUrl(bookIdForUpload, 'video', file, songId, 300000);
             setFormData(prev => ({ ...prev, videoUrl: data.url, duration: duration || prev.duration }));
         } catch (err) {
             console.error('Video upload failed:', err);
@@ -347,23 +369,25 @@ const KaraokeForm: React.FC = () => {
         }
         uploadLockRef.current = true;
         setUploadingAudio(true);
-        const endpoint = `/api/upload/audio?bookId=${bookIdForUpload}&type=audio`;
-        const useXHR = file.size > LARGE_FILE_THRESHOLD;
-        const doUpload = () => {
-            const fd = new FormData();
-            fd.append('file', file);
-            return useXHR ? uploadViaXHR(endpoint, fd, 120000) : uploadViaFetch(endpoint, fd, 120000);
-        };
+        const useDirect = file.size > DIRECT_UPLOAD_THRESHOLD;
+        const doUpload = () => useDirect
+            ? uploadViaSignedUrl(bookIdForUpload, 'audio', file, songId, 120000)
+            : (() => {
+                const fd = new FormData();
+                fd.append('file', file);
+                const ep = `/api/upload/audio?bookId=${bookIdForUpload}&type=audio`;
+                return file.size > LARGE_FILE_THRESHOLD ? uploadViaXHR(ep, fd, 120000) : uploadViaFetch(ep, fd, 120000);
+            })();
         try {
-            if (useXHR) await new Promise((r) => setTimeout(r, 300));
+            if (!useDirect) await new Promise((r) => setTimeout(r, 200));
             let data: { url: string };
             try {
                 data = await doUpload();
             } catch (err) {
                 const msg = String((err as Error)?.message || err);
-                if ((msg.includes('ERR_INSUFFICIENT_RESOURCES') || msg.includes('Failed to fetch') || msg.includes('Network error')) && file.size > LARGE_FILE_THRESHOLD) {
+                if (!useDirect && (msg.includes('ERR_INSUFFICIENT_RESOURCES') || msg.includes('Failed to fetch') || msg.includes('Network error')) && file.size > LARGE_FILE_THRESHOLD) {
                     await new Promise((r) => setTimeout(r, 3000));
-                    data = await doUpload();
+                    data = await uploadViaSignedUrl(bookIdForUpload, 'audio', file, songId, 120000);
                 } else throw err;
             }
             setFormData(prev => ({ ...prev, backgroundAudioUrl: data.url }));

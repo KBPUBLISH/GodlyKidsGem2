@@ -11,12 +11,12 @@ const MAX_AUDIO_BYTES = MAX_AUDIO_SIZE_MB * 1024 * 1024;
 
 const API_BASE = () => import.meta.env.VITE_API_BASE_URL || 'https://backendgk2-0.onrender.com';
 
-async function uploadViaFetch(endpoint: string, formData: FormData, timeoutMs = 120000): Promise<{ url: string }> {
+async function uploadViaFetch(endpoint: string, body: globalThis.FormData, timeoutMs = 120000): Promise<{ url: string }> {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
     const res = await fetch(`${API_BASE()}${endpoint}`, {
         method: 'POST',
-        body: formData,
+        body,
         signal: controller.signal,
     });
     clearTimeout(timeoutId);
@@ -32,7 +32,7 @@ interface LyricLine {
     endTime: number;
 }
 
-interface FormData {
+interface KaraokeFormData {
     title: string;
     description: string;
     coverImage: string;
@@ -50,7 +50,7 @@ interface FormData {
 /** Resize/compress image to avoid ERR_INSUFFICIENT_RESOURCES with large uploads */
 async function resizeImageForUpload(file: File, maxSize = 600, quality = 0.75): Promise<File> {
     if (file.size < 200 * 1024) return file; // Skip if already under 200KB
-    return new Promise((resolve, reject) => {
+    return new Promise<File>((resolve) => {
         const img = new Image();
         const url = URL.createObjectURL(file);
         img.onload = () => {
@@ -117,7 +117,7 @@ const KaraokeForm: React.FC = () => {
     const videoInputRef = useRef<HTMLInputElement>(null);
     const audioInputRef = useRef<HTMLInputElement>(null);
 
-    const [formData, setFormData] = useState<FormData>({
+    const [formData, setFormData] = useState<KaraokeFormData>({
         title: '',
         description: '',
         coverImage: '',

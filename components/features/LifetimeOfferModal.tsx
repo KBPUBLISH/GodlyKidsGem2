@@ -12,7 +12,7 @@ const LIFETIME_OFFER_TIMER_END_KEY = 'godlykids_lifetime_offer_timer_end';
 const TIMER_DURATION_MS = 30 * 60 * 1000; // 30 minutes
 
 interface LifetimeOfferModalProps {
-  variant: 'first' | 'final';
+  variant: 'first' | 'final' | 'expired';
   onClose: () => void;
 }
 
@@ -64,12 +64,13 @@ const LifetimeOfferModal: React.FC<LifetimeOfferModalProps> = ({ variant, onClos
   const handleDismiss = useCallback(() => {
     activityTrackingService.trackOnboardingEvent('lifetime_popup_dismissed', { variant }).catch(() => {});
     if (variant === 'first') {
-      localStorage.setItem(LIFETIME_OFFER_STAGE_KEY, 'shown_first');
-    } else {
+      // If timer expired, next app open will show "expired" popup; else show "final"
+      localStorage.setItem(LIFETIME_OFFER_STAGE_KEY, timerExpired ? 'offer_expired' : 'shown_first');
+    } else if (variant === 'expired' || variant === 'final') {
       localStorage.setItem(LIFETIME_OFFER_STAGE_KEY, 'done');
     }
     onClose();
-  }, [variant, onClose]);
+  }, [variant, onClose, timerExpired]);
 
   const handlePurchaseClick = () => {
     setError(null);
@@ -128,12 +129,18 @@ const LifetimeOfferModal: React.FC<LifetimeOfferModalProps> = ({ variant, onClos
 
             {/* Title */}
             <h2 className="text-2xl font-extrabold text-white mb-1">
-              {variant === 'first' ? 'Special Offer Just for You!' : 'Last Offer'}
+              {variant === 'first' && !timerExpired
+                ? 'Special Offer Just for You!'
+                : variant === 'expired'
+                  ? 'Your Offer Has Expired'
+                  : 'Last Offer'}
             </h2>
             <p className="text-indigo-200 text-sm mb-5">
-              {variant === 'first'
+              {variant === 'first' && !timerExpired
                 ? 'Unlock everything — one payment, forever.'
-                : "This is your last chance to lock in lifetime access."}
+                : variant === 'expired'
+                  ? "We're giving you one last chance to get lifetime access at this price."
+                  : "This is your last chance to lock in lifetime access."}
             </p>
 
             {/* Timer (first variant only) */}
@@ -158,6 +165,13 @@ const LifetimeOfferModal: React.FC<LifetimeOfferModalProps> = ({ variant, onClos
               <div className="flex items-center gap-2 bg-amber-500/20 border border-amber-400/30 rounded-xl px-4 py-2 mb-5">
                 <Sparkles size={16} className="text-amber-300" />
                 <span className="text-amber-200 text-sm font-medium">Last chance — this won't appear again</span>
+              </div>
+            )}
+
+            {variant === 'expired' && (
+              <div className="flex items-center gap-2 bg-amber-500/20 border border-amber-400/30 rounded-xl px-4 py-2 mb-5">
+                <Clock size={16} className="text-amber-300" />
+                <span className="text-amber-200 text-sm font-medium">After closing this window, it will not appear again</span>
               </div>
             )}
 
@@ -192,7 +206,7 @@ const LifetimeOfferModal: React.FC<LifetimeOfferModalProps> = ({ variant, onClos
               <p className="text-red-300 text-xs mb-3">{error}</p>
             )}
 
-            {/* CTA */}
+            {/* CTA - disabled only when first variant and timer expired (not for expired variant - one last chance) */}
             <button
               onClick={handlePurchaseClick}
               disabled={isPurchasing || (variant === 'first' && timerExpired)}

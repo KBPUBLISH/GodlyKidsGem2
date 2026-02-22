@@ -1148,7 +1148,7 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [isTransitioning, setIsTransitioning] = useState(false);
   const fadeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [showLayoutRating, setShowLayoutRating] = useState(false);
-  const [lifetimeOfferVariant, setLifetimeOfferVariant] = useState<'first' | 'final' | null>(null);
+  const [lifetimeOfferVariant, setLifetimeOfferVariant] = useState<'first' | 'final' | 'expired' | null>(null);
   const lifetimeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const prevPathForOfferRef = useRef(location.pathname);
 
@@ -1171,7 +1171,7 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     if (isPremium) return;
 
     const stage = localStorage.getItem(LIFETIME_OFFER_STAGE_KEY);
-    if (stage === 'shown_first' || stage === 'done') return;
+    if (stage === 'shown_first' || stage === 'done' || stage === 'offer_expired') return;
 
     const isMainPage = MAIN_NAV_PAGES.includes(location.pathname);
     if (!isMainPage) return;
@@ -1203,7 +1203,7 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     };
   }, [location.pathname]);
 
-  // --- Lifetime offer popup: final offer (on fresh app open) ---
+  // --- Lifetime offer popup: final offer or expired offer (on fresh app open) ---
   useEffect(() => {
     const isPremium = localStorage.getItem('godlykids_premium') === 'true';
     if (isPremium) return;
@@ -1211,6 +1211,13 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     sessionStorage.setItem(LIFETIME_OFFER_SESSION_KEY, 'true');
 
     const stage = localStorage.getItem(LIFETIME_OFFER_STAGE_KEY);
+    if (stage === 'offer_expired') {
+      const timer = setTimeout(() => {
+        if (localStorage.getItem('godlykids_premium') === 'true') return;
+        setLifetimeOfferVariant('expired');
+      }, 2000);
+      return () => clearTimeout(timer);
+    }
     if (stage === 'shown_first') {
       const timer = setTimeout(() => {
         if (localStorage.getItem('godlykids_premium') === 'true') return;

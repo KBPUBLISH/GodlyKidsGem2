@@ -405,6 +405,12 @@ const generateFilePath = (bookId, type, filename, pageNumber = null) => {
         return `lessons/${lessonId}/${type}/${finalFilename}`;
     }
 
+    // Special handling for karaoke folder
+    if (bookId === 'karaoke' || bookId?.startsWith('karaoke/')) {
+        const songId = bookId.replace('karaoke/', '').replace('karaoke', '') || 'temp';
+        return `karaoke/${songId}/${type}/${finalFilename}`;
+    }
+
     return `books/${bookId}/${type}/${finalFilename}`;
 };
 
@@ -442,6 +448,9 @@ router.post('/image', upload.single('file'), async (req, res) => {
             if (bookId === 'lessons' || bookId.startsWith('lessons/')) {
                 const lessonId = req.query.lessonId || bookId.replace('lessons/', '').replace('lessons', '') || 'temp';
                 filePath = generateFilePath(`lessons/${lessonId}`, type, req.file.originalname);
+            } else if (bookId === 'karaoke' || bookId.startsWith('karaoke/')) {
+                const songId = req.query.songId || bookId.replace('karaoke/', '').replace('karaoke', '') || 'temp';
+                filePath = generateFilePath(`karaoke/${songId}`, type, req.file.originalname);
             } else {
                 // Generate organized file path for books
                 filePath = generateFilePath(bookId, type, req.file.originalname, pageNumber);

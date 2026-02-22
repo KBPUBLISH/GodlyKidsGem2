@@ -504,6 +504,66 @@ router.post('/image', upload.single('file'), async (req, res) => {
     }
 });
 
+// Chunked upload: get signed URL for one chunk (avoids ERR_INSUFFICIENT_RESOURCES)
+// POST body: { bookId, type, contentType, filename, chunkIdx, totalChunks, sessionId, songId? }
+router.post('/signed-url-chunk', async (req, res) => {
+    try {
+        const { bookId, type, contentType, filename, chunkIdx, totalChunks, sessionId, songId } = req.body;
+        if (!bookId || !type || !contentType || !filename || chunkIdx == null || !totalChunks || !sessionId) {
+            return res.status(400).json({ message: 'bookId, type, contentType, filename, chunkIdx, totalChunks, sessionId required' });
+        }
+        if (!bucket || !process.env.GCS_BUCKET_NAME) {
+            return res.status(503).json({ message: 'GCS not configured' });
+        }
+        if (!['video', 'audio'].includes(type)) {
+            return res.status(400).json({ message: 'type must be video or audio' });
+        }
+        const safeSession = String(sessionId).replace(/[^a-zA-Z0-9_-]/g, '');
+        const tempPath = `tmp/chunk-${safeSession}-${chunkIdx}`;
+        const safeContentType = /^[a-z0-9][a-z0-9+.-]*\/[a-z0-9][a-z0-9+.-]*$/i.test(contentType)
+            ? contentType : 'application/octet-stream';
+        const [uploadUrl] = await bucket.file(tempPath).getSignedUrl({
+            version: 'v4',
+            action: 'write',
+            expires: Date.now() + 60 * 60 * 1000,
+            contentType: safeContentType,
+        });
+        res.json({ uploadUrl, tempObjectName: tempPath });
+    } catch (err) {
+        console.error('Signed URL chunk error:', err);
+        res.status(500).json({ message: err.message || 'Failed to generate signed URL' });
+    }
+});
+
+// Chunked upload: compose chunks into final file
+// POST body: { bookId, type, filename, tempObjectNames, sessionId, songId? }
+router.post('/compose-chunks', async (req, res) => {
+    try {
+        const { bookId, type, filename, tempObjectNames, sessionId, songId } = req.body;
+        if (!bookId || !type || !filename || !Array.isArray(tempObjectNames) || tempObjectNames.length === 0) {
+            return res.status(400).json({ message: 'bookId, type, filename, tempObjectNames required' });
+        }
+        if (!bucket || !process.env.GCS_BUCKET_NAME) {
+            return res.status(503).json({ message: 'GCS not configured' });
+        }
+        if (!['video', 'audio'].includes(type)) {
+            return res.status(400).json({ message: 'type must be video or audio' });
+        }
+        const effectiveBookId = (bookId === 'karaoke' && songId) ? `karaoke/${songId}` : bookId;
+        const filePath = generateFilePath(effectiveBookId, type, filename);
+        const destFile = bucket.file(filePath);
+        const sourceFiles = tempObjectNames.map((name) => bucket.file(name));
+        await destFile.compose(sourceFiles);
+        await Promise.all(sourceFiles.map((f) => f.delete().catch((e) => console.warn('Chunk delete:', e.message))));
+        const publicUrl = `https://storage.googleapis.com/${bucket.name}/${filePath}`;
+        console.log('Composed chunks:', { filePath, chunks: tempObjectNames.length });
+        res.json({ url: publicUrl });
+    } catch (err) {
+        console.error('Compose chunks error:', err);
+        res.status(500).json({ message: err.message || 'Failed to compose file' });
+    }
+});
+
 // Get signed URL for direct browser-to-GCS upload (avoids ERR_INSUFFICIENT_RESOURCES on large files)
 // POST body: { bookId, type, contentType, filename, songId? }
 // Returns: { uploadUrl, publicUrl } - browser PUTs file to uploadUrl, then uses publicUrl

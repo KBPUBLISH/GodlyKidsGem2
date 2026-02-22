@@ -73,11 +73,14 @@ const PaywallPage: React.FC = () => {
   const showReverseTrialToast = (location.state as any)?.showReverseTrialToast === true
     || (reverseTrial?.isActive && fromState === 'create-your-story');
 
-  // Always use Create Your Story paywall: hero image, no lifetime, 12 custom books for annual
+  // Create Your Story paywall: hero image, 12 custom books for annual. Show lifetime option when from deal page.
   const isCreateYourStoryPaywall = true;
+  const showLifetimeOption = fromState === 'lifetime-offer'; // Deal page sends users here; show $19.99 lifetime
   
-  const [selectedPlan, setSelectedPlan] = useState<'annual' | 'monthly' | 'lifetime'>('annual');
-  const [planSelectorExpanded, setPlanSelectorExpanded] = useState(false);
+  const [selectedPlan, setSelectedPlan] = useState<'annual' | 'monthly' | 'lifetime'>(
+    fromState === 'lifetime-offer' ? 'lifetime' : 'annual'
+  );
+  const [planSelectorExpanded, setPlanSelectorExpanded] = useState(fromState === 'lifetime-offer');
   const [showParentGate, setShowParentGate] = useState(false);
   const [isPurchasing, setIsPurchasing] = useState(false);
   const [isRestoring, setIsRestoring] = useState(false);
@@ -276,8 +279,8 @@ const PaywallPage: React.FC = () => {
     setIsPurchasing(true);
     setError(null);
 
-    // Create Your Story paywall has no lifetime option - use annual if somehow lifetime was selected
-    const effectivePlan = isCreateYourStoryPaywall && selectedPlan === 'lifetime' ? 'annual' : selectedPlan;
+    // Create Your Story paywall has no lifetime unless from deal page; otherwise use annual
+    const effectivePlan = (isCreateYourStoryPaywall && !showLifetimeOption && selectedPlan === 'lifetime') ? 'annual' : selectedPlan;
     
     // Facebook Pixel - Track checkout initiation
     const price = effectivePlan === 'lifetime' ? lifetimeSalePrice : effectivePlan === 'annual' ? annualPrice : 5.99;
@@ -660,6 +663,8 @@ const PaywallPage: React.FC = () => {
                   <p className="text-gray-500 text-xs text-center">
                     {selectedPlan === 'annual'
                       ? `7-day free trial, then $${annualPrice}/year. Cancel anytime.`
+                      : selectedPlan === 'lifetime'
+                      ? `$${lifetimeSalePrice} one-time • Lifetime access`
                       : `7-day free trial, then $${monthlyPrice}/month. Cancel anytime.`}
                   </p>
                 </div>
@@ -680,11 +685,13 @@ const PaywallPage: React.FC = () => {
                     </div>
                     <div className="text-left">
                       <p className="font-bold text-[#1e1b4b]">
-                        {selectedPlan === 'annual' ? 'Annual' : 'Monthly'}
+                        {selectedPlan === 'annual' ? 'Annual' : selectedPlan === 'lifetime' ? 'Lifetime' : 'Monthly'}
                       </p>
                       <p className="text-xs text-gray-500">
                         {selectedPlan === 'annual'
                           ? `$${annualPrice}/year • 12 free custom books`
+                          : selectedPlan === 'lifetime'
+                          ? `$${lifetimeSalePrice} one-time • Forever`
                           : `$${monthlyPrice} USD/month • Cancel anytime`}
                       </p>
                     </div>
@@ -768,8 +775,8 @@ const PaywallPage: React.FC = () => {
               </>
               )}
 
-              {/* Lifetime Option - hidden on Create Your Story paywall */}
-              {!isCreateYourStoryPaywall && (
+              {/* Lifetime Option - shown when from deal page (links to iOS/Android lifetime IAP) or legacy paywall */}
+              {(showLifetimeOption || !isCreateYourStoryPaywall) && (
               <div 
                 onClick={() => setSelectedPlan('lifetime')}
                 className={`relative w-full rounded-2xl border-2 overflow-hidden cursor-pointer transition-all ${

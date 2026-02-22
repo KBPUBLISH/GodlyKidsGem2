@@ -48,7 +48,82 @@ function getVideoDurationFromFile(file: File): Promise<number> {
     });
 }
 
-/** Direct browser-to-GCS upload via signed URL - bypasses backend, avoids Chrome resource limits */
+const CHUNK_SIZE = 5 * 1024 * 1024; // 5MB per chunk - avoids ERR_INSUFFICIENT_RESOURCES
+const CHUNK_THRESHOLD = 0; // Always use chunked for video/audio - most reliable
+
+async function retry<T>(fn: () => Promise<T>, attempts = 3): Promise<T> {
+    for (let i = 0; i < attempts; i++) {
+        try {
+            return await fn();
+        } catch (e) {
+            if (i === attempts - 1) throw e;
+            await new Promise((r) => setTimeout(r, 1000 * (i + 1)));
+        }
+    }
+    throw new Error('Retry failed');
+}
+
+/** Chunked upload - uploads in 5MB pieces to avoid ERR_INSUFFICIENT_RESOURCES */
+async function uploadViaChunked(
+    bookId: string,
+    type: 'video' | 'audio',
+    file: File,
+    songId?: string
+): Promise<{ url: string }> {
+    const totalChunks = Math.ceil(file.size / CHUNK_SIZE);
+    const sessionId = crypto.randomUUID?.() || `s${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    const tempObjectNames: string[] = [];
+    const contentType = file.type || 'application/octet-stream';
+    for (let idx = 0; idx < totalChunks; idx++) {
+        const start = idx * CHUNK_SIZE;
+        const end = Math.min(start + CHUNK_SIZE, file.size);
+        const chunk = file.slice(start, end);
+        const res = await fetch(`${API_BASE()}/api/upload/signed-url-chunk`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                bookId,
+                type,
+                contentType,
+                filename: file.name,
+                chunkIdx: idx,
+                totalChunks,
+                sessionId,
+                songId: songId || undefined,
+            }),
+        });
+        if (!res.ok) throw new Error(await res.text().catch(() => `Chunk URL failed: ${res.status}`));
+        const { uploadUrl, tempObjectName } = await res.json();
+        if (!uploadUrl || !tempObjectName) throw new Error('Invalid chunk URL response');
+        await retry(async () => {
+            const putRes = await fetch(uploadUrl, {
+                method: 'PUT',
+                headers: { 'Content-Type': contentType },
+                body: chunk,
+            });
+            if (!putRes.ok) throw new Error(`Chunk ${idx + 1} failed: ${putRes.status}`);
+        });
+        tempObjectNames.push(tempObjectName);
+    }
+    const composeRes = await fetch(`${API_BASE()}/api/upload/compose-chunks`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            bookId,
+            type,
+            filename: file.name,
+            tempObjectNames,
+            sessionId,
+            songId: songId || undefined,
+        }),
+    });
+    if (!composeRes.ok) throw new Error(await composeRes.text().catch(() => `Compose failed: ${composeRes.status}`));
+    const data = await composeRes.json();
+    if (!data?.url) throw new Error('No URL in compose response');
+    return { url: data.url };
+}
+
+/** Direct browser-to-GCS upload via signed URL - single PUT for small files */
 async function uploadViaSignedUrl(
     bookId: string,
     type: 'video' | 'audio',
@@ -81,6 +156,14 @@ async function uploadViaSignedUrl(
     clearTimeout(timeoutId);
     if (!putRes.ok) throw new Error(`Upload failed: ${putRes.status} ${await putRes.text().catch(() => '')}`);
     return { url: publicUrl };
+}
+
+/** Use chunked for large files, single PUT for small ones */
+async function uploadMedia(bookId: string, type: 'video' | 'audio', file: File, songId?: string): Promise<{ url: string }> {
+    if (file.size > CHUNK_THRESHOLD) {
+        return uploadViaChunked(bookId, type, file, songId);
+    }
+    return uploadViaSignedUrl(bookId, type, file, songId);
 }
 
 interface LyricLine {
@@ -297,7 +380,7 @@ const KaraokeForm: React.FC = () => {
         // Always use direct-to-GCS for video: browser uploads to storage.googleapis.com, not through backend.
         // This avoids ERR_INSUFFICIENT_RESOURCES when proxying 30MB+ through Render.
         try {
-            const data = await uploadViaSignedUrl(bookIdForUpload, 'video', file, songId, 300000);
+            const data = await uploadMedia(bookIdForUpload, 'video', file, songId);
             setFormData(prev => ({ ...prev, videoUrl: data.url, duration: duration || prev.duration }));
         } catch (err) {
             console.error('Video upload failed:', err);
@@ -332,7 +415,7 @@ const KaraokeForm: React.FC = () => {
         setUploadingAudio(true);
         // Always use direct-to-GCS for audio (same as video) - avoids ERR_INSUFFICIENT_RESOURCES
         try {
-            const data = await uploadViaSignedUrl(bookIdForUpload, 'audio', file, songId, 120000);
+            const data = await uploadMedia(bookIdForUpload, 'audio', file, songId);
             setFormData(prev => ({ ...prev, backgroundAudioUrl: data.url }));
         } catch (err) {
             console.error('Audio upload failed:', err);

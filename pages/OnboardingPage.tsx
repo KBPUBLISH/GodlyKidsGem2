@@ -1685,7 +1685,7 @@ const OnboardingPage: React.FC = () => {
              </div>
 
             {/* Avatar Picker - Ship Deck Background */}
-            <div className="rounded-2xl p-5 mb-6 border-2 border-[#8B4513] shadow-lg relative overflow-hidden" style={{backgroundImage: 'url(/assets/images/ship-deck.jpg)', backgroundSize: 'cover', backgroundPosition: 'center'}}>
+            <div className="rounded-2xl p-5 mb-6 border-2 border-[#8B4513] shadow-lg relative overflow-hidden" style={{backgroundImage: 'url(/assets/images/ship-deck.webp)', backgroundSize: 'cover', backgroundPosition: 'center'}}>
                {/* Slight overlay for better contrast */}
                <div className="absolute inset-0 bg-black/20 rounded-2xl"></div>
                

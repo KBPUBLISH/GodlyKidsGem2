@@ -8,6 +8,7 @@ import AvatarCompositor from '../components/avatar/AvatarCompositor';
 
 const WARRIOR_ISLAND = '/assets/images/warrior-island.webp';
 const ISLAND_BUTTON = '/assets/images/island-button.webp';
+const VOLCANO_ISLAND = '/assets/images/volcano-island.webp';
 
 interface GameItem {
   _id?: string;
@@ -39,12 +40,19 @@ const GamesPage: React.FC = () => {
   const hasCompleteAvatar = !!(equippedBody && (equippedLeftArm || equippedRightArm) && equippedLegs);
   const [isParrotFlying, setIsParrotFlying] = useState(false);
   const [isZoomingIn, setIsZoomingIn] = useState(false);
+  const [isErupting, setIsErupting] = useState(false);
   const [showContent, setShowContent] = useState(false);
   const [games, setGames] = useState<GameItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [islandBlur, setIslandBlur] = useState(0);
   const scrollRef = useRef<HTMLDivElement>(null);
   const lastScrollY = useRef(0);
+
+  const triggerEruption = useCallback(() => {
+    if (isErupting) return;
+    setIsErupting(true);
+    setTimeout(() => setIsErupting(false), 4000);
+  }, [isErupting]);
 
   const handleIslandClick = useCallback(() => {
     if (isZoomingIn) return;
@@ -367,6 +375,66 @@ const GamesPage: React.FC = () => {
         </div>
       )}
 
+      {/* Volcano island — right side */}
+      <div className="absolute overflow-visible transition-opacity duration-300" style={{ zIndex: 5, right: '-2%', top: '16%', width: '34vw', maxWidth: 170, opacity: isZoomingIn ? 0 : 1 }}>
+        <div className="absolute pointer-events-none" style={{ zIndex: 0, inset: '-10% -10%', bottom: '-6%' }}>
+          <div className="volcano-wave-1" style={{
+            position: 'absolute', left: '0', right: '0', bottom: '4%', height: '44%',
+            borderRadius: '50%',
+            border: '2.5px solid rgba(180,230,255,0.3)',
+            boxShadow: '0 0 8px 3px rgba(140,210,255,0.15)',
+          }} />
+          <div className="volcano-wave-2" style={{
+            position: 'absolute', left: '-5%', right: '-5%', bottom: '0%', height: '48%',
+            borderRadius: '50%',
+            border: '2px solid rgba(180,230,255,0.2)',
+            boxShadow: '0 0 10px 4px rgba(140,210,255,0.1)',
+          }} />
+        </div>
+        <button
+          type="button"
+          onClick={triggerEruption}
+          className="relative w-full cursor-pointer select-none transition-transform active:scale-95 hover:scale-[1.02] focus:outline-none"
+          style={{ zIndex: 1 }}
+          aria-label="Tap the Volcano"
+        >
+          <img
+            src={VOLCANO_ISLAND}
+            alt="Volcano Island"
+            className="w-full h-auto object-contain"
+          />
+        </button>
+
+        {!isErupting && (
+          <div className="absolute pointer-events-none" style={{ zIndex: 20, left: '20%', top: '-5%', width: '60%', height: '100%' }}>
+            <div className="idle-smoke-1" style={{ position: 'absolute', left: '8%', top: '0%', width: 24, height: 24, borderRadius: '50%', background: 'radial-gradient(circle, rgba(255,255,255,0.9) 0%, rgba(220,220,220,0.5) 40%, transparent 70%)', filter: 'blur(3px)' }} />
+            <div className="idle-smoke-2" style={{ position: 'absolute', left: '35%', top: '3%', width: 20, height: 20, borderRadius: '50%', background: 'radial-gradient(circle, rgba(255,255,255,0.85) 0%, rgba(210,210,210,0.45) 40%, transparent 70%)', filter: 'blur(2.5px)' }} />
+            <div className="idle-smoke-3" style={{ position: 'absolute', left: '55%', top: '-2%', width: 18, height: 18, borderRadius: '50%', background: 'radial-gradient(circle, rgba(255,255,255,0.8) 0%, rgba(200,200,200,0.4) 40%, transparent 70%)', filter: 'blur(3px)' }} />
+            <div className="idle-smoke-1" style={{ position: 'absolute', left: '25%', top: '5%', width: 16, height: 16, borderRadius: '50%', background: 'radial-gradient(circle, rgba(255,255,255,0.75) 0%, rgba(220,220,220,0.35) 40%, transparent 70%)', filter: 'blur(2px)', animationDelay: '-3s' }} />
+          </div>
+        )}
+
+        {isErupting && (
+          <div className="absolute pointer-events-none overflow-visible" style={{ zIndex: 10, inset: '-150% -50% -20% -50%' }}>
+            <div className="volcano-smoke-1" style={{ position: 'absolute', left: '40%', bottom: '25%', width: '30%', height: '20%', borderRadius: '50%', background: 'radial-gradient(circle, rgba(120,120,120,0.85) 0%, rgba(80,80,80,0.5) 50%, transparent 70%)' }} />
+            <div className="volcano-smoke-2" style={{ position: 'absolute', left: '32%', bottom: '25%', width: '25%', height: '18%', borderRadius: '50%', background: 'radial-gradient(circle, rgba(100,100,100,0.7) 0%, rgba(70,70,70,0.4) 50%, transparent 70%)' }} />
+            <div className="volcano-smoke-3" style={{ position: 'absolute', left: '48%', bottom: '25%', width: '22%', height: '16%', borderRadius: '50%', background: 'radial-gradient(circle, rgba(90,90,90,0.65) 0%, rgba(60,60,60,0.35) 50%, transparent 70%)' }} />
+            <div className="volcano-smoke-4" style={{ position: 'absolute', left: '36%', bottom: '25%', width: '35%', height: '22%', borderRadius: '50%', background: 'radial-gradient(circle, rgba(110,110,110,0.6) 0%, rgba(85,85,85,0.3) 50%, transparent 70%)' }} />
+            <div className="volcano-smoke-5" style={{ position: 'absolute', left: '42%', bottom: '25%', width: '20%', height: '14%', borderRadius: '50%', background: 'radial-gradient(circle, rgba(80,80,80,0.5) 0%, rgba(60,60,60,0.25) 50%, transparent 70%)' }} />
+
+            <div className="volcano-lava-1" style={{ position: 'absolute', left: '44%', bottom: '28%', width: 6, height: 14, borderRadius: '40% 40% 50% 50%', background: 'linear-gradient(to bottom, #ffcc00, #ff4500)', boxShadow: '0 0 10px 4px rgba(255,69,0,0.7), 0 0 20px 8px rgba(255,100,0,0.3)', filter: 'blur(0.5px)' }} />
+            <div className="volcano-lava-2" style={{ position: 'absolute', left: '52%', bottom: '28%', width: 5, height: 11, borderRadius: '40% 40% 50% 50%', background: 'linear-gradient(to bottom, #ffe066, #ff6600)', boxShadow: '0 0 8px 3px rgba(255,102,0,0.7), 0 0 16px 6px rgba(255,140,0,0.25)', filter: 'blur(0.5px)' }} />
+            <div className="volcano-lava-3" style={{ position: 'absolute', left: '40%', bottom: '28%', width: 5, height: 13, borderRadius: '40% 40% 50% 50%', background: 'linear-gradient(to bottom, #ffbb33, #ff3300)', boxShadow: '0 0 9px 3px rgba(255,51,0,0.7), 0 0 18px 6px rgba(255,80,0,0.3)', filter: 'blur(0.5px)' }} />
+            <div className="volcano-lava-4" style={{ position: 'absolute', left: '56%', bottom: '28%', width: 4, height: 9, borderRadius: '40% 40% 50% 50%', background: 'linear-gradient(to bottom, #ffdd44, #ff8800)', boxShadow: '0 0 7px 2px rgba(255,136,0,0.6)', filter: 'blur(0.5px)' }} />
+            <div className="volcano-lava-5" style={{ position: 'absolute', left: '48%', bottom: '28%', width: 7, height: 16, borderRadius: '40% 40% 50% 50%', background: 'linear-gradient(to bottom, #ffee55, #ff2200)', boxShadow: '0 0 12px 5px rgba(255,34,0,0.7), 0 0 24px 8px rgba(255,68,0,0.3)', filter: 'blur(0.5px)' }} />
+            <div className="volcano-lava-6" style={{ position: 'absolute', left: '37%', bottom: '28%', width: 4, height: 10, borderRadius: '40% 40% 50% 50%', background: 'linear-gradient(to bottom, #ffcc66, #ff5500)', boxShadow: '0 0 6px 2px rgba(255,85,0,0.6)', filter: 'blur(0.5px)' }} />
+
+            <div className="volcano-glow" style={{ position: 'absolute', left: '30%', bottom: '22%', width: '50%', height: '18%', borderRadius: '50%', background: 'radial-gradient(ellipse at center, rgba(255,100,0,0.6) 0%, rgba(255,60,0,0.3) 40%, transparent 70%)', filter: 'blur(6px)' }} />
+            <div className="lava-body-glow" style={{ position: 'absolute', left: '25%', bottom: '4%', width: '55%', height: '24%', borderRadius: '40%', background: 'radial-gradient(ellipse at center top, rgba(255,80,0,0.25) 0%, rgba(255,40,0,0.1) 50%, transparent 80%)', filter: 'blur(8px)' }} />
+          </div>
+        )}
+      </div>
+
       {/* Warrior Island — centered, nudged up */}
       <div className="flex-1 flex flex-col items-center justify-center gap-4" style={{ zIndex: 3, marginTop: '-8%' }}>
         <div
@@ -428,6 +496,69 @@ const GamesPage: React.FC = () => {
       </div>
 
       <style>{`
+        .volcano-wave-1 {
+          animation: volcano-wave-shrink 3.5s ease-in-out infinite;
+          transform-origin: center 70%;
+        }
+        .volcano-wave-2 {
+          animation: volcano-wave-shrink 4.5s ease-in-out infinite;
+          animation-delay: -1.5s;
+          transform-origin: center 70%;
+        }
+        @keyframes volcano-wave-shrink {
+          0%   { transform: scale(1.15); opacity: 0; }
+          20%  { opacity: 0.7; }
+          60%  { opacity: 0.4; }
+          100% { transform: scale(0.95); opacity: 0; }
+        }
+        .idle-smoke-1 { animation: idle-wisp 4s ease-in-out infinite; }
+        .idle-smoke-2 { animation: idle-wisp 5s ease-in-out infinite; animation-delay: -1.5s; }
+        .idle-smoke-3 { animation: idle-wisp 6s ease-in-out infinite; animation-delay: -3s; }
+        @keyframes idle-wisp {
+          0%   { transform: translateY(0) scale(0.8); opacity: 0; }
+          10%  { opacity: 0.8; transform: translateY(-6px) scale(1); }
+          30%  { opacity: 0.6; transform: translateY(-22px) scale(1.3); }
+          60%  { opacity: 0.3; transform: translateY(-45px) scale(1.7); }
+          100% { opacity: 0; transform: translateY(-70px) scale(2.2); }
+        }
+        .volcano-smoke-1 { animation: smoke-rise 3s ease-out forwards; }
+        .volcano-smoke-2 { animation: smoke-rise 3s ease-out 0.15s forwards; }
+        .volcano-smoke-3 { animation: smoke-rise 3s ease-out 0.3s forwards; }
+        .volcano-smoke-4 { animation: smoke-rise 2.8s ease-out 0.5s forwards; }
+        .volcano-smoke-5 { animation: smoke-rise 3.2s ease-out 0.7s forwards; }
+        @keyframes smoke-rise {
+          0%   { transform: translateY(0) scale(0.5); opacity: 0; }
+          15%  { opacity: 0.9; transform: translateY(-40px) scale(1.2); }
+          40%  { opacity: 0.7; transform: translateY(-100px) scale(1.8); }
+          70%  { opacity: 0.35; transform: translateY(-170px) scale(2.5); }
+          100% { opacity: 0; transform: translateY(-250px) scale(3.2); }
+        }
+        .volcano-lava-1 { animation: lava-blob 2s ease-out forwards; --lava-x: -18px; --lava-peak: -110px; }
+        .volcano-lava-2 { animation: lava-blob 1.7s ease-out 0.12s forwards; --lava-x: 12px; --lava-peak: -90px; }
+        .volcano-lava-3 { animation: lava-blob 2.2s ease-out 0.22s forwards; --lava-x: -28px; --lava-peak: -130px; }
+        .volcano-lava-4 { animation: lava-blob 1.5s ease-out 0.38s forwards; --lava-x: 22px; --lava-peak: -70px; }
+        .volcano-lava-5 { animation: lava-blob 1.9s ease-out 0.06s forwards; --lava-x: -6px; --lava-peak: -120px; }
+        .volcano-lava-6 { animation: lava-blob 1.8s ease-out 0.28s forwards; --lava-x: 16px; --lava-peak: -100px; }
+        @keyframes lava-blob {
+          0%   { transform: translate(0, 0) scaleY(1) scaleX(1) rotate(0deg); opacity: 0; }
+          8%   { opacity: 1; transform: translate(calc(var(--lava-x) * 0.15), calc(var(--lava-peak) * 0.4)) scaleY(1.6) scaleX(0.7) rotate(-5deg); }
+          30%  { opacity: 1; transform: translate(calc(var(--lava-x) * 0.5), var(--lava-peak)) scaleY(1.3) scaleX(0.8) rotate(8deg); }
+          55%  { opacity: 0.85; transform: translate(calc(var(--lava-x) * 0.8), calc(var(--lava-peak) * 0.4)) scaleY(0.9) scaleX(1.1) rotate(-3deg); }
+          80%  { opacity: 0.4; transform: translate(var(--lava-x), calc(var(--lava-peak) * -0.1)) scaleY(1.4) scaleX(0.6) rotate(12deg); }
+          100% { opacity: 0; transform: translate(calc(var(--lava-x) * 1.1), 30px) scaleY(1.8) scaleX(0.4) rotate(15deg); }
+        }
+        .volcano-glow { animation: glow-pulse 0.8s ease-in-out 3 forwards; }
+        @keyframes glow-pulse {
+          0%, 100% { opacity: 0.3; transform: scale(1); }
+          50%      { opacity: 1; transform: scale(1.3); }
+        }
+        .lava-body-glow { animation: body-glow 3s ease-in-out forwards; opacity: 0; }
+        @keyframes body-glow {
+          0%   { opacity: 0; }
+          20%  { opacity: 0.8; }
+          60%  { opacity: 0.5; }
+          100% { opacity: 0; }
+        }
         .games-cloud { left: -200px; }
         .games-cloud-1 { animation: games-cloud-flow 80s linear infinite; }
         .games-cloud-2 { animation: games-cloud-flow 65s linear infinite; animation-delay: -20s; }

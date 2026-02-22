@@ -1150,6 +1150,7 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [showLayoutRating, setShowLayoutRating] = useState(false);
   const [lifetimeOfferVariant, setLifetimeOfferVariant] = useState<'first' | 'final' | null>(null);
   const lifetimeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const prevPathForOfferRef = useRef(location.pathname);
 
   // Show "How do you like the new layout?" pop-up on first visit to /world or /home
   useEffect(() => {
@@ -1163,15 +1164,16 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
 
   // --- Lifetime offer popup: first offer (30s after paywall close) ---
   useEffect(() => {
+    const wasPrevPaywall = prevPathForOfferRef.current === '/paywall';
+    prevPathForOfferRef.current = location.pathname;
+
     const isPremium = localStorage.getItem('godlykids_premium') === 'true';
     if (isPremium) return;
 
     const stage = localStorage.getItem(LIFETIME_OFFER_STAGE_KEY);
-    // When user navigates away from /paywall and stage is 'ready', start 30s timer
-    if (prevPathRef.current === '/paywall' && location.pathname !== '/paywall' && stage === 'ready') {
+    if (wasPrevPaywall && location.pathname !== '/paywall' && stage === 'ready') {
       if (lifetimeTimerRef.current) clearTimeout(lifetimeTimerRef.current);
       lifetimeTimerRef.current = setTimeout(() => {
-        // Re-check premium and stage in case anything changed
         if (localStorage.getItem('godlykids_premium') === 'true') return;
         if (localStorage.getItem(LIFETIME_OFFER_STAGE_KEY) !== 'ready') return;
         setLifetimeOfferVariant('first');
@@ -1186,19 +1188,24 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   useEffect(() => {
     const isPremium = localStorage.getItem('godlykids_premium') === 'true';
     if (isPremium) return;
-    // Only run once per session
     if (sessionStorage.getItem(LIFETIME_OFFER_SESSION_KEY)) return;
     sessionStorage.setItem(LIFETIME_OFFER_SESSION_KEY, 'true');
 
     const stage = localStorage.getItem(LIFETIME_OFFER_STAGE_KEY);
     if (stage === 'shown_first') {
-      // Show final offer after a brief delay so the app settles
       const timer = setTimeout(() => {
         if (localStorage.getItem('godlykids_premium') === 'true') return;
         setLifetimeOfferVariant('final');
       }, 2000);
       return () => clearTimeout(timer);
     }
+  }, []);
+
+  // Listen for Header timer tap to show the lifetime offer modal at root level
+  useEffect(() => {
+    const handler = () => setLifetimeOfferVariant('first');
+    window.addEventListener('show_lifetime_offer', handler);
+    return () => window.removeEventListener('show_lifetime_offer', handler);
   }, []);
 
   // Transition detection runs in useLayoutEffect so the new page starts hidden

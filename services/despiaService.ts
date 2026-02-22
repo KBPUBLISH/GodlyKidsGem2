@@ -309,6 +309,88 @@ export const DespiaService = {
   },
 
   /**
+   * Microphone Recording (standard Web APIs)
+   *
+   * Despia MCP docs do NOT include a native mic recording protocol. Recording uses
+   * the standard Web APIs: getUserMedia + MediaRecorder. These work in Despia's
+   * WebView when the native app has microphone permission (Info.plist / AndroidManifest).
+   *
+   * Use for: Karaoke, voice memos, prayer recording, etc.
+   */
+  recording: {
+    /**
+     * Request mic permission and return a MediaStream, or null if denied.
+     * In Despia: ensure microphone permission is in the native app config.
+     */
+    requestPermission: async (): Promise<MediaStream | null> => {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        return stream;
+      } catch (err) {
+        console.warn('Microphone permission denied:', err);
+        return null;
+      }
+    },
+
+    /**
+     * Start recording from the microphone.
+     * Returns { start, stop } where stop() resolves with the audio Blob.
+     */
+    startRecording: async (): Promise<{
+      stream: MediaStream;
+      stop: () => Promise<Blob>;
+    } | null> => {
+      const stream = await DespiaService.recording.requestPermission();
+      if (!stream) return null;
+
+      const recorder = new MediaRecorder(stream, {
+        mimeType: MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
+          ? 'audio/webm;codecs=opus'
+          : 'audio/webm',
+        audioBitsPerSecond: 128000,
+      });
+
+      const chunks: Blob[] = [];
+      recorder.ondataavailable = (e) => {
+        if (e.data.size > 0) chunks.push(e.data);
+      };
+
+      return new Promise((resolve, reject) => {
+        recorder.onstart = () => {
+          resolve({
+            stream,
+            stop: () =>
+              new Promise<Blob>((res, rej) => {
+                if (recorder.state === 'inactive') {
+                  res(new Blob(chunks, { type: recorder.mimeType }));
+                  return;
+                }
+                recorder.onstop = () => {
+                  stream.getTracks().forEach((t) => t.stop());
+                  res(new Blob(chunks, { type: recorder.mimeType }));
+                };
+                recorder.stop();
+              }),
+          });
+        };
+        recorder.onerror = (e) => {
+          stream.getTracks().forEach((t) => t.stop());
+          rej((e as any)?.error || new Error('Recording failed'));
+        };
+        recorder.start(1000);
+      });
+    },
+
+    /**
+     * Open app settings (useful when mic permission was denied - user can enable manually).
+     * Only available in Despia native.
+     */
+    openSettingsForPermission: (): void => {
+      DespiaService.openSettings();
+    },
+  },
+
+  /**
    * Safe Area Support
    * https://npm.despia.com/default-guide/native-features/fullscreen-safe-area
    * 

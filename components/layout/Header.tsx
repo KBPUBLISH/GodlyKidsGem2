@@ -1,4 +1,4 @@
-import React, { useState, useEffect, lazy, Suspense } from 'react';
+import React, { useState, useEffect, useCallback, lazy, Suspense } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { Crown, FileText, Clock } from 'lucide-react';
 const ShopModal = lazy(() => import('../features/ShopModal'));
@@ -13,7 +13,8 @@ import { AVATAR_ASSETS } from '../avatar/AvatarAssets';
 
 // Lifetime deal timer constants - shared with PaywallPage
 const LIFETIME_DEAL_KEY = 'godlykids_lifetime_deal_start';
-const DEAL_DURATION_MS = 24 * 60 * 60 * 1000; // 24 hours
+const DEAL_DURATION_MS = 30 * 60 * 1000; // 30 minutes
+const LIFETIME_OFFER_STAGE_KEY = 'godlykids_lifetime_offer_stage';
 
 interface HeaderProps {
   isVisible: boolean;
@@ -44,28 +45,28 @@ const Header: React.FC<HeaderProps> = ({ isVisible, title = "GODLY KIDS" }) => {
   const [androidReady, setAndroidReady] = useState(!isAndroid);
   
   // Lifetime deal countdown timer state
-  const [dealTimeRemaining, setDealTimeRemaining] = useState<{ hours: number; minutes: number; seconds: number } | null>(null);
+  const [dealTimeRemaining, setDealTimeRemaining] = useState<{ minutes: number; seconds: number } | null>(null);
   
   // Force a repaint on Android after mount by toggling a CSS transform
   useEffect(() => {
     if (!isAndroid) return;
-    // Use a brief delay to let the browser finish initial paint, then toggle
     const timer = setTimeout(() => {
       setAndroidReady(true);
     }, 50);
     return () => clearTimeout(timer);
   }, [isAndroid]);
   
-  // Track the 24-hour countdown for lifetime deal (only if not subscribed)
+  // Track the 30-minute countdown for lifetime deal (only after paywall dismissed)
+  // Re-runs on route change so it picks up the localStorage values set by the paywall close handler
   useEffect(() => {
     if (isSubscribed) {
       setDealTimeRemaining(null);
       return;
     }
     
-    // Check if deal timer has been started
+    const stage = localStorage.getItem(LIFETIME_OFFER_STAGE_KEY);
     const dealStartTime = localStorage.getItem(LIFETIME_DEAL_KEY);
-    if (!dealStartTime) {
+    if (!dealStartTime || !stage || stage === 'none' || stage === 'done') {
       setDealTimeRemaining(null);
       return;
     }
@@ -74,26 +75,21 @@ const Header: React.FC<HeaderProps> = ({ isVisible, title = "GODLY KIDS" }) => {
     const endTime = startTime + DEAL_DURATION_MS;
     
     const updateTimer = () => {
-      const now = Date.now();
-      const remaining = endTime - now;
-      
+      const remaining = endTime - Date.now();
       if (remaining <= 0) {
         setDealTimeRemaining(null);
         return;
       }
-      
-      const hours = Math.floor(remaining / (1000 * 60 * 60));
-      const minutes = Math.floor((remaining % (1000 * 60 * 60)) / (1000 * 60));
-      const seconds = Math.floor((remaining % (1000 * 60)) / 1000);
-      
-      setDealTimeRemaining({ hours, minutes, seconds });
+      setDealTimeRemaining({
+        minutes: Math.floor(remaining / 60000),
+        seconds: Math.floor((remaining % 60000) / 1000),
+      });
     };
     
     updateTimer();
     const interval = setInterval(updateTimer, 1000);
-    
     return () => clearInterval(interval);
-  }, [isSubscribed]);
+  }, [isSubscribed, location.pathname]);
 
   // Auto-close modals when tutorial step advances past the popup_open steps
   useEffect(() => {
@@ -140,12 +136,19 @@ const Header: React.FC<HeaderProps> = ({ isVisible, title = "GODLY KIDS" }) => {
     }
   };
 
-  const handleShopClick = () => {
+  const handleShopClick = useCallback(() => {
     setIsShopOpen(true);
     if (isStepActive('shop_highlight')) {
-      nextStep(); // Advance to shop_open
+      nextStep();
     }
-  };
+  }, [isStepActive, nextStep]);
+
+  // Listen for external requests to open the avatar shop (e.g. Parrot Island tap)
+  useEffect(() => {
+    const handler = () => handleShopClick();
+    window.addEventListener('open_avatar_shop', handler);
+    return () => window.removeEventListener('open_avatar_shop', handler);
+  }, [handleShopClick]);
 
   const handleShopClose = () => {
     setIsShopOpen(false);
@@ -268,12 +271,11 @@ const Header: React.FC<HeaderProps> = ({ isVisible, title = "GODLY KIDS" }) => {
             {/* Lifetime Deal Timer - Show next to avatar if deal is active and not subscribed */}
             {dealTimeRemaining && !isSubscribed && (
               <button
-                onClick={() => navigate('/paywall')}
+                onClick={() => window.dispatchEvent(new CustomEvent('show_lifetime_offer'))}
                 className="ml-2 bg-gradient-to-r from-[#dc2626] to-[#ef4444] px-2 py-1 rounded-lg border border-[#b91c1c] shadow-md flex items-center gap-1.5 animate-pulse hover:animate-none active:scale-95 transition-transform"
               >
                 <Clock size={12} className="text-white" />
                 <span className="text-white font-mono font-bold text-xs">
-                  {String(dealTimeRemaining.hours).padStart(2, '0')}:
                   {String(dealTimeRemaining.minutes).padStart(2, '0')}:
                   {String(dealTimeRemaining.seconds).padStart(2, '0')}
                 </span>
@@ -363,49 +365,6 @@ const Header: React.FC<HeaderProps> = ({ isVisible, title = "GODLY KIDS" }) => {
                 <FileText className={`w-5 h-5 flex-shrink-0 ${isAndroid ? 'text-white' : 'text-white/90 group-hover:text-white'} transition-colors`} style={isAndroid ? { fill: 'currentColor' } : undefined} />
               </button>
 
-              {/* Shop Sign Button */}
-              <button
-                id="shop-button"
-                data-tutorial="shop-button"
-                onClick={handleShopClick}
-                className={isAndroid ?
-                  // Simplified for Android
-                  "bg-[#8B4513] px-3 py-1.5 rounded-lg border-2 border-[#5c2e0b] transition-all relative group flex items-center justify-center" :
-                  // Original styles
-                  "bg-[#8B4513] hover:bg-[#A0522D] px-3 py-1.5 rounded-lg border-2 border-[#5c2e0b] shadow-[0_4px_0_#3e1f07] active:translate-y-[2px] active:shadow-none transition-all relative group flex items-center justify-center"
-                }
-                style={isAndroid ? {
-                  boxShadow: '0 2px 4px rgba(0,0,0,0.3)',
-                  transform: 'translateZ(0)',
-                  backfaceVisibility: 'hidden',
-                  WebkitBackfaceVisibility: 'hidden',
-                  opacity: 1,
-                  minWidth: 44,
-                  minHeight: 40
-                } : undefined}
-              >
-                {/* Wood Texture Overlay - hide on Android */}
-                {!isAndroid && (
-                  <div className="absolute inset-0 opacity-20 bg-[url('https://www.transparenttextures.com/patterns/wood-pattern.png')] pointer-events-none rounded-md"></div>
-                )}
-
-                {/* Nails - hide on Android */}
-                {!isAndroid && (
-                  <>
-                    <div className="absolute top-1 left-1 w-1 h-1 bg-[#2d1809] rounded-full opacity-60"></div>
-                    <div className="absolute top-1 right-1 w-1 h-1 bg-[#2d1809] rounded-full opacity-60"></div>
-                    <div className="absolute bottom-1 left-1 w-1 h-1 bg-[#2d1809] rounded-full opacity-60"></div>
-                    <div className="absolute bottom-1 right-1 w-1 h-1 bg-[#2d1809] rounded-full opacity-60"></div>
-                  </>
-                )}
-
-                <span className={isAndroid ?
-                  "text-[#FFD700] font-display font-black text-sm tracking-wide uppercase relative z-10" :
-                  "text-[#FFD700] font-display font-black text-sm tracking-wide drop-shadow-md uppercase group-hover:text-white transition-colors relative z-10"
-                }>
-                  Shop
-                </span>
-              </button>
             </div>
           </div>
         </div>

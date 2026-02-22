@@ -187,12 +187,13 @@ const PaywallPage: React.FC = () => {
   }, [isPremium, navigate, subscribe, isClosing]);
   
   // Listen for premium status changes (from webhook confirmation after purchase)
+  // IMPORTANT: Do NOT call subscribe() here - the event was already dispatched by subscribe().
+  // Calling it again causes an infinite loop: subscribe → dispatch event → handler → subscribe → ...
   useEffect(() => {
     const handlePremiumChange = (event: CustomEvent) => {
       console.log('📱 Premium status changed on paywall:', event.detail);
       if (event.detail?.isPremium) {
         console.log('✅ Premium confirmed via event - navigating to home');
-        subscribe();
         navigate('/home');
       }
     };
@@ -243,7 +244,7 @@ const PaywallPage: React.FC = () => {
         clearInterval(backgroundPollInterval);
       }
     };
-  }, [error, subscribe, navigate]);
+  }, [error, navigate]);
 
   const handleSubscribeClick = () => {
     setError(null);
@@ -278,7 +279,7 @@ const PaywallPage: React.FC = () => {
     const effectivePlan = isCreateYourStoryPaywall && selectedPlan === 'lifetime' ? 'annual' : selectedPlan;
     
     // Facebook Pixel - Track checkout initiation
-    const price = effectivePlan === 'lifetime' ? lifetimeSalePrice : effectivePlan === 'annual' ? 39.99 : 5.99;
+    const price = effectivePlan === 'lifetime' ? lifetimeSalePrice : effectivePlan === 'annual' ? annualPrice : 5.99;
     facebookPixelService.trackInitiateCheckout(effectivePlan, price);
     
     // Track purchase attempt
@@ -432,23 +433,21 @@ const PaywallPage: React.FC = () => {
 
   // Calculate prices and savings
   const monthlyPrice = 5.99;
-  const annualPrice = 39.99;
-  const lifetimeOriginalPrice = 69.99;
+  const annualPrice = 19.99;
+  const lifetimeOriginalPrice = 39.99;
   const lifetimeSalePrice = 19.99;
   const lifetimeDiscount = Math.round(((lifetimeOriginalPrice - lifetimeSalePrice) / lifetimeOriginalPrice) * 100);
   const annualMonthly = (annualPrice / 12).toFixed(2);
   const savings = Math.round(((monthlyPrice * 12 - annualPrice) / (monthlyPrice * 12)) * 100);
   
-  // 24-hour countdown timer for lifetime deal
+  // 30-minute countdown timer for lifetime deal
   const LIFETIME_DEAL_KEY = 'godlykids_lifetime_deal_start';
-  const DEAL_DURATION_MS = 24 * 60 * 60 * 1000; // 24 hours
+  const DEAL_DURATION_MS = 30 * 60 * 1000; // 30 minutes
   
-  const [timeRemaining, setTimeRemaining] = useState<{ hours: number; minutes: number; seconds: number } | null>(null);
+  const [timeRemaining, setTimeRemaining] = useState<{ minutes: number; seconds: number } | null>(null);
   const [dealExpired, setDealExpired] = useState(false);
   
-  // Initialize and track the 24-hour countdown
   useEffect(() => {
-    // Get or set the deal start time
     let dealStartTime = localStorage.getItem(LIFETIME_DEAL_KEY);
     if (!dealStartTime) {
       dealStartTime = Date.now().toString();
@@ -459,8 +458,7 @@ const PaywallPage: React.FC = () => {
     const endTime = startTime + DEAL_DURATION_MS;
     
     const updateTimer = () => {
-      const now = Date.now();
-      const remaining = endTime - now;
+      const remaining = endTime - Date.now();
       
       if (remaining <= 0) {
         setDealExpired(true);
@@ -468,19 +466,14 @@ const PaywallPage: React.FC = () => {
         return;
       }
       
-      const hours = Math.floor(remaining / (1000 * 60 * 60));
-      const minutes = Math.floor((remaining % (1000 * 60 * 60)) / (1000 * 60));
-      const seconds = Math.floor((remaining % (1000 * 60)) / 1000);
-      
-      setTimeRemaining({ hours, minutes, seconds });
+      setTimeRemaining({
+        minutes: Math.floor(remaining / 60000),
+        seconds: Math.floor((remaining % 60000) / 1000),
+      });
     };
     
-    // Update immediately
     updateTimer();
-    
-    // Update every second
     const interval = setInterval(updateTimer, 1000);
-    
     return () => clearInterval(interval);
   }, []);
 
@@ -489,11 +482,13 @@ const PaywallPage: React.FC = () => {
     setIsClosing(true);
     activityTrackingService.trackOnboardingEvent('paywall_closed', isCreateYourStoryPaywall ? { source: 'create-your-story' } : undefined).catch(() => {});
 
-    // Seed the lifetime offer popup: if the user hasn't already progressed past this stage, mark as ready
     const stage = localStorage.getItem('godlykids_lifetime_offer_stage');
     if (!stage || stage === 'none') {
       localStorage.setItem('godlykids_lifetime_offer_stage', 'ready');
       localStorage.setItem('godlykids_lifetime_offer_ready_at', Date.now().toString());
+      if (!localStorage.getItem(LIFETIME_DEAL_KEY)) {
+        localStorage.setItem(LIFETIME_DEAL_KEY, Date.now().toString());
+      }
     }
 
     if (fromState === 'create-your-story') {
@@ -633,7 +628,9 @@ const PaywallPage: React.FC = () => {
                     <span className="font-semibold text-sm">No payment now!</span>
                   </div>
                   <p className="text-gray-500 text-xs text-center">
-                    7-day free trial, then {selectedPlan === 'annual' ? `$${annualPrice}/year` : `$${monthlyPrice}/month`}. Cancel anytime.
+                    {selectedPlan === 'annual'
+                      ? `7-day free trial, then $${annualPrice} one-time payment for lifetime access. No recurring charges.`
+                      : `7-day free trial, then $${monthlyPrice}/month. Cancel anytime.`}
                   </p>
                 </div>
               </>
@@ -657,7 +654,7 @@ const PaywallPage: React.FC = () => {
                       </p>
                       <p className="text-xs text-gray-500">
                         {selectedPlan === 'annual'
-                          ? `$${annualPrice} USD/year • 12 free custom books`
+                          ? `$${annualPrice} USD one-time • lifetime access • 12 free custom books`
                           : `$${monthlyPrice} USD/month • Cancel anytime`}
                       </p>
                     </div>
@@ -676,7 +673,7 @@ const PaywallPage: React.FC = () => {
                       Collapse
                     </button>
                   )}
-              {/* Annual Option */}
+              {/* Lifetime Deal Option (was annual) */}
               <div 
                 onClick={() => { setSelectedPlan('annual'); if (isCreateYourStoryPaywall) setPlanSelectorExpanded(false); }}
                 className={`relative w-full rounded-2xl border-2 overflow-hidden cursor-pointer transition-all ${
@@ -688,7 +685,7 @@ const PaywallPage: React.FC = () => {
                 {/* Best Value Badge */}
                 <div className="absolute -top-0 -right-0">
                   <div className="bg-gradient-to-r from-[#f59e0b] to-[#fbbf24] text-white text-[10px] font-bold px-3 py-1 rounded-bl-xl">
-                    SAVE {savings}%
+                    BEST VALUE
                   </div>
                 </div>
                 
@@ -700,13 +697,14 @@ const PaywallPage: React.FC = () => {
                   </div>
                   
                   <div className="flex-1">
-                    <p className="font-bold text-[#1e1b4b]">Annual</p>
-                    <p className="text-xs text-gray-500">${annualMonthly}/month • Billed yearly • 12 free custom books</p>
+                    <p className="font-bold text-[#1e1b4b]">Lifetime Access</p>
+                    <p className="text-xs text-gray-500">One-time payment — <span className="font-semibold text-green-600">not a subscription</span></p>
                   </div>
                   
                   <div className="text-right">
+                    <p className="text-xs text-gray-400 line-through">$39.99/yr</p>
                     <p className="font-extrabold text-xl text-[#1e1b4b]">${annualPrice} <span className="text-sm font-medium">USD</span></p>
-                    <p className="text-xs text-gray-400 line-through">${(monthlyPrice * 12).toFixed(2)} USD</p>
+                    <p className="text-[10px] text-green-600 font-semibold">One-time payment — forever</p>
                   </div>
                 </div>
               </div>
@@ -763,10 +761,6 @@ const PaywallPage: React.FC = () => {
                   <div className="bg-gradient-to-r from-[#7c3aed] to-[#8b5cf6] px-4 py-2 flex items-center justify-center gap-2">
                     <span className="text-white text-xs font-semibold">⏰ Limited Time Offer:</span>
                     <div className="flex gap-1">
-                      <span className="bg-white/20 text-white font-mono font-bold text-sm px-2 py-0.5 rounded">
-                        {String(timeRemaining.hours).padStart(2, '0')}
-                      </span>
-                      <span className="text-white font-bold">:</span>
                       <span className="bg-white/20 text-white font-mono font-bold text-sm px-2 py-0.5 rounded">
                         {String(timeRemaining.minutes).padStart(2, '0')}
                       </span>
@@ -881,10 +875,12 @@ const PaywallPage: React.FC = () => {
               <div className="mb-6">
                 <div className="flex items-center gap-2 text-green-600 mb-1">
                   <Check size={18} strokeWidth={3} />
-                  <span className="font-semibold text-sm">No payment now!</span>
+                  <span className="font-semibold text-sm">{selectedPlan === 'annual' ? 'Not a subscription!' : 'No payment now!'}</span>
                 </div>
                 <p className="text-gray-500 text-xs text-center">
-                  7-day free trial, then {selectedPlan === 'annual' ? `$${annualPrice}/year` : `$${monthlyPrice}/month`}. Cancel anytime.
+                  {selectedPlan === 'annual'
+                    ? `Instead of $39.99/year, pay just $${annualPrice} once — lifetime access, no recurring charges.`
+                    : `7-day free trial, then $${monthlyPrice}/month. Cancel anytime.`}
                 </p>
               </div>
             )}

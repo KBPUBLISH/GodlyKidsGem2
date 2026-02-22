@@ -159,21 +159,35 @@ router.post('/webhook', express.raw({ type: 'application/json' }), async (req, r
         try {
           const User = require('../models/User');
           const AppUser = require('../models/AppUser');
-          
-          // Update User collection
+          const normalizedUserId = typeof userId === 'string' && userId.includes('@') ? userId.toLowerCase().trim() : userId;
+
+          // Update User collection (auth users)
           await User.findOneAndUpdate(
-            { $or: [{ email: userId }, { _id: userId }] },
+            { $or: [{ email: normalizedUserId }, { _id: userId }] },
             { isPremium: true, subscriptionPlan: plan },
             { upsert: false }
           );
-          
-          // Update AppUser collection
-          await AppUser.findOneAndUpdate(
-            { $or: [{ email: userId.toLowerCase() }, { deviceId: userId }] },
-            { isPremium: true, subscriptionPlan: plan },
-            { upsert: false }
-          );
-          
+
+          // Update AppUser collection - use subscriptionStatus (not isPremium; AppUser schema uses subscriptionStatus)
+          let appUser = await AppUser.findOne({
+            $or: [{ email: normalizedUserId }, { deviceId: userId }]
+          });
+          if (appUser) {
+            appUser.subscriptionStatus = 'active';
+            appUser.subscriptionStartDate = appUser.subscriptionStartDate || new Date();
+            appUser.subscriptionPlan = plan;
+            await appUser.save();
+          } else {
+            // User paid but has no AppUser - create one so they get premium (e.g. web-only flow)
+            appUser = await AppUser.create({
+              email: normalizedUserId.includes('@') ? normalizedUserId : undefined,
+              deviceId: normalizedUserId.includes('@') ? undefined : userId,
+              subscriptionStatus: 'active',
+              subscriptionStartDate: new Date(),
+              subscriptionPlan: plan,
+            });
+          }
+
           console.log(`✅ Updated premium status for user: ${userId}`);
         } catch (dbError) {
           console.error('❌ Database update error:', dbError);
@@ -192,17 +206,18 @@ router.post('/webhook', express.raw({ type: 'application/json' }), async (req, r
         try {
           const User = require('../models/User');
           const AppUser = require('../models/AppUser');
-          
+          const normalizedUserId = typeof userId === 'string' && userId.includes('@') ? userId.toLowerCase().trim() : userId;
+
           await User.findOneAndUpdate(
-            { $or: [{ email: userId }, { _id: userId }] },
+            { $or: [{ email: normalizedUserId }, { _id: userId }] },
             { isPremium: false }
           );
-          
+
           await AppUser.findOneAndUpdate(
-            { $or: [{ email: userId.toLowerCase() }, { deviceId: userId }] },
-            { isPremium: false }
+            { $or: [{ email: normalizedUserId }, { deviceId: userId }] },
+            { subscriptionStatus: 'cancelled' }
           );
-          
+
           console.log(`✅ Removed premium status for user: ${userId}`);
         } catch (dbError) {
           console.error('❌ Database update error:', dbError);

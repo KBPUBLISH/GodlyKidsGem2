@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Save, Upload, Mic, Plus, Trash2 } from 'lucide-react';
+import { ArrowLeft, Save, Upload, Plus, Trash2 } from 'lucide-react';
 import apiClient from '../services/apiClient';
 import { getMediaUrl } from '../services/apiClient';
 

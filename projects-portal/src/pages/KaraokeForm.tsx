@@ -4,8 +4,6 @@ import { ArrowLeft, Save, Upload, Plus, Trash2 } from 'lucide-react';
 import apiClient from '../services/apiClient';
 import { getMediaUrl } from '../services/apiClient';
 
-const MAX_VIDEO_SIZE_MB = 80;
-const MAX_VIDEO_BYTES = MAX_VIDEO_SIZE_MB * 1024 * 1024;
 const MAX_AUDIO_SIZE_MB = 30;
 const MAX_AUDIO_BYTES = MAX_AUDIO_SIZE_MB * 1024 * 1024;
 
@@ -26,145 +24,6 @@ async function uploadViaFetch(endpoint: string, body: globalThis.FormData, timeo
     return data;
 }
 
-/** Get video duration from local file (avoids re-fetching 30MB+ after upload) */
-function getVideoDurationFromFile(file: File): Promise<number> {
-    return new Promise((resolve) => {
-        const video = document.createElement('video');
-        video.preload = 'metadata';
-        const url = URL.createObjectURL(file);
-        video.onloadedmetadata = () => {
-            URL.revokeObjectURL(url);
-            const dur = Math.round(video.duration);
-            video.src = '';
-            video.load();
-            resolve(dur > 0 ? dur : 0);
-        };
-        video.onerror = () => {
-            URL.revokeObjectURL(url);
-            video.src = '';
-            resolve(0);
-        };
-        video.src = url;
-    });
-}
-
-const CHUNK_SIZE = 5 * 1024 * 1024; // 5MB per chunk - avoids ERR_INSUFFICIENT_RESOURCES
-const CHUNK_THRESHOLD = 0; // Always use chunked for video/audio - most reliable
-
-async function retry<T>(fn: () => Promise<T>, attempts = 3): Promise<T> {
-    for (let i = 0; i < attempts; i++) {
-        try {
-            return await fn();
-        } catch (e) {
-            if (i === attempts - 1) throw e;
-            await new Promise((r) => setTimeout(r, 1000 * (i + 1)));
-        }
-    }
-    throw new Error('Retry failed');
-}
-
-/** Chunked upload - uploads in 5MB pieces to avoid ERR_INSUFFICIENT_RESOURCES */
-async function uploadViaChunked(
-    bookId: string,
-    type: 'video' | 'audio',
-    file: File,
-    songId?: string
-): Promise<{ url: string }> {
-    const totalChunks = Math.ceil(file.size / CHUNK_SIZE);
-    const sessionId = crypto.randomUUID?.() || `s${Date.now()}-${Math.random().toString(36).slice(2)}`;
-    const tempObjectNames: string[] = [];
-    const contentType = file.type || 'application/octet-stream';
-    for (let idx = 0; idx < totalChunks; idx++) {
-        const start = idx * CHUNK_SIZE;
-        const end = Math.min(start + CHUNK_SIZE, file.size);
-        const chunk = file.slice(start, end);
-        const res = await fetch(`${API_BASE()}/api/upload/signed-url-chunk`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                bookId,
-                type,
-                contentType,
-                filename: file.name,
-                chunkIdx: idx,
-                totalChunks,
-                sessionId,
-                songId: songId || undefined,
-            }),
-        });
-        if (!res.ok) throw new Error(await res.text().catch(() => `Chunk URL failed: ${res.status}`));
-        const { uploadUrl, tempObjectName } = await res.json();
-        if (!uploadUrl || !tempObjectName) throw new Error('Invalid chunk URL response');
-        await retry(async () => {
-            const putRes = await fetch(uploadUrl, {
-                method: 'PUT',
-                headers: { 'Content-Type': contentType },
-                body: chunk,
-            });
-            if (!putRes.ok) throw new Error(`Chunk ${idx + 1} failed: ${putRes.status}`);
-        });
-        tempObjectNames.push(tempObjectName);
-    }
-    const composeRes = await fetch(`${API_BASE()}/api/upload/compose-chunks`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-            bookId,
-            type,
-            filename: file.name,
-            tempObjectNames,
-            sessionId,
-            songId: songId || undefined,
-        }),
-    });
-    if (!composeRes.ok) throw new Error(await composeRes.text().catch(() => `Compose failed: ${composeRes.status}`));
-    const data = await composeRes.json();
-    if (!data?.url) throw new Error('No URL in compose response');
-    return { url: data.url };
-}
-
-/** Direct browser-to-GCS upload via signed URL - single PUT for small files */
-async function uploadViaSignedUrl(
-    bookId: string,
-    type: 'video' | 'audio',
-    file: File,
-    songId?: string,
-    timeoutMs = 300000
-): Promise<{ url: string }> {
-    const res = await fetch(`${API_BASE()}/api/upload/signed-url`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-            bookId,
-            type,
-            contentType: file.type || 'application/octet-stream',
-            filename: file.name,
-            songId: songId || undefined,
-        }),
-    });
-    if (!res.ok) throw new Error(await res.text().catch(() => `Failed to get upload URL: ${res.status}`));
-    const { uploadUrl, publicUrl } = await res.json();
-    if (!uploadUrl || !publicUrl) throw new Error('Invalid signed URL response');
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
-    const putRes = await fetch(uploadUrl, {
-        method: 'PUT',
-        headers: { 'Content-Type': file.type || 'application/octet-stream' },
-        body: file,
-        signal: controller.signal,
-    });
-    clearTimeout(timeoutId);
-    if (!putRes.ok) throw new Error(`Upload failed: ${putRes.status} ${await putRes.text().catch(() => '')}`);
-    return { url: publicUrl };
-}
-
-/** Use chunked for large files, single PUT for small ones (video only - audio uses FormData) */
-async function uploadMedia(bookId: string, type: 'video' | 'audio', file: File, songId?: string): Promise<{ url: string }> {
-    if (file.size > CHUNK_THRESHOLD) {
-        return uploadViaChunked(bookId, type, file, songId);
-    }
-    return uploadViaSignedUrl(bookId, type, file, songId);
-}
 
 
 interface LyricLine {
@@ -251,11 +110,9 @@ const KaraokeForm: React.FC = () => {
     const [loading, setLoading] = useState(false);
     const [fetching, setFetching] = useState(!!id);
     const [uploadingCover, setUploadingCover] = useState(false);
-    const [uploadingVideo, setUploadingVideo] = useState(false);
     const [uploadingAudio, setUploadingAudio] = useState(false);
-    const uploadLockRef = useRef(false); // Prevent concurrent uploads (causes ERR_INSUFFICIENT_RESOURCES)
+    const uploadLockRef = useRef(false);
     const coverInputRef = useRef<HTMLInputElement>(null);
-    const videoInputRef = useRef<HTMLInputElement>(null);
     const audioInputRef = useRef<HTMLInputElement>(null);
 
     const [formData, setFormData] = useState<KaraokeFormData>({
@@ -354,42 +211,6 @@ const KaraokeForm: React.FC = () => {
             setUploadingCover(false);
             uploadLockRef.current = false;
             if (coverInputRef.current) coverInputRef.current.value = '';
-            e.target.value = '';
-        }
-    };
-
-    const handleVideoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-        const file = e.target.files?.[0];
-        if (!file?.type.startsWith('video/')) {
-            alert('Please select a video file');
-            return;
-        }
-        if (file.size > MAX_VIDEO_BYTES) {
-            alert(`Video must be under ${MAX_VIDEO_SIZE_MB}MB. Your file is ${(file.size / 1024 / 1024).toFixed(1)}MB. Please compress it first.`);
-            e.target.value = '';
-            return;
-        }
-        if (uploadLockRef.current) {
-            alert('Please wait for the current upload to finish.');
-            e.target.value = '';
-            return;
-        }
-        uploadLockRef.current = true;
-        setUploadingVideo(true);
-        // Get duration from local file first (avoids re-fetching 30MB+ after upload)
-        const duration = await getVideoDurationFromFile(file);
-        // Always use direct-to-GCS for video: browser uploads to storage.googleapis.com, not through backend.
-        // This avoids ERR_INSUFFICIENT_RESOURCES when proxying 30MB+ through Render.
-        try {
-            const data = await uploadMedia(bookIdForUpload, 'video', file, songId);
-            setFormData(prev => ({ ...prev, videoUrl: data.url, duration: duration || prev.duration }));
-        } catch (err) {
-            console.error('Video upload failed:', err);
-            showUploadError('video', err);
-        } finally {
-            setUploadingVideo(false);
-            uploadLockRef.current = false;
-            if (videoInputRef.current) videoInputRef.current.value = '';
             e.target.value = '';
         }
     };
@@ -595,32 +416,13 @@ const KaraokeForm: React.FC = () => {
                                 <img src={getMediaUrl(formData.coverImage)} alt="Cover" className="w-24 h-24 object-cover rounded-lg" />
                             )}
                             <div>
-                                <input ref={coverInputRef} type="file" accept="image/*" onChange={handleCoverUpload} className="hidden" id="cover-upload" disabled={uploadingCover || uploadingVideo || uploadingAudio} />
+                                <input ref={coverInputRef} type="file" accept="image/*" onChange={handleCoverUpload} className="hidden" id="cover-upload" disabled={uploadingCover || uploadingAudio} />
                                 <label
-                                    htmlFor={uploadingCover || uploadingVideo || uploadingAudio ? undefined : 'cover-upload'}
-                                    className={`inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-gray-300 ${uploadingCover || uploadingVideo || uploadingAudio ? 'opacity-60 cursor-not-allowed' : 'cursor-pointer hover:bg-gray-50'}`}
+                                    htmlFor={uploadingCover || uploadingAudio ? undefined : 'cover-upload'}
+                                    className={`inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-gray-300 ${uploadingCover || uploadingAudio ? 'opacity-60 cursor-not-allowed' : 'cursor-pointer hover:bg-gray-50'}`}
                                 >
                                     <Upload className="w-4 h-4" />
                                     {uploadingCover ? 'Uploading...' : 'Upload cover'}
-                                </label>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Video (karaoke-style with lyric prompts)</label>
-                        <div className="flex items-center gap-4">
-                            {formData.videoUrl && (
-                                <video src={getMediaUrl(formData.videoUrl)} controls preload="none" className="max-w-xs max-h-32 rounded" />
-                            )}
-                            <div>
-                                <input ref={videoInputRef} type="file" accept="video/*" onChange={handleVideoUpload} className="hidden" id="video-upload" disabled={uploadingCover || uploadingVideo || uploadingAudio} />
-                                <label
-                                    htmlFor={uploadingCover || uploadingVideo || uploadingAudio ? undefined : 'video-upload'}
-                                    className={`inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-gray-300 ${uploadingCover || uploadingVideo || uploadingAudio ? 'opacity-60 cursor-not-allowed' : 'cursor-pointer hover:bg-gray-50'}`}
-                                >
-                                    <Upload className="w-4 h-4" />
-                                    {uploadingVideo ? 'Uploading...' : 'Upload video'}
                                 </label>
                             </div>
                         </div>
@@ -633,10 +435,10 @@ const KaraokeForm: React.FC = () => {
                                 <audio src={getMediaUrl(formData.backgroundAudioUrl)} controls preload="none" className="max-w-md" />
                             )}
                             <div>
-                                <input ref={audioInputRef} type="file" accept="audio/*" onChange={handleAudioUpload} className="hidden" id="audio-upload" disabled={uploadingCover || uploadingVideo || uploadingAudio} />
+                                <input ref={audioInputRef} type="file" accept="audio/*" onChange={handleAudioUpload} className="hidden" id="audio-upload" disabled={uploadingCover || uploadingAudio} />
                                 <label
-                                    htmlFor={uploadingCover || uploadingVideo || uploadingAudio ? undefined : 'audio-upload'}
-                                    className={`inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-gray-300 ${uploadingCover || uploadingVideo || uploadingAudio ? 'opacity-60 cursor-not-allowed' : 'cursor-pointer hover:bg-gray-50'}`}
+                                    htmlFor={uploadingCover || uploadingAudio ? undefined : 'audio-upload'}
+                                    className={`inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-gray-300 ${uploadingCover || uploadingAudio ? 'opacity-60 cursor-not-allowed' : 'cursor-pointer hover:bg-gray-50'}`}
                                 >
                                     <Upload className="w-4 h-4" />
                                     {uploadingAudio ? 'Uploading...' : 'Upload audio'}

@@ -414,9 +414,11 @@ const KaraokeForm: React.FC = () => {
         }
         uploadLockRef.current = true;
         setUploadingAudio(true);
-        // Use direct-to-GCS signed URL upload (same as video) - bypasses Render backend entirely
         try {
-            const data = await uploadMedia(bookIdForUpload, 'audio', file, songId);
+            const fd = new FormData();
+            fd.append('file', file);
+            const params = new URLSearchParams({ bookId: 'karaoke', type: 'audio', songId });
+            const data = await uploadViaFetch(`/api/upload/audio?${params}`, fd, 120000);
             setFormData(prev => ({ ...prev, backgroundAudioUrl: data.url }));
         } catch (err) {
             console.error('Audio upload failed:', err);

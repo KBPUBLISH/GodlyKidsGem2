@@ -355,9 +355,10 @@ router.post('/mix', mixMulter.single('recording'), async (req, res) => {
         const outPath = path.join(tmpDir, 'mixed.mp3');
 
         const aecho = REVERB_AECHO[reverbLevel];
+        // duration=shortest: mix ends when recording ends. Both start at 0, aligned.
         const complexFilter = aecho
-            ? `[1:a]aecho=${aecho}[rev];[0:a][rev]amix=inputs=2:duration=first[aout]`
-            : '[0:a][1:a]amix=inputs=2:duration=first[aout]';
+            ? `[1:a]aecho=${aecho}[rev];[0:a][rev]amix=inputs=2:duration=shortest[aout]`
+            : '[0:a][1:a]amix=inputs=2:duration=shortest[aout]';
 
         try {
             await fs.promises.writeFile(bgPath, bgBuffer);
@@ -384,9 +385,21 @@ router.post('/mix', mixMulter.single('recording'), async (req, res) => {
             await blob.makePublic();
             const mixedUrl = `https://storage.googleapis.com/${bucket.name}/${gcsPath}`;
 
+            let mixedDuration = song.duration;
+            try {
+                const metadata = await new Promise((resolve, reject) => {
+                    ffmpeg(outPath).ffprobe((err, data) => (err ? reject(err) : resolve(data)));
+                });
+                if (metadata?.format?.duration) {
+                    mixedDuration = Math.round(metadata.format.duration * 10) / 10;
+                }
+            } catch (e) {
+                /* ignore */
+            }
+
             await KaraokeSong.findByIdAndUpdate(karaokeSongId, { $inc: { recordCount: 1 } });
 
-            res.json({ mixedAudioUrl: mixedUrl, duration: song.duration });
+            res.json({ mixedAudioUrl: mixedUrl, duration: mixedDuration });
         } finally {
             try {
                 await fs.promises.unlink(bgPath).catch(() => {});

@@ -611,7 +611,7 @@ const KaraokeForm: React.FC = () => {
                         <label className="block text-sm font-medium text-gray-700 mb-1">Video (karaoke-style with lyric prompts)</label>
                         <div className="flex items-center gap-4">
                             {formData.videoUrl && (
-                                <video src={getMediaUrl(formData.videoUrl)} controls className="max-w-xs max-h-32 rounded" />
+                                <video src={getMediaUrl(formData.videoUrl)} controls preload="none" className="max-w-xs max-h-32 rounded" />
                             )}
                             <div>
                                 <input ref={videoInputRef} type="file" accept="video/*" onChange={handleVideoUpload} className="hidden" id="video-upload" disabled={uploadingCover || uploadingVideo || uploadingAudio} />
@@ -630,7 +630,7 @@ const KaraokeForm: React.FC = () => {
                         <label className="block text-sm font-medium text-gray-700 mb-1">Background Audio (for recording/mix)</label>
                         <div className="flex items-center gap-4">
                             {formData.backgroundAudioUrl && (
-                                <audio src={getMediaUrl(formData.backgroundAudioUrl)} controls className="max-w-md" />
+                                <audio src={getMediaUrl(formData.backgroundAudioUrl)} controls preload="none" className="max-w-md" />
                             )}
                             <div>
                                 <input ref={audioInputRef} type="file" accept="audio/*" onChange={handleAudioUpload} className="hidden" id="audio-upload" disabled={uploadingCover || uploadingVideo || uploadingAudio} />

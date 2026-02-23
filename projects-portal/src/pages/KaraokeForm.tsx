@@ -421,9 +421,9 @@ const KaraokeForm: React.FC = () => {
         }
         uploadLockRef.current = true;
         setUploadingAudio(true);
-        // Use FormData upload via backend (same path as BookEdit) - avoids CORS/direct-to-GCS failures
+        // Use direct-to-GCS signed URL upload (same as video) - bypasses Render backend entirely
         try {
-            const data = await uploadAudioViaFormData(songId, file);
+            const data = await uploadMedia(bookIdForUpload, 'audio', file, songId);
             setFormData(prev => ({ ...prev, backgroundAudioUrl: data.url }));
         } catch (err) {
             console.error('Audio upload failed:', err);

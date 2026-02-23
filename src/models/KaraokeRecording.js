@@ -23,6 +23,10 @@ const karaokeRecordingSchema = new mongoose.Schema({
         type: Number,
         default: 0,
     },
+    customCoverImageUrl: {
+        type: String,
+        default: null,
+    },
 }, { timestamps: true });
 
 karaokeRecordingSchema.index({ userId: 1, karaokeSongId: 1 });

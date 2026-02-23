@@ -331,6 +331,8 @@ router.post('/mix', mixMulter.single('recording'), async (req, res) => {
     try {
         const { karaokeSongId } = req.body;
         const reverbLevel = Math.min(3, Math.max(0, parseInt(req.body.reverbLevel, 10) || 0));
+        const musicVolume = Math.min(1, Math.max(0, parseFloat(req.body.musicVolume) || 0.45));
+        const voiceVolume = Math.min(1, Math.max(0, parseFloat(req.body.voiceVolume) || 1));
         if (!karaokeSongId || !req.file) {
             return res.status(400).json({ message: 'karaokeSongId and recording file are required' });
         }
@@ -355,9 +357,15 @@ router.post('/mix', mixMulter.single('recording'), async (req, res) => {
 
         const aecho = REVERB_AECHO[reverbLevel];
         // duration=shortest: mix ends when recording ends. Both start at 0, aligned.
+        // Apply volume to each input: [0]=bg, [1]=voice
+        const volBg = `[0:a]volume=${musicVolume}[bg]`;
+        const volVoice = aecho
+            ? `[1:a]aecho=${aecho}[rev];[rev]volume=${voiceVolume}[v]`
+            : `[1:a]volume=${voiceVolume}[v]`;
+        const mixFilter = `[bg][v]amix=inputs=2:duration=shortest[aout]`;
         const complexFilter = aecho
-            ? `[1:a]aecho=${aecho}[rev];[0:a][rev]amix=inputs=2:duration=shortest[aout]`
-            : '[0:a][1:a]amix=inputs=2:duration=shortest[aout]';
+            ? `${volBg};${volVoice};${mixFilter}`
+            : `${volBg};${volVoice};${mixFilter}`;
 
         try {
             await fs.promises.writeFile(bgPath, bgBuffer);

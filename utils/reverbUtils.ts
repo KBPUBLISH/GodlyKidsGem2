@@ -41,19 +41,37 @@ export function getReverbLabel(level: ReverbLevel): string {
   return REVERB_PRESETS[level]?.label ?? 'None';
 }
 
-export async function playWithReverb(
+/**
+ * Prepares voice playback (decode + setup). Call start() when ready to play in sync with music.
+ * This avoids music leading by 1–2s due to async decode.
+ * Returns duration (seconds) of the recording.
+ */
+export async function prepareVoicePlayback(
   blobUrl: string,
   reverbLevel: ReverbLevel,
   volume: number,
   onEnded: () => void
-): Promise<{ stop: () => void }> {
+): Promise<{ start: () => void; stop: () => void; duration: number }> {
   const preset = REVERB_PRESETS[reverbLevel];
   if (!preset || reverbLevel === 0) {
     const audio = new Audio(blobUrl);
     audio.volume = volume;
     audio.onended = onEnded;
-    await audio.play();
+    const dur = await new Promise<number>((resolve) => {
+      if (audio.duration && !isNaN(audio.duration)) {
+        resolve(audio.duration);
+      } else {
+        audio.addEventListener('loadedmetadata', () => resolve(audio.duration || 0), { once: true });
+        audio.addEventListener('error', () => resolve(0), { once: true });
+        setTimeout(() => resolve(0), 5000);
+      }
+    });
     return {
+      duration: dur,
+      start: () => {
+        audio.currentTime = 0;
+        audio.play().catch(() => {});
+      },
       stop: () => {
         audio.pause();
         audio.currentTime = 0;
@@ -93,13 +111,27 @@ export async function playWithReverb(
   wetGain.connect(masterGain);
   masterGain.connect(ctx.destination);
 
-  source.start(0);
-
   return {
+    duration: audioBuffer.duration,
+    start: () => {
+      source.start(0);
+    },
     stop: () => {
       try {
         source.stop();
       } catch {}
     },
   };
+}
+
+/** @deprecated Use prepareVoicePlayback for synced start */
+export async function playWithReverb(
+  blobUrl: string,
+  reverbLevel: ReverbLevel,
+  volume: number,
+  onEnded: () => void
+): Promise<{ stop: () => void }> {
+  const ctrl = await prepareVoicePlayback(blobUrl, reverbLevel, volume, onEnded);
+  ctrl.start();
+  return { stop: ctrl.stop };
 }

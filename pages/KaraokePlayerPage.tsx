@@ -2,10 +2,11 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { getMonthlyBookBaseUrl } from '../services/apiService';
 import { authService } from '../services/authService';
-import { ArrowLeft, Play, Pause, Mic, Save, Share2, Check, ImagePlus, RotateCcw } from 'lucide-react';
+import { useUser } from '../context/UserContext';
+import { ArrowLeft, Play, Pause, Mic, Save, Share2, Check, ImagePlus, RotateCcw, Pencil, Music, Disc } from 'lucide-react';
 import StormySeaError from '../components/ui/StormySeaError';
 import SelfieCapture from '../components/features/SelfieCapture';
-import { playWithReverb, getReverbLabel, type ReverbLevel } from '../utils/reverbUtils';
+import { prepareVoicePlayback, getReverbLabel, type ReverbLevel } from '../utils/reverbUtils';
 
 interface LyricLine {
   text: string;
@@ -25,6 +26,9 @@ interface KaraokeSong {
 }
 
 const formatTime = (seconds: number): string => {
+  if (typeof seconds !== 'number' || !Number.isFinite(seconds) || seconds < 0) {
+    return '0:00';
+  }
   const m = Math.floor(seconds / 60);
   const s = Math.floor(seconds % 60);
   return `${m}:${String(s).padStart(2, '0')}`;
@@ -33,6 +37,7 @@ const formatTime = (seconds: number): string => {
 const KaraokePlayerPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const { kids, currentProfileId, updateKid, parentName, setParentName } = useUser();
   const [song, setSong] = useState<KaraokeSong | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -41,16 +46,29 @@ const KaraokePlayerPage: React.FC = () => {
   const [duration, setDuration] = useState(0);
   const [isRecording, setIsRecording] = useState(false);
   const [recordedUrl, setRecordedUrl] = useState<string | null>(null);
+  const [recordingDuration, setRecordingDuration] = useState<number | null>(null);
   const [micError, setMicError] = useState<string | null>(null);
   const [isPlayingMyTake, setIsPlayingMyTake] = useState(false);
   const [savingRecording, setSavingRecording] = useState(false);
   const [savedRecordingId, setSavedRecordingId] = useState<string | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [syncOffset, setSyncOffset] = useState(0);
+  const [masterCreated, setMasterCreated] = useState(false);
+  const [mixedAudioUrl, setMixedAudioUrl] = useState<string | null>(null);
+  const [mixDuration, setMixDuration] = useState(0);
+  const [creatingMaster, setCreatingMaster] = useState(false);
+  const [masterError, setMasterError] = useState<string | null>(null);
+  const [musicVolume, setMusicVolume] = useState(0.7);
+  const [voiceVolume, setVoiceVolume] = useState(1);
   const [showSelfieModal, setShowSelfieModal] = useState(false);
   const [customCoverUrl, setCustomCoverUrl] = useState<string | null>(null);
   const [generatingCover, setGeneratingCover] = useState(false);
   const [coverError, setCoverError] = useState<string | null>(null);
+  const [isEditingArtistName, setIsEditingArtistName] = useState(false);
+  const [artistNameInput, setArtistNameInput] = useState('');
+
+  const currentKid = kids?.find((k: any) => k.id === currentProfileId);
+  const artistName = currentKid?.name || parentName || 'Artist';
   const [reverbLevel, setReverbLevel] = useState<ReverbLevel>(0);
   const voiceControllerRef = useRef<{ stop: () => void } | null>(null);
   const myTakeMusicRef = useRef<HTMLAudioElement | null>(null);
@@ -62,6 +80,7 @@ const KaraokePlayerPage: React.FC = () => {
   const activeLineRef = useRef<HTMLParagraphElement>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const recordedChunksRef = useRef<Blob[]>([]);
+  const mixedAudioRef = useRef<HTMLAudioElement | null>(null);
 
   const hasVideo = !!song?.videoUrl;
   const mediaSrc = hasVideo ? song?.videoUrl : song?.backgroundAudioUrl;
@@ -76,7 +95,8 @@ const KaraokePlayerPage: React.FC = () => {
         if (!res.ok) throw new Error('Song not found');
         const data = await res.json();
         setSong(data);
-        setDuration(data.duration || 0);
+        const d = data.duration;
+        setDuration(typeof d === 'number' && Number.isFinite(d) && d > 0 ? d : 0);
       } catch (err) {
         console.error('Karaoke song fetch error:', err);
         setError(err instanceof Error ? err.message : 'Failed to load song');
@@ -102,7 +122,10 @@ const KaraokePlayerPage: React.FC = () => {
     const el = mediaRef.current;
     if (!el) return;
 
-    const onDurationChange = () => setDuration(el.duration);
+    const onDurationChange = () => {
+      const d = el.duration;
+      if (typeof d === 'number' && Number.isFinite(d) && d > 0) setDuration(d);
+    };
     const onEnded = () => {
       setIsPlaying(false);
       setCurrentTime(0);
@@ -123,17 +146,29 @@ const KaraokePlayerPage: React.FC = () => {
     };
   }, [mediaRef, song]);
 
+  const isPlayingMyTakeRef = useRef(false);
   useEffect(() => {
-    playheadSourceRef.current = mediaRef.current;
-    return () => { playheadSourceRef.current = null; };
-  }, [mediaRef, song]);
+    isPlayingMyTakeRef.current = isPlayingMyTake;
+  }, [isPlayingMyTake]);
+
+  useEffect(() => {
+    if (!isPlayingMyTake) playheadSourceRef.current = mediaRef.current;
+    return () => { if (!isPlayingMyTakeRef.current) playheadSourceRef.current = null; };
+  }, [mediaRef, song, isPlayingMyTake]);
 
   // requestAnimationFrame for smooth lyrics sync (60fps vs timeupdate's ~4Hz)
+  // When playing My Take, use elapsed time capped at recording duration
   useEffect(() => {
     let rafId: number;
     const tick = () => {
-      const src = playheadSourceRef.current ?? mediaRef.current;
-      if (src) setCurrentTime(src.currentTime);
+      if (isPlayingMyTakeRef.current) {
+        const elapsed = (performance.now() - myTakeStartRef.current) / 1000;
+        const cap = myTakeDurationRef.current || 999;
+        setCurrentTime(Math.min(elapsed, cap));
+      } else {
+        const src = playheadSourceRef.current ?? mediaRef.current;
+        if (src) setCurrentTime(src.currentTime);
+      }
       rafId = requestAnimationFrame(tick);
     };
     rafId = requestAnimationFrame(tick);
@@ -157,12 +192,14 @@ const KaraokePlayerPage: React.FC = () => {
   };
 
   const handleSeek = (e: React.MouseEvent<HTMLDivElement>) => {
-    const el = mediaRef.current;
-    if (!el || !duration) return;
+    if (isPlayingMyTake) return;
+    const el = masterCreated && mixedAudioRef.current ? mixedAudioRef.current : mediaRef.current;
+    const dur = masterCreated ? mixDuration : duration;
+    if (!el || typeof dur !== 'number' || !Number.isFinite(dur) || dur <= 0) return;
     const rect = e.currentTarget.getBoundingClientRect();
     const x = e.clientX - rect.left;
     const pct = Math.max(0, Math.min(1, x / rect.width));
-    el.currentTime = pct * duration;
+    el.currentTime = pct * dur;
   };
 
   const handleStartRecording = async (): Promise<boolean> => {
@@ -239,40 +276,101 @@ const KaraokePlayerPage: React.FC = () => {
     setIsPlayingMyTake(false);
   };
 
+  const myTakeStartRef = useRef<number>(0);
+  const myTakeDurationRef = useRef<number>(0);
+
   const handlePlayRecording = async () => {
-    if (!recordedUrl || !song) return;
     if (isPlayingMyTake) {
       handleStopMyTake();
       return;
     }
-    const done = () => setIsPlayingMyTake(false);
-    myTakeUsedMainRef.current = false;
-    if (song.backgroundAudioUrl) {
-      const musicEl = new Audio(song.backgroundAudioUrl);
-      musicEl.volume = 0.45;
-      musicEl.currentTime = 0;
-      musicEl.addEventListener('ended', done, { once: true });
-      musicEl.play().catch(() => {});
-      myTakeMusicRef.current = musicEl;
-      playheadSourceRef.current = musicEl;
-    } else {
-      const el = mediaRef.current;
-      if (el) {
-        myTakeUsedMainRef.current = true;
-        playheadSourceRef.current = el;
-        el.volume = 0.45;
-        el.currentTime = 0;
-        el.play().catch(() => {});
+    if (masterCreated && mixedAudioUrl) {
+      let audio = mixedAudioRef.current;
+      if (!audio || audio.src !== mixedAudioUrl) {
+        audio = new Audio(mixedAudioUrl);
+        mixedAudioRef.current = audio;
       }
+      myTakeMusicRef.current = audio;
+      playheadSourceRef.current = audio;
+      myTakeStartRef.current = performance.now();
+      myTakeDurationRef.current = mixDuration || 0;
+      setDuration(mixDuration || 0);
+      audio.addEventListener('ended', handleStopMyTake, { once: true });
+      audio.play().catch(() => handleStopMyTake());
+      setIsPlayingMyTake(true);
+      return;
     }
-    try {
-      const controller = await playWithReverb(recordedUrl, reverbLevel, 1, done);
-      voiceControllerRef.current = controller;
-    } catch (e) {
-      console.error('Play with reverb failed:', e);
-    }
+    if (!recordedUrl || !song) return;
+    myTakeUsedMainRef.current = false;
     setIsPlayingMyTake(true);
+
+    try {
+      const voiceController = await prepareVoicePlayback(recordedUrl, reverbLevel, voiceVolume, handleStopMyTake);
+      voiceControllerRef.current = voiceController;
+      const recDuration = voiceController.duration || 0;
+      if (recDuration > 0) {
+        setDuration(recDuration);
+        myTakeDurationRef.current = recDuration;
+      }
+
+      // Start voice first, then music after a small delay. Voice has output latency so
+      // starting it early lets it align with the music when both are audible.
+      const VOICE_LEAD_MS = 250;
+      const onMusicPlaying = () => {
+        myTakeStartRef.current = performance.now();
+      };
+
+      if (song.backgroundAudioUrl) {
+        const musicEl = new Audio(song.backgroundAudioUrl);
+        musicEl.volume = musicVolume;
+        musicEl.currentTime = 0;
+        musicEl.addEventListener('ended', handleStopMyTake, { once: true });
+        myTakeMusicRef.current = musicEl;
+        playheadSourceRef.current = null;
+        musicEl.addEventListener('playing', onMusicPlaying, { once: true });
+        voiceController.start();
+        setTimeout(() => musicEl.play().catch(() => onMusicPlaying()), VOICE_LEAD_MS);
+      } else {
+        const el = mediaRef.current;
+        if (el) {
+          myTakeUsedMainRef.current = true;
+          playheadSourceRef.current = null;
+          el.volume = musicVolume;
+          el.currentTime = 0;
+          el.addEventListener('playing', onMusicPlaying, { once: true });
+          voiceController.start();
+          setTimeout(() => el.play().catch(() => onMusicPlaying()), VOICE_LEAD_MS);
+        } else {
+          myTakeStartRef.current = performance.now();
+          voiceController.start();
+        }
+      }
+    } catch (e) {
+      console.error('Play failed:', e);
+      setIsPlayingMyTake(false);
+    }
   };
+
+  // Load recording duration when we have a recorded blob (for post-recording screen display)
+  useEffect(() => {
+    if (!recordedUrl) {
+      setRecordingDuration(null);
+      return;
+    }
+    const audio = new Audio(recordedUrl);
+    const onLoaded = () => {
+      const d = audio.duration;
+      if (typeof d === 'number' && Number.isFinite(d) && d > 0) {
+        setRecordingDuration(d);
+      }
+    };
+    audio.addEventListener('loadedmetadata', onLoaded, { once: true });
+    audio.addEventListener('error', () => setRecordingDuration(null), { once: true });
+    return () => {
+      audio.removeEventListener('loadedmetadata', onLoaded);
+      audio.src = '';
+    };
+  }, [recordedUrl]);
 
   useEffect(() => {
     return () => {
@@ -281,10 +379,10 @@ const KaraokePlayerPage: React.FC = () => {
     };
   }, [recordedUrl]);
 
-  const handleSaveAndShare = async () => {
+  const handleCreateMasterTrack = async () => {
     if (!recordedUrl || !song || !id || !song.backgroundAudioUrl) return;
-    setSaveError(null);
-    setSavingRecording(true);
+    setMasterError(null);
+    setCreatingMaster(true);
     try {
       const base = getMonthlyBookBaseUrl();
       const blob = await fetch(recordedUrl).then((r) => r.blob());
@@ -292,6 +390,8 @@ const KaraokePlayerPage: React.FC = () => {
       form.append('recording', blob, 'recording.webm');
       form.append('karaokeSongId', id);
       form.append('reverbLevel', String(reverbLevel));
+      form.append('musicVolume', String(musicVolume));
+      form.append('voiceVolume', String(voiceVolume));
       const mixRes = await fetch(`${base}/karaoke/mix`, {
         method: 'POST',
         body: form,
@@ -301,17 +401,32 @@ const KaraokePlayerPage: React.FC = () => {
         throw new Error(err.message || 'Mixing failed');
       }
       const mixData = await mixRes.json();
-      const mixedAudioUrl = mixData.mixedAudioUrl;
-      const mixDuration = mixData.duration ?? duration ?? 0;
+      setMixedAudioUrl(mixData.mixedAudioUrl);
+      setMixDuration(mixData.duration ?? recordingDuration ?? duration ?? 0);
+      setMasterCreated(true);
+      handleStopMyTake();
+    } catch (err) {
+      console.error('Create master error:', err);
+      setMasterError(err instanceof Error ? err.message : 'Could not create master');
+    } finally {
+      setCreatingMaster(false);
+    }
+  };
 
-      const userId = authService.getUserIdForBackend();
+  const handleSaveAndShare = async () => {
+    const urlToSave = masterCreated ? mixedAudioUrl : null;
+    if (!urlToSave || !song || !id) return;
+    setSaveError(null);
+    setSavingRecording(true);
+    try {
+      const base = getMonthlyBookBaseUrl();
       const saveRes = await fetch(`${base}/karaoke/recordings`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          userId: userId || undefined,
+          userId: authService.getUserIdForBackend() || undefined,
           karaokeSongId: id,
-          mixedAudioUrl,
+          mixedAudioUrl: urlToSave,
           duration: mixDuration,
           ...(customCoverUrl && { customCoverImageUrl: customCoverUrl }),
         }),
@@ -334,10 +449,18 @@ const KaraokePlayerPage: React.FC = () => {
     ? `${window.location.origin}${window.location.pathname || '/'}#/karaoke/share/${savedRecordingId}`
     : null;
 
-  const handleCopyShareLink = async () => {
+  const handleShare = async () => {
     if (!shareUrl) return;
     try {
-      await navigator.clipboard.writeText(shareUrl);
+      if (navigator.share) {
+        await navigator.share({
+          title: song?.title || 'My karaoke recording',
+          url: shareUrl,
+          text: `Check out my karaoke recording: ${song?.title || 'My recording'}`,
+        });
+      } else {
+        await navigator.clipboard.writeText(shareUrl);
+      }
     } catch {}
   };
 
@@ -367,7 +490,7 @@ const KaraokePlayerPage: React.FC = () => {
     }
   };
 
-  const canSave = !!recordedUrl && !!song?.backgroundAudioUrl && !savingRecording && !savedRecordingId;
+  const canSave = masterCreated && !!mixedAudioUrl && !savingRecording && !savedRecordingId;
 
   const effectiveTime = currentTime + syncOffset;
   const currentLineIndex = song?.lyrics?.findIndex(
@@ -410,35 +533,230 @@ const KaraokePlayerPage: React.FC = () => {
   const handleRecordAgain = () => {
     if (recordedUrl) URL.revokeObjectURL(recordedUrl);
     setRecordedUrl(null);
+    setRecordingDuration(null);
     setSavedRecordingId(null);
+    setMasterCreated(false);
+    setMixedAudioUrl(null);
+    setMixDuration(0);
+    mixedAudioRef.current = null;
+    setMasterError(null);
     setCustomCoverUrl(null);
     setSaveError(null);
     setCoverError(null);
     setReverbLevel(0);
+    setMusicVolume(0.7);
+    setVoiceVolume(1);
     handleStopMyTake();
   };
 
-  // Post-recording review screen — like a new page
-  if (recordedUrl && !isRecording) {
+  const effectiveDurationForDisplay = masterCreated
+    ? (typeof mixDuration === 'number' && Number.isFinite(mixDuration) ? mixDuration : 0)
+    : (recordingDuration ?? duration);
+  const safeDuration = typeof effectiveDurationForDisplay === 'number' && Number.isFinite(effectiveDurationForDisplay) && effectiveDurationForDisplay > 0 ? effectiveDurationForDisplay : 0;
+
+  // Edit screen: two tracks, volume sliders, reverb, Create Master Track
+  if (recordedUrl && !isRecording && !masterCreated) {
+    const canCreateMaster = !!song?.backgroundAudioUrl && !creatingMaster;
     return (
       <div className="flex flex-col h-full bg-black">
         <div className="flex items-center justify-between px-4 py-3" style={{ paddingTop: 'calc(var(--safe-area-top, 12px) + 8px)' }}>
           <button onClick={() => navigate('/karaoke')} className="flex items-center gap-2 text-white/90 hover:text-white font-display text-sm active:scale-95">
             <ArrowLeft size={22} /> <span>Back</span>
           </button>
-          <h1 className="text-white font-display font-bold text-sm truncate flex-1 mx-2 text-center">Your recording</h1>
+          <h1 className="text-white font-display font-bold text-sm truncate flex-1 mx-2 text-center">{song.title}</h1>
           <div className="w-14" />
         </div>
 
-        {/* Keep media refs mounted for "My take" playback (video songs use main media) */}
         {hasVideo ? (
           <video ref={videoRef} src={song.videoUrl} className="hidden" />
         ) : (
           <audio ref={audioRef} src={song.backgroundAudioUrl} className="hidden" />
         )}
 
+        <div className="flex-1 flex flex-col px-4 py-6 min-h-0 overflow-y-auto">
+          <p className="text-white font-display font-bold text-lg text-center mb-4">{song.title}</p>
+
+          <button
+            onClick={handlePlayRecording}
+            className="flex items-center justify-center gap-2 w-full py-3 rounded-xl bg-white/10 border border-white/30 mb-6"
+          >
+            {isPlayingMyTake ? (
+              <Pause size={24} className="text-white" />
+            ) : (
+              <Play size={24} className="text-white ml-0.5" fill="currentColor" />
+            )}
+            <span className="text-white font-display font-bold">{isPlayingMyTake ? 'Pause' : 'Play preview'}</span>
+          </button>
+
+          <div className="w-full max-w-xs mx-auto mb-2">
+            <div className="h-1.5 bg-white/20 rounded-full overflow-hidden cursor-pointer" onClick={handleSeek}>
+              <div
+                className="h-full bg-amber-500/80 rounded-full transition-all"
+                style={{ width: `${safeDuration > 0 ? (currentTime / safeDuration) * 100 : 0}%` }}
+              />
+            </div>
+            <div className="flex justify-between text-xs text-white/50 mt-1">
+              <span>{formatTime(currentTime)}</span>
+              <span>{formatTime(safeDuration)}</span>
+            </div>
+          </div>
+
+          <div className="w-full max-w-xs mx-auto space-y-4 mt-6">
+            <div className="flex items-center gap-3">
+              <Music size={18} className="text-white/70 shrink-0" />
+              <div className="flex-1">
+                <p className="text-white/80 text-xs font-display mb-1">Background music</p>
+                <input
+                  type="range"
+                  min={0}
+                  max={100}
+                  value={musicVolume * 100}
+                  onChange={(e) => setMusicVolume(Number(e.target.value) / 100)}
+                  className="w-full h-2 bg-white/20 rounded-lg appearance-none cursor-pointer accent-amber-500"
+                />
+              </div>
+            </div>
+            <div className="flex items-center gap-3">
+              <Mic size={18} className="text-white/70 shrink-0" />
+              <div className="flex-1">
+                <p className="text-white/80 text-xs font-display mb-1">Your recording</p>
+                <input
+                  type="range"
+                  min={0}
+                  max={100}
+                  value={voiceVolume * 100}
+                  onChange={(e) => setVoiceVolume(Number(e.target.value) / 100)}
+                  className="w-full h-2 bg-white/20 rounded-lg appearance-none cursor-pointer accent-amber-500"
+                />
+              </div>
+            </div>
+          </div>
+
+          <div className="w-full max-w-xs mx-auto mt-6">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-white/80 font-display text-sm">Reverb</span>
+              <div className="flex gap-1">
+                {([0, 1, 2, 3] as ReverbLevel[]).map((level) => (
+                  <button
+                    key={level}
+                    type="button"
+                    onClick={() => setReverbLevel(level)}
+                    className={`px-2.5 py-1 rounded-lg text-xs font-display transition-all ${
+                      reverbLevel === level ? 'bg-amber-500/80 text-black' : 'bg-white/10 text-white/70 hover:bg-white/20'
+                    }`}
+                  >
+                    {level === 0 ? 'Off' : getReverbLabel(level)}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {song?.backgroundAudioUrl ? (
+              <button
+                onClick={handleCreateMasterTrack}
+                disabled={!canCreateMaster}
+                className="flex items-center justify-center gap-2 w-full py-3.5 rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 text-black font-display font-bold text-sm mt-4 active:scale-[0.98] disabled:opacity-50"
+              >
+                {creatingMaster ? (
+                  <>
+                    <div className="w-4 h-4 border-2 border-black/30 border-t-black rounded-full animate-spin" />
+                    Creating master…
+                  </>
+                ) : (
+                  <>
+                    <Disc size={20} />
+                    Create master track
+                  </>
+                )}
+              </button>
+            ) : (
+              <p className="text-white/50 text-xs text-center mt-4">Audio mixing is available for audio songs only</p>
+            )}
+            {masterError && <p className="text-amber-400 text-xs text-center mt-2">{masterError}</p>}
+
+            <button
+              onClick={handleRecordAgain}
+              className="flex items-center justify-center gap-2 w-full py-3 rounded-xl text-white/70 font-display text-sm hover:text-white/90 active:scale-[0.98] mt-6"
+            >
+              <RotateCcw size={18} />
+              Record again
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Final screen: cover, save, share (after master created)
+  if (recordedUrl && !isRecording && masterCreated) {
+    return (
+      <div className="flex flex-col h-full bg-black">
+        <div className="flex items-center justify-between px-4 py-3" style={{ paddingTop: 'calc(var(--safe-area-top, 12px) + 8px)' }}>
+          <button onClick={() => navigate('/karaoke')} className="flex items-center gap-2 text-white/90 hover:text-white font-display text-sm active:scale-95">
+            <ArrowLeft size={22} /> <span>Back</span>
+          </button>
+          <h1 className="text-white font-display font-bold text-sm truncate flex-1 mx-2 text-center">{song.title}</h1>
+          <div className="w-14" />
+        </div>
+
         <div className="flex-1 flex flex-col items-center justify-center px-4 py-6 min-h-0">
-          <p className="text-white/80 font-display text-center mb-4">{song.title}</p>
+          <p className="text-white font-display font-bold text-lg text-center mb-1">{song.title}</p>
+          <div className="flex items-center justify-center gap-1.5 mb-4">
+            {isEditingArtistName ? (
+              <>
+                <input
+                  type="text"
+                  value={artistNameInput}
+                  onChange={(e) => setArtistNameInput(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      const name = artistNameInput.trim();
+                      if (name) {
+                        if (currentKid) updateKid(currentKid.id, { name });
+                        else setParentName(name);
+                      }
+                      setIsEditingArtistName(false);
+                    }
+                    if (e.key === 'Escape') {
+                      setArtistNameInput(artistName);
+                      setIsEditingArtistName(false);
+                    }
+                  }}
+                  className="bg-white/10 text-white border border-white/30 rounded-lg px-2 py-1 text-sm font-display w-32 text-center focus:outline-none focus:border-amber-400"
+                  autoFocus
+                />
+                <button
+                  type="button"
+                  onClick={() => {
+                    const name = artistNameInput.trim();
+                    if (name) {
+                      if (currentKid) updateKid(currentKid.id, { name });
+                      else setParentName(name);
+                    }
+                    setIsEditingArtistName(false);
+                  }}
+                  className="text-amber-400 text-xs font-display"
+                >
+                  Done
+                </button>
+              </>
+            ) : (
+              <>
+                <p className="text-white/80 font-display text-sm">{artistName}</p>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setArtistNameInput(artistName);
+                    setIsEditingArtistName(true);
+                  }}
+                  className="p-0.5 rounded hover:bg-white/10 text-white/60 hover:text-white"
+                  aria-label="Edit artist name"
+                >
+                  <Pencil size={14} />
+                </button>
+              </>
+            )}
+          </div>
           <button
             onClick={handlePlayRecording}
             className="relative w-56 aspect-square rounded-2xl overflow-hidden bg-gradient-to-br from-violet-900 to-purple-950 border-2 border-white/20 shadow-xl active:scale-[0.98] transition-transform"
@@ -475,18 +793,15 @@ const KaraokePlayerPage: React.FC = () => {
           )}
 
           <div className="w-full max-w-xs mt-6">
-            <div
-              className="h-2 bg-white/20 rounded-full overflow-hidden cursor-pointer mb-2"
-              onClick={handleSeek}
-            >
+            <div className="h-2 bg-white/20 rounded-full overflow-hidden cursor-pointer mb-2" onClick={handleSeek}>
               <div
                 className="h-full bg-gradient-to-r from-[#FFD700] to-[#FFA500] rounded-full transition-all"
-                style={{ width: `${duration > 0 ? (currentTime / duration) * 100 : 0}%` }}
+                style={{ width: `${safeDuration > 0 ? (currentTime / safeDuration) * 100 : 0}%` }}
               />
             </div>
             <div className="flex justify-between text-xs text-white/60">
               <span>{formatTime(currentTime)}</span>
-              <span>{formatTime(duration)}</span>
+              <span>{formatTime(safeDuration)}</span>
             </div>
           </div>
 
@@ -535,45 +850,44 @@ const KaraokePlayerPage: React.FC = () => {
                     <img src={customCoverUrl} alt="Cover" className="w-16 h-16 rounded-lg object-cover border-2 border-emerald-500/50" />
                   </div>
                 )}
-                <button
-                  onClick={handleSaveAndShare}
-                  disabled={savingRecording}
-                  className="flex items-center justify-center gap-2 w-full py-3.5 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-500 text-white font-display font-bold text-sm shadow-lg active:scale-[0.98] disabled:opacity-70"
-                >
-                  {savingRecording ? (
-                    <>
-                      <div className="w-4 h-4 border-2 border-white/50 border-t-white rounded-full animate-spin" />
-                      Saving…
-                    </>
-                  ) : (
-                    <>
-                      <Save size={20} />
-                      Save to my library
-                    </>
-                  )}
-                </button>
               </>
             )}
-            {savedRecordingId && shareUrl && (
-              <>
-                <div className="flex items-center justify-center gap-2 text-emerald-400 font-display font-bold text-sm py-2">
-                  <Check size={20} />
-                  Saved!
-                </div>
-                <button
-                  onClick={handleCopyShareLink}
-                  className="flex items-center justify-center gap-2 w-full py-3.5 rounded-xl bg-white/10 text-white font-display font-bold text-sm border border-white/30 hover:bg-white/20 active:scale-[0.98]"
-                >
-                  <Share2 size={20} />
-                  Copy share link
-                </button>
-              </>
+
+            <div className="flex gap-3">
+              <button
+                onClick={handleSaveAndShare}
+                disabled={!canSave || savingRecording}
+                className="flex-1 flex items-center justify-center gap-2 py-3.5 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-500 text-white font-display font-bold text-sm shadow-lg active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {savingRecording ? (
+                  <>
+                    <div className="w-4 h-4 border-2 border-white/50 border-t-white rounded-full animate-spin" />
+                    Saving…
+                  </>
+                ) : (
+                  <>
+                    <Save size={20} />
+                    Save to library
+                  </>
+                )}
+              </button>
+              <button
+                onClick={savedRecordingId && shareUrl ? handleShare : undefined}
+                disabled={!savedRecordingId || !shareUrl}
+                className="flex-1 flex items-center justify-center gap-2 py-3.5 rounded-xl bg-white/10 text-white font-display font-bold text-sm border border-white/30 hover:bg-white/20 active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <Share2 size={20} />
+                Share
+              </button>
+            </div>
+            {savedRecordingId && (
+              <div className="flex items-center justify-center gap-2 text-emerald-400 font-display font-bold text-sm py-1">
+                <Check size={20} />
+                Saved to library!
+              </div>
             )}
             {coverError && <p className="text-amber-400 text-xs text-center">{coverError}</p>}
             {saveError && <p className="text-amber-400 text-xs text-center">{saveError}</p>}
-            {!song?.backgroundAudioUrl && (
-              <p className="text-white/50 text-xs text-center">Save is available for audio songs only</p>
-            )}
 
             <button
               onClick={handleRecordAgain}

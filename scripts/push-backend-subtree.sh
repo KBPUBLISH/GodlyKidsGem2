@@ -49,16 +49,19 @@ fi
 echo "→ Splitting subtree (prefix=$PREFIX) into branch backend-split..."
 git subtree split --prefix="$PREFIX" -b backend-split
 
-# 5) Warn if remote already has this commit (push would say "Everything up-to-date", Render won't deploy)
+# 5) If remote already has this exact commit, add empty commit to force Render redeploy
 git fetch "$REMOTE" "$BRANCH" --quiet 2>/dev/null || true
 REMOTE_SHA=$(git rev-parse "refs/remotes/$REMOTE/$BRANCH" 2>/dev/null || echo "")
 OUR_SHA=$(git rev-parse backend-split)
 if [ -n "$REMOTE_SHA" ] && [ "$REMOTE_SHA" = "$OUR_SHA" ]; then
     echo ""
-    echo "*** NO NEW CHANGES TO PUSH ***"
-    echo "BackendGK2.0/main already has this exact code. Push will say 'Everything up-to-date' and Render will not start a new deploy."
-    echo "  → If you have new backend changes: commit them in GodlyKidsGem2, then run this script again."
-    echo "  → To redeploy the current code on Render: dashboard.render.com → godlykids-backend → Manual Deploy."
+    echo "→ Remote already has this code. Adding empty commit to trigger Render redeploy..."
+    SAVED_BRANCH=$(git branch --show-current)
+    git stash push -m "push-backend-subtree temp" 2>/dev/null || true
+    git checkout backend-split
+    git commit --allow-empty -m "chore: trigger Render redeploy"
+    git checkout "$SAVED_BRANCH"
+    git stash pop 2>/dev/null || true
     echo ""
 fi
 

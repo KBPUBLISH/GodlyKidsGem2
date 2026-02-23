@@ -1,8 +1,24 @@
 const express = require('express');
 const router = express.Router();
+const fetch = require('node-fetch');
 const KaraokeSong = require('../models/KaraokeSong');
 const KaraokeRecording = require('../models/KaraokeRecording');
+const AppUser = require('../models/AppUser');
 const mongoose = require('mongoose');
+const { bucket } = require('../config/storage');
+const { GoogleGenAI } = require('@google/genai');
+
+/** Resolve userId (ObjectId, email, or deviceId) to ObjectId for recordings. */
+async function resolveUserId(userId) {
+    if (!userId) return null;
+    if (mongoose.Types.ObjectId.isValid(userId) && String(userId).length === 24) {
+        return new mongoose.Types.ObjectId(userId);
+    }
+    const user = await AppUser.findOne({
+        $or: [{ email: userId }, { deviceId: userId }],
+    }).select('_id').lean();
+    return user ? user._id : null;
+}
 
 // GET /api/karaoke - list karaoke songs (published by default, or all for portal)
 router.get('/', async (req, res) => {
@@ -39,6 +55,35 @@ router.get('/', async (req, res) => {
         });
     } catch (err) {
         console.error('Karaoke list error:', err);
+        res.status(500).json({ message: err.message });
+    }
+});
+
+// GET /api/karaoke/share/:recordingId - get recording for share link (public, no auth)
+router.get('/share/:recordingId', async (req, res) => {
+    try {
+        const { recordingId } = req.params;
+        if (!mongoose.Types.ObjectId.isValid(recordingId)) {
+            return res.status(400).json({ message: 'Invalid recording ID' });
+        }
+        const rec = await KaraokeRecording.findById(recordingId)
+            .populate('karaokeSongId', 'title coverImage')
+            .lean();
+        if (!rec || !rec.mixedAudioUrl) {
+            return res.status(404).json({ message: 'Recording not found' });
+        }
+        res.json({
+            mixedAudioUrl: rec.mixedAudioUrl,
+            duration: rec.duration || 0,
+            recordedAt: rec.recordedAt,
+            customCoverImageUrl: rec.customCoverImageUrl || null,
+            song: rec.karaokeSongId ? {
+                title: rec.karaokeSongId.title,
+                coverImage: rec.customCoverImageUrl || rec.karaokeSongId.coverImage,
+            } : null,
+        });
+    } catch (err) {
+        console.error('Karaoke share get error:', err);
         res.status(500).json({ message: err.message });
     }
 });
@@ -162,6 +207,98 @@ router.post('/:id/increment-view', async (req, res) => {
     }
 });
 
+// POST /api/karaoke/album-cover - generate personalized album cover from selfie using Gemini 2.5
+router.post('/album-cover', async (req, res) => {
+    try {
+        const { selfieBase64, songTitle } = req.body;
+        if (!selfieBase64 || !songTitle) {
+            return res.status(400).json({ message: 'selfieBase64 and songTitle are required' });
+        }
+        const base64Data = String(selfieBase64).replace(/^data:image\/\w+;base64,/, '');
+        const mimeType = (String(selfieBase64).match(/^data:(image\/\w+);base64,/) || [])[1] || 'image/jpeg';
+
+        const albumPrompt = `Using this photo as the only reference for the person, create a personalized music album cover for the worship song "${songTitle}".
+The cover should feature the person from the photo as the main subject, styled as a music album cover. Square format, vibrant colors, child-friendly and family-friendly, worship/faith themed.
+Style: colorful illustration, warm and uplifting, suitable for ages 4–12. Do not add text or lyrics to the image. Make it feel like a personal CD or streaming album cover.`;
+
+        let imageBase64 = null;
+
+        // Try Vertex AI first
+        const credentialsJson = process.env.GCS_CREDENTIALS_JSON || process.env.GOOGLE_SERVICE_ACCOUNT_JSON;
+        if (credentialsJson) {
+            try {
+                const credentials = JSON.parse(credentialsJson);
+                const projectId = credentials.project_id || process.env.GCS_PROJECT_ID;
+                const { GoogleAuth } = require('google-auth-library');
+                const auth = new (require('google-auth-library').GoogleAuth)({ credentials, scopes: ['https://www.googleapis.com/auth/cloud-platform'] });
+                const client = await auth.getClient();
+                const token = await client.getAccessToken();
+                const url = `https://us-central1-aiplatform.googleapis.com/v1/projects/${projectId}/locations/us-central1/publishers/google/models/gemini-2.5-flash-image:generateContent`;
+                const resp = await fetch(url, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token.token}` },
+                    body: JSON.stringify({
+                        contents: [{ role: 'user', parts: [{ text: albumPrompt }, { inlineData: { mimeType, data: base64Data } }] }],
+                        generationConfig: { responseModalities: ['TEXT', 'IMAGE'], imageConfig: { aspectRatio: '1:1' } },
+                    }),
+                });
+                if (resp.ok) {
+                    const data = await resp.json();
+                    const parts = data.candidates?.[0]?.content?.parts || [];
+                    for (const p of parts) {
+                        if (p.inlineData?.data) {
+                            imageBase64 = p.inlineData.data;
+                            break;
+                        }
+                    }
+                }
+            } catch (e) {
+                console.warn('Karaoke album cover Vertex error:', e?.message);
+            }
+        }
+
+        // Fallback: Consumer Gemini
+        if (!imageBase64 && process.env.GEMINI_API_KEY) {
+            try {
+                const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+                const response = await ai.models.generateContent({
+                    model: 'gemini-2.5-flash-image',
+                    contents: [{ text: albumPrompt }, { inlineData: { mimeType, data: base64Data } }],
+                });
+                const parts = response.candidates?.[0]?.content?.parts || [];
+                for (const p of parts) {
+                    if (p.inlineData?.data) {
+                        imageBase64 = p.inlineData.data;
+                        break;
+                    }
+                }
+            } catch (e) {
+                console.warn('Karaoke album cover Gemini error:', e?.message);
+            }
+        }
+
+        if (!imageBase64) {
+            return res.status(503).json({ message: 'Album cover generation is not available. Ensure GCS_CREDENTIALS_JSON or GEMINI_API_KEY is set.' });
+        }
+
+        let imageUrl = null;
+        if (bucket) {
+            const ext = mimeType.includes('jpeg') ? 'jpg' : 'png';
+            const filename = `karaoke/album-covers/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
+            const file = bucket.file(filename);
+            await file.save(Buffer.from(imageBase64, 'base64'), { contentType: mimeType, metadata: { cacheControl: 'public, max-age=31536000' } });
+            await file.makePublic();
+            imageUrl = `https://storage.googleapis.com/${bucket.name}/${filename}`;
+        } else {
+            imageUrl = `data:${mimeType};base64,${imageBase64}`;
+        }
+        res.json({ imageUrl });
+    } catch (err) {
+        console.error('Karaoke album cover error:', err);
+        res.status(500).json({ message: err.message || 'Album cover generation failed' });
+    }
+});
+
 // POST /api/karaoke/mix - mix background + recording, return mixed URL
 const multer = require('multer');
 const path = require('path');
@@ -184,9 +321,17 @@ const mixMulter = multer({
     limits: { fileSize: 100 * 1024 * 1024 }, // 100MB
 });
 
+const REVERB_AECHO = {
+    0: null,
+    1: '0.8:0.9:50:0.3',
+    2: '0.8:0.88:60:0.45:100:0.35',
+    3: '0.8:0.85:60:0.5:120:0.4:180:0.3',
+};
+
 router.post('/mix', mixMulter.single('recording'), async (req, res) => {
     try {
         const { karaokeSongId } = req.body;
+        const reverbLevel = Math.min(3, Math.max(0, parseInt(req.body.reverbLevel, 10) || 0));
         if (!karaokeSongId || !req.file) {
             return res.status(400).json({ message: 'karaokeSongId and recording file are required' });
         }
@@ -209,6 +354,11 @@ router.post('/mix', mixMulter.single('recording'), async (req, res) => {
         const recPath = path.join(tmpDir, 'recording.webm');
         const outPath = path.join(tmpDir, 'mixed.mp3');
 
+        const aecho = REVERB_AECHO[reverbLevel];
+        const complexFilter = aecho
+            ? `[1:a]aecho=${aecho}[rev];[0:a][rev]amix=inputs=2:duration=first[aout]`
+            : '[0:a][1:a]amix=inputs=2:duration=first[aout]';
+
         try {
             await fs.promises.writeFile(bgPath, bgBuffer);
             await fs.promises.writeFile(recPath, req.file.buffer);
@@ -217,7 +367,7 @@ router.post('/mix', mixMulter.single('recording'), async (req, res) => {
                 ffmpeg()
                     .input(bgPath)
                     .input(recPath)
-                    .complexFilter('[0:a][1:a]amix=inputs=2:duration=first[aout]')
+                    .complexFilter(complexFilter)
                     .outputOptions(['-map', '[aout]', '-ac', '2', '-b:a', '128k'])
                     .output(outPath)
                     .on('error', reject)
@@ -254,8 +404,9 @@ router.post('/mix', mixMulter.single('recording'), async (req, res) => {
 // POST /api/karaoke/recordings - save user recording (optional)
 router.post('/recordings', async (req, res) => {
     try {
-        const userId = req.user?.id || req.body.userId;
-        const { karaokeSongId, mixedAudioUrl, duration } = req.body;
+        const rawUserId = req.user?.id || req.body.userId;
+        const userId = rawUserId ? await resolveUserId(rawUserId) : null;
+        const { karaokeSongId, mixedAudioUrl, duration, customCoverImageUrl } = req.body;
 
         if (!karaokeSongId || !mixedAudioUrl) {
             return res.status(400).json({ message: 'karaokeSongId and mixedAudioUrl are required' });
@@ -266,6 +417,7 @@ router.post('/recordings', async (req, res) => {
             karaokeSongId,
             mixedAudioUrl,
             duration: duration || 0,
+            ...(customCoverImageUrl && { customCoverImageUrl }),
         });
         await rec.save();
         res.status(201).json(rec);
@@ -278,7 +430,8 @@ router.post('/recordings', async (req, res) => {
 // GET /api/karaoke/recordings - list user's saved recordings (optional)
 router.get('/recordings/list', async (req, res) => {
     try {
-        const userId = req.user?.id || req.query.userId;
+        const rawUserId = req.user?.id || req.query.userId;
+        const userId = rawUserId ? await resolveUserId(rawUserId) : null;
         if (!userId) {
             return res.json({ data: [] });
         }

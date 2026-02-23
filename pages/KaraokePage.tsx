@@ -3,8 +3,18 @@ import { useNavigate } from 'react-router-dom';
 import PremiumBadge from '../components/ui/PremiumBadge';
 import { useUser } from '../context/UserContext';
 import { getMonthlyBookBaseUrl } from '../services/apiService';
-import { Mic, Lock, ArrowLeft } from 'lucide-react';
+import { authService } from '../services/authService';
+import { Mic, Lock, ArrowLeft, Library, Play, Share2 } from 'lucide-react';
 import StormySeaError from '../components/ui/StormySeaError';
+
+interface KaraokeRecording {
+  _id: string;
+  karaokeSongId: { title: string; coverImage?: string } | null;
+  mixedAudioUrl: string;
+  customCoverImageUrl?: string | null;
+  duration?: number;
+  recordedAt?: string;
+}
 
 interface KaraokeSong {
   _id: string;
@@ -24,6 +34,29 @@ const KaraokePage: React.FC = () => {
   const [songs, setSongs] = useState<KaraokeSong[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [myRecordings, setMyRecordings] = useState<KaraokeRecording[]>([]);
+  const [recordingsLoading, setRecordingsLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchRecordings = async () => {
+      const userId = authService.getUserIdForBackend();
+      if (!userId) {
+        setRecordingsLoading(false);
+        return;
+      }
+      try {
+        const base = getMonthlyBookBaseUrl();
+        const res = await fetch(`${base}/karaoke/recordings/list?userId=${encodeURIComponent(userId)}`);
+        const data = await res.json().catch(() => ({}));
+        setMyRecordings(data.data || []);
+      } catch {
+        setMyRecordings([]);
+      } finally {
+        setRecordingsLoading(false);
+      }
+    };
+    fetchRecordings();
+  }, []);
 
   useEffect(() => {
     const fetchSongs = async () => {
@@ -82,6 +115,63 @@ const KaraokePage: React.FC = () => {
               Sing along with worship songs
             </h2>
           </div>
+
+          {myRecordings.length > 0 && (
+            <section className="mb-6">
+              <div className="flex items-center gap-2 mb-3">
+                <Library className="w-5 h-5 text-white/90" />
+                <h3 className="text-base font-display font-bold text-white drop-shadow-md">
+                  My karaoke songs
+                </h3>
+              </div>
+              <div className="flex gap-3 overflow-x-auto pb-2 -mx-1 scrollbar-hide" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
+                {myRecordings.map((rec) => (
+                  <div
+                    key={rec._id}
+                    className="flex-shrink-0 w-36 rounded-xl overflow-hidden bg-white/10 border border-white/20"
+                  >
+                    <button
+                      type="button"
+                      onClick={() => navigate(`/karaoke/share/${rec._id}`)}
+                      className="w-full text-left block"
+                    >
+                      <div className="aspect-square relative bg-gradient-to-br from-violet-700 to-purple-800">
+                        {(rec.customCoverImageUrl || rec.karaokeSongId?.coverImage) ? (
+                          <img
+                            src={rec.customCoverImageUrl || rec.karaokeSongId!.coverImage}
+                            alt={rec.karaokeSongId?.title || 'Recording'}
+                            className="w-full h-full object-cover"
+                          />
+                        ) : (
+                          <div className="w-full h-full flex items-center justify-center">
+                            <Mic className="w-10 h-10 text-white/40" />
+                          </div>
+                        )}
+                        <div className="absolute inset-0 flex items-center justify-center bg-black/30 opacity-0 hover:opacity-100 transition-opacity">
+                          <Play size={28} className="text-white drop-shadow-lg" fill="currentColor" />
+                        </div>
+                      </div>
+                      <p className="text-white text-xs font-display font-bold truncate px-2 py-1.5">
+                        {rec.karaokeSongId?.title || 'My recording'}
+                      </p>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        const url = `${window.location.origin}${window.location.pathname || '/'}#/karaoke/share/${rec._id}`;
+                        navigator.clipboard.writeText(url).catch(() => {});
+                      }}
+                      className="w-full flex items-center justify-center gap-1 py-1.5 text-white/80 hover:text-white text-xs font-display"
+                    >
+                      <Share2 size={14} />
+                      Share
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </section>
+          )}
 
           {error ? (
             <StormySeaError

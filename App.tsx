@@ -601,6 +601,7 @@ import ParentQuizPage from './pages/ParentQuizPage';
 import GamesPage from './pages/GamesPage';
 import KaraokePage from './pages/KaraokePage';
 import KaraokePlayerPage from './pages/KaraokePlayerPage';
+import KaraokeSharePage from './pages/KaraokeSharePage';
 import InterestSelectionPage from './pages/InterestSelectionPage';
 import DailySessionPage from './pages/DailySessionPage';
 
@@ -1570,6 +1571,7 @@ const App: React.FC = () => {
                   <Route path="/lesson/:lessonId" element={<ProtectedRoute><LessonPlayerPage /></ProtectedRoute>} />
                   <Route path="/games" element={<GamesPage />} />
                   <Route path="/karaoke" element={<KaraokePage />} />
+                  <Route path="/karaoke/share/:recordingId" element={<KaraokeSharePage />} />
                   <Route path="/karaoke/:id" element={<KaraokePlayerPage />} />
                   <Route path="/profile" element={<ProfileSelectionPage />} />
                   <Route path="/create-profile" element={<CreateProfilePage />} />

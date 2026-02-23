@@ -287,7 +287,7 @@ Style: colorful illustration, warm and uplifting, suitable for ages 4–12. Do n
             const filename = `karaoke/album-covers/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
             const file = bucket.file(filename);
             await file.save(Buffer.from(imageBase64, 'base64'), { contentType: mimeType, metadata: { cacheControl: 'public, max-age=31536000' } });
-            await file.makePublic();
+            // Skip makePublic() - fails with uniform bucket-level access
             imageUrl = `https://storage.googleapis.com/${bucket.name}/${filename}`;
         } else {
             imageUrl = `data:${mimeType};base64,${imageBase64}`;
@@ -400,7 +400,7 @@ router.post('/mix', mixMulter.single('recording'), async (req, res) => {
             await blob.save(mixedBuffer, {
                 metadata: { contentType: 'audio/mpeg' },
             });
-            await blob.makePublic();
+            // Skip makePublic() - fails with uniform bucket-level access; bucket policy handles public read
             const mixedUrl = `https://storage.googleapis.com/${bucket.name}/${gcsPath}`;
 
             let mixedDuration = song.duration;

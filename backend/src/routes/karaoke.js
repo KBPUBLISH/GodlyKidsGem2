@@ -306,7 +306,6 @@ const fs = require('fs');
 const os = require('os');
 const ffmpeg = require('fluent-ffmpeg');
 const ffmpegInstaller = require('@ffmpeg-installer/ffmpeg');
-const { bucket } = require('../config/storage');
 
 let ffmpegAvailable = false;
 try {

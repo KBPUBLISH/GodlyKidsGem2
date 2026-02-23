@@ -12,6 +12,14 @@ export const apiClient = axios.create({
   },
 });
 
+// FormData must NOT have Content-Type set - browser adds multipart boundary
+apiClient.interceptors.request.use((config) => {
+  if (config.data instanceof FormData) {
+    delete config.headers['Content-Type'];
+  }
+  return config;
+});
+
 // Helper to get full URL for uploads (useful for form submissions)
 export const getApiUrl = (path: string): string => {
   // Ensure path starts with /

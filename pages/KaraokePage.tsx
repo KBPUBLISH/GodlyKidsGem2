@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import PremiumBadge from '../components/ui/PremiumBadge';
 import { useUser } from '../context/UserContext';
-import { getApiBaseUrl } from '../services/apiService';
+import { getMonthlyBookBaseUrl } from '../services/apiService';
 import { Mic, Lock, ArrowLeft } from 'lucide-react';
 import StormySeaError from '../components/ui/StormySeaError';
 

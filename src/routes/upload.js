@@ -553,8 +553,13 @@ router.post('/compose-chunks', async (req, res) => {
         const filePath = generateFilePath(effectiveBookId, type, filename);
         const destFile = bucket.file(filePath);
         const sourceFiles = tempObjectNames.map((name) => bucket.file(name));
-        await destFile.compose(sourceFiles);
-        await Promise.all(sourceFiles.map((f) => f.delete().catch((e) => console.warn('Chunk delete:', e.message))));
+        if (sourceFiles.length === 1) {
+            await sourceFiles[0].copy(destFile);
+            await sourceFiles[0].delete().catch((e) => console.warn('Chunk delete:', e.message));
+        } else {
+            await bucket.combine(sourceFiles, destFile);
+            await Promise.all(sourceFiles.map((f) => f.delete().catch((e) => console.warn('Chunk delete:', e.message))));
+        }
         const publicUrl = `https://storage.googleapis.com/${bucket.name}/${filePath}`;
         console.log('Composed chunks:', { filePath, chunks: tempObjectNames.length });
         res.json({ url: publicUrl });

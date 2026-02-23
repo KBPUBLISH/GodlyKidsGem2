@@ -338,8 +338,9 @@ router.post('/mix', mixMulter.single('recording'), async (req, res) => {
         }
 
         const song = await KaraokeSong.findById(karaokeSongId);
-        if (!song || !song.backgroundAudioUrl) {
-            return res.status(400).json({ message: 'Song not found or has no background audio' });
+        const audioSourceUrl = song?.backgroundAudioUrl || song?.videoUrl;
+        if (!song || !audioSourceUrl) {
+            return res.status(400).json({ message: 'Song not found or has no background audio or video' });
         }
 
         if (!ffmpegAvailable || !bucket) {
@@ -347,10 +348,13 @@ router.post('/mix', mixMulter.single('recording'), async (req, res) => {
         }
 
         const axios = require('axios');
-        const resp = await axios.get(song.backgroundAudioUrl, { responseType: 'arraybuffer' });
-        const bgBuffer = Buffer.from(resp.data);
+        const resp = await axios.get(audioSourceUrl, { responseType: 'arraybuffer' });
+        const sourceBuffer = Buffer.from(resp.data);
 
         const tmpDir = await fs.promises.mkdtemp(path.join(os.tmpdir(), 'karaoke-'));
+        const isVideo = !song.backgroundAudioUrl && song.videoUrl;
+        const ext = isVideo ? (audioSourceUrl.includes('.webm') ? 'webm' : 'mp4') : 'mp3';
+        const sourcePath = path.join(tmpDir, `source.${ext}`);
         const bgPath = path.join(tmpDir, 'background.mp3');
         const recPath = path.join(tmpDir, 'recording.webm');
         const outPath = path.join(tmpDir, 'mixed.mp3');
@@ -368,7 +372,14 @@ router.post('/mix', mixMulter.single('recording'), async (req, res) => {
             : `${volBg};${volVoice};${mixFilter}`;
 
         try {
-            await fs.promises.writeFile(bgPath, bgBuffer);
+            await fs.promises.writeFile(sourcePath, sourceBuffer);
+            if (!song.backgroundAudioUrl && song.videoUrl) {
+                await new Promise((resolve, reject) => {
+                    ffmpeg(sourcePath).noVideo().audioCodec('libmp3lame').output(bgPath).on('error', reject).on('end', resolve).run();
+                });
+            } else {
+                await fs.promises.copyFile(sourcePath, bgPath);
+            }
             await fs.promises.writeFile(recPath, req.file.buffer);
 
             await new Promise((resolve, reject) => {
@@ -409,6 +420,7 @@ router.post('/mix', mixMulter.single('recording'), async (req, res) => {
             res.json({ mixedAudioUrl: mixedUrl, duration: mixedDuration });
         } finally {
             try {
+                await fs.promises.unlink(sourcePath).catch(() => {});
                 await fs.promises.unlink(bgPath).catch(() => {});
                 await fs.promises.unlink(recPath).catch(() => {});
                 await fs.promises.unlink(outPath).catch(() => {});

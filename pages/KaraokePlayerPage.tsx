@@ -380,7 +380,7 @@ const KaraokePlayerPage: React.FC = () => {
   }, [recordedUrl]);
 
   const handleCreateMasterTrack = async () => {
-    if (!recordedUrl || !song || !id || !song.backgroundAudioUrl) return;
+    if (!recordedUrl || !song || !id || (!song.backgroundAudioUrl && !song.videoUrl)) return;
     setMasterError(null);
     setCreatingMaster(true);
     try {
@@ -556,7 +556,7 @@ const KaraokePlayerPage: React.FC = () => {
 
   // Edit screen: two tracks, volume sliders, reverb, Create Master Track
   if (recordedUrl && !isRecording && !masterCreated) {
-    const canCreateMaster = !!song?.backgroundAudioUrl && !creatingMaster;
+    const canCreateMaster = (!!song?.backgroundAudioUrl || !!song?.videoUrl) && !creatingMaster;
     return (
       <div className="flex flex-col h-full bg-black">
         <div className="flex items-center justify-between px-4 py-3" style={{ paddingTop: 'calc(var(--safe-area-top, 12px) + 8px)' }}>
@@ -651,35 +651,31 @@ const KaraokePlayerPage: React.FC = () => {
               </div>
             </div>
 
-            {song?.backgroundAudioUrl ? (
-              <button
-                onClick={handleCreateMasterTrack}
-                disabled={!canCreateMaster}
-                className="flex items-center justify-center gap-2 w-full py-3.5 rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 text-black font-display font-bold text-sm mt-4 active:scale-[0.98] disabled:opacity-50"
-              >
-                {creatingMaster ? (
-                  <>
-                    <div className="w-4 h-4 border-2 border-black/30 border-t-black rounded-full animate-spin" />
-                    Creating master…
-                  </>
-                ) : (
-                  <>
-                    <Disc size={20} />
-                    Create master track
-                  </>
-                )}
-              </button>
-            ) : (
-              <p className="text-white/50 text-xs text-center mt-4">Audio mixing is available for audio songs only</p>
-            )}
-            {masterError && <p className="text-amber-400 text-xs text-center mt-2">{masterError}</p>}
-
             <button
               onClick={handleRecordAgain}
-              className="flex items-center justify-center gap-2 w-full py-3 rounded-xl text-white/70 font-display text-sm hover:text-white/90 active:scale-[0.98] mt-6"
+              className="flex items-center justify-center gap-2 w-full py-3 rounded-xl text-white/70 font-display text-sm hover:text-white/90 active:scale-[0.98] mt-4"
             >
               <RotateCcw size={18} />
               Record again
+            </button>
+            {masterError && <p className="text-amber-400 text-xs text-center mt-2">{masterError}</p>}
+
+            <button
+              onClick={handleCreateMasterTrack}
+              disabled={!canCreateMaster}
+              className="flex items-center justify-center gap-2 w-full py-3.5 rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 text-black font-display font-bold text-sm mt-6 mb-8 active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {creatingMaster ? (
+                <>
+                  <div className="w-4 h-4 border-2 border-black/30 border-t-black rounded-full animate-spin" />
+                  Creating…
+                </>
+              ) : (
+                <>
+                  <Disc size={20} />
+                  Create my song
+                </>
+              )}
             </button>
           </div>
         </div>

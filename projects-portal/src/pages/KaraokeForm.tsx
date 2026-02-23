@@ -166,30 +166,12 @@ async function uploadMedia(bookId: string, type: 'video' | 'audio', file: File, 
     return uploadViaSignedUrl(bookId, type, file, songId);
 }
 
-/** Upload audio via backend (FormData) - uses apiClient like BookEdit/PlaylistForm. Avoids fetch ERR_INSUFFICIENT_RESOURCES. */
+/** Upload audio via backend FormData using native fetch (single connection, proper cleanup). */
 async function uploadAudioViaFormData(songId: string, file: File): Promise<{ url: string }> {
     const formData = new FormData();
     formData.append('file', file);
     const params = new URLSearchParams({ bookId: 'karaoke', type: 'audio', songId });
-    const maxAttempts = 3;
-    let lastErr: unknown;
-    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
-        try {
-            const { data } = await apiClient.post<{ url: string }>(
-                `/api/upload/audio?${params}`,
-                formData,
-                { timeout: 120000 }
-            );
-            if (!data?.url) throw new Error('No URL in response');
-            return data;
-        } catch (e) {
-            lastErr = e;
-            if (attempt < maxAttempts) {
-                await new Promise((r) => setTimeout(r, 1500 * attempt));
-            }
-        }
-    }
-    throw lastErr;
+    return uploadViaFetch(`/api/upload/audio?${params}`, formData, 120000);
 }
 
 interface LyricLine {

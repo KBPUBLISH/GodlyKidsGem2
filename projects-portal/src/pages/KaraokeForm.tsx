@@ -166,13 +166,6 @@ async function uploadMedia(bookId: string, type: 'video' | 'audio', file: File, 
     return uploadViaSignedUrl(bookId, type, file, songId);
 }
 
-/** Upload audio via backend FormData using native fetch (single connection, proper cleanup). */
-async function uploadAudioViaFormData(songId: string, file: File): Promise<{ url: string }> {
-    const formData = new FormData();
-    formData.append('file', file);
-    const params = new URLSearchParams({ bookId: 'karaoke', type: 'audio', songId });
-    return uploadViaFetch(`/api/upload/audio?${params}`, formData, 120000);
-}
 
 interface LyricLine {
     text: string;

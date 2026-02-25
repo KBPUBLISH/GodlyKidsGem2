@@ -7,8 +7,7 @@ import { useUser } from '../context/UserContext';
 import { ArrowLeft, Play, Pause, Mic, Share2, Check, ImagePlus, RotateCcw, Pencil, Music, Disc } from 'lucide-react';
 import StormySeaError from '../components/ui/StormySeaError';
 import SelfieCapture from '../components/features/SelfieCapture';
-import { DespiaService } from '../services/despiaService';
-import { prepareVoicePlayback, createVoiceAudioContext, getReverbLabel, type ReverbLevel } from '../utils/reverbUtils';
+import { prepareVoicePlayback, getReverbLabel, type ReverbLevel } from '../utils/reverbUtils';
 
 interface LyricLine {
   text: string;
@@ -89,8 +88,6 @@ const KaraokePlayerPage: React.FC = () => {
   const mixedAudioRef = useRef<HTMLAudioElement | null>(null);
   const recordingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const progressPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const recordingStartOffsetRef = useRef(0);
-  const recordingCtxRef = useRef<AudioContext | null>(null);
 
   // Use background MP3 for playback; video is no longer used
   const mediaSrc = song?.backgroundAudioUrl || song?.videoUrl;
@@ -211,11 +208,8 @@ const KaraokePlayerPage: React.FC = () => {
       handleStopRecording();
       el.pause();
     } else {
-      // iOS: Start playback FIRST (in user gesture), before requesting mic.
-      // getUserMedia takes over the audio session and can mute playback otherwise.
-      await el.play().catch(() => {});
       const ok = await handleStartRecording();
-      if (!ok) el.pause();
+      if (ok) el.play().catch(() => {});
     }
   };
 
@@ -241,19 +235,7 @@ const KaraokePlayerPage: React.FC = () => {
       setRecordedUrl(null);
     }
     try {
-      // iOS Safari: Request play-and-record audio session so music and mic work together.
-      if (typeof navigator !== 'undefined' && (navigator as any).audioSession?.setType) {
-        try {
-          (navigator as any).audioSession.setType('play-and-record');
-        } catch (_) { /* not supported */ }
-      } else if (typeof navigator !== 'undefined' && (navigator as any).audioSession !== undefined) {
-        try {
-          (navigator as any).audioSession.type = 'play-and-record';
-        } catch (_) { /* not supported */ }
-      }
-      // Always disable echo cancellation / noise suppression / auto gain.
-      // On iOS, echo cancellation aggressively cancels out music playing from the speaker,
-      // making the recording nearly silent. These constraints are critical for karaoke.
+      // Disable processing effects to reduce choppiness with external mics
       const stream = await navigator.mediaDevices.getUserMedia({
         audio: {
           echoCancellation: false,
@@ -261,18 +243,12 @@ const KaraokePlayerPage: React.FC = () => {
           autoGainControl: false,
         },
       });
-
-      // Record directly from the raw mic stream. DO NOT route through
-      // AudioContext/MediaStreamDestination -- iOS Safari produces silent
-      // recordings from MediaStreamDestination. Voice boost is applied
-      // server-side during the mix instead.
       const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
         ? 'audio/webm;codecs=opus'
         : MediaRecorder.isTypeSupported('audio/mp4')
           ? 'audio/mp4'
           : 'audio/webm';
       const recorder = new MediaRecorder(stream, {
-        mimeType,
         audioBitsPerSecond: 128000,
       });
       recordedChunksRef.current = [];
@@ -281,9 +257,7 @@ const KaraokePlayerPage: React.FC = () => {
       };
       recorder.onstop = () => {
         stream.getTracks().forEach((t) => t.stop());
-        try { recordingCtxRef.current?.close(); } catch {} finally { recordingCtxRef.current = null; }
         const blob = new Blob(recordedChunksRef.current, { type: mimeType });
-        console.log(`🎤 Recording: ${recordedChunksRef.current.length} chunks, ${(blob.size / 1024).toFixed(1)}KB, type=${mimeType}`);
         setRecordedUrl(URL.createObjectURL(blob));
       };
       mediaRecorderRef.current = recorder;
@@ -291,9 +265,6 @@ const KaraokePlayerPage: React.FC = () => {
       // recordings longer than ~1 min to fail/truncate. Without timeslice we get one
       // blob on stop, which avoids the cutoff.
       recorder.start();
-      // Capture music position when recording starts - used for sync on mix (iOS: playback starts before mic, so recording begins late)
-      const offset = mediaRef.current?.currentTime;
-      recordingStartOffsetRef.current = typeof offset === 'number' && Number.isFinite(offset) ? offset : 0;
       setIsRecording(true);
       // Poll progress bar while recording (fallback for platforms where timeupdate/rAF may not fire)
       if (progressPollRef.current) clearInterval(progressPollRef.current);
@@ -329,12 +300,7 @@ const KaraokePlayerPage: React.FC = () => {
       return true;
     } catch (err) {
       console.error('Mic access failed:', err);
-      const isDespia = DespiaService.isNative();
-      setMicError(
-        isDespia
-          ? 'Microphone access is needed. Please allow it in your device Settings.'
-          : 'Microphone access is needed to record. Please allow it in your browser settings.'
-      );
+      setMicError('Microphone access is needed to record. Please allow it in your browser settings.');
       return false;
     }
   };
@@ -404,12 +370,8 @@ const KaraokePlayerPage: React.FC = () => {
     myTakeUsedMainRef.current = false;
     setIsPlayingMyTake(true);
 
-    // Create AudioContext NOW in the user gesture (click handler) before any async work.
-    // iOS blocks AudioContext created after awaits/fetches.
-    const voiceCtx = createVoiceAudioContext();
-
     try {
-      const voiceController = await prepareVoicePlayback(recordedUrl, reverbLevel, voiceVolume, handleStopMyTake, voiceCtx);
+      const voiceController = await prepareVoicePlayback(recordedUrl, reverbLevel, voiceVolume, handleStopMyTake);
       voiceControllerRef.current = voiceController;
       const recDuration = voiceController.duration || 0;
       if (recDuration > 0) {
@@ -532,13 +494,11 @@ const KaraokePlayerPage: React.FC = () => {
       const base = getMonthlyBookBaseUrl();
       const blob = await fetch(recordedUrl).then((r) => r.blob());
       const form = new FormData();
-      const recExt = blob.type.includes('mp4') ? 'mp4' : blob.type.includes('ogg') ? 'ogg' : 'webm';
-      form.append('recording', blob, `recording.${recExt}`);
+      form.append('recording', blob, 'recording.webm');
       form.append('karaokeSongId', id);
       form.append('reverbLevel', String(reverbLevel));
       form.append('musicVolume', String(musicVolume));
       form.append('voiceVolume', String(voiceVolume));
-      form.append('recordingStartOffset', String(recordingStartOffsetRef.current));
       const mixRes = await fetch(`${base}/karaoke/mix`, {
         method: 'POST',
         body: form,
@@ -729,10 +689,8 @@ const KaraokePlayerPage: React.FC = () => {
 
   const handleRecordAgain = () => {
     if (recordedUrl) URL.revokeObjectURL(recordedUrl);
-    try { recordingCtxRef.current?.close(); } catch {} finally { recordingCtxRef.current = null; }
     setRecordedUrl(null);
     setRecordingDuration(null);
-    recordingStartOffsetRef.current = 0;
     setSavedRecordingId(null);
     setMasterCreated(false);
     setMixedAudioUrl(null);

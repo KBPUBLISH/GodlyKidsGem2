@@ -8,7 +8,7 @@ import { ArrowLeft, Play, Pause, Mic, Share2, Check, ImagePlus, RotateCcw, Penci
 import StormySeaError from '../components/ui/StormySeaError';
 import SelfieCapture from '../components/features/SelfieCapture';
 import { DespiaService } from '../services/despiaService';
-import { prepareVoicePlayback, createVoiceAudioContext, getReverbLabel, type ReverbLevel, type VoiceController } from '../utils/reverbUtils';
+import { prepareVoicePlayback, createVoiceAudioContext, getReverbLabel, type ReverbLevel } from '../utils/reverbUtils';
 
 interface LyricLine {
   text: string;
@@ -77,7 +77,7 @@ const KaraokePlayerPage: React.FC = () => {
   const currentKid = kids?.find((k: any) => k.id === currentProfileId);
   const artistName = currentKid?.name || parentName || 'Artist';
   const [reverbLevel, setReverbLevel] = useState<ReverbLevel>(0);
-  const voiceControllerRef = useRef<VoiceController | null>(null);
+  const voiceControllerRef = useRef<{ stop: () => void } | null>(null);
   const myTakeMusicRef = useRef<HTMLAudioElement | null>(null);
   const myTakeVoiceRef = useRef<HTMLAudioElement | null>(null);
   const myTakeUsedMainRef = useRef(false);
@@ -90,6 +90,7 @@ const KaraokePlayerPage: React.FC = () => {
   const recordingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const progressPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const recordingStartOffsetRef = useRef(0);
+  const recordingCtxRef = useRef<AudioContext | null>(null);
 
   // Use background MP3 for playback; video is no longer used
   const mediaSrc = song?.backgroundAudioUrl || song?.videoUrl;
@@ -171,36 +172,24 @@ const KaraokePlayerPage: React.FC = () => {
   }, [mediaRef, song]);
 
   const isPlayingMyTakeRef = useRef(false);
-  // Keep ref in sync immediately (useEffect would be delayed by a frame)
-  isPlayingMyTakeRef.current = isPlayingMyTake;
+  useEffect(() => {
+    isPlayingMyTakeRef.current = isPlayingMyTake;
+  }, [isPlayingMyTake]);
 
   useEffect(() => {
     if (!isPlayingMyTake) playheadSourceRef.current = mediaRef.current;
     return () => { if (!isPlayingMyTakeRef.current) playheadSourceRef.current = null; };
   }, [mediaRef, song, isPlayingMyTake]);
 
-  // requestAnimationFrame for smooth progress tracking
+  // requestAnimationFrame for smooth lyrics sync (60fps vs timeupdate's ~4Hz)
+  // When playing My Take, use elapsed time capped at recording duration
   useEffect(() => {
     let rafId: number;
     const tick = () => {
       if (isPlayingMyTakeRef.current) {
-        // During preview: read currentTime from the music element if available,
-        // otherwise fall back to wall-clock elapsed time.
-        const musicEl = myTakeMusicRef.current;
-        const mainEl = myTakeUsedMainRef.current ? mediaRef.current : null;
-        const playingEl = musicEl || mainEl;
-        if (playingEl && typeof playingEl.currentTime === 'number' && playingEl.currentTime > 0) {
-          setCurrentTime(playingEl.currentTime);
-          // Also sync duration from the element if we don't have one yet
-          const d = playingEl.duration;
-          if (typeof d === 'number' && Number.isFinite(d) && d > 0 && myTakeDurationRef.current <= 0) {
-            myTakeDurationRef.current = d;
-          }
-        } else {
-          const elapsed = (performance.now() - myTakeStartRef.current) / 1000;
-          const cap = myTakeDurationRef.current || 999;
-          setCurrentTime(Math.min(elapsed, cap));
-        }
+        const elapsed = (performance.now() - myTakeStartRef.current) / 1000;
+        const cap = myTakeDurationRef.current || 999;
+        setCurrentTime(Math.min(elapsed, cap));
       } else {
         const src = playheadSourceRef.current ?? mediaRef.current;
         if (src) setCurrentTime(src.currentTime);
@@ -214,20 +203,6 @@ const KaraokePlayerPage: React.FC = () => {
   useEffect(() => {
     activeLineRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'nearest' });
   }, [currentTime, song?.lyrics]);
-
-  // Live volume: update music HTMLAudioElement when slider moves during preview
-  useEffect(() => {
-    const el = myTakeMusicRef.current;
-    if (el) el.volume = musicVolume;
-    if (myTakeUsedMainRef.current && mediaRef.current) {
-      mediaRef.current.volume = musicVolume;
-    }
-  }, [musicVolume]);
-
-  // Live volume: update voice AudioContext gain when slider moves during preview
-  useEffect(() => {
-    voiceControllerRef.current?.setVolume?.(voiceVolume);
-  }, [voiceVolume]);
 
   const handleMicPress = async () => {
     const el = mediaRef.current;
@@ -286,16 +261,24 @@ const KaraokePlayerPage: React.FC = () => {
           autoGainControl: false,
         },
       });
-      // Record directly from the raw mic stream.
-      // Avoid Web Audio processing (createMediaStreamDestination) which is
-      // broken on iOS Safari and produces empty/silent recordings.
-      // Voice boost is applied server-side during mix instead.
+      // Boost mic signal through Web Audio GainNode before recording.
+      // iOS reduces mic gain when speakers are active; this compensates.
+      const recCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
+      if (recCtx.state === 'suspended') await recCtx.resume().catch(() => {});
+      const micSource = recCtx.createMediaStreamSource(stream);
+      const boostGain = recCtx.createGain();
+      boostGain.gain.value = 3.0; // 3x boost to compensate for iOS mic reduction
+      const dest = recCtx.createMediaStreamDestination();
+      micSource.connect(boostGain);
+      boostGain.connect(dest);
+      recordingCtxRef.current = recCtx;
+
       const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
         ? 'audio/webm;codecs=opus'
         : MediaRecorder.isTypeSupported('audio/mp4')
           ? 'audio/mp4'
           : 'audio/webm';
-      const recorder = new MediaRecorder(stream, {
+      const recorder = new MediaRecorder(dest.stream, {
         audioBitsPerSecond: 128000,
       });
       recordedChunksRef.current = [];
@@ -304,6 +287,7 @@ const KaraokePlayerPage: React.FC = () => {
       };
       recorder.onstop = () => {
         stream.getTracks().forEach((t) => t.stop());
+        try { recordingCtxRef.current?.close(); } catch {} finally { recordingCtxRef.current = null; }
         const blob = new Blob(recordedChunksRef.current, { type: mimeType });
         console.log(`🎤 Recording: ${recordedChunksRef.current.length} chunks, ${(blob.size / 1024).toFixed(1)}KB, type=${mimeType}`);
         setRecordedUrl(URL.createObjectURL(blob));
@@ -321,14 +305,8 @@ const KaraokePlayerPage: React.FC = () => {
       if (progressPollRef.current) clearInterval(progressPollRef.current);
       progressPollRef.current = setInterval(() => {
         const el = mediaRef.current;
-        if (el) {
-          if (typeof el.currentTime === 'number' && Number.isFinite(el.currentTime)) {
-            setCurrentTime(el.currentTime);
-          }
-          const d = el.duration;
-          if (typeof d === 'number' && Number.isFinite(d) && d > 0 && d < 86400) {
-            setDuration(d);
-          }
+        if (el && typeof el.currentTime === 'number' && Number.isFinite(el.currentTime)) {
+          setCurrentTime(el.currentTime);
         }
       }, 100);
       stopRecordingRef.current = () => {
@@ -401,12 +379,6 @@ const KaraokePlayerPage: React.FC = () => {
       myTakeUsedMainRef.current = false;
     }
     playheadSourceRef.current = mediaRef.current;
-    setCurrentTime(0);
-    // Restore the original song/media duration so the bar resets properly
-    const d = main?.duration;
-    if (typeof d === 'number' && Number.isFinite(d) && d > 0 && d < 86400) {
-      setDuration(d);
-    }
     setIsPlayingMyTake(false);
   };
 
@@ -436,8 +408,6 @@ const KaraokePlayerPage: React.FC = () => {
     }
     if (!recordedUrl || !song) return;
     myTakeUsedMainRef.current = false;
-    setCurrentTime(0);
-    myTakeStartRef.current = performance.now();
     setIsPlayingMyTake(true);
 
     // Create AudioContext NOW in the user gesture (click handler) before any async work.
@@ -453,13 +423,11 @@ const KaraokePlayerPage: React.FC = () => {
         myTakeDurationRef.current = recDuration;
       }
 
-      // Start music FIRST, then start voice when music actually begins playing.
-      // AudioBufferSourceNode.start() is instant (buffer in memory), but
-      // HTMLAudioElement.play() has ~200-300ms loading latency. Starting voice
-      // first would make it audibly ahead of the music.
+      // Start voice first, then music after a small delay. Voice has output latency so
+      // starting it early lets it align with the music when both are audible.
+      const VOICE_LEAD_MS = 300;
       const onMusicPlaying = () => {
         myTakeStartRef.current = performance.now();
-        voiceController.start();
       };
 
       if (song.backgroundAudioUrl) {
@@ -470,7 +438,8 @@ const KaraokePlayerPage: React.FC = () => {
         myTakeMusicRef.current = musicEl;
         playheadSourceRef.current = null;
         musicEl.addEventListener('playing', onMusicPlaying, { once: true });
-        musicEl.play().catch(() => onMusicPlaying());
+        voiceController.start();
+        setTimeout(() => musicEl.play().catch(() => onMusicPlaying()), VOICE_LEAD_MS);
       } else {
         const el = mediaRef.current;
         if (el) {
@@ -479,7 +448,8 @@ const KaraokePlayerPage: React.FC = () => {
           el.volume = musicVolume;
           el.currentTime = 0;
           el.addEventListener('playing', onMusicPlaying, { once: true });
-          el.play().catch(() => onMusicPlaying());
+          voiceController.start();
+          setTimeout(() => el.play().catch(() => onMusicPlaying()), VOICE_LEAD_MS);
         } else {
           myTakeStartRef.current = performance.now();
           voiceController.start();
@@ -491,34 +461,23 @@ const KaraokePlayerPage: React.FC = () => {
     }
   };
 
-  // Load recording duration when we have a recorded blob.
-  // iOS blob URLs often report Infinity at loadedmetadata; seek to a huge time to force resolution.
+  // Load recording duration when we have a recorded blob (for post-recording screen display)
   useEffect(() => {
     if (!recordedUrl) {
       setRecordingDuration(null);
       return;
     }
     const audio = new Audio(recordedUrl);
-    let resolved = false;
-    const tryResolve = () => {
+    const onLoaded = () => {
       const d = audio.duration;
-      if (!resolved && typeof d === 'number' && Number.isFinite(d) && d > 0) {
-        resolved = true;
+      if (typeof d === 'number' && Number.isFinite(d) && d > 0) {
         setRecordingDuration(d);
       }
     };
-    audio.addEventListener('loadedmetadata', () => {
-      tryResolve();
-      if (!resolved) {
-        // iOS workaround: seek to large value to force duration calculation
-        audio.currentTime = 1e10;
-      }
-    }, { once: true });
-    audio.addEventListener('durationchange', tryResolve);
-    audio.addEventListener('seeked', tryResolve, { once: true });
+    audio.addEventListener('loadedmetadata', onLoaded, { once: true });
     audio.addEventListener('error', () => setRecordingDuration(null), { once: true });
     return () => {
-      audio.removeEventListener('durationchange', tryResolve);
+      audio.removeEventListener('loadedmetadata', onLoaded);
       audio.src = '';
     };
   }, [recordedUrl]);
@@ -581,7 +540,6 @@ const KaraokePlayerPage: React.FC = () => {
       const form = new FormData();
       const recExt = blob.type.includes('mp4') ? 'mp4' : blob.type.includes('ogg') ? 'ogg' : 'webm';
       form.append('recording', blob, `recording.${recExt}`);
-      form.append('recordingMimeType', blob.type || `audio/${recExt}`);
       form.append('karaokeSongId', id);
       form.append('reverbLevel', String(reverbLevel));
       form.append('musicVolume', String(musicVolume));
@@ -777,6 +735,7 @@ const KaraokePlayerPage: React.FC = () => {
 
   const handleRecordAgain = () => {
     if (recordedUrl) URL.revokeObjectURL(recordedUrl);
+    try { recordingCtxRef.current?.close(); } catch {} finally { recordingCtxRef.current = null; }
     setRecordedUrl(null);
     setRecordingDuration(null);
     recordingStartOffsetRef.current = 0;
@@ -796,21 +755,9 @@ const KaraokePlayerPage: React.FC = () => {
     handleStopMyTake();
   };
 
-  // Duration for progress bar display. Prioritize the playing element's duration.
-  let effectiveDurationForDisplay: number;
-  if (isPlayingMyTake) {
-    if (myTakeDurationRef.current > 0) {
-      effectiveDurationForDisplay = myTakeDurationRef.current;
-    } else {
-      const el = myTakeMusicRef.current || (myTakeUsedMainRef.current ? mediaRef.current : null);
-      const d = el?.duration;
-      effectiveDurationForDisplay = (typeof d === 'number' && Number.isFinite(d) && d > 0) ? d : (recordingDuration ?? duration);
-    }
-  } else if (masterCreated) {
-    effectiveDurationForDisplay = (typeof mixDuration === 'number' && Number.isFinite(mixDuration) ? mixDuration : 0);
-  } else {
-    effectiveDurationForDisplay = recordingDuration ?? duration;
-  }
+  const effectiveDurationForDisplay = masterCreated
+    ? (typeof mixDuration === 'number' && Number.isFinite(mixDuration) ? mixDuration : 0)
+    : (recordingDuration ?? duration);
   const safeDuration = typeof effectiveDurationForDisplay === 'number' && Number.isFinite(effectiveDurationForDisplay) && effectiveDurationForDisplay > 0 ? effectiveDurationForDisplay : 0;
 
   // Edit screen: two tracks, volume sliders, reverb, Create Master Track

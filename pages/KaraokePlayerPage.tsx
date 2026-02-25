@@ -261,24 +261,18 @@ const KaraokePlayerPage: React.FC = () => {
           autoGainControl: false,
         },
       });
-      // Boost mic signal through Web Audio GainNode before recording.
-      // iOS reduces mic gain when speakers are active; this compensates.
-      const recCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
-      if (recCtx.state === 'suspended') await recCtx.resume().catch(() => {});
-      const micSource = recCtx.createMediaStreamSource(stream);
-      const boostGain = recCtx.createGain();
-      boostGain.gain.value = 3.0; // 3x boost to compensate for iOS mic reduction
-      const dest = recCtx.createMediaStreamDestination();
-      micSource.connect(boostGain);
-      boostGain.connect(dest);
-      recordingCtxRef.current = recCtx;
 
+      // Record directly from the raw mic stream. DO NOT route through
+      // AudioContext/MediaStreamDestination -- iOS Safari produces silent
+      // recordings from MediaStreamDestination. Voice boost is applied
+      // server-side during the mix instead.
       const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
         ? 'audio/webm;codecs=opus'
         : MediaRecorder.isTypeSupported('audio/mp4')
           ? 'audio/mp4'
           : 'audio/webm';
-      const recorder = new MediaRecorder(dest.stream, {
+      const recorder = new MediaRecorder(stream, {
+        mimeType,
         audioBitsPerSecond: 128000,
       });
       recordedChunksRef.current = [];

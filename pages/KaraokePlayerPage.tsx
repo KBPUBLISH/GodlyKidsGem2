@@ -208,8 +208,11 @@ const KaraokePlayerPage: React.FC = () => {
       handleStopRecording();
       el.pause();
     } else {
+      // iOS: Start playback FIRST (in user gesture), before requesting mic.
+      // getUserMedia takes over the audio session and can mute playback otherwise.
+      await el.play().catch(() => {});
       const ok = await handleStartRecording();
-      if (ok) el.play().catch(() => {});
+      if (!ok) el.pause();
     }
   };
 
@@ -235,7 +238,16 @@ const KaraokePlayerPage: React.FC = () => {
       setRecordedUrl(null);
     }
     try {
-      // Disable processing effects to reduce choppiness with external mics
+      // iOS Safari: Request play-and-record audio session so music and mic work together.
+      if (typeof navigator !== 'undefined' && (navigator as any).audioSession?.setType) {
+        try {
+          (navigator as any).audioSession.setType('play-and-record');
+        } catch (_) { /* not supported */ }
+      } else if (typeof navigator !== 'undefined' && (navigator as any).audioSession !== undefined) {
+        try {
+          (navigator as any).audioSession.type = 'play-and-record';
+        } catch (_) { /* not supported */ }
+      }
       const stream = await navigator.mediaDevices.getUserMedia({
         audio: {
           echoCancellation: false,

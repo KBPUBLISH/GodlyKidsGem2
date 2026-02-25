@@ -42,51 +42,66 @@ export function getReverbLabel(level: ReverbLevel): string {
 }
 
 /**
+ * Create an AudioContext inside a user gesture so iOS allows playback later.
+ * Call this synchronously in the click handler, then pass the ctx to prepareVoicePlayback.
+ */
+export function createVoiceAudioContext(): AudioContext {
+  const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
+  // iOS requires resume() inside a user gesture to unlock the context
+  if (ctx.state === 'suspended') ctx.resume().catch(() => {});
+  return ctx;
+}
+
+/**
  * Prepares voice playback (decode + setup). Call start() when ready to play in sync with music.
- * This avoids music leading by 1–2s due to async decode.
- * Returns duration (seconds) of the recording.
+ * 
+ * IMPORTANT for iOS: Pass a pre-created AudioContext (from createVoiceAudioContext) that was
+ * created inside the user gesture. iOS blocks AudioContext and Audio.play() when created
+ * after async gaps (fetch, decodeAudioData, etc.).
  */
 export async function prepareVoicePlayback(
   blobUrl: string,
   reverbLevel: ReverbLevel,
   volume: number,
-  onEnded: () => void
+  onEnded: () => void,
+  existingCtx?: AudioContext
 ): Promise<{ start: () => void; stop: () => void; duration: number }> {
   const preset = REVERB_PRESETS[reverbLevel];
   if (!preset || reverbLevel === 0) {
-    const audio = new Audio(blobUrl);
-    audio.volume = volume;
-    audio.onended = onEnded;
-    const dur = await new Promise<number>((resolve) => {
-      if (audio.duration && !isNaN(audio.duration)) {
-        resolve(audio.duration);
-      } else {
-        audio.addEventListener('loadedmetadata', () => resolve(audio.duration || 0), { once: true });
-        audio.addEventListener('error', () => resolve(0), { once: true });
-        setTimeout(() => resolve(0), 5000);
-      }
-    });
+    // For no-reverb: use AudioContext too (more reliable on iOS than Audio element)
+    const ctx = existingCtx ?? new (window.AudioContext || (window as any).webkitAudioContext)();
+    if (ctx.state === 'suspended') await ctx.resume().catch(() => {});
+
+    const res = await fetch(blobUrl);
+    const arrayBuffer = await res.arrayBuffer();
+    const audioBuffer = await ctx.decodeAudioData(arrayBuffer);
+
+    const gainNode = ctx.createGain();
+    gainNode.gain.value = volume;
+    gainNode.connect(ctx.destination);
+
+    let source: AudioBufferSourceNode | null = null;
     return {
-      duration: dur,
+      duration: audioBuffer.duration,
       start: () => {
-        audio.currentTime = 0;
-        audio.play().catch(() => {});
+        source = ctx.createBufferSource();
+        source.buffer = audioBuffer;
+        source.onended = onEnded;
+        source.connect(gainNode);
+        source.start(0);
       },
       stop: () => {
-        audio.pause();
-        audio.currentTime = 0;
+        try { source?.stop(); } catch {}
       },
     };
   }
 
-  const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
+  const ctx = existingCtx ?? new (window.AudioContext || (window as any).webkitAudioContext)();
+  if (ctx.state === 'suspended') await ctx.resume().catch(() => {});
+
   const res = await fetch(blobUrl);
   const arrayBuffer = await res.arrayBuffer();
   const audioBuffer = await ctx.decodeAudioData(arrayBuffer);
-
-  const source = ctx.createBufferSource();
-  source.buffer = audioBuffer;
-  source.onended = onEnded;
 
   const convolver = ctx.createConvolver();
   convolver.buffer = createImpulseResponse(
@@ -104,22 +119,24 @@ export async function prepareVoicePlayback(
   const masterGain = ctx.createGain();
   masterGain.gain.value = volume;
 
-  source.connect(dryGain);
-  source.connect(convolver);
-  convolver.connect(wetGain);
   dryGain.connect(masterGain);
   wetGain.connect(masterGain);
   masterGain.connect(ctx.destination);
+  convolver.connect(wetGain);
 
+  let source: AudioBufferSourceNode | null = null;
   return {
     duration: audioBuffer.duration,
     start: () => {
+      source = ctx.createBufferSource();
+      source.buffer = audioBuffer;
+      source.onended = onEnded;
+      source.connect(dryGain);
+      source.connect(convolver);
       source.start(0);
     },
     stop: () => {
-      try {
-        source.stop();
-      } catch {}
+      try { source?.stop(); } catch {}
     },
   };
 }

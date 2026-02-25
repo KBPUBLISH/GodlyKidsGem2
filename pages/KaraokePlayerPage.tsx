@@ -8,7 +8,7 @@ import { ArrowLeft, Play, Pause, Mic, Share2, Check, ImagePlus, RotateCcw, Penci
 import StormySeaError from '../components/ui/StormySeaError';
 import SelfieCapture from '../components/features/SelfieCapture';
 import { DespiaService } from '../services/despiaService';
-import { prepareVoicePlayback, getReverbLabel, type ReverbLevel } from '../utils/reverbUtils';
+import { prepareVoicePlayback, createVoiceAudioContext, getReverbLabel, type ReverbLevel } from '../utils/reverbUtils';
 
 interface LyricLine {
   text: string;
@@ -249,22 +249,16 @@ const KaraokePlayerPage: React.FC = () => {
           (navigator as any).audioSession.type = 'play-and-record';
         } catch (_) { /* not supported */ }
       }
-      // In Despia native: use DespiaService for mic access (native permission handling)
-      // Elsewhere: standard getUserMedia with constraints
-      let stream: MediaStream;
-      if (DespiaService.isNative()) {
-        const despiaStream = await DespiaService.recording.requestPermission();
-        if (!despiaStream) throw new Error('Microphone permission denied');
-        stream = despiaStream;
-      } else {
-        stream = await navigator.mediaDevices.getUserMedia({
-          audio: {
-            echoCancellation: false,
-            noiseSuppression: false,
-            autoGainControl: false,
-          },
-        });
-      }
+      // Always disable echo cancellation / noise suppression / auto gain.
+      // On iOS, echo cancellation aggressively cancels out music playing from the speaker,
+      // making the recording nearly silent. These constraints are critical for karaoke.
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: {
+          echoCancellation: false,
+          noiseSuppression: false,
+          autoGainControl: false,
+        },
+      });
       const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
         ? 'audio/webm;codecs=opus'
         : MediaRecorder.isTypeSupported('audio/mp4')
@@ -280,6 +274,7 @@ const KaraokePlayerPage: React.FC = () => {
       recorder.onstop = () => {
         stream.getTracks().forEach((t) => t.stop());
         const blob = new Blob(recordedChunksRef.current, { type: mimeType });
+        console.log(`🎤 Recording: ${recordedChunksRef.current.length} chunks, ${(blob.size / 1024).toFixed(1)}KB, type=${mimeType}`);
         setRecordedUrl(URL.createObjectURL(blob));
       };
       mediaRecorderRef.current = recorder;
@@ -400,8 +395,12 @@ const KaraokePlayerPage: React.FC = () => {
     myTakeUsedMainRef.current = false;
     setIsPlayingMyTake(true);
 
+    // Create AudioContext NOW in the user gesture (click handler) before any async work.
+    // iOS blocks AudioContext created after awaits/fetches.
+    const voiceCtx = createVoiceAudioContext();
+
     try {
-      const voiceController = await prepareVoicePlayback(recordedUrl, reverbLevel, voiceVolume, handleStopMyTake);
+      const voiceController = await prepareVoicePlayback(recordedUrl, reverbLevel, voiceVolume, handleStopMyTake, voiceCtx);
       voiceControllerRef.current = voiceController;
       const recDuration = voiceController.duration || 0;
       if (recDuration > 0) {

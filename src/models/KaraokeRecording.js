@@ -27,6 +27,10 @@ const karaokeRecordingSchema = new mongoose.Schema({
         type: String,
         default: null,
     },
+    artistName: {
+        type: String,
+        default: null,
+    },
 }, { timestamps: true });
 
 karaokeRecordingSchema.index({ userId: 1, karaokeSongId: 1 });

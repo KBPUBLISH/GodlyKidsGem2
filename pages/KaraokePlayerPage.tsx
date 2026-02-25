@@ -7,6 +7,7 @@ import { useUser } from '../context/UserContext';
 import { ArrowLeft, Play, Pause, Mic, Share2, Check, ImagePlus, RotateCcw, Pencil, Music, Disc } from 'lucide-react';
 import StormySeaError from '../components/ui/StormySeaError';
 import SelfieCapture from '../components/features/SelfieCapture';
+import { DespiaService } from '../services/despiaService';
 import { prepareVoicePlayback, getReverbLabel, type ReverbLevel } from '../utils/reverbUtils';
 
 interface LyricLine {
@@ -248,14 +249,22 @@ const KaraokePlayerPage: React.FC = () => {
           (navigator as any).audioSession.type = 'play-and-record';
         } catch (_) { /* not supported */ }
       }
-      // Disable processing effects to reduce choppiness with external mics
-      const stream = await navigator.mediaDevices.getUserMedia({
-        audio: {
-          echoCancellation: false,
-          noiseSuppression: false,
-          autoGainControl: false,
-        },
-      });
+      // In Despia native: use DespiaService for mic access (native permission handling)
+      // Elsewhere: standard getUserMedia with constraints
+      let stream: MediaStream;
+      if (DespiaService.isNative()) {
+        const despiaStream = await DespiaService.recording.requestPermission();
+        if (!despiaStream) throw new Error('Microphone permission denied');
+        stream = despiaStream;
+      } else {
+        stream = await navigator.mediaDevices.getUserMedia({
+          audio: {
+            echoCancellation: false,
+            noiseSuppression: false,
+            autoGainControl: false,
+          },
+        });
+      }
       const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
         ? 'audio/webm;codecs=opus'
         : MediaRecorder.isTypeSupported('audio/mp4')
@@ -316,7 +325,12 @@ const KaraokePlayerPage: React.FC = () => {
       return true;
     } catch (err) {
       console.error('Mic access failed:', err);
-      setMicError('Microphone access is needed to record. Please allow it in your browser settings.');
+      const isDespia = DespiaService.isNative();
+      setMicError(
+        isDespia
+          ? 'Microphone access is needed. Please allow it in your device Settings.'
+          : 'Microphone access is needed to record. Please allow it in your browser settings.'
+      );
       return false;
     }
   };

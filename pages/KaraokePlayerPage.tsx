@@ -8,7 +8,7 @@ import { ArrowLeft, Play, Pause, Mic, Share2, Check, ImagePlus, RotateCcw, Penci
 import StormySeaError from '../components/ui/StormySeaError';
 import SelfieCapture from '../components/features/SelfieCapture';
 import { DespiaService } from '../services/despiaService';
-import { prepareVoicePlayback, createVoiceAudioContext, getReverbLabel, type ReverbLevel } from '../utils/reverbUtils';
+import { prepareVoicePlayback, createVoiceAudioContext, getReverbLabel, type ReverbLevel, type VoiceController } from '../utils/reverbUtils';
 
 interface LyricLine {
   text: string;
@@ -76,7 +76,7 @@ const KaraokePlayerPage: React.FC = () => {
   const currentKid = kids?.find((k: any) => k.id === currentProfileId);
   const artistName = currentKid?.name || parentName || 'Artist';
   const [reverbLevel, setReverbLevel] = useState<ReverbLevel>(0);
-  const voiceControllerRef = useRef<{ stop: () => void } | null>(null);
+  const voiceControllerRef = useRef<VoiceController | null>(null);
   const myTakeMusicRef = useRef<HTMLAudioElement | null>(null);
   const myTakeVoiceRef = useRef<HTMLAudioElement | null>(null);
   const myTakeUsedMainRef = useRef(false);
@@ -202,6 +202,17 @@ const KaraokePlayerPage: React.FC = () => {
   useEffect(() => {
     activeLineRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'nearest' });
   }, [currentTime, song?.lyrics]);
+
+  // Live volume: update music HTMLAudioElement when slider moves during preview
+  useEffect(() => {
+    const el = myTakeMusicRef.current;
+    if (el) el.volume = musicVolume;
+  }, [musicVolume]);
+
+  // Live volume: update voice AudioContext gain when slider moves during preview
+  useEffect(() => {
+    voiceControllerRef.current?.setVolume?.(voiceVolume);
+  }, [voiceVolume]);
 
   const handleMicPress = async () => {
     const el = mediaRef.current;
@@ -557,7 +568,8 @@ const KaraokePlayerPage: React.FC = () => {
       const base = getMonthlyBookBaseUrl();
       const blob = await fetch(recordedUrl).then((r) => r.blob());
       const form = new FormData();
-      form.append('recording', blob, 'recording.webm');
+      const recExt = blob.type.includes('mp4') ? 'mp4' : blob.type.includes('ogg') ? 'ogg' : 'webm';
+      form.append('recording', blob, `recording.${recExt}`);
       form.append('karaokeSongId', id);
       form.append('reverbLevel', String(reverbLevel));
       form.append('musicVolume', String(musicVolume));

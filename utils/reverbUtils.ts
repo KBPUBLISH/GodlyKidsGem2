@@ -59,16 +59,22 @@ export function createVoiceAudioContext(): AudioContext {
  * created inside the user gesture. iOS blocks AudioContext and Audio.play() when created
  * after async gaps (fetch, decodeAudioData, etc.).
  */
+export interface VoiceController {
+  start: () => void;
+  stop: () => void;
+  setVolume: (v: number) => void;
+  duration: number;
+}
+
 export async function prepareVoicePlayback(
   blobUrl: string,
   reverbLevel: ReverbLevel,
   volume: number,
   onEnded: () => void,
   existingCtx?: AudioContext
-): Promise<{ start: () => void; stop: () => void; duration: number }> {
+): Promise<VoiceController> {
   const preset = REVERB_PRESETS[reverbLevel];
   if (!preset || reverbLevel === 0) {
-    // For no-reverb: use AudioContext too (more reliable on iOS than Audio element)
     const ctx = existingCtx ?? new (window.AudioContext || (window as any).webkitAudioContext)();
     if (ctx.state === 'suspended') await ctx.resume().catch(() => {});
 
@@ -93,6 +99,7 @@ export async function prepareVoicePlayback(
       stop: () => {
         try { source?.stop(); } catch {}
       },
+      setVolume: (v: number) => { gainNode.gain.value = v; },
     };
   }
 
@@ -138,6 +145,7 @@ export async function prepareVoicePlayback(
     stop: () => {
       try { source?.stop(); } catch {}
     },
+    setVolume: (v: number) => { masterGain.gain.value = v; },
   };
 }
 

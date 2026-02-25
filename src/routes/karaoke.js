@@ -351,6 +351,8 @@ router.post('/mix', mixMulter.single('recording'), async (req, res) => {
         const reverbLevel = Math.min(3, Math.max(0, parseInt(req.body.reverbLevel, 10) || 0));
         const musicVolume = Math.min(1, Math.max(0, parseFloat(req.body.musicVolume) || 0.45));
         const voiceVolume = Math.min(1, Math.max(0, parseFloat(req.body.voiceVolume) || 1));
+        // Seconds into music when recording started (iOS: playback starts before mic, so recording begins late)
+        const recordingStartOffset = Math.max(0, Math.min(10, parseFloat(req.body.recordingStartOffset) || 0));
         if (!karaokeSongId || !req.file) {
             return res.status(400).json({ message: 'karaokeSongId and recording file are required' });
         }
@@ -378,16 +380,17 @@ router.post('/mix', mixMulter.single('recording'), async (req, res) => {
         const outPath = path.join(tmpDir, 'mixed.mp3');
 
         const aecho = REVERB_AECHO[reverbLevel];
-        // duration=shortest: mix ends when recording ends. Both start at 0, aligned.
-        // Apply volume to each input: [0]=bg, [1]=voice
+        const offsetMs = Math.round(recordingStartOffset * 1000);
+        // If recording started late (e.g. iOS), add silence so voice aligns with background
+        const delayFilter = offsetMs > 0 ? `[1:a]adelay=${offsetMs}|${offsetMs}[delayed];` : '';
+        const voiceInput = offsetMs > 0 ? '[delayed]' : '[1:a]';
         const volBg = `[0:a]volume=${musicVolume}[bg]`;
         const volVoice = aecho
-            ? `[1:a]aecho=${aecho}[rev];[rev]volume=${voiceVolume}[v]`
-            : `[1:a]volume=${voiceVolume}[v]`;
+            ? `${voiceInput}aecho=${aecho}[rev];[rev]volume=${voiceVolume}[v]`
+            : `${voiceInput}volume=${voiceVolume}[v]`;
+        const complexVoice = delayFilter + volVoice;
         const mixFilter = `[bg][v]amix=inputs=2:duration=shortest[aout]`;
-        const complexFilter = aecho
-            ? `${volBg};${volVoice};${mixFilter}`
-            : `${volBg};${volVoice};${mixFilter}`;
+        const complexFilter = `${volBg};${complexVoice};${mixFilter}`;
 
         try {
             await fs.promises.writeFile(sourcePath, sourceBuffer);

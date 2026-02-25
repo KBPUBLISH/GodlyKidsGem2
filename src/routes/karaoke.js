@@ -387,9 +387,12 @@ router.post('/mix', mixMulter.single('recording'), async (req, res) => {
         const delayFilter = offsetMs > 0 ? `[1:a]adelay=${offsetMs}|${offsetMs}[delayed];` : '';
         const voiceInput = offsetMs > 0 ? '[delayed]' : '[1:a]';
         const volBg = `[0:a]volume=${musicVolume}[bg]`;
+        // Apply 3x voice boost to compensate for iOS mic being quiet when
+        // speakers are active. Recording comes in raw (no frontend gain).
+        const effectiveVoiceVol = Math.min(3, voiceVolume * 3);
         const volVoice = aecho
-            ? `${voiceInput}aecho=${aecho}[rev];[rev]volume=${voiceVolume}[v]`
-            : `${voiceInput}volume=${voiceVolume}[v]`;
+            ? `${voiceInput}aecho=${aecho}[rev];[rev]volume=${effectiveVoiceVol}[v]`
+            : `${voiceInput}volume=${effectiveVoiceVol}[v]`;
         const complexVoice = delayFilter + volVoice;
         const mixFilter = `[bg][v]amix=inputs=2:duration=first[aout]`;
         const complexFilter = `${volBg};${complexVoice};${mixFilter}`;
@@ -404,15 +407,21 @@ router.post('/mix', mixMulter.single('recording'), async (req, res) => {
                 await fs.promises.copyFile(sourcePath, bgPath);
             }
             await fs.promises.writeFile(recPath, req.file.buffer);
+            console.log(`🎤 Recording: ${(req.file.buffer.length / 1024).toFixed(1)}KB, ext=${recExt}, original=${recOrigName}`);
+            console.log(`🎤 Filter: ${complexFilter}`);
 
             await new Promise((resolve, reject) => {
                 ffmpeg()
                     .input(bgPath)
                     .input(recPath)
+                    .inputOptions(['-analyzeduration', '10000000', '-probesize', '10000000'])
                     .complexFilter(complexFilter)
                     .outputOptions(['-map', '[aout]', '-ac', '2', '-b:a', '128k'])
                     .output(outPath)
-                    .on('error', reject)
+                    .on('error', (err) => {
+                        console.error('FFmpeg mix error:', err.message);
+                        reject(err);
+                    })
                     .on('end', resolve)
                     .run();
             });

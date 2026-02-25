@@ -376,32 +376,9 @@ router.post('/mix', mixMulter.single('recording'), async (req, res) => {
         const ext = isVideo ? (audioSourceUrl.includes('.webm') ? 'webm' : 'mp4') : 'mp3';
         const sourcePath = path.join(tmpDir, `source.${ext}`);
         const bgPath = path.join(tmpDir, 'background.mp3');
-        // Detect recording format from file magic bytes (iOS sends MP4, Chrome sends WebM)
-        const buf = req.file.buffer;
-        let recExt = '.webm';
-        if (buf.length >= 8) {
-            if (buf[4] === 0x66 && buf[5] === 0x74 && buf[6] === 0x79 && buf[7] === 0x70) {
-                recExt = '.mp4';
-            } else if (buf[0] === 0x4F && buf[1] === 0x67 && buf[2] === 0x67 && buf[3] === 0x53) {
-                recExt = '.ogg';
-            }
-        }
-        console.log(`🎤 Recording: ${(buf.length / 1024).toFixed(1)}KB, detected format: ${recExt}, originalname: ${req.file.originalname}`);
-        let recPath = path.join(tmpDir, `recording${recExt}`);
+        const rawRecPath = path.join(tmpDir, 'recording_raw');
+        const recWavPath = path.join(tmpDir, 'recording.wav');
         const outPath = path.join(tmpDir, 'mixed.mp3');
-
-        const aecho = REVERB_AECHO[reverbLevel];
-        const offsetMs = Math.round(recordingStartOffset * 1000);
-        // If recording started late (e.g. iOS), add silence so voice aligns with background
-        const delayFilter = offsetMs > 0 ? `[1:a]adelay=${offsetMs}|${offsetMs}[delayed];` : '';
-        const voiceInput = offsetMs > 0 ? '[delayed]' : '[1:a]';
-        const volBg = `[0:a]volume=${musicVolume}[bg]`;
-        const volVoice = aecho
-            ? `${voiceInput}aecho=${aecho}[rev];[rev]volume=${voiceVolume}[v]`
-            : `${voiceInput}volume=${voiceVolume}[v]`;
-        const complexVoice = delayFilter + volVoice;
-        const mixFilter = `[bg][v]amix=inputs=2:duration=first[aout]`;
-        const complexFilter = `${volBg};${complexVoice};${mixFilter}`;
 
         try {
             await fs.promises.writeFile(sourcePath, sourceBuffer);
@@ -412,39 +389,57 @@ router.post('/mix', mixMulter.single('recording'), async (req, res) => {
             } else {
                 await fs.promises.copyFile(sourcePath, bgPath);
             }
-            await fs.promises.writeFile(recPath, req.file.buffer);
 
-            // Probe recording to verify FFmpeg can read it; if extension is wrong, try the other
+            // Save recording with NO extension so FFmpeg auto-probes the format
+            // from content instead of relying on extension (iOS=MP4, Chrome=WebM).
+            await fs.promises.writeFile(rawRecPath, req.file.buffer);
+            console.log(`🎤 Recording: ${(req.file.buffer.length / 1024).toFixed(1)}KB, originalname: ${req.file.originalname}`);
+
+            // Convert recording to WAV first - this eliminates ALL format detection
+            // issues. FFmpeg auto-probes the raw file, outputs universal PCM WAV.
+            await new Promise((resolve, reject) => {
+                ffmpeg(rawRecPath)
+                    .inputOptions(['-analyzeduration', '20000000', '-probesize', '20000000'])
+                    .audioCodec('pcm_s16le')
+                    .audioChannels(1)
+                    .audioFrequency(44100)
+                    .output(recWavPath)
+                    .on('error', (err) => {
+                        console.error('FFmpeg WAV conversion error:', err.message);
+                        reject(err);
+                    })
+                    .on('end', resolve)
+                    .run();
+            });
+
+            // Probe the WAV to log actual duration
             try {
-                const recProbe = await new Promise((resolve, reject) => {
-                    ffmpeg(recPath).ffprobe((err, data) => (err ? reject(err) : resolve(data)));
+                const wavProbe = await new Promise((resolve, reject) => {
+                    ffmpeg(recWavPath).ffprobe((err, data) => (err ? reject(err) : resolve(data)));
                 });
-                const probeDur = recProbe?.format?.duration;
-                console.log(`🎤 Recording probe: format=${recProbe?.format?.format_name}, duration=${probeDur}s, size=${recProbe?.format?.size}`);
+                console.log(`🎤 WAV probe: duration=${wavProbe?.format?.duration}s, size=${wavProbe?.format?.size}`);
+            } catch (e) { console.warn('WAV probe error:', e.message); }
 
-                if (!probeDur || probeDur < 2) {
-                    const altExt = recExt === '.mp4' ? '.webm' : '.mp4';
-                    const altPath = path.join(tmpDir, `recording${altExt}`);
-                    await fs.promises.rename(recPath, altPath);
-                    const altProbe = await new Promise((resolve, reject) => {
-                        ffmpeg(altPath).ffprobe((err, data) => (err ? reject(err) : resolve(data)));
-                    });
-                    if (altProbe?.format?.duration && altProbe.format.duration >= 2) {
-                        console.log(`🎤 Re-probe with ${altExt} succeeded: duration=${altProbe.format.duration}s`);
-                        recPath = altPath;
-                    } else {
-                        await fs.promises.rename(altPath, recPath);
-                    }
-                }
-            } catch (probeErr) {
-                console.warn('Recording probe warning:', probeErr.message);
-            }
+            // Build FFmpeg filter for mixing
+            const aecho = REVERB_AECHO[reverbLevel];
+            const offsetMs = Math.round(recordingStartOffset * 1000);
+            const delayFilter = offsetMs > 0 ? `[1:a]adelay=${offsetMs}|${offsetMs}[delayed];` : '';
+            const voiceInput = offsetMs > 0 ? '[delayed]' : '[1:a]';
+            // Boost voice by 3x (≈+10dB) to compensate for quiet iOS mic recordings
+            const effectiveVoiceVol = Math.min(3, voiceVolume * 3);
+            const volBg = `[0:a]volume=${musicVolume}[bg]`;
+            const volVoice = aecho
+                ? `${voiceInput}aecho=${aecho}[rev];[rev]volume=${effectiveVoiceVol}[v]`
+                : `${voiceInput}volume=${effectiveVoiceVol}[v]`;
+            const complexVoice = delayFilter + volVoice;
+            const mixFilter = `[bg][v]amix=inputs=2:duration=first[aout]`;
+            const complexFilter = `${volBg};${complexVoice};${mixFilter}`;
+            console.log(`🎤 Mix filter: ${complexFilter}`);
 
             await new Promise((resolve, reject) => {
                 ffmpeg()
                     .input(bgPath)
-                    .input(recPath)
-                    .inputOptions(['-analyzeduration', '10000000', '-probesize', '10000000'])
+                    .input(recWavPath)
                     .complexFilter(complexFilter)
                     .outputOptions(['-map', '[aout]', '-ac', '2', '-b:a', '128k'])
                     .output(outPath)

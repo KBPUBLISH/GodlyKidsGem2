@@ -90,7 +90,6 @@ const KaraokePlayerPage: React.FC = () => {
   const recordingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const progressPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const recordingStartOffsetRef = useRef(0);
-  const recordingCtxRef = useRef<AudioContext | null>(null);
 
   // Use background MP3 for playback; video is no longer used
   const mediaSrc = song?.backgroundAudioUrl || song?.videoUrl;
@@ -180,15 +179,28 @@ const KaraokePlayerPage: React.FC = () => {
     return () => { if (!isPlayingMyTakeRef.current) playheadSourceRef.current = null; };
   }, [mediaRef, song, isPlayingMyTake]);
 
-  // requestAnimationFrame for smooth lyrics sync (60fps vs timeupdate's ~4Hz)
-  // When playing My Take, use elapsed time capped at recording duration
+  // requestAnimationFrame for smooth progress tracking
   useEffect(() => {
     let rafId: number;
     const tick = () => {
       if (isPlayingMyTakeRef.current) {
-        const elapsed = (performance.now() - myTakeStartRef.current) / 1000;
-        const cap = myTakeDurationRef.current || 999;
-        setCurrentTime(Math.min(elapsed, cap));
+        // During preview: read currentTime from the music element if available,
+        // otherwise fall back to wall-clock elapsed time.
+        const musicEl = myTakeMusicRef.current;
+        const mainEl = myTakeUsedMainRef.current ? mediaRef.current : null;
+        const playingEl = musicEl || mainEl;
+        if (playingEl && typeof playingEl.currentTime === 'number' && playingEl.currentTime > 0) {
+          setCurrentTime(playingEl.currentTime);
+          // Also sync duration from the element if we don't have one yet
+          const d = playingEl.duration;
+          if (typeof d === 'number' && Number.isFinite(d) && d > 0 && myTakeDurationRef.current <= 0) {
+            myTakeDurationRef.current = d;
+          }
+        } else {
+          const elapsed = (performance.now() - myTakeStartRef.current) / 1000;
+          const cap = myTakeDurationRef.current || 999;
+          setCurrentTime(Math.min(elapsed, cap));
+        }
       } else {
         const src = playheadSourceRef.current ?? mediaRef.current;
         if (src) setCurrentTime(src.currentTime);
@@ -274,32 +286,16 @@ const KaraokePlayerPage: React.FC = () => {
           autoGainControl: false,
         },
       });
-      // Adaptive mic boost: DynamicsCompressor automatically amplifies quiet input
-      // (e.g. iOS reducing mic gain when speaker is active) while limiting loud input
-      // (e.g. headphones where mic runs at full sensitivity).
-      const recCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
-      if (recCtx.state === 'suspended') await recCtx.resume().catch(() => {});
-      const micSource = recCtx.createMediaStreamSource(stream);
-      const compressor = recCtx.createDynamicsCompressor();
-      compressor.threshold.value = -40;
-      compressor.knee.value = 20;
-      compressor.ratio.value = 4;
-      compressor.attack.value = 0.003;
-      compressor.release.value = 0.15;
-      const makeupGain = recCtx.createGain();
-      makeupGain.gain.value = 2.5;
-      const dest = recCtx.createMediaStreamDestination();
-      micSource.connect(compressor);
-      compressor.connect(makeupGain);
-      makeupGain.connect(dest);
-      recordingCtxRef.current = recCtx;
-
+      // Record directly from the raw mic stream.
+      // Avoid Web Audio processing (createMediaStreamDestination) which is
+      // broken on iOS Safari and produces empty/silent recordings.
+      // Voice boost is applied server-side during mix instead.
       const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
         ? 'audio/webm;codecs=opus'
         : MediaRecorder.isTypeSupported('audio/mp4')
           ? 'audio/mp4'
           : 'audio/webm';
-      const recorder = new MediaRecorder(dest.stream, {
+      const recorder = new MediaRecorder(stream, {
         audioBitsPerSecond: 128000,
       });
       recordedChunksRef.current = [];
@@ -308,7 +304,6 @@ const KaraokePlayerPage: React.FC = () => {
       };
       recorder.onstop = () => {
         stream.getTracks().forEach((t) => t.stop());
-        try { recordingCtxRef.current?.close(); } catch {} finally { recordingCtxRef.current = null; }
         const blob = new Blob(recordedChunksRef.current, { type: mimeType });
         console.log(`🎤 Recording: ${recordedChunksRef.current.length} chunks, ${(blob.size / 1024).toFixed(1)}KB, type=${mimeType}`);
         setRecordedUrl(URL.createObjectURL(blob));
@@ -779,7 +774,6 @@ const KaraokePlayerPage: React.FC = () => {
 
   const handleRecordAgain = () => {
     if (recordedUrl) URL.revokeObjectURL(recordedUrl);
-    try { recordingCtxRef.current?.close(); } catch {} finally { recordingCtxRef.current = null; }
     setRecordedUrl(null);
     setRecordingDuration(null);
     recordingStartOffsetRef.current = 0;
@@ -799,13 +793,21 @@ const KaraokePlayerPage: React.FC = () => {
     handleStopMyTake();
   };
 
-  // When preview is playing, prefer the duration we stored when playback started.
-  // Otherwise fall back to recording → mix → song duration in that order.
-  const effectiveDurationForDisplay = isPlayingMyTake && myTakeDurationRef.current > 0
-    ? myTakeDurationRef.current
-    : masterCreated
-      ? (typeof mixDuration === 'number' && Number.isFinite(mixDuration) ? mixDuration : 0)
-      : (recordingDuration ?? duration);
+  // Duration for progress bar display. Prioritize the playing element's duration.
+  let effectiveDurationForDisplay: number;
+  if (isPlayingMyTake) {
+    if (myTakeDurationRef.current > 0) {
+      effectiveDurationForDisplay = myTakeDurationRef.current;
+    } else {
+      const el = myTakeMusicRef.current || (myTakeUsedMainRef.current ? mediaRef.current : null);
+      const d = el?.duration;
+      effectiveDurationForDisplay = (typeof d === 'number' && Number.isFinite(d) && d > 0) ? d : (recordingDuration ?? duration);
+    }
+  } else if (masterCreated) {
+    effectiveDurationForDisplay = (typeof mixDuration === 'number' && Number.isFinite(mixDuration) ? mixDuration : 0);
+  } else {
+    effectiveDurationForDisplay = recordingDuration ?? duration;
+  }
   const safeDuration = typeof effectiveDurationForDisplay === 'number' && Number.isFinite(effectiveDurationForDisplay) && effectiveDurationForDisplay > 0 ? effectiveDurationForDisplay : 0;
 
   // Edit screen: two tracks, volume sliders, reverb, Create Master Track

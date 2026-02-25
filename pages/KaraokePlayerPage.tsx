@@ -172,9 +172,8 @@ const KaraokePlayerPage: React.FC = () => {
   }, [mediaRef, song]);
 
   const isPlayingMyTakeRef = useRef(false);
-  useEffect(() => {
-    isPlayingMyTakeRef.current = isPlayingMyTake;
-  }, [isPlayingMyTake]);
+  // Keep ref in sync immediately (useEffect would be delayed by a frame)
+  isPlayingMyTakeRef.current = isPlayingMyTake;
 
   useEffect(() => {
     if (!isPlayingMyTake) playheadSourceRef.current = mediaRef.current;
@@ -208,6 +207,9 @@ const KaraokePlayerPage: React.FC = () => {
   useEffect(() => {
     const el = myTakeMusicRef.current;
     if (el) el.volume = musicVolume;
+    if (myTakeUsedMainRef.current && mediaRef.current) {
+      mediaRef.current.volume = musicVolume;
+    }
   }, [musicVolume]);
 
   // Live volume: update voice AudioContext gain when slider moves during preview
@@ -456,7 +458,6 @@ const KaraokePlayerPage: React.FC = () => {
         myTakeDurationRef.current = recDuration;
       }
 
-      const VOICE_LEAD_MS = 300;
       const onMusicPlaying = () => {
         myTakeStartRef.current = performance.now();
       };
@@ -470,7 +471,7 @@ const KaraokePlayerPage: React.FC = () => {
         playheadSourceRef.current = null;
         musicEl.addEventListener('playing', onMusicPlaying, { once: true });
         voiceController.start();
-        setTimeout(() => musicEl.play().catch(() => onMusicPlaying()), VOICE_LEAD_MS);
+        musicEl.play().catch(() => onMusicPlaying());
       } else {
         const el = mediaRef.current;
         if (el) {
@@ -480,7 +481,7 @@ const KaraokePlayerPage: React.FC = () => {
           el.currentTime = 0;
           el.addEventListener('playing', onMusicPlaying, { once: true });
           voiceController.start();
-          setTimeout(() => el.play().catch(() => onMusicPlaying()), VOICE_LEAD_MS);
+          el.play().catch(() => onMusicPlaying());
         } else {
           myTakeStartRef.current = performance.now();
           voiceController.start();
@@ -492,23 +493,34 @@ const KaraokePlayerPage: React.FC = () => {
     }
   };
 
-  // Load recording duration when we have a recorded blob (for post-recording screen display)
+  // Load recording duration when we have a recorded blob.
+  // iOS blob URLs often report Infinity at loadedmetadata; seek to a huge time to force resolution.
   useEffect(() => {
     if (!recordedUrl) {
       setRecordingDuration(null);
       return;
     }
     const audio = new Audio(recordedUrl);
-    const onLoaded = () => {
+    let resolved = false;
+    const tryResolve = () => {
       const d = audio.duration;
-      if (typeof d === 'number' && Number.isFinite(d) && d > 0) {
+      if (!resolved && typeof d === 'number' && Number.isFinite(d) && d > 0) {
+        resolved = true;
         setRecordingDuration(d);
       }
     };
-    audio.addEventListener('loadedmetadata', onLoaded, { once: true });
+    audio.addEventListener('loadedmetadata', () => {
+      tryResolve();
+      if (!resolved) {
+        // iOS workaround: seek to large value to force duration calculation
+        audio.currentTime = 1e10;
+      }
+    }, { once: true });
+    audio.addEventListener('durationchange', tryResolve);
+    audio.addEventListener('seeked', tryResolve, { once: true });
     audio.addEventListener('error', () => setRecordingDuration(null), { once: true });
     return () => {
-      audio.removeEventListener('loadedmetadata', onLoaded);
+      audio.removeEventListener('durationchange', tryResolve);
       audio.src = '';
     };
   }, [recordedUrl]);
@@ -786,9 +798,13 @@ const KaraokePlayerPage: React.FC = () => {
     handleStopMyTake();
   };
 
-  const effectiveDurationForDisplay = masterCreated
-    ? (typeof mixDuration === 'number' && Number.isFinite(mixDuration) ? mixDuration : 0)
-    : (recordingDuration ?? duration);
+  // When preview is playing, prefer the duration we stored when playback started.
+  // Otherwise fall back to recording → mix → song duration in that order.
+  const effectiveDurationForDisplay = isPlayingMyTake && myTakeDurationRef.current > 0
+    ? myTakeDurationRef.current
+    : masterCreated
+      ? (typeof mixDuration === 'number' && Number.isFinite(mixDuration) ? mixDuration : 0)
+      : (recordingDuration ?? duration);
   const safeDuration = typeof effectiveDurationForDisplay === 'number' && Number.isFinite(effectiveDurationForDisplay) && effectiveDurationForDisplay > 0 ? effectiveDurationForDisplay : 0;
 
   // Edit screen: two tracks, volume sliders, reverb, Create Master Track

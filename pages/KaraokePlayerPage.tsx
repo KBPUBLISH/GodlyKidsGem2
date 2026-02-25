@@ -583,6 +583,7 @@ const KaraokePlayerPage: React.FC = () => {
       const form = new FormData();
       const recExt = blob.type.includes('mp4') ? 'mp4' : blob.type.includes('ogg') ? 'ogg' : 'webm';
       form.append('recording', blob, `recording.${recExt}`);
+      form.append('recordingMimeType', blob.type || `audio/${recExt}`);
       form.append('karaokeSongId', id);
       form.append('reverbLevel', String(reverbLevel));
       form.append('musicVolume', String(musicVolume));

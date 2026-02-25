@@ -376,9 +376,18 @@ router.post('/mix', mixMulter.single('recording'), async (req, res) => {
         const ext = isVideo ? (audioSourceUrl.includes('.webm') ? 'webm' : 'mp4') : 'mp3';
         const sourcePath = path.join(tmpDir, `source.${ext}`);
         const bgPath = path.join(tmpDir, 'background.mp3');
-        const recOrigName = req.file.originalname || 'recording.webm';
-        const recExt = path.extname(recOrigName) || '.webm';
-        const recPath = path.join(tmpDir, `recording${recExt}`);
+        // Detect recording format from file magic bytes (iOS sends MP4, Chrome sends WebM)
+        const buf = req.file.buffer;
+        let recExt = '.webm';
+        if (buf.length >= 8) {
+            if (buf[4] === 0x66 && buf[5] === 0x74 && buf[6] === 0x79 && buf[7] === 0x70) {
+                recExt = '.mp4';
+            } else if (buf[0] === 0x4F && buf[1] === 0x67 && buf[2] === 0x67 && buf[3] === 0x53) {
+                recExt = '.ogg';
+            }
+        }
+        console.log(`🎤 Recording: ${(buf.length / 1024).toFixed(1)}KB, detected format: ${recExt}, originalname: ${req.file.originalname}`);
+        let recPath = path.join(tmpDir, `recording${recExt}`);
         const outPath = path.join(tmpDir, 'mixed.mp3');
 
         const aecho = REVERB_AECHO[reverbLevel];
@@ -405,14 +414,44 @@ router.post('/mix', mixMulter.single('recording'), async (req, res) => {
             }
             await fs.promises.writeFile(recPath, req.file.buffer);
 
+            // Probe recording to verify FFmpeg can read it; if extension is wrong, try the other
+            try {
+                const recProbe = await new Promise((resolve, reject) => {
+                    ffmpeg(recPath).ffprobe((err, data) => (err ? reject(err) : resolve(data)));
+                });
+                const probeDur = recProbe?.format?.duration;
+                console.log(`🎤 Recording probe: format=${recProbe?.format?.format_name}, duration=${probeDur}s, size=${recProbe?.format?.size}`);
+
+                if (!probeDur || probeDur < 2) {
+                    const altExt = recExt === '.mp4' ? '.webm' : '.mp4';
+                    const altPath = path.join(tmpDir, `recording${altExt}`);
+                    await fs.promises.rename(recPath, altPath);
+                    const altProbe = await new Promise((resolve, reject) => {
+                        ffmpeg(altPath).ffprobe((err, data) => (err ? reject(err) : resolve(data)));
+                    });
+                    if (altProbe?.format?.duration && altProbe.format.duration >= 2) {
+                        console.log(`🎤 Re-probe with ${altExt} succeeded: duration=${altProbe.format.duration}s`);
+                        recPath = altPath;
+                    } else {
+                        await fs.promises.rename(altPath, recPath);
+                    }
+                }
+            } catch (probeErr) {
+                console.warn('Recording probe warning:', probeErr.message);
+            }
+
             await new Promise((resolve, reject) => {
                 ffmpeg()
                     .input(bgPath)
                     .input(recPath)
+                    .inputOptions(['-analyzeduration', '10000000', '-probesize', '10000000'])
                     .complexFilter(complexFilter)
                     .outputOptions(['-map', '[aout]', '-ac', '2', '-b:a', '128k'])
                     .output(outPath)
-                    .on('error', reject)
+                    .on('error', (err) => {
+                        console.error('FFmpeg mix error:', err.message);
+                        reject(err);
+                    })
                     .on('end', resolve)
                     .run();
             });
@@ -443,10 +482,11 @@ router.post('/mix', mixMulter.single('recording'), async (req, res) => {
             res.json({ mixedAudioUrl: mixedUrl, duration: mixedDuration });
         } finally {
             try {
-                await fs.promises.unlink(sourcePath).catch(() => {});
-                await fs.promises.unlink(bgPath).catch(() => {});
-                await fs.promises.unlink(recPath).catch(() => {});
-                await fs.promises.unlink(outPath).catch(() => {});
+                // Clean up all possible temp files
+                const files = await fs.promises.readdir(tmpDir).catch(() => []);
+                for (const f of files) {
+                    await fs.promises.unlink(path.join(tmpDir, f)).catch(() => {});
+                }
                 await fs.promises.rmdir(tmpDir).catch(() => {});
             } catch (e) {}
         }

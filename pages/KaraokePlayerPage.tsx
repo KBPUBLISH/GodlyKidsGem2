@@ -260,16 +260,24 @@ const KaraokePlayerPage: React.FC = () => {
           autoGainControl: false,
         },
       });
-      // Boost mic signal through Web Audio GainNode before recording.
-      // iOS reduces mic gain when speakers are active; this compensates.
+      // Adaptive mic boost: DynamicsCompressor automatically amplifies quiet input
+      // (e.g. iOS reducing mic gain when speaker is active) while limiting loud input
+      // (e.g. headphones where mic runs at full sensitivity).
       const recCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
       if (recCtx.state === 'suspended') await recCtx.resume().catch(() => {});
       const micSource = recCtx.createMediaStreamSource(stream);
-      const boostGain = recCtx.createGain();
-      boostGain.gain.value = 3.0; // 3x boost to compensate for iOS mic reduction
+      const compressor = recCtx.createDynamicsCompressor();
+      compressor.threshold.value = -40;
+      compressor.knee.value = 20;
+      compressor.ratio.value = 4;
+      compressor.attack.value = 0.003;
+      compressor.release.value = 0.15;
+      const makeupGain = recCtx.createGain();
+      makeupGain.gain.value = 2.5;
       const dest = recCtx.createMediaStreamDestination();
-      micSource.connect(boostGain);
-      boostGain.connect(dest);
+      micSource.connect(compressor);
+      compressor.connect(makeupGain);
+      makeupGain.connect(dest);
       recordingCtxRef.current = recCtx;
 
       const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
@@ -304,8 +312,14 @@ const KaraokePlayerPage: React.FC = () => {
       if (progressPollRef.current) clearInterval(progressPollRef.current);
       progressPollRef.current = setInterval(() => {
         const el = mediaRef.current;
-        if (el && typeof el.currentTime === 'number' && Number.isFinite(el.currentTime)) {
-          setCurrentTime(el.currentTime);
+        if (el) {
+          if (typeof el.currentTime === 'number' && Number.isFinite(el.currentTime)) {
+            setCurrentTime(el.currentTime);
+          }
+          const d = el.duration;
+          if (typeof d === 'number' && Number.isFinite(d) && d > 0 && d < 86400) {
+            setDuration(d);
+          }
         }
       }, 100);
       stopRecordingRef.current = () => {
@@ -378,6 +392,12 @@ const KaraokePlayerPage: React.FC = () => {
       myTakeUsedMainRef.current = false;
     }
     playheadSourceRef.current = mediaRef.current;
+    setCurrentTime(0);
+    // Restore the original song/media duration so the bar resets properly
+    const d = main?.duration;
+    if (typeof d === 'number' && Number.isFinite(d) && d > 0 && d < 86400) {
+      setDuration(d);
+    }
     setIsPlayingMyTake(false);
   };
 
@@ -407,6 +427,8 @@ const KaraokePlayerPage: React.FC = () => {
     }
     if (!recordedUrl || !song) return;
     myTakeUsedMainRef.current = false;
+    setCurrentTime(0);
+    myTakeStartRef.current = performance.now();
     setIsPlayingMyTake(true);
 
     // Create AudioContext NOW in the user gesture (click handler) before any async work.
@@ -422,8 +444,6 @@ const KaraokePlayerPage: React.FC = () => {
         myTakeDurationRef.current = recDuration;
       }
 
-      // Start voice first, then music after a small delay. Voice has output latency so
-      // starting it early lets it align with the music when both are audible.
       const VOICE_LEAD_MS = 300;
       const onMusicPlaying = () => {
         myTakeStartRef.current = performance.now();

@@ -72,6 +72,7 @@ const KaraokePlayerPage: React.FC = () => {
   const [isEditingArtistName, setIsEditingArtistName] = useState(false);
   const [artistNameInput, setArtistNameInput] = useState('');
   const [showCongratsOverlay, setShowCongratsOverlay] = useState(false);
+  const [showHeadphonePrompt, setShowHeadphonePrompt] = useState(true);
 
   const currentKid = kids?.find((k: any) => k.id === currentProfileId);
   const artistName = currentKid?.name || parentName || 'Artist';
@@ -698,6 +699,36 @@ const KaraokePlayerPage: React.FC = () => {
       .filter(({ startTime }) => startTime <= effectiveTime)
       .pop();
     if (lastPassed) currentLineIndex = lastPassed.i;
+  }
+
+  if (showHeadphonePrompt) {
+    return (
+      <div className="flex flex-col h-full bg-black">
+        <div className="flex items-center gap-2 px-4 py-3" style={{ paddingTop: 'calc(var(--safe-area-top, 12px) + 8px)' }}>
+          <button onClick={() => navigate('/karaoke')} className="flex items-center gap-2 text-white/90 hover:text-white font-display text-sm active:scale-95">
+            <ArrowLeft size={22} /> <span>Back</span>
+          </button>
+        </div>
+        <div className="flex-1 flex flex-col items-center justify-center px-6 text-center gap-6">
+          <div className="text-6xl mb-2">🎧</div>
+          <h2 className="text-white font-display font-bold text-2xl leading-tight">
+            Best with headphones!
+          </h2>
+          <p className="text-white/70 font-display text-base max-w-xs leading-relaxed">
+            For the best recording quality, plug in your headphones or earbuds before singing. Your voice will sound clearer and the music won't bleed into the mic.
+          </p>
+          <div className="flex flex-col items-center gap-3 w-full max-w-xs mt-4">
+            <button
+              onClick={() => setShowHeadphonePrompt(false)}
+              className="w-full py-4 rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 text-black font-display font-bold text-base active:scale-[0.98] shadow-lg"
+            >
+              Continue
+            </button>
+            <p className="text-white/40 text-xs font-display">You can still record without headphones</p>
+          </div>
+        </div>
+      </div>
+    );
   }
 
   if (loading || (!song && !error)) {

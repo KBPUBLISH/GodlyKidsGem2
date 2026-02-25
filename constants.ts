@@ -128,3 +128,12 @@ export const API_BASE_URL =
   typeof import.meta !== "undefined" && (import.meta as any).env?.VITE_API_BASE_URL
     ? (import.meta as any).env.VITE_API_BASE_URL
     : "http://localhost:5001/api/";
+
+/** Build karaoke share URL for a recording. Uses production URL when origin is opaque (WebView/Despia). */
+export const getKaraokeShareUrl = (recordingId: string): string => {
+  const base =
+    typeof window !== 'undefined' && window.location?.origin && /^https?:\/\//.test(window.location.origin)
+      ? window.location.origin + (window.location.pathname || '/')
+      : 'https://app.godlykids.com/';
+  return `${base.replace(/\/$/, '')}#/karaoke/share/${recordingId}`;
+};

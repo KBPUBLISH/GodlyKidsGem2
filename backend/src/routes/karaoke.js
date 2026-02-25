@@ -77,6 +77,7 @@ router.get('/share/:recordingId', async (req, res) => {
             duration: rec.duration || 0,
             recordedAt: rec.recordedAt,
             customCoverImageUrl: rec.customCoverImageUrl || null,
+            artistName: rec.artistName || null,
             song: rec.karaokeSongId ? {
                 title: rec.karaokeSongId.title,
                 coverImage: rec.customCoverImageUrl || rec.karaokeSongId.coverImage,
@@ -121,6 +122,7 @@ router.post('/', async (req, res) => {
             minAge,
             isMembersOnly,
             goalTags,
+            coverImagePrompts,
         } = req.body;
 
         if (!title) {
@@ -140,6 +142,7 @@ router.post('/', async (req, res) => {
             minAge: minAge != null ? minAge : undefined,
             isMembersOnly: isMembersOnly || false,
             goalTags: Array.isArray(goalTags) ? goalTags : [],
+            coverImagePrompts: Array.isArray(coverImagePrompts) ? coverImagePrompts : [],
         });
         await song.save();
         res.status(201).json(song);
@@ -162,7 +165,7 @@ router.put('/:id', async (req, res) => {
 
         const allowed = [
             'title', 'description', 'coverImage', 'videoUrl', 'backgroundAudioUrl',
-            'duration', 'lyrics', 'status', 'order', 'minAge', 'isMembersOnly', 'goalTags',
+            'duration', 'lyrics', 'status', 'order', 'minAge', 'isMembersOnly', 'goalTags', 'coverImagePrompts',
         ];
         for (const key of allowed) {
             if (req.body[key] !== undefined) {
@@ -207,19 +210,34 @@ router.post('/:id/increment-view', async (req, res) => {
     }
 });
 
+const COVER_STYLES = {
+    pixar: 'Pixar-style 3D animation: soft rounded shapes, expressive faces, warm studio lighting, high-quality CGI.',
+    illustration: 'Colorful 2D illustration: hand-drawn feel, vibrant colors, gentle lines, child-friendly art style.',
+    disney: 'Disney-style animation: classic animated look, expressive characters, magical atmosphere, warm colors.',
+};
+
 // POST /api/karaoke/album-cover - generate personalized album cover from selfie using Gemini 2.5
 router.post('/album-cover', async (req, res) => {
     try {
-        const { selfieBase64, songTitle } = req.body;
+        const { selfieBase64, songTitle, coverPrompts, style } = req.body;
         if (!selfieBase64 || !songTitle) {
             return res.status(400).json({ message: 'selfieBase64 and songTitle are required' });
         }
         const base64Data = String(selfieBase64).replace(/^data:image\/\w+;base64,/, '');
         const mimeType = (String(selfieBase64).match(/^data:(image\/\w+);base64,/) || [])[1] || 'image/jpeg';
 
-        const albumPrompt = `Using this photo as the only reference for the person, create a personalized music album cover for the worship song "${songTitle}".
-The cover should feature the person from the photo as the main subject, styled as a music album cover. Square format, vibrant colors, child-friendly and family-friendly, worship/faith themed.
-Style: colorful illustration, warm and uplifting, suitable for ages 4–12. Do not add text or lyrics to the image. Make it feel like a personal CD or streaming album cover.`;
+        const styleKey = (String(style || '').toLowerCase() || 'illustration').replace(/\s+/g, '_');
+        const styleDesc = COVER_STYLES[styleKey] || COVER_STYLES.illustration;
+
+        const customPrompts = Array.isArray(coverPrompts)
+            ? coverPrompts.filter(Boolean).map(String).join('. ')
+            : '';
+
+        const albumPrompt = `Using this photo as the only reference for the person, create a SQUARE personalized music album cover for the worship song "${songTitle}".
+The cover must be square (1:1). Feature the person from the photo as the main subject, styled as a music album cover.
+IMPORTANT: Include the song title "${songTitle}" as text overlay on the cover (e.g. at top or bottom, readable and decorative).
+${customPrompts ? `Scene requirements: ${customPrompts}.` : ''}
+Style: ${styleDesc} Vibrant colors, child-friendly, worship/faith themed, suitable for ages 4–12.`;
 
         let imageBase64 = null;
 
@@ -438,7 +456,7 @@ router.post('/recordings', async (req, res) => {
     try {
         const rawUserId = req.user?.id || req.body.userId;
         const userId = rawUserId ? await resolveUserId(rawUserId) : null;
-        const { karaokeSongId, mixedAudioUrl, duration, customCoverImageUrl } = req.body;
+        const { karaokeSongId, mixedAudioUrl, duration, customCoverImageUrl, artistName } = req.body;
 
         if (!karaokeSongId || !mixedAudioUrl) {
             return res.status(400).json({ message: 'karaokeSongId and mixedAudioUrl are required' });
@@ -450,6 +468,7 @@ router.post('/recordings', async (req, res) => {
             mixedAudioUrl,
             duration: duration || 0,
             ...(customCoverImageUrl && { customCoverImageUrl }),
+            artistName: (artistName != null && String(artistName).trim()) ? String(artistName).trim() : 'Artist',
         });
         await rec.save();
         res.status(201).json(rec);
@@ -474,6 +493,24 @@ router.get('/recordings/list', async (req, res) => {
             .lean();
         res.json({ data: recordings });
     } catch (err) {
+        res.status(500).json({ message: err.message });
+    }
+});
+
+// DELETE /api/karaoke/recordings/:recordingId - delete user recording (public, no auth)
+router.delete('/recordings/:recordingId', async (req, res) => {
+    try {
+        const { recordingId } = req.params;
+        if (!mongoose.Types.ObjectId.isValid(recordingId)) {
+            return res.status(400).json({ message: 'Invalid recording ID' });
+        }
+        const result = await KaraokeRecording.findByIdAndDelete(recordingId);
+        if (!result) {
+            return res.status(404).json({ message: 'Recording not found' });
+        }
+        res.json({ message: 'Deleted' });
+    } catch (err) {
+        console.error('Karaoke recording delete error:', err);
         res.status(500).json({ message: err.message });
     }
 });

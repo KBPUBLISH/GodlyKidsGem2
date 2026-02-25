@@ -45,6 +45,7 @@ interface KaraokeFormData {
     minAge?: number;
     isMembersOnly: boolean;
     goalTags: string[];
+    coverImagePrompts: string[];
 }
 
 /** Resize/compress image to avoid ERR_INSUFFICIENT_RESOURCES with large uploads */
@@ -127,6 +128,7 @@ const KaraokeForm: React.FC = () => {
         order: 0,
         isMembersOnly: false,
         goalTags: [],
+        coverImagePrompts: [],
     });
 
     const songId = id && id !== 'new' ? id : 'temp';
@@ -157,6 +159,7 @@ const KaraokeForm: React.FC = () => {
                 minAge: s.minAge,
                 isMembersOnly: s.isMembersOnly || false,
                 goalTags: Array.isArray(s.goalTags) ? s.goalTags : [],
+                coverImagePrompts: Array.isArray(s.coverImagePrompts) ? s.coverImagePrompts : [],
             });
         } catch (error) {
             console.error('Error fetching song:', error);
@@ -305,6 +308,7 @@ const KaraokeForm: React.FC = () => {
                 minAge: formData.minAge,
                 isMembersOnly: formData.isMembersOnly,
                 goalTags: formData.goalTags,
+                coverImagePrompts: formData.coverImagePrompts,
             };
             if (id && id !== 'new') {
                 await apiClient.put(`/api/karaoke/${id}`, payload);
@@ -448,6 +452,22 @@ const KaraokeForm: React.FC = () => {
                     </div>
 
                     <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Cover Image Prompts (for AI-generated covers)</label>
+                        <textarea
+                            name="coverImagePrompts"
+                            value={(formData.coverImagePrompts || []).join('\n')}
+                            onChange={e => setFormData(prev => ({
+                                ...prev,
+                                coverImagePrompts: e.target.value.split(/\n|,/).map(s => s.trim()).filter(Boolean),
+                            }))}
+                            className="w-full border border-gray-300 rounded-lg px-3 py-2"
+                            rows={3}
+                            placeholder="One per line or comma-separated. e.g. Jesus with the child, Include Jesus in the scene"
+                        />
+                        <p className="text-xs text-gray-500 mt-1">Used when kids create a personalized album cover from their selfie (e.g. &quot;Jesus Loves Me&quot;: add &quot;Jesus with the child&quot;).</p>
+                    </div>
+
+                    <div>
                         <label className="block text-sm font-medium text-gray-700 mb-1">Duration (seconds)</label>
                         <input
                             type="number"
@@ -469,7 +489,7 @@ const KaraokeForm: React.FC = () => {
                             Add line
                         </button>
                     </div>
-                    <p className="text-sm text-gray-500">Lyrics with start/end times in seconds for karaoke highlighting.</p>
+                    <p className="text-sm text-gray-500">Lyrics with start/end times in seconds for karaoke highlighting. Enter decimal seconds (e.g. 5.5 for 5½ seconds). Times should match the track you upload.</p>
                     {formData.lyrics.length === 0 ? (
                         <p className="text-gray-400 text-sm">No lyrics yet. Add lines with text and timing.</p>
                     ) : (
@@ -487,7 +507,7 @@ const KaraokeForm: React.FC = () => {
                                         type="number"
                                         value={lyric.startTime}
                                         onChange={e => updateLyric(i, 'startTime', Number(e.target.value) || 0)}
-                                        placeholder="Start"
+                                        placeholder="Start (sec)"
                                         className="w-20 border border-gray-200 rounded px-2 py-1 text-sm"
                                         step={0.1}
                                         min={0}
@@ -496,7 +516,7 @@ const KaraokeForm: React.FC = () => {
                                         type="number"
                                         value={lyric.endTime}
                                         onChange={e => updateLyric(i, 'endTime', Number(e.target.value) || 0)}
-                                        placeholder="End"
+                                        placeholder="End (sec)"
                                         className="w-20 border border-gray-200 rounded px-2 py-1 text-sm"
                                         step={0.1}
                                         min={0}

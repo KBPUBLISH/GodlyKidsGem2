@@ -1,9 +1,10 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { getMonthlyBookBaseUrl } from '../services/apiService';
+import { getKaraokeShareUrl } from '../constants';
 import { authService } from '../services/authService';
 import { useUser } from '../context/UserContext';
-import { ArrowLeft, Play, Pause, Mic, Save, Share2, Check, ImagePlus, RotateCcw, Pencil, Music, Disc } from 'lucide-react';
+import { ArrowLeft, Play, Pause, Mic, Share2, Check, ImagePlus, RotateCcw, Pencil, Music, Disc } from 'lucide-react';
 import StormySeaError from '../components/ui/StormySeaError';
 import SelfieCapture from '../components/features/SelfieCapture';
 import { prepareVoicePlayback, getReverbLabel, type ReverbLevel } from '../utils/reverbUtils';
@@ -23,6 +24,7 @@ interface KaraokeSong {
   backgroundAudioUrl?: string;
   duration?: number;
   lyrics: LyricLine[];
+  coverImagePrompts?: string[];
 }
 
 const formatTime = (seconds: number): string => {
@@ -61,11 +63,14 @@ const KaraokePlayerPage: React.FC = () => {
   const [musicVolume, setMusicVolume] = useState(0.7);
   const [voiceVolume, setVoiceVolume] = useState(1);
   const [showSelfieModal, setShowSelfieModal] = useState(false);
+  const [showCoverStyleSelector, setShowCoverStyleSelector] = useState(false);
+  const [selectedCoverStyle, setSelectedCoverStyle] = useState<'pixar' | 'illustration' | 'disney'>('illustration');
   const [customCoverUrl, setCustomCoverUrl] = useState<string | null>(null);
   const [generatingCover, setGeneratingCover] = useState(false);
   const [coverError, setCoverError] = useState<string | null>(null);
   const [isEditingArtistName, setIsEditingArtistName] = useState(false);
   const [artistNameInput, setArtistNameInput] = useState('');
+  const [showCongratsOverlay, setShowCongratsOverlay] = useState(false);
 
   const currentKid = kids?.find((k: any) => k.id === currentProfileId);
   const artistName = currentKid?.name || parentName || 'Artist';
@@ -74,16 +79,17 @@ const KaraokePlayerPage: React.FC = () => {
   const myTakeMusicRef = useRef<HTMLAudioElement | null>(null);
   const myTakeVoiceRef = useRef<HTMLAudioElement | null>(null);
   const myTakeUsedMainRef = useRef(false);
-  const videoRef = useRef<HTMLVideoElement>(null);
   const audioRef = useRef<HTMLAudioElement>(null);
   const lyricsContainerRef = useRef<HTMLDivElement>(null);
   const activeLineRef = useRef<HTMLParagraphElement>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const recordedChunksRef = useRef<Blob[]>([]);
   const mixedAudioRef = useRef<HTMLAudioElement | null>(null);
+  const recordingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const progressPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  const hasVideo = !!song?.videoUrl;
-  const mediaSrc = hasVideo ? song?.videoUrl : song?.backgroundAudioUrl;
+  // Use background MP3 for playback; video is no longer used
+  const mediaSrc = song?.backgroundAudioUrl || song?.videoUrl;
 
   useEffect(() => {
     if (!id) return;
@@ -91,7 +97,9 @@ const KaraokePlayerPage: React.FC = () => {
       try {
         setError(null);
         const base = getMonthlyBookBaseUrl();
-        const res = await fetch(`${base}/karaoke/${id}`);
+        // Cache-bust so we get fresh song data (including updated backgroundAudioUrl)
+        // after re-uploading audio in the portal
+        const res = await fetch(`${base}/karaoke/${id}?t=${Date.now()}`);
         if (!res.ok) throw new Error('Song not found');
         const data = await res.json();
         setSong(data);
@@ -113,7 +121,7 @@ const KaraokePlayerPage: React.FC = () => {
     fetch(`${base}/karaoke/${id}/increment-view`, { method: 'POST' }).catch(() => {});
   }, [song?._id, id]);
 
-  const mediaRef = hasVideo ? videoRef : audioRef;
+  const mediaRef = audioRef;
   const stopRecordingRef = useRef<() => void>(() => {});
 
   const playheadSourceRef = useRef<HTMLMediaElement | null>(null);
@@ -122,24 +130,37 @@ const KaraokePlayerPage: React.FC = () => {
     const el = mediaRef.current;
     if (!el) return;
 
-    const onDurationChange = () => {
+    const updateDurationFromMedia = () => {
       const d = el.duration;
-      if (typeof d === 'number' && Number.isFinite(d) && d > 0) setDuration(d);
+      if (typeof d === 'number' && Number.isFinite(d) && d > 0 && d < 86400) setDuration(d);
+    };
+    const onDurationChange = updateDurationFromMedia;
+    const onLoadedMetadata = updateDurationFromMedia;
+    const onTimeUpdate = () => {
+      setCurrentTime(el.currentTime);
+      updateDurationFromMedia();
     };
     const onEnded = () => {
       setIsPlaying(false);
       setCurrentTime(0);
-      if (typeof stopRecordingRef.current === 'function') stopRecordingRef.current();
+      // Do NOT stop recording here - the "ended" event can fire early (e.g. at ~1:04
+      // on some platforms) before the song actually finishes. Recording stops via
+      // duration-based timer or user tap instead.
     };
     const onPlay = () => setIsPlaying(true);
     const onPause = () => setIsPlaying(false);
 
+    el.addEventListener('loadedmetadata', onLoadedMetadata);
     el.addEventListener('durationchange', onDurationChange);
+    el.addEventListener('timeupdate', onTimeUpdate);
     el.addEventListener('ended', onEnded);
     el.addEventListener('play', onPlay);
     el.addEventListener('pause', onPause);
+    onLoadedMetadata();
     return () => {
+      el.removeEventListener('loadedmetadata', onLoadedMetadata);
       el.removeEventListener('durationchange', onDurationChange);
+      el.removeEventListener('timeupdate', onTimeUpdate);
       el.removeEventListener('ended', onEnded);
       el.removeEventListener('play', onPlay);
       el.removeEventListener('pause', onPause);
@@ -176,7 +197,7 @@ const KaraokePlayerPage: React.FC = () => {
   }, [mediaRef]);
 
   useEffect(() => {
-    activeLineRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    activeLineRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'nearest' });
   }, [currentTime, song?.lyrics]);
 
   const handleMicPress = async () => {
@@ -213,13 +234,22 @@ const KaraokePlayerPage: React.FC = () => {
       setRecordedUrl(null);
     }
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      // Disable processing effects to reduce choppiness with external mics
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: {
+          echoCancellation: false,
+          noiseSuppression: false,
+          autoGainControl: false,
+        },
+      });
       const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
         ? 'audio/webm;codecs=opus'
         : MediaRecorder.isTypeSupported('audio/mp4')
           ? 'audio/mp4'
           : 'audio/webm';
-      const recorder = new MediaRecorder(stream);
+      const recorder = new MediaRecorder(stream, {
+        audioBitsPerSecond: 128000,
+      });
       recordedChunksRef.current = [];
       recorder.ondataavailable = (e) => {
         if (e.data.size > 0) recordedChunksRef.current.push(e.data);
@@ -230,15 +260,42 @@ const KaraokePlayerPage: React.FC = () => {
         setRecordedUrl(URL.createObjectURL(blob));
       };
       mediaRecorderRef.current = recorder;
-      recorder.start(1000);
+      // Avoid timeslice - Safari/WebKit has a bug (Bug #216076) where timeslice causes
+      // recordings longer than ~1 min to fail/truncate. Without timeslice we get one
+      // blob on stop, which avoids the cutoff.
+      recorder.start();
       setIsRecording(true);
+      // Poll progress bar while recording (fallback for platforms where timeupdate/rAF may not fire)
+      if (progressPollRef.current) clearInterval(progressPollRef.current);
+      progressPollRef.current = setInterval(() => {
+        const el = mediaRef.current;
+        if (el && typeof el.currentTime === 'number' && Number.isFinite(el.currentTime)) {
+          setCurrentTime(el.currentTime);
+        }
+      }, 100);
       stopRecordingRef.current = () => {
         if (recorder.state !== 'inactive') {
+          if (progressPollRef.current) {
+            clearInterval(progressPollRef.current);
+            progressPollRef.current = null;
+          }
+          if (recordingTimeoutRef.current) {
+            clearTimeout(recordingTimeoutRef.current);
+            recordingTimeoutRef.current = null;
+          }
           recorder.stop();
           mediaRecorderRef.current = null;
           setIsRecording(false);
+          mediaRef.current?.pause();
         }
       };
+      // Stop recording after song duration - don't rely on "ended" which can fire early
+      const d = duration > 0 && Number.isFinite(duration) ? duration : (mediaRef.current?.duration > 0 ? mediaRef.current.duration : 120);
+      const stopAfterSec = Math.ceil(d + 2);
+      recordingTimeoutRef.current = setTimeout(() => {
+        recordingTimeoutRef.current = null;
+        stopRecordingRef.current();
+      }, stopAfterSec * 1000);
       return true;
     } catch (err) {
       console.error('Mic access failed:', err);
@@ -248,6 +305,14 @@ const KaraokePlayerPage: React.FC = () => {
   };
 
   const handleStopRecording = () => {
+    if (progressPollRef.current) {
+      clearInterval(progressPollRef.current);
+      progressPollRef.current = null;
+    }
+    if (recordingTimeoutRef.current) {
+      clearTimeout(recordingTimeoutRef.current);
+      recordingTimeoutRef.current = null;
+    }
     const rec = mediaRecorderRef.current;
     if (!rec || rec.state === 'inactive') return;
     rec.stop();
@@ -315,7 +380,7 @@ const KaraokePlayerPage: React.FC = () => {
 
       // Start voice first, then music after a small delay. Voice has output latency so
       // starting it early lets it align with the music when both are audible.
-      const VOICE_LEAD_MS = 250;
+      const VOICE_LEAD_MS = 300;
       const onMusicPlaying = () => {
         myTakeStartRef.current = performance.now();
       };
@@ -379,6 +444,47 @@ const KaraokePlayerPage: React.FC = () => {
     };
   }, [recordedUrl]);
 
+  // Initialize artist name when entering edit screen (after recording)
+  useEffect(() => {
+    if (recordedUrl) {
+      setArtistNameInput(currentKid?.name || parentName || 'Artist');
+    }
+  }, [recordedUrl]); // eslint-disable-line react-hooks/exhaustive-deps -- init once when we have a recording
+
+  // Auto-dismiss congrats overlay after 3 seconds
+  useEffect(() => {
+    if (!showCongratsOverlay) return;
+    const t = setTimeout(() => setShowCongratsOverlay(false), 3000);
+    return () => clearTimeout(t);
+  }, [showCongratsOverlay]);
+
+  // Auto-save to library when master is created
+  useEffect(() => {
+    if (!masterCreated || !mixedAudioUrl || !song || !id || savedRecordingId || savingRecording) return;
+    setSaveError(null);
+    setSavingRecording(true);
+    const base = getMonthlyBookBaseUrl();
+    fetch(`${base}/karaoke/recordings`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        userId: authService.getUserIdForBackend() || undefined,
+        karaokeSongId: id,
+        mixedAudioUrl,
+        duration: mixDuration,
+        ...(customCoverUrl && { customCoverImageUrl: customCoverUrl }),
+        artistName: (artistNameInput || artistName || '').trim() || 'Artist',
+      }),
+    })
+      .then((res) => {
+        if (!res.ok) throw new Error('Save failed');
+        return res.json();
+      })
+      .then((saved) => setSavedRecordingId(saved._id))
+      .catch((err) => setSaveError(err instanceof Error ? err.message : 'Could not save'))
+      .finally(() => setSavingRecording(false));
+  }, [masterCreated, mixedAudioUrl, song?._id, id]); // eslint-disable-line react-hooks/exhaustive-deps -- only trigger on master create
+
   const handleCreateMasterTrack = async () => {
     if (!recordedUrl || !song || !id || (!song.backgroundAudioUrl && !song.videoUrl)) return;
     setMasterError(null);
@@ -404,6 +510,7 @@ const KaraokePlayerPage: React.FC = () => {
       setMixedAudioUrl(mixData.mixedAudioUrl);
       setMixDuration(mixData.duration ?? recordingDuration ?? duration ?? 0);
       setMasterCreated(true);
+      setShowCongratsOverlay(true);
       handleStopMyTake();
     } catch (err) {
       console.error('Create master error:', err);
@@ -429,6 +536,7 @@ const KaraokePlayerPage: React.FC = () => {
           mixedAudioUrl: urlToSave,
           duration: mixDuration,
           ...(customCoverUrl && { customCoverImageUrl: customCoverUrl }),
+          artistName: (artistNameInput || artistName || '').trim() || 'Artist',
         }),
       });
       if (!saveRes.ok) {
@@ -445,9 +553,7 @@ const KaraokePlayerPage: React.FC = () => {
     }
   };
 
-  const shareUrl = savedRecordingId
-    ? `${window.location.origin}${window.location.pathname || '/'}#/karaoke/share/${savedRecordingId}`
-    : null;
+  const shareUrl = savedRecordingId ? getKaraokeShareUrl(savedRecordingId) : null;
 
   const handleShare = async () => {
     if (!shareUrl) return;
@@ -461,7 +567,15 @@ const KaraokePlayerPage: React.FC = () => {
       } else {
         await navigator.clipboard.writeText(shareUrl);
       }
-    } catch {}
+      if (!navigator.share) alert('📋 Link copied! Share it with family and friends.');
+    } catch (err) {
+      try {
+        await navigator.clipboard.writeText(shareUrl);
+        alert('📋 Link copied! Share it with family and friends.');
+      } catch {
+        prompt('Copy this link to share:', shareUrl);
+      }
+    }
   };
 
   const handleAlbumCoverCapture = async (imageBase64: string) => {
@@ -474,7 +588,12 @@ const KaraokePlayerPage: React.FC = () => {
       const res = await fetch(`${base}/karaoke/album-cover`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ selfieBase64: imageBase64, songTitle: song.title }),
+        body: JSON.stringify({
+          selfieBase64: imageBase64,
+          songTitle: song.title,
+          coverPrompts: song.coverImagePrompts ?? [],
+          style: selectedCoverStyle,
+        }),
       });
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
@@ -490,12 +609,19 @@ const KaraokePlayerPage: React.FC = () => {
     }
   };
 
-  const canSave = masterCreated && !!mixedAudioUrl && !savingRecording && !savedRecordingId;
-
   const effectiveTime = currentTime + syncOffset;
-  const currentLineIndex = song?.lyrics?.findIndex(
-    (l) => effectiveTime >= l.startTime && effectiveTime <= l.endTime
-  ) ?? -1;
+  const lyrics = song?.lyrics ?? [];
+  // Match lyric: within [startTime, endTime] with small epsilon for float precision.
+  // Fallback: when in a gap between lines, highlight the last line we've passed (startTime <= t).
+  let currentLineIndex = lyrics.findIndex(
+    (l) => effectiveTime >= l.startTime - 0.05 && effectiveTime <= l.endTime + 0.05
+  );
+  if (currentLineIndex < 0 && lyrics.length > 0) {
+    const lastPassed = lyrics.map((l, i) => ({ i, startTime: l.startTime }))
+      .filter(({ startTime }) => startTime <= effectiveTime)
+      .pop();
+    if (lastPassed) currentLineIndex = lastPassed.i;
+  }
 
   if (loading || (!song && !error)) {
     return (
@@ -538,6 +664,7 @@ const KaraokePlayerPage: React.FC = () => {
     setMasterCreated(false);
     setMixedAudioUrl(null);
     setMixDuration(0);
+    setShowCongratsOverlay(false);
     mixedAudioRef.current = null;
     setMasterError(null);
     setCustomCoverUrl(null);
@@ -559,26 +686,35 @@ const KaraokePlayerPage: React.FC = () => {
     const canCreateMaster = (!!song?.backgroundAudioUrl || !!song?.videoUrl) && !creatingMaster;
     return (
       <div className="flex flex-col h-full bg-black">
-        <div className="flex items-center justify-between px-4 py-3" style={{ paddingTop: 'calc(var(--safe-area-top, 12px) + 8px)' }}>
+        <div className="flex items-center px-4 py-3" style={{ paddingTop: 'calc(var(--safe-area-top, 12px) + 8px)' }}>
           <button onClick={() => navigate('/karaoke')} className="flex items-center gap-2 text-white/90 hover:text-white font-display text-sm active:scale-95">
             <ArrowLeft size={22} /> <span>Back</span>
           </button>
-          <h1 className="text-white font-display font-bold text-sm truncate flex-1 mx-2 text-center">{song.title}</h1>
-          <div className="w-14" />
         </div>
 
-        {hasVideo ? (
-          <video ref={videoRef} src={song.videoUrl} className="hidden" />
-        ) : (
-          <audio ref={audioRef} src={song.backgroundAudioUrl} className="hidden" />
-        )}
+        <audio ref={audioRef} src={mediaSrc || undefined} className="hidden" />
 
         <div className="flex-1 flex flex-col px-4 py-6 min-h-0 overflow-y-auto">
-          <p className="text-white font-display font-bold text-lg text-center mb-4">{song.title}</p>
+          {/* Artist name - first thing for the user to fill in */}
+          <div className="mb-8">
+            <label htmlFor="artist-name" className="block text-white/80 font-display text-sm mb-2">
+              Your name
+            </label>
+            <input
+              id="artist-name"
+              type="text"
+              value={artistNameInput}
+              onChange={(e) => setArtistNameInput(e.target.value)}
+              placeholder="Artist"
+              className="w-full py-3 px-4 rounded-xl bg-white/10 border border-white/30 text-white font-display text-base placeholder-white/40 focus:outline-none focus:border-amber-500"
+            />
+          </div>
+
+          <p className="text-white font-display font-bold text-lg text-center mb-6">{song.title}</p>
 
           <button
             onClick={handlePlayRecording}
-            className="flex items-center justify-center gap-2 w-full py-3 rounded-xl bg-white/10 border border-white/30 mb-6"
+            className="flex items-center justify-center gap-2 w-full py-4 rounded-xl bg-white/10 border border-white/30 mb-8"
           >
             {isPlayingMyTake ? (
               <Pause size={24} className="text-white" />
@@ -588,7 +724,7 @@ const KaraokePlayerPage: React.FC = () => {
             <span className="text-white font-display font-bold">{isPlayingMyTake ? 'Pause' : 'Play preview'}</span>
           </button>
 
-          <div className="w-full max-w-xs mx-auto mb-2">
+          <div className="w-full max-w-xs mx-auto mb-6">
             <div className="h-1.5 bg-white/20 rounded-full overflow-hidden cursor-pointer" onClick={handleSeek}>
               <div
                 className="h-full bg-amber-500/80 rounded-full transition-all"
@@ -601,7 +737,7 @@ const KaraokePlayerPage: React.FC = () => {
             </div>
           </div>
 
-          <div className="w-full max-w-xs mx-auto space-y-4 mt-6">
+          <div className="w-full max-w-xs mx-auto space-y-5 mt-8">
             <div className="flex items-center gap-3">
               <Music size={18} className="text-white/70 shrink-0" />
               <div className="flex-1">
@@ -632,8 +768,8 @@ const KaraokePlayerPage: React.FC = () => {
             </div>
           </div>
 
-          <div className="w-full max-w-xs mx-auto mt-6">
-            <div className="flex items-center justify-between mb-2">
+          <div className="w-full max-w-xs mx-auto mt-10">
+            <div className="flex items-center justify-between mb-3">
               <span className="text-white/80 font-display text-sm">Reverb</span>
               <div className="flex gap-1">
                 {([0, 1, 2, 3] as ReverbLevel[]).map((level) => (
@@ -653,7 +789,7 @@ const KaraokePlayerPage: React.FC = () => {
 
             <button
               onClick={handleRecordAgain}
-              className="flex items-center justify-center gap-2 w-full py-3 rounded-xl text-white/70 font-display text-sm hover:text-white/90 active:scale-[0.98] mt-4"
+              className="flex items-center justify-center gap-2 w-full py-3 rounded-xl text-white/70 font-display text-sm hover:text-white/90 active:scale-[0.98] mt-6"
             >
               <RotateCcw size={18} />
               Record again
@@ -663,7 +799,7 @@ const KaraokePlayerPage: React.FC = () => {
             <button
               onClick={handleCreateMasterTrack}
               disabled={!canCreateMaster}
-              className="flex items-center justify-center gap-2 w-full py-3.5 rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 text-black font-display font-bold text-sm mt-6 mb-8 active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed"
+              className="flex items-center justify-center gap-2 w-full py-4 rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 text-black font-display font-bold text-sm mt-8 mb-10 active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {creatingMaster ? (
                 <>
@@ -683,20 +819,74 @@ const KaraokePlayerPage: React.FC = () => {
     );
   }
 
+  // Congrats overlay: shows for ~3 seconds after "Create my song" before final screen
+  if (recordedUrl && !isRecording && masterCreated && showCongratsOverlay) {
+    return (
+      <div className="fixed inset-0 z-[9999] flex flex-col items-center justify-center bg-black">
+        <style>{`
+          @keyframes karaoke-confetti {
+            0% { transform: translateY(0) rotate(0deg); opacity: 1; }
+            100% { transform: translateY(100vh) rotate(720deg); opacity: 0; }
+          }
+          .karaoke-confetti {
+            animation: karaoke-confetti 2.5s ease-out forwards;
+          }
+        `}</style>
+        <div className="absolute inset-0 overflow-hidden pointer-events-none">
+          {[...Array(30)].map((_, i) => (
+            <div
+              key={i}
+              className="absolute karaoke-confetti"
+              style={{
+                left: `${Math.random() * 100}%`,
+                top: '-20px',
+                animationDelay: `${Math.random() * 0.5}s`,
+                backgroundColor: ['#FFD700', '#FF6B6B', '#4ECDC4', '#FFA500', '#96E6A1'][Math.floor(Math.random() * 5)],
+                width: '10px',
+                height: '10px',
+                borderRadius: Math.random() > 0.5 ? '50%' : '0',
+              }}
+            />
+          ))}
+        </div>
+        <div className="relative text-center px-6">
+          <p className="text-5xl mb-4">🎤</p>
+          <h2 className="text-white font-display font-bold text-2xl mb-2">Congratulations!</h2>
+          <p className="text-amber-400 font-display text-lg">Beautiful singer!</p>
+          <p className="text-white/70 font-display text-sm mt-4">Your song is saved to your library</p>
+        </div>
+      </div>
+    );
+  }
+
   // Final screen: cover, save, share (after master created)
   if (recordedUrl && !isRecording && masterCreated) {
+    const coverSrc = customCoverUrl || song.coverImage;
     return (
-      <div className="flex flex-col h-full bg-black">
+      <div className="relative flex flex-col h-full overflow-hidden bg-black">
+        {/* Blurred cover image as background */}
+        {coverSrc && (
+          <>
+            <div
+              className="absolute inset-0 scale-110 bg-cover bg-center bg-no-repeat"
+              style={{
+                backgroundImage: `url(${coverSrc})`,
+                filter: 'blur(40px)',
+              }}
+              aria-hidden
+            />
+            <div className="absolute inset-0 bg-black/60" aria-hidden />
+          </>
+        )}
+        <div className="relative z-10 flex flex-col h-full">
         <div className="flex items-center justify-between px-4 py-3" style={{ paddingTop: 'calc(var(--safe-area-top, 12px) + 8px)' }}>
-          <button onClick={() => navigate('/karaoke')} className="flex items-center gap-2 text-white/90 hover:text-white font-display text-sm active:scale-95">
+          <button onClick={() => navigate('/karaoke')} className="flex items-center gap-2 text-white/90 hover:text-white font-display text-sm active:scale-95 drop-shadow-md">
             <ArrowLeft size={22} /> <span>Back</span>
           </button>
-          <h1 className="text-white font-display font-bold text-sm truncate flex-1 mx-2 text-center">{song.title}</h1>
-          <div className="w-14" />
         </div>
 
         <div className="flex-1 flex flex-col items-center justify-center px-4 py-6 min-h-0">
-          <p className="text-white font-display font-bold text-lg text-center mb-1">{song.title}</p>
+          <p className="text-white font-display font-bold text-lg text-center mb-1 drop-shadow-md">{song.title}</p>
           <div className="flex items-center justify-center gap-1.5 mb-4">
             {isEditingArtistName ? (
               <>
@@ -714,7 +904,7 @@ const KaraokePlayerPage: React.FC = () => {
                       setIsEditingArtistName(false);
                     }
                     if (e.key === 'Escape') {
-                      setArtistNameInput(artistName);
+                      setArtistNameInput(artistNameInput || artistName);
                       setIsEditingArtistName(false);
                     }
                   }}
@@ -738,11 +928,11 @@ const KaraokePlayerPage: React.FC = () => {
               </>
             ) : (
               <>
-                <p className="text-white/80 font-display text-sm">{artistName}</p>
+                <p className="text-white/80 font-display text-sm">{artistNameInput || artistName}</p>
                 <button
                   type="button"
                   onClick={() => {
-                    setArtistNameInput(artistName);
+                    setArtistNameInput(artistNameInput || artistName);
                     setIsEditingArtistName(true);
                   }}
                   className="p-0.5 rounded hover:bg-white/10 text-white/60 hover:text-white"
@@ -761,10 +951,10 @@ const KaraokePlayerPage: React.FC = () => {
               <img
                 src={customCoverUrl || song.coverImage}
                 alt={song.title}
-                className="w-full h-full object-cover"
+                className="absolute inset-0 w-full h-full object-cover object-center"
               />
             ) : (
-              <div className="w-full h-full flex items-center justify-center">
+              <div className="absolute inset-0 w-full h-full flex items-center justify-center">
                 <span className="text-white/50 text-6xl">♪</span>
               </div>
             )}
@@ -802,88 +992,38 @@ const KaraokePlayerPage: React.FC = () => {
           </div>
 
           <div className="flex flex-col gap-3 w-full max-w-xs mt-8">
-            <div className="flex items-center justify-between">
-              <span className="text-white/80 font-display text-sm">Reverb</span>
-              <div className="flex gap-1">
-                {([0, 1, 2, 3] as ReverbLevel[]).map((level) => (
-                  <button
-                    key={level}
-                    type="button"
-                    onClick={() => setReverbLevel(level)}
-                    className={`px-3 py-1.5 rounded-lg text-xs font-display transition-all ${
-                      reverbLevel === level
-                        ? 'bg-amber-500/80 text-black'
-                        : 'bg-white/10 text-white/70 hover:bg-white/20'
-                    }`}
-                  >
-                    {level === 0 ? 'Off' : getReverbLabel(level)}
-                  </button>
-                ))}
+            {savingRecording ? (
+              <div className="flex items-center justify-center gap-2 py-3 text-white/70 font-display text-sm">
+                <div className="w-4 h-4 border-2 border-white/50 border-t-white rounded-full animate-spin" />
+                Saving to library…
               </div>
-            </div>
-
-            {canSave && (
-              <>
-                <button
-                  onClick={() => setShowSelfieModal(true)}
-                  disabled={generatingCover}
-                  className="flex items-center justify-center gap-2 w-full py-3.5 rounded-xl bg-white/10 text-white font-display font-bold text-sm border border-white/30 hover:bg-white/20 active:scale-[0.98] disabled:opacity-70"
-                >
-                  {generatingCover ? (
-                    <>
-                      <div className="w-4 h-4 border-2 border-white/50 border-t-white rounded-full animate-spin" />
-                      Creating…
-                    </>
-                  ) : (
-                    <>
-                      <ImagePlus size={20} />
-                      {customCoverUrl ? 'Change album cover' : 'Create album cover'}
-                    </>
-                  )}
-                </button>
-                {customCoverUrl && (
-                  <div className="flex justify-center">
-                    <img src={customCoverUrl} alt="Cover" className="w-16 h-16 rounded-lg object-cover border-2 border-emerald-500/50" />
-                  </div>
-                )}
-              </>
-            )}
-
-            <div className="flex gap-3">
-              <button
-                onClick={handleSaveAndShare}
-                disabled={!canSave || savingRecording}
-                className="flex-1 flex items-center justify-center gap-2 py-3.5 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-500 text-white font-display font-bold text-sm shadow-lg active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {savingRecording ? (
-                  <>
-                    <div className="w-4 h-4 border-2 border-white/50 border-t-white rounded-full animate-spin" />
-                    Saving…
-                  </>
-                ) : (
-                  <>
-                    <Save size={20} />
-                    Save to library
-                  </>
-                )}
-              </button>
-              <button
-                onClick={savedRecordingId && shareUrl ? handleShare : undefined}
-                disabled={!savedRecordingId || !shareUrl}
-                className="flex-1 flex items-center justify-center gap-2 py-3.5 rounded-xl bg-white/10 text-white font-display font-bold text-sm border border-white/30 hover:bg-white/20 active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                <Share2 size={20} />
-                Share
-              </button>
-            </div>
-            {savedRecordingId && (
-              <div className="flex items-center justify-center gap-2 text-emerald-400 font-display font-bold text-sm py-1">
+            ) : savedRecordingId ? (
+              <div className="flex items-center justify-center gap-2 text-emerald-400 font-display font-bold text-sm py-2">
                 <Check size={20} />
                 Saved to library!
               </div>
-            )}
+            ) : null}
+            <button
+              onClick={savedRecordingId && shareUrl ? handleShare : undefined}
+              disabled={!savedRecordingId || !shareUrl}
+              className="w-full flex items-center justify-center gap-2 py-3.5 rounded-xl bg-white/10 text-white font-display font-bold text-sm border border-white/30 hover:bg-white/20 active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <Share2 size={20} />
+              Share
+            </button>
             {coverError && <p className="text-amber-400 text-xs text-center">{coverError}</p>}
-            {saveError && <p className="text-amber-400 text-xs text-center">{saveError}</p>}
+            {saveError && (
+              <div className="flex flex-col items-center gap-2">
+                <p className="text-amber-400 text-xs text-center">{saveError}</p>
+                <button
+                  type="button"
+                  onClick={handleSaveAndShare}
+                  className="text-amber-400 text-xs font-display underline hover:text-amber-300"
+                >
+                  Try again
+                </button>
+              </div>
+            )}
 
             <button
               onClick={handleRecordAgain}
@@ -895,60 +1035,128 @@ const KaraokePlayerPage: React.FC = () => {
           </div>
         </div>
 
+        {showCoverStyleSelector && (
+          <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/70" onClick={() => setShowCoverStyleSelector(false)}>
+            <div
+              className="w-full max-w-lg rounded-t-2xl bg-gray-900 p-6 pb-safe"
+              style={{ paddingBottom: 'max(1.5rem, env(safe-area-inset-bottom))' }}
+              onClick={e => e.stopPropagation()}
+            >
+              <h3 className="text-white font-display font-bold text-lg mb-3">Choose cover style</h3>
+              <div className="grid grid-cols-1 gap-2">
+                {(['illustration', 'pixar', 'disney'] as const).map((s) => (
+                  <button
+                    key={s}
+                    type="button"
+                    onClick={() => {
+                      setSelectedCoverStyle(s);
+                      setShowCoverStyleSelector(false);
+                      setShowSelfieModal(true);
+                    }}
+                    className="flex items-center justify-between w-full py-3 px-4 rounded-xl bg-white/10 text-white font-display hover:bg-white/20 active:scale-[0.98]"
+                  >
+                    <span className="capitalize">{s}</span>
+                  </button>
+                ))}
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowCoverStyleSelector(false)}
+                className="w-full mt-3 py-2 text-white/70 font-display text-sm"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        )}
+
         <SelfieCapture
           isOpen={showSelfieModal}
           onCapture={handleAlbumCoverCapture}
           onClose={() => setShowSelfieModal(false)}
           childName="you"
         />
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="flex flex-col h-full bg-black">
+    <div
+      className="relative flex flex-col h-full bg-black bg-cover bg-center bg-no-repeat"
+      style={{ backgroundImage: 'url(/karokebg.webp)' }}
+    >
+      {/* Dark overlay over background (80% opacity) */}
+      <div className="absolute inset-0 bg-black/80 pointer-events-none z-0" aria-hidden />
+      <div className="relative z-10 flex flex-col h-full">
       <div className="flex items-center justify-between px-4 py-3" style={{ paddingTop: 'calc(var(--safe-area-top, 12px) + 8px)' }}>
-        <button onClick={() => navigate('/karaoke')} className="flex items-center gap-2 text-white/90 hover:text-white font-display text-sm active:scale-95">
+        <button onClick={() => navigate('/karaoke')} className="flex items-center gap-2 text-white/90 hover:text-white font-display text-sm active:scale-95 drop-shadow-md">
           <ArrowLeft size={22} /> <span>Back</span>
         </button>
-        <h1 className="text-white font-display font-bold text-sm truncate flex-1 mx-2 text-center">{song.title}</h1>
+        <h1 className="text-white font-display font-bold text-sm truncate flex-1 mx-2 text-center drop-shadow-md">{song.title}</h1>
         <div className="w-14" />
       </div>
 
-      {/* Media: video or audio (hidden, or show cover for audio) */}
-      <div className="relative w-full bg-black" style={{ aspectRatio: '16/9', maxHeight: '40vh' }}>
-        {hasVideo ? (
-          <video
-            ref={videoRef}
-            src={song.videoUrl}
-            className="w-full h-full object-contain"
-            playsInline
-            onClick={handleMicPress}
-          />
-        ) : (
-          <div
-            className="absolute inset-0 flex items-center justify-center bg-gradient-to-br from-violet-900 to-purple-950 cursor-pointer"
-            onClick={handleMicPress}
-          >
-            {song.coverImage ? (
-              <img
-                src={song.coverImage}
-                alt={song.title}
-                className="w-full h-full object-contain"
-              />
-            ) : (
-              <div className="text-white/50 text-6xl">♪</div>
-            )}
-          </div>
-        )}
-        {!hasVideo && (
-          <audio ref={audioRef} src={song.backgroundAudioUrl} playsInline />
-        )}
+      {/* Media: tap to start/stop recording */}
+      <div
+        className="relative w-[min(100%,28vh)] aspect-square mx-auto cursor-pointer flex-shrink-0 rounded-2xl overflow-hidden"
+        onClick={handleMicPress}
+      >
+        <div className="absolute inset-0 z-10 flex items-center justify-center bg-black/30">
+          {song.coverImage ? (
+            <img
+              src={song.coverImage}
+              alt={song.title}
+              className="absolute inset-0 w-full h-full object-cover"
+            />
+          ) : (
+            <div className="text-white/70 text-6xl drop-shadow-lg">♪</div>
+          )}
+        </div>
+        <audio ref={audioRef} src={mediaSrc || undefined} playsInline preload="auto" />
       </div>
 
-      {/* Lyrics */}
-      <div ref={lyricsContainerRef} className="flex-1 overflow-y-auto px-4 py-6 min-h-0">
-        <div className="max-w-xl mx-auto text-center">
+      {/* Controls - below the stage */}
+      <div className="flex-shrink-0 px-4 pt-4 pb-5">
+        <div className="max-w-xl mx-auto">
+          <div
+            className="h-2 bg-white/20 rounded-full overflow-hidden cursor-pointer mb-4 mt-2"
+            onClick={handleSeek}
+          >
+            <div
+              className="h-full bg-gradient-to-r from-[#FFD700] to-[#FFA500] rounded-full transition-all duration-75"
+              style={{ width: `${duration > 0 ? Math.min(100, (currentTime / duration) * 100) : 0}%` }}
+            />
+          </div>
+          <div className="flex justify-between text-sm text-white/60 mb-4">
+            <span>{formatTime(currentTime)}</span>
+            <span>{formatTime(duration)}</span>
+          </div>
+          {micError && (
+            <p className="text-amber-400 text-xs text-center mb-2">{micError}</p>
+          )}
+          <div className="flex items-center justify-center gap-4">
+            <button
+              onClick={handleMicPress}
+              className={`w-16 h-16 rounded-full flex items-center justify-center active:scale-95 transition-all duration-300 drop-shadow-lg ${
+                isRecording
+                  ? 'bg-red-600 text-white shadow-[0_0_24px_rgba(220,38,38,0.9)] ring-4 ring-red-400/60 animate-pulse'
+                  : 'bg-gradient-to-br from-amber-300 via-[#FFD700] to-amber-500 text-black shadow-[0_4px_20px_rgba(251,191,36,0.4)] hover:shadow-[0_4px_24px_rgba(251,191,36,0.5)] hover:from-amber-200 hover:via-[#FFE44D] hover:to-amber-400'
+              }`}
+              aria-label={isRecording ? 'Stop recording' : 'Start singing (record)'}
+            >
+              <Mic size={32} strokeWidth={2.5} className={isRecording ? 'drop-shadow-[0_0_8px_rgba(255,255,255,0.9)]' : ''} />
+            </button>
+          </div>
+          {isRecording && (
+            <p className="text-red-400 text-xs text-center mt-2 font-display drop-shadow-md">Recording…</p>
+          )}
+        </div>
+      </div>
+
+      {/* Lyrics - scrollable below the controls */}
+      <div ref={lyricsContainerRef} className="flex-1 overflow-y-auto overflow-x-hidden px-4 pt-2 min-h-0 scroll-smooth" style={{ paddingBottom: 'max(1.5rem, env(safe-area-inset-bottom, 0px))' }}>
+        <div className="max-w-xl mx-auto text-center pb-8">
           {song.lyrics && song.lyrics.length > 0 ? (
             song.lyrics.map((line, idx) => {
               const isActive = idx === currentLineIndex;
@@ -957,7 +1165,7 @@ const KaraokePlayerPage: React.FC = () => {
                 <p
                   key={idx}
                   ref={isActive ? activeLineRef : null}
-                  className={`py-1.5 text-lg font-display transition-all duration-200 text-center ${
+                  className={`py-1.5 text-lg font-display transition-all duration-200 text-center scroll-mt-24 scroll-mb-24 ${
                     isActive
                       ? 'text-[#FFD700] font-bold scale-105'
                       : isPast
@@ -975,71 +1183,13 @@ const KaraokePlayerPage: React.FC = () => {
         </div>
       </div>
 
-      {/* Controls */}
-      <div className="bg-gradient-to-t from-black to-transparent pt-6 pb-8 px-4 safe-area-bottom">
-        <div className="max-w-xl mx-auto">
-          <div
-            className="h-2 bg-white/20 rounded-full overflow-hidden cursor-pointer mb-4"
-            onClick={handleSeek}
-          >
-            <div
-              className="h-full bg-gradient-to-r from-[#FFD700] to-[#FFA500] rounded-full transition-all duration-75"
-              style={{ width: `${duration > 0 ? (currentTime / duration) * 100 : 0}%` }}
-            />
-          </div>
-          <div className="flex items-center justify-between gap-2 text-sm text-white/60 mb-4">
-            <span>{formatTime(currentTime)}</span>
-            <div className="flex items-center gap-1">
-              {syncOffset !== 0 && (
-                <span className="text-amber-400/90 text-xs">Sync {syncOffset > 0 ? '+' : ''}{syncOffset.toFixed(1)}s</span>
-              )}
-              <button
-                type="button"
-                onClick={() => setSyncOffset((s) => Math.max(-2, s - 0.3))}
-                className="px-2 py-0.5 rounded bg-white/10 hover:bg-white/20 text-white/80 text-xs font-display"
-                aria-label="Lyrics earlier"
-              >
-                −
-              </button>
-              <button
-                type="button"
-                onClick={() => setSyncOffset((s) => Math.min(2, s + 0.3))}
-                className="px-2 py-0.5 rounded bg-white/10 hover:bg-white/20 text-white/80 text-xs font-display"
-                aria-label="Lyrics later"
-              >
-                +
-              </button>
-            </div>
-            <span>{formatTime(duration)}</span>
-          </div>
-          {micError && (
-            <p className="text-amber-400 text-xs text-center mb-2">{micError}</p>
-          )}
-          <div className="flex items-center justify-center gap-4">
-            <button
-              onClick={handleMicPress}
-              className={`w-16 h-16 rounded-full flex items-center justify-center active:scale-95 transition-all duration-300 ${
-                isRecording
-                  ? 'bg-red-600 text-white shadow-[0_0_24px_rgba(220,38,38,0.9)] ring-4 ring-red-400/60 animate-pulse'
-                  : 'bg-gradient-to-br from-amber-300 via-[#FFD700] to-amber-500 text-black shadow-[0_4px_20px_rgba(251,191,36,0.4)] hover:shadow-[0_4px_24px_rgba(251,191,36,0.5)] hover:from-amber-200 hover:via-[#FFE44D] hover:to-amber-400'
-              }`}
-              aria-label={isRecording ? 'Stop recording' : 'Start singing (record)'}
-            >
-              <Mic size={32} strokeWidth={2.5} className={isRecording ? 'drop-shadow-[0_0_8px_rgba(255,255,255,0.9)]' : ''} />
-            </button>
-          </div>
-          {isRecording && (
-            <p className="text-red-400 text-xs text-center mt-2 font-display">Recording…</p>
-          )}
-        </div>
-      </div>
-
       <SelfieCapture
         isOpen={showSelfieModal}
         onCapture={handleAlbumCoverCapture}
         onClose={() => setShowSelfieModal(false)}
         childName="you"
       />
+      </div>
     </div>
   );
 };

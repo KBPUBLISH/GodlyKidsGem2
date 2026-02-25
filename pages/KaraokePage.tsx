@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import PremiumBadge from '../components/ui/PremiumBadge';
 import { useUser } from '../context/UserContext';
 import { getMonthlyBookBaseUrl } from '../services/apiService';
+import { getKaraokeShareUrl } from '../constants';
 import { authService } from '../services/authService';
 import { Mic, Lock, ArrowLeft, Library, Play, Share2 } from 'lucide-react';
 import StormySeaError from '../components/ui/StormySeaError';
@@ -88,111 +89,59 @@ const KaraokePage: React.FC = () => {
   };
 
   return (
-    <div className="flex flex-col h-full overflow-hidden bg-gradient-to-b from-sky-400 via-sky-300 to-blue-400">
-      <div className="flex items-center gap-2 px-4 pt-2 pb-2" style={{ paddingTop: 'calc(var(--safe-area-top, 12px) + 8px)' }}>
-        <button
-          onClick={() => navigate('/listen')}
-          className="flex items-center gap-2 text-white/90 hover:text-white transition-colors font-display text-sm active:scale-95"
-          aria-label="Back to Listen"
-        >
-          <ArrowLeft size={22} />
-          <span>Back</span>
-        </button>
-      </div>
-
-      <div className="flex-1 overflow-y-auto overflow-x-hidden">
-        {/* Ocean wave accent */}
-        <div className="absolute inset-0 pointer-events-none overflow-hidden" style={{ zIndex: 0 }} aria-hidden>
-          <svg className="absolute opacity-30" viewBox="0 0 2880 320" preserveAspectRatio="none" style={{ top: '10%', height: '12%', width: '200%' }}>
-            <path fill="rgba(255,255,255,0.15)" d="M0,280L60,274C120,268,240,256,360,250C480,244,600,244,720,250C840,256,960,268,1080,274C1200,280,1320,280,1440,274L2880,268L2880,320L0,320Z" />
-          </svg>
+    <div
+      className="relative flex flex-col h-full overflow-hidden bg-cover bg-center bg-no-repeat"
+      style={{ backgroundImage: 'url(/karokebg.webp)' }}
+    >
+      {/* Dark overlay over background (20% opacity) */}
+      <div className="absolute inset-0 bg-black/20 pointer-events-none" aria-hidden />
+      <div className="relative z-10 flex flex-col h-full overflow-hidden">
+        {/* Header overlay on stage */}
+        <div className="flex-shrink-0 flex items-center gap-2 px-4 pt-2 pb-2" style={{ paddingTop: 'calc(var(--safe-area-top, 12px) + 8px)' }}>
+          <button
+            onClick={() => navigate('/listen')}
+            className="flex items-center gap-2 text-white/90 hover:text-white transition-colors font-display text-sm active:scale-95 drop-shadow-md"
+            aria-label="Back to Listen"
+          >
+            <ArrowLeft size={22} />
+            <span>Back</span>
+          </button>
         </div>
 
-        <div className="relative z-10 px-4 pt-4 pb-24">
-          <div className="flex items-center gap-2 mb-4">
-            <Mic className="w-6 h-6 text-white/90" />
-            <h2 className="text-lg font-display font-bold text-white drop-shadow-md">
-              Sing along with worship songs
-            </h2>
-          </div>
-
-          {myRecordings.length > 0 && (
-            <section className="mb-6">
-              <div className="flex items-center gap-2 mb-3">
-                <Library className="w-5 h-5 text-white/90" />
-                <h3 className="text-base font-display font-bold text-white drop-shadow-md">
-                  My karaoke songs
-                </h3>
+        {/* Stage + content in one scroll - content can scroll up over the stage */}
+        <div className="flex-1 overflow-y-auto overflow-x-hidden min-h-0">
+          {/* Stage - top ~2/3 when at rest; scrolls away as user scrolls */}
+          <div className="flex-shrink-0" style={{ minHeight: 'calc(66vh - 50px)' }} aria-hidden />
+          {/* Content - starts below stage, scrolls up over it */}
+          <div className="px-4 pt-4 pb-24" style={{ paddingBottom: 'max(6rem, env(safe-area-inset-bottom, 0px))' }}>
+            {/* Karaoke song templates first */}
+            {error ? (
+              <StormySeaError
+                onRetry={() => window.location.reload()}
+                message={error}
+              />
+            ) : loading ? (
+              <div className="flex flex-col items-center justify-center py-12">
+                <div className="w-10 h-10 border-3 border-white/50 border-t-white rounded-full animate-spin" />
+                <p className="text-white/80 font-display mt-4">Loading songs...</p>
               </div>
-              <div className="flex gap-3 overflow-x-auto pb-2 -mx-1 scrollbar-hide" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
-                {myRecordings.map((rec) => (
-                  <div
-                    key={rec._id}
-                    className="flex-shrink-0 w-36 rounded-xl overflow-hidden bg-white/10 border border-white/20"
-                  >
-                    <button
-                      type="button"
-                      onClick={() => navigate(`/karaoke/share/${rec._id}`)}
-                      className="w-full text-left block"
-                    >
-                      <div className="aspect-square relative bg-gradient-to-br from-violet-700 to-purple-800">
-                        {(rec.customCoverImageUrl || rec.karaokeSongId?.coverImage) ? (
-                          <img
-                            src={rec.customCoverImageUrl || rec.karaokeSongId!.coverImage}
-                            alt={rec.karaokeSongId?.title || 'Recording'}
-                            className="w-full h-full object-cover"
-                          />
-                        ) : (
-                          <div className="w-full h-full flex items-center justify-center">
-                            <Mic className="w-10 h-10 text-white/40" />
-                          </div>
-                        )}
-                        <div className="absolute inset-0 flex items-center justify-center bg-black/30 opacity-0 hover:opacity-100 transition-opacity">
-                          <Play size={28} className="text-white drop-shadow-lg" fill="currentColor" />
-                        </div>
-                      </div>
-                      <p className="text-white text-xs font-display font-bold truncate px-2 py-1.5">
-                        {rec.karaokeSongId?.title || 'My recording'}
-                      </p>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        const url = `${window.location.origin}${window.location.pathname || '/'}#/karaoke/share/${rec._id}`;
-                        navigator.clipboard.writeText(url).catch(() => {});
-                      }}
-                      className="w-full flex items-center justify-center gap-1 py-1.5 text-white/80 hover:text-white text-xs font-display"
-                    >
-                      <Share2 size={14} />
-                      Share
-                    </button>
-                  </div>
-                ))}
+            ) : songs.length === 0 ? (
+              <div className="text-center py-12 px-6 bg-white/20 rounded-2xl backdrop-blur-sm">
+                <Mic className="w-12 h-12 text-white/60 mx-auto mb-3" />
+                <p className="text-white/90 font-display font-bold">No karaoke songs yet</p>
+                <p className="text-white/70 font-display text-sm mt-1">
+                  Check back soon for new songs to sing along with!
+                </p>
               </div>
-            </section>
-          )}
-
-          {error ? (
-            <StormySeaError
-              onRetry={() => window.location.reload()}
-              message={error}
-            />
-          ) : loading ? (
-            <div className="flex flex-col items-center justify-center py-16">
-              <div className="w-10 h-10 border-3 border-white/50 border-t-white rounded-full animate-spin" />
-              <p className="text-white/80 font-display mt-4">Loading songs...</p>
-            </div>
-          ) : songs.length === 0 ? (
-            <div className="text-center py-16 px-6 bg-white/20 rounded-2xl backdrop-blur-sm">
-              <Mic className="w-12 h-12 text-white/60 mx-auto mb-3" />
-              <p className="text-white/90 font-display font-bold">No karaoke songs yet</p>
-              <p className="text-white/70 font-display text-sm mt-1">
-                Check back soon for new songs to sing along with!
-              </p>
-            </div>
-          ) : (
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 max-w-2xl mx-auto">
+            ) : (
+              <section className="mb-6">
+                <div className="flex items-center gap-2 mb-3">
+                  <Mic className="w-5 h-5 text-white/90" />
+                  <h2 className="text-base font-display font-bold text-white drop-shadow-md">
+                    Sing along with worship songs
+                  </h2>
+                </div>
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 max-w-2xl mx-auto">
               {songs.map((song) => {
                 const isLocked = song.isMembersOnly && !isSubscribed;
                 return (
@@ -233,16 +182,90 @@ const KaraokePage: React.FC = () => {
                     <p className="text-white text-sm font-display font-bold mt-2 truncate drop-shadow-md">
                       {song.title}
                     </p>
-                    {song.duration && song.duration > 0 && (
-                      <p className="text-white/70 text-xs font-display">
-                        {Math.floor(song.duration / 60)}:{String(song.duration % 60).padStart(2, '0')}
-                      </p>
-                    )}
+                    <p className="text-white/70 text-xs font-display mt-0.5 min-h-[1.25rem]">
+                      {song.duration != null && song.duration > 0
+                        ? `${Math.floor(song.duration / 60)}:${String(Math.floor(song.duration % 60)).padStart(2, '0')}`
+                        : '\u00A0'}
+                    </p>
                   </button>
                 );
               })}
-            </div>
-          )}
+                </div>
+              </section>
+            )}
+
+            {/* My karaoke songs - below the templates */}
+            {myRecordings.length > 0 && (
+              <section>
+                <div className="flex items-center gap-2 mb-3">
+                  <Library className="w-5 h-5 text-white/90" />
+                  <h3 className="text-base font-display font-bold text-white drop-shadow-md">
+                    My karaoke songs
+                  </h3>
+                </div>
+                <div className="flex gap-3 overflow-x-auto pb-2 -mx-1 scrollbar-hide" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
+                  {myRecordings.map((rec) => (
+                    <div
+                      key={rec._id}
+                      className="flex-shrink-0 w-36 rounded-xl overflow-hidden bg-white/10 border border-white/20"
+                    >
+                      <button
+                        type="button"
+                        onClick={() => navigate(`/karaoke/share/${rec._id}`)}
+                        className="w-full text-left block"
+                      >
+                        <div className="aspect-square relative bg-gradient-to-br from-violet-700 to-purple-800">
+                          {(rec.customCoverImageUrl || rec.karaokeSongId?.coverImage) ? (
+                            <img
+                              src={rec.customCoverImageUrl || rec.karaokeSongId!.coverImage}
+                              alt={rec.karaokeSongId?.title || 'Recording'}
+                              className="w-full h-full object-cover"
+                            />
+                          ) : (
+                            <div className="w-full h-full flex items-center justify-center">
+                              <Mic className="w-10 h-10 text-white/40" />
+                            </div>
+                          )}
+                          <div className="absolute inset-0 flex items-center justify-center bg-black/30 opacity-0 hover:opacity-100 transition-opacity">
+                            <Play size={28} className="text-white drop-shadow-lg" fill="currentColor" />
+                          </div>
+                        </div>
+                        <p className="text-white text-xs font-display font-bold truncate px-2 py-1.5">
+                          {rec.karaokeSongId?.title || 'My recording'}
+                        </p>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={async (e) => {
+                          e.stopPropagation();
+                          const url = getKaraokeShareUrl(rec._id);
+                          try {
+                            if (navigator.share) {
+                              await navigator.share({ title: rec.karaokeSongId?.title || 'Karaoke', url, text: `Check out my karaoke: ${rec.karaokeSongId?.title || ''}` });
+                            } else {
+                              await navigator.clipboard.writeText(url);
+                              alert('📋 Link copied!');
+                            }
+                          } catch {
+                            try {
+                              await navigator.clipboard.writeText(url);
+                              alert('📋 Link copied!');
+                            } catch {
+                              prompt('Copy this link:', url);
+                            }
+                          }
+                        }}
+                        className="w-full flex items-center justify-center gap-1 py-1.5 text-white/80 hover:text-white text-xs font-display"
+                      >
+                        <Share2 size={14} />
+                        Share
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </section>
+            )}
+          </div>
         </div>
       </div>
     </div>

@@ -1,13 +1,15 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { getMonthlyBookBaseUrl } from '../services/apiService';
-import { ArrowLeft, Play, Pause } from 'lucide-react';
+import { getKaraokeShareUrl } from '../constants';
+import { ArrowLeft, Play, Pause, Share2, Trash2 } from 'lucide-react';
 import StormySeaError from '../components/ui/StormySeaError';
 
 interface ShareData {
   mixedAudioUrl: string;
   duration: number;
   recordedAt?: string;
+  artistName?: string | null;
   song?: { title: string; coverImage?: string };
 }
 
@@ -26,6 +28,7 @@ const KaraokeSharePage: React.FC = () => {
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
+  const [deleting, setDeleting] = useState(false);
   const audioRef = useRef<HTMLAudioElement>(null);
 
   useEffect(() => {
@@ -81,6 +84,47 @@ const KaraokeSharePage: React.FC = () => {
     else el.play().catch(() => {});
   };
 
+  const shareUrl = recordingId ? getKaraokeShareUrl(recordingId) : '';
+
+  const handleShare = async () => {
+    if (!shareUrl) return;
+    try {
+      if (navigator.share) {
+        await navigator.share({
+          title: data?.song?.title || 'My karaoke recording',
+          url: shareUrl,
+          text: `Check out my karaoke recording: ${data?.song?.title || 'My recording'}`,
+        });
+      } else {
+        await navigator.clipboard.writeText(shareUrl);
+        alert('📋 Link copied! Share it with family and friends.');
+      }
+    } catch (err) {
+      try {
+        await navigator.clipboard.writeText(shareUrl);
+        alert('📋 Link copied! Share it with family and friends.');
+      } catch {
+        prompt('Copy this link to share:', shareUrl);
+      }
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!recordingId || !confirm('Delete this recording? This cannot be undone.')) return;
+    setDeleting(true);
+    try {
+      const base = getMonthlyBookBaseUrl();
+      const res = await fetch(`${base}/karaoke/recordings/${recordingId}`, { method: 'DELETE' });
+      if (!res.ok) throw new Error('Could not delete');
+      navigate('/karaoke');
+    } catch (err) {
+      console.error('Delete error:', err);
+      alert('Could not delete recording. Please try again.');
+    } finally {
+      setDeleting(false);
+    }
+  };
+
   const handleSeek = (e: React.MouseEvent<HTMLDivElement>) => {
     const el = audioRef.current;
     if (!el || !duration) return;
@@ -123,35 +167,58 @@ const KaraokeSharePage: React.FC = () => {
     );
   }
 
+  const coverSrc = data.song?.coverImage;
+
   return (
-    <div className="flex flex-col h-full bg-black">
+    <div className="relative flex flex-col h-full overflow-hidden bg-black">
+      {/* Blurred cover image as background */}
+      {coverSrc && (
+        <>
+          <div
+            className="absolute inset-0 scale-110 bg-cover bg-center bg-no-repeat"
+            style={{
+              backgroundImage: `url(${coverSrc})`,
+              filter: 'blur(40px)',
+            }}
+            aria-hidden
+          />
+          <div className="absolute inset-0 bg-black/60" aria-hidden />
+        </>
+      )}
+      <div className="relative z-10 flex flex-col h-full">
       <div className="flex items-center justify-between px-4 py-3" style={{ paddingTop: 'calc(var(--safe-area-top, 12px) + 8px)' }}>
-        <button onClick={() => navigate('/karaoke')} className="flex items-center gap-2 text-white/90 hover:text-white font-display text-sm active:scale-95">
+        <button onClick={() => navigate('/karaoke')} className="flex items-center gap-2 text-white/90 hover:text-white font-display text-sm active:scale-95 drop-shadow-md">
           <ArrowLeft size={22} /> <span>Back</span>
         </button>
-        <h1 className="text-white font-display font-bold text-sm truncate flex-1 mx-2 text-center">
-          {data.song?.title || 'Shared karaoke'}
-        </h1>
-        <div className="w-14" />
+        <div className="flex-1" />
+        <button
+          onClick={handleShare}
+          className="flex items-center justify-center p-2 text-white/90 hover:text-white active:scale-95 drop-shadow-md"
+          aria-label="Share"
+        >
+          <Share2 size={22} />
+        </button>
       </div>
 
       <div className="flex-1 flex flex-col items-center justify-center px-4">
         <div
-          className="relative w-full max-w-sm aspect-square rounded-2xl overflow-hidden bg-gradient-to-br from-violet-900 to-purple-950 flex items-center justify-center"
-          style={{ maxHeight: '40vh' }}
+          className="relative w-[min(100%,min(20rem,40vh))] aspect-square rounded-2xl overflow-hidden bg-gradient-to-br from-violet-900 to-purple-950 flex items-center justify-center"
         >
           {data.song?.coverImage ? (
-            <img src={data.song.coverImage} alt={data.song.title} className="w-full h-full object-contain" />
+            <img src={data.song.coverImage} alt={data.song.title} className="absolute inset-0 w-full h-full object-cover" />
           ) : (
             <span className="text-white/50 text-6xl">♪</span>
           )}
         </div>
-        <p className="text-white/80 font-display mt-4 text-center">Music + voice recording</p>
+        <div className="mt-4 text-center">
+          <p className="text-white font-display font-bold drop-shadow-md">{data.song?.title || 'My recording'}</p>
+          <p className="text-white/70 font-display text-sm mt-0.5 drop-shadow-md">{data.artistName || 'Artist'}</p>
+        </div>
       </div>
 
       <audio ref={audioRef} src={data.mixedAudioUrl} preload="metadata" />
 
-      <div className="bg-gradient-to-t from-black to-transparent pt-6 pb-8 px-4 safe-area-bottom">
+      <div className="relative bg-gradient-to-t from-black to-transparent pt-6 pb-8 px-4 safe-area-bottom">
         <div className="max-w-xl mx-auto">
           <div
             className="h-2 bg-white/20 rounded-full overflow-hidden cursor-pointer mb-4"
@@ -176,6 +243,16 @@ const KaraokeSharePage: React.FC = () => {
             </button>
           </div>
         </div>
+        <button
+          onClick={handleDelete}
+          disabled={deleting}
+          className="absolute bottom-4 right-4 p-2.5 rounded-xl text-white/70 hover:text-red-400 hover:bg-white/10 active:scale-95 disabled:opacity-50 flex items-center justify-center"
+          aria-label="Delete"
+          title="Delete recording"
+        >
+          <Trash2 size={22} />
+        </button>
+      </div>
       </div>
     </div>
   );

@@ -59,6 +59,10 @@ const karaokeSongSchema = new mongoose.Schema({
         type: [String],
         default: [],
     },
+    coverImagePrompts: {
+        type: [String],
+        default: [],
+    },
     viewCount: {
         type: Number,
         default: 0,

@@ -206,10 +206,10 @@ const LifetimeOfferModal: React.FC<LifetimeOfferModalProps> = ({ variant, onClos
               <p className="text-red-300 text-xs mb-3">{error}</p>
             )}
 
-            {/* CTA - disabled only when first variant and timer expired (not for expired variant - one last chance) */}
+            {/* CTA - disabled only when purchasing; allow purchase even after timer (one last chance) */}
             <button
               onClick={handlePurchaseClick}
-              disabled={isPurchasing || (variant === 'first' && timerExpired)}
+              disabled={isPurchasing}
               className="w-full font-bold text-lg py-4 rounded-2xl shadow-lg active:scale-[0.98] transition-all mb-3 disabled:opacity-50 disabled:cursor-not-allowed bg-gradient-to-r from-amber-400 to-yellow-500 text-[#1e1b4b] shadow-amber-400/30"
             >
               {isPurchasing ? (

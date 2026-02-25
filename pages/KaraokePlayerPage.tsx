@@ -87,6 +87,7 @@ const KaraokePlayerPage: React.FC = () => {
   const mixedAudioRef = useRef<HTMLAudioElement | null>(null);
   const recordingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const progressPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const recordingStartOffsetRef = useRef(0);
 
   // Use background MP3 for playback; video is no longer used
   const mediaSrc = song?.backgroundAudioUrl || song?.videoUrl;
@@ -207,8 +208,11 @@ const KaraokePlayerPage: React.FC = () => {
       handleStopRecording();
       el.pause();
     } else {
+      // iOS: Start playback FIRST (in user gesture), before requesting mic.
+      // getUserMedia takes over the audio session and can mute playback otherwise.
+      await el.play().catch(() => {});
       const ok = await handleStartRecording();
-      if (ok) el.play().catch(() => {});
+      if (!ok) el.pause();
     }
   };
 
@@ -234,6 +238,16 @@ const KaraokePlayerPage: React.FC = () => {
       setRecordedUrl(null);
     }
     try {
+      // iOS Safari: Request play-and-record audio session so music and mic work together.
+      if (typeof navigator !== 'undefined' && (navigator as any).audioSession?.setType) {
+        try {
+          (navigator as any).audioSession.setType('play-and-record');
+        } catch (_) { /* not supported */ }
+      } else if (typeof navigator !== 'undefined' && (navigator as any).audioSession !== undefined) {
+        try {
+          (navigator as any).audioSession.type = 'play-and-record';
+        } catch (_) { /* not supported */ }
+      }
       // Disable processing effects to reduce choppiness with external mics
       const stream = await navigator.mediaDevices.getUserMedia({
         audio: {
@@ -264,6 +278,9 @@ const KaraokePlayerPage: React.FC = () => {
       // recordings longer than ~1 min to fail/truncate. Without timeslice we get one
       // blob on stop, which avoids the cutoff.
       recorder.start();
+      // Capture music position when recording starts - used for sync on mix (iOS: playback starts before mic, so recording begins late)
+      const offset = mediaRef.current?.currentTime;
+      recordingStartOffsetRef.current = typeof offset === 'number' && Number.isFinite(offset) ? offset : 0;
       setIsRecording(true);
       // Poll progress bar while recording (fallback for platforms where timeupdate/rAF may not fire)
       if (progressPollRef.current) clearInterval(progressPollRef.current);
@@ -498,6 +515,7 @@ const KaraokePlayerPage: React.FC = () => {
       form.append('reverbLevel', String(reverbLevel));
       form.append('musicVolume', String(musicVolume));
       form.append('voiceVolume', String(voiceVolume));
+      form.append('recordingStartOffset', String(recordingStartOffsetRef.current));
       const mixRes = await fetch(`${base}/karaoke/mix`, {
         method: 'POST',
         body: form,
@@ -660,6 +678,7 @@ const KaraokePlayerPage: React.FC = () => {
     if (recordedUrl) URL.revokeObjectURL(recordedUrl);
     setRecordedUrl(null);
     setRecordingDuration(null);
+    recordingStartOffsetRef.current = 0;
     setSavedRecordingId(null);
     setMasterCreated(false);
     setMixedAudioUrl(null);

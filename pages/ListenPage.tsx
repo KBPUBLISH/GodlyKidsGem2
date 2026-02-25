@@ -402,7 +402,7 @@ const ListenPage: React.FC = () => {
             style={{ zIndex: 15, right: '2%', top: '12%', width: '22vw', maxWidth: 110, opacity: 0.88 }}
             aria-label="Go to Karaoke"
           >
-            <img src={KARAOKE_RAFT} alt="" className="w-full h-auto object-contain drop-shadow-[0_4px_12px_rgba(0,0,0,0.3)] pointer-events-none" />
+            <img src={KARAOKE_RAFT} alt="" className="w-full h-auto object-contain pointer-events-none" />
           </button>
           {/* Fixed island behind content */}
           <div className="absolute top-0 left-0 right-0 flex justify-center pt-12 pointer-events-none" style={{ zIndex: 4 }}>
@@ -856,7 +856,7 @@ const ListenPage: React.FC = () => {
           <img
             src={KARAOKE_RAFT}
             alt=""
-            className="w-full h-auto object-contain drop-shadow-[0_4px_12px_rgba(0,0,0,0.3)] pointer-events-none"
+            className="w-full h-auto object-contain pointer-events-none"
           />
         </button>
 

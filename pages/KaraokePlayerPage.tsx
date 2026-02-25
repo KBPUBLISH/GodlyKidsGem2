@@ -89,6 +89,7 @@ const KaraokePlayerPage: React.FC = () => {
   const recordingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const progressPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const recordingStartOffsetRef = useRef(0);
+  const recordingCtxRef = useRef<AudioContext | null>(null);
 
   // Use background MP3 for playback; video is no longer used
   const mediaSrc = song?.backgroundAudioUrl || song?.videoUrl;
@@ -259,12 +260,24 @@ const KaraokePlayerPage: React.FC = () => {
           autoGainControl: false,
         },
       });
+      // Boost mic signal through Web Audio GainNode before recording.
+      // iOS reduces mic gain when speakers are active; this compensates.
+      const recCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
+      if (recCtx.state === 'suspended') await recCtx.resume().catch(() => {});
+      const micSource = recCtx.createMediaStreamSource(stream);
+      const boostGain = recCtx.createGain();
+      boostGain.gain.value = 3.0; // 3x boost to compensate for iOS mic reduction
+      const dest = recCtx.createMediaStreamDestination();
+      micSource.connect(boostGain);
+      boostGain.connect(dest);
+      recordingCtxRef.current = recCtx;
+
       const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
         ? 'audio/webm;codecs=opus'
         : MediaRecorder.isTypeSupported('audio/mp4')
           ? 'audio/mp4'
           : 'audio/webm';
-      const recorder = new MediaRecorder(stream, {
+      const recorder = new MediaRecorder(dest.stream, {
         audioBitsPerSecond: 128000,
       });
       recordedChunksRef.current = [];
@@ -273,6 +286,7 @@ const KaraokePlayerPage: React.FC = () => {
       };
       recorder.onstop = () => {
         stream.getTracks().forEach((t) => t.stop());
+        try { recordingCtxRef.current?.close(); } catch {} finally { recordingCtxRef.current = null; }
         const blob = new Blob(recordedChunksRef.current, { type: mimeType });
         console.log(`🎤 Recording: ${recordedChunksRef.current.length} chunks, ${(blob.size / 1024).toFixed(1)}KB, type=${mimeType}`);
         setRecordedUrl(URL.createObjectURL(blob));
@@ -689,6 +703,7 @@ const KaraokePlayerPage: React.FC = () => {
 
   const handleRecordAgain = () => {
     if (recordedUrl) URL.revokeObjectURL(recordedUrl);
+    try { recordingCtxRef.current?.close(); } catch {} finally { recordingCtxRef.current = null; }
     setRecordedUrl(null);
     setRecordingDuration(null);
     recordingStartOffsetRef.current = 0;

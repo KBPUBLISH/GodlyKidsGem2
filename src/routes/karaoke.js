@@ -376,7 +376,9 @@ router.post('/mix', mixMulter.single('recording'), async (req, res) => {
         const ext = isVideo ? (audioSourceUrl.includes('.webm') ? 'webm' : 'mp4') : 'mp3';
         const sourcePath = path.join(tmpDir, `source.${ext}`);
         const bgPath = path.join(tmpDir, 'background.mp3');
-        const recPath = path.join(tmpDir, 'recording.webm');
+        const recOrigName = req.file.originalname || 'recording.webm';
+        const recExt = path.extname(recOrigName) || '.webm';
+        const recPath = path.join(tmpDir, `recording${recExt}`);
         const outPath = path.join(tmpDir, 'mixed.mp3');
 
         const aecho = REVERB_AECHO[reverbLevel];
@@ -389,7 +391,7 @@ router.post('/mix', mixMulter.single('recording'), async (req, res) => {
             ? `${voiceInput}aecho=${aecho}[rev];[rev]volume=${voiceVolume}[v]`
             : `${voiceInput}volume=${voiceVolume}[v]`;
         const complexVoice = delayFilter + volVoice;
-        const mixFilter = `[bg][v]amix=inputs=2:duration=shortest[aout]`;
+        const mixFilter = `[bg][v]amix=inputs=2:duration=first[aout]`;
         const complexFilter = `${volBg};${complexVoice};${mixFilter}`;
 
         try {

@@ -453,8 +453,13 @@ const KaraokePlayerPage: React.FC = () => {
         myTakeDurationRef.current = recDuration;
       }
 
+      // Start music FIRST, then start voice when music actually begins playing.
+      // AudioBufferSourceNode.start() is instant (buffer in memory), but
+      // HTMLAudioElement.play() has ~200-300ms loading latency. Starting voice
+      // first would make it audibly ahead of the music.
       const onMusicPlaying = () => {
         myTakeStartRef.current = performance.now();
+        voiceController.start();
       };
 
       if (song.backgroundAudioUrl) {
@@ -465,7 +470,6 @@ const KaraokePlayerPage: React.FC = () => {
         myTakeMusicRef.current = musicEl;
         playheadSourceRef.current = null;
         musicEl.addEventListener('playing', onMusicPlaying, { once: true });
-        voiceController.start();
         musicEl.play().catch(() => onMusicPlaying());
       } else {
         const el = mediaRef.current;
@@ -475,7 +479,6 @@ const KaraokePlayerPage: React.FC = () => {
           el.volume = musicVolume;
           el.currentTime = 0;
           el.addEventListener('playing', onMusicPlaying, { once: true });
-          voiceController.start();
           el.play().catch(() => onMusicPlaying());
         } else {
           myTakeStartRef.current = performance.now();

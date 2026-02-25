@@ -351,8 +351,6 @@ router.post('/mix', mixMulter.single('recording'), async (req, res) => {
         const reverbLevel = Math.min(3, Math.max(0, parseInt(req.body.reverbLevel, 10) || 0));
         const musicVolume = Math.min(1, Math.max(0, parseFloat(req.body.musicVolume) || 0.45));
         const voiceVolume = Math.min(1, Math.max(0, parseFloat(req.body.voiceVolume) || 1));
-        // Seconds into music when recording started (iOS: playback starts before mic, so recording begins late)
-        const recordingStartOffset = Math.max(0, Math.min(10, parseFloat(req.body.recordingStartOffset) || 0));
         if (!karaokeSongId || !req.file) {
             return res.status(400).json({ message: 'karaokeSongId and recording file are required' });
         }
@@ -376,26 +374,22 @@ router.post('/mix', mixMulter.single('recording'), async (req, res) => {
         const ext = isVideo ? (audioSourceUrl.includes('.webm') ? 'webm' : 'mp4') : 'mp3';
         const sourcePath = path.join(tmpDir, `source.${ext}`);
         const bgPath = path.join(tmpDir, 'background.mp3');
-        const recOrigName = req.file.originalname || 'recording.webm';
-        const recExt = path.extname(recOrigName) || '.webm';
-        const recPath = path.join(tmpDir, `recording${recExt}`);
+        const recPath = path.join(tmpDir, 'recording.webm');
         const outPath = path.join(tmpDir, 'mixed.mp3');
 
         const aecho = REVERB_AECHO[reverbLevel];
-        const offsetMs = Math.round(recordingStartOffset * 1000);
-        // If recording started late (e.g. iOS), add silence so voice aligns with background
-        const delayFilter = offsetMs > 0 ? `[1:a]adelay=${offsetMs}|${offsetMs}[delayed];` : '';
-        const voiceInput = offsetMs > 0 ? '[delayed]' : '[1:a]';
-        const volBg = `[0:a]volume=${musicVolume}[bg]`;
-        // Apply 3x voice boost to compensate for iOS mic being quiet when
-        // speakers are active. Recording comes in raw (no frontend gain).
+        // duration=shortest: mix ends when recording ends. Both start at 0, aligned.
+        // Apply volume to each input: [0]=bg, [1]=voice
+        // 3x voice boost compensates for iOS mic being quiet when speakers are active
         const effectiveVoiceVol = Math.min(3, voiceVolume * 3);
+        const volBg = `[0:a]volume=${musicVolume}[bg]`;
         const volVoice = aecho
-            ? `${voiceInput}aecho=${aecho}[rev];[rev]volume=${effectiveVoiceVol}[v]`
-            : `${voiceInput}volume=${effectiveVoiceVol}[v]`;
-        const complexVoice = delayFilter + volVoice;
-        const mixFilter = `[bg][v]amix=inputs=2:duration=first[aout]`;
-        const complexFilter = `${volBg};${complexVoice};${mixFilter}`;
+            ? `[1:a]aecho=${aecho}[rev];[rev]volume=${effectiveVoiceVol}[v]`
+            : `[1:a]volume=${effectiveVoiceVol}[v]`;
+        const mixFilter = `[bg][v]amix=inputs=2:duration=shortest[aout]`;
+        const complexFilter = aecho
+            ? `${volBg};${volVoice};${mixFilter}`
+            : `${volBg};${volVoice};${mixFilter}`;
 
         try {
             await fs.promises.writeFile(sourcePath, sourceBuffer);
@@ -407,21 +401,15 @@ router.post('/mix', mixMulter.single('recording'), async (req, res) => {
                 await fs.promises.copyFile(sourcePath, bgPath);
             }
             await fs.promises.writeFile(recPath, req.file.buffer);
-            console.log(`🎤 Recording: ${(req.file.buffer.length / 1024).toFixed(1)}KB, ext=${recExt}, original=${recOrigName}`);
-            console.log(`🎤 Filter: ${complexFilter}`);
 
             await new Promise((resolve, reject) => {
                 ffmpeg()
                     .input(bgPath)
                     .input(recPath)
-                    .inputOptions(['-analyzeduration', '10000000', '-probesize', '10000000'])
                     .complexFilter(complexFilter)
                     .outputOptions(['-map', '[aout]', '-ac', '2', '-b:a', '128k'])
                     .output(outPath)
-                    .on('error', (err) => {
-                        console.error('FFmpeg mix error:', err.message);
-                        reject(err);
-                    })
+                    .on('error', reject)
                     .on('end', resolve)
                     .run();
             });

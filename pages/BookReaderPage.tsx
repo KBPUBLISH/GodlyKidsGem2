@@ -1378,6 +1378,12 @@ const BookReaderPage: React.FC = () => {
         };
     }, [stopAllBookAudio]);
 
+    // Ref for visibility handler to check if audiobook/playlist is playing (don't clear MediaSession then)
+    const playlistPlayingRef = useRef({ currentPlaylist: null as typeof currentPlaylist, isPlaying: false });
+    useEffect(() => {
+        playlistPlayingRef.current = { currentPlaylist, isPlaying };
+    }, [currentPlaylist, isPlaying]);
+
     // Effect: Stop audio when page becomes hidden (user switches tabs/apps)
     // Book music should NOT play in background - only playlists should do that
     useEffect(() => {
@@ -1410,8 +1416,10 @@ const BookReaderPage: React.FC = () => {
                 bookBackgroundMusicRef.current.pause();
             }
             
-            // Clear MediaSession to prevent lock screen controls for book music
-            if ('mediaSession' in navigator) {
+            // Clear MediaSession ONLY if audiobook/playlist is NOT playing. Otherwise we'd wipe
+            // the playlist's session and cause Android to pause audiobooks when screen turns off.
+            const { currentPlaylist: pl, isPlaying: ip } = playlistPlayingRef.current;
+            if (!(pl && ip) && 'mediaSession' in navigator) {
                 try {
                     navigator.mediaSession.metadata = null;
                     navigator.mediaSession.playbackState = 'none';

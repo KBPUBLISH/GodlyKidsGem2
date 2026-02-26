@@ -42,7 +42,7 @@ const ParentGateModal: React.FC<ParentGateModalProps> = ({ isOpen, onClose, onSu
   if (!isOpen) return null;
 
   const modalContent = (
-    <div className="fixed inset-0 z-[200] flex items-center justify-center px-4 pointer-events-auto">
+    <div className="fixed inset-0 z-[10000] flex items-center justify-center px-4 pointer-events-auto">
       {/* Backdrop */}
       <div 
         className="absolute inset-0 bg-black/80 backdrop-blur-sm animate-in fade-in duration-300" 

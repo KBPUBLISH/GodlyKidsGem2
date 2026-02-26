@@ -88,6 +88,8 @@ const KaraokePlayerPage: React.FC = () => {
   const mixedAudioRef = useRef<HTMLAudioElement | null>(null);
   const recordingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const progressPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const monitorCtxRef = useRef<AudioContext | null>(null);
+  const monitorSourceRef = useRef<MediaStreamAudioSourceNode | null>(null);
 
   // Use background MP3 for playback; video is no longer used
   const mediaSrc = song?.backgroundAudioUrl || song?.videoUrl;
@@ -255,6 +257,21 @@ const KaraokePlayerPage: React.FC = () => {
           autoGainControl: false,
         },
       });
+      // Route mic to speakers so user hears themselves while singing (voice monitoring).
+      // Required on iOS: mic stream is not played by default; Web Audio must explicitly connect it.
+      try {
+        const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
+        const source = ctx.createMediaStreamSource(stream);
+        const gain = ctx.createGain();
+        gain.gain.value = 1;
+        source.connect(gain);
+        gain.connect(ctx.destination);
+        monitorCtxRef.current = ctx;
+        monitorSourceRef.current = source;
+        if (ctx.state === 'suspended') await ctx.resume();
+      } catch (e) {
+        console.warn('Mic monitoring unavailable:', e);
+      }
       const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
         ? 'audio/webm;codecs=opus'
         : MediaRecorder.isTypeSupported('audio/mp4')
@@ -296,6 +313,15 @@ const KaraokePlayerPage: React.FC = () => {
             clearTimeout(recordingTimeoutRef.current);
             recordingTimeoutRef.current = null;
           }
+          // Stop mic monitoring
+          if (monitorSourceRef.current && monitorCtxRef.current) {
+            try {
+              monitorSourceRef.current.disconnect();
+            } catch (_) {}
+            monitorSourceRef.current = null;
+            if (monitorCtxRef.current.state !== 'closed') monitorCtxRef.current.close();
+            monitorCtxRef.current = null;
+          }
           recorder.stop();
           mediaRecorderRef.current = null;
           setIsRecording(false);
@@ -325,6 +351,15 @@ const KaraokePlayerPage: React.FC = () => {
     if (recordingTimeoutRef.current) {
       clearTimeout(recordingTimeoutRef.current);
       recordingTimeoutRef.current = null;
+    }
+    // Stop mic monitoring
+    if (monitorSourceRef.current && monitorCtxRef.current) {
+      try {
+        monitorSourceRef.current.disconnect();
+      } catch (_) {}
+      monitorSourceRef.current = null;
+      if (monitorCtxRef.current.state !== 'closed') monitorCtxRef.current.close();
+      monitorCtxRef.current = null;
     }
     const rec = mediaRecorderRef.current;
     if (!rec || rec.state === 'inactive') return;

@@ -492,38 +492,27 @@ const KaraokePlayerPage: React.FC = () => {
     }
   };
 
-  // Load recording duration when we have a recorded blob (decode for accurate duration on iOS)
+  // Load recording duration when we have a recorded blob.
+  // Use HTML Audio only (decodeAudioData in bg can block AudioContext on iOS and break Play button).
+  // handlePlayRecording sets recordingDuration from decoded blob when user clicks Play.
   useEffect(() => {
     if (!recordedUrl) {
       setRecordingDuration(null);
       return;
     }
-    let cancelled = false;
-    (async () => {
-      try {
-        const res = await fetch(recordedUrl);
-        const buf = await res.arrayBuffer();
-        const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
-        const decoded = await ctx.decodeAudioData(buf);
-        if (!cancelled && decoded.duration > 0) {
-          setRecordingDuration(decoded.duration);
-        }
-        ctx.close();
-      } catch {
-        // Fallback: HTML Audio (may report wrong duration on iOS)
-        const audio = new Audio(recordedUrl);
-        audio.addEventListener('loadedmetadata', () => {
-          if (!cancelled) {
-            const d = audio.duration;
-            if (typeof d === 'number' && Number.isFinite(d) && d > 0 && d < 86400) {
-              setRecordingDuration(d);
-            }
-          }
-        }, { once: true });
-        audio.addEventListener('error', () => { if (!cancelled) setRecordingDuration(null); }, { once: true });
+    const audio = new Audio(recordedUrl);
+    const onLoaded = () => {
+      const d = audio.duration;
+      if (typeof d === 'number' && Number.isFinite(d) && d > 0 && d < 86400) {
+        setRecordingDuration(d);
       }
-    })();
-    return () => { cancelled = true; };
+    };
+    audio.addEventListener('loadedmetadata', onLoaded, { once: true });
+    audio.addEventListener('error', () => setRecordingDuration(null), { once: true });
+    return () => {
+      audio.removeEventListener('loadedmetadata', onLoaded);
+      audio.src = '';
+    };
   }, [recordedUrl]);
 
   useEffect(() => {

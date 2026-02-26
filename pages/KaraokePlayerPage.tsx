@@ -36,6 +36,13 @@ const formatTime = (seconds: number): string => {
   return `${m}:${String(s).padStart(2, '0')}`;
 };
 
+/** Detect Safari/iOS - use audio-recorder-polyfill for reliable recording (native MediaRecorder produces corrupt/silent output). */
+function isSafariOrIOS(): boolean {
+  if (typeof navigator === 'undefined') return false;
+  const ua = navigator.userAgent;
+  return /iPhone|iPad|iPod/.test(ua) || (/Safari/.test(ua) && !/Chrome|Chromium/.test(ua));
+}
+
 const KaraokePlayerPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -90,6 +97,7 @@ const KaraokePlayerPage: React.FC = () => {
   const progressPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const monitorCtxRef = useRef<AudioContext | null>(null);
   const monitorSourceRef = useRef<MediaStreamAudioSourceNode | null>(null);
+  const myTakeStopTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Use background MP3 for playback; video is no longer used
   const mediaSrc = song?.backgroundAudioUrl || song?.videoUrl;
@@ -257,27 +265,37 @@ const KaraokePlayerPage: React.FC = () => {
           autoGainControl: false,
         },
       });
-      // Route mic to speakers so user hears themselves while singing (voice monitoring).
-      // Required on iOS: mic stream is not played by default; Web Audio must explicitly connect it.
-      try {
-        const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
-        const source = ctx.createMediaStreamSource(stream);
-        const gain = ctx.createGain();
-        gain.gain.value = 1;
-        source.connect(gain);
-        gain.connect(ctx.destination);
-        monitorCtxRef.current = ctx;
-        monitorSourceRef.current = source;
-        if (ctx.state === 'suspended') await ctx.resume();
-      } catch (e) {
-        console.warn('Mic monitoring unavailable:', e);
+      const usePolyfill = isSafariOrIOS();
+      if (usePolyfill) {
+        const AudioRecorderPolyfill = (await import('audio-recorder-polyfill')).default;
+        (window as any).MediaRecorder = AudioRecorderPolyfill;
       }
-      const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
-        ? 'audio/webm;codecs=opus'
-        : MediaRecorder.isTypeSupported('audio/mp4')
-          ? 'audio/mp4'
-          : 'audio/webm';
+      // Voice monitoring: polyfill provides it via ScriptProcessor->destination on Safari.
+      // On other browsers, route mic to speakers explicitly.
+      if (!usePolyfill) {
+        try {
+          const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
+          const source = ctx.createMediaStreamSource(stream);
+          const gain = ctx.createGain();
+          gain.gain.value = 1;
+          source.connect(gain);
+          gain.connect(ctx.destination);
+          monitorCtxRef.current = ctx;
+          monitorSourceRef.current = source;
+          if (ctx.state === 'suspended') await ctx.resume();
+        } catch (e) {
+          console.warn('Mic monitoring unavailable:', e);
+        }
+      }
+      const mimeType = usePolyfill
+        ? 'audio/wav'
+        : MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
+          ? 'audio/webm;codecs=opus'
+          : MediaRecorder.isTypeSupported('audio/mp4')
+            ? 'audio/mp4'
+            : 'audio/webm';
       const recorder = new MediaRecorder(stream, {
+        mimeType,
         audioBitsPerSecond: 128000,
       });
       recordedChunksRef.current = [];
@@ -369,6 +387,10 @@ const KaraokePlayerPage: React.FC = () => {
   };
 
   const handleStopMyTake = () => {
+    if (myTakeStopTimeoutRef.current) {
+      clearTimeout(myTakeStopTimeoutRef.current);
+      myTakeStopTimeoutRef.current = null;
+    }
     const music = myTakeMusicRef.current;
     const main = mediaRef.current;
     if (music) {
@@ -424,6 +446,8 @@ const KaraokePlayerPage: React.FC = () => {
       if (recDuration > 0) {
         setDuration(recDuration);
         myTakeDurationRef.current = recDuration;
+        // Stop preview after recording duration (prevents full track playing when recording is short)
+        myTakeStopTimeoutRef.current = setTimeout(handleStopMyTake, Math.ceil((recDuration + 0.5) * 1000));
       }
 
       // Start voice first, then music after a small delay. Voice has output latency so
@@ -540,8 +564,9 @@ const KaraokePlayerPage: React.FC = () => {
     try {
       const base = getMonthlyBookBaseUrl();
       const blob = await fetch(recordedUrl).then((r) => r.blob());
+      const recFilename = blob.type?.includes('wav') ? 'recording.wav' : 'recording.webm';
       const form = new FormData();
-      form.append('recording', blob, 'recording.webm');
+      form.append('recording', blob, recFilename);
       form.append('karaokeSongId', id);
       form.append('reverbLevel', String(reverbLevel));
       form.append('musicVolume', String(musicVolume));

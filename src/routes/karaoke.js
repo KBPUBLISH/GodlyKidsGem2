@@ -387,7 +387,9 @@ router.post('/mix', mixMulter.single('recording'), async (req, res) => {
         const volVoice = aecho
             ? `[1:a]aecho=${aecho}[rev];[rev]volume=${effectiveVoiceVol}[v]`
             : `[1:a]volume=${effectiveVoiceVol}[v]`;
-        const mixFilter = `[bg][v]amix=inputs=2:duration=shortest[aout]`;
+        // amix scales by 1/n; add master gain for commercial-level loudness (Spotify ~ -14 LUFS)
+        const masterGain = 2;
+        const mixFilter = `[bg][v]amix=inputs=2:duration=shortest[amix];[amix]volume=${masterGain}[aout]`;
         const complexFilter = aecho
             ? `${volBg};${volVoice};${mixFilter}`
             : `${volBg};${volVoice};${mixFilter}`;

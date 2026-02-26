@@ -440,11 +440,15 @@ const KaraokePlayerPage: React.FC = () => {
     setIsPlayingMyTake(true);
 
     try {
-      const voiceController = await prepareVoicePlayback(recordedUrl, reverbLevel, voiceVolume, handleStopMyTake);
+      // 2.5x voice boost for preview (backend uses 3x when mixing; iOS recordings tend to be quiet)
+      const voiceBoost = 2.5;
+      const effectiveVoiceVol = Math.min(2, voiceVolume * voiceBoost);
+      const voiceController = await prepareVoicePlayback(recordedUrl, reverbLevel, effectiveVoiceVol, handleStopMyTake);
       voiceControllerRef.current = voiceController;
       const recDuration = voiceController.duration || 0;
       if (recDuration > 0) {
         setDuration(recDuration);
+        setRecordingDuration(recDuration); // Authoritative duration from decoded blob (fixes wrong blob metadata on iOS)
         myTakeDurationRef.current = recDuration;
         // Stop preview after recording duration (prevents full track playing when recording is short)
         myTakeStopTimeoutRef.current = setTimeout(handleStopMyTake, Math.ceil((recDuration + 0.5) * 1000));
@@ -488,25 +492,38 @@ const KaraokePlayerPage: React.FC = () => {
     }
   };
 
-  // Load recording duration when we have a recorded blob (for post-recording screen display)
+  // Load recording duration when we have a recorded blob (decode for accurate duration on iOS)
   useEffect(() => {
     if (!recordedUrl) {
       setRecordingDuration(null);
       return;
     }
-    const audio = new Audio(recordedUrl);
-    const onLoaded = () => {
-      const d = audio.duration;
-      if (typeof d === 'number' && Number.isFinite(d) && d > 0) {
-        setRecordingDuration(d);
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch(recordedUrl);
+        const buf = await res.arrayBuffer();
+        const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
+        const decoded = await ctx.decodeAudioData(buf);
+        if (!cancelled && decoded.duration > 0) {
+          setRecordingDuration(decoded.duration);
+        }
+        ctx.close();
+      } catch {
+        // Fallback: HTML Audio (may report wrong duration on iOS)
+        const audio = new Audio(recordedUrl);
+        audio.addEventListener('loadedmetadata', () => {
+          if (!cancelled) {
+            const d = audio.duration;
+            if (typeof d === 'number' && Number.isFinite(d) && d > 0 && d < 86400) {
+              setRecordingDuration(d);
+            }
+          }
+        }, { once: true });
+        audio.addEventListener('error', () => { if (!cancelled) setRecordingDuration(null); }, { once: true });
       }
-    };
-    audio.addEventListener('loadedmetadata', onLoaded, { once: true });
-    audio.addEventListener('error', () => setRecordingDuration(null), { once: true });
-    return () => {
-      audio.removeEventListener('loadedmetadata', onLoaded);
-      audio.src = '';
-    };
+    })();
+    return () => { cancelled = true; };
   }, [recordedUrl]);
 
   useEffect(() => {

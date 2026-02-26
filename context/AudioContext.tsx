@@ -416,6 +416,26 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         }
     }, [currentPlaylist, currentTrackIndex, updateMediaSession]);
 
+    // Android: Re-establish MediaSession when app returns to foreground (screen on / app resumed).
+    // Android WebView can drop the lock screen media controls when backgrounded; re-applying fixes it.
+    useEffect(() => {
+        const isAndroid = typeof navigator !== 'undefined' && /android/i.test(navigator.userAgent);
+        if (!isAndroid || !('mediaSession' in navigator)) return;
+
+        const handleVisibilityChange = () => {
+            if (document.visibilityState === 'visible' && currentPlaylist && isPlaying) {
+                try {
+                    updateMediaSession();
+                } catch (e) {
+                    // Ignore
+                }
+            }
+        };
+
+        document.addEventListener('visibilitychange', handleVisibilityChange);
+        return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
+    }, [currentPlaylist, isPlaying, updateMediaSession]);
+
     // Safe wrapper for mediaSession operations - prevents errors during Despia WebView transitions
     const safeMediaSessionAction = useCallback((action: string, handler: ((details?: any) => void) | null) => {
         try {

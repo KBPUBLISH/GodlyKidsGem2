@@ -374,7 +374,8 @@ router.post('/mix', mixMulter.single('recording'), async (req, res) => {
         const ext = isVideo ? (audioSourceUrl.includes('.webm') ? 'webm' : 'mp4') : 'mp3';
         const sourcePath = path.join(tmpDir, `source.${ext}`);
         const bgPath = path.join(tmpDir, 'background.mp3');
-        const recPath = path.join(tmpDir, 'recording.webm');
+        const recExt = req.file?.originalname?.endsWith('.wav') ? 'wav' : 'webm';
+        const recPath = path.join(tmpDir, `recording.${recExt}`);
         const outPath = path.join(tmpDir, 'mixed.mp3');
 
         const aecho = REVERB_AECHO[reverbLevel];

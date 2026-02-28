@@ -78,7 +78,7 @@ const PaywallPage: React.FC = () => {
   const showLifetimeOption = fromState === 'lifetime-offer'; // Deal page sends users here; show $19.99 lifetime
   
   const [selectedPlan, setSelectedPlan] = useState<'annual' | 'monthly' | 'lifetime'>(
-    fromState === 'lifetime-offer' ? 'lifetime' : 'annual'
+    fromState === 'lifetime-offer' ? 'lifetime' : 'monthly'
   );
   const [planSelectorExpanded, setPlanSelectorExpanded] = useState(fromState === 'lifetime-offer');
   const [showParentGate, setShowParentGate] = useState(false);
@@ -657,7 +657,7 @@ const PaywallPage: React.FC = () => {
                       Processing...
                     </span>
                   ) : (
-                    <span>Continue</span>
+                    <span>Start 7-Day Free Trial</span>
                   )}
                 </button>
                 <div className="mb-6">

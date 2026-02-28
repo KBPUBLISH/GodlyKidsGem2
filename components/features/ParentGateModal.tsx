@@ -7,9 +7,10 @@ interface ParentGateModalProps {
   isOpen: boolean;
   onClose: () => void;
   onSuccess: () => void;
+  isPurchasing?: boolean; // Show loading state after gate is passed
 }
 
-const ParentGateModal: React.FC<ParentGateModalProps> = ({ isOpen, onClose, onSuccess }) => {
+const ParentGateModal: React.FC<ParentGateModalProps> = ({ isOpen, onClose, onSuccess, isPurchasing = false }) => {
   const [answer, setAnswer] = useState('');
   const [problem, setProblem] = useState({ q: '', a: 0 });
   const [error, setError] = useState(false);
@@ -52,56 +53,72 @@ const ParentGateModal: React.FC<ParentGateModalProps> = ({ isOpen, onClose, onSu
       {/* Modal Card */}
       <div className="relative w-full max-w-xs bg-[#fdf6e3] rounded-2xl p-6 shadow-2xl border-4 border-[#8B4513] animate-in zoom-in-95 flex flex-col items-center text-center">
          
-         {/* Close Button */}
+         {/* Close Button - hide when purchasing */}
+         {!isPurchasing && (
          <button 
             onClick={onClose} 
             className="absolute top-3 right-3 text-[#8B4513]/50 hover:text-[#8B4513] transition-colors"
          >
             <X size={24} />
          </button>
+         )}
          
          {/* Icon */}
          <div className="w-14 h-14 bg-[#8B4513] rounded-full flex items-center justify-center mb-4 text-[#FFD700] shadow-md border-2 border-[#eecaa0]">
             <Lock size={24} />
          </div>
 
-         <h2 className="font-display font-bold text-xl text-[#5c2e0b] mb-1">Ask a Parent</h2>
-         <p className="text-[#8B4513] text-sm mb-6 font-semibold opacity-80">
-             Please solve to continue.
-         </p>
+         {isPurchasing ? (
+            // Show loading state when purchase is processing
+            <>
+               <h2 className="font-display font-bold text-xl text-[#5c2e0b] mb-1">Processing...</h2>
+               <p className="text-[#8B4513] text-sm mb-6 font-semibold opacity-80">
+                  Opening payment screen
+               </p>
+               <div className="w-12 h-12 border-4 border-[#8B4513]/20 border-t-[#8B4513] rounded-full animate-spin"></div>
+            </>
+         ) : (
+            // Show math problem when not purchasing
+            <>
+               <h2 className="font-display font-bold text-xl text-[#5c2e0b] mb-1">Ask a Parent</h2>
+               <p className="text-[#8B4513] text-sm mb-6 font-semibold opacity-80">
+                  Please solve to continue.
+               </p>
 
-         {/* Math Problem */}
-         <div className="text-3xl font-display font-extrabold text-[#5c2e0b] mb-6 bg-white/50 px-6 py-3 rounded-xl border-2 border-[#8B4513]/20 shadow-inner">
-            {problem.q}
-         </div>
+               {/* Math Problem */}
+               <div className="text-3xl font-display font-extrabold text-[#5c2e0b] mb-6 bg-white/50 px-6 py-3 rounded-xl border-2 border-[#8B4513]/20 shadow-inner">
+                  {problem.q}
+               </div>
 
-         <form onSubmit={handleSubmit} className="w-full">
-            <input 
-                type="tel" 
-                value={answer}
-                onChange={(e) => {
-                    setAnswer(e.target.value);
-                    if(error) setError(false);
-                }}
-                className={`w-full border-2 rounded-xl px-4 py-3 text-center text-xl font-bold mb-4 outline-none transition-colors font-display text-[#5c2e0b] placeholder:text-[#5c2e0b]/30 shadow-inner ${
-                    error 
-                    ? 'border-red-500 bg-red-50 animate-[shake_0.5s_ease-in-out]' 
-                    : 'border-[#8B4513]/30 bg-white focus:border-[#8B4513]'
-                }`}
-                placeholder="?"
-                autoFocus
-            />
-            
-            {error && (
-                <p className="text-red-500 text-xs font-bold mb-3 -mt-2 animate-pulse">
-                    Incorrect, try again!
-                </p>
-            )}
-            
-            <WoodButton fullWidth type="submit" variant="primary" className="py-3 text-lg">
-                Verify & Continue
-            </WoodButton>
-         </form>
+               <form onSubmit={handleSubmit} className="w-full">
+                  <input 
+                     type="tel" 
+                     value={answer}
+                     onChange={(e) => {
+                        setAnswer(e.target.value);
+                        if(error) setError(false);
+                     }}
+                     className={`w-full border-2 rounded-xl px-4 py-3 text-center text-xl font-bold mb-4 outline-none transition-colors font-display text-[#5c2e0b] placeholder:text-[#5c2e0b]/30 shadow-inner ${
+                        error 
+                        ? 'border-red-500 bg-red-50 animate-[shake_0.5s_ease-in-out]' 
+                        : 'border-[#8B4513]/30 bg-white focus:border-[#8B4513]'
+                     }`}
+                     placeholder="?"
+                     autoFocus
+                  />
+                  
+                  {error && (
+                     <p className="text-red-500 text-xs font-bold mb-3 -mt-2 animate-pulse">
+                        Incorrect, try again!
+                     </p>
+                  )}
+                  
+                  <WoodButton fullWidth type="submit" variant="primary" className="py-3 text-lg">
+                     Verify & Continue
+                  </WoodButton>
+               </form>
+            </>
+         )}
       </div>
       <style>{`
         @keyframes shake {

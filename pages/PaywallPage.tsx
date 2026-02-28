@@ -276,7 +276,8 @@ const PaywallPage: React.FC = () => {
     console.log('✅ Parent gate passed, starting purchase flow');
     activityTrackingService.trackOnboardingEvent('paywall_parent_gate_passed', { planType: selectedPlan, ...(isCreateYourStoryPaywall && { source: 'create-your-story' }) });
     
-    setShowParentGate(false);
+    // Keep parent gate open with "Processing..." state until purchase dialog appears
+    // This prevents user from seeing the paywall and thinking they already got access
     setIsPurchasing(true);
     setError(null);
 
@@ -294,6 +295,9 @@ const PaywallPage: React.FC = () => {
       console.log('💳 Calling purchase() with plan:', effectivePlan);
       const result = await purchase(effectivePlan);
       console.log('💳 Purchase result:', result);
+
+      // Close parent gate now that purchase dialog appeared and completed
+      setShowParentGate(false);
 
       if (result.success) {
         // CRITICAL: Verify with backend before granting premium. DeSpia/RevenueCat may fire
@@ -961,7 +965,8 @@ const PaywallPage: React.FC = () => {
         <ParentGateModal 
           isOpen={showParentGate} 
           onClose={() => setShowParentGate(false)} 
-          onSuccess={handleGateSuccess} 
+          onSuccess={handleGateSuccess}
+          isPurchasing={isPurchasing}
         />
 
         {/* Account Required Modal */}

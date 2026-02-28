@@ -48,7 +48,7 @@ export const PRODUCT_IDS_IOS: Record<string, string> = {
 export const PRODUCT_IDS_ANDROID = {
   ANNUAL: 'yearlymember:yearly',
   MONTHLY: 'godlykidsmonthly:monthly',
-  LIFETIME: 'lifetime',
+  LIFETIME: 'lifetime', // Matches Google Play product identifier
 };
 
 // Web Billing product IDs (Stripe products linked in RevenueCat Web Billing)

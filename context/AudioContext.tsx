@@ -332,6 +332,32 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
             lastListeningTimeRef.current = 0;
         });
 
+        // Handle audio errors (network issues, codec problems, etc.)
+        audio.addEventListener('error', (e) => {
+            console.error('🎵 Audio error:', e, 'error code:', audio.error?.code, 'message:', audio.error?.message);
+            // Don't set isPlaying to false - let user manually retry
+        });
+
+        // Handle stalled playback (buffering issues)
+        audio.addEventListener('stalled', () => {
+            console.warn('🎵 Audio stalled (buffering)');
+        });
+
+        // Handle when browser suspends loading (to save bandwidth)
+        audio.addEventListener('suspend', () => {
+            console.log('🎵 Audio loading suspended by browser');
+        });
+
+        // Handle waiting for data (buffering)
+        audio.addEventListener('waiting', () => {
+            console.log('🎵 Audio waiting for data (buffering)');
+        });
+
+        // Handle when playback can resume after buffering
+        audio.addEventListener('canplay', () => {
+            console.log('🎵 Audio can play (buffering complete)');
+        });
+
         return () => {
             // Save remaining listening time on unmount
             if (listeningTimeAccumulatorRef.current > 0) {

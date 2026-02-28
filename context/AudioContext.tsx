@@ -184,6 +184,10 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     const lastEngagementUpdateRef = useRef<number>(0);
     const ENGAGEMENT_UPDATE_INTERVAL = 30; // seconds
     
+    // Watchdog: detect when audio is stuck (isPlaying true but not progressing)
+    const lastAudioTimeRef = useRef<number>(0);
+    const stuckCheckIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+    
     // Keep preview mode ref in sync with state
     useEffect(() => {
         isPreviewModeRef.current = isPreviewMode;
@@ -335,27 +339,59 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         // Handle audio errors (network issues, codec problems, etc.)
         audio.addEventListener('error', (e) => {
             console.error('🎵 Audio error:', e, 'error code:', audio.error?.code, 'message:', audio.error?.message);
-            // Don't set isPlaying to false - let user manually retry
+            // Try to recover by reloading
+            const currentPos = audio.currentTime;
+            audio.load();
+            audio.currentTime = currentPos;
+            if (!audio.paused) {
+                audio.play().catch(() => {});
+            }
         });
 
-        // Handle stalled playback (buffering issues)
+        // Handle stalled playback (buffering issues) - auto-recover
         audio.addEventListener('stalled', () => {
-            console.warn('🎵 Audio stalled (buffering)');
+            console.warn('🎵 Audio stalled (buffering) - attempting recovery');
+            // Try to recover by seeking slightly forward
+            const currentPos = audio.currentTime;
+            audio.currentTime = currentPos + 0.1;
+            if (!audio.paused) {
+                audio.play().catch(() => {});
+            }
         });
 
         // Handle when browser suspends loading (to save bandwidth)
         audio.addEventListener('suspend', () => {
             console.log('🎵 Audio loading suspended by browser');
+            // If we're supposed to be playing but suspended, try to resume
+            if (!audio.paused && audio.readyState < audio.HAVE_FUTURE_DATA) {
+                audio.load();
+            }
         });
 
         // Handle waiting for data (buffering)
+        let waitingTimeout: ReturnType<typeof setTimeout> | null = null;
         audio.addEventListener('waiting', () => {
             console.log('🎵 Audio waiting for data (buffering)');
+            // If stuck waiting for more than 5 seconds, try to recover
+            if (waitingTimeout) clearTimeout(waitingTimeout);
+            waitingTimeout = setTimeout(() => {
+                if (!audio.paused && audio.readyState < audio.HAVE_FUTURE_DATA) {
+                    console.warn('🎵 Audio stuck buffering - attempting recovery');
+                    const currentPos = audio.currentTime;
+                    audio.load();
+                    audio.currentTime = currentPos;
+                    audio.play().catch(() => {});
+                }
+            }, 5000);
         });
 
         // Handle when playback can resume after buffering
         audio.addEventListener('canplay', () => {
             console.log('🎵 Audio can play (buffering complete)');
+            if (waitingTimeout) {
+                clearTimeout(waitingTimeout);
+                waitingTimeout = null;
+            }
         });
 
         return () => {
@@ -396,14 +432,47 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
         if (isPlaying) {
             audio.play().catch(e => console.log('Play failed:', e.name));
+            
+            // Start watchdog to detect stuck audio
+            if (stuckCheckIntervalRef.current) {
+                clearInterval(stuckCheckIntervalRef.current);
+            }
+            lastAudioTimeRef.current = audio.currentTime;
+            stuckCheckIntervalRef.current = setInterval(() => {
+                const currentTime = audio.currentTime;
+                const lastTime = lastAudioTimeRef.current;
+                
+                // If audio should be playing but hasn't progressed in 5 seconds, it's stuck
+                if (!audio.paused && currentTime === lastTime && currentTime > 0) {
+                    console.error('🎵 Audio is stuck! Time:', currentTime, '- Attempting recovery');
+                    // Try to unstick by seeking slightly forward
+                    audio.currentTime = currentTime + 0.1;
+                    audio.play().catch(() => {});
+                }
+                
+                lastAudioTimeRef.current = currentTime;
+            }, 5000); // Check every 5 seconds
         } else {
             audio.pause();
+            
+            // Stop watchdog when paused
+            if (stuckCheckIntervalRef.current) {
+                clearInterval(stuckCheckIntervalRef.current);
+                stuckCheckIntervalRef.current = null;
+            }
         }
         
         // Update media session playback state
         if ('mediaSession' in navigator) {
             navigator.mediaSession.playbackState = isPlaying ? 'playing' : 'paused';
         }
+        
+        return () => {
+            if (stuckCheckIntervalRef.current) {
+                clearInterval(stuckCheckIntervalRef.current);
+                stuckCheckIntervalRef.current = null;
+            }
+        };
     }, [isPlaying]);
 
     // Media Session setup with cover image

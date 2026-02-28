@@ -223,7 +223,11 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
                         
                         // Check if preview limit reached
                         if (previewTimeAccumulator.current >= AUDIO_PREVIEW_SECONDS) {
-                            console.log('🎵 Preview limit reached - pausing playback');
+                            console.log('🎵 Preview limit reached - pausing playback', {
+                                isPreviewMode: isPreviewModeRef.current,
+                                accumulated: previewTimeAccumulator.current,
+                                limit: AUDIO_PREVIEW_SECONDS
+                            });
                             audio.pause();
                             setIsPlaying(false);
                             setPreviewLimitReached(true);
@@ -592,6 +596,9 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
             console.log('🎵 Starting playlist in preview mode (2 min limit) - user not subscribed');
         } else {
             console.log('🎵 Full playback mode - user is subscribed');
+            // IMPORTANT: Reset preview accumulator for subscribed users to prevent false pauses
+            previewTimeAccumulator.current = 0;
+            setPreviewTimeRemaining(AUDIO_PREVIEW_SECONDS);
             setPreviewLimitReached(false);
         }
         

@@ -565,6 +565,49 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         }
     }, [currentPlaylist, currentTrackIndex, updateMediaSession]);
 
+    // Update position state for lock screen progress bar (Android requires this to keep the notification alive)
+    useEffect(() => {
+        if (!('mediaSession' in navigator) || !audioRef.current) return;
+        
+        const audio = audioRef.current;
+        const updatePositionState = () => {
+            if (audio && !isNaN(audio.duration) && audio.duration > 0) {
+                try {
+                    navigator.mediaSession.setPositionState({
+                        duration: audio.duration,
+                        playbackRate: audio.playbackRate,
+                        position: Math.min(audio.currentTime, audio.duration)
+                    });
+                } catch (e) {
+                    // setPositionState not supported in all browsers
+                }
+            }
+        };
+
+        let interval: ReturnType<typeof setInterval> | null = null;
+        if (isPlaying) {
+            updatePositionState();
+            interval = setInterval(updatePositionState, 1000);
+        }
+
+        return () => {
+            if (interval) clearInterval(interval);
+        };
+    }, [isPlaying]);
+
+    // Periodically refresh metadata while paused to prevent Android from dropping the notification
+    useEffect(() => {
+        if (!currentPlaylist || isPlaying) return;
+        
+        const refreshInterval = setInterval(() => {
+            if (currentPlaylist && !isPlaying) {
+                updateMediaSession();
+            }
+        }, 20000);
+        
+        return () => clearInterval(refreshInterval);
+    }, [currentPlaylist, isPlaying, updateMediaSession]);
+
     // Auto-resume playback when app returns to foreground.
     // Android WebView kills/freezes audio in background - need aggressive recovery.
     useEffect(() => {
@@ -667,12 +710,30 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         const setupDelay = isDespia ? 100 : 0;
         
         const timeoutId = setTimeout(() => {
-            safeMediaSessionAction('play', () => {
-                audioRef.current?.play();
+            safeMediaSessionAction('play', async () => {
+                const audio = audioRef.current;
+                if (!audio) return;
+                try {
+                    // Android may have suspended audio - reload if needed
+                    if (audio.readyState < 2) {
+                        audio.load();
+                    }
+                    await audio.play();
+                    setIsPlaying(true);
+                } catch (e) {
+                    // Retry after short delay
+                    setTimeout(async () => {
+                        try {
+                            await audioRef.current?.play();
+                            setIsPlaying(true);
+                        } catch { }
+                    }, 100);
+                }
             });
 
             safeMediaSessionAction('pause', () => {
                 audioRef.current?.pause();
+                setIsPlaying(false);
             });
 
             safeMediaSessionAction('nexttrack', () => {
@@ -707,11 +768,25 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
                     );
                 }
             });
+
+            safeMediaSessionAction('stop', () => {
+                setIsPlaying(false);
+                setCurrentPlaylist(null);
+                if (audioRef.current) {
+                    audioRef.current.pause();
+                    audioRef.current.src = '';
+                }
+                if ('mediaSession' in navigator) {
+                    try {
+                        navigator.mediaSession.metadata = null;
+                        navigator.mediaSession.playbackState = 'none';
+                    } catch { }
+                }
+            });
         }, setupDelay);
 
         return () => {
             clearTimeout(timeoutId);
-            // Cleanup handlers - wrapped to prevent errors during Despia transitions
             safeMediaSessionAction('play', null);
             safeMediaSessionAction('pause', null);
             safeMediaSessionAction('nexttrack', null);
@@ -719,6 +794,7 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
             safeMediaSessionAction('seekto', null);
             safeMediaSessionAction('seekbackward', null);
             safeMediaSessionAction('seekforward', null);
+            safeMediaSessionAction('stop', null);
         };
     }, [currentPlaylist, currentTrackIndex, safeMediaSessionAction]);
 

@@ -38,7 +38,7 @@ export const PRODUCT_IDS = {
 export const PRODUCT_IDS_IOS: Record<string, string> = {
   MONTHLY: 'kbpublish.godlykids.monthly',
   ANNUAL: 'kbpublish.godlykids.yearly',
-  LIFETIME: 'kbpublish.godlykids.lifetime', // Add if you create a lifetime product in App Store Connect
+  LIFETIME: 'Lifetimepurchase', // Matches App Store Connect product identifier
 };
 
 /**

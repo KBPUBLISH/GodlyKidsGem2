@@ -66,7 +66,6 @@ const PaywallPage: React.FC = () => {
     purchase, 
     restorePurchases,
     reverseTrial,
-    checkPremiumStatus,
   } = useSubscription();
 
   // Show "You've Got a Gift!" toast when coming from reverse-trial activation or when state requests it
@@ -301,38 +300,10 @@ const PaywallPage: React.FC = () => {
       setShowParentGate(false);
 
       if (result.success) {
-        // CRITICAL: Verify with backend before granting premium. DeSpia/RevenueCat may fire
-        // success before the user double-clicks to confirm in Apple/Google. Backend only
-        // gets the webhook after payment is actually processed.
-        const userId = localStorage.getItem('godlykids_user_email') || localStorage.getItem('godlykids_device_id') || 'anonymous';
-        const baseUrl = getApiBaseUrl();
-        let backendConfirmed = false;
-        for (let attempt = 0; attempt < 5; attempt++) {
-          try {
-            const statusRes = await fetch(`${baseUrl}/api/webhooks/purchase-status/${encodeURIComponent(userId)}`);
-            if (statusRes.ok) {
-              const statusData = await statusRes.json();
-              if (statusData.isPremium) {
-                backendConfirmed = true;
-                break;
-              }
-            }
-          } catch {
-            // Network error - retry
-          }
-          if (attempt < 4) await new Promise(r => setTimeout(r, 2000));
-        }
-        if (!backendConfirmed) {
-          console.warn('⚠️ Purchase reported success but backend has no premium - payment not completed or webhook delayed');
-          localStorage.removeItem('godlykids_premium'); // Undo any premature grant from DeSpia callback
-          await checkPremiumStatus(); // Force context to re-read and clear premium state
-          setError('Payment not yet confirmed. Please complete the purchase in the App Store (double-tap to confirm), or tap Restore Purchases once done.');
-          return;
-        }
-
-        // Backend confirmed premium - safe to grant
+        // RevenueCat service already confirmed purchase (via DeSpia callback, localStorage,
+        // or backend webhook polling). Grant premium immediately — don't block the user
+        // with another round of verification.
         try {
-          // Facebook Pixel - Track successful purchase
           facebookPixelService.trackPurchase(effectivePlan, price);
           facebookPixelService.trackSubscribe(effectivePlan, price);
         } catch (fbError) {
@@ -340,7 +311,6 @@ const PaywallPage: React.FC = () => {
         }
         
         try {
-          // Meta Conversions API - Server-side purchase tracking
           const userEmail = localStorage.getItem('godlykids_user_email') || authService.getUser()?.email;
           metaAttributionService.trackPurchase({
             email: userEmail || undefined,
@@ -353,15 +323,35 @@ const PaywallPage: React.FC = () => {
         }
         
         try {
-          // Track successful subscription
           activityTrackingService.trackOnboardingEvent('subscribed', { planType: selectedPlan, ...(isCreateYourStoryPaywall && { source: 'create-your-story' }) });
         } catch (trackError) {
           console.warn('⚠️ Activity tracking error:', trackError);
         }
         
-        // Update local state
         subscribe();
         navigate('/home');
+
+        // Non-blocking background recheck: if the webhook hasn't arrived yet, keep
+        // polling the backend so the premium status is eventually persisted server-side.
+        // This does NOT revoke access — it just ensures the backend catches up.
+        const userId = localStorage.getItem('godlykids_user_email') || localStorage.getItem('godlykids_device_id') || 'anonymous';
+        const baseUrl = getApiBaseUrl();
+        (async () => {
+          for (let attempt = 0; attempt < 10; attempt++) {
+            try {
+              const statusRes = await fetch(`${baseUrl}/api/webhooks/purchase-status/${encodeURIComponent(userId)}`);
+              if (statusRes.ok) {
+                const statusData = await statusRes.json();
+                if (statusData.isPremium) {
+                  console.log('✅ Backend confirmed premium (background recheck)');
+                  return;
+                }
+              }
+            } catch { /* ignore */ }
+            await new Promise(r => setTimeout(r, 3000));
+          }
+          console.warn('⚠️ Backend has not confirmed premium after background recheck — webhook may be delayed');
+        })();
       } else if (result.error && result.error !== 'Purchase cancelled') {
         console.error('❌ Purchase failed:', result.error);
         activityTrackingService.trackOnboardingEvent('paywall_purchase_error', { planType: selectedPlan, error: result.error, ...(isCreateYourStoryPaywall && { source: 'create-your-story' }) });

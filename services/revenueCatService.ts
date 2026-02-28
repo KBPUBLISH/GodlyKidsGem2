@@ -348,32 +348,26 @@ export const RevenueCatService = {
         
         let resolved = false;
         let pollCount = 0;
-        const maxPolls = 60; // 60 seconds max wait - RevenueCat webhooks can be slow
-        const minWaitBeforeCheck = 2; // 2 seconds to let Apple sheet appear
-        
-        // Poll faster initially (every 500ms for first 15 seconds), then slower
-        const getPollInterval = () => pollCount < 30 ? 500 : 1000;
+        const maxWaitSeconds = 90; // 90s — users may need time for Face ID, double-click, etc.
+        const minWaitBeforeCheck = 2;
         
         const doPoll = async () => {
           pollCount++;
-          const elapsedSeconds = pollCount * 0.5; // Approximate seconds (500ms intervals initially)
+          // First 30 polls at 500ms = 15s, then 1s each
+          const elapsedSeconds = pollCount <= 30
+            ? pollCount * 0.5
+            : 15 + (pollCount - 30);
           
-          // Don't check for the first second - let Apple sheet appear
           if (elapsedSeconds < minWaitBeforeCheck) {
-            if (pollCount === 1) {
-              console.log('⏳ Apple payment sheet appearing...');
-            }
             schedulePoll();
             return;
           }
           
-          // Check if already resolved by event listener
           if (purchaseResolve !== resolve) {
             cleanupPurchaseState();
             return;
           }
           
-          // Check if already handled by DeSpia callback
           if (purchaseSuccessHandled && !resolved) {
             resolved = true;
             console.log('✅ Purchase already handled by callback');
@@ -383,7 +377,6 @@ export const RevenueCatService = {
             return;
           }
           
-          // Check localStorage first (fastest)
           const localPremium = localStorage.getItem('godlykids_premium') === 'true';
           if (localPremium && !resolved) {
             resolved = true;
@@ -394,7 +387,6 @@ export const RevenueCatService = {
             return;
           }
           
-          // Poll backend for webhook confirmation
           try {
             const response = await fetch(`${apiBaseUrl}/api/webhooks/purchase-status/${encodeURIComponent(userId)}`);
             const data = await response.json();
@@ -409,24 +401,18 @@ export const RevenueCatService = {
               return;
             }
             
-            // Log progress every 5 seconds
-            if (Math.floor(elapsedSeconds) % 5 === 0 && elapsedSeconds > 1) {
+            if (Math.floor(elapsedSeconds) % 10 === 0 && elapsedSeconds > 1) {
               console.log(`⏳ Waiting for payment confirmation... (${elapsedSeconds.toFixed(0)}s)`);
             }
           } catch (error) {
-            // Network error - just continue polling
-            if (Math.floor(elapsedSeconds) % 5 === 0) {
-              console.log(`⚠️ Backend check failed, continuing...`);
-            }
+            // Network error — continue polling
           }
           
-          // Timeout after maxPolls (30 seconds)
-          if (elapsedSeconds >= maxPolls && !resolved) {
+          if (elapsedSeconds >= maxWaitSeconds && !resolved) {
             resolved = true;
             cleanupPurchaseState();
-            console.log('⏱️ Polling timeout after', maxPolls, 'seconds');
+            console.log('⏱️ Polling timeout after', maxWaitSeconds, 'seconds');
             
-            // Final check of localStorage
             const finalPremium = localStorage.getItem('godlykids_premium') === 'true';
             if (finalPremium) {
               console.log('✅ Premium found in final check');
@@ -435,27 +421,21 @@ export const RevenueCatService = {
               return;
             }
             
-            // Not premium yet - tell user it's still processing
-            console.log('⚠️ Payment still processing - user may need to wait or restore');
-            resolve({ 
-              success: false, 
-              error: 'Payment is processing. If you completed the payment, please wait a moment or tap "Restore Purchases".' 
-            });
+            // DeSpia doesn't reliably fire cancel callbacks, so a timeout most likely
+            // means the user dismissed the Apple/Google payment sheet.
+            resolve({ success: false, error: 'Purchase cancelled' });
             purchaseResolve = null;
             return;
           }
           
-          // Schedule next poll
           schedulePoll();
         };
         
-        // Schedule a poll with variable interval (faster at first)
         const schedulePoll = () => {
-          const interval = pollCount < 30 ? 500 : 1000; // 500ms for first 15s, then 1s
+          const interval = pollCount < 30 ? 500 : 1000;
           purchasePollInterval = setTimeout(doPoll, interval) as unknown as ReturnType<typeof setInterval>;
         };
         
-        // Start polling
         schedulePoll();
       });
     }

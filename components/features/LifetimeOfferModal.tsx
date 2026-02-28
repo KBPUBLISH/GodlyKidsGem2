@@ -81,12 +81,16 @@ const LifetimeOfferModal: React.FC<LifetimeOfferModalProps> = ({ variant, onClos
   };
 
   const handleGateSuccess = async () => {
-    setShowParentGate(false);
+    // Keep parent gate open with "Processing..." state until purchase dialog appears
     setIsPurchasing(true);
     setError(null);
 
     try {
       const result = await purchase('lifetime');
+      
+      // Close parent gate now that purchase dialog appeared and completed
+      setShowParentGate(false);
+      
       if (result.success) {
         activityTrackingService.trackOnboardingEvent('subscribed', { planType: 'lifetime', source: 'lifetime-popup', variant }).catch(() => {});
         localStorage.setItem(LIFETIME_OFFER_STAGE_KEY, 'done');
@@ -241,8 +245,10 @@ const LifetimeOfferModal: React.FC<LifetimeOfferModalProps> = ({ variant, onClos
 
       {showParentGate && (
         <ParentGateModal
+          isOpen={showParentGate}
           onSuccess={handleGateSuccess}
           onClose={() => setShowParentGate(false)}
+          isPurchasing={isPurchasing}
         />
       )}
     </>

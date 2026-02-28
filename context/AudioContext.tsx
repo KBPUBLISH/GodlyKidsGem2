@@ -128,6 +128,7 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     // --- Refs ---
     const audioRef = useRef<HTMLAudioElement | null>(null);
     const sfxContextRef = useRef<AudioContext | null>(null);
+    const wasPlayingBeforeBackgroundRef = useRef<boolean>(false); // Track if audio was playing before going to background
 
     // Get or create SFX AudioContext (reuse for all sound effects)
     // Protected against errors during Despia WebView transitions
@@ -315,6 +316,9 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         });
 
         audio.addEventListener('pause', () => {
+            // Browser may auto-pause when backgrounding - track this so we can auto-resume on foreground
+            console.log('🎵 Audio paused - document.hidden:', document.hidden);
+            
             setIsPlaying(false);
             // Save any accumulated listening time when paused
             if (listeningTimeAccumulatorRef.current > 0) {
@@ -416,19 +420,42 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         }
     }, [currentPlaylist, currentTrackIndex, updateMediaSession]);
 
-    // Android: Re-establish MediaSession when app returns to foreground (screen on / app resumed).
-    // Android WebView can drop the lock screen media controls when backgrounded; re-applying fixes it.
+    // Auto-resume playback when app returns to foreground (fixes browser auto-pause in background).
+    // On Android: Also re-establish MediaSession for lock screen controls.
     useEffect(() => {
-        const isAndroid = typeof navigator !== 'undefined' && /android/i.test(navigator.userAgent);
-        if (!isAndroid || !('mediaSession' in navigator)) return;
-
         const handleVisibilityChange = () => {
-            if (document.visibilityState === 'visible' && currentPlaylist && isPlaying) {
-                try {
-                    updateMediaSession();
-                } catch (e) {
-                    // Ignore
+            const audio = audioRef.current;
+            
+            if (document.visibilityState === 'hidden') {
+                // Going to background - remember if we're playing
+                wasPlayingBeforeBackgroundRef.current = !!(currentPlaylist && isPlaying && audio && !audio.paused);
+                console.log('🎵 Going to background, wasPlaying:', wasPlayingBeforeBackgroundRef.current);
+            } else if (document.visibilityState === 'visible') {
+                // Coming back to foreground
+                console.log('🎵 Coming to foreground, wasPlayingBefore:', wasPlayingBeforeBackgroundRef.current, 'currentPlaylist:', !!currentPlaylist);
+                
+                if (currentPlaylist) {
+                    // Re-establish MediaSession (important for Android)
+                    if ('mediaSession' in navigator) {
+                        try {
+                            updateMediaSession();
+                        } catch (e) {
+                            // Ignore
+                        }
+                    }
+                    
+                    // Auto-resume if audio was playing before background
+                    if (wasPlayingBeforeBackgroundRef.current && audio) {
+                        console.log('🎵 Auto-resuming playback after returning from background');
+                        audio.play().catch(e => {
+                            console.log('Auto-resume failed:', e.name);
+                        });
+                        setIsPlaying(true);
+                    }
                 }
+                
+                // Clear the flag
+                wasPlayingBeforeBackgroundRef.current = false;
             }
         };
 

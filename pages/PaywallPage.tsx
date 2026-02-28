@@ -81,6 +81,7 @@ const PaywallPage: React.FC = () => {
     fromState === 'lifetime-offer' ? 'lifetime' : 'monthly'
   );
   const [planSelectorExpanded, setPlanSelectorExpanded] = useState(fromState === 'lifetime-offer');
+  const [showAllFeatures, setShowAllFeatures] = useState(false);
   const [showParentGate, setShowParentGate] = useState(false);
   const [isPurchasing, setIsPurchasing] = useState(false);
   const [isRestoring, setIsRestoring] = useState(false);
@@ -618,10 +619,9 @@ const PaywallPage: React.FC = () => {
               </p>
             )}
 
-            {/* Features & Benefits */}
-            <div className="w-full space-y-3 mb-6">
-              <h3 className="font-bold text-[#1e1b4b] text-base mb-2">What's included</h3>
-              {[
+            {/* Features & Benefits (show 3, expandable) */}
+            {(() => {
+              const allFeatures = [
                 { icon: '📚', title: 'Bible Curriculum', desc: 'Complete Christian education' },
                 { icon: '✝️', title: 'Scripture Memory', desc: 'Learn verses through play' },
                 { icon: '📖', title: 'Bible Story Library', desc: 'Animated lessons & devotionals' },
@@ -631,19 +631,42 @@ const PaywallPage: React.FC = () => {
                 { icon: '👨‍👩‍👧‍👦', title: 'Family Profiles (Up to 5)', desc: 'Each child gets their own progress' },
                 { icon: '📋', title: 'Report Cards', desc: 'Track learning & earning for each kid' },
                 { icon: '📝', title: '12 Free Custom Books', desc: 'Personalized Bible adventures' },
-              ].map((feature, i) => (
-                <div key={i} className="flex items-center gap-3 bg-white rounded-xl px-4 py-3 border border-gray-100 shadow-sm">
-                  <span className="text-2xl shrink-0">{feature.icon}</span>
-                  <div className="flex-1 min-w-0">
-                    <p className="font-semibold text-[#1e1b4b] text-sm">{feature.title}</p>
-                    <p className="text-xs text-gray-500">{feature.desc}</p>
-                  </div>
-                  <Check size={18} className="text-[#6366f1] shrink-0" strokeWidth={3} />
+              ];
+              const visible = showAllFeatures ? allFeatures : allFeatures.slice(0, 3);
+              return (
+                <div className="w-full space-y-3 mb-4">
+                  <h3 className="font-bold text-[#1e1b4b] text-base mb-2">What's included</h3>
+                  {visible.map((feature, i) => (
+                    <div key={i} className="flex items-center gap-3 bg-white rounded-xl px-4 py-3 border border-gray-100 shadow-sm">
+                      <span className="text-2xl shrink-0">{feature.icon}</span>
+                      <div className="flex-1 min-w-0">
+                        <p className="font-semibold text-[#1e1b4b] text-sm">{feature.title}</p>
+                        <p className="text-xs text-gray-500">{feature.desc}</p>
+                      </div>
+                      <Check size={18} className="text-[#6366f1] shrink-0" strokeWidth={3} />
+                    </div>
+                  ))}
+                  {!showAllFeatures && (
+                    <button
+                      onClick={() => setShowAllFeatures(true)}
+                      className="w-full flex items-center justify-center gap-1 text-[#6366f1] text-sm font-semibold py-2"
+                    >
+                      +{allFeatures.length - 3} more features <ChevronDown size={16} />
+                    </button>
+                  )}
+                  {showAllFeatures && (
+                    <button
+                      onClick={() => setShowAllFeatures(false)}
+                      className="w-full flex items-center justify-center gap-1 text-[#6366f1] text-sm font-semibold py-2"
+                    >
+                      Show less <ChevronUp size={16} />
+                    </button>
+                  )}
                 </div>
-              ))}
-            </div>
+              );
+            })()}
 
-            {/* CTA + trial summary above plan selector (Create Your Story paywall only) */}
+            {/* CTA + trial summary (Create Your Story paywall only) */}
             {isCreateYourStoryPaywall && (
               <>
                 <button

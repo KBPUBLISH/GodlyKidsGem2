@@ -128,7 +128,9 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     // --- Refs ---
     const audioRef = useRef<HTMLAudioElement | null>(null);
     const sfxContextRef = useRef<AudioContext | null>(null);
-    const wasPlayingBeforeBackgroundRef = useRef<boolean>(false); // Track if audio was playing before going to background
+    const wasPlayingBeforeBackgroundRef = useRef<boolean>(false);
+    const savedPositionBeforeBackgroundRef = useRef<number>(0);
+    const isRecoveringAudioRef = useRef<boolean>(false); // Prevent pause event from interfering during recovery
 
     // Get or create SFX AudioContext (reuse for all sound effects)
     // Protected against errors during Despia WebView transitions
@@ -333,11 +335,13 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         });
 
         audio.addEventListener('pause', () => {
-            // Browser may auto-pause when backgrounding - track this so we can auto-resume on foreground
-            console.log('🎵 Audio paused - document.hidden:', document.hidden);
+            // Don't update React state if Android killed audio in background or we're recovering
+            if (document.hidden || isRecoveringAudioRef.current) {
+                console.log('🎵 Audio paused (background/recovery) - skipping state update');
+                return;
+            }
             
             setIsPlaying(false);
-            // Save any accumulated listening time when paused
             if (listeningTimeAccumulatorRef.current > 0) {
                 activityTrackingService.trackAudioListeningTime(Math.floor(listeningTimeAccumulatorRef.current));
                 listeningTimeAccumulatorRef.current = 0;
@@ -456,21 +460,39 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
                 
                 // If audio should be playing but hasn't progressed, it's stuck
                 if (!audio.paused && currentTime === lastTime && currentTime > 0) {
-                    console.error('🎵 Audio is stuck! Time:', currentTime, `(${isAndroid ? 'Android' : 'other'}) - Attempting recovery`);
+                    console.error('🎵 Audio stuck at', currentTime, isAndroid ? '(Android)' : '');
+                    isRecoveringAudioRef.current = true;
                     
-                    // Android: Try multiple recovery strategies
                     if (isAndroid) {
-                        // Strategy 1: Reload the audio element
                         const src = audio.src;
                         const pos = audio.currentTime;
-                        audio.load();
                         audio.src = src;
-                        audio.currentTime = pos;
-                        audio.play().catch(() => {});
+                        audio.load();
+                        const onReady = () => {
+                            audio.currentTime = pos;
+                            audio.play().then(() => {
+                                isRecoveringAudioRef.current = false;
+                            }).catch(() => {
+                                isRecoveringAudioRef.current = false;
+                            });
+                            audio.removeEventListener('canplay', onReady);
+                        };
+                        audio.addEventListener('canplay', onReady);
+                        setTimeout(() => {
+                            audio.removeEventListener('canplay', onReady);
+                            if (audio.paused) {
+                                audio.currentTime = pos;
+                                audio.play().catch(() => {});
+                            }
+                            isRecoveringAudioRef.current = false;
+                        }, 3000);
                     } else {
-                        // Other platforms: Just seek slightly
                         audio.currentTime = currentTime + 0.1;
-                        audio.play().catch(() => {});
+                        audio.play().then(() => {
+                            isRecoveringAudioRef.current = false;
+                        }).catch(() => {
+                            isRecoveringAudioRef.current = false;
+                        });
                     }
                 }
                 
@@ -543,48 +565,86 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         }
     }, [currentPlaylist, currentTrackIndex, updateMediaSession]);
 
-    // Auto-resume playback when app returns to foreground (fixes browser auto-pause in background).
-    // On Android: Also re-establish MediaSession for lock screen controls.
+    // Auto-resume playback when app returns to foreground.
+    // Android WebView kills/freezes audio in background - need aggressive recovery.
     useEffect(() => {
+        const isAndroid = typeof navigator !== 'undefined' && /android/i.test(navigator.userAgent);
+        
         const handleVisibilityChange = () => {
             const audio = audioRef.current;
             
             if (document.visibilityState === 'hidden') {
-                // Going to background - remember if we're playing
-                wasPlayingBeforeBackgroundRef.current = !!(currentPlaylist && isPlaying && audio && !audio.paused);
-                console.log('🎵 Going to background, wasPlaying:', wasPlayingBeforeBackgroundRef.current);
+                // Going to background - save state before Android kills the audio
+                const wasPlaying = !!(currentPlaylist && isPlaying && audio);
+                wasPlayingBeforeBackgroundRef.current = wasPlaying;
+                if (wasPlaying && audio) {
+                    savedPositionBeforeBackgroundRef.current = audio.currentTime;
+                }
             } else if (document.visibilityState === 'visible') {
-                // Coming back to foreground
-                console.log('🎵 Coming to foreground, wasPlayingBefore:', wasPlayingBeforeBackgroundRef.current, 'currentPlaylist:', !!currentPlaylist);
-                
-                if (currentPlaylist) {
-                    // Re-establish MediaSession (important for Android)
-                    if ('mediaSession' in navigator) {
-                        try {
-                            updateMediaSession();
-                        } catch (e) {
-                            // Ignore
-                        }
-                    }
-                    
-                    // Auto-resume if audio was playing before background
-                    if (wasPlayingBeforeBackgroundRef.current && audio) {
-                        console.log('🎵 Auto-resuming playback after returning from background');
-                        audio.play().catch(e => {
-                            console.log('Auto-resume failed:', e.name);
-                        });
-                        setIsPlaying(true);
-                    }
+                if (!currentPlaylist || !wasPlayingBeforeBackgroundRef.current || !audio) {
+                    wasPlayingBeforeBackgroundRef.current = false;
+                    return;
                 }
                 
-                // Clear the flag
+                const savedPos = savedPositionBeforeBackgroundRef.current;
                 wasPlayingBeforeBackgroundRef.current = false;
+                
+                // Re-establish MediaSession
+                if ('mediaSession' in navigator) {
+                    try { updateMediaSession(); } catch (e) { /* ignore */ }
+                }
+                
+                // Set recovery flag so pause events during reload don't mess up state
+                isRecoveringAudioRef.current = true;
+                
+                if (isAndroid) {
+                    // Android: Audio element is likely dead/frozen. 
+                    // Must fully reload the source and seek back to saved position.
+                    const track = currentPlaylist.items[currentTrackIndex];
+                    if (track?.audioUrl) {
+                        audio.src = track.audioUrl;
+                        audio.load();
+                        
+                        const resumeFromSaved = () => {
+                            audio.currentTime = savedPos;
+                            audio.play().then(() => {
+                                isRecoveringAudioRef.current = false;
+                            }).catch(() => {
+                                isRecoveringAudioRef.current = false;
+                            });
+                            setIsPlaying(true);
+                            audio.removeEventListener('canplay', resumeFromSaved);
+                        };
+                        audio.addEventListener('canplay', resumeFromSaved);
+                        
+                        // Fallback if canplay never fires
+                        setTimeout(() => {
+                            audio.removeEventListener('canplay', resumeFromSaved);
+                            if (audio.paused) {
+                                audio.currentTime = savedPos;
+                                audio.play().catch(() => {});
+                                setIsPlaying(true);
+                            }
+                            isRecoveringAudioRef.current = false;
+                        }, 3000);
+                    } else {
+                        isRecoveringAudioRef.current = false;
+                    }
+                } else {
+                    // iOS/other: Simple resume is enough
+                    audio.play().then(() => {
+                        isRecoveringAudioRef.current = false;
+                    }).catch(() => {
+                        isRecoveringAudioRef.current = false;
+                    });
+                    setIsPlaying(true);
+                }
             }
         };
 
         document.addEventListener('visibilitychange', handleVisibilityChange);
         return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
-    }, [currentPlaylist, isPlaying, updateMediaSession]);
+    }, [currentPlaylist, currentTrackIndex, isPlaying, updateMediaSession]);
 
     // Safe wrapper for mediaSession operations - prevents errors during Despia WebView transitions
     const safeMediaSessionAction = useCallback((action: string, handler: ((details?: any) => void) | null) => {

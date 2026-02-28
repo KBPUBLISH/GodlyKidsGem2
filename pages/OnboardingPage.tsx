@@ -1575,14 +1575,14 @@ const OnboardingPage: React.FC = () => {
   const renderProgress = () => {
     const totalSteps = 6; // Parent, Family, Goals, Features, Voice, Account
     return (
-    <div className="w-full max-w-md px-6 mb-6">
-       {/* Wood plank container for progress */}
-       <div className="bg-[#CD853F] rounded-2xl p-4 border-2 border-[#8B4513] shadow-lg relative overflow-hidden">
+    <div className="w-full max-w-md px-1">
+       {/* Wood plank container for progress - compact */}
+       <div className="bg-[#CD853F] rounded-xl p-2.5 border-2 border-[#8B4513] shadow-lg relative overflow-hidden">
          {/* Wood grain */}
          <div className="absolute inset-0 opacity-10" style={{backgroundImage: 'repeating-linear-gradient(90deg, transparent, transparent 25px, #3E1F07 25px, #3E1F07 27px)'}}></div>
          
          <div className="relative">
-           <div className="flex justify-between mb-3 text-[#5c2e0b] font-display font-bold text-[8px] uppercase tracking-wide">
+           <div className="flex justify-between mb-1.5 text-[#5c2e0b] font-display font-bold text-[8px] uppercase tracking-wide">
               <span className={step >= 1 ? "text-[#3E1F07]" : "opacity-40"}>Parent</span>
               <span className={step >= 2 ? "text-[#3E1F07]" : "opacity-40"}>Family</span>
               <span className={step >= 3 ? "text-[#3E1F07]" : "opacity-40"}>Goals</span>
@@ -1590,7 +1590,7 @@ const OnboardingPage: React.FC = () => {
               <span className={step >= 5 ? "text-[#3E1F07]" : "opacity-40"}>Voice</span>
               <span className={step >= 6 ? "text-[#3E1F07]" : "opacity-40"}>Account</span>
            </div>
-           <div className="h-4 bg-[#5c2e0b] rounded-full overflow-hidden border-2 border-[#3E1F07] shadow-inner">
+           <div className="h-3 bg-[#5c2e0b] rounded-full overflow-hidden border-2 border-[#3E1F07] shadow-inner">
               <div 
                 className="h-full bg-gradient-to-r from-[#FFD700] to-[#ffb300] transition-all duration-500 ease-out rounded-full"
                 style={{ width: `${(step / totalSteps) * 100}%` }}
@@ -1636,35 +1636,24 @@ const OnboardingPage: React.FC = () => {
   return (
     <div className="flex flex-col min-h-screen h-full w-full relative overflow-y-auto no-scrollbar bg-gradient-to-br from-[#1a237e] to-[#0d113a]">
       
-      {/* Wood Header Bar */}
-      <div className="relative z-20 pt-8 pb-4 px-6 bg-[#CD853F] shadow-md border-b-4 border-[#8B4513]">
-        {/* Wood Texture */}
-        <div className="absolute inset-0 opacity-10 pointer-events-none" style={{backgroundImage: 'repeating-linear-gradient(90deg, transparent, transparent 30px, #3E1F07 30px, #3E1F07 32px)'}}></div>
-        
-        <div className="relative flex items-center justify-between z-10">
+      {/* Slim top row: back button (when step > 1) + progress bar - no thick SETUP toolbar */}
+      <div className="flex-shrink-0 pt-4 pb-2 px-4 mb-2 w-full" style={{ paddingTop: 'calc(var(--safe-area-top, 0px) + 12px)' }}>
+        <div className="flex items-center gap-2 w-full max-w-md mx-auto">
            {step > 1 && (
              <button 
                onClick={() => setStep(prev => (prev - 1) as any)} 
-               className="w-12 h-12 bg-[#8B4513] hover:bg-[#A0522D] rounded-full flex items-center justify-center text-[#f3e5ab] border-2 border-[#eecaa0] active:scale-95 transition-transform shadow-md"
+               className="flex-shrink-0 w-9 h-9 bg-[#8B4513] hover:bg-[#A0522D] rounded-full flex items-center justify-center text-[#f3e5ab] border-2 border-[#eecaa0] active:scale-95 transition-transform shadow-md"
              >
-                <ChevronLeft size={28} strokeWidth={3} />
+                <ChevronLeft size={22} strokeWidth={3} />
              </button>
            )}
-           {step === 1 && <div className="w-12"></div>} {/* Spacer */}
-           
-           <div className="flex flex-col items-center">
-               <h1 className="font-display font-extrabold text-2xl text-[#5c2e0b] tracking-wide drop-shadow-sm uppercase">
-                   Setup
-               </h1>
+           <div className="flex-1 min-w-0">
+             {renderProgress()}
            </div>
-           
-           <div className="w-12"></div> {/* Spacer */}
         </div>
       </div>
 
-      <div className="flex-1 flex flex-col items-center pt-6 pb-10 w-full relative z-10">
-        
-        {renderProgress()}
+      <div className="flex-1 flex flex-col items-center pt-2 pb-10 w-full relative z-10">
 
         {/* --- STEP 1: PARENT PROFILE --- */}
         {step === 1 && (

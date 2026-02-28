@@ -355,18 +355,51 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         updateMediaSession();
     }, [currentPlaylist, currentTrackIndex]);
 
-    // Simple play/pause sync
+    // Play/pause sync - with recovery for frozen audio (Android WebView kills the element in background)
     useEffect(() => {
         const audio = audioRef.current;
         if (!audio || !audio.src) return;
 
         if (isPlaying) {
-            audio.play().catch(e => console.log('Play failed:', e.name));
+            const playPromise = audio.play();
+            if (playPromise) {
+                playPromise.then(() => {
+                    // Verify audio is actually progressing after 1.5s
+                    const checkTime = audio.currentTime;
+                    setTimeout(() => {
+                        if (isPlaying && audioRef.current === audio && !audio.paused && audio.currentTime === checkTime && checkTime > 0) {
+                            // Audio element is frozen - reload the track
+                            console.log('🎵 Audio frozen, reloading track at', checkTime);
+                            const src = audio.src;
+                            audio.src = src;
+                            audio.load();
+                            audio.addEventListener('canplay', function resume() {
+                                audio.currentTime = checkTime;
+                                audio.play().catch(() => {});
+                                audio.removeEventListener('canplay', resume);
+                            });
+                        }
+                    }, 1500);
+                }).catch(e => {
+                    console.log('Play failed:', e.name);
+                    // If play fails entirely, try reloading
+                    if (currentPlaylist) {
+                        const track = currentPlaylist.items[currentTrackIndex];
+                        if (track?.audioUrl) {
+                            audio.src = track.audioUrl;
+                            audio.load();
+                            audio.addEventListener('canplay', function retry() {
+                                audio.play().catch(() => {});
+                                audio.removeEventListener('canplay', retry);
+                            });
+                        }
+                    }
+                });
+            }
         } else {
             audio.pause();
         }
         
-        // Update media session playback state
         if ('mediaSession' in navigator) {
             navigator.mediaSession.playbackState = isPlaying ? 'playing' : 'paused';
         }

@@ -197,6 +197,15 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     useEffect(() => {
         const audio = document.createElement('audio');
         audio.preload = 'auto';
+        
+        // Android: Set additional attributes to prevent suspension
+        const isAndroid = typeof navigator !== 'undefined' && /android/i.test(navigator.userAgent);
+        if (isAndroid) {
+            audio.setAttribute('playsinline', 'true');
+            // Try to prevent audio from being suspended by Android WebView
+            audio.setAttribute('preload', 'auto');
+        }
+        
         audioRef.current = audio;
 
         // Basic event listeners
@@ -433,7 +442,10 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         if (isPlaying) {
             audio.play().catch(e => console.log('Play failed:', e.name));
             
-            // Start watchdog to detect stuck audio
+            // Android: More aggressive watchdog for stuck audio (Android WebView suspends audio more aggressively)
+            const isAndroid = typeof navigator !== 'undefined' && /android/i.test(navigator.userAgent);
+            const checkInterval = isAndroid ? 3000 : 5000; // Check every 3s on Android, 5s on others
+            
             if (stuckCheckIntervalRef.current) {
                 clearInterval(stuckCheckIntervalRef.current);
             }
@@ -442,16 +454,28 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
                 const currentTime = audio.currentTime;
                 const lastTime = lastAudioTimeRef.current;
                 
-                // If audio should be playing but hasn't progressed in 5 seconds, it's stuck
+                // If audio should be playing but hasn't progressed, it's stuck
                 if (!audio.paused && currentTime === lastTime && currentTime > 0) {
-                    console.error('🎵 Audio is stuck! Time:', currentTime, '- Attempting recovery');
-                    // Try to unstick by seeking slightly forward
-                    audio.currentTime = currentTime + 0.1;
-                    audio.play().catch(() => {});
+                    console.error('🎵 Audio is stuck! Time:', currentTime, `(${isAndroid ? 'Android' : 'other'}) - Attempting recovery`);
+                    
+                    // Android: Try multiple recovery strategies
+                    if (isAndroid) {
+                        // Strategy 1: Reload the audio element
+                        const src = audio.src;
+                        const pos = audio.currentTime;
+                        audio.load();
+                        audio.src = src;
+                        audio.currentTime = pos;
+                        audio.play().catch(() => {});
+                    } else {
+                        // Other platforms: Just seek slightly
+                        audio.currentTime = currentTime + 0.1;
+                        audio.play().catch(() => {});
+                    }
                 }
                 
                 lastAudioTimeRef.current = currentTime;
-            }, 5000); // Check every 5 seconds
+            }, checkInterval);
         } else {
             audio.pause();
             

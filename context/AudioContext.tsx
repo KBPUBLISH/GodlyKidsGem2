@@ -128,9 +128,6 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     // --- Refs ---
     const audioRef = useRef<HTMLAudioElement | null>(null);
     const sfxContextRef = useRef<AudioContext | null>(null);
-    const wasPlayingBeforeBackgroundRef = useRef<boolean>(false);
-    const savedPositionBeforeBackgroundRef = useRef<number>(0);
-    const isRecoveringAudioRef = useRef<boolean>(false); // Prevent pause event from interfering during recovery
 
     // Get or create SFX AudioContext (reuse for all sound effects)
     // Protected against errors during Despia WebView transitions
@@ -186,10 +183,6 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     const lastEngagementUpdateRef = useRef<number>(0);
     const ENGAGEMENT_UPDATE_INTERVAL = 30; // seconds
     
-    // Watchdog: detect when audio is stuck (isPlaying true but not progressing)
-    const lastAudioTimeRef = useRef<number>(0);
-    const stuckCheckIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
-    
     // Keep preview mode ref in sync with state
     useEffect(() => {
         isPreviewModeRef.current = isPreviewMode;
@@ -199,15 +192,6 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     useEffect(() => {
         const audio = document.createElement('audio');
         audio.preload = 'auto';
-        
-        // Android: Set additional attributes to prevent suspension
-        const isAndroid = typeof navigator !== 'undefined' && /android/i.test(navigator.userAgent);
-        if (isAndroid) {
-            audio.setAttribute('playsinline', 'true');
-            // Try to prevent audio from being suspended by Android WebView
-            audio.setAttribute('preload', 'auto');
-        }
-        
         audioRef.current = audio;
 
         // Basic event listeners
@@ -238,11 +222,7 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
                         
                         // Check if preview limit reached
                         if (previewTimeAccumulator.current >= AUDIO_PREVIEW_SECONDS) {
-                            console.log('🎵 Preview limit reached - pausing playback', {
-                                isPreviewMode: isPreviewModeRef.current,
-                                accumulated: previewTimeAccumulator.current,
-                                limit: AUDIO_PREVIEW_SECONDS
-                            });
+                            console.log('🎵 Preview limit reached - pausing playback');
                             audio.pause();
                             setIsPlaying(false);
                             setPreviewLimitReached(true);
@@ -335,76 +315,13 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         });
 
         audio.addEventListener('pause', () => {
-            // Don't update React state if Android killed audio in background or we're recovering
-            if (document.hidden || isRecoveringAudioRef.current) {
-                console.log('🎵 Audio paused (background/recovery) - skipping state update');
-                return;
-            }
-            
             setIsPlaying(false);
+            // Save any accumulated listening time when paused
             if (listeningTimeAccumulatorRef.current > 0) {
                 activityTrackingService.trackAudioListeningTime(Math.floor(listeningTimeAccumulatorRef.current));
                 listeningTimeAccumulatorRef.current = 0;
             }
             lastListeningTimeRef.current = 0;
-        });
-
-        // Handle audio errors (network issues, codec problems, etc.)
-        audio.addEventListener('error', (e) => {
-            console.error('🎵 Audio error:', e, 'error code:', audio.error?.code, 'message:', audio.error?.message);
-            // Try to recover by reloading
-            const currentPos = audio.currentTime;
-            audio.load();
-            audio.currentTime = currentPos;
-            if (!audio.paused) {
-                audio.play().catch(() => {});
-            }
-        });
-
-        // Handle stalled playback (buffering issues) - auto-recover
-        audio.addEventListener('stalled', () => {
-            console.warn('🎵 Audio stalled (buffering) - attempting recovery');
-            // Try to recover by seeking slightly forward
-            const currentPos = audio.currentTime;
-            audio.currentTime = currentPos + 0.1;
-            if (!audio.paused) {
-                audio.play().catch(() => {});
-            }
-        });
-
-        // Handle when browser suspends loading (to save bandwidth)
-        audio.addEventListener('suspend', () => {
-            console.log('🎵 Audio loading suspended by browser');
-            // If we're supposed to be playing but suspended, try to resume
-            if (!audio.paused && audio.readyState < audio.HAVE_FUTURE_DATA) {
-                audio.load();
-            }
-        });
-
-        // Handle waiting for data (buffering)
-        let waitingTimeout: ReturnType<typeof setTimeout> | null = null;
-        audio.addEventListener('waiting', () => {
-            console.log('🎵 Audio waiting for data (buffering)');
-            // If stuck waiting for more than 5 seconds, try to recover
-            if (waitingTimeout) clearTimeout(waitingTimeout);
-            waitingTimeout = setTimeout(() => {
-                if (!audio.paused && audio.readyState < audio.HAVE_FUTURE_DATA) {
-                    console.warn('🎵 Audio stuck buffering - attempting recovery');
-                    const currentPos = audio.currentTime;
-                    audio.load();
-                    audio.currentTime = currentPos;
-                    audio.play().catch(() => {});
-                }
-            }, 5000);
-        });
-
-        // Handle when playback can resume after buffering
-        audio.addEventListener('canplay', () => {
-            console.log('🎵 Audio can play (buffering complete)');
-            if (waitingTimeout) {
-                clearTimeout(waitingTimeout);
-                waitingTimeout = null;
-            }
         });
 
         return () => {
@@ -445,80 +362,14 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
         if (isPlaying) {
             audio.play().catch(e => console.log('Play failed:', e.name));
-            
-            // Android: More aggressive watchdog for stuck audio (Android WebView suspends audio more aggressively)
-            const isAndroid = typeof navigator !== 'undefined' && /android/i.test(navigator.userAgent);
-            const checkInterval = isAndroid ? 3000 : 5000; // Check every 3s on Android, 5s on others
-            
-            if (stuckCheckIntervalRef.current) {
-                clearInterval(stuckCheckIntervalRef.current);
-            }
-            lastAudioTimeRef.current = audio.currentTime;
-            stuckCheckIntervalRef.current = setInterval(() => {
-                const currentTime = audio.currentTime;
-                const lastTime = lastAudioTimeRef.current;
-                
-                // If audio should be playing but hasn't progressed, it's stuck
-                if (!audio.paused && currentTime === lastTime && currentTime > 0) {
-                    console.error('🎵 Audio stuck at', currentTime, isAndroid ? '(Android)' : '');
-                    isRecoveringAudioRef.current = true;
-                    
-                    if (isAndroid) {
-                        const src = audio.src;
-                        const pos = audio.currentTime;
-                        audio.src = src;
-                        audio.load();
-                        const onReady = () => {
-                            audio.currentTime = pos;
-                            audio.play().then(() => {
-                                isRecoveringAudioRef.current = false;
-                            }).catch(() => {
-                                isRecoveringAudioRef.current = false;
-                            });
-                            audio.removeEventListener('canplay', onReady);
-                        };
-                        audio.addEventListener('canplay', onReady);
-                        setTimeout(() => {
-                            audio.removeEventListener('canplay', onReady);
-                            if (audio.paused) {
-                                audio.currentTime = pos;
-                                audio.play().catch(() => {});
-                            }
-                            isRecoveringAudioRef.current = false;
-                        }, 3000);
-                    } else {
-                        audio.currentTime = currentTime + 0.1;
-                        audio.play().then(() => {
-                            isRecoveringAudioRef.current = false;
-                        }).catch(() => {
-                            isRecoveringAudioRef.current = false;
-                        });
-                    }
-                }
-                
-                lastAudioTimeRef.current = currentTime;
-            }, checkInterval);
         } else {
             audio.pause();
-            
-            // Stop watchdog when paused
-            if (stuckCheckIntervalRef.current) {
-                clearInterval(stuckCheckIntervalRef.current);
-                stuckCheckIntervalRef.current = null;
-            }
         }
         
         // Update media session playback state
         if ('mediaSession' in navigator) {
             navigator.mediaSession.playbackState = isPlaying ? 'playing' : 'paused';
         }
-        
-        return () => {
-            if (stuckCheckIntervalRef.current) {
-                clearInterval(stuckCheckIntervalRef.current);
-                stuckCheckIntervalRef.current = null;
-            }
-        };
     }, [isPlaying]);
 
     // Media Session setup with cover image
@@ -565,130 +416,6 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         }
     }, [currentPlaylist, currentTrackIndex, updateMediaSession]);
 
-    // Update position state for lock screen progress bar (Android requires this to keep the notification alive)
-    useEffect(() => {
-        if (!('mediaSession' in navigator) || !audioRef.current) return;
-        
-        const audio = audioRef.current;
-        const updatePositionState = () => {
-            if (audio && !isNaN(audio.duration) && audio.duration > 0) {
-                try {
-                    navigator.mediaSession.setPositionState({
-                        duration: audio.duration,
-                        playbackRate: audio.playbackRate,
-                        position: Math.min(audio.currentTime, audio.duration)
-                    });
-                } catch (e) {
-                    // setPositionState not supported in all browsers
-                }
-            }
-        };
-
-        let interval: ReturnType<typeof setInterval> | null = null;
-        if (isPlaying) {
-            updatePositionState();
-            interval = setInterval(updatePositionState, 1000);
-        }
-
-        return () => {
-            if (interval) clearInterval(interval);
-        };
-    }, [isPlaying]);
-
-    // Periodically refresh metadata while paused to prevent Android from dropping the notification
-    useEffect(() => {
-        if (!currentPlaylist || isPlaying) return;
-        
-        const refreshInterval = setInterval(() => {
-            if (currentPlaylist && !isPlaying) {
-                updateMediaSession();
-            }
-        }, 20000);
-        
-        return () => clearInterval(refreshInterval);
-    }, [currentPlaylist, isPlaying, updateMediaSession]);
-
-    // Auto-resume playback when app returns to foreground.
-    // Android WebView kills/freezes audio in background - need aggressive recovery.
-    useEffect(() => {
-        const isAndroid = typeof navigator !== 'undefined' && /android/i.test(navigator.userAgent);
-        
-        const handleVisibilityChange = () => {
-            const audio = audioRef.current;
-            
-            if (document.visibilityState === 'hidden') {
-                // Going to background - save state before Android kills the audio
-                const wasPlaying = !!(currentPlaylist && isPlaying && audio);
-                wasPlayingBeforeBackgroundRef.current = wasPlaying;
-                if (wasPlaying && audio) {
-                    savedPositionBeforeBackgroundRef.current = audio.currentTime;
-                }
-            } else if (document.visibilityState === 'visible') {
-                if (!currentPlaylist || !wasPlayingBeforeBackgroundRef.current || !audio) {
-                    wasPlayingBeforeBackgroundRef.current = false;
-                    return;
-                }
-                
-                const savedPos = savedPositionBeforeBackgroundRef.current;
-                wasPlayingBeforeBackgroundRef.current = false;
-                
-                // Re-establish MediaSession
-                if ('mediaSession' in navigator) {
-                    try { updateMediaSession(); } catch (e) { /* ignore */ }
-                }
-                
-                // Set recovery flag so pause events during reload don't mess up state
-                isRecoveringAudioRef.current = true;
-                
-                if (isAndroid) {
-                    // Android: Audio element is likely dead/frozen. 
-                    // Must fully reload the source and seek back to saved position.
-                    const track = currentPlaylist.items[currentTrackIndex];
-                    if (track?.audioUrl) {
-                        audio.src = track.audioUrl;
-                        audio.load();
-                        
-                        const resumeFromSaved = () => {
-                            audio.currentTime = savedPos;
-                            audio.play().then(() => {
-                                isRecoveringAudioRef.current = false;
-                            }).catch(() => {
-                                isRecoveringAudioRef.current = false;
-                            });
-                            setIsPlaying(true);
-                            audio.removeEventListener('canplay', resumeFromSaved);
-                        };
-                        audio.addEventListener('canplay', resumeFromSaved);
-                        
-                        // Fallback if canplay never fires
-                        setTimeout(() => {
-                            audio.removeEventListener('canplay', resumeFromSaved);
-                            if (audio.paused) {
-                                audio.currentTime = savedPos;
-                                audio.play().catch(() => {});
-                                setIsPlaying(true);
-                            }
-                            isRecoveringAudioRef.current = false;
-                        }, 3000);
-                    } else {
-                        isRecoveringAudioRef.current = false;
-                    }
-                } else {
-                    // iOS/other: Simple resume is enough
-                    audio.play().then(() => {
-                        isRecoveringAudioRef.current = false;
-                    }).catch(() => {
-                        isRecoveringAudioRef.current = false;
-                    });
-                    setIsPlaying(true);
-                }
-            }
-        };
-
-        document.addEventListener('visibilitychange', handleVisibilityChange);
-        return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
-    }, [currentPlaylist, currentTrackIndex, isPlaying, updateMediaSession]);
-
     // Safe wrapper for mediaSession operations - prevents errors during Despia WebView transitions
     const safeMediaSessionAction = useCallback((action: string, handler: ((details?: any) => void) | null) => {
         try {
@@ -710,30 +437,12 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         const setupDelay = isDespia ? 100 : 0;
         
         const timeoutId = setTimeout(() => {
-            safeMediaSessionAction('play', async () => {
-                const audio = audioRef.current;
-                if (!audio) return;
-                try {
-                    // Android may have suspended audio - reload if needed
-                    if (audio.readyState < 2) {
-                        audio.load();
-                    }
-                    await audio.play();
-                    setIsPlaying(true);
-                } catch (e) {
-                    // Retry after short delay
-                    setTimeout(async () => {
-                        try {
-                            await audioRef.current?.play();
-                            setIsPlaying(true);
-                        } catch { }
-                    }, 100);
-                }
+            safeMediaSessionAction('play', () => {
+                audioRef.current?.play();
             });
 
             safeMediaSessionAction('pause', () => {
                 audioRef.current?.pause();
-                setIsPlaying(false);
             });
 
             safeMediaSessionAction('nexttrack', () => {
@@ -768,25 +477,11 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
                     );
                 }
             });
-
-            safeMediaSessionAction('stop', () => {
-                setIsPlaying(false);
-                setCurrentPlaylist(null);
-                if (audioRef.current) {
-                    audioRef.current.pause();
-                    audioRef.current.src = '';
-                }
-                if ('mediaSession' in navigator) {
-                    try {
-                        navigator.mediaSession.metadata = null;
-                        navigator.mediaSession.playbackState = 'none';
-                    } catch { }
-                }
-            });
         }, setupDelay);
 
         return () => {
             clearTimeout(timeoutId);
+            // Cleanup handlers - wrapped to prevent errors during Despia transitions
             safeMediaSessionAction('play', null);
             safeMediaSessionAction('pause', null);
             safeMediaSessionAction('nexttrack', null);
@@ -794,7 +489,6 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
             safeMediaSessionAction('seekto', null);
             safeMediaSessionAction('seekbackward', null);
             safeMediaSessionAction('seekforward', null);
-            safeMediaSessionAction('stop', null);
         };
     }, [currentPlaylist, currentTrackIndex, safeMediaSessionAction]);
 
@@ -850,8 +544,7 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
             setPreviewLimitReached(false);
             console.log('🎵 Starting playlist in preview mode (2 min limit) - user not subscribed');
         } else {
-            console.log('🎵 Full playback mode - user is subscribed');
-            // IMPORTANT: Reset preview accumulator for subscribed users to prevent false pauses
+            // Subscribed: reset preview state to prevent stale limits from a previous preview session
             previewTimeAccumulator.current = 0;
             setPreviewTimeRemaining(AUDIO_PREVIEW_SECONDS);
             setPreviewLimitReached(false);

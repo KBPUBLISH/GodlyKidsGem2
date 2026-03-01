@@ -1038,9 +1038,9 @@ const PanoramaBackground: React.FC = () => {
           className="absolute inset-0 w-[600vw] h-full transition-opacity duration-500"
           style={{
             backgroundImage: `url(${equippedBackground})`,
-            backgroundSize: 'auto 100%',
-            backgroundPosition: 'left bottom',
-            backgroundRepeat: 'repeat-x'
+            backgroundSize: 'cover',
+            backgroundPosition: 'center bottom',
+            backgroundRepeat: 'no-repeat'
           }}
         >
         </div>

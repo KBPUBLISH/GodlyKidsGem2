@@ -1,7 +1,6 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { activityTrackingService } from '../services/activityTrackingService';
-import { hasCompletedAnySession } from '../services/dailySessionService';
 import CreateAccountModal from '../components/modals/CreateAccountModal';
 import { ApiService } from '../services/apiService';
 
@@ -176,21 +175,17 @@ const LandingPage: React.FC = () => {
   const handleStartExplore = () => {
     activityTrackingService.trackOnboardingEvent('splash_explore_clicked');
     
-    // Check if user has completed at least one session but doesn't have an account
-    // If so, require account creation before continuing
-    const hasCompletedFirstLesson = hasCompletedAnySession();
     const hasAccount = hasUserAccount();
     
-    if (hasCompletedFirstLesson && !hasAccount) {
-      // Show account creation modal
-      setShowAccountModal(true);
+    if (hasAccount) {
+      // Existing user — go straight to home
+      localStorage.setItem('godlykids_welcome_seen', 'true');
+      navigate('/home');
       return;
     }
     
-    // Skip welcome page - go directly to explore
-    localStorage.setItem('godlykids_welcome_seen', 'true');
-    // Go to the explore/home page
-    navigate('/home');
+    // New user — go through onboarding first
+    navigate('/onboarding');
   };
 
   const handleSignIn = () => {

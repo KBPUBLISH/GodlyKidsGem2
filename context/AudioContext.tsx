@@ -125,6 +125,9 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     const previewTimeAccumulator = useRef(0);
     const isPreviewModeRef = useRef(false); // Ref for use in event listeners
 
+    // --- Wake Lock for Android background audio ---
+    const wakeLockRef = useRef<any>(null);
+
     // --- Refs ---
     const audioRef = useRef<HTMLAudioElement | null>(null);
     const sfxAudioRefs = useRef<{
@@ -380,7 +383,65 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         }
     }, [isPlaying]);
 
-    // Media Session setup with cover image
+    // Android: Update MediaSession position state every 500ms while playing
+    // This is critical - without it Android kills the audio process in background
+    useEffect(() => {
+        if (!isPlaying) return;
+        const interval = setInterval(() => {
+            const audio = audioRef.current;
+            if (!audio || audio.paused) return;
+            if ('mediaSession' in navigator && 'setPositionState' in navigator.mediaSession) {
+                try {
+                    const dur = audio.duration;
+                    const pos = audio.currentTime;
+                    if (!isNaN(dur) && dur > 0 && !isNaN(pos)) {
+                        navigator.mediaSession.setPositionState({
+                            duration: dur,
+                            playbackRate: 1,
+                            position: Math.min(pos, dur),
+                        });
+                    }
+                } catch (e) {
+                    // Silently fail
+                }
+            }
+        }, 500);
+        return () => clearInterval(interval);
+    }, [isPlaying]);
+
+    // Wake Lock: Prevent Android from sleeping/killing audio during playback
+    useEffect(() => {
+        const requestWakeLock = async () => {
+            try {
+                if ('wakeLock' in navigator && isPlaying) {
+                    wakeLockRef.current = await (navigator as any).wakeLock.request('screen');
+                    console.log('🔒 Wake Lock acquired');
+                }
+            } catch (err) {
+                console.log('Wake Lock not supported or failed:', err);
+            }
+        };
+
+        const releaseWakeLock = async () => {
+            if (wakeLockRef.current) {
+                try {
+                    await wakeLockRef.current.release();
+                    wakeLockRef.current = null;
+                    console.log('🔓 Wake Lock released');
+                } catch (err) {
+                    console.log('Wake Lock release failed:', err);
+                }
+            }
+        };
+
+        if (isPlaying) {
+            requestWakeLock();
+        } else {
+            releaseWakeLock();
+        }
+
+        return () => { releaseWakeLock(); };
+    }, [isPlaying]);
     const updateMediaSession = useCallback(() => {
         if (!('mediaSession' in navigator) || !currentPlaylist) return;
 

@@ -187,12 +187,13 @@ const PaywallPage: React.FC = () => {
   }, [isPremium, navigate, subscribe, isClosing]);
   
   // Listen for premium status changes (from webhook confirmation after purchase)
+  // IMPORTANT: Do NOT call subscribe() here - the event was already dispatched by subscribe().
+  // Calling it again causes an infinite loop: subscribe → dispatch event → handler → subscribe → ...
   useEffect(() => {
     const handlePremiumChange = (event: CustomEvent) => {
       console.log('📱 Premium status changed on paywall:', event.detail);
       if (event.detail?.isPremium) {
         console.log('✅ Premium confirmed via event - navigating to home');
-        subscribe();
         navigate('/home');
       }
     };
@@ -243,7 +244,7 @@ const PaywallPage: React.FC = () => {
         clearInterval(backgroundPollInterval);
       }
     };
-  }, [error, subscribe, navigate]);
+  }, [error, navigate]);
 
   const handleSubscribeClick = () => {
     setError(null);

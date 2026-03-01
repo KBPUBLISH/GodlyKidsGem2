@@ -252,21 +252,8 @@ const HomePage: React.FC = () => {
   const [selectedDayIndex, setSelectedDayIndex] = useState<number>(getSelectedDay());
   const todayIndex = getTodayIndex();
   
-  // Welcome video state - plays once per app session when returning to home
-  // Disabled on Android due to video playback issues
-  const [showWelcomeVideo, setShowWelcomeVideo] = useState(() => {
-    // Check if running on Android
-    const ua = navigator.userAgent.toLowerCase();
-    const isAndroid = ua.includes('android');
-    
-    // Disable welcome video on Android
-    if (isAndroid) {
-      return false;
-    }
-    
-    const hasShownThisSession = sessionStorage.getItem('godlykids_welcome_shown');
-    return !hasShownThisSession;
-  });
+  // Welcome video - disabled
+  const [showWelcomeVideo] = useState(false);
   const welcomeVideoRef = useRef<HTMLVideoElement>(null);
   
   // Explore categories state - initialize from cache if available

@@ -391,6 +391,10 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
                                 audio.play().catch(() => {});
                                 audio.removeEventListener('canplay', resume);
                             });
+                        } else if (isPlaying && audioRef.current === audio && audio.paused) {
+                            // Audio got paused but should be playing - resume it
+                            console.log('🎵 Audio paused unexpectedly, resuming at', audio.currentTime);
+                            audio.play().catch(e => console.log('Unexpected pause recovery failed:', e.name));
                         }
                     }, 1500);
                 }).catch(e => {
@@ -437,7 +441,41 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
             }
         };
         document.addEventListener('visibilitychange', handleVisibilityChange);
-        return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
+        
+        // Also listen to 'pageshow' for iOS/Android app resume (more reliable than visibilitychange)
+        const handlePageShow = (event: PageTransitionEvent) => {
+            console.log('🎵 Page show - persisted:', event.persisted, 'isPlayingRef:', isPlayingRef.current);
+            if (event.persisted || document.visibilityState === 'visible') {
+                const audio = audioRef.current;
+                if (audio && isPlayingRef.current && audio.paused) {
+                    console.log('🎵 Page resumed - restarting audio');
+                    audio.play().catch(e => console.log('Resume on page show failed:', e.name));
+                }
+            }
+        };
+        window.addEventListener('pageshow', handlePageShow as EventListener);
+        
+        // Also add a focus listener as backup
+        const handleFocus = () => {
+            console.log('🎵 Window focus - isPlayingRef:', isPlayingRef.current);
+            const audio = audioRef.current;
+            if (audio && isPlayingRef.current && audio.paused) {
+                console.log('🎵 Window focused - resuming audio');
+                // Small delay to let the WebView fully wake up
+                setTimeout(() => {
+                    if (audioRef.current && isPlayingRef.current && audioRef.current.paused) {
+                        audioRef.current.play().catch(e => console.log('Resume on focus failed:', e.name));
+                    }
+                }, 100);
+            }
+        };
+        window.addEventListener('focus', handleFocus);
+        
+        return () => {
+            document.removeEventListener('visibilitychange', handleVisibilityChange);
+            window.removeEventListener('pageshow', handlePageShow as EventListener);
+            window.removeEventListener('focus', handleFocus);
+        };
     }, []);
     
     // Keep-alive ping to prevent Android from suspending WebView during background audio playback

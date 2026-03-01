@@ -320,8 +320,20 @@ const PaywallPage: React.FC = () => {
           console.warn('⚠️ Activity tracking error:', trackError);
         }
         
-        // Update local state
+        // Update local state and verify subscription
         subscribe();
+        
+        // Verify subscription is actually active before navigating away
+        await checkPremiumStatus();
+        const verifiedPremium = localStorage.getItem('godlykids_premium') === 'true';
+        
+        if (!verifiedPremium) {
+          console.warn('⚠️ Subscription verification failed after purchase');
+          setError('Subscription activated but verification failed. Tap "Restore Purchases" to complete.');
+          return;
+        }
+        
+        console.log('✅ Subscription verified - navigating to home');
         navigate('/home');
       } else if (result.error && result.error !== 'Purchase cancelled') {
         console.error('❌ Purchase failed:', result.error);

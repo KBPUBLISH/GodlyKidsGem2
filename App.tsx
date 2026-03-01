@@ -933,7 +933,6 @@ import { metaAttributionService } from './services/metaAttributionService';
 import DemoTimer from './components/features/DemoTimer';
 import ReadyToJumpInPage from './pages/ReadyToJumpInPage';
 import OnboardingTutorial from './components/features/OnboardingTutorial';
-import LayoutRatingModal, { shouldShowLayoutRating } from './components/features/LayoutRatingModal';
 import { TutorialProvider, useTutorial } from './context/TutorialContext';
 
 // --- ASSETS & HELPERS ---
@@ -1150,20 +1149,9 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const prevPathRef = useRef(location.pathname);
   const [isTransitioning, setIsTransitioning] = useState(false);
   const fadeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const [showLayoutRating, setShowLayoutRating] = useState(false);
   const [lifetimeOfferVariant, setLifetimeOfferVariant] = useState<'first' | 'final' | 'expired' | null>(null);
   const lifetimeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const prevPathForOfferRef = useRef(location.pathname);
-
-  // Show "How do you like the new layout?" pop-up on first visit to /world or /home
-  useEffect(() => {
-    const isNewLayoutPage = location.pathname === '/world' || location.pathname === '/home';
-    if (!isNewLayoutPage || !shouldShowLayoutRating()) return;
-    const timer = setTimeout(() => {
-      setShowLayoutRating(true);
-    }, 20000);
-    return () => clearTimeout(timer);
-  }, [location.pathname]);
 
   // --- Lifetime offer popup: first offer (1 minute after user spends time on app) ---
   const LIFETIME_FIRST_MAIN_PAGE_KEY = 'godlykids_lifetime_first_main_page_at';
@@ -1344,15 +1332,6 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
 
       {/* Onboarding Tutorial Overlay */}
       <OnboardingTutorial />
-
-      {/* Layout rating pop-up - "How do you like the new layout?" */}
-      <LayoutRatingModal
-        isOpen={showLayoutRating}
-        onClose={() => setShowLayoutRating(false)}
-        userId={localStorage.getItem('godlykids_user_email') || localStorage.getItem('godlykids_device_id') || 'anonymous'}
-        email={localStorage.getItem('godlykids_user_email') || undefined}
-        platform={/despia/i.test(navigator.userAgent) ? (/iphone|ipad/i.test(navigator.userAgent) ? 'ios' : 'android') : 'web'}
-      />
 
       {/* Lifetime offer popup (shown after paywall dismissal) */}
       {lifetimeOfferVariant && (

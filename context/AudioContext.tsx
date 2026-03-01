@@ -125,58 +125,55 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     const previewTimeAccumulator = useRef(0);
     const isPreviewModeRef = useRef(false); // Ref for use in event listeners
 
-    // --- Wake Lock for Android background audio ---
-    const wakeLockRef = useRef<any>(null);
-
     // --- Refs ---
     const audioRef = useRef<HTMLAudioElement | null>(null);
-    const [audioReady, setAudioReady] = useState(false);
-    const updateMediaSessionRef = useRef<() => void>(() => {});
-    const sfxAudioRefs = useRef<{
-        click: HTMLAudioElement | null;
-        back: HTMLAudioElement | null;
-        success: HTMLAudioElement | null;
-        tab: HTMLAudioElement | null;
-    }>({
-        click: null,
-        back: null,
-        success: null,
-        tab: null
-    });
+    const sfxContextRef = useRef<AudioContext | null>(null);
 
-    // Create reusable HTML audio elements for sound effects
-    // Using data URIs with minimal synthesized tones
-    useEffect(() => {
-        // Create silent/minimal audio elements that can be played on demand
-        // These use data URIs to avoid network requests
-        
-        // Simple beep tones using data URIs (tiny files, instant playback)
-        const createToneAudio = (frequency: number, duration: number) => {
-            const audio = document.createElement('audio');
-            audio.preload = 'auto';
-            audio.volume = 0.15;
-            // We'll use silent audio and handle sound via native beep
-            // For now, using a minimal silent MP3 data URI
-            audio.src = 'data:audio/mp3;base64,SUQzBAAAAAAAI1RTU0UAAAAPAAADTGF2ZjU4Ljc2LjEwMAAAAAAAAAAAAAAA//tQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWGluZwAAAA8AAAACAAABhgC7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7v////////////////////////////////////////////////////////////////AAAAATGF2YzU4LjEzAAAAAAAAAAAAAAAAJAAAAAAAAAAAhv8xgCQAAAAAAP/7QAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWGLUZY3BAUUxBVkM1OC4xMwC7u7u7u7u7u7u7u7u7u7u7u7u7u7u7//sQRAAP8AAAf4AAAAgAAA0gAAABAAAB/gAAACAAADSAAAAETEFNRTMuMTAwVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVV';
-            return audio;
-        };
-
-        sfxAudioRefs.current = {
-            click: createToneAudio(400, 0.1),
-            back: createToneAudio(200, 0.15),
-            success: createToneAudio(440, 0.3),
-            tab: createToneAudio(600, 0.05)
-        };
-
-        return () => {
-            // Cleanup audio elements
-            Object.values(sfxAudioRefs.current).forEach(audio => {
-                if (audio) {
-                    audio.pause();
-                    audio.src = '';
+    // Get or create SFX AudioContext (reuse for all sound effects)
+    // Protected against errors during Despia WebView transitions
+    const getSfxContext = useCallback(() => {
+        try {
+            // In Despia during early boot, skip audio context creation to avoid transition errors
+            const isDespia = typeof window !== 'undefined' && (window as any).__GK_IS_DESPIA__;
+            if (isDespia) {
+                const bootTimestamp = (window as any).__GK_BOOT_TIMESTAMP__ || 0;
+                const timeSinceBoot = Date.now() - bootTimestamp;
+                // Skip audio during first 500ms of boot to avoid transition issues
+                if (timeSinceBoot < 500) {
+                    throw new Error('Skipping audio during Despia transition');
                 }
-            });
-        };
+            }
+            
+            if (!sfxContextRef.current || sfxContextRef.current.state === 'closed') {
+                sfxContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
+            }
+            // Resume if suspended (happens after user interaction is required)
+            if (sfxContextRef.current.state === 'suspended') {
+                sfxContextRef.current.resume().catch(() => {
+                    // Ignore resume errors - can happen during visibility changes
+                });
+            }
+            return sfxContextRef.current;
+        } catch (e) {
+            // Return a dummy context-like object that won't crash when used
+            console.log('AudioContext unavailable:', e);
+            return {
+                createOscillator: () => ({
+                    connect: () => {},
+                    start: () => {},
+                    stop: () => {},
+                    frequency: { setValueAtTime: () => {} },
+                    type: 'sine'
+                }),
+                createGain: () => ({
+                    connect: () => {},
+                    gain: { setValueAtTime: () => {}, exponentialRampToValueAtTime: () => {} }
+                }),
+                destination: {},
+                currentTime: 0,
+                state: 'suspended'
+            } as unknown as AudioContext;
+        }
     }, []);
 
     // Track listening time - store last tracked time to calculate deltas
@@ -191,14 +188,13 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         isPreviewModeRef.current = isPreviewMode;
     }, [isPreviewMode]);
 
-    // Setup event listeners for the audio element (runs when audio element is in DOM)
+    // Attach event listeners once audio element is in DOM
     useEffect(() => {
-        if (!audioReady) return;
         const audio = audioRef.current;
         if (!audio) return;
 
         // Basic event listeners
-        const handleTimeUpdate = () => {
+        audio.addEventListener('timeupdate', () => {
             setCurrentTime(audio.currentTime);
             if (!isNaN(audio.duration) && audio.duration > 0) {
                 setProgress((audio.currentTime / audio.duration) * 100);
@@ -259,13 +255,13 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
                     });
                 }
             }
-        };
+        });
 
-        const handleLoadedMetadata = () => {
+        audio.addEventListener('loadedmetadata', () => {
             setDuration(audio.duration);
-        };
+        });
 
-        const handleEnded = () => {
+        audio.addEventListener('ended', () => {
             // Send final engagement update for completed track (100%)
             setCurrentPlaylist(playlist => {
                 if (playlist) {
@@ -310,14 +306,14 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
                 }
                 return playlist;
             });
-        };
+        });
 
-        const handlePlay = () => {
+        audio.addEventListener('play', () => {
             setIsPlaying(true);
-            updateMediaSessionRef.current();
-        };
+            updateMediaSession();
+        });
 
-        const handlePause = () => {
+        audio.addEventListener('pause', () => {
             setIsPlaying(false);
             // Save any accumulated listening time when paused
             if (listeningTimeAccumulatorRef.current > 0) {
@@ -325,28 +321,17 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
                 listeningTimeAccumulatorRef.current = 0;
             }
             lastListeningTimeRef.current = 0;
-        };
-
-        audio.addEventListener('timeupdate', handleTimeUpdate);
-        audio.addEventListener('loadedmetadata', handleLoadedMetadata);
-        audio.addEventListener('ended', handleEnded);
-        audio.addEventListener('play', handlePlay);
-        audio.addEventListener('pause', handlePause);
+        });
 
         return () => {
             // Save remaining listening time on unmount
             if (listeningTimeAccumulatorRef.current > 0) {
                 activityTrackingService.trackAudioListeningTime(Math.floor(listeningTimeAccumulatorRef.current));
             }
-            audio.removeEventListener('timeupdate', handleTimeUpdate);
-            audio.removeEventListener('loadedmetadata', handleLoadedMetadata);
-            audio.removeEventListener('ended', handleEnded);
-            audio.removeEventListener('play', handlePlay);
-            audio.removeEventListener('pause', handlePause);
             audio.pause();
             audio.src = '';
         };
-    }, [audioReady]);
+    }, []);
 
     // Load track when playlist or index changes
     useEffect(() => {
@@ -369,88 +354,59 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         updateMediaSession();
     }, [currentPlaylist, currentTrackIndex]);
 
-    // Simple play/pause sync
+    // Play/pause sync - with recovery for frozen audio (Android WebView kills the element in background)
     useEffect(() => {
         const audio = audioRef.current;
         if (!audio || !audio.src) return;
 
         if (isPlaying) {
-            audio.play().catch(e => console.log('Play failed:', e.name));
+            const playPromise = audio.play();
+            if (playPromise) {
+                playPromise.then(() => {
+                    // Verify audio is actually progressing after 1.5s
+                    const checkTime = audio.currentTime;
+                    setTimeout(() => {
+                        if (isPlaying && audioRef.current === audio && !audio.paused && audio.currentTime === checkTime && checkTime > 0) {
+                            // Audio element is frozen - reload the track
+                            console.log('🎵 Audio frozen, reloading track at', checkTime);
+                            const src = audio.src;
+                            audio.src = src;
+                            audio.load();
+                            audio.addEventListener('canplay', function resume() {
+                                audio.currentTime = checkTime;
+                                audio.play().catch(() => {});
+                                audio.removeEventListener('canplay', resume);
+                            });
+                        }
+                    }, 1500);
+                }).catch(e => {
+                    console.log('Play failed:', e.name);
+                    // If play fails entirely, try reloading
+                    if (currentPlaylist) {
+                        const track = currentPlaylist.items[currentTrackIndex];
+                        if (track?.audioUrl) {
+                            audio.src = track.audioUrl;
+                            audio.load();
+                            audio.addEventListener('canplay', function retry() {
+                                audio.play().catch(() => {});
+                                audio.removeEventListener('canplay', retry);
+                            });
+                        }
+                    }
+                });
+            }
         } else {
             audio.pause();
         }
         
-        // Update media session playback state
         if ('mediaSession' in navigator) {
             navigator.mediaSession.playbackState = isPlaying ? 'playing' : 'paused';
         }
     }, [isPlaying]);
 
-    // Android: Update MediaSession position state every 500ms while playing
-    // This is critical - without it Android kills the audio process in background
-    useEffect(() => {
-        if (!isPlaying) return;
-        const interval = setInterval(() => {
-            const audio = audioRef.current;
-            if (!audio || audio.paused) return;
-            if ('mediaSession' in navigator && 'setPositionState' in navigator.mediaSession) {
-                try {
-                    const dur = audio.duration;
-                    const pos = audio.currentTime;
-                    if (!isNaN(dur) && dur > 0 && !isNaN(pos)) {
-                        navigator.mediaSession.setPositionState({
-                            duration: dur,
-                            playbackRate: 1,
-                            position: Math.min(pos, dur),
-                        });
-                    }
-                } catch (e) {
-                    // Silently fail
-                }
-            }
-        }, 500);
-        return () => clearInterval(interval);
-    }, [isPlaying]);
-
-    // Wake Lock: Prevent Android from sleeping/killing audio during playback
-    useEffect(() => {
-        const requestWakeLock = async () => {
-            try {
-                if ('wakeLock' in navigator && isPlaying) {
-                    wakeLockRef.current = await (navigator as any).wakeLock.request('screen');
-                    console.log('🔒 Wake Lock acquired');
-                }
-            } catch (err) {
-                console.log('Wake Lock not supported or failed:', err);
-            }
-        };
-
-        const releaseWakeLock = async () => {
-            if (wakeLockRef.current) {
-                try {
-                    await wakeLockRef.current.release();
-                    wakeLockRef.current = null;
-                    console.log('🔓 Wake Lock released');
-                } catch (err) {
-                    console.log('Wake Lock release failed:', err);
-                }
-            }
-        };
-
-        if (isPlaying) {
-            requestWakeLock();
-        } else {
-            releaseWakeLock();
-        }
-
-        return () => { releaseWakeLock(); };
-    }, [isPlaying]);
-    // MediaSession: Set metadata AND action handlers together (Faith Defence pattern)
-    // This must be called every time track changes or playback starts
-    // Android requires both metadata + action handlers to show the widget
+    // Media Session setup with cover image
     const updateMediaSession = useCallback(() => {
-        if (!('mediaSession' in navigator)) return;
-        if (!currentPlaylist) return;
+        if (!('mediaSession' in navigator) || !currentPlaylist) return;
 
         const track = currentPlaylist.items[currentTrackIndex];
         if (!track) return;
@@ -459,11 +415,16 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         console.log('📱 Setting Media Session:', track.title, 'Cover:', coverImage);
 
         try {
+            // Build artwork array with multiple sizes for iOS
             const artwork: MediaImage[] = [];
             if (coverImage) {
                 artwork.push(
-                    { src: coverImage, sizes: '256x256', type: 'image/jpeg' },
-                    { src: coverImage, sizes: '512x512', type: 'image/jpeg' }
+                    { src: coverImage, sizes: '96x96', type: 'image/png' },
+                    { src: coverImage, sizes: '128x128', type: 'image/png' },
+                    { src: coverImage, sizes: '192x192', type: 'image/png' },
+                    { src: coverImage, sizes: '256x256', type: 'image/png' },
+                    { src: coverImage, sizes: '384x384', type: 'image/png' },
+                    { src: coverImage, sizes: '512x512', type: 'image/png' }
                 );
             }
 
@@ -473,112 +434,124 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
                 album: currentPlaylist.title,
                 artwork
             });
-
+            
             navigator.mediaSession.playbackState = isPlaying ? 'playing' : 'paused';
-
-            // Action handlers must be set alongside metadata for Android widget
-            navigator.mediaSession.setActionHandler('play', () => {
-                audioRef.current?.play();
-                setIsPlaying(true);
-            });
-
-            navigator.mediaSession.setActionHandler('pause', () => {
-                audioRef.current?.pause();
-                setIsPlaying(false);
-            });
-
-            navigator.mediaSession.setActionHandler('seekbackward', (details) => {
-                const skipTime = details?.seekOffset || 10;
-                if (audioRef.current) {
-                    audioRef.current.currentTime = Math.max(0, audioRef.current.currentTime - skipTime);
-                }
-            });
-
-            navigator.mediaSession.setActionHandler('seekforward', (details) => {
-                const skipTime = details?.seekOffset || 10;
-                if (audioRef.current) {
-                    audioRef.current.currentTime = Math.min(
-                        audioRef.current.duration || 0,
-                        audioRef.current.currentTime + skipTime
-                    );
-                }
-            });
-
-            navigator.mediaSession.setActionHandler('seekto', (details) => {
-                if (audioRef.current && details?.seekTime !== undefined) {
-                    audioRef.current.currentTime = details.seekTime;
-                }
-            });
-
-            navigator.mediaSession.setActionHandler('nexttrack', () => {
-                setCurrentTrackIndex(prev => {
-                    const next = prev + 1;
-                    return currentPlaylist && next < currentPlaylist.items.length ? next : prev;
-                });
-            });
-
-            navigator.mediaSession.setActionHandler('previoustrack', () => {
-                setCurrentTrackIndex(prev => prev > 0 ? prev - 1 : 0);
-            });
-
         } catch (e) {
             console.log('Media Session error:', e);
         }
     }, [currentPlaylist, currentTrackIndex, isPlaying]);
 
-    // Keep ref in sync so event listeners always call latest version
-    useEffect(() => {
-        updateMediaSessionRef.current = updateMediaSession;
-    }, [updateMediaSession]);
-
-    // Update media session when track changes or playback state changes
+    // Update media session when track changes
     useEffect(() => {
         if (currentPlaylist) {
             updateMediaSession();
         }
-    }, [currentPlaylist, currentTrackIndex, isPlaying, updateMediaSession]);
+    }, [currentPlaylist, currentTrackIndex, updateMediaSession]);
 
-    // Cleanup media session on unmount
-    useEffect(() => {
-        return () => {
-            if ('mediaSession' in navigator) {
-                try {
-                    navigator.mediaSession.metadata = null;
-                    navigator.mediaSession.setActionHandler('play', null);
-                    navigator.mediaSession.setActionHandler('pause', null);
-                    navigator.mediaSession.setActionHandler('seekbackward', null);
-                    navigator.mediaSession.setActionHandler('seekforward', null);
-                    navigator.mediaSession.setActionHandler('seekto', null);
-                    navigator.mediaSession.setActionHandler('nexttrack', null);
-                    navigator.mediaSession.setActionHandler('previoustrack', null);
-                } catch {}
+    // Safe wrapper for mediaSession operations - prevents errors during Despia WebView transitions
+    const safeMediaSessionAction = useCallback((action: string, handler: ((details?: any) => void) | null) => {
+        try {
+            if ('mediaSession' in navigator && navigator.mediaSession.setActionHandler) {
+                navigator.mediaSession.setActionHandler(action as MediaSessionAction, handler);
             }
-        };
+        } catch (e) {
+            // Silently fail - this can happen during WebView transitions in Despia
+            console.log('MediaSession action setup skipped:', action, e);
+        }
     }, []);
+    
+    // Set up Media Session action handlers once
+    useEffect(() => {
+        if (!('mediaSession' in navigator)) return;
 
-    // --- Simple SFX using HTML Audio Elements ---
-    const playSfxAudio = useCallback((type: 'click' | 'back' | 'success' | 'tab') => {
+        // In Despia, delay media session setup slightly to avoid race conditions during WebView creation
+        const isDespia = typeof window !== 'undefined' && (window as any).__GK_IS_DESPIA__;
+        const setupDelay = isDespia ? 100 : 0;
+        
+        const timeoutId = setTimeout(() => {
+            safeMediaSessionAction('play', () => {
+                audioRef.current?.play();
+            });
+
+            safeMediaSessionAction('pause', () => {
+                audioRef.current?.pause();
+            });
+
+            safeMediaSessionAction('nexttrack', () => {
+                if (currentPlaylist && currentTrackIndex < currentPlaylist.items.length - 1) {
+                    setCurrentTrackIndex(prev => prev + 1);
+                }
+            });
+
+            safeMediaSessionAction('previoustrack', () => {
+                if (currentTrackIndex > 0) {
+                    setCurrentTrackIndex(prev => prev - 1);
+                }
+            });
+
+            safeMediaSessionAction('seekto', (details: any) => {
+                if (audioRef.current && details?.seekTime !== undefined) {
+                    audioRef.current.currentTime = details.seekTime;
+                }
+            });
+
+            safeMediaSessionAction('seekbackward', (details: any) => {
+                if (audioRef.current) {
+                    audioRef.current.currentTime = Math.max(0, audioRef.current.currentTime - (details?.seekOffset || 10));
+                }
+            });
+
+            safeMediaSessionAction('seekforward', (details: any) => {
+                if (audioRef.current) {
+                    audioRef.current.currentTime = Math.min(
+                        audioRef.current.duration || 0,
+                        audioRef.current.currentTime + (details?.seekOffset || 10)
+                    );
+                }
+            });
+        }, setupDelay);
+
+        return () => {
+            clearTimeout(timeoutId);
+            // Cleanup handlers - wrapped to prevent errors during Despia transitions
+            safeMediaSessionAction('play', null);
+            safeMediaSessionAction('pause', null);
+            safeMediaSessionAction('nexttrack', null);
+            safeMediaSessionAction('previoustrack', null);
+            safeMediaSessionAction('seekto', null);
+            safeMediaSessionAction('seekbackward', null);
+            safeMediaSessionAction('seekforward', null);
+        };
+    }, [currentPlaylist, currentTrackIndex, safeMediaSessionAction]);
+
+    // --- Simple SFX using Web Audio API ---
+    const playTone = useCallback((freq: number, dur: number, vol: number = 0.15) => {
         if (!sfxEnabled) return;
         try {
-            const audio = sfxAudioRefs.current[type];
-            if (audio) {
-                // Reset to beginning and play
-                audio.currentTime = 0;
-                audio.play().catch(() => {
-                    // Silently fail if autoplay is blocked
-                });
-            }
+            const ctx = getSfxContext();
+            const osc = ctx.createOscillator();
+            const gain = ctx.createGain();
+            osc.type = 'sine';
+            osc.frequency.setValueAtTime(freq, ctx.currentTime);
+            gain.gain.setValueAtTime(vol, ctx.currentTime);
+            gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + dur);
+            osc.connect(gain);
+            gain.connect(ctx.destination);
+            osc.start(ctx.currentTime);
+            osc.stop(ctx.currentTime + dur);
         } catch (e) {
             console.log('SFX error:', e);
         }
-    }, [sfxEnabled]);
+    }, [sfxEnabled, getSfxContext]);
 
-    const playClick = useCallback(() => playSfxAudio('click'), [playSfxAudio]);
-    const playBack = useCallback(() => playSfxAudio('back'), [playSfxAudio]);
-    const playTab = useCallback(() => playSfxAudio('tab'), [playSfxAudio]);
+    const playClick = useCallback(() => playTone(400, 0.1), [playTone]);
+    const playBack = useCallback(() => playTone(200, 0.15), [playTone]);
+    const playTab = useCallback(() => playTone(600, 0.05), [playTone]);
     const playSuccess = useCallback(() => {
-        playSfxAudio('success');
-    }, [playSfxAudio]);
+        playTone(440, 0.2);
+        setTimeout(() => playTone(660, 0.2), 100);
+        setTimeout(() => playTone(880, 0.3), 200);
+    }, [playTone]);
 
     // --- Playlist Player Methods ---
     const playPlaylist = useCallback((playlist: Playlist, startIndex: number = 0, isSubscribed: boolean = true) => {
@@ -603,7 +576,9 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
             setPreviewLimitReached(false);
             console.log('🎵 Starting playlist in preview mode (2 min limit) - user not subscribed');
         } else {
-            console.log('🎵 Full playback mode - user is subscribed');
+            // Subscribed: reset preview state to prevent stale limits from a previous preview session
+            previewTimeAccumulator.current = 0;
+            setPreviewTimeRemaining(AUDIO_PREVIEW_SECONDS);
             setPreviewLimitReached(false);
         }
         
@@ -708,18 +683,7 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
             isPreviewMode, previewLimitReached, previewTimeRemaining, dismissPreviewLimit
         }}>
             {children}
-            {/* Render audio element in DOM for Android background playback support */}
-            <audio
-                ref={(el) => {
-                    if (el && !audioRef.current) {
-                        audioRef.current = el;
-                        setAudioReady(true);
-                    }
-                }}
-                preload="auto"
-                playsInline
-                style={{ display: 'none' }}
-            />
+            <audio ref={audioRef} preload="auto" playsInline style={{ display: 'none' }} />
         </AudioContext.Provider>
     );
 };

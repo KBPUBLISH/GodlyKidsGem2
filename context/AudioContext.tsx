@@ -431,12 +431,34 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
                 if (audio && isPlayingRef.current && audio.paused) {
                     console.log('🎵 App foregrounded - resuming audio');
                     audio.play().catch(e => console.log('Resume on foreground failed:', e.name));
+                } else if (audio && !isPlayingRef.current) {
+                    console.log('🎵 App foregrounded - audio was paused by user, not resuming');
                 }
             }
         };
         document.addEventListener('visibilitychange', handleVisibilityChange);
         return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
     }, []);
+    
+    // Keep-alive ping to prevent Android from suspending WebView during background audio playback
+    useEffect(() => {
+        let keepAliveInterval: NodeJS.Timeout | null = null;
+        
+        if (isPlaying) {
+            // Ping every 30 seconds to keep JS context alive
+            keepAliveInterval = setInterval(() => {
+                if (audioRef.current && !audioRef.current.paused) {
+                    console.log('🎵 Keep-alive ping - currentTime:', audioRef.current.currentTime);
+                }
+            }, 30000);
+        }
+        
+        return () => {
+            if (keepAliveInterval) {
+                clearInterval(keepAliveInterval);
+            }
+        };
+    }, [isPlaying]);
 
     // Media Session setup with cover image
     const updateMediaSession = useCallback(() => {

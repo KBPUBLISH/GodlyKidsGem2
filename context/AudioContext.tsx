@@ -130,6 +130,8 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
     // --- Refs ---
     const audioRef = useRef<HTMLAudioElement | null>(null);
+    const [audioReady, setAudioReady] = useState(false);
+    const updateMediaSessionRef = useRef<() => void>(() => {});
     const sfxAudioRefs = useRef<{
         click: HTMLAudioElement | null;
         back: HTMLAudioElement | null;
@@ -189,8 +191,9 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         isPreviewModeRef.current = isPreviewMode;
     }, [isPreviewMode]);
 
-    // Setup event listeners for the audio element
+    // Setup event listeners for the audio element (runs when audio element is in DOM)
     useEffect(() => {
+        if (!audioReady) return;
         const audio = audioRef.current;
         if (!audio) return;
 
@@ -311,7 +314,7 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
         const handlePlay = () => {
             setIsPlaying(true);
-            updateMediaSession();
+            updateMediaSessionRef.current();
         };
 
         const handlePause = () => {
@@ -343,7 +346,7 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
             audio.pause();
             audio.src = '';
         };
-    }, []);
+    }, [audioReady]);
 
     // Load track when playlist or index changes
     useEffect(() => {
@@ -442,8 +445,12 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
         return () => { releaseWakeLock(); };
     }, [isPlaying]);
+    // MediaSession: Set metadata AND action handlers together (Faith Defence pattern)
+    // This must be called every time track changes or playback starts
+    // Android requires both metadata + action handlers to show the widget
     const updateMediaSession = useCallback(() => {
-        if (!('mediaSession' in navigator) || !currentPlaylist) return;
+        if (!('mediaSession' in navigator)) return;
+        if (!currentPlaylist) return;
 
         const track = currentPlaylist.items[currentTrackIndex];
         if (!track) return;
@@ -452,16 +459,11 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         console.log('📱 Setting Media Session:', track.title, 'Cover:', coverImage);
 
         try {
-            // Build artwork array with multiple sizes for iOS
             const artwork: MediaImage[] = [];
             if (coverImage) {
                 artwork.push(
-                    { src: coverImage, sizes: '96x96', type: 'image/png' },
-                    { src: coverImage, sizes: '128x128', type: 'image/png' },
-                    { src: coverImage, sizes: '192x192', type: 'image/png' },
-                    { src: coverImage, sizes: '256x256', type: 'image/png' },
-                    { src: coverImage, sizes: '384x384', type: 'image/png' },
-                    { src: coverImage, sizes: '512x512', type: 'image/png' }
+                    { src: coverImage, sizes: '256x256', type: 'image/jpeg' },
+                    { src: coverImage, sizes: '512x512', type: 'image/jpeg' }
                 );
             }
 
@@ -471,95 +473,88 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
                 album: currentPlaylist.title,
                 artwork
             });
-            
+
             navigator.mediaSession.playbackState = isPlaying ? 'playing' : 'paused';
-        } catch (e) {
-            console.log('Media Session error:', e);
-        }
-    }, [currentPlaylist, currentTrackIndex, isPlaying]);
 
-    // Update media session when track changes
-    useEffect(() => {
-        if (currentPlaylist) {
-            updateMediaSession();
-        }
-    }, [currentPlaylist, currentTrackIndex, updateMediaSession]);
-
-    // Safe wrapper for mediaSession operations - prevents errors during Despia WebView transitions
-    const safeMediaSessionAction = useCallback((action: string, handler: ((details?: any) => void) | null) => {
-        try {
-            if ('mediaSession' in navigator && navigator.mediaSession.setActionHandler) {
-                navigator.mediaSession.setActionHandler(action as MediaSessionAction, handler);
-            }
-        } catch (e) {
-            // Silently fail - this can happen during WebView transitions in Despia
-            console.log('MediaSession action setup skipped:', action, e);
-        }
-    }, []);
-    
-    // Set up Media Session action handlers once
-    useEffect(() => {
-        if (!('mediaSession' in navigator)) return;
-
-        // In Despia, delay media session setup slightly to avoid race conditions during WebView creation
-        const isDespia = typeof window !== 'undefined' && (window as any).__GK_IS_DESPIA__;
-        const setupDelay = isDespia ? 100 : 0;
-        
-        const timeoutId = setTimeout(() => {
-            safeMediaSessionAction('play', () => {
+            // Action handlers must be set alongside metadata for Android widget
+            navigator.mediaSession.setActionHandler('play', () => {
                 audioRef.current?.play();
+                setIsPlaying(true);
             });
 
-            safeMediaSessionAction('pause', () => {
+            navigator.mediaSession.setActionHandler('pause', () => {
                 audioRef.current?.pause();
+                setIsPlaying(false);
             });
 
-            safeMediaSessionAction('nexttrack', () => {
-                if (currentPlaylist && currentTrackIndex < currentPlaylist.items.length - 1) {
-                    setCurrentTrackIndex(prev => prev + 1);
+            navigator.mediaSession.setActionHandler('seekbackward', (details) => {
+                const skipTime = details?.seekOffset || 10;
+                if (audioRef.current) {
+                    audioRef.current.currentTime = Math.max(0, audioRef.current.currentTime - skipTime);
                 }
             });
 
-            safeMediaSessionAction('previoustrack', () => {
-                if (currentTrackIndex > 0) {
-                    setCurrentTrackIndex(prev => prev - 1);
+            navigator.mediaSession.setActionHandler('seekforward', (details) => {
+                const skipTime = details?.seekOffset || 10;
+                if (audioRef.current) {
+                    audioRef.current.currentTime = Math.min(
+                        audioRef.current.duration || 0,
+                        audioRef.current.currentTime + skipTime
+                    );
                 }
             });
 
-            safeMediaSessionAction('seekto', (details: any) => {
+            navigator.mediaSession.setActionHandler('seekto', (details) => {
                 if (audioRef.current && details?.seekTime !== undefined) {
                     audioRef.current.currentTime = details.seekTime;
                 }
             });
 
-            safeMediaSessionAction('seekbackward', (details: any) => {
-                if (audioRef.current) {
-                    audioRef.current.currentTime = Math.max(0, audioRef.current.currentTime - (details?.seekOffset || 10));
-                }
+            navigator.mediaSession.setActionHandler('nexttrack', () => {
+                setCurrentTrackIndex(prev => {
+                    const next = prev + 1;
+                    return currentPlaylist && next < currentPlaylist.items.length ? next : prev;
+                });
             });
 
-            safeMediaSessionAction('seekforward', (details: any) => {
-                if (audioRef.current) {
-                    audioRef.current.currentTime = Math.min(
-                        audioRef.current.duration || 0,
-                        audioRef.current.currentTime + (details?.seekOffset || 10)
-                    );
-                }
+            navigator.mediaSession.setActionHandler('previoustrack', () => {
+                setCurrentTrackIndex(prev => prev > 0 ? prev - 1 : 0);
             });
-        }, setupDelay);
 
+        } catch (e) {
+            console.log('Media Session error:', e);
+        }
+    }, [currentPlaylist, currentTrackIndex, isPlaying]);
+
+    // Keep ref in sync so event listeners always call latest version
+    useEffect(() => {
+        updateMediaSessionRef.current = updateMediaSession;
+    }, [updateMediaSession]);
+
+    // Update media session when track changes or playback state changes
+    useEffect(() => {
+        if (currentPlaylist) {
+            updateMediaSession();
+        }
+    }, [currentPlaylist, currentTrackIndex, isPlaying, updateMediaSession]);
+
+    // Cleanup media session on unmount
+    useEffect(() => {
         return () => {
-            clearTimeout(timeoutId);
-            // Cleanup handlers - wrapped to prevent errors during Despia transitions
-            safeMediaSessionAction('play', null);
-            safeMediaSessionAction('pause', null);
-            safeMediaSessionAction('nexttrack', null);
-            safeMediaSessionAction('previoustrack', null);
-            safeMediaSessionAction('seekto', null);
-            safeMediaSessionAction('seekbackward', null);
-            safeMediaSessionAction('seekforward', null);
+            if ('mediaSession' in navigator) {
+                try {
+                    navigator.mediaSession.metadata = null;
+                    navigator.mediaSession.setActionHandler('play', null);
+                    navigator.mediaSession.setActionHandler('pause', null);
+                    navigator.mediaSession.setActionHandler('seekbackward', null);
+                    navigator.mediaSession.setActionHandler('seekforward', null);
+                    navigator.mediaSession.setActionHandler('seekto', null);
+                    navigator.mediaSession.setActionHandler('nexttrack', null);
+                    navigator.mediaSession.setActionHandler('previoustrack', null);
+                } catch {}
+            }
         };
-    }, [currentPlaylist, currentTrackIndex, safeMediaSessionAction]);
+    }, []);
 
     // --- Simple SFX using HTML Audio Elements ---
     const playSfxAudio = useCallback((type: 'click' | 'back' | 'success' | 'tab') => {
@@ -718,6 +713,7 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
                 ref={(el) => {
                     if (el && !audioRef.current) {
                         audioRef.current = el;
+                        setAudioReady(true);
                     }
                 }}
                 preload="auto"

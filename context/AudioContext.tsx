@@ -128,6 +128,8 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     // --- Refs ---
     const audioRef = useRef<HTMLAudioElement | null>(null);
     const sfxContextRef = useRef<AudioContext | null>(null);
+    const userRequestedPauseRef = useRef(false);
+    const isPlayingRef = useRef(false);
 
     // Get or create SFX AudioContext (reuse for all sound effects)
     // Protected against errors during Despia WebView transitions
@@ -183,10 +185,13 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     const lastEngagementUpdateRef = useRef<number>(0);
     const ENGAGEMENT_UPDATE_INTERVAL = 30; // seconds
     
-    // Keep preview mode ref in sync with state
+    // Keep refs in sync with state
     useEffect(() => {
         isPreviewModeRef.current = isPreviewMode;
     }, [isPreviewMode]);
+    useEffect(() => {
+        isPlayingRef.current = isPlaying;
+    }, [isPlaying]);
 
     // Attach event listeners once audio element is in DOM
     useEffect(() => {
@@ -222,6 +227,7 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
                         // Check if preview limit reached
                         if (previewTimeAccumulator.current >= AUDIO_PREVIEW_SECONDS) {
                             console.log('🎵 Preview limit reached - pausing playback');
+                            userRequestedPauseRef.current = true;
                             audio.pause();
                             setIsPlaying(false);
                             setPreviewLimitReached(true);
@@ -299,6 +305,7 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
                         } else {
                             // No more tracks - stop playing
                             console.log('🎵 Playlist ended');
+                            userRequestedPauseRef.current = true;
                             setIsPlaying(false);
                             return prev; // Stay at last track
                         }
@@ -314,7 +321,10 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         });
 
         audio.addEventListener('pause', () => {
-            setIsPlaying(false);
+            if (userRequestedPauseRef.current) {
+                setIsPlaying(false);
+                userRequestedPauseRef.current = false;
+            }
             // Save any accumulated listening time when paused
             if (listeningTimeAccumulatorRef.current > 0) {
                 activityTrackingService.trackAudioListeningTime(Math.floor(listeningTimeAccumulatorRef.current));
@@ -396,6 +406,7 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
                 });
             }
         } else {
+            userRequestedPauseRef.current = true;
             audio.pause();
         }
         
@@ -403,6 +414,21 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
             navigator.mediaSession.playbackState = isPlaying ? 'playing' : 'paused';
         }
     }, [isPlaying]);
+
+    // Auto-resume playback when app returns to foreground (Android WebView pauses audio in background)
+    useEffect(() => {
+        const handleVisibilityChange = () => {
+            if (document.visibilityState === 'visible') {
+                const audio = audioRef.current;
+                if (audio && isPlayingRef.current && audio.paused) {
+                    console.log('🎵 App foregrounded - resuming audio');
+                    audio.play().catch(e => console.log('Resume on foreground failed:', e.name));
+                }
+            }
+        };
+        document.addEventListener('visibilitychange', handleVisibilityChange);
+        return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
+    }, []);
 
     // Media Session setup with cover image
     const updateMediaSession = useCallback(() => {
@@ -474,6 +500,7 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
             });
 
             safeMediaSessionAction('pause', () => {
+                userRequestedPauseRef.current = true;
                 audioRef.current?.pause();
             });
 
@@ -612,7 +639,10 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     }, []);
 
     const togglePlayPause = useCallback(() => {
-        setIsPlaying(prev => !prev);
+        setIsPlaying(prev => {
+            if (prev) userRequestedPauseRef.current = true;
+            return !prev;
+        });
     }, []);
 
     const nextTrack = useCallback(() => {
@@ -637,6 +667,7 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     }, []);
 
     const closePlayer = useCallback(() => {
+        userRequestedPauseRef.current = true;
         setIsPlaying(false);
         setCurrentPlaylist(null);
         setCurrentTrackIndex(0);
@@ -683,7 +714,7 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
             isPreviewMode, previewLimitReached, previewTimeRemaining, dismissPreviewLimit
         }}>
             {children}
-            <audio ref={audioRef} preload="auto" playsInline style={{ display: 'none' }} />
+            <audio ref={audioRef} preload="auto" playsInline data-gk-player style={{ display: 'none' }} />
         </AudioContext.Provider>
     );
 };

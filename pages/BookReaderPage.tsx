@@ -990,14 +990,15 @@ const BookReaderPage: React.FC = () => {
         const killAllAudio = () => {
             const allAudio = document.querySelectorAll('audio');
             allAudio.forEach(audio => {
-                // Don't kill our own book music - it should play!
                 if (bookBackgroundMusicRef.current && audio === bookBackgroundMusicRef.current) {
                     return;
                 }
-                // Force pause and mute only app background music
+                if (audio.hasAttribute('data-gk-player')) {
+                    return;
+                }
                 audio.pause();
                 audio.volume = 0;
-                audio.currentTime = 0; // Reset position
+                audio.currentTime = 0;
             });
         };
         killAllAudio();

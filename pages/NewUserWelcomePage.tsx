@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Sparkles, BookOpen, Music, Video, ArrowLeft } from 'lucide-react';
+import { Sparkles, BookOpen, Music, Video, X } from 'lucide-react';
 import { API_BASE_URL } from '../constants';
 import WoodButton from '../components/ui/WoodButton';
 import { useAudio } from '../context/AudioContext';
@@ -339,16 +339,16 @@ const NewUserWelcomePage: React.FC = () => {
       `}</style>
 
       <div className="relative z-10 px-5 py-8 pb-32 max-w-lg mx-auto">
-        {/* Back button - allows user to exit tutorial */}
+        {/* Close button (X) - allows user to exit */}
         <button
           onClick={handleBackOut}
-          className="absolute top-4 left-4 z-20 w-10 h-10 rounded-full bg-black/30 backdrop-blur-sm flex items-center justify-center hover:bg-black/50 transition-colors"
+          className="absolute top-4 right-4 z-20 w-10 h-10 rounded-full bg-black/30 backdrop-blur-sm flex items-center justify-center hover:bg-black/50 transition-colors"
           style={{
             opacity: showContent ? 1 : 0,
             transition: 'opacity 0.5s ease-out',
           }}
         >
-          <ArrowLeft className="w-5 h-5 text-white/80" />
+          <X className="w-5 h-5 text-white/80" />
         </button>
         
         {/* Header with golden script text - like reference */}

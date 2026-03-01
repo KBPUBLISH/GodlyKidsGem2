@@ -261,6 +261,11 @@ export const DespiaService = {
     }
 
     try {
+      // CRITICAL: Cancel all pending notifications first to prevent duplicates
+      // Use s=0 with empty message to clear the queue
+      despia(`sendlocalpushmsg://push.cancel`);
+      console.log('📱 Cancelled all pending notifications');
+      
       // Calculate seconds until next 9am
       const now = new Date();
       const next9am = new Date();

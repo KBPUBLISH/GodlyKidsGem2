@@ -364,7 +364,7 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [equippedPet, setEquippedPet] = useState<string | null>(saved?.equippedPet ?? null);
   
   // Background customization
-  const [equippedBackground, setEquippedBackground] = useState<string>('/assets/images/islandbackground.jpg');
+  const [equippedBackground, setEquippedBackground] = useState<string>('/assets/images/panorama-background.jpg');
   
   // Rotation State (Defaults to 0)
   const [equippedLeftArmRotation, setEquippedLeftArmRotation] = useState<number>(saved?.equippedLeftArmRotation ?? 0);

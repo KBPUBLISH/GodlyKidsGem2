@@ -989,13 +989,17 @@ const BookReaderPage: React.FC = () => {
         // BUT preserve book background music
         const killAllAudio = () => {
             const allAudio = document.querySelectorAll('audio');
+            console.log('📖 BookReader killAllAudio - found', allAudio.length, 'audio elements');
             allAudio.forEach(audio => {
                 if (bookBackgroundMusicRef.current && audio === bookBackgroundMusicRef.current) {
+                    console.log('📖 Skipping book music element');
                     return;
                 }
                 if (audio.hasAttribute('data-gk-player')) {
+                    console.log('📖 Skipping data-gk-player element (playlist audio)');
                     return;
                 }
+                console.log('📖 Killing audio element:', audio.src.substring(0, 50));
                 audio.pause();
                 audio.volume = 0;
                 audio.currentTime = 0;

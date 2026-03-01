@@ -321,9 +321,13 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         });
 
         audio.addEventListener('pause', () => {
+            console.log('🎵 PAUSE EVENT - userRequested:', userRequestedPauseRef.current, 'src:', audio.src.substring(0, 50));
             if (userRequestedPauseRef.current) {
+                console.log('🎵 User-requested pause - setting isPlaying(false)');
                 setIsPlaying(false);
                 userRequestedPauseRef.current = false;
+            } else {
+                console.log('🎵 System pause detected - ignoring (will auto-resume on foreground)');
             }
             // Save any accumulated listening time when paused
             if (listeningTimeAccumulatorRef.current > 0) {
@@ -418,8 +422,12 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     // Auto-resume playback when app returns to foreground (Android WebView pauses audio in background)
     useEffect(() => {
         const handleVisibilityChange = () => {
+            console.log('🎵 Visibility change - state:', document.visibilityState, 'isPlayingRef:', isPlayingRef.current);
             if (document.visibilityState === 'visible') {
                 const audio = audioRef.current;
+                if (audio) {
+                    console.log('🎵 Audio element - paused:', audio.paused, 'src:', audio.src.substring(0, 50));
+                }
                 if (audio && isPlayingRef.current && audio.paused) {
                     console.log('🎵 App foregrounded - resuming audio');
                     audio.play().catch(e => console.log('Resume on foreground failed:', e.name));

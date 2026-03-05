@@ -13,6 +13,8 @@ const LIFETIME_ORIGINAL = 69.99;
 const LIFETIME_SALE = 19.99;
 const DISCOUNT = Math.round(((LIFETIME_ORIGINAL - LIFETIME_SALE) / LIFETIME_ORIGINAL) * 100);
 
+const isDespiaNative = (): boolean => navigator.userAgent.toLowerCase().includes('despia');
+
 const LifetimeOfferModal: React.FC<LifetimeOfferModalProps> = ({ isOpen, onClose }) => {
   const navigate = useNavigate();
   const { isPremium } = useSubscription();

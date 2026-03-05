@@ -874,14 +874,16 @@ const HomePageWithWelcomeCheck: React.FC = () => {
   // The flow is: explore → try content → SaveProgressModal prompts to create account
   // This gives users a chance to experience the app before asking them to sign up
   
-  // Only show welcome screen if user completed onboarding AND hasn't seen welcome yet
-  if (userCompletedOnboarding && shouldShowWelcome()) {
-    return <NewUserWelcomePage />;
-  }
-  
+  const showWelcome = userCompletedOnboarding && shouldShowWelcome();
+
   return (
     <>
       <HomePage />
+      {showWelcome && (
+        <div className="fixed inset-0 z-[90]">
+          <NewUserWelcomePage />
+        </div>
+      )}
       {showSaveProgressModal && (
         <SaveProgressModal
           isOpen={true}

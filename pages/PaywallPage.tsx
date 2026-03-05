@@ -66,6 +66,7 @@ const PaywallPage: React.FC = () => {
     purchase, 
     restorePurchases,
     reverseTrial,
+    checkPremiumStatus,
   } = useSubscription();
 
   // Show "You've Got a Gift!" toast when coming from reverse-trial activation or when state requests it
@@ -321,10 +322,7 @@ const PaywallPage: React.FC = () => {
           console.warn('⚠️ Activity tracking error:', trackError);
         }
         
-        // Update local state and verify subscription
-        subscribe();
-        
-        // Verify subscription is actually active before navigating away
+        // Verify subscription is actually active before granting premium
         await checkPremiumStatus();
         const verifiedPremium = localStorage.getItem('godlykids_premium') === 'true';
         
@@ -334,6 +332,8 @@ const PaywallPage: React.FC = () => {
           return;
         }
         
+        // Only grant premium AFTER verification succeeds
+        subscribe();
         console.log('✅ Subscription verified - navigating to home');
         navigate('/home');
       } else if (result.error && result.error !== 'Purchase cancelled') {

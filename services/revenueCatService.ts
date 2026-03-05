@@ -146,27 +146,22 @@ const cleanupPurchaseState = () => {
   }
 };
 
-// Handle purchase success - with guard against multiple calls
+// Handle DeSpia purchase callback — ONLY sets a flag.
+// The purchase poll loop verifies with the backend before granting premium.
+// DeSpia fires this callback even when the user cancels the Apple sheet,
+// so we MUST NOT set localStorage or resolve here.
 const handlePurchaseSuccess = () => {
   if (purchaseSuccessHandled) {
-    console.log('⚠️ Purchase success already handled, ignoring duplicate callback');
+    console.log('⚠️ Purchase callback already received, ignoring duplicate');
     return;
   }
   purchaseSuccessHandled = true;
+  console.log('📱 DeSpia purchase callback received — will verify with backend');
   
-  console.log('✅ Setting premium status');
-  localStorage.setItem('godlykids_premium', 'true');
-  
-  if (purchaseResolve) {
-    purchaseResolve({ success: true });
-    purchaseResolve = null;
-  }
-  cleanupPurchaseState();
-  
-  // Reset the guard after a short delay (for next purchase)
+  // Reset the guard after a delay (for next purchase attempt)
   setTimeout(() => {
     purchaseSuccessHandled = false;
-  }, 5000);
+  }, 90000);
 };
 
 // Extend window to include DeSpia callbacks
@@ -243,14 +238,9 @@ const setupPurchaseListener = () => {
     }
   });
   
-  // Listen for localStorage changes from backend webhook confirmation
-  // Only handle if we're in the middle of a purchase flow
-  window.addEventListener('storage', (event: StorageEvent) => {
-    if (event.key === 'godlykids_premium' && event.newValue === 'true' && purchaseResolve) {
-      console.log('✅ Premium status confirmed via storage event');
-      handlePurchaseSuccess();
-    }
-  });
+  // Note: localStorage storage event listener removed — backend polling is the
+  // only trusted confirmation source. DeSpia callbacks and localStorage writes
+  // cannot be trusted because DeSpia fires success even on cancel.
 };
 
 // Initialize listeners
@@ -396,42 +386,23 @@ export const RevenueCatService = {
             return;
           }
           
-          // Check if already handled by DeSpia callback (most reliable signal)
-          if (purchaseSuccessHandled && !resolved) {
-            resolved = true;
-            console.log('✅ Purchase confirmed by DeSpia callback');
-            cleanupAndResolve({ success: true });
-            return;
-          }
-          
-          // Only trust localStorage if it was set by a DeSpia callback (not by visibility handler).
-          // The purchase flow cleared it earlier, so if it's back, a callback set it.
-          const localPremium = localStorage.getItem('godlykids_premium') === 'true';
-          if (localPremium && purchaseSuccessHandled && !resolved) {
-            resolved = true;
-            console.log('✅ Premium detected in localStorage (set by callback) after', elapsedSeconds.toFixed(1), 'seconds');
-            cleanupAndResolve({ success: true });
-            return;
-          }
-          
-          // Poll backend — but ONLY count it as a new purchase if the user
-          // was NOT already premium before we started.
-          if (!wasPremiumBefore) {
-            try {
-              const response = await fetch(`${apiBaseUrl}/api/webhooks/purchase-status/${encodeURIComponent(userId)}`);
-              const data = await response.json();
-              
-              if (data.isPremium && !resolved) {
-                resolved = true;
-                console.log('✅ Premium confirmed by backend webhook after', elapsedSeconds.toFixed(1), 'seconds');
-                localStorage.setItem('godlykids_premium', 'true');
-                cleanupAndResolve({ success: true });
-                return;
-              }
-            } catch (error) {
-              if (Math.floor(elapsedSeconds) % 5 === 0) {
-                console.log(`⚠️ Backend check failed, continuing...`);
-              }
+          // Always verify with the backend — this is the ONLY source of truth.
+          // DeSpia callbacks fire even when the user cancels, so we never trust
+          // them alone. We poll the backend regardless of callback status.
+          try {
+            const response = await fetch(`${apiBaseUrl}/api/webhooks/purchase-status/${encodeURIComponent(userId)}`);
+            const data = await response.json();
+            
+            if (data.isPremium && !wasPremiumBefore && !resolved) {
+              resolved = true;
+              console.log('✅ Premium confirmed by backend after', elapsedSeconds.toFixed(1), 'seconds');
+              localStorage.setItem('godlykids_premium', 'true');
+              cleanupAndResolve({ success: true });
+              return;
+            }
+          } catch (error) {
+            if (Math.floor(elapsedSeconds) % 5 === 0) {
+              console.log(`⚠️ Backend check failed, continuing...`);
             }
           }
           
@@ -445,14 +416,7 @@ export const RevenueCatService = {
             resolved = true;
             console.log('⏱️ Polling timeout after', maxPolls, 'seconds');
             
-            // Only trust localStorage if a DeSpia callback set it
-            if (purchaseSuccessHandled) {
-              console.log('✅ Premium found via callback at final check');
-              cleanupAndResolve({ success: true });
-              return;
-            }
-            
-            console.log('⚠️ Payment still processing - user may need to wait or restore');
+            console.log('⚠️ Payment not confirmed by backend — user may need to wait or restore');
             cleanupAndResolve({ 
               success: false, 
               error: 'Payment is processing. If you completed the payment, please wait a moment or tap "Restore Purchases".' 
@@ -476,29 +440,35 @@ export const RevenueCatService = {
     }
 
     // Legacy mode: Wait for DeSpia to process and user to complete purchase
-    // Only trust DeSpia callbacks — don't poll localStorage (visibility handler can contaminate it)
+    // Legacy mode: poll backend for confirmation (never trust DeSpia callbacks alone)
     return new Promise((resolve) => {
       purchaseResolve = resolve;
       let pollCount = 0;
-      const maxPolls = 120; // 2 minutes max wait (user might take time to confirm)
+      const maxPolls = 120;
       
-      console.log('⏳ Waiting for purchase confirmation...');
+      console.log('⏳ Waiting for purchase confirmation (legacy mode)...');
       
-      const pollInterval = setInterval(() => {
+      const pollInterval = setInterval(async () => {
         pollCount++;
         
-        // Only trust purchase if DeSpia callback explicitly set it
-        if (purchaseSuccessHandled) {
-          console.log('✅ Purchase SUCCESS confirmed by callback after', pollCount, 'seconds');
-          clearInterval(pollInterval);
-          if (purchaseTimeout) clearTimeout(purchaseTimeout);
-          (window as any).__GK_PURCHASE_IN_PROGRESS__ = false;
-          resolve({ success: true });
-          purchaseResolve = null;
-          return;
+        // Verify with backend — the only source of truth
+        try {
+          const response = await fetch(`${apiBaseUrl}/api/webhooks/purchase-status/${encodeURIComponent(userId)}`);
+          const data = await response.json();
+          if (data.isPremium && !wasPremiumBefore) {
+            console.log('✅ Premium confirmed by backend after', pollCount, 'seconds');
+            localStorage.setItem('godlykids_premium', 'true');
+            clearInterval(pollInterval);
+            if (purchaseTimeout) clearTimeout(purchaseTimeout);
+            (window as any).__GK_PURCHASE_IN_PROGRESS__ = false;
+            resolve({ success: true });
+            purchaseResolve = null;
+            return;
+          }
+        } catch {
+          // continue polling
         }
         
-        // Check every 10 seconds if still waiting
         if (pollCount % 10 === 0) {
           console.log(`⏳ Still waiting for purchase... (${pollCount}s)`);
         }
@@ -512,15 +482,10 @@ export const RevenueCatService = {
         }
       }, 1000);
       
-      // Backup timeout at 2.5 minutes
       purchaseTimeout = setTimeout(() => {
         clearInterval(pollInterval);
         (window as any).__GK_PURCHASE_IN_PROGRESS__ = false;
-        if (purchaseSuccessHandled) {
-          resolve({ success: true });
-        } else {
-          resolve({ success: false, error: 'Purchase was not completed' });
-        }
+        resolve({ success: false, error: 'Purchase was not completed' });
         purchaseResolve = null;
       }, 150000);
     });

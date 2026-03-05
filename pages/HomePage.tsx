@@ -1831,22 +1831,21 @@ const HomePage: React.FC = () => {
           </section>
         )}
 
-        {/* Daily Tasks & IQ Games Section - Vertical 9:16 Sliding Cards */}
+        {/* Daily Tasks & IQ Games Section - App Icon Style */}
         <section className="mt-4">
           <SectionTitle 
             title="Daily Tasks & IQ Games" 
             icon="🧠"
             color="#4CAF50"
           />
-          <div className="w-screen overflow-x-auto no-scrollbar pb-4 -mx-4 snap-x snap-mandatory">
-            <div className="flex space-x-4 px-4">
+          <div className="grid grid-cols-4 gap-3 px-4 pb-4">
               
               {/* Daily Key Task */}
               <div
-                className="relative w-[52vw] max-w-[220px] flex-shrink-0 snap-center cursor-pointer"
+                className="flex flex-col items-center cursor-pointer"
                 onClick={handleDailyKeyClick}
               >
-                <div className="relative aspect-[9/16] rounded-2xl overflow-hidden transition-all border-3 shadow-xl border-[#FFD700] hover:scale-[1.02] active:scale-[0.98]">
+                <div className="relative aspect-square w-full max-w-[72px] rounded-2xl overflow-hidden transition-all border-2 shadow-lg border-[#FFD700] hover:scale-105 active:scale-95">
                   {/* Background Gradient */}
                   <div className="absolute inset-0 bg-gradient-to-br from-[#8B4513] to-[#5c2e0b]" />
                   
@@ -1855,27 +1854,20 @@ const HomePage: React.FC = () => {
                     backgroundImage: 'radial-gradient(circle at 30% 20%, #FFD700 3%, transparent 10%), radial-gradient(circle at 70% 80%, #FFD700 3%, transparent 10%), radial-gradient(circle at 50% 50%, #FFD700 2%, transparent 8%)'
                   }} />
                   
-                  {/* Icon & Content - Centered */}
-                  <div className="absolute inset-0 flex flex-col items-center justify-center">
-                    <div className="w-16 h-16 rounded-full bg-[#FFD700]/20 flex items-center justify-center mb-3 border-2 border-[#FFD700]/30">
-                      <Key size={36} className="text-[#FFD700]" fill="#B8860B" />
-                    </div>
-                    <span className="text-[#FFD700] text-lg font-bold font-display text-center px-3">
-                      Daily Key
-                    </span>
-                    <span className="text-white/70 text-xs text-center px-3 mt-1">
-                      Unlock rewards
-                    </span>
+                  {/* Icon - Centered */}
+                  <div className="absolute inset-0 flex items-center justify-center">
+                    <Key size={28} className="text-[#FFD700]" fill="#B8860B" />
                   </div>
                 </div>
+                <span className="text-white text-xs font-bold font-display text-center mt-1.5 truncate w-full">Daily Key</span>
               </div>
 
               {/* Memory Task */}
               <div
-                className="relative w-[52vw] max-w-[220px] flex-shrink-0 snap-center cursor-pointer"
+                className="flex flex-col items-center cursor-pointer"
                 onClick={handleMemoryClick}
               >
-                <div className="relative aspect-[9/16] rounded-2xl overflow-hidden transition-all border-3 shadow-xl border-[#5c6bc0] hover:scale-[1.02] active:scale-[0.98]">
+                <div className="relative aspect-square w-full max-w-[72px] rounded-2xl overflow-hidden transition-all border-2 shadow-lg border-[#5c6bc0] hover:scale-105 active:scale-95">
                   {/* Background Gradient */}
                   <div className="absolute inset-0 bg-gradient-to-br from-[#1a237e] to-[#0d1442]" />
                   
@@ -1884,27 +1876,20 @@ const HomePage: React.FC = () => {
                     backgroundImage: 'radial-gradient(circle at 20% 30%, #90caf9 3%, transparent 10%), radial-gradient(circle at 80% 70%, #90caf9 3%, transparent 10%), radial-gradient(circle at 50% 50%, #90caf9 2%, transparent 8%)'
                   }} />
                   
-                  {/* Icon & Content - Centered */}
-                  <div className="absolute inset-0 flex flex-col items-center justify-center">
-                    <div className="w-16 h-16 rounded-full bg-[#5c6bc0]/30 flex items-center justify-center mb-3 border-2 border-[#5c6bc0]/30">
-                      <Brain size={36} className="text-[#90caf9]" fill="#64b5f6" />
-                    </div>
-                    <span className="text-[#90caf9] text-lg font-bold font-display text-center px-3">
-                      Memory
-                    </span>
-                    <span className="text-white/70 text-xs text-center px-3 mt-1">
-                      Bible challenge
-                    </span>
+                  {/* Icon - Centered */}
+                  <div className="absolute inset-0 flex items-center justify-center">
+                    <Brain size={28} className="text-[#90caf9]" fill="#64b5f6" />
                   </div>
                 </div>
+                <span className="text-white text-xs font-bold font-display text-center mt-1.5 truncate w-full">Memory</span>
               </div>
 
               {/* Prayer Task */}
               <div
-                className="relative w-[52vw] max-w-[220px] flex-shrink-0 snap-center cursor-pointer"
+                className="flex flex-col items-center cursor-pointer"
                 onClick={handlePrayerClick}
               >
-                <div className="relative aspect-[9/16] rounded-2xl overflow-hidden transition-all border-3 shadow-xl border-[#BA68C8] hover:scale-[1.02] active:scale-[0.98]">
+                <div className="relative aspect-square w-full max-w-[72px] rounded-2xl overflow-hidden transition-all border-2 shadow-lg border-[#BA68C8] hover:scale-105 active:scale-95">
                   {/* Background Gradient */}
                   <div className="absolute inset-0 bg-gradient-to-br from-[#7B1FA2] to-[#4A148C]" />
                   
@@ -1913,19 +1898,12 @@ const HomePage: React.FC = () => {
                     backgroundImage: 'radial-gradient(circle at 30% 40%, #F06292 3%, transparent 10%), radial-gradient(circle at 70% 60%, #F06292 3%, transparent 10%), radial-gradient(circle at 50% 50%, #F06292 2%, transparent 8%)'
                   }} />
                   
-                  {/* Icon & Content - Centered */}
-                  <div className="absolute inset-0 flex flex-col items-center justify-center">
-                    <div className="w-16 h-16 rounded-full bg-[#F06292]/20 flex items-center justify-center mb-3 border-2 border-[#F06292]/30">
-                      <Heart size={36} className="text-[#F06292]" fill="#EC407A" />
-                    </div>
-                    <span className="text-[#F06292] text-lg font-bold font-display text-center px-3">
-                      Prayer
-                    </span>
-                    <span className="text-white/70 text-xs text-center px-3 mt-1">
-                      Connect with God
-                    </span>
+                  {/* Icon - Centered */}
+                  <div className="absolute inset-0 flex items-center justify-center">
+                    <Heart size={28} className="text-[#F06292]" fill="#EC407A" />
                   </div>
                 </div>
+                <span className="text-white text-xs font-bold font-display text-center mt-1.5 truncate w-full">Prayer</span>
               </div>
 
               {/* Dynamic Games from Backend */}
@@ -1940,7 +1918,7 @@ const HomePage: React.FC = () => {
                 return (
                   <div
                     key={gameId}
-                    className="relative w-[52vw] max-w-[220px] flex-shrink-0 snap-center cursor-pointer"
+                    className="flex flex-col items-center cursor-pointer"
                     onClick={() => {
                       if (isLocked) {
                         // Show purchase confirmation
@@ -1972,7 +1950,7 @@ const HomePage: React.FC = () => {
                       }
                     }}
                   >
-                    <div className={`relative aspect-[9/16] rounded-2xl overflow-hidden transition-all border-3 shadow-xl ${isLocked ? 'border-[#FFD700]' : 'border-[#4CAF50]'}`}>
+                    <div className={`relative aspect-square w-full max-w-[72px] rounded-2xl overflow-hidden transition-all border-2 shadow-lg hover:scale-105 active:scale-95 ${isLocked ? 'border-[#FFD700]' : 'border-[#4CAF50]'}`}>
                       {/* Cover Image or Gradient Background */}
                       {game.coverImage ? (
                         <img 
@@ -1984,54 +1962,44 @@ const HomePage: React.FC = () => {
                         <div className={`absolute inset-0 bg-gradient-to-br ${isLocked ? 'from-[#8B4513] to-[#5c2e0b]' : 'from-[#4CAF50] to-[#2E7D32]'}`} />
                       )}
                       
-                      {/* Game Logo */}
-                      {game.logo && !isLocked && (
-                        <div className="absolute inset-0 flex items-center justify-center z-[5] pointer-events-none">
+                      {/* Game Logo or Icon - Centered */}
+                      {game.logo && !isLocked ? (
+                        <div className="absolute inset-0 flex items-center justify-center z-[5] pointer-events-none p-2">
                           <img
                             src={game.logo}
                             alt={`${game.name} logo`}
-                            className="w-[60%] h-auto max-h-[40%] object-contain rounded-2xl drop-shadow-[0_4px_12px_rgba(0,0,0,0.4)]"
+                            className="w-full h-full object-contain rounded-xl drop-shadow-[0_2px_8px_rgba(0,0,0,0.4)]"
                           />
+                        </div>
+                      ) : !game.coverImage && (
+                        <div className="absolute inset-0 flex items-center justify-center">
+                          <span className="text-white/90 text-xl">🎮</span>
                         </div>
                       )}
 
-                      {/* Age Rating Badge - Always show */}
+                      {/* Age Rating Badge - Compact */}
                       {game.ageRating && (
-                        <div className="absolute top-2 left-2 bg-blue-500/90 backdrop-blur-sm text-white text-xs font-bold px-2 py-1 rounded-full z-20 shadow-lg">
-                          {game.ageRating === 'All Ages' ? 'All Ages' : (game.ageRating.includes('Ages') ? game.ageRating : `Ages ${game.ageRating}`)}
+                        <div className="absolute top-0.5 left-0.5 bg-blue-500/90 backdrop-blur-sm text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full z-20">
+                          {game.ageRating === 'All Ages' ? 'All' : (game.ageRating.includes('Ages') ? game.ageRating.replace('Ages ', '') : game.ageRating)}
                         </div>
                       )}
                       
                       {/* Lock Overlay for Purchasable Games */}
                       {isLocked && (
-                        <div className="absolute inset-0 bg-black/40 flex flex-col items-center justify-center z-10">
-                          <div className="bg-black/70 rounded-full p-3 border-2 border-[#FFD700] mb-2">
-                            <Lock size={24} className="text-[#FFD700]" />
-                          </div>
-                          <div className="bg-[#FFD700] rounded-full px-3 py-1.5 flex items-center gap-1.5">
-                            <Coins size={14} className="text-[#5c2e0b]" />
-                            <span className="text-sm font-bold text-[#5c2e0b]">{game.goldCoinPrice}</span>
+                        <div className="absolute inset-0 bg-black/50 flex flex-col items-center justify-center z-10">
+                          <Lock size={20} className="text-[#FFD700] mb-0.5" />
+                          <div className="flex items-center gap-1">
+                            <Coins size={12} className="text-[#FFD700]" />
+                            <span className="text-[10px] font-bold text-[#FFD700]">{game.goldCoinPrice}</span>
                           </div>
                         </div>
                       )}
-                      
-                      {/* Overlay with game info */}
-                      <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 via-black/40 to-transparent pt-16 pb-4 px-3">
-                        <span className="text-white text-base font-bold font-display text-center block drop-shadow-lg">
-                          {game.name}
-                        </span>
-                        {game.description && !isLocked && (
-                          <span className="text-white/80 text-xs text-center block mt-1 drop-shadow">
-                            {game.description.substring(0, 40)}...
-                          </span>
-                        )}
-                      </div>
                     </div>
+                    <span className="text-white text-xs font-bold font-display text-center mt-1.5 truncate w-full">{game.name}</span>
                   </div>
                 );
               })}
 
-            </div>
           </div>
         </section>
 

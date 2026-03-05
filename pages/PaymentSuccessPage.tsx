@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { CheckCircle, Loader2, XCircle } from 'lucide-react';
 import { useSubscription } from '../context/SubscriptionContext';
@@ -11,8 +11,7 @@ const PaymentSuccessPage: React.FC = () => {
   const [status, setStatus] = useState<'verifying' | 'success' | 'error'>('verifying');
   const [errorMessage, setErrorMessage] = useState('');
 
-  useEffect(() => {
-    const verifyPayment = async () => {
+  const verifyPayment = useCallback(async () => {
       const sessionId = searchParams.get('session_id');
       
       console.log('🔍 Verifying Stripe payment...');
@@ -70,26 +69,22 @@ const PaymentSuccessPage: React.FC = () => {
           }
         }
 
-        // If we get here, payment might still be processing
-        // Give user option to retry or go home
-        console.log('⚠️ Payment not yet confirmed');
-        setStatus('success'); // Still show success - webhook might be delayed
-        localStorage.setItem('godlykids_premium', 'true');
-        subscribe();
-        
-        setTimeout(() => {
-          navigate('/home', { replace: true });
-        }, 2000);
+        // Payment not yet confirmed - do NOT grant premium
+        // Only grant when we have explicit verification (session or purchase-status)
+        console.log('⚠️ Payment not yet confirmed - not granting premium');
+        setStatus('error');
+        setErrorMessage('Payment verification pending. If you just subscribed, wait a moment and tap Retry. Otherwise, go back and try again.');
 
       } catch (error: any) {
         console.error('❌ Payment verification error:', error);
         setErrorMessage(error.message || 'Failed to verify payment');
         setStatus('error');
       }
-    };
-
-    verifyPayment();
   }, [searchParams, navigate, subscribe]);
+
+  useEffect(() => {
+    verifyPayment();
+  }, [verifyPayment]);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-[#1a1a2e] via-[#16213e] to-[#0f3460] flex items-center justify-center px-6">
@@ -122,15 +117,26 @@ const PaymentSuccessPage: React.FC = () => {
             <h1 className="text-2xl font-bold text-white mb-2">Something went wrong</h1>
             <p className="text-white/60 mb-4">{errorMessage}</p>
             <p className="text-white/40 text-sm mb-6">
-              If you completed the payment, your subscription should be active shortly. 
-              Please try the "Restore Purchases" option.
+              If you completed the payment, tap Retry. Otherwise, use "Restore Purchases" in the app.
             </p>
-            <button
-              onClick={() => navigate('/home', { replace: true })}
-              className="bg-[#FFD700] text-[#1a1a2e] px-6 py-3 rounded-xl font-bold"
-            >
-              Go to App
-            </button>
+            <div className="flex flex-col sm:flex-row gap-3 justify-center">
+              <button
+                onClick={() => {
+                  setStatus('verifying');
+                  setErrorMessage('');
+                  void verifyPayment();
+                }}
+                className="bg-[#4CAF50] text-white px-6 py-3 rounded-xl font-bold"
+              >
+                Retry
+              </button>
+              <button
+                onClick={() => navigate('/home', { replace: true })}
+                className="bg-[#FFD700] text-[#1a1a2e] px-6 py-3 rounded-xl font-bold"
+              >
+                Go to App
+              </button>
+            </div>
           </>
         )}
       </div>

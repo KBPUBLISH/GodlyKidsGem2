@@ -645,7 +645,7 @@ const PaywallPage: React.FC = () => {
                       Processing...
                     </span>
                   ) : (
-                    <span>Continue</span>
+                    <span>Start 1 Week Trial</span>
                   )}
                 </button>
                 <div className="mb-6">

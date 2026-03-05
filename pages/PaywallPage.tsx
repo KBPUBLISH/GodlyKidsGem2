@@ -72,10 +72,11 @@ const PaywallPage: React.FC = () => {
   const showReverseTrialToast = (location.state as any)?.showReverseTrialToast === true
     || (reverseTrial?.isActive && fromState === 'create-your-story');
 
-  // Always use Create Your Story paywall: hero image, no lifetime, 12 custom books for annual
-  const isCreateYourStoryPaywall = true;
+  // Use Create Your Story paywall unless navigated here for lifetime offer
+  const selectLifetime = (location.state as any)?.selectLifetime === true;
+  const isCreateYourStoryPaywall = !selectLifetime;
   
-  const [selectedPlan, setSelectedPlan] = useState<'annual' | 'monthly' | 'lifetime'>('annual');
+  const [selectedPlan, setSelectedPlan] = useState<'annual' | 'monthly' | 'lifetime'>(selectLifetime ? 'lifetime' : 'annual');
   const [planSelectorExpanded, setPlanSelectorExpanded] = useState(false);
   const [showParentGate, setShowParentGate] = useState(false);
   const [isPurchasing, setIsPurchasing] = useState(false);
@@ -645,7 +646,7 @@ const PaywallPage: React.FC = () => {
                       Processing...
                     </span>
                   ) : (
-                    <span>Start 1 Week Trial</span>
+                    <span>Start 1 Week Trial $0.00</span>
                   )}
                 </button>
                 <div className="mb-6">

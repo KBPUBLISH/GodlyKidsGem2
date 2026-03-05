@@ -302,6 +302,15 @@ export const SubscriptionProvider: React.FC<SubscriptionProviderProps> = ({ chil
   useEffect(() => {
     const handleVisibilityChange = async () => {
       if (document.visibilityState === 'visible' && isInitialized) {
+        // IMPORTANT: Skip this check while a purchase is in progress.
+        // The purchase poll in revenueCatService handles its own backend checks.
+        // Running this concurrently causes false-positive premium grants when the
+        // backend returns isPremium=true for a pre-existing reverse trial or sub
+        // that is unrelated to the current purchase attempt.
+        if ((window as any).__GK_PURCHASE_IN_PROGRESS__) {
+          console.log('📱 App became visible - skipping subscription check (purchase in progress)');
+          return;
+        }
         console.log('📱 App became visible - checking subscription status...');
         const hasPremium = await checkSubscriptionFromAllSources();
         if (hasPremium !== isPremium) {

@@ -925,6 +925,7 @@ import { DespiaService } from './services/despiaService';
 import { authService } from './services/authService';
 import { metaAttributionService } from './services/metaAttributionService';
 import DemoTimer from './components/features/DemoTimer';
+import LifetimeOfferModal from './components/modals/LifetimeOfferModal';
 import ReadyToJumpInPage from './pages/ReadyToJumpInPage';
 import OnboardingTutorial from './components/features/OnboardingTutorial';
 import { TutorialProvider, useTutorial } from './context/TutorialContext';
@@ -1102,8 +1103,30 @@ const ReferralPromptWrapper: React.FC<{ children: React.ReactNode }> = ({ childr
   );
 };
 
+const LIFETIME_OFFER_SHOWN_KEY = 'godlykids_lifetime_offer_shown_session';
+
 const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const location = useLocation();
+  const [showLifetimeOffer, setShowLifetimeOffer] = useState(false);
+
+  // Show lifetime offer popup 30 seconds after landing on /home (once per session, non-premium only)
+  useEffect(() => {
+    if (location.pathname !== '/home') return;
+    if (sessionStorage.getItem(LIFETIME_OFFER_SHOWN_KEY)) return;
+
+    const timer = setTimeout(() => {
+      if (location.pathname !== '/home') return;
+      const isPremium = localStorage.getItem('godlykids_premium') === 'true';
+      const tutorialActive = isTutorialInProgress();
+      if (isPremium || tutorialActive) return;
+
+      sessionStorage.setItem(LIFETIME_OFFER_SHOWN_KEY, 'true');
+      setShowLifetimeOffer(true);
+    }, 30_000);
+
+    return () => clearTimeout(timer);
+  }, [location.pathname]);
+
   useEffect(() => {
     try {
       (window as any).__GK_TRACE__?.('route_change', { path: location.pathname, hash: location.hash, search: location.search });
@@ -1196,6 +1219,12 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
           style={{ height: 'var(--safe-area-bottom, 0px)' }}
         />
       )}
+
+      {/* Lifetime offer popup — appears 30s after app start */}
+      <LifetimeOfferModal
+        isOpen={showLifetimeOffer}
+        onClose={() => setShowLifetimeOffer(false)}
+      />
     </div>
   );
 };

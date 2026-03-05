@@ -326,6 +326,28 @@ export const RevenueCatService = {
       return RevenueCatService.purchaseWeb(productId);
     }
     
+    // Get API base URL
+    const apiBaseUrl = localStorage.getItem('godlykids_api_url') || 
+      (window.location.hostname === 'localhost' ? 'http://localhost:5001' : 'https://backendgk2-0.onrender.com');
+    
+    // IMPORTANT: Snapshot backend premium status BEFORE triggering the purchase.
+    // The purchase-status endpoint returns true for ANY premium source (reverse trial,
+    // old subscription, etc.). We must not treat a pre-existing premium as a "new purchase".
+    let wasPremiumBefore = false;
+    try {
+      const preCheck = await fetch(`${apiBaseUrl}/api/webhooks/purchase-status/${encodeURIComponent(userId)}`);
+      if (preCheck.ok) {
+        const preData = await preCheck.json();
+        wasPremiumBefore = !!preData.isPremium;
+        console.log('📋 Backend premium status BEFORE purchase:', wasPremiumBefore);
+      }
+    } catch {
+      console.log('⚠️ Could not pre-check backend premium status');
+    }
+    
+    // Signal that a purchase is in progress (prevents visibility handler from interfering)
+    (window as any).__GK_PURCHASE_IN_PROGRESS__ = true;
+    
     // Trigger DeSpia/RevenueCat purchase (Android → Google Play, iOS → App Store)
     const purchaseUrl = `revenuecat://purchase?external_id=${encodeURIComponent(userId)}&product=${encodeURIComponent(rcProductId)}`;
     console.log(isAndroid ? '🔗 [Android] Sending product to RevenueCat → Google Play:' : '🔗 Sending product to RevenueCat:', rcProductId, purchaseUrl);
@@ -338,21 +360,21 @@ export const RevenueCatService = {
       console.log('⏳ Waiting for Apple payment confirmation via webhook...');
       console.log('📱 Apple payment sheet should appear now - user must complete payment');
       
-      // Get API base URL
-      const apiBaseUrl = localStorage.getItem('godlykids_api_url') || 
-        (window.location.hostname === 'localhost' ? 'http://localhost:5001' : 'https://backendgk2-0.onrender.com');
-      
       return new Promise((resolve) => {
         // Store resolve for event listeners
         purchaseResolve = resolve;
+        
+        const cleanupAndResolve = (result: { success: boolean; error?: string }) => {
+          (window as any).__GK_PURCHASE_IN_PROGRESS__ = false;
+          cleanupPurchaseState();
+          purchaseResolve = null;
+          resolve(result);
+        };
         
         let resolved = false;
         let pollCount = 0;
         const maxPolls = 60; // 60 seconds max wait - RevenueCat webhooks can be slow
         const minWaitBeforeCheck = 2; // 2 seconds to let Apple sheet appear
-        
-        // Poll faster initially (every 500ms for first 15 seconds), then slower
-        const getPollInterval = () => pollCount < 30 ? 500 : 1000;
         
         const doPoll = async () => {
           pollCount++;
@@ -369,79 +391,72 @@ export const RevenueCatService = {
           
           // Check if already resolved by event listener
           if (purchaseResolve !== resolve) {
+            (window as any).__GK_PURCHASE_IN_PROGRESS__ = false;
             cleanupPurchaseState();
             return;
           }
           
-          // Check if already handled by DeSpia callback
+          // Check if already handled by DeSpia callback (most reliable signal)
           if (purchaseSuccessHandled && !resolved) {
             resolved = true;
-            console.log('✅ Purchase already handled by callback');
-            cleanupPurchaseState();
-            resolve({ success: true });
-            purchaseResolve = null;
+            console.log('✅ Purchase confirmed by DeSpia callback');
+            cleanupAndResolve({ success: true });
             return;
           }
           
-          // Check localStorage first (fastest)
+          // Only trust localStorage if it was set by a DeSpia callback (not by visibility handler).
+          // The purchase flow cleared it earlier, so if it's back, a callback set it.
           const localPremium = localStorage.getItem('godlykids_premium') === 'true';
-          if (localPremium && !resolved) {
+          if (localPremium && purchaseSuccessHandled && !resolved) {
             resolved = true;
-            console.log('✅ Premium detected in localStorage after', elapsedSeconds.toFixed(1), 'seconds');
-            cleanupPurchaseState();
-            resolve({ success: true });
-            purchaseResolve = null;
+            console.log('✅ Premium detected in localStorage (set by callback) after', elapsedSeconds.toFixed(1), 'seconds');
+            cleanupAndResolve({ success: true });
             return;
           }
           
-          // Poll backend for webhook confirmation
-          try {
-            const response = await fetch(`${apiBaseUrl}/api/webhooks/purchase-status/${encodeURIComponent(userId)}`);
-            const data = await response.json();
-            
-            if (data.isPremium && !resolved) {
-              resolved = true;
-              console.log('✅ Premium confirmed by backend webhook after', elapsedSeconds.toFixed(1), 'seconds');
-              localStorage.setItem('godlykids_premium', 'true');
-              cleanupPurchaseState();
-              resolve({ success: true });
-              purchaseResolve = null;
-              return;
-            }
-            
-            // Log progress every 5 seconds
-            if (Math.floor(elapsedSeconds) % 5 === 0 && elapsedSeconds > 1) {
-              console.log(`⏳ Waiting for payment confirmation... (${elapsedSeconds.toFixed(0)}s)`);
-            }
-          } catch (error) {
-            // Network error - just continue polling
-            if (Math.floor(elapsedSeconds) % 5 === 0) {
-              console.log(`⚠️ Backend check failed, continuing...`);
+          // Poll backend — but ONLY count it as a new purchase if the user
+          // was NOT already premium before we started.
+          if (!wasPremiumBefore) {
+            try {
+              const response = await fetch(`${apiBaseUrl}/api/webhooks/purchase-status/${encodeURIComponent(userId)}`);
+              const data = await response.json();
+              
+              if (data.isPremium && !resolved) {
+                resolved = true;
+                console.log('✅ Premium confirmed by backend webhook after', elapsedSeconds.toFixed(1), 'seconds');
+                localStorage.setItem('godlykids_premium', 'true');
+                cleanupAndResolve({ success: true });
+                return;
+              }
+            } catch (error) {
+              if (Math.floor(elapsedSeconds) % 5 === 0) {
+                console.log(`⚠️ Backend check failed, continuing...`);
+              }
             }
           }
           
-          // Timeout after maxPolls (30 seconds)
+          // Log progress every 5 seconds
+          if (Math.floor(elapsedSeconds) % 5 === 0 && elapsedSeconds > 1) {
+            console.log(`⏳ Waiting for payment confirmation... (${elapsedSeconds.toFixed(0)}s)`, wasPremiumBefore ? '(backend poll skipped — was already premium)' : '');
+          }
+          
+          // Timeout after maxPolls
           if (elapsedSeconds >= maxPolls && !resolved) {
             resolved = true;
-            cleanupPurchaseState();
             console.log('⏱️ Polling timeout after', maxPolls, 'seconds');
             
-            // Final check of localStorage
-            const finalPremium = localStorage.getItem('godlykids_premium') === 'true';
-            if (finalPremium) {
-              console.log('✅ Premium found in final check');
-              resolve({ success: true });
-              purchaseResolve = null;
+            // Only trust localStorage if a DeSpia callback set it
+            if (purchaseSuccessHandled) {
+              console.log('✅ Premium found via callback at final check');
+              cleanupAndResolve({ success: true });
               return;
             }
             
-            // Not premium yet - tell user it's still processing
             console.log('⚠️ Payment still processing - user may need to wait or restore');
-            resolve({ 
+            cleanupAndResolve({ 
               success: false, 
               error: 'Payment is processing. If you completed the payment, please wait a moment or tap "Restore Purchases".' 
             });
-            purchaseResolve = null;
             return;
           }
           
@@ -461,7 +476,7 @@ export const RevenueCatService = {
     }
 
     // Legacy mode: Wait for DeSpia to process and user to complete purchase
-    // DeSpia should fire 'despia-purchase-success' event or set localStorage
+    // Only trust DeSpia callbacks — don't poll localStorage (visibility handler can contaminate it)
     return new Promise((resolve) => {
       purchaseResolve = resolve;
       let pollCount = 0;
@@ -471,12 +486,13 @@ export const RevenueCatService = {
       
       const pollInterval = setInterval(() => {
         pollCount++;
-        const isPremium = localStorage.getItem('godlykids_premium') === 'true';
         
-        if (isPremium) {
-          console.log('✅ Purchase SUCCESS detected after', pollCount, 'seconds');
+        // Only trust purchase if DeSpia callback explicitly set it
+        if (purchaseSuccessHandled) {
+          console.log('✅ Purchase SUCCESS confirmed by callback after', pollCount, 'seconds');
           clearInterval(pollInterval);
           if (purchaseTimeout) clearTimeout(purchaseTimeout);
+          (window as any).__GK_PURCHASE_IN_PROGRESS__ = false;
           resolve({ success: true });
           purchaseResolve = null;
           return;
@@ -490,6 +506,7 @@ export const RevenueCatService = {
         if (pollCount >= maxPolls) {
           console.log('⏱️ Purchase timeout after 2 minutes');
           clearInterval(pollInterval);
+          (window as any).__GK_PURCHASE_IN_PROGRESS__ = false;
           resolve({ success: false, error: 'Purchase timed out - please try again' });
           purchaseResolve = null;
         }
@@ -498,8 +515,8 @@ export const RevenueCatService = {
       // Backup timeout at 2.5 minutes
       purchaseTimeout = setTimeout(() => {
         clearInterval(pollInterval);
-        const isPremium = localStorage.getItem('godlykids_premium') === 'true';
-        if (isPremium) {
+        (window as any).__GK_PURCHASE_IN_PROGRESS__ = false;
+        if (purchaseSuccessHandled) {
           resolve({ success: true });
         } else {
           resolve({ success: false, error: 'Purchase was not completed' });
@@ -616,6 +633,7 @@ export const RevenueCatService = {
   cancelPurchase: (): void => {
     console.log('❌ Cancelling purchase via DeSpia URL scheme');
     window.despia = 'cancelinapppurchase://';
+    (window as any).__GK_PURCHASE_IN_PROGRESS__ = false;
     
     if (purchaseResolve) {
       purchaseResolve({ success: false, error: 'Purchase cancelled' });

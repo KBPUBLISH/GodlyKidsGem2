@@ -14,6 +14,7 @@ import { AVATAR_ASSETS } from '../avatar/AvatarAssets';
 // Lifetime deal timer constants - shared with PaywallPage
 const LIFETIME_DEAL_KEY = 'godlykids_lifetime_deal_start';
 const DEAL_DURATION_MS = 24 * 60 * 60 * 1000; // 24 hours
+const LIFETIME_OFFER_SHOWN_KEY = 'godlykids_lifetime_offer_shown_session';
 
 interface HeaderProps {
   isVisible: boolean;
@@ -264,10 +265,10 @@ const Header: React.FC<HeaderProps> = ({ isVisible, title = "GODLY KIDS" }) => {
               </div>
             </div>
             
-            {/* Lifetime Deal Timer - Show next to avatar if deal is active and not subscribed */}
-            {dealTimeRemaining && !isSubscribed && (
+            {/* Lifetime Deal Timer - Only show AFTER the lifetime offer popup has been displayed */}
+            {dealTimeRemaining && !isSubscribed && sessionStorage.getItem(LIFETIME_OFFER_SHOWN_KEY) && (
               <button
-                onClick={() => navigate('/paywall')}
+                onClick={() => navigate('/paywall', { state: { selectLifetime: true } })}
                 className="ml-2 bg-gradient-to-r from-[#dc2626] to-[#ef4444] px-2 py-1 rounded-lg border border-[#b91c1c] shadow-md flex items-center gap-1.5 animate-pulse hover:animate-none active:scale-95 transition-transform"
               >
                 <Clock size={12} className="text-white" />

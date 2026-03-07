@@ -71,7 +71,7 @@ const LifetimeOfferModal: React.FC<LifetimeOfferModalProps> = ({ isOpen, onClose
   const pad = (n: number) => String(n).padStart(2, '0');
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-300">
+    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-300" style={{ paddingTop: 'var(--safe-area-top, 0px)', paddingBottom: 'var(--safe-area-bottom, 0px)' }}>
       <div className="relative w-full max-w-sm overflow-hidden rounded-3xl shadow-2xl animate-in zoom-in-95 duration-300">
         {/* Close */}
         <button

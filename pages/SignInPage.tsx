@@ -259,7 +259,8 @@ const SignInPage: React.FC = () => {
       {/* Back Button */}
       <button 
         onClick={() => navigate(-1)} 
-        className="absolute top-6 left-6 z-30 w-10 h-10 bg-black/30 backdrop-blur-md rounded-full flex items-center justify-center text-white border border-white/20 active:scale-95 transition-transform"
+        className="absolute left-6 z-30 w-10 h-10 bg-black/30 backdrop-blur-md rounded-full flex items-center justify-center text-white border border-white/20 active:scale-95 transition-transform"
+        style={{ top: 'calc(var(--safe-area-top, 0px) + 1.5rem)' }}
       >
         <ChevronLeft size={24} />
       </button>

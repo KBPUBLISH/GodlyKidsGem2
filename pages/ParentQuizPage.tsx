@@ -976,7 +976,7 @@ const ParentQuizPage: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-stone-50 to-amber-50/30">
+    <div className="min-h-screen bg-gradient-to-b from-stone-50 to-amber-50/30" style={{ paddingTop: 'var(--safe-area-top, 0px)', paddingBottom: 'var(--safe-area-bottom, 0px)' }}>
       {/* Progress Bar */}
       {currentScreen !== 'hero' && currentScreen !== 'deeplink' && (
         <div className="fixed top-0 left-0 right-0 h-1 bg-stone-200 z-50">

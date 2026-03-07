@@ -81,7 +81,7 @@ const GameWebViewPage: React.FC = () => {
     <div className="min-h-screen bg-black flex flex-col">
       {/* Header - Hidden in fullscreen */}
       {!isFullscreen && (
-        <div className="bg-gradient-to-r from-[#2d1b4e] to-[#1a1a2e] px-4 py-3 flex items-center justify-between safe-area-top">
+        <div className="bg-gradient-to-r from-[#2d1b4e] to-[#1a1a2e] px-4 py-3 flex items-center justify-between" style={{ paddingTop: 'calc(var(--safe-area-top, 0px) + 0.75rem)' }}>
           <button
             onClick={handleBack}
             className="flex items-center gap-2 text-white/90 hover:text-white transition-colors"

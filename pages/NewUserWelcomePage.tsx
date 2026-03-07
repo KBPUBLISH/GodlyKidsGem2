@@ -282,7 +282,7 @@ const NewUserWelcomePage: React.FC = () => {
   }
 
   return (
-    <div className="h-full overflow-auto">
+    <div className="h-full overflow-auto" style={{ paddingTop: 'var(--safe-area-top, 0px)', paddingBottom: 'var(--safe-area-bottom, 0px)' }}>
       {/* Deep navy night sky gradient - matching reference */}
       <div 
         className="absolute inset-0"

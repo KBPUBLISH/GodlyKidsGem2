@@ -115,7 +115,7 @@ const ShareBookPage: React.FC = () => {
     }
 
     return (
-        <div className="min-h-screen bg-gradient-to-b from-[#5c2e0b] via-[#3E1F07] to-[#2a1a05]">
+        <div className="min-h-screen bg-gradient-to-b from-[#5c2e0b] via-[#3E1F07] to-[#2a1a05]" style={{ paddingBottom: 'var(--safe-area-bottom, 0px)' }}>
             {/* Header with Cover */}
             <div className="relative">
                 {/* Background blur */}
@@ -124,7 +124,7 @@ const ShareBookPage: React.FC = () => {
                     style={{ backgroundImage: `url(${book.coverUrl})` }}
                 />
                 
-                <div className="relative pt-12 pb-8 px-6">
+                <div className="relative pb-8 px-6" style={{ paddingTop: 'calc(var(--safe-area-top, 0px) + 3rem)' }}>
                     {/* Cover Art */}
                     <div className="w-40 h-56 mx-auto rounded-lg shadow-2xl overflow-hidden mb-6 border-4 border-[#8B4513]">
                         {book.coverUrl ? (

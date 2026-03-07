@@ -39,7 +39,7 @@ const ProfileSelectionPage: React.FC = () => {
     <div className="flex flex-col h-full w-full relative overflow-y-auto no-scrollbar">
       
       {/* Wood Header Bar */}
-      <div className="relative z-20 pt-8 pb-4 px-6 bg-[#CD853F] shadow-md border-b-4 border-[#8B4513]">
+      <div className="relative z-20 pb-4 px-6 bg-[#CD853F] shadow-md border-b-4 border-[#8B4513]" style={{ paddingTop: 'calc(var(--safe-area-top, 0px) + 2rem)' }}>
         {/* Wood Texture */}
         <div className="absolute inset-0 opacity-10 pointer-events-none" style={{backgroundImage: 'repeating-linear-gradient(90deg, transparent, transparent 30px, #3E1F07 30px, #3E1F07 32px)'}}></div>
         

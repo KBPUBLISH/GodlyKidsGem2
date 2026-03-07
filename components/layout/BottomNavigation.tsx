@@ -200,8 +200,8 @@ const BottomNavigation: React.FC = () => {
   const handleMouseDown = (e: React.MouseEvent) => onStart(e.clientX, e.clientY);
   const handleMouseMove = (e: React.MouseEvent) => onMove(e.clientX, e.clientY);
 
-  const WHEEL_SIZE = 400;
-  const RADIUS = 115;
+  const WHEEL_SIZE = 340;
+  const RADIUS = 98;
   const CENTER = WHEEL_SIZE / 2;
 
   // Positive target rotation
@@ -227,7 +227,7 @@ const BottomNavigation: React.FC = () => {
       {showWheelHint && (
         <div 
           className={`absolute z-[50] pointer-events-auto transition-all duration-500 ease-in-out ${
-            isPlayerActive ? 'bottom-[180px] md:bottom-[220px]' : 'bottom-[100px] md:bottom-[140px]'
+            isPlayerActive ? 'bottom-[155px] md:bottom-[195px]' : 'bottom-[80px] md:bottom-[120px]'
           }`}
           onClick={dismissHint}
         >
@@ -269,7 +269,7 @@ const BottomNavigation: React.FC = () => {
 
       {/* Active Indicator Jewel */}
       <div
-        className={`absolute z-[45] animate-bounce duration-[2000ms] transition-all duration-500 ease-in-out ${isPlayerActive ? 'bottom-[215px] md:bottom-[255px]' : 'bottom-[135px] md:bottom-[175px]'
+        className={`absolute z-[45] animate-bounce duration-[2000ms] transition-all duration-500 ease-in-out ${isPlayerActive ? 'bottom-[185px] md:bottom-[225px]' : 'bottom-[115px] md:bottom-[155px]'
           }`}
       >
         <div className="w-0 h-0 border-l-[8px] border-l-transparent border-r-[8px] border-r-transparent border-t-[12px] border-t-[#FFD700]"></div>
@@ -277,13 +277,13 @@ const BottomNavigation: React.FC = () => {
 
       {/* Static CSS Shadow */}
       <div
-        className={`absolute w-[340px] h-[340px] rounded-full bg-black/40 blur-xl pointer-events-none md:scale-[1.25] transition-all duration-500 ease-in-out ${isPlayerActive ? 'bottom-[-115px] md:bottom-[-120px]' : 'bottom-[-195px] md:bottom-[-200px]'
+        className={`absolute w-[290px] h-[290px] rounded-full bg-black/40 blur-xl pointer-events-none md:scale-[1.25] transition-all duration-500 ease-in-out ${isPlayerActive ? 'bottom-[-95px] md:bottom-[-100px]' : 'bottom-[-165px] md:bottom-[-170px]'
           }`}
       ></div>
 
       <div
         ref={wheelRef}
-        className={`absolute w-[400px] h-[400px] md:scale-[1.25] origin-center pointer-events-auto touch-none select-none flex items-center justify-center transition-all duration-500 ease-in-out ${isPlayerActive ? 'bottom-[-110px] md:bottom-[-115px]' : 'bottom-[-190px] md:bottom-[-195px]'
+        className={`absolute w-[340px] h-[340px] md:scale-[1.25] origin-center pointer-events-auto touch-none select-none flex items-center justify-center transition-all duration-500 ease-in-out ${isPlayerActive ? 'bottom-[-90px] md:bottom-[-95px]' : 'bottom-[-160px] md:bottom-[-165px]'
           }`}
         onTouchStart={handleTouchStart}
         onTouchMove={handleTouchMove}

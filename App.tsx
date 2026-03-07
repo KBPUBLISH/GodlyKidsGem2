@@ -1241,14 +1241,7 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
       <MiniPlayer />
 
       {/* Only show BottomNavigation on main tab pages */}
-      {!isLanding && !isSignIn && !isOnboarding && !isWelcome && !isReadyToJumpIn && !isBookDetail && !isPlayer && !isProfile && !isCreateProfile && !isEditProfile && !isPaywall && !isSettings && !isBookReader && !isAudioPage && !isLessonPage && !isGamePage && !isResetPassword && !isBookSeries && !isCreatePlaylist && !isMyPlaylist && !isDailySession && !isPremiumOnboarding && !isBookCreating ? (
-        <BottomNavigation />
-      ) : (
-        <div 
-          className="w-full bg-transparent pointer-events-none flex-shrink-0" 
-          style={{ height: 'var(--safe-area-bottom, 0px)' }}
-        />
-      )}
+      {!isLanding && !isSignIn && !isOnboarding && !isWelcome && !isReadyToJumpIn && !isBookDetail && !isPlayer && !isProfile && !isCreateProfile && !isEditProfile && !isPaywall && !isSettings && !isBookReader && !isAudioPage && !isLessonPage && !isGamePage && !isResetPassword && !isBookSeries && !isCreatePlaylist && !isMyPlaylist && !isDailySession && !isPremiumOnboarding && !isBookCreating && <BottomNavigation />}
 
       {/* Onboarding Tutorial Overlay */}
       <OnboardingTutorial />

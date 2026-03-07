@@ -60,7 +60,7 @@ const ReadyToJumpInPage: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-[#1a0f05] via-[#2d1a0a] to-[#3E1F07] flex flex-col items-center justify-center px-6 py-12 relative overflow-hidden" style={{ paddingTop: 'calc(var(--safe-area-top, 0px) + 3rem)', paddingBottom: 'calc(var(--safe-area-bottom, 0px) + 3rem)' }}>
+    <div className="min-h-screen bg-gradient-to-b from-[#1a0f05] via-[#2d1a0a] to-[#3E1F07] flex flex-col items-center justify-center px-6 py-12 relative overflow-hidden" style={{ paddingTop: 'calc(var(--safe-area-top, 0px) + 3rem)' }}>
       {/* Animated Background */}
       <ParticleBackground />
 

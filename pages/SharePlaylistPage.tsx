@@ -169,7 +169,7 @@ const SharePlaylistPage: React.FC = () => {
     const displaySubtitle = featuredTrack ? `from "${playlist.title}"` : playlist.description;
 
     return (
-        <div className="min-h-screen bg-gradient-to-b from-[#1a0a2e] via-[#2d1b4e] to-[#1a0a2e]" style={{ paddingBottom: 'var(--safe-area-bottom, 0px)' }}>
+        <div className="min-h-screen bg-gradient-to-b from-[#1a0a2e] via-[#2d1b4e] to-[#1a0a2e]" >
             {/* Header with Cover */}
             <div className="relative">
                 {/* Background blur */}

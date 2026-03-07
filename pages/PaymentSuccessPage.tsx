@@ -87,7 +87,7 @@ const PaymentSuccessPage: React.FC = () => {
   }, [verifyPayment]);
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-[#1a1a2e] via-[#16213e] to-[#0f3460] flex items-center justify-center px-6" style={{ paddingTop: 'var(--safe-area-top, 0px)', paddingBottom: 'var(--safe-area-bottom, 0px)' }}>
+    <div className="min-h-screen bg-gradient-to-br from-[#1a1a2e] via-[#16213e] to-[#0f3460] flex items-center justify-center px-6" style={{ paddingTop: 'var(--safe-area-top, 0px)' }}>
       <div className="text-center">
         {status === 'verifying' && (
           <>

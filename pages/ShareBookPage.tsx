@@ -115,7 +115,7 @@ const ShareBookPage: React.FC = () => {
     }
 
     return (
-        <div className="min-h-screen bg-gradient-to-b from-[#5c2e0b] via-[#3E1F07] to-[#2a1a05]" style={{ paddingBottom: 'var(--safe-area-bottom, 0px)' }}>
+        <div className="min-h-screen bg-gradient-to-b from-[#5c2e0b] via-[#3E1F07] to-[#2a1a05]" >
             {/* Header with Cover */}
             <div className="relative">
                 {/* Background blur */}

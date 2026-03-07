@@ -153,7 +153,7 @@ const ResetPasswordPage: React.FC = () => {
   // Success state
   if (success) {
     return (
-      <div className="flex flex-col h-full w-full items-center justify-center px-6" style={{ paddingTop: 'var(--safe-area-top, 0px)', paddingBottom: 'var(--safe-area-bottom, 0px)' }}>
+      <div className="flex flex-col h-full w-full items-center justify-center px-6" style={{ paddingTop: 'var(--safe-area-top, 0px)' }}>
         <div className="bg-white/10 backdrop-blur-md rounded-2xl p-8 max-w-md w-full text-center border border-white/20">
           <CheckCircle className="w-16 h-16 text-green-400 mx-auto mb-4" />
           <h1 className="text-white font-display font-bold text-xl mb-2">Password Reset!</h1>
@@ -176,7 +176,7 @@ const ResetPasswordPage: React.FC = () => {
 
   // Reset form
   return (
-    <div className="flex flex-col h-full w-full items-center justify-center px-6" style={{ paddingTop: 'var(--safe-area-top, 0px)', paddingBottom: 'var(--safe-area-bottom, 0px)' }}>
+    <div className="flex flex-col h-full w-full items-center justify-center px-6" style={{ paddingTop: 'var(--safe-area-top, 0px)' }}>
       <div className="w-full max-w-md">
         {/* Header Sign */}
         <div className="relative mb-8 animate-in slide-in-from-top-10 duration-700">

@@ -103,6 +103,15 @@ const onboardingEventSchema = new mongoose.Schema({
             // First lesson paywall
             'first_lesson_paywall_shown', // Paywall shown after first lesson
 
+            // Lifetime offer events
+            'lifetime_offer_shown',
+            'lifetime_offer_clicked',
+            'lifetime_offer_dismissed',
+
+            // Reverse trial offer modal
+            'reverse_trial_offer_accepted',
+            'reverse_trial_offer_declined',
+
             // Dive into the Bible / Create Your Story (book building) funnel
             'book_building_started',
             'book_building_step_1_complete',

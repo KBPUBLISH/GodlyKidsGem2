@@ -793,6 +793,27 @@ const HomePageWithWelcomeCheck: React.FC = () => {
   // Check if tutorial is still in progress
   const tutorialActive = isTutorialInProgress();
   
+  // Show paywall immediately on app open — once per session, every day for 1 week
+  useEffect(() => {
+    const PAYWALL_SESSION_KEY = 'godlykids_paywall_shown_session';
+    const PAYWALL_FIRST_OPEN_KEY = 'godlykids_paywall_first_open';
+    const PAYWALL_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
+
+    if (sessionStorage.getItem(PAYWALL_SESSION_KEY)) return;
+    const isPremium = localStorage.getItem('godlykids_premium') === 'true';
+    if (isPremium || tutorialActive) return;
+
+    const firstOpen = localStorage.getItem(PAYWALL_FIRST_OPEN_KEY);
+    if (firstOpen) {
+      if (Date.now() - parseInt(firstOpen, 10) > PAYWALL_WINDOW_MS) return;
+    } else {
+      localStorage.setItem(PAYWALL_FIRST_OPEN_KEY, Date.now().toString());
+    }
+
+    sessionStorage.setItem(PAYWALL_SESSION_KEY, 'true');
+    navigate('/paywall', { state: { hideCloseButton: false } });
+  }, []);
+  
   // Listen for guest content consumption events to re-check when user returns
   useEffect(() => {
     const handleContentConsumed = () => {
@@ -1106,12 +1127,14 @@ const ReferralPromptWrapper: React.FC<{ children: React.ReactNode }> = ({ childr
 };
 
 const LIFETIME_OFFER_SHOWN_KEY = 'godlykids_lifetime_offer_shown_session';
+const LIFETIME_OFFER_FIRST_SHOWN_KEY = 'godlykids_lifetime_offer_first_shown';
+const LIFETIME_OFFER_WINDOW_MS = 7 * 24 * 60 * 60 * 1000; // 1 week
 
 const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const location = useLocation();
   const [showLifetimeOffer, setShowLifetimeOffer] = useState(false);
 
-  // Show lifetime offer popup 30 seconds after landing on /home (once per session, non-premium only)
+  // Show lifetime offer once per app open, every day for 1 week for new users
   useEffect(() => {
     if (location.pathname !== '/home') return;
     if (sessionStorage.getItem(LIFETIME_OFFER_SHOWN_KEY)) return;
@@ -1121,6 +1144,15 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
       const isPremium = localStorage.getItem('godlykids_premium') === 'true';
       const tutorialActive = isTutorialInProgress();
       if (isPremium || tutorialActive) return;
+
+      // Check if within the 1-week window
+      const firstShown = localStorage.getItem(LIFETIME_OFFER_FIRST_SHOWN_KEY);
+      if (firstShown) {
+        const elapsed = Date.now() - parseInt(firstShown, 10);
+        if (elapsed > LIFETIME_OFFER_WINDOW_MS) return;
+      } else {
+        localStorage.setItem(LIFETIME_OFFER_FIRST_SHOWN_KEY, Date.now().toString());
+      }
 
       sessionStorage.setItem(LIFETIME_OFFER_SHOWN_KEY, 'true');
       setShowLifetimeOffer(true);

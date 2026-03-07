@@ -218,7 +218,7 @@ const VideoLessonModal: React.FC<VideoLessonModalProps> = ({ isOpen, onClose, le
     return (
         <div className="fixed inset-0 bg-black z-50 flex flex-col">
             {/* Progress Bar */}
-            <div className="absolute top-0 left-0 right-0 z-10">
+            <div className="absolute top-0 left-0 right-0 z-10" style={{ paddingTop: 'var(--safe-area-top, 0px)' }}>
                 <div className="flex gap-1 p-2">
                     {steps.map((step, idx) => (
                         <div

@@ -48,7 +48,7 @@ const AudioPlayerPage: React.FC = () => {
     <div className="flex flex-col h-full w-full relative overflow-hidden">
       
       {/* Top Bar */}
-      <div className="absolute top-0 left-0 right-0 p-6 z-30 flex justify-between items-center pt-8">
+      <div className="absolute top-0 left-0 right-0 p-6 z-30 flex justify-between items-center" style={{ paddingTop: 'calc(var(--safe-area-top, 0px) + 2rem)' }}>
         {/* Custom Back Button (Orange/Wood Box style) */}
         <button 
           onClick={() => navigate(`/book/${bookId}`)}
@@ -108,7 +108,7 @@ const AudioPlayerPage: React.FC = () => {
       </div>
 
       {/* Bottom Player Control Bar */}
-      <div className="absolute bottom-0 left-0 right-0 h-44 bg-[#8B4513] z-30 rounded-t-[40px] shadow-[0_-10px_40px_rgba(0,0,0,0.5)] flex flex-col px-8 pt-8 overflow-hidden">
+      <div className="absolute bottom-0 left-0 right-0 bg-[#8B4513] z-30 rounded-t-[40px] shadow-[0_-10px_40px_rgba(0,0,0,0.5)] flex flex-col px-8 pt-8 overflow-hidden" style={{ paddingBottom: 'var(--safe-area-bottom, 0px)', minHeight: '11rem' }}>
           
           {/* Wood Texture Background */}
           <div className="absolute inset-0 pointer-events-none opacity-30 mix-blend-multiply"

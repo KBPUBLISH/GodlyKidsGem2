@@ -966,7 +966,7 @@ const LessonPlayerPage: React.FC = () => {
                     </div>
 
                     {/* Header Bar - Episode selector on left, X button on right */}
-                    <div className="absolute top-2 left-2 right-2 z-50 flex items-center justify-between">
+                    <div className="absolute left-2 right-2 z-50 flex items-center justify-between" style={{ top: 'calc(var(--safe-area-top, 0px) + 0.5rem)' }}>
                         {/* Episode Indicator - Left side */}
                         {hasEpisodes ? (
                             <div className="relative">
@@ -1305,6 +1305,8 @@ const LessonPlayerPage: React.FC = () => {
                         setTouchStart(null);
                     }}
                 >
+                    {/* Safe area spacer */}
+                    <div className="w-full flex-shrink-0" style={{ height: 'var(--safe-area-top, 0px)' }} />
                     {/* Progress Bar for other screens */}
                     <div className="w-full h-1 bg-gray-800">
                         <div

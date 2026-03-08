@@ -1194,7 +1194,7 @@ const HomePage: React.FC = () => {
                               alt={lesson.title}
                               className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                               onError={(e) => {
-                                (e.target as HTMLImageElement).src = 'https://via.placeholder.com/150x200/9C27B0/FFFFFF?text=📺';
+                                (e.target as HTMLImageElement).src = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='150' height='200'%3E%3Crect fill='%239C27B0' width='150' height='200'/%3E%3Ctext x='50%25' y='50%25' fill='white' font-size='40' text-anchor='middle' dy='.3em'%3E📺%3C/text%3E%3C/svg%3E";
                               }}
                             />
                           ) : (
@@ -1687,7 +1687,7 @@ const HomePage: React.FC = () => {
                         alt={item.title}
                         className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                         onError={(e) => {
-                          (e.target as HTMLImageElement).src = 'https://via.placeholder.com/150x200/E91E63/FFFFFF?text=💝';
+                          (e.target as HTMLImageElement).src = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='150' height='200'%3E%3Crect fill='%23E91E63' width='150' height='200'/%3E%3Ctext x='50%25' y='50%25' fill='white' font-size='40' text-anchor='middle' dy='.3em'%3E💝%3C/text%3E%3C/svg%3E";
                         }}
                       />
                       {/* Play overlay for audio */}
@@ -1744,7 +1744,7 @@ const HomePage: React.FC = () => {
                         alt={episode.title}
                         className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                         onError={(e) => {
-                          (e.target as HTMLImageElement).src = 'https://via.placeholder.com/150x200/FF6B35/FFFFFF?text=🎵';
+                          (e.target as HTMLImageElement).src = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='150' height='200'%3E%3Crect fill='%23FF6B35' width='150' height='200'/%3E%3Ctext x='50%25' y='50%25' fill='white' font-size='40' text-anchor='middle' dy='.3em'%3E🎵%3C/text%3E%3C/svg%3E";
                         }}
                       />
                       {/* Play overlay */}
@@ -1799,7 +1799,7 @@ const HomePage: React.FC = () => {
                         alt={book.title}
                         className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                         onError={(e) => {
-                          (e.target as HTMLImageElement).src = 'https://via.placeholder.com/150x200/4CAF50/FFFFFF?text=📚';
+                          (e.target as HTMLImageElement).src = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='150' height='200'%3E%3Crect fill='%234CAF50' width='150' height='200'/%3E%3Ctext x='50%25' y='50%25' fill='white' font-size='40' text-anchor='middle' dy='.3em'%3E📚%3C/text%3E%3C/svg%3E";
                         }}
                       />
                       {/* Play overlay */}

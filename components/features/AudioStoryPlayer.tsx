@@ -348,7 +348,7 @@ const AudioStoryPlayer: React.FC<AudioStoryPlayerProps> = ({
                 </div>
 
                 {/* Controls */}
-                <div className="bg-gradient-to-t from-black to-transparent pt-8 pb-6 px-6 safe-area-bottom">
+                <div className="bg-gradient-to-t from-black to-transparent pt-8 pb-6 px-6">
                     {/* Progress bar */}
                     <div className="mb-4 space-y-2">
                         <div 

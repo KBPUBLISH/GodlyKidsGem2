@@ -11,7 +11,7 @@ interface BookCardProps {
 }
 
 // Default placeholder image
-const DEFAULT_COVER = 'https://via.placeholder.com/400x400/8B4513/FFFFFF?text=Book+Cover';
+const DEFAULT_COVER = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='400' height='400'%3E%3Crect fill='%238B4513' width='400' height='400'/%3E%3Ctext x='50%25' y='50%25' fill='white' font-size='24' text-anchor='middle' dy='.3em' font-family='sans-serif'%3EBook Cover%3C/text%3E%3C/svg%3E";
 
 const BookCard: React.FC<BookCardProps> = ({ book, onClick }) => {
   const [imageError, setImageError] = useState(false);

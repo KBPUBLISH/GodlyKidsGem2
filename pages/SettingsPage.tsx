@@ -13,6 +13,7 @@ import { authService } from '../services/authService';
 import { getApiBaseUrl } from '../services/apiService';
 import WebViewModal from '../components/features/WebViewModal';
 import ParentGateModal from '../components/features/ParentGateModal';
+import DespiaService from '../services/despiaService';
 
 const SettingsPage: React.FC = () => {
   const navigate = useNavigate();
@@ -511,7 +512,7 @@ const SettingsPage: React.FC = () => {
                             </div>
                             <div>
                                 <div className="font-extrabold text-[#856404] text-sm font-display">Premium Active</div>
-                                <div className="text-xs text-[#856404]/70 font-bold">Manage in App Store</div>
+                                <div className="text-xs text-[#856404]/70 font-bold">Manage in {navigator.userAgent.toLowerCase().includes('android') ? 'Play Store' : 'App Store'}</div>
                             </div>
                         </div>
                         <button 
@@ -519,15 +520,17 @@ const SettingsPage: React.FC = () => {
                                 // Open subscription management
                                 // iOS: Opens App Store subscriptions page
                                 // Android: Opens Play Store subscriptions
-                                const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
-                                const isAndroid = /Android/.test(navigator.userAgent);
+                                // Prefer DespiaService for native app (handles WebView UA correctly)
+                                const ua = navigator.userAgent.toLowerCase();
+                                const isIOS = DespiaService.isIOS || /ipad|iphone|ipod/.test(ua);
+                                const isAndroid = DespiaService.isAndroid || ua.includes('android');
                                 
-                                if (isIOS) {
-                                    // iOS App Store subscription management
-                                    window.location.href = 'itms-apps://apps.apple.com/account/subscriptions';
-                                } else if (isAndroid) {
-                                    // Google Play subscription management
-                                    window.location.href = 'https://play.google.com/store/account/subscriptions';
+                                if (isAndroid) {
+                                    // Android: Open native Play Store subscription management
+                                    window.open('https://play.google.com/store/account/subscriptions', '_blank');
+                                } else if (isIOS) {
+                                    // iOS: Open native App Store subscription management (window.open hands off to system)
+                                    window.open('itms-apps://apps.apple.com/account/subscriptions', '_blank');
                                 } else {
                                     // Web fallback - open Apple subscriptions page
                                     window.open('https://apps.apple.com/account/subscriptions', '_blank');

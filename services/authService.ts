@@ -106,6 +106,8 @@ export const authService = {
     try {
       if (user?.email) {
         localStorage.setItem('godlykids_user_email', user.email);
+        // Future: if DeSpia exposes RevenueCat setAttribute ($email), call it here so
+        // webhooks get email for any existing device-id purchases and restore works by email.
       }
       localStorage.setItem('godlykids_user', JSON.stringify(user));
     } catch {

@@ -257,9 +257,9 @@ const PaywallPage: React.FC = () => {
     console.log('🔘 Start Trial button clicked, plan:', selectedPlan);
     activityTrackingService.trackOnboardingEvent('paywall_trial_clicked', { planType: selectedPlan, ...(isCreateYourStoryPaywall && { source: 'create-your-story' }) });
     
-    // Lifetime purchase from deal: no account required. User can create account later; purchase syncs by email/device.
-    const isLifetimeDealFlow = fromState === 'lifetime-offer' && selectedPlan === 'lifetime';
-    if (!isLifetimeDealFlow && !hasAccount()) {
+    // Require sign-in before ANY in-app purchase so RevenueCat webhook receives email as app_user_id.
+    // Otherwise purchase is tied to device ID and user won't get premium after signing in on another device.
+    if (!hasAccount()) {
       console.log('⚠️ No account found, showing account required modal');
       activityTrackingService.trackOnboardingEvent('paywall_account_required', { planType: selectedPlan, ...(isCreateYourStoryPaywall && { source: 'create-your-story' }) });
       setShowAccountRequired(true);
@@ -1003,10 +1003,10 @@ const PaywallPage: React.FC = () => {
                 </div>
                 
                 <h2 className="text-[#1e1b4b] font-bold text-xl mb-2">
-                  Create an Account First
+                  Sign in so your purchase is saved
                 </h2>
                 <p className="text-gray-600 text-sm mb-6">
-                  To manage your subscription and sync progress across devices, please create a free account.
+                  Create a free account first. That way your subscription is tied to your email and will restore on any device.
                 </p>
                 
                 <button

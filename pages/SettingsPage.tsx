@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ChevronLeft, Volume2, Bell, Shield, FileText, LogOut, Crown, HelpCircle, Mic, Trash2, RefreshCw, CheckCircle, AlertCircle, Globe, Check, ChevronRight, UserPlus, LogIn } from 'lucide-react';
+import { ChevronLeft, Volume2, Bell, Shield, FileText, LogOut, Crown, HelpCircle, Mic, Trash2, RefreshCw, CheckCircle, AlertCircle, Globe, Check, ChevronRight, UserPlus, LogIn, Paintbrush } from 'lucide-react';
 import WoodButton from '../components/ui/WoodButton';
 import { useUser } from '../context/UserContext';
 import { useAudio } from '../context/AudioContext';
@@ -14,12 +14,14 @@ import { getApiBaseUrl } from '../services/apiService';
 import WebViewModal from '../components/features/WebViewModal';
 import ParentGateModal from '../components/features/ParentGateModal';
 import DespiaService from '../services/despiaService';
+import { useTheme, AppTheme } from '../context/ThemeContext';
 
 const SettingsPage: React.FC = () => {
   const navigate = useNavigate();
   const { isSubscribed, isVoiceUnlocked, setIsSubscribed, resetUser } = useUser();
   const { sfxEnabled, toggleSfx, playBack } = useAudio();
   const { currentLanguage, setLanguage, supportedLanguages, isTranslating, t } = useLanguage();
+  const { theme, setTheme } = useTheme();
   const [clonedVoices, setClonedVoices] = useState<ClonedVoice[]>([]);
   const [deletingVoiceId, setDeletingVoiceId] = useState<string | null>(null);
   const [availableVoices, setAvailableVoices] = useState<any[]>([]);
@@ -289,6 +291,41 @@ const SettingsPage: React.FC = () => {
                             <div className={`absolute top-0.5 w-5 h-5 bg-white rounded-full shadow-sm transition-all duration-200 ${notificationsEnabled ? 'left-5' : 'left-0.5'}`}></div>
                         </button>
                     </div>
+                </div>
+            </section>
+
+            {/* Appearance / Theme Toggle */}
+            <section className="bg-[#fff8e1] rounded-2xl p-5 border-2 border-[#eecaa0] shadow-sm">
+                <h3 className="font-display font-bold text-[#8B4513] text-lg mb-4 uppercase tracking-wide opacity-80">Appearance</h3>
+                <div className="grid grid-cols-2 gap-3">
+                    {([
+                      { id: 'panorama' as AppTheme, label: 'Panorama', desc: 'Classic feed layout', emoji: '🌅' },
+                      { id: 'island' as AppTheme, label: 'Island', desc: 'Interactive world', emoji: '🏝️' },
+                    ]).map((option) => {
+                      const isActive = theme === option.id;
+                      return (
+                        <button
+                          key={option.id}
+                          onClick={() => setTheme(option.id)}
+                          className={`relative rounded-xl p-4 border-2 transition-all duration-200 text-left ${
+                            isActive
+                              ? 'border-[#f57c00] bg-[#fff3e0] shadow-md scale-[1.02]'
+                              : 'border-[#eecaa0] bg-white/60 hover:bg-white/80'
+                          }`}
+                        >
+                          <div className="text-2xl mb-2">{option.emoji}</div>
+                          <div className={`font-bold text-sm ${isActive ? 'text-[#e65100]' : 'text-[#5c2e0b]'}`}>
+                            {option.label}
+                          </div>
+                          <div className="text-[10px] text-[#8B6914] mt-0.5">{option.desc}</div>
+                          {isActive && (
+                            <div className="absolute top-2 right-2 w-5 h-5 rounded-full bg-[#f57c00] flex items-center justify-center">
+                              <Check size={12} className="text-white" />
+                            </div>
+                          )}
+                        </button>
+                      );
+                    })}
                 </div>
             </section>
 

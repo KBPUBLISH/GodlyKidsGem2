@@ -570,6 +570,8 @@ if (!(window as any).__GK_APP_BOOTED__) {
 }
 import ListenPage from './pages/ListenPage';
 import ReadPage from './pages/ReadPage';
+import ReadPagePanorama from './pages/ReadPagePanorama';
+import ListenPagePanorama from './pages/ListenPagePanorama';
 import LibraryPage from './pages/LibraryPage';
 import BookCreatingPage from './pages/BookCreatingPage';
 import CreateYourStoryPage from './pages/CreateYourStoryPage';
@@ -885,9 +887,11 @@ const WorldPageWithWelcomeCheck: React.FC = () => {
     return <NewUserWelcomePage />;
   }
   
+  const { isPanorama } = useTheme();
+
   return (
     <>
-      <WorldPage />
+      {isPanorama ? <HomePage /> : <WorldPage />}
       {showSaveProgressModal && (
         <SaveProgressModal
           isOpen={true}
@@ -905,8 +909,6 @@ const WorldPageWithWelcomeCheck: React.FC = () => {
           }}
         />
       )}
-      {/* CreateAccountModal is NOT shown automatically for new users */}
-      {/* Users explore freely → try content → SaveProgressModal prompts them */}
       {showTrialExpiredModal && (
         <ReverseTrialExpiredModal
           isOpen={true}
@@ -934,6 +936,7 @@ import DemoTimer from './components/features/DemoTimer';
 import ReadyToJumpInPage from './pages/ReadyToJumpInPage';
 import OnboardingTutorial from './components/features/OnboardingTutorial';
 import { TutorialProvider, useTutorial } from './context/TutorialContext';
+import { ThemeProvider, useTheme } from './context/ThemeContext';
 
 // --- ASSETS & HELPERS ---
 
@@ -1141,11 +1144,22 @@ const ReferralPromptWrapper: React.FC<{ children: React.ReactNode }> = ({ childr
 
 const MAIN_NAV_PAGES = ['/world', '/home', '/listen', '/read', '/games'];
 
+const ThemedReadPage: React.FC = () => {
+  const { isPanorama } = useTheme();
+  return isPanorama ? <ReadPagePanorama /> : <ReadPage />;
+};
+
+const ThemedListenPage: React.FC = () => {
+  const { isPanorama } = useTheme();
+  return isPanorama ? <ListenPagePanorama /> : <ListenPage />;
+};
+
 const LIFETIME_OFFER_STAGE_KEY = 'godlykids_lifetime_offer_stage';
 const LIFETIME_OFFER_SESSION_KEY = 'godlykids_lifetime_offer_session_checked';
 
 const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const location = useLocation();
+  const { isIsland } = useTheme();
   const prevPathRef = useRef(location.pathname);
   const [isTransitioning, setIsTransitioning] = useState(false);
   const fadeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -1305,10 +1319,12 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
       <PanoramaBackground />
       <AssetPreloader />
 
-      {/* Persistent island layer — always mounted, visibility toggled by route */}
-      <div style={{ opacity: isTransitioning ? 0 : 1, transition: isTransitioning ? 'none' : 'opacity 0.4s ease-in-out' }}>
-        <PersistentWorldIsland />
-      </div>
+      {/* Persistent island layer — only mounted in island theme, visibility toggled by route */}
+      {isIsland && (
+        <div style={{ opacity: isTransitioning ? 0 : 1, transition: isTransitioning ? 'none' : 'opacity 0.4s ease-in-out' }}>
+          <PersistentWorldIsland />
+        </div>
+      )}
 
       {/* Content Wrapper - safe area padding applied here so background is unaffected */}
       <div 
@@ -1316,7 +1332,7 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
         style={{
           paddingLeft: 'var(--safe-area-left, 0px)',
           paddingRight: 'var(--safe-area-right, 0px)',
-          pointerEvents: (location.pathname === '/world' || location.pathname === '/home') ? 'none' : 'auto',
+          pointerEvents: (isIsland && (location.pathname === '/world' || location.pathname === '/home')) ? 'none' : 'auto',
           opacity: isTransitioning ? 0 : 1,
           transition: isTransitioning ? 'none' : 'opacity 0.4s ease-in-out',
         }}
@@ -1494,6 +1510,7 @@ const App: React.FC = () => {
 
   return (
     <ErrorBoundary>
+      <ThemeProvider>
       <LanguageProvider>
       <AudioProvider>
         <UserProvider>
@@ -1530,8 +1547,8 @@ const App: React.FC = () => {
                   <Route path="/world" element={<WorldPageWithWelcomeCheck />} />
                   {/* /home redirects to /world so island buttons are the main explore view */}
                   <Route path="/home" element={<Navigate to="/world" replace />} />
-                  <Route path="/listen" element={<ListenPage />} />
-                  <Route path="/read" element={<ReadPage />} />
+                  <Route path="/listen" element={<ThemedListenPage />} />
+                  <Route path="/read" element={<ThemedReadPage />} />
                   <Route path="/library/creating/:customMonthlyBookId" element={<BookCreatingPage />} />
                   <Route path="/library" element={<LibraryPage />} />
                   <Route path="/create-your-story" element={<CreateYourStoryPage />} />
@@ -1573,6 +1590,7 @@ const App: React.FC = () => {
         </UserProvider>
       </AudioProvider>
       </LanguageProvider>
+      </ThemeProvider>
     </ErrorBoundary>
   );
 };

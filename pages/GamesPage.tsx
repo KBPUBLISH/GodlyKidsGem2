@@ -1,9 +1,9 @@
 import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Gamepad2, Lock } from 'lucide-react';
+import { Gamepad2 } from 'lucide-react';
 import { ApiService } from '../services/apiService';
 import { useUser } from '../context/UserContext';
-import { useSubscription } from '../context/SubscriptionContext';
+
 import AvatarCompositor from '../components/avatar/AvatarCompositor';
 
 const WARRIOR_ISLAND = '/assets/images/warrior-island.webp';
@@ -27,7 +27,6 @@ interface GameItem {
 
 const GamesPage: React.FC = () => {
   const navigate = useNavigate();
-  const { isPremium } = useSubscription();
   const {
     coins, spendCoins,
     equippedAvatar, equippedHat, equippedBody, equippedLeftArm, equippedRightArm, equippedLegs,
@@ -95,13 +94,6 @@ const GamesPage: React.FC = () => {
   };
 
   const handleGameClick = (game: GameItem) => {
-    // If game is locked and user is not premium, go to paywall
-    if (game.isPurchasable && !isPremium) {
-      navigate('/paywall');
-      return;
-    }
-    
-    // Otherwise, play the game
     if (game.url) {
       navigate(`/game?url=${encodeURIComponent(game.url)}&name=${encodeURIComponent(game.name)}`);
     } else {
@@ -216,14 +208,7 @@ const GamesPage: React.FC = () => {
                             </div>
                           )}
 
-                          {/* Lock overlay for purchasable games */}
-                          {game.isPurchasable && (
-                            <div className="absolute inset-0 bg-black/40 flex items-center justify-center z-10">
-                              <div className="bg-black/60 rounded-full p-2 border-2 border-[#FFD700]">
-                                <Lock size={16} className="text-[#FFD700]" />
-                              </div>
-                            </div>
-                          )}
+                          
                         </div>
 
                         <span className="text-white text-[11px] font-display font-bold text-center leading-tight drop-shadow-md line-clamp-2 w-full">

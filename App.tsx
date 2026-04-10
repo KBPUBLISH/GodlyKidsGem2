@@ -781,6 +781,7 @@ const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) =
 const WorldPageWithWelcomeCheck: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
+  const { isPanorama } = useTheme();
   const [showSaveProgressModal, setShowSaveProgressModal] = useState(false);
   const [showTrialExpiredModal, setShowTrialExpiredModal] = useState(false);
   const [hasAccount, setHasAccount] = useState(() => hasUserAccount());
@@ -886,8 +887,16 @@ const WorldPageWithWelcomeCheck: React.FC = () => {
   if (userCompletedOnboarding && shouldShowWelcome()) {
     return <NewUserWelcomePage />;
   }
-  
-  const { isPanorama } = useTheme();
+
+  // Show paywall once per day for non-subscribed users
+  const today = new Date().toISOString().split('T')[0];
+  const paywallLastShown = localStorage.getItem('godlykids_paywall_shown_date');
+  const isPremiumUser = localStorage.getItem('godlykids_premium') === 'true';
+  if (!isPremiumUser && paywallLastShown !== today && !tutorialActive) {
+    localStorage.setItem('godlykids_paywall_shown_date', today);
+    navigate('/paywall', { replace: true });
+    return null;
+  }
 
   return (
     <>

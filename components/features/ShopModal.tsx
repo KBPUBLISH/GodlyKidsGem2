@@ -148,6 +148,8 @@ const ShopModal: React.FC<ShopModalProps> = ({ isOpen, onClose, initialTab, hide
     const [isSavedFeedback, setIsSavedFeedback] = useState(false);
     const [showScrollHint, setShowScrollHint] = useState(false);
     const [showCoinHistory, setShowCoinHistory] = useState(false);
+    const [showHatHint, setShowHatHint] = useState(false);
+    const hatHintTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const tabsContainerRef = useRef<HTMLDivElement>(null);
     const menuContainerRef = useRef<HTMLDivElement>(null);
     const touchStartY = useRef<number>(0);
@@ -159,6 +161,12 @@ const ShopModal: React.FC<ShopModalProps> = ({ isOpen, onClose, initialTab, hide
         window.dispatchEvent(new CustomEvent('godlykids_shop_closed'));
         onClose();
     };
+
+    useEffect(() => {
+        return () => {
+            if (hatHintTimerRef.current) clearTimeout(hatHintTimerRef.current);
+        };
+    }, []);
 
     // Update tab when initialTab changes
     useEffect(() => {
@@ -348,7 +356,12 @@ const ShopModal: React.FC<ShopModalProps> = ({ isOpen, onClose, initialTab, hide
     const handleEquip = (item: ShopItem) => {
         equipItem(item.type, item.value);
         if (item.type === 'animation') {
-            setIsPlaying(true); // Auto play preview
+            setIsPlaying(true);
+        }
+        if (item.type === 'hat') {
+            if (hatHintTimerRef.current) clearTimeout(hatHintTimerRef.current);
+            setShowHatHint(true);
+            hatHintTimerRef.current = setTimeout(() => setShowHatHint(false), 4000);
         }
     };
 
@@ -448,11 +461,14 @@ const ShopModal: React.FC<ShopModalProps> = ({ isOpen, onClose, initialTab, hide
 
     // --- BUILDER CONTROLS LOGIC ---
     const handlePartClick = (part: 'leftArm' | 'rightArm' | 'legs' | 'head' | 'body' | 'hat') => {
-        // Auto-enable builder mode and select part when clicking on avatar
         if (!isBuilderMode) {
             setIsBuilderMode(true);
         }
         setSelectedPart(part);
+        if (part === 'hat' && showHatHint) {
+            setShowHatHint(false);
+            if (hatHintTimerRef.current) clearTimeout(hatHintTimerRef.current);
+        }
     };
 
     const updateOffset = (axis: 'x' | 'y', delta: number) => {
@@ -825,7 +841,6 @@ const ShopModal: React.FC<ShopModalProps> = ({ isOpen, onClose, initialTab, hide
                                     : '0',
                         }}
                     >
-                        {/* Wrapper now only sizes; Compositor handles frame */}
                         <div className="w-full h-full relative">
                             <AvatarCompositor
                                 headUrl={equippedAvatar}
@@ -834,7 +849,7 @@ const ShopModal: React.FC<ShopModalProps> = ({ isOpen, onClose, initialTab, hide
                                 leftArm={equippedLeftArm}
                                 rightArm={equippedRightArm}
                                 legs={equippedLegs}
-                                animationStyle={equippedAnimation} // Pass equipped animation
+                                animationStyle={equippedAnimation}
                                 leftArmRotation={equippedLeftArmRotation}
                                 rightArmRotation={equippedRightArmRotation}
                                 legsRotation={equippedLegsRotation}
@@ -854,8 +869,23 @@ const ShopModal: React.FC<ShopModalProps> = ({ isOpen, onClose, initialTab, hide
                                 hatScale={hatScale}
                                 onPartClick={handlePartClick}
                                 isAnimating={isPlaying}
-                                frameClass={equippedFrame} // Pass frame
+                                frameClass={equippedFrame}
                             />
+                            {showHatHint && equippedHat && (
+                                <div
+                                    className="absolute z-30 pointer-events-none"
+                                    style={{ top: '8%', left: '50%', transform: 'translateX(-50%)' }}
+                                >
+                                    <div className="flex flex-col items-center animate-bounce">
+                                        <span className="text-3xl" style={{ filter: 'drop-shadow(0 2px 4px rgba(0,0,0,0.4))' }}>
+                                            👆
+                                        </span>
+                                        <span className="text-[10px] font-bold text-white bg-black/60 rounded-full px-2 py-0.5 mt-1 whitespace-nowrap">
+                                            Tap hat to move
+                                        </span>
+                                    </div>
+                                </div>
+                            )}
                         </div>
                     </div>
                 </div>

@@ -607,13 +607,13 @@ const PaywallPage: React.FC = () => {
             <p className="sr-only" aria-live="polite">
               Slide {heroSlide + 1} of {PAYWALL_HERO_SLIDES.length}
             </p>
-            <div className="relative aspect-[16/10] w-full overflow-hidden bg-slate-100 sm:aspect-[16/9]">
+            <div className="relative aspect-[3/2] w-full overflow-hidden bg-slate-100 sm:aspect-[16/9]">
               <AnimatePresence mode="wait" initial={false}>
                 <motion.img
                   key={heroSlide}
                   src={PAYWALL_HERO_SLIDES[heroSlide].src}
                   alt={PAYWALL_HERO_SLIDES[heroSlide].alt}
-                  className="absolute inset-0 h-full w-full object-cover object-center"
+                  className="absolute inset-0 h-full w-full object-cover object-top"
                   initial={{ opacity: 0, x: 32, scale: 0.88 }}
                   animate={{ opacity: 1, x: 0, scale: 1 }}
                   exit={{ opacity: 0, x: -24, scale: 0.94 }}

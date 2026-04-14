@@ -9,6 +9,19 @@ const Page = require('../models/Page');
 const TutorialEvent = require('../models/TutorialEvent');
 const EmailSubscriber = require('../models/EmailSubscriber');
 const GamePlayEvent = require('../models/GamePlayEvent');
+const { authenticateAdmin } = require('../middleware/auth');
+
+function escapeRegexForEmail(str) {
+    return String(str).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function getProtectedAdminEmails() {
+    const envEmails = process.env.ADMIN_EMAILS;
+    if (envEmails) {
+        return envEmails.split(',').map((e) => e.trim().toLowerCase()).filter(Boolean);
+    }
+    return ['admin@godlykids.com', 'support@godlykids.com', 'hello@kbpublish.org'];
+}
 
 /**
  * GET /api/analytics/users
@@ -448,8 +461,10 @@ router.get('/users', async (req, res) => {
             summary: {
                 totalUsers: statsUsers.length,
                 totalUsersAllTime: allUsers.length, // Always include all-time count
-                authUsers: authUserCount,      // Users with login accounts
-                anonymousUsers: appOnlyUserCount, // Anonymous/app-only users
+                authUsers: authUserCount,      // Users with login accounts (may be time-filtered)
+                anonymousUsers: appOnlyUserCount, // Anonymous/app-only users (may be time-filtered)
+                loginAccountsAllTime: mergedUsers.filter((u) => u.source === 'auth').length,
+                appOnlyAccountsAllTime: mergedUsers.filter((u) => u.source === 'app').length,
                 totalCoins,
                 totalKids,
                 totalSessions,
@@ -1292,6 +1307,86 @@ router.post('/admin/add-coins', async (req, res) => {
             success: false, 
             message: 'Failed to add coins',
             error: error.message 
+        });
+    }
+});
+
+/**
+ * DELETE /api/analytics/admin/users/:id?source=auth|app
+ * Remove a user record from the User (login) and/or AppUser collection.
+ * Requires admin JWT or X-Admin-Key when ADMIN_API_KEY is set.
+ */
+router.delete('/admin/users/:id', authenticateAdmin, async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { source } = req.query;
+
+        if (!['auth', 'app'].includes(source)) {
+            return res.status(400).json({
+                success: false,
+                message: 'Query param source must be "auth" or "app" (matches dashboard row)',
+            });
+        }
+
+        if (!mongoose.Types.ObjectId.isValid(id)) {
+            return res.status(400).json({ success: false, message: 'Invalid user id' });
+        }
+
+        const protectedEmails = getProtectedAdminEmails();
+
+        if (source === 'auth') {
+            const authUser = await User.findById(id);
+            if (!authUser) {
+                return res.status(404).json({ success: false, message: 'Login user not found' });
+            }
+            const emailLower = authUser.email.toLowerCase();
+            if (protectedEmails.includes(emailLower)) {
+                return res.status(403).json({
+                    success: false,
+                    message: 'Cannot delete a protected admin account',
+                });
+            }
+            await User.findByIdAndDelete(id);
+            await AppUser.deleteMany({
+                email: new RegExp(`^${escapeRegexForEmail(emailLower)}$`, 'i'),
+            });
+            return res.json({
+                success: true,
+                message: 'Login account removed; linked app profile deleted if present',
+            });
+        }
+
+        const appUser = await AppUser.findById(id);
+        if (!appUser) {
+            return res.status(404).json({ success: false, message: 'App user not found' });
+        }
+        const em = (appUser.email || '').trim().toLowerCase();
+        if (em && protectedEmails.includes(em)) {
+            return res.status(403).json({
+                success: false,
+                message: 'Cannot delete a protected account',
+            });
+        }
+        if (em) {
+            const hasAuth = await User.findOne({
+                email: new RegExp(`^${escapeRegexForEmail(em)}$`, 'i'),
+            });
+            if (hasAuth) {
+                return res.status(400).json({
+                    success: false,
+                    message:
+                        'This email has a login (User) record. Delete that row first (it removes the app profile too).',
+                });
+            }
+        }
+        await AppUser.findByIdAndDelete(id);
+        return res.json({ success: true, message: 'App user removed' });
+    } catch (error) {
+        console.error('Admin delete user error:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Failed to delete user',
+            error: error.message,
         });
     }
 });

@@ -581,6 +581,8 @@ import CreateProfilePage from './pages/CreateProfilePage';
 import EditProfilePage from './pages/EditProfilePage';
 import AudioPlayerPage from './pages/AudioPlayerPage';
 import PaywallPage from './pages/PaywallPage';
+import PaywallIntroPage from './pages/PaywallIntroPage';
+import PaywallTrialNotifyPage from './pages/PaywallTrialNotifyPage';
 import PremiumOnboardingPage from './pages/PremiumOnboardingPage';
 import TrialStatsPage from './pages/TrialStatsPage';
 import SettingsPage from './pages/SettingsPage';
@@ -1050,7 +1052,7 @@ const PanoramaBackground: React.FC = () => {
     if (path === '/profile') return 5;
     if (path === '/create-profile') return 5;
     if (path.startsWith('/player/')) return 5;
-    if (path === '/paywall') return 5;
+    if (path === '/paywall' || path === '/paywall/intro' || path === '/paywall/reminder') return 5;
     if (path === '/settings') return 5;
     return 1;
   }, [location.pathname]);
@@ -1293,7 +1295,7 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const isProfile = location.pathname === '/profile';
   const isCreateProfile = location.pathname === '/create-profile';
   const isEditProfile = location.pathname === '/edit-profile';
-  const isPaywall = location.pathname === '/paywall';
+  const isPaywall = location.pathname === '/paywall' || location.pathname === '/paywall/intro' || location.pathname === '/paywall/reminder';
   const isSettings = location.pathname === '/settings';
   const isBookReader = location.pathname.startsWith('/read/');
   const isAudioPage = location.pathname.startsWith('/audio/');
@@ -1581,6 +1583,8 @@ const App: React.FC = () => {
                   <Route path="/profile" element={<ProfileSelectionPage />} />
                   <Route path="/create-profile" element={<CreateProfilePage />} />
                   <Route path="/edit-profile" element={<EditProfilePage />} />
+                  <Route path="/paywall/intro" element={<PaywallIntroPage />} />
+                  <Route path="/paywall/reminder" element={<PaywallTrialNotifyPage />} />
                   <Route path="/paywall" element={<PaywallPage />} />
                   <Route path="/premium-onboarding" element={<PremiumOnboardingPage />} />
                   <Route path="/trial-stats" element={<TrialStatsPage />} />

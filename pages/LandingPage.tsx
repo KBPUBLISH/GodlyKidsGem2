@@ -305,7 +305,7 @@ const LandingPage: React.FC = () => {
         
         {/* Social Proof */}
         <p className="text-[#5A7A8A] text-sm text-center mb-6">
-          Over 1,000+ families use Godly Kids for daily faith lessons
+          Over 10,000 families use Godly Kids for daily faith lessons
         </p>
         
         {/* Start to Explore Button - Wood Theme */}

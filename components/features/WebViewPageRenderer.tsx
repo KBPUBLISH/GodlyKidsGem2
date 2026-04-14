@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { ChevronRight, Loader2, AlertCircle, RefreshCw } from 'lucide-react';
+import { usePreventPullToRefresh } from '../../hooks/usePreventPullToRefresh';
 
 interface WebViewPageRendererProps {
     url: string;
@@ -29,6 +30,7 @@ const WebViewPageRenderer: React.FC<WebViewPageRendererProps> = ({
     onSwipeLeft,
     onSwipeRight,
 }) => {
+    usePreventPullToRefresh(true);
     const [isLoading, setIsLoading] = useState(true);
     const [hasError, setHasError] = useState(false);
     const [errorMessage, setErrorMessage] = useState('');
@@ -122,7 +124,8 @@ const WebViewPageRenderer: React.FC<WebViewPageRendererProps> = ({
     
     return (
         <div 
-            className="absolute inset-0 flex flex-col bg-gray-900"
+            className="absolute inset-0 flex flex-col bg-gray-900 overflow-hidden overscroll-none"
+            style={{ overscrollBehavior: 'none' }}
             onTouchStart={handleTouchStart}
             onTouchMove={handleTouchMove}
             onTouchEnd={handleTouchEnd}
@@ -168,7 +171,8 @@ const WebViewPageRenderer: React.FC<WebViewPageRendererProps> = ({
             <iframe
                 ref={iframeRef}
                 src={url}
-                className="flex-1 w-full h-full border-0"
+                className="flex-1 w-full min-h-0 h-full border-0 overscroll-none"
+                style={{ overscrollBehavior: 'none' }}
                 onLoad={handleLoad}
                 onError={handleError}
                 allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; fullscreen"

@@ -4,8 +4,10 @@ import {
     Users, UserPlus, Coins, Baby, Calendar, TrendingUp, 
     Activity, Smartphone, Globe, Monitor, RefreshCw,
     ChevronDown, ChevronUp, Search, ArrowUpRight, ArrowDownRight,
-    BookOpen, Clock, Headphones, Music, Gamepad2, FileText, Mail, BookMarked
+    BookOpen, Clock, Headphones, Music, Gamepad2, FileText, Mail, BookMarked,
+    Download, Trash2
 } from 'lucide-react';
+import { useAuth } from '../contexts/AuthContext';
 
 interface UserData {
     id: string;
@@ -51,6 +53,8 @@ interface UserData {
     // Onboarding fields
     onboardingStatus?: string;
     onboardingCompletedAt?: string;
+    /** Row origin: login table vs app-only profile */
+    source?: 'auth' | 'app';
 }
 
 interface GameStats {
@@ -101,6 +105,13 @@ interface AnalyticsData {
     summary: {
         totalUsers: number;
         totalUsersAllTime: number;
+        /** Login accounts (User collection), may be filtered by time range */
+        authUsers?: number;
+        anonymousUsers?: number;
+        /** All-time count of users with an email+password login (User collection) */
+        loginAccountsAllTime?: number;
+        /** All-time app-only profiles (no User login row) */
+        appOnlyAccountsAllTime?: number;
         totalCoins: number;
         totalKids: number;
         totalSessions: number;
@@ -168,6 +179,7 @@ const TIME_RANGE_OPTIONS: { value: TimeRange; label: string }[] = [
 ];
 
 const Dashboard: React.FC = () => {
+    const { getToken } = useAuth();
     const [data, setData] = useState<AnalyticsData | null>(null);
     const [gameAnalytics, setGameAnalytics] = useState<GameAnalytics | null>(null);
     const [loading, setLoading] = useState(true);
@@ -179,6 +191,7 @@ const Dashboard: React.FC = () => {
     const [timeView, setTimeView] = useState<'daily' | 'weekly'>('daily');
     const [selectedTimeRange, setSelectedTimeRange] = useState<TimeRange>('all');
     const [showGameSection, setShowGameSection] = useState(true);
+    const [deletingId, setDeletingId] = useState<string | null>(null);
 
     const fetchData = async (timeRange: TimeRange = selectedTimeRange) => {
         setLoading(true);
@@ -211,6 +224,70 @@ const Dashboard: React.FC = () => {
     useEffect(() => {
         fetchData(selectedTimeRange);
     }, [selectedTimeRange]);
+
+    const downloadEmailCsv = () => {
+        if (!data?.users?.length) return;
+        const csvEscape = (val: string) => `"${String(val).replace(/"/g, '""')}"`;
+        const header = 'email,source,account_type,created_at,user_id\n';
+        const lines: string[] = [];
+        for (const u of data.users) {
+            let email = u.email && u.email !== 'Anonymous' ? u.email.trim() : '';
+            if (!email && u.subscriberEmail) email = u.subscriberEmail.trim();
+            if (!email || !email.includes('@')) continue;
+            lines.push(
+                [
+                    csvEscape(email),
+                    u.source || '',
+                    u.accountType,
+                    csvEscape(u.createdAt || ''),
+                    u.id,
+                ].join(',')
+            );
+        }
+        const blob = new Blob([header + lines.join('\n')], { type: 'text/csv;charset=utf-8' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `godlykids-user-emails-${new Date().toISOString().slice(0, 10)}.csv`;
+        a.click();
+        URL.revokeObjectURL(url);
+    };
+
+    const handleDeleteUser = async (user: UserData, e: React.MouseEvent) => {
+        e.stopPropagation();
+        const src = user.source;
+        if (!src) {
+            window.alert('Cannot delete: missing account type. Refresh the dashboard and try again.');
+            return;
+        }
+        const token = getToken();
+        if (!token) {
+            window.alert('You must be logged in to delete users.');
+            return;
+        }
+        const ok = window.confirm(
+            `Permanently delete this user from the database?\n\n${user.email}\n(${src === 'auth' ? 'login account (+ linked app profile if any)' : 'app profile only'})\n\nThis cannot be undone.`
+        );
+        if (!ok) return;
+        setDeletingId(user.id);
+        try {
+            const res = await fetch(
+                `${API_BASE}/analytics/admin/users/${encodeURIComponent(user.id)}?source=${encodeURIComponent(src)}`,
+                { method: 'DELETE', headers: { Authorization: `Bearer ${token}` } }
+            );
+            const json = (await res.json().catch(() => ({}))) as { message?: string };
+            if (!res.ok) {
+                window.alert(json.message || `Delete failed (${res.status})`);
+                return;
+            }
+            await fetchData(selectedTimeRange);
+        } catch (err) {
+            console.error(err);
+            window.alert('Failed to delete user');
+        } finally {
+            setDeletingId(null);
+        }
+    };
 
     const formatDate = (dateStr: string) => {
         return new Date(dateStr).toLocaleDateString('en-US', {
@@ -335,6 +412,15 @@ const Dashboard: React.FC = () => {
                             </button>
                         ))}
                     </div>
+                    <button
+                        type="button"
+                        onClick={downloadEmailCsv}
+                        disabled={!data?.users?.length}
+                        className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-200 text-gray-800 rounded-lg hover:bg-gray-50 disabled:opacity-50"
+                    >
+                        <Download className="w-4 h-4" />
+                        Download emails (CSV)
+                    </button>
                     <button 
                         onClick={() => fetchData(selectedTimeRange)}
                         className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700"
@@ -388,7 +474,7 @@ const Dashboard: React.FC = () => {
             </div>
 
             {/* Summary Cards - Row 1: Users & Engagement */}
-            <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
+            <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-4">
                 <div className="bg-white rounded-xl border border-gray-100 p-4 shadow-sm">
                     <div className="flex items-center gap-2 text-gray-500 text-sm mb-1">
                         <Users className="w-4 h-4" />
@@ -398,6 +484,18 @@ const Dashboard: React.FC = () => {
                     {selectedTimeRange !== 'all' && data.summary.totalUsersAllTime && (
                         <p className="text-xs text-gray-400">of {data.summary.totalUsersAllTime.toLocaleString()} total</p>
                     )}
+                </div>
+                <div className="bg-white rounded-xl border border-indigo-100 p-4 shadow-sm ring-1 ring-indigo-50">
+                    <div className="flex items-center gap-2 text-indigo-700 text-sm mb-1 font-medium">
+                        <Mail className="w-4 h-4" />
+                        Login accounts (all time)
+                    </div>
+                    <p className="text-2xl font-bold text-indigo-800">
+                        {(data.summary.loginAccountsAllTime ?? data.summary.authUsers ?? 0).toLocaleString()}
+                    </p>
+                    <p className="text-xs text-gray-500 mt-1">
+                        Email + password users (User collection)
+                    </p>
                 </div>
                 <div className="bg-white rounded-xl border border-gray-100 p-4 shadow-sm">
                     <div className="flex items-center gap-2 text-gray-500 text-sm mb-1">
@@ -895,6 +993,7 @@ const Dashboard: React.FC = () => {
                                 <th className="px-4 py-3 text-center font-medium">Platform</th>
                                 <th className="px-4 py-3 text-left font-medium">Created</th>
                                 <th className="px-4 py-3 text-left font-medium">Last Active</th>
+                                <th className="px-4 py-3 text-right font-medium w-28">Actions</th>
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-gray-100">
@@ -987,10 +1086,22 @@ const Dashboard: React.FC = () => {
                                         <td className="px-4 py-3 text-gray-500 text-xs">
                                             {user.lastActiveAt ? formatDate(user.lastActiveAt) : '-'}
                                         </td>
+                                        <td className="px-4 py-3 text-right">
+                                            <button
+                                                type="button"
+                                                title="Remove this user from the database"
+                                                disabled={deletingId === user.id || !user.source}
+                                                onClick={(e) => handleDeleteUser(user, e)}
+                                                className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-md border border-red-200 text-red-700 hover:bg-red-50 disabled:opacity-40 disabled:cursor-not-allowed"
+                                            >
+                                                <Trash2 className="w-3.5 h-3.5" />
+                                                Delete
+                                            </button>
+                                        </td>
                                     </tr>
                                     {expandedUserId === user.id && (
                                         <tr className="bg-indigo-50">
-                                            <td colSpan={9} className="px-6 py-4">
+                                            <td colSpan={10} className="px-6 py-4">
                                                 <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
                                                     <div>
                                                         <p className="text-xs text-gray-500 mb-1">Kid Profiles</p>

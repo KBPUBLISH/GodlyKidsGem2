@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { ArrowLeft, Loader2, Maximize2, Minimize2, ExternalLink } from 'lucide-react';
+import { usePreventPullToRefresh } from '../hooks/usePreventPullToRefresh';
 
 const GameWebViewPage: React.FC = () => {
   const navigate = useNavigate();
@@ -24,6 +25,8 @@ const GameWebViewPage: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [iframeError, setIframeError] = useState(false);
+
+  usePreventPullToRefresh(!!rawGameUrl);
 
   const handleBack = () => {
     // Clear any saved route that might have the game URL
@@ -78,7 +81,10 @@ const GameWebViewPage: React.FC = () => {
   }
 
   return (
-    <div className="min-h-screen bg-black flex flex-col">
+    <div
+      className="h-[100dvh] min-h-0 bg-black flex flex-col overflow-hidden overscroll-none"
+      style={{ overscrollBehavior: 'none' }}
+    >
       {/* Header - Hidden in fullscreen */}
       {!isFullscreen && (
         <div className="bg-gradient-to-r from-[#2d1b4e] to-[#1a1a2e] px-4 py-3 flex items-center justify-between safe-area-top">
@@ -114,10 +120,13 @@ const GameWebViewPage: React.FC = () => {
       )}
 
       {/* Game WebView (iframe) */}
-      <div className={`flex-1 relative ${isFullscreen ? 'fixed inset-0 z-50' : ''}`}>
+      <div
+        className={`flex-1 relative min-h-0 overscroll-none ${isFullscreen ? 'fixed inset-0 z-50' : ''}`}
+        style={{ overscrollBehavior: 'none' }}
+      >
         <iframe
           src={gameUrl}
-          className="w-full h-full border-0"
+          className="w-full h-full border-0 overscroll-none"
           title={gameName}
           allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; fullscreen"
           allowFullScreen
@@ -136,6 +145,7 @@ const GameWebViewPage: React.FC = () => {
             left: 0,
             width: '100%',
             height: '100%',
+            overscrollBehavior: 'none',
           }}
         />
         

@@ -1047,7 +1047,7 @@ const OnboardingPage: React.FC = () => {
       // Track onboarding complete and go to paywall
       activityTrackingService.trackOnboardingEvent('onboarding_complete');
       activityTrackingService.resetOnboardingSession();
-      navigate('/paywall', { state: { fromOnboarding: true } });
+      navigate('/paywall/intro', { state: { fromOnboarding: true } });
       return;
     }
     
@@ -1089,8 +1089,8 @@ const OnboardingPage: React.FC = () => {
         activityTrackingService.trackOnboardingEvent('account_created', { email: accountEmail });
         activityTrackingService.trackOnboardingEvent('onboarding_complete');
         activityTrackingService.resetOnboardingSession();
-        // Navigate to paywall (not /ready) so users can subscribe
-        navigate('/paywall', { state: { fromOnboarding: true } });
+        // Paywall sequence starts on intro, then full paywall
+        navigate('/paywall/intro', { state: { fromOnboarding: true } });
       } else {
         setAccountStep5Error(result.error || 'Failed to create account');
       }
@@ -2188,21 +2188,6 @@ const OnboardingPage: React.FC = () => {
                   'CREATE FREE ACCOUNT'
                 )}
               </WoodButton>
-              
-              {/* Skip Button */}
-              <button
-                type="button"
-                onClick={() => {
-                  playClick();
-                  activityTrackingService.trackOnboardingEvent('account_skipped');
-                  activityTrackingService.trackOnboardingEvent('onboarding_complete');
-                  activityTrackingService.resetOnboardingSession();
-                  navigate('/paywall', { state: { fromOnboarding: true } });
-                }}
-                className="w-full mt-3 py-3 text-[#eecaa0]/80 text-sm font-medium hover:text-[#FFD700] hover:underline transition-colors"
-              >
-                SKIP
-              </button>
             </div>
             
             {/* Trust Badges */}

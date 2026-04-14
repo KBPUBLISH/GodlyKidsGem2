@@ -1,7 +1,8 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { Check, X, Loader2, RefreshCw, AlertCircle, CheckCircle, Mail, UserPlus, Bell, ChevronDown, ChevronUp } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { Check, X, Loader2, RefreshCw, AlertCircle, CheckCircle, Mail, UserPlus, ChevronDown, ChevronUp, ChevronLeft } from 'lucide-react';
 import { useUser } from '../context/UserContext';
 import { useSubscription } from '../context/SubscriptionContext';
 import ParentGateModal from '../components/features/ParentGateModal';
@@ -10,13 +11,6 @@ import { getApiBaseUrl } from '../services/apiService';
 import { facebookPixelService } from '../services/facebookPixelService';
 import { metaAttributionService } from '../services/metaAttributionService';
 import { activityTrackingService } from '../services/activityTrackingService';
-import despia from 'despia-native';
-
-// Check if running in Despia native app
-const isDespiaNative = (): boolean => {
-  const ua = navigator.userAgent.toLowerCase();
-  return ua.includes('despia');
-};
 
 // Check if user has a real account (not just device ID)
 const hasAccount = (): boolean => {
@@ -49,20 +43,76 @@ const getUserFirstName = (): string => {
   return '';
 };
 
+/** 5-minute urgency countdown for Create Your Story paywall CTA (persists across visits). */
+const PAYWALL_TRIAL_URGENCY_KEY = 'godlykids_paywall_trial_urgency_start';
+const PAYWALL_TRIAL_URGENCY_MS = 5 * 60 * 1000;
+
+function getTrialUrgencyRemaining(): { mm: number; ss: number; expired: boolean } {
+  if (typeof window === 'undefined') {
+    return { mm: 5, ss: 0, expired: false };
+  }
+  let start = localStorage.getItem(PAYWALL_TRIAL_URGENCY_KEY);
+  if (!start) {
+    start = Date.now().toString();
+    localStorage.setItem(PAYWALL_TRIAL_URGENCY_KEY, start);
+  }
+  const end = parseInt(start, 10) + PAYWALL_TRIAL_URGENCY_MS;
+  const rem = end - Date.now();
+  if (rem <= 0) {
+    return { mm: 0, ss: 0, expired: true };
+  }
+  return {
+    mm: Math.floor(rem / 60000),
+    ss: Math.floor((rem % 60000) / 1000),
+    expired: false,
+  };
+}
+
+/** Create Your Story paywall hero carousel (auto-advances every 3s). */
+const PAYWALL_HERO_SLIDES: { src: string; alt: string }[] = [
+  {
+    src: '/assets/images/paywall-carousel-1.png',
+    alt: 'Daily devotional activities for kids — family using Godly Kids on a tablet at home',
+  },
+  {
+    src: '/assets/images/paywall-carousel-2.png',
+    alt: 'Child watching a calming video book on a tablet',
+  },
+  {
+    src: '/assets/images/paywall-carousel-3.png',
+    alt: 'Hours of screen-free fun — Holy Spirit Adventures audio playing on a phone in the car',
+  },
+  {
+    src: '/assets/images/paywall-carousel-4.png',
+    alt: 'Games that teach faith — child playing Scribby Path on Godly Kids',
+  },
+];
+
+const PAYWALL_KID_FEEDBACK: { name: string; quote: string }[] = [
+  { name: 'Emma', quote: 'THANK YOU SO MUCH FOR GODLY KIDS!!!' },
+  { name: 'Marcus', quote: 'Keep up the great work' },
+  { name: 'Lily', quote: 'I love Godly Kids because you get to learn about the Bible' },
+  { name: 'Noah', quote: 'The Bible stories are my favorite part every day!' },
+  { name: 'Ava', quote: "We listen together as a family and it's so fun." },
+  { name: 'Ethan', quote: 'I memorized a new verse this week!' },
+  { name: 'Zoe', quote: 'The games help me remember what we read.' },
+];
+
 const PaywallPage: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const { subscribe } = useUser();
-  
-  // Check if close button should be hidden (from tutorial timer expiry)
+  /** Dedupe Strict Mode / re-renders when opening parent gate from `/paywall/reminder` return. */
+  const resumeSubscribeHandledKey = useRef<string | null>(null);
+
   const hideCloseButton = (location.state as any)?.hideCloseButton === true;
   
   const fromState = (location.state as any)?.from as string | undefined;
+  const fromOnboarding = (location.state as any)?.fromOnboarding === true;
   
   const { 
     isLoading, 
     isPremium,
-    isNativeApp,
     purchase, 
     restorePurchases,
     reverseTrial,
@@ -76,11 +126,12 @@ const PaywallPage: React.FC = () => {
   const isCreateYourStoryPaywall = true;
   const showLifetimeOption = fromState === 'lifetime-offer'; // Deal page sends users here; show $19.99 lifetime
   
-  const [selectedPlan, setSelectedPlan] = useState<'annual' | 'monthly' | 'lifetime'>(
-    fromState === 'lifetime-offer' ? 'lifetime' : 'monthly'
-  );
+  const [selectedPlan, setSelectedPlan] = useState<'annual' | 'monthly' | 'lifetime'>(() => {
+    const s = (location.state as any)?.selectedPlan;
+    if (s === 'annual' || s === 'monthly' || s === 'lifetime') return s;
+    return fromState === 'lifetime-offer' ? 'lifetime' : 'monthly';
+  });
   const [planSelectorExpanded, setPlanSelectorExpanded] = useState(fromState === 'lifetime-offer');
-  const [showAllFeatures, setShowAllFeatures] = useState(false);
   const [showParentGate, setShowParentGate] = useState(false);
   const [isPurchasing, setIsPurchasing] = useState(false);
   const [isRestoring, setIsRestoring] = useState(false);
@@ -89,78 +140,6 @@ const PaywallPage: React.FC = () => {
     type: 'success' | 'info';
     message: string;
   } | null>(null);
-  
-  const [isClosing, setIsClosing] = useState(false); // Prevent auto-navigation during close
-  
-  // Trial reminder toggle state - check notification permission
-  const [trialReminderEnabled, setTrialReminderEnabled] = useState(false);
-  const [notificationsAllowed, setNotificationsAllowed] = useState<boolean | null>(null);
-  
-  // Check notification permission on mount
-  useEffect(() => {
-    const checkNotificationPermission = async () => {
-      if (isDespiaNative()) {
-        // In Despia native app - assume notifications are available
-        // The actual permission is managed at OS level
-        setNotificationsAllowed(true);
-        setTrialReminderEnabled(true);
-      } else if ('Notification' in window) {
-        // Web browser - check Notification API
-        const permission = Notification.permission;
-        if (permission === 'granted') {
-          setNotificationsAllowed(true);
-          setTrialReminderEnabled(true);
-        } else if (permission === 'denied') {
-          setNotificationsAllowed(false);
-          setTrialReminderEnabled(false);
-        } else {
-          // Permission is 'default' - not yet asked
-          setNotificationsAllowed(null);
-          setTrialReminderEnabled(false);
-        }
-      } else {
-        // No notification support
-        setNotificationsAllowed(false);
-        setTrialReminderEnabled(false);
-      }
-    };
-    
-    checkNotificationPermission();
-  }, []);
-  
-  // Handle notification toggle - opens native settings if needed
-  const handleNotificationToggle = async () => {
-    if (trialReminderEnabled) {
-      // Just turn off
-      setTrialReminderEnabled(false);
-      return;
-    }
-    
-    // Trying to enable
-    if (isDespiaNative()) {
-      // Open native settings app where user can enable notifications
-      despia('settingsapp://');
-      // Optimistically enable - user is going to settings
-      setTrialReminderEnabled(true);
-      setNotificationsAllowed(true);
-    } else if ('Notification' in window) {
-      if (Notification.permission === 'default') {
-        // Request permission
-        const permission = await Notification.requestPermission();
-        if (permission === 'granted') {
-          setNotificationsAllowed(true);
-          setTrialReminderEnabled(true);
-        } else {
-          setNotificationsAllowed(false);
-        }
-      } else if (Notification.permission === 'denied') {
-        // Can't request again - show message
-        setNotificationsAllowed(false);
-      } else {
-        setTrialReminderEnabled(true);
-      }
-    }
-  };
   
   // Restore modal state
   const [showRestoreModal, setShowRestoreModal] = useState(false);
@@ -182,13 +161,12 @@ const PaywallPage: React.FC = () => {
   }, [isCreateYourStoryPaywall]);
 
   // If user already has premium, redirect to home
-  // But don't auto-redirect if we're already handling the close flow
   useEffect(() => {
-    if (isPremium && !isClosing) {
+    if (isPremium) {
       subscribe(); // Update local state
       navigate('/home');
     }
-  }, [isPremium, navigate, subscribe, isClosing]);
+  }, [isPremium, navigate, subscribe]);
   
   // Listen for premium status changes (from webhook confirmation after purchase)
   // IMPORTANT: Do NOT call subscribe() here - the event was already dispatched by subscribe().
@@ -250,6 +228,37 @@ const PaywallPage: React.FC = () => {
     };
   }, [error, navigate]);
 
+  // After trial-notify step: resume straight to parent gate + purchase
+  useEffect(() => {
+    const st = location.state as any;
+    if (!st?.resumeSubscribe) {
+      resumeSubscribeHandledKey.current = null;
+      return;
+    }
+    if (resumeSubscribeHandledKey.current === location.key) return;
+    resumeSubscribeHandledKey.current = location.key;
+
+    const plan =
+      st.selectedPlan === 'annual' || st.selectedPlan === 'monthly' || st.selectedPlan === 'lifetime'
+        ? st.selectedPlan
+        : selectedPlan;
+
+    if (!hasAccount()) {
+      navigate('/paywall', { replace: true, state: { ...st, resumeSubscribe: false } });
+      return;
+    }
+
+    console.log('🔐 Resuming from trial reminder — showing parent gate');
+    activityTrackingService.trackOnboardingEvent('paywall_parent_gate_shown', {
+      planType: plan,
+      ...(isCreateYourStoryPaywall && { source: 'create-your-story' }),
+    });
+    setShowParentGate(true);
+
+    const { resumeSubscribe: _ignored, ...rest } = st;
+    navigate('/paywall', { replace: true, state: { ...rest, resumeSubscribe: false } });
+  }, [location.key, location.state, navigate, selectedPlan, isCreateYourStoryPaywall]);
+
   const handleSubscribeClick = () => {
     setError(null);
     
@@ -265,11 +274,18 @@ const PaywallPage: React.FC = () => {
       setShowAccountRequired(true);
       return;
     }
-    
-    // Show parent gate before processing
-    console.log('🔐 Account found, showing parent gate');
-    activityTrackingService.trackOnboardingEvent('paywall_parent_gate_shown', { planType: selectedPlan, ...(isCreateYourStoryPaywall && { source: 'create-your-story' }) });
-    setShowParentGate(true);
+
+    // Trial billing reminder + optional notifications, then return here with resumeSubscribe
+    console.log('🔔 Navigating to trial reminder step');
+    navigate('/paywall/reminder', {
+      state: {
+        ...(location.state as object || {}),
+        selectedPlan,
+        from: fromState,
+        hideCloseButton,
+        showReverseTrialToast: (location.state as any)?.showReverseTrialToast,
+      },
+    });
   };
 
   const handleGateSuccess = async () => {
@@ -506,9 +522,32 @@ const PaywallPage: React.FC = () => {
     return () => clearInterval(interval);
   }, []);
 
-  // Handle paywall close - return to previous screen or home
-  const handlePaywallClose = () => {
-    setIsClosing(true);
+  const [trialUrgency, setTrialUrgency] = useState(getTrialUrgencyRemaining);
+  useEffect(() => {
+    setTrialUrgency(getTrialUrgencyRemaining());
+    const id = setInterval(() => setTrialUrgency(getTrialUrgencyRemaining()), 1000);
+    return () => clearInterval(id);
+  }, []);
+
+  const [heroSlide, setHeroSlide] = useState(0);
+  useEffect(() => {
+    if (!isCreateYourStoryPaywall) return;
+    const id = setInterval(() => {
+      setHeroSlide((i) => (i + 1) % PAYWALL_HERO_SLIDES.length);
+    }, 3000);
+    return () => clearInterval(id);
+  }, [isCreateYourStoryPaywall]);
+
+  const [feedbackSlide, setFeedbackSlide] = useState(0);
+  useEffect(() => {
+    if (!isCreateYourStoryPaywall) return;
+    const id = setInterval(() => {
+      setFeedbackSlide((i) => (i + 1) % PAYWALL_KID_FEEDBACK.length);
+    }, 4000);
+    return () => clearInterval(id);
+  }, [isCreateYourStoryPaywall]);
+
+  const handlePaywallBack = () => {
     activityTrackingService.trackOnboardingEvent('paywall_closed', isCreateYourStoryPaywall ? { source: 'create-your-story' } : undefined).catch(() => {});
 
     const stage = localStorage.getItem('godlykids_lifetime_offer_stage');
@@ -520,15 +559,22 @@ const PaywallPage: React.FC = () => {
       }
     }
 
+    if (fromOnboarding) {
+      navigate('/paywall/intro', { state: { ...(location.state as object || {}) } });
+      return;
+    }
     if (fromState === 'create-your-story') {
       navigate('/create-your-story', { replace: true });
-    } else {
-      navigate('/home');
+      return;
     }
+    navigate('/home');
   };
 
   return (
-    <div className="relative h-full w-full bg-gradient-to-b from-[#f8faff] via-[#eef2ff] to-[#e0e7ff] overflow-y-auto no-scrollbar flex flex-col">
+    <div
+      className="relative h-full w-full bg-gradient-to-b from-[#f8faff] via-[#eef2ff] to-[#e0e7ff] overflow-y-auto no-scrollbar flex flex-col"
+      style={{ paddingTop: 'var(--safe-area-top, 0px)' }}
+    >
         {/* Decorative clouds/shapes */}
         <div className="absolute inset-0 overflow-hidden pointer-events-none">
           <div className="absolute top-10 left-0 w-32 h-20 bg-gradient-to-r from-[#c7d2fe]/40 to-transparent rounded-full blur-2xl"></div>
@@ -537,40 +583,55 @@ const PaywallPage: React.FC = () => {
           <div className="absolute bottom-20 right-10 w-32 h-20 bg-[#fde68a]/20 rounded-full blur-xl"></div>
         </div>
 
-        {/* Header with close and restore */}
-        <div className="relative z-20 flex items-center justify-between px-4 pt-6 pb-2" style={{ paddingTop: 'calc(var(--safe-area-top, 0px) + 24px)' }}>
-          {!hideCloseButton ? (
-            <button 
-              onClick={handlePaywallClose} 
-              className="p-2 text-gray-400 hover:text-gray-600 transition-colors"
-            >
-              <X size={24} strokeWidth={2.5} />
-            </button>
-          ) : (
-            <div className="w-10" />
-          )}
-          
-          <button
-            onClick={() => {
-              const user = authService.getUser();
-              setRestoreEmail(user?.email || '');
-              setShowRestoreModal(true);
-            }}
-            disabled={isRestoring}
-            className="text-[#6366f1] text-sm font-semibold hover:text-[#4f46e5] transition-colors disabled:opacity-50"
-          >
-            {isRestoring ? 'Restoring...' : 'Restore'}
-          </button>
-        </div>
-
-        {/* Hero image for Create Your Story paywall - full width, outside padded content */}
+        {/* Hero carousel — Create Your Story paywall */}
         {isCreateYourStoryPaywall && (
           <div className="w-full flex-shrink-0 relative z-10">
-            <img
-              src="/assets/images/paywall-hero.png"
-              alt="Create Your Own Bible Adventure - Enter the Bible and make it personal"
-              className="w-full h-auto object-cover object-top block"
-            />
+            {!hideCloseButton && (
+              <header className="flex items-center border-b border-indigo-400/40 bg-gradient-to-r from-[#6366f1] to-[#4f46e5] px-2 py-1.5 shadow-sm">
+                <button
+                  type="button"
+                  onClick={handlePaywallBack}
+                  className="flex items-center gap-0.5 py-0.5 pl-0.5 pr-2 text-sm font-semibold text-white hover:text-indigo-100 transition-colors"
+                  aria-label="Back"
+                >
+                  <ChevronLeft size={22} strokeWidth={2.5} className="shrink-0" />
+                  <span>Back</span>
+                </button>
+              </header>
+            )}
+          <div
+            role="region"
+            aria-roledescription="carousel"
+            aria-label="Godly Kids highlights"
+          >
+            <p className="sr-only" aria-live="polite">
+              Slide {heroSlide + 1} of {PAYWALL_HERO_SLIDES.length}
+            </p>
+            <div className="relative aspect-[16/10] w-full overflow-hidden bg-slate-100 sm:aspect-[16/9]">
+              <AnimatePresence mode="wait" initial={false}>
+                <motion.img
+                  key={heroSlide}
+                  src={PAYWALL_HERO_SLIDES[heroSlide].src}
+                  alt={PAYWALL_HERO_SLIDES[heroSlide].alt}
+                  className="absolute inset-0 h-full w-full object-cover object-center"
+                  initial={{ opacity: 0, x: 32, scale: 0.88 }}
+                  animate={{ opacity: 1, x: 0, scale: 1 }}
+                  exit={{ opacity: 0, x: -24, scale: 0.94 }}
+                  transition={{ type: 'spring', stiffness: 420, damping: 32, mass: 0.85 }}
+                />
+              </AnimatePresence>
+            </div>
+            <div className="flex justify-center gap-1.5 py-2.5" aria-hidden="true">
+              {PAYWALL_HERO_SLIDES.map((_, i) => (
+                <span
+                  key={i}
+                  className={`h-1.5 rounded-full transition-all duration-300 ${
+                    i === heroSlide ? 'w-6 bg-[#6366f1]' : 'w-1.5 bg-[#c7d2fe]'
+                  }`}
+                />
+              ))}
+            </div>
+          </div>
           </div>
         )}
 
@@ -587,92 +648,94 @@ const PaywallPage: React.FC = () => {
             </div>
             )}
 
-            {/* Trial Reminder - compact text + toggle */}
-            <div className="flex items-center justify-between w-full mb-5">
-              <span className="text-[#1e1b4b] text-sm font-medium">
-                Trial Reminder Day 5 {trialReminderEnabled ? 'Enabled' : 'Disabled'}
-              </span>
-              <button
-                onClick={handleNotificationToggle}
-                className={`w-12 h-7 rounded-full transition-colors relative flex-shrink-0 ml-3 ${
-                  trialReminderEnabled ? 'bg-[#6366f1]' : 'bg-gray-300'
-                }`}
-              >
-                <div className={`absolute top-1 w-5 h-5 bg-white rounded-full shadow-md transition-transform ${
-                  trialReminderEnabled ? 'translate-x-6' : 'translate-x-1'
-                }`} />
-              </button>
-            </div>
-            {notificationsAllowed === false && !isDespiaNative() && (
-              <p className="text-xs text-gray-500 mb-4 -mt-3">
-                Enable notifications in your device settings to receive trial reminders.
-              </p>
-            )}
-
-            {/* Features & Benefits (show 3, expandable) */}
-            {(() => {
-              const allFeatures = [
-                { icon: '📚', title: 'Bible Curriculum', desc: 'Complete Christian education' },
-                { icon: '✝️', title: 'Scripture Memory', desc: 'Learn verses through play' },
-                { icon: '📖', title: 'Bible Story Library', desc: 'Animated lessons & devotionals' },
-                { icon: '🎧', title: 'Audio Learning Center', desc: 'Scripture songs & audiobooks' },
-                { icon: '✨', title: 'Interactive Quizzes', desc: 'Test comprehension & earn rewards' },
-                { icon: '🎤', title: 'Read-Along Narration', desc: 'Multiple voices to choose from' },
-                { icon: '👨‍👩‍👧‍👦', title: 'Family Profiles (Up to 5)', desc: 'Each child gets their own progress' },
-                { icon: '📋', title: 'Report Cards', desc: 'Track learning & earning for each kid' },
-                { icon: '📝', title: '12 Free Custom Books', desc: 'Personalized Bible adventures' },
-              ];
-              const visible = showAllFeatures ? allFeatures : allFeatures.slice(0, 3);
-              return (
-                <div className="w-full space-y-3 mb-4">
-                  <h3 className="font-bold text-[#1e1b4b] text-base mb-2">What's included</h3>
-                  {visible.map((feature, i) => (
-                    <div key={i} className="flex items-center gap-3 bg-white rounded-xl px-4 py-3 border border-gray-100 shadow-sm">
-                      <span className="text-2xl shrink-0">{feature.icon}</span>
-                      <div className="flex-1 min-w-0">
-                        <p className="font-semibold text-[#1e1b4b] text-sm">{feature.title}</p>
-                        <p className="text-xs text-gray-500">{feature.desc}</p>
-                      </div>
-                      <Check size={18} className="text-[#6366f1] shrink-0" strokeWidth={3} />
-                    </div>
-                  ))}
-                  {!showAllFeatures && (
-                    <button
-                      onClick={() => setShowAllFeatures(true)}
-                      className="w-full flex items-center justify-center gap-1 text-[#6366f1] text-sm font-semibold py-2"
-                    >
-                      +{allFeatures.length - 3} more features <ChevronDown size={16} />
-                    </button>
-                  )}
-                  {showAllFeatures && (
-                    <button
-                      onClick={() => setShowAllFeatures(false)}
-                      className="w-full flex items-center justify-center gap-1 text-[#6366f1] text-sm font-semibold py-2"
-                    >
-                      Show less <ChevronUp size={16} />
-                    </button>
-                  )}
-                </div>
-              );
-            })()}
-
             {/* CTA + trial summary (Create Your Story paywall only) */}
             {isCreateYourStoryPaywall && (
               <>
-                <button
-                  onClick={handleSubscribeClick}
-                  disabled={isPurchasing || isRestoring || isLoading}
-                  className="w-full font-bold text-lg py-4 rounded-2xl shadow-lg active:scale-[0.98] transition-all mb-3 disabled:opacity-70 disabled:cursor-not-allowed bg-gradient-to-r from-[#6366f1] to-[#4f46e5] text-white shadow-indigo-200/50"
+                <section
+                  className="w-full mb-4 rounded-xl bg-white/90 border border-indigo-100 px-4 py-4 shadow-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-[#6366f1]/40"
+                  role="region"
+                  aria-roledescription="carousel"
+                  aria-label="Real feedback from kids"
                 >
-                  {isPurchasing ? (
-                    <span className="flex items-center justify-center gap-2">
-                      <Loader2 className="w-5 h-5 animate-spin" />
-                      Processing...
+                  <h3 className="font-display font-extrabold text-base sm:text-lg text-center mb-2 bg-gradient-to-r from-[#6366f1] to-[#8b5cf6] bg-clip-text text-transparent">
+                    Real Feedback from Kids
+                  </h3>
+                  <p className="text-center text-xs font-semibold tracking-wide text-[#64748b] mb-3">
+                    8/10 Members Refer Godly Kids
+                  </p>
+                  <p className="sr-only" aria-live="polite">
+                    {PAYWALL_KID_FEEDBACK[feedbackSlide].name}: {PAYWALL_KID_FEEDBACK[feedbackSlide].quote}
+                  </p>
+                  <div className="relative min-h-[4.5rem] overflow-hidden sm:min-h-[4rem]">
+                    <AnimatePresence mode="wait" initial={false}>
+                      <motion.div
+                        key={feedbackSlide}
+                        className="flex items-start gap-3 text-left"
+                        initial={{ opacity: 0, y: 10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: -8 }}
+                        transition={{ duration: 0.35, ease: [0.22, 1, 0.36, 1] }}
+                      >
+                        <span className="shrink-0 rounded-full bg-[#eef2ff] px-3 py-1 text-sm font-bold text-[#6366f1] ring-1 ring-indigo-100">
+                          {PAYWALL_KID_FEEDBACK[feedbackSlide].name}
+                        </span>
+                        <p className="min-w-0 flex-1 text-sm italic leading-snug text-[#475569]">
+                          &ldquo;{PAYWALL_KID_FEEDBACK[feedbackSlide].quote}&rdquo;
+                        </p>
+                      </motion.div>
+                    </AnimatePresence>
+                  </div>
+                </section>
+                <div className="relative w-full mb-3">
+                  <p
+                    id="paywall-trial-countdown-label"
+                    className="sr-only"
+                    aria-live="polite"
+                    aria-atomic="true"
+                  >
+                    {trialUrgency.expired
+                      ? 'Five minute offer timer ended'
+                      : `${trialUrgency.mm} minutes ${trialUrgency.ss} seconds remaining on limited offer`}
+                  </p>
+                  <button
+                    type="button"
+                    onClick={handleSubscribeClick}
+                    disabled={isPurchasing || isRestoring || isLoading}
+                    className="relative flex min-h-[3.5rem] w-full items-center justify-center px-4 py-4 text-lg font-bold leading-tight rounded-2xl shadow-lg active:scale-[0.98] transition-all disabled:opacity-70 disabled:cursor-not-allowed bg-gradient-to-r from-[#6366f1] to-[#4f46e5] text-white shadow-indigo-200/50 pl-4 pr-[5.25rem] sm:pr-28"
+                    aria-describedby="paywall-trial-countdown-label"
+                  >
+                    {isPurchasing ? (
+                      <span className="flex items-center justify-center gap-2">
+                        <Loader2 className="w-5 h-5 animate-spin" />
+                        Processing...
+                      </span>
+                    ) : (
+                      <>
+                        <span className="sr-only">
+                          Start 14-day free trial, zero dollars today
+                        </span>
+                        <span className="text-center leading-tight" aria-hidden="true">
+                          <span className="inline-flex flex-wrap items-center justify-center gap-x-1">
+                            <span>Start</span>
+                            <span className="line-through decoration-2 decoration-red-500 px-0.5 text-white/95 drop-shadow-sm">
+                              7
+                            </span>
+                            <span>14-Day Free Trial — $0.00</span>
+                          </span>
+                        </span>
+                      </>
+                    )}
+                  </button>
+                  <div
+                    className="pointer-events-none absolute -top-1 right-2 sm:right-3 z-10 min-w-[3.25rem] rounded-lg bg-gradient-to-b from-red-500 to-red-600 px-2 py-1 text-center shadow-md ring-2 ring-white"
+                    aria-hidden="true"
+                  >
+                    <span className="block text-[9px] font-semibold uppercase leading-tight text-red-100">5 min</span>
+                    <span className="font-mono text-sm font-bold leading-none tabular-nums text-white">
+                      {String(trialUrgency.mm).padStart(2, '0')}:{String(trialUrgency.ss).padStart(2, '0')}
                     </span>
-                  ) : (
-                    <span>Start 7-Day Free Trial</span>
-                  )}
-                </button>
+                  </div>
+                </div>
                 <div className="mb-6">
                   <div className="flex items-center gap-2 text-green-600 mb-1">
                     <Check size={18} strokeWidth={3} />
@@ -680,10 +743,10 @@ const PaywallPage: React.FC = () => {
                   </div>
                   <p className="text-gray-500 text-xs text-center">
                     {selectedPlan === 'annual'
-                      ? `7-day free trial, then $${annualPrice}/year. Cancel anytime.`
+                      ? `14-day free trial, then $${annualPrice}/year. Cancel anytime.`
                       : selectedPlan === 'lifetime'
                       ? `$${lifetimeSalePrice} one-time • Lifetime access`
-                      : `7-day free trial, then $${monthlyPrice}/month. Cancel anytime.`}
+                      : `14-day free trial, then $${monthlyPrice}/month. Cancel anytime.`}
                   </p>
                 </div>
               </>
@@ -703,14 +766,14 @@ const PaywallPage: React.FC = () => {
                     </div>
                     <div className="text-left">
                       <p className="font-bold text-[#1e1b4b]">
-                        {selectedPlan === 'annual' ? 'Annual' : selectedPlan === 'lifetime' ? 'Lifetime' : 'Monthly'}
+                        {selectedPlan === 'annual' ? 'Annual' : selectedPlan === 'lifetime' ? 'Lifetime' : 'Family Monthly Plan'}
                       </p>
                       <p className="text-xs text-gray-500">
                         {selectedPlan === 'annual'
                           ? `$${annualPrice}/year • 12 free custom books`
                           : selectedPlan === 'lifetime'
                           ? `$${lifetimeSalePrice} one-time • Forever`
-                          : `$${monthlyPrice} USD/month • Cancel anytime`}
+                          : `$${monthlyPrice} USD/month • Over 1,000 members • Cancel anytime`}
                       </p>
                     </div>
                   </div>
@@ -753,7 +816,7 @@ const PaywallPage: React.FC = () => {
                   
                   <div className="flex-1">
                     <p className="font-bold text-[#1e1b4b]">Annual</p>
-                    <p className="text-xs text-gray-500">7-day free trial, then <span className="font-semibold text-green-600">$39.99/year</span></p>
+                    <p className="text-xs text-gray-500">14-day free trial, then <span className="font-semibold text-green-600">$39.99/year</span></p>
                   </div>
                   
                   <div className="text-right">
@@ -779,12 +842,12 @@ const PaywallPage: React.FC = () => {
                     {selectedPlan === 'monthly' && <Check size={14} className="text-white" strokeWidth={3} />}
                   </div>
                   
-                  <div className="flex-1">
-                    <p className="font-bold text-[#1e1b4b]">Monthly</p>
-                    <p className="text-xs text-gray-500">Cancel anytime</p>
+                  <div className="flex-1 min-w-0">
+                    <p className="font-bold text-[#1e1b4b]">Family Monthly Plan</p>
+                    <p className="text-xs text-gray-500">Over 1,000 members • Cancel anytime</p>
                   </div>
                   
-                  <div className="text-right">
+                  <div className="text-right shrink-0">
                     <p className="font-extrabold text-xl text-[#1e1b4b]">${monthlyPrice} <span className="text-sm font-medium">USD</span></p>
                     <p className="text-xs text-gray-400">/month</p>
                   </div>
@@ -933,8 +996,8 @@ const PaywallPage: React.FC = () => {
                 </div>
                 <p className="text-gray-500 text-xs text-center">
                   {selectedPlan === 'annual'
-                    ? `7-day free trial, then $${annualPrice}/year. Cancel anytime.`
-                    : `7-day free trial, then $${monthlyPrice}/month. Cancel anytime.`}
+                    ? `14-day free trial, then $${annualPrice}/year. Cancel anytime.`
+                    : `14-day free trial, then $${monthlyPrice}/month. Cancel anytime.`}
                 </p>
               </div>
             )}
@@ -971,8 +1034,26 @@ const PaywallPage: React.FC = () => {
 
             {/* Fine Print */}
             <p className="text-gray-400 text-[10px] text-center px-4 w-full leading-relaxed">
-              Free trial for 7 days, then subscription automatically renews unless cancelled at least 24-hours before the trial ends. Cancel anytime in App Store or Google Play.
+              Free trial for 14 days, then subscription automatically renews unless cancelled at least 24-hours before the trial ends. Cancel anytime in App Store or Google Play.
             </p>
+
+            <div
+              className="w-full flex justify-center pt-4"
+              style={{ paddingBottom: 'calc(0.5rem + env(safe-area-inset-bottom, 0px))' }}
+            >
+              <button
+                type="button"
+                onClick={() => {
+                  const user = authService.getUser();
+                  setRestoreEmail(user?.email || '');
+                  setShowRestoreModal(true);
+                }}
+                disabled={isRestoring}
+                className="text-[#6366f1] text-sm font-semibold hover:text-[#4f46e5] transition-colors disabled:opacity-50"
+              >
+                {isRestoring ? 'Restoring...' : 'Restore'}
+              </button>
+            </div>
         </div>
 
         <ParentGateModal 
@@ -1097,7 +1178,7 @@ const PaywallPage: React.FC = () => {
                 <div className="text-6xl mb-4">🎁</div>
                 <h3 className="text-2xl font-bold text-gray-800 mb-2">You've Got a Gift!</h3>
                 <p className="text-gray-600 mb-4">
-                  Enjoy <span className="font-bold text-[#6366f1]">7 days of Premium</span> on us!
+                  Enjoy <span className="font-bold text-[#6366f1]">14 days of Premium</span> on us!
                 </p>
                 <p className="text-sm text-gray-500">
                   Full access to all stories, lessons, and features. No payment required.

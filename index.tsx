@@ -87,6 +87,8 @@ import App from './App';
       /^\/sign-in$/,
       /^\/onboarding$/,
       /^\/paywall$/,
+      /^\/paywall\/intro$/,
+      /^\/paywall\/reminder$/,
       /^\/library$/,
       /^\/games$/,
       /^\/settings$/,

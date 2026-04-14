@@ -559,8 +559,32 @@ const PaywallPage: React.FC = () => {
       }
     }
 
-    if (fromOnboarding) {
-      navigate('/paywall/intro', { state: { ...(location.state as object || {}) } });
+    const st = (location.state || {}) as {
+      paywallFlowBackTarget?: 'intro' | 'reminder';
+      selectedPlan?: 'annual' | 'monthly' | 'lifetime';
+      from?: string;
+      fromOnboarding?: boolean;
+      hideCloseButton?: boolean;
+      showReverseTrialToast?: boolean;
+    };
+
+    // After "We'll remind you…" step: Back returns to that screen (not home).
+    if (st.paywallFlowBackTarget === 'reminder' && st.selectedPlan) {
+      navigate('/paywall/reminder', {
+        state: {
+          selectedPlan: st.selectedPlan,
+          from: st.from,
+          fromOnboarding: st.fromOnboarding,
+          hideCloseButton: st.hideCloseButton,
+          showReverseTrialToast: st.showReverseTrialToast,
+        },
+      });
+      return;
+    }
+
+    // Onboarding: intro is the prior step (replace navigation hides history).
+    if (st.paywallFlowBackTarget === 'intro' || fromOnboarding) {
+      navigate('/paywall/intro', { state: { fromOnboarding: true } });
       return;
     }
     if (fromState === 'create-your-story') {

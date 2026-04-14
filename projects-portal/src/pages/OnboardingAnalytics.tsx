@@ -223,6 +223,14 @@ interface BookBuildingData {
 }
 
 /** Global paywall analytics (all sources) */
+interface PaywallPurchaseErrorRow {
+    createdAt: string;
+    userId: string;
+    error: string | null;
+    planType: string | null;
+    source: string | null;
+}
+
 interface PaywallData {
     success: boolean;
     period: { days: number; startDate: string };
@@ -250,6 +258,31 @@ interface PaywallData {
         purchaseCancelled: number;
         paywallClosed: number;
     }[];
+    /** Counts grouped by stored error message (from paywall_purchase_error events) */
+    purchaseErrorBreakdown?: { error: string; count: number }[];
+    /** Most recent purchase error events in the selected period */
+    recentPurchaseErrors?: PaywallPurchaseErrorRow[];
+}
+
+/** Portal display order for Paywall sources cards */
+const PAYWALL_SOURCE_ORDER = ['create-your-story', 'onboarding-first-time-user'] as const;
+
+function paywallSourceSortKey(source: string): number {
+    const idx = (PAYWALL_SOURCE_ORDER as readonly string[]).indexOf(source);
+    return idx === -1 ? 100 : idx;
+}
+
+function labelPaywallSource(source: string): string {
+    const map: Record<string, string> = {
+        'create-your-story': 'Create Your Story',
+        'onboarding-first-time-user': 'Onboarding first time user',
+        general: 'Other / no source',
+    };
+    if (map[source]) return map[source];
+    return source
+        .split('-')
+        .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+        .join(' ');
 }
 
 interface LessonRetentionData {
@@ -1546,6 +1579,72 @@ const OnboardingAnalytics: React.FC = () => {
                     <div><span className="text-gray-500 text-sm">Cancelled</span><p className="font-semibold text-orange-600">{paywallData.summary.purchaseCancelled.toLocaleString()}</p></div>
                     <div><span className="text-gray-500 text-sm">Errors</span><p className="font-semibold text-red-600">{paywallData.summary.purchaseError.toLocaleString()}</p></div>
                 </div>
+                {paywallData.summary.purchaseError > 0 && (
+                    <details className="mt-4 pt-4 border-t border-gray-200 group">
+                        <summary className="cursor-pointer text-sm font-medium text-gray-700 hover:text-gray-900 list-none flex items-center gap-2">
+                            <ChevronRight className="w-4 h-4 text-gray-500 transition-transform group-open:rotate-90" />
+                            Purchase error details
+                            <span className="text-gray-400 font-normal">(messages from app + recent events)</span>
+                        </summary>
+                        <div className="mt-3 space-y-4 pl-1">
+                            {paywallData.purchaseErrorBreakdown && paywallData.purchaseErrorBreakdown.length > 0 && (
+                                <div>
+                                    <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">By message</h4>
+                                    <div className="overflow-x-auto rounded-lg border border-gray-100">
+                                        <table className="w-full text-sm">
+                                            <thead>
+                                                <tr className="text-left text-gray-500 border-b bg-gray-50">
+                                                    <th className="py-2 px-3 font-medium">Error message</th>
+                                                    <th className="py-2 px-3 font-medium w-24">Count</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                {paywallData.purchaseErrorBreakdown.map((row) => (
+                                                    <tr key={row.error} className="border-b border-gray-100 last:border-0">
+                                                        <td className="py-2 px-3 text-gray-800 break-words max-w-xl">{row.error}</td>
+                                                        <td className="py-2 px-3 font-medium text-red-600">{row.count}</td>
+                                                    </tr>
+                                                ))}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+                            )}
+                            {paywallData.recentPurchaseErrors && paywallData.recentPurchaseErrors.length > 0 && (
+                                <div>
+                                    <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Recent events (up to 50)</h4>
+                                    <div className="overflow-x-auto rounded-lg border border-gray-100">
+                                        <table className="w-full text-sm">
+                                            <thead>
+                                                <tr className="text-left text-gray-500 border-b bg-gray-50">
+                                                    <th className="py-2 px-3 font-medium">Time (UTC)</th>
+                                                    <th className="py-2 px-3 font-medium">User</th>
+                                                    <th className="py-2 px-3 font-medium">Source</th>
+                                                    <th className="py-2 px-3 font-medium">Plan</th>
+                                                    <th className="py-2 px-3 font-medium">Message</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                {paywallData.recentPurchaseErrors.map((row, i) => (
+                                                    <tr key={`${row.userId}-${row.createdAt}-${i}`} className="border-b border-gray-100 last:border-0">
+                                                        <td className="py-2 px-3 text-gray-600 whitespace-nowrap">{new Date(row.createdAt).toISOString().replace('T', ' ').slice(0, 19)}</td>
+                                                        <td className="py-2 px-3 font-mono text-xs text-gray-700 max-w-[140px] truncate" title={row.userId}>{row.userId}</td>
+                                                        <td className="py-2 px-3 text-gray-700">{row.source || '—'}</td>
+                                                        <td className="py-2 px-3 text-gray-700">{row.planType || '—'}</td>
+                                                        <td className="py-2 px-3 text-gray-800 break-words max-w-md">{row.error || '(no message)'}</td>
+                                                    </tr>
+                                                ))}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+                            )}
+                            {(!paywallData.purchaseErrorBreakdown?.length && !paywallData.recentPurchaseErrors?.length) && (
+                                <p className="text-sm text-gray-500">No stored messages for this period. Deploy the latest API to see breakdowns, or check MongoDB <code className="text-xs bg-gray-100 px-1 rounded">OnboardingEvent</code> for <code className="text-xs bg-gray-100 px-1 rounded">paywall_purchase_error</code>.</p>
+                            )}
+                        </div>
+                    </details>
+                )}
             </div>
             <div className="bg-white rounded-xl border border-gray-100 p-6 shadow-sm mb-6">
                 <h3 className="text-lg font-semibold text-gray-800 mb-4 flex items-center gap-2">
@@ -1573,9 +1672,11 @@ const OnboardingAnalytics: React.FC = () => {
                 <h3 className="text-lg font-semibold text-gray-800 mb-4">Paywall sources</h3>
                 <p className="text-sm text-gray-500 mb-4">Breakdown by where users encountered the paywall.</p>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    {Object.entries(paywallData.sourceBreakdown).map(([source, data]) => (
+                    {Object.entries(paywallData.sourceBreakdown)
+                        .sort(([a], [b]) => paywallSourceSortKey(a) - paywallSourceSortKey(b) || a.localeCompare(b))
+                        .map(([source, data]) => (
                         <div key={source} className="bg-gray-50 rounded-lg p-4 border border-gray-200">
-                            <div className="font-semibold text-gray-900 mb-2 capitalize">{source}</div>
+                            <div className="font-semibold text-gray-900 mb-2">{labelPaywallSource(source)}</div>
                             <div className="space-y-1 text-sm">
                                 <div className="flex justify-between"><span className="text-gray-600">Shown:</span><span className="font-medium">{data.paywallShown}</span></div>
                                 <div className="flex justify-between"><span className="text-gray-600">Clicked:</span><span className="font-medium text-blue-600">{data.trialClicked}</span></div>

@@ -55,6 +55,8 @@ interface UserData {
     onboardingCompletedAt?: string;
     /** Row origin: login table vs app-only profile */
     source?: 'auth' | 'app';
+    /** Email/password login (User) and still on free tier — never started 14-day trial (server-computed). */
+    loginNoTrialYet?: boolean;
 }
 
 interface GameStats {
@@ -112,6 +114,10 @@ interface AnalyticsData {
         loginAccountsAllTime?: number;
         /** All-time app-only profiles (no User login row) */
         appOnlyAccountsAllTime?: number;
+        /** Login accounts in selected time range still on `free` (never started trial/subscription). */
+        loginAccountsNeverStartedTrial?: number;
+        /** Same cohort, all-time user list size. */
+        loginAccountsNeverStartedTrialAllTime?: number;
         totalCoins: number;
         totalKids: number;
         totalSessions: number;
@@ -170,6 +176,12 @@ const getApiBase = () => {
 };
 const API_BASE = getApiBase();
 
+type UserCohortFilter = 'all' | 'login_no_trial';
+
+const isLoginAccountNoTrial = (u: UserData): boolean =>
+    u.loginNoTrialYet === true ||
+    (u.source === 'auth' && (u.subscriptionStatus || 'free') === 'free');
+
 const TIME_RANGE_OPTIONS: { value: TimeRange; label: string }[] = [
     { value: '1d', label: '1 Day' },
     { value: '1w', label: '1 Week' },
@@ -192,6 +204,7 @@ const Dashboard: React.FC = () => {
     const [selectedTimeRange, setSelectedTimeRange] = useState<TimeRange>('all');
     const [showGameSection, setShowGameSection] = useState(true);
     const [deletingId, setDeletingId] = useState<string | null>(null);
+    const [cohortFilter, setCohortFilter] = useState<UserCohortFilter>('all');
 
     const fetchData = async (timeRange: TimeRange = selectedTimeRange) => {
         setLoading(true);
@@ -225,30 +238,58 @@ const Dashboard: React.FC = () => {
         fetchData(selectedTimeRange);
     }, [selectedTimeRange]);
 
-    const downloadEmailCsv = () => {
-        if (!data?.users?.length) return;
+    const buildUserCsvRows = (users: UserData[], onlyLoginNoTrial: boolean) => {
         const csvEscape = (val: string) => `"${String(val).replace(/"/g, '""')}"`;
-        const header = 'email,source,account_type,created_at,user_id\n';
         const lines: string[] = [];
-        for (const u of data.users) {
+        for (const u of users) {
+            if (onlyLoginNoTrial && !isLoginAccountNoTrial(u)) continue;
             let email = u.email && u.email !== 'Anonymous' ? u.email.trim() : '';
             if (!email && u.subscriberEmail) email = u.subscriberEmail.trim();
             if (!email || !email.includes('@')) continue;
+            const loginNoTrial = isLoginAccountNoTrial(u) ? 'yes' : 'no';
             lines.push(
                 [
                     csvEscape(email),
                     u.source || '',
                     u.accountType,
+                    u.subscriptionStatus || 'free',
+                    loginNoTrial,
                     csvEscape(u.createdAt || ''),
                     u.id,
                 ].join(',')
             );
         }
+        return lines;
+    };
+
+    const downloadEmailCsv = () => {
+        if (!data?.users?.length) return;
+        const header =
+            'email,source,account_type,subscription_status,login_never_started_trial,created_at,user_id\n';
+        const lines = buildUserCsvRows(data.users, false);
         const blob = new Blob([header + lines.join('\n')], { type: 'text/csv;charset=utf-8' });
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
-        a.download = `godlykids-user-emails-${new Date().toISOString().slice(0, 10)}.csv`;
+        a.download = `godlykids-users-${new Date().toISOString().slice(0, 10)}.csv`;
+        a.click();
+        URL.revokeObjectURL(url);
+    };
+
+    const downloadLoginNoTrialCsv = () => {
+        if (!data?.users?.length) return;
+        const header =
+            'email,source,account_type,subscription_status,login_never_started_trial,created_at,user_id\n';
+        const lines = buildUserCsvRows(data.users, true);
+        if (!lines.length) {
+            window.alert('No users match: login account and never started trial (still on free).');
+            return;
+        }
+        const blob = new Blob([header + lines.join('\n')], { type: 'text/csv;charset=utf-8' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `godlykids-login-no-trial-${new Date().toISOString().slice(0, 10)}.csv`;
         a.click();
         URL.revokeObjectURL(url);
     };
@@ -275,9 +316,13 @@ const Dashboard: React.FC = () => {
                 `${API_BASE}/analytics/admin/users/${encodeURIComponent(user.id)}?source=${encodeURIComponent(src)}`,
                 { method: 'DELETE', headers: { Authorization: `Bearer ${token}` } }
             );
-            const json = (await res.json().catch(() => ({}))) as { message?: string };
+            const json = (await res.json().catch(() => ({}))) as { message?: string; error?: string };
             if (!res.ok) {
-                window.alert(json.message || `Delete failed (${res.status})`);
+                window.alert(
+                    json.message ||
+                        json.error ||
+                        `Delete failed (${res.status})`
+                );
                 return;
             }
             await fetchData(selectedTimeRange);
@@ -329,6 +374,9 @@ const Dashboard: React.FC = () => {
     // Filter and sort users
     const filteredUsers = data?.users
         .filter(user => {
+            if (cohortFilter === 'login_no_trial' && !isLoginAccountNoTrial(user)) {
+                return false;
+            }
             const search = searchTerm.toLowerCase();
             return (
                 user.email.toLowerCase().includes(search) ||
@@ -419,7 +467,17 @@ const Dashboard: React.FC = () => {
                         className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-200 text-gray-800 rounded-lg hover:bg-gray-50 disabled:opacity-50"
                     >
                         <Download className="w-4 h-4" />
-                        Download emails (CSV)
+                        Download users (CSV)
+                    </button>
+                    <button
+                        type="button"
+                        onClick={downloadLoginNoTrialCsv}
+                        disabled={!data?.users?.length}
+                        title="Export only email/password logins still on free (never started 14-day trial)"
+                        className="flex items-center gap-2 px-4 py-2 bg-amber-50 border border-amber-200 text-amber-900 rounded-lg hover:bg-amber-100 disabled:opacity-50 text-sm font-medium"
+                    >
+                        <Download className="w-4 h-4" />
+                        CSV: login, no trial
                     </button>
                     <button 
                         onClick={() => fetchData(selectedTimeRange)}
@@ -474,7 +532,7 @@ const Dashboard: React.FC = () => {
             </div>
 
             {/* Summary Cards - Row 1: Users & Engagement */}
-            <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-4">
+            <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-4 xl:grid-cols-8 gap-4">
                 <div className="bg-white rounded-xl border border-gray-100 p-4 shadow-sm">
                     <div className="flex items-center gap-2 text-gray-500 text-sm mb-1">
                         <Users className="w-4 h-4" />
@@ -496,6 +554,24 @@ const Dashboard: React.FC = () => {
                     <p className="text-xs text-gray-500 mt-1">
                         Email + password users (User collection)
                     </p>
+                </div>
+                <div className="bg-white rounded-xl border border-amber-200 p-4 shadow-sm ring-1 ring-amber-50">
+                    <div className="flex items-center gap-2 text-amber-800 text-sm mb-1 font-medium">
+                        <Mail className="w-4 h-4" />
+                        Login, never started trial
+                    </div>
+                    <p className="text-2xl font-bold text-amber-900">
+                        {(data.summary.loginAccountsNeverStartedTrial ?? 0).toLocaleString()}
+                    </p>
+                    <p className="text-xs text-amber-700/80 mt-1">
+                        In period · free tier only
+                    </p>
+                    {selectedTimeRange !== 'all' &&
+                        data.summary.loginAccountsNeverStartedTrialAllTime != null && (
+                        <p className="text-[11px] text-gray-500 mt-1">
+                            {data.summary.loginAccountsNeverStartedTrialAllTime.toLocaleString()} all-time
+                        </p>
+                    )}
                 </div>
                 <div className="bg-white rounded-xl border border-gray-100 p-4 shadow-sm">
                     <div className="flex items-center gap-2 text-gray-500 text-sm mb-1">
@@ -946,9 +1022,18 @@ const Dashboard: React.FC = () => {
                 <div className="p-4 border-b border-gray-100">
                     <div className="flex flex-col md:flex-row gap-4 items-start md:items-center justify-between">
                         <h3 className="text-lg font-semibold text-gray-800">All Users</h3>
-                        <div className="flex gap-3 w-full md:w-auto">
+                        <div className="flex flex-wrap gap-3 w-full md:w-auto">
+                            <select
+                                value={cohortFilter}
+                                onChange={(e) => setCohortFilter(e.target.value as UserCohortFilter)}
+                                className="px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white min-w-[200px]"
+                                title="Filter the table (and search within the filter)"
+                            >
+                                <option value="all">Show: all users</option>
+                                <option value="login_no_trial">Show: login, never started trial</option>
+                            </select>
                             {/* Search */}
-                            <div className="relative flex-1 md:w-64">
+                            <div className="relative flex-1 md:w-64 min-w-[180px]">
                                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
                                 <input
                                     type="text"
@@ -1013,6 +1098,14 @@ const Dashboard: React.FC = () => {
                                                     <div className="flex items-center gap-2">
                                                         <p className="font-medium text-gray-800">{user.email}</p>
                                                         {/* Account type badge */}
+                                                        {isLoginAccountNoTrial(user) && (
+                                                            <span
+                                                                className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-amber-100 text-amber-900 border border-amber-200"
+                                                                title="Email/password login, still on free — did not start 14-day trial"
+                                                            >
+                                                                No trial
+                                                            </span>
+                                                        )}
                                                         {user.accountType === 'email' ? (
                                                             <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-blue-100 text-blue-700">
                                                                 <Mail className="w-2.5 h-2.5 mr-0.5" />

@@ -1,0 +1,58 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  font-family: 'Baloo 2', system-ui, sans-serif;
+  background:
+    radial-gradient(1200px 600px at 10% -10%, #fff6c2 0%, transparent 55%),
+    radial-gradient(900px 500px at 110% 5%, #bae6fd 0%, transparent 55%),
+    linear-gradient(180deg, #f0f9ff 0%, #e0f2fe 100%);
+  color: #0c4a6e;
+}
+
+.font-display {
+  font-family: 'Fredoka One', 'Baloo 2', system-ui, sans-serif;
+  letter-spacing: 0.01em;
+}
+
+.line-clamp-2 {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+}
+
+.line-clamp-3 {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  overflow: hidden;
+}
+
+.line-clamp-4 {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 4;
+  overflow: hidden;
+}
+
+/* Hide scrollbar for horizontal tab strips */
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+/* Prevent body scroll when the detail modal is open */
+body.modal-open {
+  overflow: hidden;
+}

@@ -357,7 +357,8 @@ router.post('/complete-onboarding', async (req, res) => {
  */
 router.post('/start-reverse-trial', async (req, res) => {
     try {
-        const { deviceId, email, platform } = req.body;
+        const { deviceId, email, platform, trialDurationHours: rawDuration } = req.body;
+        const trialDurationHours = Math.min(Math.max(parseInt(rawDuration, 10) || 168, 1), 168);
         
         if (!deviceId && !email) {
             return res.status(400).json({ 
@@ -419,7 +420,8 @@ router.post('/start-reverse-trial', async (req, res) => {
         }
         
         const trialStartDate = new Date();
-        const trialEndDate = new Date(trialStartDate.getTime() + 7 * 24 * 60 * 60 * 1000);
+        const trialEndDate = new Date(trialStartDate.getTime() + trialDurationHours * 60 * 60 * 1000);
+        const daysRemaining = Math.max(0, Math.ceil(trialDurationHours / 24));
         
         // Start the reverse trial
         user.reverseTrialStartDate = trialStartDate;
@@ -443,23 +445,25 @@ router.post('/start-reverse-trial', async (req, res) => {
                 deviceId,
                 userId: user._id,
                 email: user.email || null,
+                trialDurationHours,
                 trialStartedAt: trialStartDate,
                 trialEndedAt: trialEndDate,
                 platform: platform || user.platform || 'unknown',
                 converted: false,
             });
-            console.log(`📱 Recorded device ${deviceId} as having used reverse trial`);
+            console.log(`📱 Recorded device ${deviceId} as having used reverse trial (${trialDurationHours}h)`);
         }
         
-        console.log('🎁 Reverse trial started for user:', user._id, '- Device:', deviceId);
+        console.log('🎁 Reverse trial started for user:', user._id, '- Device:', deviceId, `- Duration: ${trialDurationHours}h`);
         
         res.json({ 
             success: true,
             userId: user._id,
             trialStartDate: trialStartDate,
             trialEndDate: trialEndDate,
-            daysRemaining: 7,
-            message: 'Reverse trial started! Enjoy 7 days of premium.'
+            trialDurationHours,
+            daysRemaining,
+            message: `Reverse trial started! Enjoy ${daysRemaining} day${daysRemaining !== 1 ? 's' : ''} of premium.`
         });
         
     } catch (error) {
@@ -506,9 +510,22 @@ router.get('/reverse-trial-status/:identifier', async (req, res) => {
             });
         }
         
+        // Look up stored duration from the device record (falls back to 7 days)
+        let storedDurationHours = 168;
+        const deviceRecord = await ReverseTrialDevice.findOne({
+            $or: [
+                { email: identifier.toLowerCase() },
+                { deviceId: identifier },
+                { userId: user._id }
+            ]
+        });
+        if (deviceRecord?.trialDurationHours) {
+            storedDurationHours = deviceRecord.trialDurationHours;
+        }
+        
         // Calculate trial status
         const now = new Date();
-        const trialEndDate = new Date(user.reverseTrialStartDate.getTime() + 7 * 24 * 60 * 60 * 1000);
+        const trialEndDate = new Date(user.reverseTrialStartDate.getTime() + storedDurationHours * 60 * 60 * 1000);
         const daysRemaining = Math.max(0, Math.ceil((trialEndDate - now) / (24 * 60 * 60 * 1000)));
         const isActive = user.reverseTrialActive && now < trialEndDate;
         
@@ -775,8 +792,6 @@ router.get('/notification-settings/:userId', async (req, res) => {
     }
 });
 
-module.exports = router;
-
 /**
  * DELETE /api/app-user/by-email/:email
  * Delete an AppUser by email (for cleanup)
@@ -797,3 +812,5 @@ router.delete('/by-email/:email', async (req, res) => {
         res.status(500).json({ success: false, error: 'Failed to delete' });
     }
 });
+
+module.exports = router;

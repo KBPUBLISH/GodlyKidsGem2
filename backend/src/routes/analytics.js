@@ -317,6 +317,8 @@ router.get('/users', async (req, res) => {
             };
         });
 
+        const authIdStringSet = new Set(authUsers.map((a) => String(a._id)));
+
         // Format users for display
         const formattedUsers = allUsers.map(user => {
             // Find tutorial progress for this user (match by email or deviceId)
@@ -350,8 +352,20 @@ router.get('/users', async (req, res) => {
             // Anonymous users are "returning" if they have activity beyond their first session
             const isReturningAnonymous = accountType === 'anonymous' && hasActivity && (user.stats?.totalSessions || 0) > 1;
             
+            const uid = String(user._id);
+            const resolvedSource =
+                user.source === 'auth' || user.source === 'app'
+                    ? user.source
+                    : authIdStringSet.has(uid)
+                      ? 'auth'
+                      : 'app';
+
+            const subStatus = user.subscriptionStatus || 'free';
+            /** Email/password login (User row) but still on free tier — never started 14-day trial / subscription. */
+            const loginNoTrialYet = resolvedSource === 'auth' && subStatus === 'free';
+
             return {
-            id: user._id,
+            id: uid,
             email: user.email || 'Anonymous',
             username: user.username,
             deviceId: user.deviceId,
@@ -378,7 +392,8 @@ router.get('/users', async (req, res) => {
             tutorialLastStep: tutorialData.lastStep,
             farthestPage: user.stats?.farthestPageReached || '/',
             // Account info
-            subscriptionStatus: user.subscriptionStatus || 'free',
+            subscriptionStatus: subStatus,
+            loginNoTrialYet,
             platform: user.platform || 'unknown',
             referralCode: user.referralCode,
             referralCount: user.referralCount || 0,
@@ -403,13 +418,21 @@ router.get('/users', async (req, res) => {
             // Sortable timestamps (milliseconds) for frontend sorting
             createdAtMs: safeDate(user.createdAt),
             lastActiveAtMs: safeDate(user.lastActiveAt),
-            source: user.source, // 'auth' = has login account, 'app' = anonymous/app-only
+            source: resolvedSource, // 'auth' = has login account, 'app' = anonymous/app-only
         };
         });
 
         // Count by source (use statsUsers for time-range stats)
         const authUserCount = statsUsers.filter(u => u.source === 'auth').length;
         const appOnlyUserCount = statsUsers.filter(u => u.source === 'app').length;
+
+        /** Login (User) accounts still on free tier — did not start 14-day trial / paid subscription. */
+        const loginNeverStartedTrialStats = statsUsers.filter(
+            (u) => u.source === 'auth' && (u.subscriptionStatus || 'free') === 'free'
+        ).length;
+        const loginNeverStartedTrialAllTime = mergedUsers.filter(
+            (u) => u.source === 'auth' && (u.subscriptionStatus || 'free') === 'free'
+        ).length;
         
         // Count by account type from formatted users
         const emailAccountCount = formattedUsers.filter(u => u.accountType === 'email').length;
@@ -465,6 +488,8 @@ router.get('/users', async (req, res) => {
                 anonymousUsers: appOnlyUserCount, // Anonymous/app-only users (may be time-filtered)
                 loginAccountsAllTime: mergedUsers.filter((u) => u.source === 'auth').length,
                 appOnlyAccountsAllTime: mergedUsers.filter((u) => u.source === 'app').length,
+                loginAccountsNeverStartedTrial: loginNeverStartedTrialStats,
+                loginAccountsNeverStartedTrialAllTime: loginNeverStartedTrialAllTime,
                 totalCoins,
                 totalKids,
                 totalSessions,
@@ -1182,6 +1207,28 @@ router.get('/paywall', async (req, res) => {
             ...byDay[date],
         }));
 
+        const purchaseErrorEvents = events.filter((e) => e.event === 'paywall_purchase_error');
+        const breakdownMap = {};
+        purchaseErrorEvents.forEach((e) => {
+            const raw = e.metadata?.error;
+            const label = typeof raw === 'string' && raw.trim() ? raw.trim() : '(no message)';
+            breakdownMap[label] = (breakdownMap[label] || 0) + 1;
+        });
+        const purchaseErrorBreakdown = Object.entries(breakdownMap)
+            .map(([error, count]) => ({ error, count }))
+            .sort((a, b) => b.count - a.count);
+
+        const recentPurchaseErrors = [...purchaseErrorEvents]
+            .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
+            .slice(0, 50)
+            .map((e) => ({
+                createdAt: e.createdAt,
+                userId: e.userId,
+                error: typeof e.metadata?.error === 'string' ? e.metadata.error : null,
+                planType: e.metadata?.planType || null,
+                source: e.metadata?.source || null,
+            }));
+
         res.json({
             success: true,
             period: {
@@ -1200,6 +1247,8 @@ router.get('/paywall', async (req, res) => {
             funnel,
             sourceBreakdown,
             dailyTrends,
+            purchaseErrorBreakdown,
+            recentPurchaseErrors,
         });
     } catch (error) {
         console.error('Paywall analytics error:', error);

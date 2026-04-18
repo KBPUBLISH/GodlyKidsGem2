@@ -28,7 +28,7 @@ interface SubscriptionContextType {
   getPremiumStatusStrict: () => Promise<boolean>;
   purchase: (plan: 'annual' | 'monthly' | 'lifetime') => Promise<{ success: boolean; error?: string }>;
   restorePurchases: () => Promise<{ success: boolean; error?: string }>;
-  startReverseTrial: () => Promise<{ success: boolean; error?: string }>;
+  startReverseTrial: (options?: { trialDurationHours?: number }) => Promise<{ success: boolean; error?: string }>;
   checkReverseTrialStatus: () => Promise<ReverseTrialStatus>;
   markReverseTrialConverted: () => Promise<void>;
   
@@ -454,7 +454,7 @@ export const SubscriptionProvider: React.FC<SubscriptionProviderProps> = ({ chil
   }, []);
 
   // Start a reverse trial
-  const startReverseTrial = useCallback(async (): Promise<{ success: boolean; error?: string }> => {
+  const startReverseTrial = useCallback(async (options?: { trialDurationHours?: number }): Promise<{ success: boolean; error?: string }> => {
     try {
       const userIds = getAllUserIds();
       const apiBaseUrl = getApiBaseUrl();
@@ -468,32 +468,35 @@ export const SubscriptionProvider: React.FC<SubscriptionProviderProps> = ({ chil
       }
       
       const email = userIds.find(id => id.includes('@'));
+      const trialDurationHours = options?.trialDurationHours;
       
-      console.log('🎁 Starting reverse trial with:', { deviceId, email: email || 'none' });
+      console.log('🎁 Starting reverse trial with:', { deviceId, email: email || 'none', trialDurationHours: trialDurationHours || 168 });
       
       const response = await fetch(`${apiBaseUrl}/api/app-user/start-reverse-trial`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ deviceId, email }),
+        body: JSON.stringify({ deviceId, email, ...(trialDurationHours ? { trialDurationHours } : {}) }),
       });
       
       const data = await response.json();
       
       if (data.success) {
+        const effectiveDurationHours = data.trialDurationHours || trialDurationHours || 168;
+        const fallbackMs = effectiveDurationHours * 60 * 60 * 1000;
+        
         // Safely parse trial end date first
         let trialEndDate: Date | null = null;
         try {
           if (data.trialEndDate) {
             trialEndDate = new Date(data.trialEndDate);
-            // Check for Invalid Date
             if (isNaN(trialEndDate.getTime())) {
-              trialEndDate = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // Fallback: 7 days from now
+              trialEndDate = new Date(Date.now() + fallbackMs);
             }
           } else {
-            trialEndDate = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // Default: 7 days from now
+            trialEndDate = new Date(Date.now() + fallbackMs);
           }
         } catch {
-          trialEndDate = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // Fallback on error
+          trialEndDate = new Date(Date.now() + fallbackMs);
         }
         
         // Update local state and localStorage
@@ -504,10 +507,11 @@ export const SubscriptionProvider: React.FC<SubscriptionProviderProps> = ({ chil
         }
         setIsPremium(true);
         
+        const daysRemaining = data.daysRemaining ?? Math.max(0, Math.ceil(effectiveDurationHours / 24));
         setReverseTrial({
           hasReverseTrial: true,
           isActive: true,
-          daysRemaining: 7,
+          daysRemaining,
           trialEndDate,
           eligible: false,
         });

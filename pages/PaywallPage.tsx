@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Check, X, Loader2, RefreshCw, AlertCircle, CheckCircle, Mail, UserPlus, ChevronDown, ChevronUp, ChevronLeft } from 'lucide-react';
+import { Check, X, Loader2, RefreshCw, AlertCircle, CheckCircle, Mail, UserPlus, ChevronDown, ChevronUp, ChevronLeft, Gift, Clock } from 'lucide-react';
 import { useUser } from '../context/UserContext';
 import { useSubscription } from '../context/SubscriptionContext';
 import ParentGateModal from '../components/features/ParentGateModal';
@@ -116,6 +116,7 @@ const PaywallPage: React.FC = () => {
     purchase, 
     restorePurchases,
     reverseTrial,
+    startReverseTrial,
   } = useSubscription();
 
   // Show "You've Got a Gift!" toast when coming from reverse-trial activation or when state requests it
@@ -123,8 +124,17 @@ const PaywallPage: React.FC = () => {
     || (reverseTrial?.isActive && fromState === 'create-your-story');
 
   // Create Your Story paywall: hero image, 12 custom books for annual. Show lifetime option when from deal page.
-  const isCreateYourStoryPaywall = true;
+  const isCreateYourStoryPaywall = fromState === 'create-your-story';
   const showLifetimeOption = fromState === 'lifetime-offer'; // Deal page sends users here; show $19.99 lifetime
+
+  /** Funnel source for analytics (portal "Paywall sources"). Not every entry path sets this. */
+  const paywallAnalyticsSource =
+    fromState === 'create-your-story'
+      ? 'create-your-story'
+      : fromOnboarding
+        ? 'onboarding-first-time-user'
+        : undefined;
+  const paywallSourceMeta = paywallAnalyticsSource ? { source: paywallAnalyticsSource } : {};
   
   const [selectedPlan, setSelectedPlan] = useState<'annual' | 'monthly' | 'lifetime'>(() => {
     const s = (location.state as any)?.selectedPlan;
@@ -148,6 +158,10 @@ const PaywallPage: React.FC = () => {
   // Account required modal state
   const [showAccountRequired, setShowAccountRequired] = useState(false);
   
+  // Exit-intent 24h trial popup state
+  const [showExitTrialOffer, setShowExitTrialOffer] = useState(false);
+  const [isStartingTrial, setIsStartingTrial] = useState(false);
+  
   // Get personalized name
   const firstName = getUserFirstName();
   
@@ -157,8 +171,11 @@ const PaywallPage: React.FC = () => {
     facebookPixelService.init();
     facebookPixelService.trackPaywallView();
     // Onboarding funnel tracking
-    activityTrackingService.trackOnboardingEvent('paywall_shown', isCreateYourStoryPaywall ? { source: 'create-your-story' } : undefined);
-  }, [isCreateYourStoryPaywall]);
+    activityTrackingService.trackOnboardingEvent(
+      'paywall_shown',
+      paywallAnalyticsSource ? { source: paywallAnalyticsSource } : undefined
+    );
+  }, [paywallAnalyticsSource]);
 
   // If user already has premium, redirect to home
   useEffect(() => {
@@ -251,26 +268,26 @@ const PaywallPage: React.FC = () => {
     console.log('🔐 Resuming from trial reminder — showing parent gate');
     activityTrackingService.trackOnboardingEvent('paywall_parent_gate_shown', {
       planType: plan,
-      ...(isCreateYourStoryPaywall && { source: 'create-your-story' }),
+      ...paywallSourceMeta,
     });
     setShowParentGate(true);
 
     const { resumeSubscribe: _ignored, ...rest } = st;
     navigate('/paywall', { replace: true, state: { ...rest, resumeSubscribe: false } });
-  }, [location.key, location.state, navigate, selectedPlan, isCreateYourStoryPaywall]);
+  }, [location.key, location.state, navigate, selectedPlan, paywallAnalyticsSource]);
 
   const handleSubscribeClick = () => {
     setError(null);
     
     // Track trial button clicked
     console.log('🔘 Start Trial button clicked, plan:', selectedPlan);
-    activityTrackingService.trackOnboardingEvent('paywall_trial_clicked', { planType: selectedPlan, ...(isCreateYourStoryPaywall && { source: 'create-your-story' }) });
+    activityTrackingService.trackOnboardingEvent('paywall_trial_clicked', { planType: selectedPlan, ...paywallSourceMeta });
     
     // Require sign-in before ANY in-app purchase so RevenueCat webhook receives email as app_user_id.
     // Otherwise purchase is tied to device ID and user won't get premium after signing in on another device.
     if (!hasAccount()) {
       console.log('⚠️ No account found, showing account required modal');
-      activityTrackingService.trackOnboardingEvent('paywall_account_required', { planType: selectedPlan, ...(isCreateYourStoryPaywall && { source: 'create-your-story' }) });
+      activityTrackingService.trackOnboardingEvent('paywall_account_required', { planType: selectedPlan, ...paywallSourceMeta });
       setShowAccountRequired(true);
       return;
     }
@@ -290,7 +307,7 @@ const PaywallPage: React.FC = () => {
 
   const handleGateSuccess = async () => {
     console.log('✅ Parent gate passed, starting purchase flow');
-    activityTrackingService.trackOnboardingEvent('paywall_parent_gate_passed', { planType: selectedPlan, ...(isCreateYourStoryPaywall && { source: 'create-your-story' }) });
+    activityTrackingService.trackOnboardingEvent('paywall_parent_gate_passed', { planType: selectedPlan, ...paywallSourceMeta });
     
     // Keep parent gate open with "Processing..." state until purchase dialog appears
     // This prevents user from seeing the paywall and thinking they already got access
@@ -305,7 +322,7 @@ const PaywallPage: React.FC = () => {
     facebookPixelService.trackInitiateCheckout(effectivePlan, price);
     
     // Track purchase attempt
-    activityTrackingService.trackOnboardingEvent('paywall_purchase_started', { planType: effectivePlan, ...(isCreateYourStoryPaywall && { source: 'create-your-story' }) });
+    activityTrackingService.trackOnboardingEvent('paywall_purchase_started', { planType: effectivePlan, ...paywallSourceMeta });
 
     try {
       console.log('💳 Calling purchase() with plan:', effectivePlan);
@@ -339,7 +356,7 @@ const PaywallPage: React.FC = () => {
         }
         
         try {
-          activityTrackingService.trackOnboardingEvent('subscribed', { planType: selectedPlan, ...(isCreateYourStoryPaywall && { source: 'create-your-story' }) });
+          activityTrackingService.trackOnboardingEvent('subscribed', { planType: selectedPlan, ...paywallSourceMeta });
         } catch (trackError) {
           console.warn('⚠️ Activity tracking error:', trackError);
         }
@@ -370,15 +387,15 @@ const PaywallPage: React.FC = () => {
         })();
       } else if (result.error && result.error !== 'Purchase cancelled') {
         console.error('❌ Purchase failed:', result.error);
-        activityTrackingService.trackOnboardingEvent('paywall_purchase_error', { planType: selectedPlan, error: result.error, ...(isCreateYourStoryPaywall && { source: 'create-your-story' }) });
+        activityTrackingService.trackOnboardingEvent('paywall_purchase_error', { planType: selectedPlan, error: result.error, ...paywallSourceMeta });
         setError(result.error);
       } else {
         console.log('⏸️ Purchase cancelled by user');
-        activityTrackingService.trackOnboardingEvent('paywall_purchase_cancelled', { planType: selectedPlan, ...(isCreateYourStoryPaywall && { source: 'create-your-story' }) });
+        activityTrackingService.trackOnboardingEvent('paywall_purchase_cancelled', { planType: selectedPlan, ...paywallSourceMeta });
       }
     } catch (err: any) {
       console.error('Purchase error:', err);
-      activityTrackingService.trackOnboardingEvent('paywall_purchase_error', { planType: selectedPlan, error: err.message, ...(isCreateYourStoryPaywall && { source: 'create-your-story' }) });
+      activityTrackingService.trackOnboardingEvent('paywall_purchase_error', { planType: selectedPlan, error: err.message, ...paywallSourceMeta });
       setError(err.message || 'An error occurred during purchase');
     } finally {
       setIsPurchasing(false);
@@ -547,9 +564,9 @@ const PaywallPage: React.FC = () => {
     return () => clearInterval(id);
   }, [isCreateYourStoryPaywall]);
 
-  const handlePaywallBack = () => {
-    activityTrackingService.trackOnboardingEvent('paywall_closed', isCreateYourStoryPaywall ? { source: 'create-your-story' } : undefined).catch(() => {});
+  const EXIT_TRIAL_SHOWN_KEY = 'godlykids_exit_trial_shown';
 
+  const proceedWithPaywallBack = () => {
     const stage = localStorage.getItem('godlykids_lifetime_offer_stage');
     if (!stage || stage === 'none') {
       localStorage.setItem('godlykids_lifetime_offer_stage', 'ready');
@@ -568,7 +585,6 @@ const PaywallPage: React.FC = () => {
       showReverseTrialToast?: boolean;
     };
 
-    // After "We'll remind you…" step: Back returns to that screen (not home).
     if (st.paywallFlowBackTarget === 'reminder' && st.selectedPlan) {
       navigate('/paywall/reminder', {
         state: {
@@ -582,7 +598,6 @@ const PaywallPage: React.FC = () => {
       return;
     }
 
-    // Onboarding: intro is the prior step (replace navigation hides history).
     if (st.paywallFlowBackTarget === 'intro' || fromOnboarding) {
       navigate('/paywall/intro', { state: { fromOnboarding: true } });
       return;
@@ -592,6 +607,56 @@ const PaywallPage: React.FC = () => {
       return;
     }
     navigate('/home');
+  };
+
+  const handlePaywallBack = () => {
+    activityTrackingService.trackOnboardingEvent(
+      'paywall_closed',
+      paywallAnalyticsSource ? { source: paywallAnalyticsSource } : undefined
+    ).catch(() => {});
+
+    // Check if user is eligible for the 24h exit-intent trial
+    const alreadyShown = sessionStorage.getItem(EXIT_TRIAL_SHOWN_KEY) === 'true';
+    const hadReverseTrial = localStorage.getItem('godlykids_reverse_trial') === 'true';
+    const isEligible = !isPremium
+      && !hadReverseTrial
+      && reverseTrial?.eligible !== false
+      && !alreadyShown;
+
+    if (isEligible) {
+      sessionStorage.setItem(EXIT_TRIAL_SHOWN_KEY, 'true');
+      activityTrackingService.trackOnboardingEvent('paywall_exit_trial_offered', paywallSourceMeta).catch(() => {});
+      setShowExitTrialOffer(true);
+      return;
+    }
+
+    proceedWithPaywallBack();
+  };
+
+  const handleAcceptExitTrial = async () => {
+    setIsStartingTrial(true);
+    try {
+      activityTrackingService.trackOnboardingEvent('paywall_exit_trial_accepted', paywallSourceMeta).catch(() => {});
+      const result = await startReverseTrial({ trialDurationHours: 24 });
+      if (result.success) {
+        setShowExitTrialOffer(false);
+        navigate('/home');
+      } else {
+        setShowExitTrialOffer(false);
+        proceedWithPaywallBack();
+      }
+    } catch {
+      setShowExitTrialOffer(false);
+      proceedWithPaywallBack();
+    } finally {
+      setIsStartingTrial(false);
+    }
+  };
+
+  const handleDeclineExitTrial = () => {
+    activityTrackingService.trackOnboardingEvent('paywall_exit_trial_declined', paywallSourceMeta).catch(() => {});
+    setShowExitTrialOffer(false);
+    proceedWithPaywallBack();
   };
 
   return (
@@ -606,6 +671,19 @@ const PaywallPage: React.FC = () => {
           <div className="absolute bottom-40 left-5 w-24 h-16 bg-[#c7d2fe]/30 rounded-full blur-xl"></div>
           <div className="absolute bottom-20 right-10 w-32 h-20 bg-[#fde68a]/20 rounded-full blur-xl"></div>
         </div>
+
+        {/* Close button for default paywall variant */}
+        {!isCreateYourStoryPaywall && !hideCloseButton && (
+          <button
+            type="button"
+            onClick={handlePaywallBack}
+            className="absolute top-3 right-3 z-20 w-9 h-9 bg-white/80 backdrop-blur-sm rounded-full flex items-center justify-center text-gray-500 hover:text-gray-700 hover:bg-white shadow-sm transition-all"
+            style={{ marginTop: 'var(--safe-area-top, 0px)' }}
+            aria-label="Close"
+          >
+            <X size={20} />
+          </button>
+        )}
 
         {/* Hero carousel — Create Your Story paywall */}
         {isCreateYourStoryPaywall && (
@@ -1215,6 +1293,94 @@ const PaywallPage: React.FC = () => {
             </div>
           </div>
         )}
+
+        {/* Exit-Intent 24h Free Trial Popup */}
+        <AnimatePresence>
+          {showExitTrialOffer && (
+            <motion.div
+              className="fixed inset-0 z-[110] flex items-center justify-center p-4"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.2 }}
+            >
+              <div
+                className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+                onClick={handleDeclineExitTrial}
+              />
+              <motion.div
+                className="relative w-full max-w-sm bg-white rounded-3xl shadow-2xl overflow-hidden"
+                initial={{ scale: 0.9, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                exit={{ scale: 0.9, opacity: 0 }}
+                transition={{ type: 'spring', stiffness: 400, damping: 28 }}
+              >
+                {/* Decorative top band */}
+                <div className="h-2 bg-gradient-to-r from-[#6366f1] via-[#8b5cf6] to-[#f59e0b]" />
+
+                <div className="relative p-6 pt-5 text-center">
+                  <button
+                    onClick={handleDeclineExitTrial}
+                    className="absolute top-3 right-3 p-1 text-gray-400 hover:text-gray-600 transition-colors"
+                    aria-label="Close"
+                  >
+                    <X size={20} />
+                  </button>
+
+                  {/* Icon */}
+                  <div className="mx-auto w-16 h-16 bg-gradient-to-br from-[#6366f1] to-[#8b5cf6] rounded-full flex items-center justify-center mb-4 shadow-lg shadow-indigo-300/40">
+                    <Gift className="w-8 h-8 text-white" />
+                  </div>
+
+                  <h2 className="text-xl font-bold text-[#1e1b4b] mb-1">
+                    Wait! Try Premium FREE
+                  </h2>
+                  <p className="text-[#6366f1] font-extrabold text-2xl mb-4">
+                    for 24 Hours
+                  </p>
+
+                  {/* Perks */}
+                  <div className="bg-[#f8faff] rounded-2xl p-4 mb-5 text-left space-y-2.5">
+                    {[
+                      { icon: <Check size={16} className="text-green-500" strokeWidth={3} />, text: 'Full access to 150+ books & stories' },
+                      { icon: <Check size={16} className="text-green-500" strokeWidth={3} />, text: '15+ Bible games & activities' },
+                      { icon: <Check size={16} className="text-green-500" strokeWidth={3} />, text: 'Personalized content for your child' },
+                      { icon: <Clock size={16} className="text-[#6366f1]" />, text: 'No credit card needed' },
+                    ].map((item, i) => (
+                      <div key={i} className="flex items-center gap-2.5">
+                        <span className="shrink-0">{item.icon}</span>
+                        <span className="text-sm font-medium text-gray-700">{item.text}</span>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* CTA */}
+                  <button
+                    onClick={handleAcceptExitTrial}
+                    disabled={isStartingTrial}
+                    className="w-full py-3.5 px-6 bg-gradient-to-r from-[#6366f1] to-[#4f46e5] text-white font-bold text-lg rounded-2xl shadow-lg shadow-indigo-300/40 active:scale-[0.98] transition-all disabled:opacity-70 disabled:cursor-not-allowed mb-3"
+                  >
+                    {isStartingTrial ? (
+                      <span className="flex items-center justify-center gap-2">
+                        <Loader2 className="w-5 h-5 animate-spin" />
+                        Starting...
+                      </span>
+                    ) : (
+                      'Start My Free Day'
+                    )}
+                  </button>
+
+                  <button
+                    onClick={handleDeclineExitTrial}
+                    className="text-gray-400 text-sm font-medium hover:text-gray-600 transition-colors"
+                  >
+                    No thanks
+                  </button>
+                </div>
+              </motion.div>
+            </motion.div>
+          )}
+        </AnimatePresence>
 
     </div>
   );

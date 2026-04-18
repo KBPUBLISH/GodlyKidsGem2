@@ -1,6 +1,14 @@
 import React, { useEffect, useState, useRef } from 'react';
-import { ShoppingCart, Plus, Edit2, Save, X, Upload, Trash2, Star, Eye, ExternalLink } from 'lucide-react';
+import { ShoppingCart, Plus, Edit2, Save, X, Upload, Trash2, Star, Eye, ExternalLink, Video, MessageSquare, Image as ImageIcon } from 'lucide-react';
 import apiClient from '../services/apiClient';
+
+interface Review {
+    _id?: string;
+    author: string;
+    rating: number;
+    text?: string;
+    date?: string;
+}
 
 interface AmazonBook {
     _id?: string;
@@ -11,6 +19,9 @@ interface AmazonBook {
     asin?: string;
     price?: string;
     coverImage: string;
+    images?: string[];
+    promoVideoUrl?: string;
+    reviews?: Review[];
     category?: string;
     categories?: string[];
     minAge?: number;
@@ -58,6 +69,9 @@ const AmazonBooks: React.FC = () => {
         asin: '',
         price: '',
         coverImage: '',
+        images: [],
+        promoVideoUrl: '',
+        reviews: [],
         category: 'Children\'s Books',
         status: 'draft',
         isFeatured: false,
@@ -136,6 +150,9 @@ const AmazonBooks: React.FC = () => {
                 asin: '',
                 price: '',
                 coverImage: '',
+                images: [],
+                promoVideoUrl: '',
+                reviews: [],
                 category: 'Children\'s Books',
                 status: 'draft',
                 isFeatured: false,
@@ -169,6 +186,23 @@ const AmazonBooks: React.FC = () => {
             alert('Failed to upload cover image');
         } finally {
             setUploadingCover(false);
+        }
+    };
+
+    const uploadGalleryFile = async (file: File): Promise<string | null> => {
+        const uploadFormData = new FormData();
+        uploadFormData.append('file', file);
+        try {
+            const response = await apiClient.post(
+                `/api/upload/image?bookId=amazon-books&type=cover`,
+                uploadFormData,
+                { headers: { 'Content-Type': 'multipart/form-data' } }
+            );
+            return response.data.url as string;
+        } catch (error) {
+            console.error('Failed to upload gallery image:', error);
+            alert('Failed to upload gallery image');
+            return null;
         }
     };
 
@@ -218,6 +252,29 @@ const AmazonBooks: React.FC = () => {
                     <Plus className="w-4 h-4" />
                     Add Amazon Book
                 </button>
+            </div>
+
+            <div className="bg-gradient-to-r from-orange-50 to-amber-50 border border-orange-200 rounded-lg p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                <div className="flex items-start gap-3">
+                    <ShoppingCart className="w-5 h-5 text-orange-600 mt-0.5 flex-shrink-0" />
+                    <div>
+                        <p className="text-sm font-semibold text-gray-800">
+                            Published books appear live at <span className="text-orange-700">bookstore.godlykids.com</span>
+                        </p>
+                        <p className="text-xs text-gray-600 mt-0.5">
+                            Only books with status <span className="font-semibold">Published</span> are visible. Featured books show at the top.
+                        </p>
+                    </div>
+                </div>
+                <a
+                    href="https://bookstore.godlykids.com"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1.5 px-3 py-2 bg-white border border-orange-300 text-orange-700 rounded-lg hover:bg-orange-100 transition text-sm font-semibold whitespace-nowrap"
+                >
+                    Open bookstore
+                    <ExternalLink className="w-3.5 h-3.5" />
+                </a>
             </div>
 
             {books.length === 0 ? (
@@ -484,6 +541,22 @@ const AmazonBooks: React.FC = () => {
                                 </div>
                             </div>
 
+                            <GallerySection
+                                images={formData.images || []}
+                                onChange={(next) => setFormData({ ...formData, images: next })}
+                                uploadFile={uploadGalleryFile}
+                            />
+
+                            <VideoSection
+                                value={formData.promoVideoUrl || ''}
+                                onChange={(v) => setFormData({ ...formData, promoVideoUrl: v })}
+                            />
+
+                            <ReviewsSection
+                                reviews={formData.reviews || []}
+                                onChange={(next) => setFormData({ ...formData, reviews: next })}
+                            />
+
                             <div className="border-t pt-4">
                                 <h3 className="font-semibold text-gray-700 mb-3">Featured Settings</h3>
                                 <div className="flex items-center gap-4">
@@ -677,6 +750,22 @@ const AmazonBooks: React.FC = () => {
                                 </div>
                             </div>
 
+                            <GallerySection
+                                images={newBook.images || []}
+                                onChange={(next) => setNewBook({ ...newBook, images: next })}
+                                uploadFile={uploadGalleryFile}
+                            />
+
+                            <VideoSection
+                                value={newBook.promoVideoUrl || ''}
+                                onChange={(v) => setNewBook({ ...newBook, promoVideoUrl: v })}
+                            />
+
+                            <ReviewsSection
+                                reviews={newBook.reviews || []}
+                                onChange={(next) => setNewBook({ ...newBook, reviews: next })}
+                            />
+
                             <div className="border-t pt-4">
                                 <h3 className="font-semibold text-gray-700 mb-3">Featured Settings</h3>
                                 <div className="flex items-center gap-4">
@@ -734,3 +823,189 @@ const AmazonBooks: React.FC = () => {
 };
 
 export default AmazonBooks;
+
+/* ----------------------- Shared form sub-components ----------------------- */
+
+interface GalleryProps {
+    images: string[];
+    onChange: (next: string[]) => void;
+    uploadFile: (file: File) => Promise<string | null>;
+}
+
+const GallerySection: React.FC<GalleryProps> = ({ images, onChange, uploadFile }) => {
+    const [uploading, setUploading] = useState(false);
+
+    const handleFiles = async (files: FileList | null) => {
+        if (!files || files.length === 0) return;
+        setUploading(true);
+        try {
+            const next = [...images];
+            for (const file of Array.from(files)) {
+                const url = await uploadFile(file);
+                if (url) next.push(url);
+            }
+            onChange(next);
+        } finally {
+            setUploading(false);
+        }
+    };
+
+    const removeAt = (idx: number) => onChange(images.filter((_, i) => i !== idx));
+
+    return (
+        <div className="border-t pt-4">
+            <h3 className="font-semibold text-gray-700 mb-2 flex items-center gap-2">
+                <ImageIcon className="w-4 h-4 text-sky-600" />
+                Gallery images
+                <span className="text-xs font-normal text-gray-500">shown on the bookstore detail page</span>
+            </h3>
+
+            {images.length > 0 && (
+                <div className="grid grid-cols-4 sm:grid-cols-5 gap-2 mb-3">
+                    {images.map((url, idx) => (
+                        <div key={`${url}-${idx}`} className="relative group">
+                            <img src={url} alt={`Gallery ${idx + 1}`} className="w-full h-24 object-cover rounded-lg border border-gray-300" />
+                            <button
+                                type="button"
+                                onClick={() => removeAt(idx)}
+                                className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1 hover:bg-red-600 opacity-0 group-hover:opacity-100 transition-opacity"
+                                title="Remove image"
+                            >
+                                <X className="w-3 h-3" />
+                            </button>
+                        </div>
+                    ))}
+                </div>
+            )}
+
+            <label className="flex items-center justify-center gap-2 border-2 border-dashed border-gray-300 rounded-lg p-3 text-sm text-gray-600 hover:border-sky-400 cursor-pointer transition-colors">
+                <Upload className={`w-4 h-4 ${uploading ? 'text-sky-500 animate-pulse' : 'text-gray-400'}`} />
+                <span>{uploading ? 'Uploading…' : 'Upload one or more images'}</span>
+                <input
+                    type="file"
+                    accept="image/*"
+                    multiple
+                    className="hidden"
+                    onChange={(e) => {
+                        void handleFiles(e.target.files);
+                        e.currentTarget.value = '';
+                    }}
+                />
+            </label>
+        </div>
+    );
+};
+
+const VideoSection: React.FC<{ value: string; onChange: (v: string) => void }> = ({ value, onChange }) => {
+    return (
+        <div className="border-t pt-4">
+            <h3 className="font-semibold text-gray-700 mb-2 flex items-center gap-2">
+                <Video className="w-4 h-4 text-sky-600" />
+                Promo video URL
+                <span className="text-xs font-normal text-gray-500">YouTube, Vimeo, or direct .mp4</span>
+            </h3>
+            <input
+                type="url"
+                value={value}
+                onChange={(e) => onChange(e.target.value)}
+                placeholder="https://www.youtube.com/watch?v=…"
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg"
+            />
+            {value && (
+                <p className="text-xs text-gray-500 mt-1">
+                    Plays inside the book detail page. Leave blank to hide the video section.
+                </p>
+            )}
+        </div>
+    );
+};
+
+interface ReviewsProps {
+    reviews: Review[];
+    onChange: (next: Review[]) => void;
+}
+
+const ReviewsSection: React.FC<ReviewsProps> = ({ reviews, onChange }) => {
+    const update = (idx: number, patch: Partial<Review>) => {
+        onChange(reviews.map((r, i) => (i === idx ? { ...r, ...patch } : r)));
+    };
+    const remove = (idx: number) => onChange(reviews.filter((_, i) => i !== idx));
+    const add = () =>
+        onChange([
+            ...reviews,
+            { author: '', rating: 5, text: '', date: new Date().toISOString() },
+        ]);
+
+    return (
+        <div className="border-t pt-4">
+            <div className="flex items-center justify-between mb-2">
+                <h3 className="font-semibold text-gray-700 flex items-center gap-2">
+                    <MessageSquare className="w-4 h-4 text-sky-600" />
+                    Reviews
+                    <span className="text-xs font-normal text-gray-500">shown on the bookstore detail page</span>
+                </h3>
+                <button
+                    type="button"
+                    onClick={add}
+                    className="px-3 py-1.5 text-sm bg-sky-600 text-white rounded-lg hover:bg-sky-700 flex items-center gap-1"
+                >
+                    <Plus className="w-3.5 h-3.5" />
+                    Add review
+                </button>
+            </div>
+
+            {reviews.length === 0 ? (
+                <p className="text-sm text-gray-500 italic">No reviews yet. Add the first one to build trust.</p>
+            ) : (
+                <div className="space-y-3">
+                    {reviews.map((r, idx) => (
+                        <div key={idx} className="border border-gray-200 rounded-lg p-3 bg-gray-50">
+                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                                <input
+                                    type="text"
+                                    value={r.author}
+                                    onChange={(e) => update(idx, { author: e.target.value })}
+                                    placeholder="Reviewer name (e.g. Sarah M.)"
+                                    className="px-3 py-2 border border-gray-300 rounded-lg text-sm sm:col-span-2"
+                                />
+                                <div className="flex items-center gap-1 px-3 py-2 border border-gray-300 rounded-lg bg-white">
+                                    {[1, 2, 3, 4, 5].map((n) => (
+                                        <button
+                                            type="button"
+                                            key={n}
+                                            onClick={() => update(idx, { rating: n })}
+                                            className="focus:outline-none"
+                                            title={`${n} star${n > 1 ? 's' : ''}`}
+                                        >
+                                            <Star
+                                                className={`w-4 h-4 ${n <= r.rating ? 'text-amber-500' : 'text-gray-300'}`}
+                                                fill={n <= r.rating ? 'currentColor' : 'none'}
+                                            />
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+                            <textarea
+                                value={r.text || ''}
+                                onChange={(e) => update(idx, { text: e.target.value })}
+                                placeholder="What did they say about the book?"
+                                rows={2}
+                                className="mt-2 w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                            />
+                            <div className="flex justify-end mt-2">
+                                <button
+                                    type="button"
+                                    onClick={() => remove(idx)}
+                                    className="text-xs text-red-600 hover:text-red-700 flex items-center gap-1"
+                                >
+                                    <Trash2 className="w-3.5 h-3.5" />
+                                    Remove
+                                </button>
+                            </div>
+                        </div>
+                    ))}
+                </div>
+            )}
+        </div>
+    );
+};

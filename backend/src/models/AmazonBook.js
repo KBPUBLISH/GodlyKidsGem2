@@ -26,12 +26,40 @@ const amazonBookSchema = new mongoose.Schema({
         type: String, // Display price (e.g., "$12.99")
     },
     
-    // Cover image
+    // Cover image (main)
     coverImage: {
         type: String,
         required: true,
     },
-    
+
+    // Additional gallery images shown on the book detail page
+    images: {
+        type: [String],
+        default: [],
+    },
+
+    // Optional promo video (YouTube / Vimeo / direct mp4 URL)
+    promoVideoUrl: {
+        type: String,
+        default: '',
+    },
+
+    // Parent / reader reviews shown on the bookstore detail page
+    reviews: {
+        type: [
+            new mongoose.Schema(
+                {
+                    author: { type: String, required: true },
+                    rating: { type: Number, min: 1, max: 5, default: 5 },
+                    text: { type: String, default: '' },
+                    date: { type: Date, default: Date.now },
+                },
+                { _id: true }
+            ),
+        ],
+        default: [],
+    },
+
     // Categorization
     category: {
         type: String,

@@ -46,6 +46,8 @@ const SettingsPage: React.FC = () => {
   
   // Parent gate for Help Center
   const [showHelpCenterGate, setShowHelpCenterGate] = useState(false);
+  const [showDeleteAccountGate, setShowDeleteAccountGate] = useState(false);
+  const [deleteAccountBusy, setDeleteAccountBusy] = useState(false);
   
   // Load cloned voices
   useEffect(() => {
@@ -76,6 +78,46 @@ const SettingsPage: React.FC = () => {
   const handleBack = () => {
       playBack();
       navigate('/profile');
+  };
+
+  const runDeleteAccountAfterParentGate = async () => {
+    const token = authService.getToken();
+    if (!token) {
+      alert('Please sign in again, then try deleting your account.');
+      return;
+    }
+    setDeleteAccountBusy(true);
+    try {
+      const base = getApiBaseUrl();
+      const res = await fetch(`${base}auth/account`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const json = (await res.json().catch(() => ({}))) as { message?: string };
+      if (!res.ok) {
+        alert(json.message || 'Failed to delete account');
+        return;
+      }
+      authService.signOut();
+      try {
+        localStorage.clear();
+      } catch {
+        Object.keys(localStorage).forEach((k) => localStorage.removeItem(k));
+      }
+      try {
+        sessionStorage.clear();
+      } catch {
+        /* ignore */
+      }
+      window.location.replace(
+        `${window.location.origin}${window.location.pathname}?account-deleted=${Date.now()}`
+      );
+    } catch (e) {
+      console.error(e);
+      alert('Failed to delete account');
+    } finally {
+      setDeleteAccountBusy(false);
+    }
   };
 
   const handleDeleteVoice = async (voiceId: string) => {
@@ -509,6 +551,23 @@ const SettingsPage: React.FC = () => {
                             <p className="text-[#5c2e0b] text-sm font-semibold">Signed in as:</p>
                             <p className="text-[#8B4513] text-base font-bold truncate">{userEmail}</p>
                         </div>
+                        <button
+                            type="button"
+                            disabled={deleteAccountBusy}
+                            onClick={() => {
+                                if (
+                                    !window.confirm(
+                                        'Permanently delete your Godly Kids account and server-side profile data? This cannot be undone. If you have a subscription, cancel it in the App Store or Play Store — we do not manage billing here.'
+                                    )
+                                ) {
+                                    return;
+                                }
+                                setShowDeleteAccountGate(true);
+                            }}
+                            className="mt-4 w-full text-center text-sm font-semibold text-red-800/90 underline underline-offset-2 disabled:opacity-50"
+                        >
+                            {deleteAccountBusy ? 'Deleting…' : 'Delete my account'}
+                        </button>
                     </section>
                 ) : (
                     /* Sign In / Sign Up Section - Show when NOT signed in */
@@ -736,6 +795,14 @@ const SettingsPage: React.FC = () => {
         onSuccess={() => {
           // Open godlykids.com in a new tab
           window.open('https://www.godlykids.com', '_blank');
+        }}
+      />
+
+      <ParentGateModal
+        isOpen={showDeleteAccountGate}
+        onClose={() => !deleteAccountBusy && setShowDeleteAccountGate(false)}
+        onSuccess={() => {
+          void runDeleteAccountAfterParentGate();
         }}
       />
     </div>

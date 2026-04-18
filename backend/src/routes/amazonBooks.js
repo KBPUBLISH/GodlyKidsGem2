@@ -120,6 +120,9 @@ router.post('/', async (req, res) => {
             asin: req.body.asin || '',
             price: req.body.price || '',
             coverImage: req.body.coverImage,
+            images: Array.isArray(req.body.images) ? req.body.images : [],
+            promoVideoUrl: req.body.promoVideoUrl || '',
+            reviews: Array.isArray(req.body.reviews) ? req.body.reviews : [],
             category: req.body.category || 'Other',
             categories: req.body.categories || [],
             minAge: req.body.minAge ? Number(req.body.minAge) : undefined,
@@ -155,7 +158,8 @@ router.put('/:id', async (req, res) => {
         // Update fields
         const updateFields = [
             'title', 'author', 'description', 'amazonUrl', 'asin', 'price',
-            'coverImage', 'category', 'categories', 'minAge', 'maxAge',
+            'coverImage', 'images', 'promoVideoUrl', 'reviews',
+            'category', 'categories', 'minAge', 'maxAge',
             'status', 'isFeatured', 'featuredOrder', 'badgeText', 'badgeColor'
         ];
         

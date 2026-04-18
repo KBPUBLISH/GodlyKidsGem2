@@ -85,6 +85,13 @@ const onboardingEventSchema = new mongoose.Schema({
             'reverse_trial_converted',  // User subscribed during/after reverse trial
             'reverse_trial_churned',    // User declined after reverse trial
             'reverse_trial_expired_subscribe_clicked', // User clicked subscribe on expired trial modal
+            'reverse_trial_offer_accepted',  // User accepted the reverse trial offer
+            'reverse_trial_offer_declined',  // User declined the reverse trial offer
+            
+            // Paywall exit-intent 24h trial events
+            'paywall_exit_trial_offered',    // Exit popup shown when user tried to leave paywall
+            'paywall_exit_trial_accepted',   // User accepted the 24h free trial from exit popup
+            'paywall_exit_trial_declined',   // User declined the 24h free trial from exit popup
             
             // Reverse trial onboarding screens
             'reverse_trial_screen_1_viewed',
@@ -128,7 +135,7 @@ const onboardingEventSchema = new mongoose.Schema({
     metadata: {
         step: Number,
         planType: String,           // 'annual' | 'monthly' | 'lifetime'
-        source: String,             // 'create-your-story' when paywall/convert from Dive into the Bible
+        source: String,             // 'create-your-story' | 'onboarding-first-time-user' | etc.
         kidsCount: Number,
         voiceSelected: String,
         priorities: [String],       // Discipleship goals selected

@@ -9,6 +9,8 @@
     "build": "vite build",
     "preview": "vite preview --host 127.0.0.1",
     "portal": "cd projects-portal && npm run dev",
+    "bookstore": "cd bookstore && npm run dev",
+    "bookstore:build": "cd bookstore && npm run build",
     "sync": "./scripts/sync-from-github.sh",
     "push": "./scripts/push-to-github.sh",
     "branch": "./scripts/create-work-branch.sh"

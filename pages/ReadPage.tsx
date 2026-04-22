@@ -10,6 +10,7 @@ import { ApiService } from '../services/apiService';
 import { Search, ChevronDown, BookOpen, Heart, Sparkles, TreePine, Sword, Star, Book, Users, Crown, Compass, Smile, Castle } from 'lucide-react';
 import PremiumBadge from '../components/ui/PremiumBadge';
 import { readingProgressService } from '../services/readingProgressService';
+import { FEATURE_CREATE_YOUR_STORY } from '../constants';
 
 const ageOptions = ['All Ages', '3+', '4+', '5+', '6+', '7+', '8+', '9+', '10+'];
 
@@ -92,6 +93,7 @@ const ReadPage: React.FC = () => {
   const [isBtnPopping, setIsBtnPopping] = useState(false);
 
   const handleWhirlpoolClick = useCallback(() => {
+    if (!FEATURE_CREATE_YOUR_STORY) return;
     if (isWhirlpoolActive || isBtnPopping) return;
     setIsBtnPopping(true);
     setTimeout(() => {
@@ -714,7 +716,7 @@ const ReadPage: React.FC = () => {
         <div className="absolute bottom-0 left-0 right-0 h-[25%]" style={{ background: 'linear-gradient(to top, rgba(0,40,80,0.10), transparent)' }} />
       </div>
 
-      {/* Whirlpool + Book Island — top right */}
+      {FEATURE_CREATE_YOUR_STORY && (
       <div
         className="absolute"
         style={{ zIndex: 2, right: '-2%', top: '22%', width: '40vw', maxWidth: 200 }}
@@ -788,6 +790,7 @@ const ReadPage: React.FC = () => {
           </div>
         </button>
       </div>
+      )}
 
       {/* Book Island — left side, navigates to Library */}
       <div

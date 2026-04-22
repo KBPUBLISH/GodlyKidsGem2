@@ -5,6 +5,7 @@ import Header from '../components/layout/Header';
 import { getMonthlyBookBaseUrl } from '../services/apiService';
 import { authService } from '../services/authService';
 import { BookOpen, Loader2, ChevronRight } from 'lucide-react';
+import { FEATURE_CREATE_YOUR_STORY } from '../constants';
 
 /** From GET /api/monthly-book/my-books — only kid-created books (not templates). */
 interface MyMonthlyBook {
@@ -91,23 +92,24 @@ const KidsMonthlyPage: React.FC = () => {
           Stories you created with &quot;Create your story&quot; — just for you, not in the main library.
         </p>
 
-        {/* CTA to create a new one */}
-        <button
-          type="button"
-          onClick={() => navigate('/create-your-story')}
-          className="w-full mb-8 rounded-2xl overflow-hidden border-2 border-amber-400/60 bg-gradient-to-br from-amber-600/40 to-amber-800/50 shadow-xl active:scale-[0.98] transition-transform"
-        >
-          <div className="p-4 flex items-center gap-4">
-            <div className="w-14 h-14 rounded-xl bg-amber-500/30 flex items-center justify-center shrink-0">
-              <BookOpen className="w-8 h-8 text-amber-200" />
+        {FEATURE_CREATE_YOUR_STORY && (
+          <button
+            type="button"
+            onClick={() => navigate('/create-your-story')}
+            className="w-full mb-8 rounded-2xl overflow-hidden border-2 border-amber-400/60 bg-gradient-to-br from-amber-600/40 to-amber-800/50 shadow-xl active:scale-[0.98] transition-transform"
+          >
+            <div className="p-4 flex items-center gap-4">
+              <div className="w-14 h-14 rounded-xl bg-amber-500/30 flex items-center justify-center shrink-0">
+                <BookOpen className="w-8 h-8 text-amber-200" />
+              </div>
+              <div className="flex-1 min-w-0 text-left">
+                <h2 className="text-white font-bold text-lg">Create your story</h2>
+                <p className="text-amber-100/90 text-sm mt-0.5">A new adventure with you in it.</p>
+              </div>
+              <ChevronRight className="w-5 h-5 text-amber-200 shrink-0" />
             </div>
-            <div className="flex-1 min-w-0 text-left">
-              <h2 className="text-white font-bold text-lg">Create your story</h2>
-              <p className="text-amber-100/90 text-sm mt-0.5">A new adventure with you in it.</p>
-            </div>
-            <ChevronRight className="w-5 h-5 text-amber-200 shrink-0" />
-          </div>
-        </button>
+          </button>
+        )}
 
         {loading ? (
           <div className="py-12 flex flex-col items-center gap-3">

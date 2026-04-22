@@ -117,11 +117,20 @@ export const MOCK_BOOKS: Book[] = [
   }
 ];
 
-/** Feature flag: show Create Your Story (Kids Monthly) in Library and Home. Override with VITE_FEATURE_CREATE_YOUR_STORY (default: true). */
+/**
+ * Feature flag: show Create Your Story (Kids Monthly) in Library and Home.
+ * Override with VITE_FEATURE_CREATE_YOUR_STORY.
+ *
+ * NOTE: Default was flipped to FALSE on 2026-04-18 in response to a Gemini API
+ * billing incident. Re-enable by setting VITE_FEATURE_CREATE_YOUR_STORY=true
+ * in the frontend env once the billing/abuse investigation is complete and
+ * proper server-side rate limiting / auth is in place on the story-generation
+ * endpoints.
+ */
 export const FEATURE_CREATE_YOUR_STORY =
   typeof import.meta !== 'undefined' && (import.meta as any).env?.VITE_FEATURE_CREATE_YOUR_STORY !== undefined
     ? (import.meta as any).env.VITE_FEATURE_CREATE_YOUR_STORY === 'true' || (import.meta as any).env.VITE_FEATURE_CREATE_YOUR_STORY === true
-    : true;
+    : false;
 
 // API Base URL - can be overridden with VITE_API_BASE_URL environment variable
 export const API_BASE_URL =

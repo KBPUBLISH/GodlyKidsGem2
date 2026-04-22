@@ -575,6 +575,7 @@ import ListenPagePanorama from './pages/ListenPagePanorama';
 import LibraryPage from './pages/LibraryPage';
 import BookCreatingPage from './pages/BookCreatingPage';
 import CreateYourStoryPage from './pages/CreateYourStoryPage';
+import { FEATURE_CREATE_YOUR_STORY } from './constants';
 import BookDetailPage from './pages/BookDetailPage';
 import ProfileSelectionPage from './pages/ProfileSelectionPage';
 import CreateProfilePage from './pages/CreateProfilePage';
@@ -1562,7 +1563,10 @@ const App: React.FC = () => {
                   <Route path="/read" element={<ThemedReadPage />} />
                   <Route path="/library/creating/:customMonthlyBookId" element={<BookCreatingPage />} />
                   <Route path="/library" element={<LibraryPage />} />
-                  <Route path="/create-your-story" element={<CreateYourStoryPage />} />
+                  <Route
+                    path="/create-your-story"
+                    element={FEATURE_CREATE_YOUR_STORY ? <CreateYourStoryPage /> : <Navigate to="/world" replace />}
+                  />
                   <Route path="/audio" element={<AudioPage />} />
                   <Route path="/book/:id" element={<BookDetailPage />} />
                   <Route path="/audio/playlist/:playlistId" element={<PlaylistDetailPage />} />

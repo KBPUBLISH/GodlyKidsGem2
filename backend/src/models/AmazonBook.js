@@ -14,16 +14,31 @@ const amazonBookSchema = new mongoose.Schema({
         type: String,
     },
     
-    // Amazon product details
+    // Amazon product details (optional if the book is sold via Stripe instead)
     amazonUrl: {
         type: String,
-        required: true,
+        default: '',
     },
     asin: {
         type: String, // Amazon Standard Identification Number (optional)
     },
     price: {
         type: String, // Display price (e.g., "$12.99")
+    },
+
+    // Stripe checkout (optional) - supports two modes:
+    //   1. stripePaymentLinkUrl: a pre-built Payment Link (https://buy.stripe.com/...)
+    //      -> clicking the button just opens that URL directly.
+    //   2. stripePriceId: a Stripe Price id (e.g. price_1Abc...) -> the backend
+    //      creates a Checkout Session on demand and redirects the buyer.
+    // If both are set, the Payment Link takes precedence (simpler path).
+    stripePaymentLinkUrl: {
+        type: String,
+        default: '',
+    },
+    stripePriceId: {
+        type: String,
+        default: '',
     },
     
     // Cover image (main)
@@ -112,6 +127,10 @@ const amazonBookSchema = new mongoose.Schema({
     
     // Analytics
     clickCount: {
+        type: Number,
+        default: 0,
+    },
+    stripeClickCount: {
         type: Number,
         default: 0,
     },

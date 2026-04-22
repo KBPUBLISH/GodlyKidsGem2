@@ -105,20 +105,26 @@ router.post('/', async (req, res) => {
         if (!req.body.author) {
             return res.status(400).json({ message: 'Author is required' });
         }
-        if (!req.body.amazonUrl) {
-            return res.status(400).json({ message: 'Amazon URL is required' });
-        }
         if (!req.body.coverImage) {
             return res.status(400).json({ message: 'Cover image is required' });
         }
-        
+        // At least one purchase method must be configured: Amazon URL, Stripe
+        // Payment Link URL, or a Stripe Price id that we can checkout against.
+        if (!req.body.amazonUrl && !req.body.stripePaymentLinkUrl && !req.body.stripePriceId) {
+            return res.status(400).json({
+                message: 'At least one purchase method (Amazon URL, Stripe Payment Link, or Stripe Price ID) is required',
+            });
+        }
+
         const bookData = {
             title: req.body.title,
             author: req.body.author,
             description: req.body.description || '',
-            amazonUrl: req.body.amazonUrl,
+            amazonUrl: req.body.amazonUrl || '',
             asin: req.body.asin || '',
             price: req.body.price || '',
+            stripePaymentLinkUrl: req.body.stripePaymentLinkUrl || '',
+            stripePriceId: req.body.stripePriceId || '',
             coverImage: req.body.coverImage,
             images: Array.isArray(req.body.images) ? req.body.images : [],
             promoVideoUrl: req.body.promoVideoUrl || '',
@@ -158,6 +164,7 @@ router.put('/:id', async (req, res) => {
         // Update fields
         const updateFields = [
             'title', 'author', 'description', 'amazonUrl', 'asin', 'price',
+            'stripePaymentLinkUrl', 'stripePriceId',
             'coverImage', 'images', 'promoVideoUrl', 'reviews',
             'category', 'categories', 'minAge', 'maxAge',
             'status', 'isFeatured', 'featuredOrder', 'badgeText', 'badgeColor'
@@ -209,6 +216,79 @@ router.post('/:id/click', async (req, res) => {
         res.json({ clickCount: book.clickCount });
     } catch (error) {
         console.error('Error incrementing click count:', error);
+        res.status(500).json({ message: error.message });
+    }
+});
+
+/**
+ * POST /api/amazon-books/:id/checkout-session
+ * Returns a URL the buyer should be redirected to for Stripe checkout.
+ *   - If the book has stripePaymentLinkUrl, we return it directly.
+ *   - Otherwise, if stripePriceId is set, we create a Stripe Checkout Session
+ *     on the fly and return session.url.
+ * Also increments stripeClickCount for analytics.
+ */
+router.post('/:id/checkout-session', async (req, res) => {
+    try {
+        const book = await AmazonBook.findById(req.params.id);
+        if (!book) return res.status(404).json({ message: 'Amazon book not found' });
+
+        // Payment Link path (no backend work required)
+        if (book.stripePaymentLinkUrl) {
+            await AmazonBook.updateOne({ _id: book._id }, { $inc: { stripeClickCount: 1 } });
+            return res.json({ url: book.stripePaymentLinkUrl, mode: 'payment_link' });
+        }
+
+        if (!book.stripePriceId) {
+            return res.status(400).json({
+                message: 'This book does not have Stripe checkout configured',
+            });
+        }
+
+        if (!process.env.STRIPE_SECRET_KEY) {
+            return res.status(500).json({ message: 'Stripe is not configured on the server' });
+        }
+
+        const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
+
+        const origin =
+            req.body.origin ||
+            req.get('origin') ||
+            req.get('referer') ||
+            'https://bookstore.godlykids.com';
+        const normalizedOrigin = origin.replace(/\/$/, '');
+
+        const successUrl =
+            req.body.successUrl ||
+            `${normalizedOrigin}/?purchase=success&book=${encodeURIComponent(book._id.toString())}`;
+        const cancelUrl =
+            req.body.cancelUrl ||
+            `${normalizedOrigin}/?purchase=canceled&book=${encodeURIComponent(book._id.toString())}`;
+
+        const session = await stripe.checkout.sessions.create({
+            mode: 'payment',
+            payment_method_types: ['card'],
+            line_items: [
+                {
+                    price: book.stripePriceId,
+                    quantity: 1,
+                },
+            ],
+            success_url: successUrl,
+            cancel_url: cancelUrl,
+            metadata: {
+                bookId: book._id.toString(),
+                bookTitle: book.title,
+                source: 'bookstore',
+            },
+        });
+
+        await AmazonBook.updateOne({ _id: book._id }, { $inc: { stripeClickCount: 1 } });
+
+        console.log(`💳 Stripe checkout session created for "${book.title}" -> ${session.id}`);
+        res.json({ url: session.url, sessionId: session.id, mode: 'checkout_session' });
+    } catch (error) {
+        console.error('Error creating Stripe checkout session for book:', error);
         res.status(500).json({ message: error.message });
     }
 });

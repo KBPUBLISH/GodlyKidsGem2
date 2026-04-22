@@ -11,9 +11,11 @@ export interface AmazonBook {
   title: string;
   author: string;
   description?: string;
-  amazonUrl: string;
+  amazonUrl?: string;
   asin?: string;
   price?: string;
+  stripePaymentLinkUrl?: string;
+  stripePriceId?: string;
   coverImage: string;
   images?: string[];
   promoVideoUrl?: string;
@@ -28,6 +30,7 @@ export interface AmazonBook {
   badgeText?: string;
   badgeColor?: string;
   clickCount?: number;
+  stripeClickCount?: number;
   createdAt?: string;
 }
 
@@ -60,4 +63,35 @@ export async function trackBookClick(bookId: string): Promise<void> {
   } catch {
     // non-blocking — do not prevent the user from reaching Amazon
   }
+}
+
+/**
+ * Ask the backend for a Stripe checkout URL for this book.
+ *  - If the book has a Payment Link, we get that URL back directly.
+ *  - Otherwise, the backend creates a Checkout Session on the fly.
+ * Either way, the caller should redirect the browser to `url`.
+ */
+export async function createBookCheckoutSession(
+  bookId: string
+): Promise<{ url: string; mode: 'payment_link' | 'checkout_session' }> {
+  const res = await fetch(`${API_BASE_URL}/api/amazon-books/${bookId}/checkout-session`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      origin: typeof window !== 'undefined' ? window.location.origin : undefined,
+    }),
+  });
+  if (!res.ok) {
+    let message = `Failed to start checkout (${res.status})`;
+    try {
+      const body = await res.json();
+      if (body?.message) message = body.message;
+    } catch {
+      // ignore
+    }
+    throw new Error(message);
+  }
+  const body = await res.json();
+  if (!body?.url) throw new Error('Checkout session did not return a URL');
+  return { url: body.url as string, mode: (body.mode as 'payment_link' | 'checkout_session') ?? 'checkout_session' };
 }

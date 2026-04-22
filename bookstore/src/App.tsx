@@ -1,9 +1,11 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   BookOpen,
   ChevronLeft,
   ChevronRight,
+  CreditCard,
   ExternalLink,
+  Loader2,
   PlayCircle,
   Search,
   ShoppingBag,
@@ -12,7 +14,11 @@ import {
   X,
 } from 'lucide-react';
 import type { AmazonBook, Review } from './services/api';
-import { fetchPublishedBooks, trackBookClick } from './services/api';
+import {
+  createBookCheckoutSession,
+  fetchPublishedBooks,
+  trackBookClick,
+} from './services/api';
 
 const ALL_CATEGORY = 'All Books';
 
@@ -91,14 +97,10 @@ function App() {
     });
   }, [books, query, activeCategory]);
 
-  const handleBuy = useCallback((book: AmazonBook) => {
-    if (book._id) void trackBookClick(book._id);
-    window.open(book.amazonUrl, '_blank', 'noopener,noreferrer');
-  }, []);
-
   return (
     <div className="min-h-full flex flex-col">
       <SiteHeader />
+      <PurchaseStatusBanner />
       <Hero bookCount={books.length} />
 
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 pb-24">
@@ -168,11 +170,7 @@ function App() {
       <SiteFooter />
 
       {selected && (
-        <BookDetailModal
-          book={selected}
-          onClose={() => setSelected(null)}
-          onBuy={handleBuy}
-        />
+        <BookDetailModal book={selected} onClose={() => setSelected(null)} />
       )}
     </div>
   );
@@ -219,7 +217,7 @@ function Hero({ bookCount }: { bookCount: number }) {
             </h1>
             <p className="mt-4 text-sky-800/80 text-lg max-w-2xl">
               Handpicked books that help kids know God, love His Word, and live with courage.
-              Every title ships straight from Amazon.
+              Checkout securely with Stripe or buy straight from Amazon.
             </p>
 
             <div className="mt-6 flex flex-wrap items-center gap-3">
@@ -324,7 +322,7 @@ function BookCard({
       className="group text-left bg-white rounded-2xl overflow-hidden shadow-card border border-sky-100 hover:border-gold-300 hover:-translate-y-1 hover:shadow-lg transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-gold-400"
       aria-label={`Open ${book.title} details`}
     >
-      <div className="relative aspect-[2/3] bg-sky-50 overflow-hidden">
+      <div className="relative aspect-square bg-sky-50 overflow-hidden">
         {book.coverImage ? (
           <img
             src={book.coverImage}
@@ -356,11 +354,18 @@ function BookCard({
             {book.price}
           </span>
         )}
-        {book.promoVideoUrl && (
-          <span className="absolute bottom-2 left-2 text-[10px] font-bold text-white bg-sky-700/80 backdrop-blur px-2 py-1 rounded-full inline-flex items-center gap-1">
-            <PlayCircle className="w-3 h-3" /> Video
-          </span>
-        )}
+        <div className="absolute bottom-2 left-2 flex flex-wrap gap-1">
+          {book.promoVideoUrl && (
+            <span className="text-[10px] font-bold text-white bg-sky-700/80 backdrop-blur px-2 py-1 rounded-full inline-flex items-center gap-1">
+              <PlayCircle className="w-3 h-3" /> Video
+            </span>
+          )}
+          {(book.stripePaymentLinkUrl || book.stripePriceId) && (
+            <span className="text-[10px] font-bold text-sky-900 bg-gold-300/95 backdrop-blur px-2 py-1 rounded-full inline-flex items-center gap-1">
+              <CreditCard className="w-3 h-3" /> Instant checkout
+            </span>
+          )}
+        </div>
 
         <div className="absolute inset-x-0 bottom-0 p-3 bg-gradient-to-t from-sky-900/80 to-transparent opacity-0 group-hover:opacity-100 transition-opacity">
           <span className="inline-flex items-center gap-1 text-white text-xs font-semibold">
@@ -394,7 +399,7 @@ function LoadingGrid() {
             key={i}
             className="bg-white rounded-2xl overflow-hidden shadow-card border border-sky-100"
           >
-            <div className="aspect-[2/3] bg-sky-100 animate-pulse" />
+            <div className="aspect-square bg-sky-100 animate-pulse" />
             <div className="p-4 space-y-2">
               <div className="h-4 rounded bg-sky-100 animate-pulse" />
               <div className="h-3 w-2/3 rounded bg-sky-100 animate-pulse" />
@@ -433,6 +438,66 @@ function ErrorState({ message }: { message: string }) {
   );
 }
 
+function PurchaseStatusBanner() {
+  const [status, setStatus] = useState<'success' | 'canceled' | null>(null);
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const purchase = params.get('purchase');
+    if (purchase === 'success' || purchase === 'canceled') {
+      setStatus(purchase);
+      // Clean the URL so a refresh doesn't keep showing the banner
+      params.delete('purchase');
+      params.delete('book');
+      const clean = params.toString();
+      window.history.replaceState(
+        {},
+        '',
+        `${window.location.pathname}${clean ? `?${clean}` : ''}${window.location.hash}`
+      );
+    }
+  }, []);
+
+  if (!status) return null;
+
+  const isSuccess = status === 'success';
+  return (
+    <div
+      className={`${
+        isSuccess
+          ? 'bg-emerald-50 border-emerald-200 text-emerald-900'
+          : 'bg-amber-50 border-amber-200 text-amber-900'
+      } border-b px-4 py-3`}
+      role="status"
+    >
+      <div className="max-w-7xl mx-auto flex items-start sm:items-center justify-between gap-3">
+        <div className="flex items-start sm:items-center gap-2 text-sm">
+          {isSuccess ? (
+            <>
+              <span className="text-lg leading-none">🎉</span>
+              <span>
+                <strong className="font-semibold">Thank you for your purchase!</strong>{' '}
+                You'll get a receipt from Stripe by email shortly.
+              </span>
+            </>
+          ) : (
+            <span>
+              Checkout was canceled — no worries. You can try again whenever you're ready.
+            </span>
+          )}
+        </div>
+        <button
+          onClick={() => setStatus(null)}
+          className="flex-shrink-0 opacity-60 hover:opacity-100"
+          aria-label="Dismiss"
+        >
+          <X className="w-4 h-4" />
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function SiteFooter() {
   return (
     <footer className="border-t border-sky-100 bg-white/70">
@@ -440,7 +505,7 @@ function SiteFooter() {
         <div className="flex items-center gap-2">
           <BookOpen className="w-4 h-4 text-sky-700" />
           <span>
-            &copy; {new Date().getFullYear()} Godly Kids. Purchases are fulfilled by Amazon.
+            &copy; {new Date().getFullYear()} Godly Kids. Secure checkout via Stripe & Amazon.
           </span>
         </div>
         <div className="flex items-center gap-4">
@@ -471,21 +536,45 @@ function SiteFooter() {
 function BookDetailModal({
   book,
   onClose,
-  onBuy,
 }: {
   book: AmazonBook;
   onClose: () => void;
-  onBuy: (b: AmazonBook) => void;
 }) {
   const gallery = useMemo(
     () => [book.coverImage, ...(book.images ?? [])].filter(Boolean) as string[],
     [book.coverImage, book.images]
   );
   const [activeImage, setActiveImage] = useState(0);
+  const [zoomed, setZoomed] = useState(false);
+  const [stripeLoading, setStripeLoading] = useState(false);
+  const [stripeError, setStripeError] = useState<string | null>(null);
 
   const prev = () => setActiveImage((i) => (i - 1 + gallery.length) % gallery.length);
   const next = () => setActiveImage((i) => (i + 1) % gallery.length);
   const reviewCount = book.reviews?.length ?? 0;
+
+  const hasStripe = Boolean(book.stripePaymentLinkUrl || book.stripePriceId);
+  const hasAmazon = Boolean(book.amazonUrl);
+
+  const handleAmazon = () => {
+    if (!book.amazonUrl) return;
+    if (book._id) void trackBookClick(book._id);
+    window.open(book.amazonUrl, '_blank', 'noopener,noreferrer');
+  };
+
+  const handleStripe = async () => {
+    if (stripeLoading) return;
+    setStripeError(null);
+    setStripeLoading(true);
+    try {
+      const { url } = await createBookCheckoutSession(book._id);
+      // Send the buyer to Stripe's hosted checkout page.
+      window.location.href = url;
+    } catch (e) {
+      setStripeError(e instanceof Error ? e.message : 'Could not start checkout');
+      setStripeLoading(false);
+    }
+  };
 
   return (
     <div
@@ -506,14 +595,32 @@ function BookDetailModal({
         </button>
 
         <div className="grid md:grid-cols-5 gap-0">
-          <div className="md:col-span-2 bg-gradient-to-br from-sky-50 to-sky-100 p-4 sm:p-6">
-            <div className="relative aspect-[2/3] bg-white rounded-2xl overflow-hidden shadow-card">
-              {gallery.length > 0 ? (
+          <div className="relative md:col-span-2 overflow-hidden p-4 sm:p-6 bg-gradient-to-br from-sky-50 to-sky-100 isolate">
+            {gallery.length > 0 && (
+              <>
                 <img
                   src={gallery[activeImage]}
-                  alt={book.title}
-                  className="w-full h-full object-cover"
+                  alt=""
+                  aria-hidden="true"
+                  className="absolute inset-0 w-full h-full object-cover scale-125 blur-2xl opacity-70 -z-10 transition-opacity duration-500"
                 />
+                <div className="absolute inset-0 bg-gradient-to-br from-white/30 to-sky-100/40 -z-10" />
+              </>
+            )}
+            <div className="relative aspect-square rounded-xl mx-auto w-60 sm:w-72 md:w-auto md:max-w-none group">
+              {gallery.length > 0 ? (
+                <button
+                  type="button"
+                  onClick={() => setZoomed(true)}
+                  className="w-full h-full block rounded-xl focus:outline-none focus:ring-2 focus:ring-gold-400"
+                  aria-label="Enlarge image"
+                >
+                  <img
+                    src={gallery[activeImage]}
+                    alt={book.title}
+                    className="w-full h-full object-cover rounded-xl shadow-card cursor-zoom-in transition-transform group-hover:scale-[1.02]"
+                  />
+                </button>
               ) : (
                 <div className="w-full h-full flex items-center justify-center text-sky-300">
                   <BookOpen className="w-16 h-16" />
@@ -522,7 +629,7 @@ function BookDetailModal({
 
               {book.badgeText && (
                 <span
-                  className="absolute top-3 left-3 px-3 py-1 rounded-full text-[11px] font-bold text-white shadow"
+                  className="absolute top-3 left-3 px-3 py-1 rounded-full text-[11px] font-bold text-white shadow pointer-events-none"
                   style={{ backgroundColor: book.badgeColor || '#ffb703' }}
                 >
                   {book.badgeText}
@@ -545,24 +652,27 @@ function BookDetailModal({
                   >
                     <ChevronRight className="w-5 h-5" />
                   </button>
-                  <div className="absolute bottom-3 left-1/2 -translate-x-1/2 flex gap-1.5">
-                    {gallery.map((_, i) => (
-                      <button
-                        key={i}
-                        onClick={() => setActiveImage(i)}
-                        className={`w-2 h-2 rounded-full transition ${
-                          i === activeImage ? 'bg-gold-400 w-5' : 'bg-white/80'
-                        }`}
-                        aria-label={`Image ${i + 1}`}
-                      />
-                    ))}
-                  </div>
                 </>
               )}
             </div>
 
             {gallery.length > 1 && (
-              <div className="mt-3 grid grid-cols-5 gap-2">
+              <div className="mt-3 flex justify-center gap-1.5">
+                {gallery.map((_, i) => (
+                  <button
+                    key={i}
+                    onClick={() => setActiveImage(i)}
+                    className={`h-2 rounded-full transition-all ${
+                      i === activeImage ? 'bg-gold-400 w-6' : 'bg-sky-300/80 hover:bg-sky-400 w-2'
+                    }`}
+                    aria-label={`Image ${i + 1}`}
+                  />
+                ))}
+              </div>
+            )}
+
+            {gallery.length > 1 && (
+              <div className="mt-3 mx-auto w-60 sm:w-72 md:w-auto md:max-w-none grid grid-cols-5 gap-2">
                 {gallery.map((src, i) => (
                   <button
                     key={`${src}-${i}`}
@@ -642,22 +752,152 @@ function BookDetailModal({
               </div>
             )}
 
-            <div className="pt-2">
-              <button
-                onClick={() => onBuy(book)}
-                className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-6 py-3.5 rounded-full bg-gold-400 hover:bg-gold-300 text-sky-900 font-bold text-lg shadow-gold transition"
-              >
-                <ShoppingBag className="w-5 h-5" />
-                Buy on Amazon
-                <ExternalLink className="w-4 h-4" />
-              </button>
-              <p className="text-xs text-sky-700/70 mt-2">
-                Opens Amazon in a new tab. Godly Kids never stores your payment info.
+            <div className="pt-2 space-y-3">
+              {hasStripe && (
+                <button
+                  onClick={handleStripe}
+                  disabled={stripeLoading}
+                  className="w-full inline-flex items-center justify-center gap-2 px-6 py-3.5 rounded-full bg-gold-400 hover:bg-gold-300 text-sky-900 font-bold text-lg shadow-gold transition disabled:opacity-70 disabled:cursor-wait"
+                >
+                  {stripeLoading ? (
+                    <>
+                      <Loader2 className="w-5 h-5 animate-spin" />
+                      Starting secure checkout…
+                    </>
+                  ) : (
+                    <>
+                      <CreditCard className="w-5 h-5" />
+                      Buy now — secure checkout
+                    </>
+                  )}
+                </button>
+              )}
+
+              {hasAmazon && (
+                <button
+                  onClick={handleAmazon}
+                  className={`w-full inline-flex items-center justify-center gap-2 px-6 py-3.5 rounded-full font-bold text-lg transition ${
+                    hasStripe
+                      ? 'bg-white border-2 border-sky-200 hover:border-sky-400 text-sky-900 hover:bg-sky-50'
+                      : 'bg-gold-400 hover:bg-gold-300 text-sky-900 shadow-gold'
+                  }`}
+                >
+                  <ShoppingBag className="w-5 h-5" />
+                  {hasStripe ? 'Or buy on Amazon' : 'Buy on Amazon'}
+                  <ExternalLink className="w-4 h-4" />
+                </button>
+              )}
+
+              {stripeError && (
+                <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
+                  {stripeError}
+                </p>
+              )}
+
+              <p className="text-xs text-sky-700/70">
+                {hasStripe
+                  ? 'Secure checkout powered by Stripe. Godly Kids never stores your card details.'
+                  : 'Opens Amazon in a new tab. Godly Kids never stores your payment info.'}
               </p>
             </div>
           </div>
         </div>
       </div>
+
+      {zoomed && gallery.length > 0 && (
+        <ImageLightbox
+          images={gallery}
+          activeIndex={activeImage}
+          onChange={setActiveImage}
+          onClose={() => setZoomed(false)}
+          alt={book.title}
+        />
+      )}
+    </div>
+  );
+}
+
+function ImageLightbox({
+  images,
+  activeIndex,
+  onChange,
+  onClose,
+  alt,
+}: {
+  images: string[];
+  activeIndex: number;
+  onChange: (i: number) => void;
+  onClose: () => void;
+  alt: string;
+}) {
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+      else if (e.key === 'ArrowLeft')
+        onChange((activeIndex - 1 + images.length) % images.length);
+      else if (e.key === 'ArrowRight')
+        onChange((activeIndex + 1) % images.length);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [activeIndex, images.length, onChange, onClose]);
+
+  const prev = () => onChange((activeIndex - 1 + images.length) % images.length);
+  const next = () => onChange((activeIndex + 1) % images.length);
+
+  return (
+    <div
+      className="fixed inset-0 z-[60] bg-sky-950/90 backdrop-blur flex items-center justify-center p-4 sm:p-8"
+      onClick={onClose}
+      role="dialog"
+      aria-modal="true"
+      aria-label="Image viewer"
+    >
+      <button
+        type="button"
+        onClick={onClose}
+        className="absolute top-4 right-4 w-10 h-10 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center backdrop-blur"
+        aria-label="Close image viewer"
+      >
+        <X className="w-6 h-6" />
+      </button>
+
+      <img
+        src={images[activeIndex]}
+        alt={alt}
+        onClick={(e) => e.stopPropagation()}
+        className="max-w-full max-h-full object-contain rounded-xl shadow-2xl cursor-zoom-out"
+      />
+
+      {images.length > 1 && (
+        <>
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              prev();
+            }}
+            className="absolute left-3 sm:left-6 top-1/2 -translate-y-1/2 w-11 h-11 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center backdrop-blur"
+            aria-label="Previous image"
+          >
+            <ChevronLeft className="w-6 h-6" />
+          </button>
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              next();
+            }}
+            className="absolute right-3 sm:right-6 top-1/2 -translate-y-1/2 w-11 h-11 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center backdrop-blur"
+            aria-label="Next image"
+          >
+            <ChevronRight className="w-6 h-6" />
+          </button>
+          <div className="absolute bottom-5 left-1/2 -translate-x-1/2 text-white/80 text-xs font-semibold bg-white/10 px-3 py-1.5 rounded-full backdrop-blur">
+            {activeIndex + 1} / {images.length}
+          </div>
+        </>
+      )}
     </div>
   );
 }

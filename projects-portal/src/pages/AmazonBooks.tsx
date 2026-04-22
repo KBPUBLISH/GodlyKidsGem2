@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useRef } from 'react';
-import { ShoppingCart, Plus, Edit2, Save, X, Upload, Trash2, Star, Eye, ExternalLink, Video, MessageSquare, Image as ImageIcon } from 'lucide-react';
+import { ShoppingCart, Plus, Edit2, Save, X, Upload, Trash2, Star, Eye, ExternalLink, Video, MessageSquare, Image as ImageIcon, CreditCard } from 'lucide-react';
 import apiClient from '../services/apiClient';
 
 interface Review {
@@ -18,6 +18,8 @@ interface AmazonBook {
     amazonUrl: string;
     asin?: string;
     price?: string;
+    stripePaymentLinkUrl?: string;
+    stripePriceId?: string;
     coverImage: string;
     images?: string[];
     promoVideoUrl?: string;
@@ -32,6 +34,7 @@ interface AmazonBook {
     badgeText?: string;
     badgeColor?: string;
     clickCount?: number;
+    stripeClickCount?: number;
 }
 
 const BADGE_COLORS = [
@@ -68,6 +71,8 @@ const AmazonBooks: React.FC = () => {
         amazonUrl: '',
         asin: '',
         price: '',
+        stripePaymentLinkUrl: '',
+        stripePriceId: '',
         coverImage: '',
         images: [],
         promoVideoUrl: '',
@@ -133,8 +138,12 @@ const AmazonBooks: React.FC = () => {
     };
 
     const handleCreateBook = async () => {
-        if (!newBook.title || !newBook.author || !newBook.amazonUrl || !newBook.coverImage) {
-            alert('Please fill in Title, Author, Amazon URL, and Cover Image');
+        if (!newBook.title || !newBook.author || !newBook.coverImage) {
+            alert('Please fill in Title, Author, and Cover Image');
+            return;
+        }
+        if (!newBook.amazonUrl && !newBook.stripePaymentLinkUrl && !newBook.stripePriceId) {
+            alert('Add at least one purchase method: an Amazon URL, a Stripe Payment Link, or a Stripe Price ID.');
             return;
         }
 
@@ -149,6 +158,8 @@ const AmazonBooks: React.FC = () => {
                 amazonUrl: '',
                 asin: '',
                 price: '',
+                stripePaymentLinkUrl: '',
+                stripePriceId: '',
                 coverImage: '',
                 images: [],
                 promoVideoUrl: '',
@@ -344,15 +355,21 @@ const AmazonBooks: React.FC = () => {
                                     <p className="text-sm text-gray-500 mt-2 line-clamp-2">{book.description}</p>
                                 )}
 
-                                <div className="flex items-center gap-2 mt-3 text-xs text-gray-500">
+                                <div className="flex items-center gap-2 mt-3 text-xs text-gray-500 flex-wrap">
                                     <Eye className="w-3 h-3" />
                                     <span>{book.clickCount || 0} clicks</span>
-                                    <span className="mx-2">|</span>
+                                    <span className="mx-1">|</span>
                                     <span className={`px-2 py-0.5 rounded-full ${
                                         book.status === 'published' ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-700'
                                     }`}>
                                         {book.status}
                                     </span>
+                                    {(book.stripePaymentLinkUrl || book.stripePriceId) && (
+                                        <span className="px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-700 flex items-center gap-1" title={`${book.stripeClickCount || 0} Stripe clicks`}>
+                                            <CreditCard className="w-3 h-3" />
+                                            Stripe
+                                        </span>
+                                    )}
                                 </div>
 
                                 {/* Actions */}
@@ -386,15 +403,17 @@ const AmazonBooks: React.FC = () => {
                                     >
                                         {book.status === 'published' ? 'Live' : 'Draft'}
                                     </button>
-                                    <a
-                                        href={book.amazonUrl}
-                                        target="_blank"
-                                        rel="noopener noreferrer"
-                                        className="px-3 py-2 bg-orange-100 text-orange-700 rounded-lg hover:bg-orange-200 transition flex items-center justify-center"
-                                        title="View on Amazon"
-                                    >
-                                        <ExternalLink className="w-3 h-3" />
-                                    </a>
+                                    {book.amazonUrl && (
+                                        <a
+                                            href={book.amazonUrl}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            className="px-3 py-2 bg-orange-100 text-orange-700 rounded-lg hover:bg-orange-200 transition flex items-center justify-center"
+                                            title="View on Amazon"
+                                        >
+                                            <ExternalLink className="w-3 h-3" />
+                                        </a>
+                                    )}
                                 </div>
                             </div>
                         </div>
@@ -487,7 +506,7 @@ const AmazonBooks: React.FC = () => {
 
                             <div className="grid grid-cols-2 gap-4">
                                 <div>
-                                    <label className="block text-sm font-semibold text-gray-700 mb-2">Amazon URL *</label>
+                                    <label className="block text-sm font-semibold text-gray-700 mb-2">Amazon URL</label>
                                     <input
                                         type="url"
                                         value={formData.amazonUrl || ''}
@@ -507,6 +526,13 @@ const AmazonBooks: React.FC = () => {
                                     />
                                 </div>
                             </div>
+
+                            <StripeSection
+                                paymentLinkUrl={formData.stripePaymentLinkUrl || ''}
+                                priceId={formData.stripePriceId || ''}
+                                onChange={(patch) => setFormData({ ...formData, ...patch })}
+                                stripeClickCount={formData.stripeClickCount}
+                            />
 
                             <div className="border-t pt-4">
                                 <h3 className="font-semibold text-gray-700 mb-3">Badge Settings</h3>
@@ -696,7 +722,7 @@ const AmazonBooks: React.FC = () => {
 
                             <div className="grid grid-cols-2 gap-4">
                                 <div>
-                                    <label className="block text-sm font-semibold text-gray-700 mb-2">Amazon URL *</label>
+                                    <label className="block text-sm font-semibold text-gray-700 mb-2">Amazon URL</label>
                                     <input
                                         type="url"
                                         value={newBook.amazonUrl || ''}
@@ -716,6 +742,12 @@ const AmazonBooks: React.FC = () => {
                                     />
                                 </div>
                             </div>
+
+                            <StripeSection
+                                paymentLinkUrl={newBook.stripePaymentLinkUrl || ''}
+                                priceId={newBook.stripePriceId || ''}
+                                onChange={(patch) => setNewBook({ ...newBook, ...patch })}
+                            />
 
                             <div className="border-t pt-4">
                                 <h3 className="font-semibold text-gray-700 mb-3">Badge Settings</h3>
@@ -892,6 +924,77 @@ const GallerySection: React.FC<GalleryProps> = ({ images, onChange, uploadFile }
                     }}
                 />
             </label>
+        </div>
+    );
+};
+
+interface StripeSectionProps {
+    paymentLinkUrl: string;
+    priceId: string;
+    onChange: (patch: { stripePaymentLinkUrl?: string; stripePriceId?: string }) => void;
+    stripeClickCount?: number;
+}
+
+const StripeSection: React.FC<StripeSectionProps> = ({ paymentLinkUrl, priceId, onChange, stripeClickCount }) => {
+    const priceIdLooksValid = !priceId || /^price_[A-Za-z0-9]+$/.test(priceId.trim());
+    const linkLooksValid =
+        !paymentLinkUrl || /^https:\/\/(buy\.)?stripe\.com\//.test(paymentLinkUrl.trim());
+
+    return (
+        <div className="border-t pt-4">
+            <h3 className="font-semibold text-gray-700 mb-2 flex items-center gap-2">
+                <CreditCard className="w-4 h-4 text-indigo-600" />
+                Stripe checkout
+                <span className="text-xs font-normal text-gray-500">optional — sell direct without Amazon</span>
+                {typeof stripeClickCount === 'number' && stripeClickCount > 0 && (
+                    <span className="ml-auto text-xs font-normal text-gray-500">
+                        {stripeClickCount} Stripe clicks
+                    </span>
+                )}
+            </h3>
+
+            <p className="text-xs text-gray-500 mb-3 leading-relaxed">
+                Use <strong>one</strong> of the two fields below. If both are filled, the Payment Link takes precedence.
+                Create these in the <a href="https://dashboard.stripe.com/products" target="_blank" rel="noopener noreferrer" className="text-indigo-600 hover:underline">Stripe Dashboard</a> under Products.
+            </p>
+
+            <div className="space-y-3">
+                <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-1">
+                        Payment Link URL
+                        <span className="text-xs font-normal text-gray-500 ml-2">simplest — paste from Stripe</span>
+                    </label>
+                    <input
+                        type="url"
+                        value={paymentLinkUrl}
+                        onChange={(e) => onChange({ stripePaymentLinkUrl: e.target.value })}
+                        placeholder="https://buy.stripe.com/…"
+                        className={`w-full px-4 py-2 border rounded-lg ${linkLooksValid ? 'border-gray-300' : 'border-red-400'}`}
+                    />
+                    {!linkLooksValid && (
+                        <p className="text-xs text-red-600 mt-1">Expected a URL like https://buy.stripe.com/…</p>
+                    )}
+                </div>
+
+                <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-1">
+                        Price ID
+                        <span className="text-xs font-normal text-gray-500 ml-2">advanced — creates a fresh checkout each time</span>
+                    </label>
+                    <input
+                        type="text"
+                        value={priceId}
+                        onChange={(e) => onChange({ stripePriceId: e.target.value.trim() })}
+                        placeholder="price_1Abc123…"
+                        className={`w-full px-4 py-2 border rounded-lg font-mono text-sm ${priceIdLooksValid ? 'border-gray-300' : 'border-red-400'}`}
+                    />
+                    {!priceIdLooksValid && (
+                        <p className="text-xs text-red-600 mt-1">
+                            That doesn't look like a Price ID. It should start with <code className="bg-gray-100 px-1 rounded">price_</code>. Don't paste a Product ID (<code className="bg-gray-100 px-1 rounded">prod_…</code>) — grab the Price ID from inside the product.
+                        </p>
+                    )}
+                </div>
+            </div>
         </div>
     );
 };

@@ -14,10 +14,17 @@ import { apiClient, getMediaUrl } from '../services/apiClient';
 
 interface TextBox {
     text?: string;
+    x?: number;          // % from left (0–100)
+    y?: number;          // % from top  (0–100)
+    width?: number;      // % of parent width
+    height?: number;     // % of parent height (optional → auto)
     fontFamily?: string;
     fontSize?: number;
     color?: string;
     alignment?: 'left' | 'center' | 'right';
+    showBackground?: boolean;
+    backgroundColor?: string;
+    shadowColor?: string;  // 'white' | 'black' | custom
 }
 
 interface SequenceItem { url: string; order: number }
@@ -58,6 +65,74 @@ const getBackground = (page: PreviewPage): { url?: string; type: 'image' | 'vide
     const url = page.backgroundUrl || page.files?.background?.url;
     const type = (page.backgroundType || page.files?.background?.type || 'image') as 'image' | 'video';
     return { url: url ? getMediaUrl(url) : undefined, type };
+};
+
+// Pull the authored text-box list (content.textBoxes wins over root textBoxes,
+// matching how getCombinedText resolves text content).
+const getTextBoxes = (page: PreviewPage): TextBox[] => {
+    if (page.content?.textBoxes && page.content.textBoxes.length) return page.content.textBoxes;
+    return page.textBoxes || [];
+};
+
+// Resolve the text-shadow CSS the editor stored as 'white' | 'black' | custom.
+const resolveShadow = (s?: string): string => {
+    if (!s || s === 'none') return 'none';
+    if (s === 'white') return '0 1px 2px rgba(255,255,255,0.95), 0 0 6px rgba(255,255,255,0.6)';
+    if (s === 'black') return '0 2px 6px rgba(0,0,0,0.85), 0 0 12px rgba(0,0,0,0.6)';
+    return `0 2px 6px ${s}`;
+};
+
+/**
+ * Render authored text boxes at their authored x/y/% positions, on top of media.
+ * Used for Media-kind swipe-up pages so text overlays still appear (matches the
+ * side-swipe reader's behavior). On the active card, the boxes fade in.
+ */
+const PositionedTextBoxes: React.FC<{
+    boxes: TextBox[];
+    isCurrent: boolean;
+    pageId: string;
+}> = ({ boxes, isCurrent, pageId }) => {
+    if (!boxes || boxes.length === 0) return null;
+    return (
+        <div className="absolute inset-0 pointer-events-none">
+            {boxes.map((b, i) => {
+                const text = (b.text || '').trim();
+                if (!text) return null;
+                const left = typeof b.x === 'number' ? `${b.x}%` : '5%';
+                const top = typeof b.y === 'number' ? `${b.y}%` : '50%';
+                const width = typeof b.width === 'number' ? `${b.width}%` : '90%';
+                const height = typeof b.height === 'number' ? `${b.height}%` : 'auto';
+                const align = b.alignment || 'left';
+                return (
+                    <div
+                        key={`${pageId}-tb-${i}-${isCurrent ? 'on' : 'off'}`}
+                        style={{
+                            position: 'absolute',
+                            left,
+                            top,
+                            width,
+                            height,
+                            textAlign: align,
+                            fontFamily: b.fontFamily || 'Patrick Hand, system-ui, sans-serif',
+                            color: b.color || '#4a3b2a',
+                            fontSize: `clamp(12px, ${(b.fontSize || 24) * 0.7}px, ${(b.fontSize || 24)}px)`,
+                            lineHeight: 1.3,
+                            textShadow: resolveShadow(b.shadowColor),
+                            background: b.showBackground ? (b.backgroundColor || 'rgba(255,255,255,0.85)') : 'transparent',
+                            padding: b.showBackground ? '6px 10px' : 0,
+                            borderRadius: b.showBackground ? 8 : 0,
+                            whiteSpace: 'pre-wrap',
+                            wordBreak: 'break-word',
+                            animation: isCurrent ? 'swpTextIn 700ms cubic-bezier(0.22, 1, 0.36, 1) both' : undefined,
+                            animationDelay: isCurrent ? `${120 + i * 90}ms` : undefined,
+                        }}
+                    >
+                        {text}
+                    </div>
+                );
+            })}
+        </div>
+    );
 };
 
 /**
@@ -418,7 +493,8 @@ const SwipeUpPreview: React.FC = () => {
                     {pages.map((page, index) => {
                         const isText = page.pageKind === 'text';
                         const text = getCombinedText(page);
-                        const firstBox = (page.content?.textBoxes && page.content.textBoxes[0]) || (page.textBoxes && page.textBoxes[0]);
+                        const boxes = getTextBoxes(page);
+                        const firstBox = boxes[0];
                         const isCurrent = index === currentIndex;
                         const hasBgMedia = !!(
                             page.backgroundUrl ||
@@ -440,10 +516,9 @@ const SwipeUpPreview: React.FC = () => {
                                     onSequenceEnd={() => handleVideoEnded(index)}
                                 />
 
-                                {isText && (
+                                {isText ? (
+                                    /* Text-kind page: centered combined text (Swipe Up "text card") */
                                     <>
-                                        {/* Subtle vignette for legibility — only when there's an actual
-                                            bg image/video; on the gradient placeholder we don't need extra dim. */}
                                         {hasBgMedia && (
                                             <div
                                                 key={`dim-${page._id}-${isCurrent ? 'on' : 'off'}`}
@@ -476,6 +551,13 @@ const SwipeUpPreview: React.FC = () => {
                                             </div>
                                         </div>
                                     </>
+                                ) : (
+                                    /* Media-kind page: render authored text boxes at their authored positions */
+                                    <PositionedTextBoxes
+                                        boxes={boxes}
+                                        isCurrent={isCurrent}
+                                        pageId={page._id || `p${index}`}
+                                    />
                                 )}
                             </section>
                         );

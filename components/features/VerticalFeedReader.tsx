@@ -8,10 +8,17 @@ import { analyticsService } from '../../services/analyticsService';
 
 interface TextBox {
     text?: string;
+    x?: number;
+    y?: number;
+    width?: number;
+    height?: number;
     fontFamily?: string;
     fontSize?: number;
     color?: string;
     alignment?: 'left' | 'center' | 'right';
+    showBackground?: boolean;
+    backgroundColor?: string;
+    shadowColor?: string;
 }
 
 interface SequenceItem { url: string; order: number }
@@ -58,6 +65,67 @@ const getBackground = (page: VerticalPage): { url?: string; type: 'image' | 'vid
     const url = page.backgroundUrl || page.files?.background?.url;
     const type = (page.backgroundType || page.files?.background?.type || 'image') as 'image' | 'video';
     return { url, type };
+};
+
+const getTextBoxes = (page: VerticalPage): TextBox[] => {
+    if (page.content?.textBoxes && page.content.textBoxes.length) return page.content.textBoxes;
+    return page.textBoxes || [];
+};
+
+const resolveShadow = (s?: string): string => {
+    if (!s || s === 'none') return 'none';
+    if (s === 'white') return '0 1px 2px rgba(255,255,255,0.95), 0 0 6px rgba(255,255,255,0.6)';
+    if (s === 'black') return '0 2px 6px rgba(0,0,0,0.85), 0 0 12px rgba(0,0,0,0.6)';
+    return `0 2px 6px ${s}`;
+};
+
+/** Positioned text boxes overlay for media-kind pages in the swipe-up reader. */
+const FeedPositionedTextBoxes: React.FC<{
+    boxes: TextBox[];
+    isCurrent: boolean;
+    pageId: string;
+}> = ({ boxes, isCurrent, pageId }) => {
+    if (!boxes || boxes.length === 0) return null;
+    return (
+        <div className="absolute inset-0 pointer-events-none">
+            {boxes.map((b, i) => {
+                const text = (b.text || '').trim();
+                if (!text) return null;
+                const left = typeof b.x === 'number' ? `${b.x}%` : '5%';
+                const top = typeof b.y === 'number' ? `${b.y}%` : '50%';
+                const width = typeof b.width === 'number' ? `${b.width}%` : '90%';
+                const height = typeof b.height === 'number' ? `${b.height}%` : 'auto';
+                const align = b.alignment || 'left';
+                return (
+                    <div
+                        key={`${pageId}-tb-${i}-${isCurrent ? 'on' : 'off'}`}
+                        style={{
+                            position: 'absolute',
+                            left,
+                            top,
+                            width,
+                            height,
+                            textAlign: align,
+                            fontFamily: b.fontFamily || 'Patrick Hand, system-ui, sans-serif',
+                            color: b.color || '#4a3b2a',
+                            fontSize: `clamp(14px, ${(b.fontSize || 24) * 0.7}px, ${(b.fontSize || 24)}px)`,
+                            lineHeight: 1.3,
+                            textShadow: resolveShadow(b.shadowColor),
+                            background: b.showBackground ? (b.backgroundColor || 'rgba(255,255,255,0.85)') : 'transparent',
+                            padding: b.showBackground ? '6px 10px' : 0,
+                            borderRadius: b.showBackground ? 8 : 0,
+                            whiteSpace: 'pre-wrap',
+                            wordBreak: 'break-word',
+                            animation: isCurrent ? 'vfrTextIn 700ms cubic-bezier(0.22, 1, 0.36, 1) both' : undefined,
+                            animationDelay: isCurrent ? `${120 + i * 90}ms` : undefined,
+                        }}
+                    >
+                        {text}
+                    </div>
+                );
+            })}
+        </div>
+    );
 };
 
 /**
@@ -441,7 +509,8 @@ const VerticalFeedReader: React.FC<Props> = ({ bookId, book: preLoadedBook, shar
                 {pages.map((page, index) => {
                     const isText = page.pageKind === 'text';
                     const text = getCombinedText(page);
-                    const firstBox = (page.content?.textBoxes && page.content.textBoxes[0]) || (page.textBoxes && page.textBoxes[0]);
+                    const boxes = getTextBoxes(page);
+                    const firstBox = boxes[0];
                     const isCurrent = index === currentIndex;
                     return (
                         <section
@@ -458,21 +527,19 @@ const VerticalFeedReader: React.FC<Props> = ({ bookId, book: preLoadedBook, shar
                                 onSequenceEnd={() => handleVideoEnded(index)}
                             />
 
-                            {/* Text overlay for text pages */}
-                            {isText && (
+                            {isText ? (
+                                /* Text-kind page: centered combined text */
                                 <>
                                     <div
-                                        key={`dim-${page._id}-${index === currentIndex ? 'on' : 'off'}`}
+                                        key={`dim-${page._id}-${isCurrent ? 'on' : 'off'}`}
                                         className="absolute inset-0 bg-gradient-to-b from-black/50 via-black/30 to-black/70"
                                         style={{
-                                            animation: index === currentIndex
-                                                ? 'vfrDimIn 600ms ease-out both'
-                                                : undefined,
+                                            animation: isCurrent ? 'vfrDimIn 600ms ease-out both' : undefined,
                                         }}
                                     />
                                     <div className="absolute inset-0 flex items-center justify-center px-6 pt-20 pb-28">
                                         <div
-                                            key={`text-${page._id}-${index === currentIndex ? 'on' : 'off'}`}
+                                            key={`text-${page._id}-${isCurrent ? 'on' : 'off'}`}
                                             className="max-w-md w-full text-center"
                                             style={{
                                                 fontFamily: firstBox?.fontFamily || 'Patrick Hand, system-ui, sans-serif',
@@ -482,16 +549,23 @@ const VerticalFeedReader: React.FC<Props> = ({ bookId, book: preLoadedBook, shar
                                                 textShadow: '0 2px 14px rgba(0,0,0,0.7)',
                                                 whiteSpace: 'pre-wrap',
                                                 wordBreak: 'break-word',
-                                                animation: index === currentIndex
+                                                animation: isCurrent
                                                     ? 'vfrTextIn 750ms cubic-bezier(0.22, 1, 0.36, 1) both'
                                                     : undefined,
-                                                animationDelay: index === currentIndex ? '180ms' : undefined,
+                                                animationDelay: isCurrent ? '180ms' : undefined,
                                             }}
                                         >
                                             {text || ' '}
                                         </div>
                                     </div>
                                 </>
+                            ) : (
+                                /* Media-kind page: render authored text boxes at their authored positions */
+                                <FeedPositionedTextBoxes
+                                    boxes={boxes}
+                                    isCurrent={isCurrent}
+                                    pageId={page._id || `p${index}`}
+                                />
                             )}
                         </section>
                     );

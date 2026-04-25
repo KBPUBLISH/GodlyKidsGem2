@@ -3251,7 +3251,7 @@ const PageEditor: React.FC = () => {
                 <div className="p-4 border-b border-gray-200 bg-gray-50 flex items-center justify-between">
                     <h3 className="text-sm font-bold text-gray-800 uppercase tracking-wider">Pages ({existingPages.length})</h3>
                     <button
-                        onClick={createNewPage}
+                        onClick={() => createNewPage()}
                         className="bg-indigo-600 text-white px-3 py-1 rounded text-xs font-semibold hover:bg-indigo-700 transition flex items-center gap-1"
                         title="Add New Page"
                     >

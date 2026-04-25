@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import { useParams, Link, useNavigate } from 'react-router-dom';
 import { apiClient, getMediaUrl } from '../services/apiClient';
 import {
     Save,
@@ -75,6 +75,7 @@ interface Game {
 
 const PageEditor: React.FC = () => {
     const { bookId } = useParams<{ bookId: string }>();
+    const navigate = useNavigate();
 
     // Core State
     const [pageNumber, setPageNumber] = useState<number>(1);
@@ -1342,6 +1343,16 @@ const PageEditor: React.FC = () => {
                                     {pageKind === 'text'
                                         ? 'Full-screen text card. Background image/video is optional and used purely for style. TTS works the same as regular books.'
                                         : 'Full-screen image or video. No text overlay; user swipes up to advance.'}
+                                </p>
+                                <button
+                                    type="button"
+                                    onClick={() => bookId && navigate(`/books/preview-swipe/${bookId}`)}
+                                    className="mt-2 inline-flex items-center gap-2 px-3 py-1.5 bg-gradient-to-r from-pink-600 to-purple-600 hover:from-pink-700 hover:to-purple-700 text-white rounded-md text-xs font-medium shadow-sm transition"
+                                >
+                                    <span>▶</span> Preview Swipe Up (no TTS)
+                                </button>
+                                <p className="text-[11px] text-gray-500">
+                                    Save your page first, then preview to see snap-scroll, fade-in animation, and video auto-advance with the current draft.
                                 </p>
                             </div>
                         </>

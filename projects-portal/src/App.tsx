@@ -16,6 +16,7 @@ import PlaylistForm from './pages/PlaylistForm';
 import BookSeries from './pages/BookSeries';
 import BookSeriesForm from './pages/BookSeriesForm';
 import BookReader from './pages/BookReader';
+import SwipeUpPreview from './pages/SwipeUpPreview';
 import PageEditor from './pages/PageEditor';
 import Categories from './pages/Categories';
 import Voices from './pages/Voices';
@@ -101,6 +102,7 @@ function App() {
             <Route path="books/new" element={<BookForm />} />
             <Route path="books/edit/:bookId" element={<BookEdit />} />
             <Route path="books/read/:bookId" element={<BookReader />} />
+            <Route path="books/preview-swipe/:bookId" element={<SwipeUpPreview />} />
             <Route path="pages/new/:bookId" element={<PageEditor />} />
             <Route path="playlists" element={<Playlists />} />
             <Route path="playlists/new" element={<PlaylistForm />} />

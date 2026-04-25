@@ -318,7 +318,17 @@ const VerticalFeedReader: React.FC<Props> = ({ bookId, book: preLoadedBook, shar
                 className="h-full w-full overflow-y-scroll snap-y snap-mandatory overscroll-contain"
                 style={{ scrollbarWidth: 'none' }}
             >
-                <style>{`.vfr-scroll::-webkit-scrollbar{display:none}`}</style>
+                <style>{`
+                    .vfr-scroll::-webkit-scrollbar{display:none}
+                    @keyframes vfrTextIn {
+                        from { opacity: 0; transform: translateY(18px); filter: blur(6px); }
+                        to   { opacity: 1; transform: translateY(0);    filter: blur(0); }
+                    }
+                    @keyframes vfrDimIn {
+                        from { opacity: 0; }
+                        to   { opacity: 1; }
+                    }
+                `}</style>
 
                 {pages.map((page, index) => {
                     const bg = getBackground(page);
@@ -358,9 +368,18 @@ const VerticalFeedReader: React.FC<Props> = ({ bookId, book: preLoadedBook, shar
                             {/* Text overlay for text pages */}
                             {isText && (
                                 <>
-                                    <div className="absolute inset-0 bg-gradient-to-b from-black/50 via-black/30 to-black/70" />
+                                    <div
+                                        key={`dim-${page._id}-${index === currentIndex ? 'on' : 'off'}`}
+                                        className="absolute inset-0 bg-gradient-to-b from-black/50 via-black/30 to-black/70"
+                                        style={{
+                                            animation: index === currentIndex
+                                                ? 'vfrDimIn 600ms ease-out both'
+                                                : undefined,
+                                        }}
+                                    />
                                     <div className="absolute inset-0 flex items-center justify-center px-6 pt-20 pb-28">
                                         <div
+                                            key={`text-${page._id}-${index === currentIndex ? 'on' : 'off'}`}
                                             className="max-w-md w-full text-center"
                                             style={{
                                                 fontFamily: firstBox?.fontFamily || 'Patrick Hand, system-ui, sans-serif',
@@ -370,6 +389,10 @@ const VerticalFeedReader: React.FC<Props> = ({ bookId, book: preLoadedBook, shar
                                                 textShadow: '0 2px 14px rgba(0,0,0,0.7)',
                                                 whiteSpace: 'pre-wrap',
                                                 wordBreak: 'break-word',
+                                                animation: index === currentIndex
+                                                    ? 'vfrTextIn 750ms cubic-bezier(0.22, 1, 0.36, 1) both'
+                                                    : undefined,
+                                                animationDelay: index === currentIndex ? '180ms' : undefined,
                                             }}
                                         >
                                             {text || ' '}

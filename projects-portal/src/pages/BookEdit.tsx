@@ -724,9 +724,21 @@ const BookEdit: React.FC = () => {
                             </button>
                         </div>
                         {readerLayout === 'swipe_up' && (
-                            <p className="text-xs text-pink-700 mt-2">
-                                In Swipe Up books, each page in the page editor gets a "Page Kind" toggle (Text or Media).
-                            </p>
+                            <>
+                                <p className="text-xs text-pink-700 mt-2">
+                                    In Swipe Up books, each page in the page editor gets a "Page Kind" toggle (Text or Media).
+                                </p>
+                                <button
+                                    type="button"
+                                    onClick={() => navigate(`/books/preview-swipe/${bookId}`)}
+                                    className="mt-3 inline-flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-pink-600 to-purple-600 hover:from-pink-700 hover:to-purple-700 text-white rounded-lg text-sm font-medium shadow-sm transition"
+                                >
+                                    <span>▶</span> Preview Swipe Up (no TTS)
+                                </button>
+                                <p className="text-[11px] text-gray-500 mt-1">
+                                    Opens a phone-shaped preview using the book's current draft pages — verifies snap-scroll, animation, and video auto-advance. TTS is muted in preview.
+                                </p>
+                            </>
                         )}
                     </div>
                     <div>

@@ -54,7 +54,7 @@ const SwipeUpPreview: React.FC = () => {
     const { bookId } = useParams<{ bookId: string }>();
     const navigate = useNavigate();
     const containerRef = useRef<HTMLDivElement>(null);
-    const sectionRefs = useRef<Array<HTMLDivElement | null>>([]);
+    const sectionRefs = useRef<Array<HTMLElement | null>>([]);
     const advanceTimerRef = useRef<number | null>(null);
 
     const [book, setBook] = useState<any>(null);

@@ -20,11 +20,7 @@ interface TextBox {
     alignment?: 'left' | 'center' | 'right';
 }
 
-interface SequenceItem {
-    url: string;
-    order?: number;
-    filename?: string;
-}
+interface SequenceItem { url: string; order: number }
 
 interface PreviewPage {
     _id: string;
@@ -33,14 +29,15 @@ interface PreviewPage {
     videoAutoAdvance?: boolean;
     backgroundUrl?: string;
     backgroundType?: 'image' | 'video';
-    backgroundImageAnimation?: string;
     files?: { background?: { url?: string; type?: string } };
     textBoxes?: TextBox[];
     content?: { text?: string; textBoxes?: TextBox[] };
+    // Image sequence (cycle of images)
     useImageSequence?: boolean;
     imageSequence?: SequenceItem[];
-    imageSequenceDuration?: number;
-    imageSequenceAnimation?: string;
+    imageSequenceDuration?: number;   // seconds per image (default 3)
+    imageSequenceAnimation?: string;  // 'fade' | 'zoom' | 'kenBurns' | etc.
+    // Video sequence (play in order)
     useVideoSequence?: boolean;
     videoSequence?: SequenceItem[];
 }
@@ -57,130 +54,136 @@ const getCombinedText = (page: PreviewPage): string => {
     return (page.content?.text || '').trim();
 };
 
-type ResolvedMedia =
-    | { kind: 'none' }
-    | { kind: 'image'; url: string }
-    | { kind: 'video'; url: string }
-    | { kind: 'image-sequence'; urls: string[]; durationMs: number }
-    | { kind: 'video-sequence'; urls: string[] };
-
-const resolveMedia = (page: PreviewPage): ResolvedMedia => {
-    if (page.useVideoSequence && page.videoSequence && page.videoSequence.length > 0) {
-        const urls = [...page.videoSequence]
-            .sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
-            .map(v => getMediaUrl(v.url))
-            .filter(Boolean);
-        if (urls.length) return { kind: 'video-sequence', urls };
-    }
-    if (page.useImageSequence && page.imageSequence && page.imageSequence.length > 0) {
-        const urls = [...page.imageSequence]
-            .sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
-            .map(i => getMediaUrl(i.url))
-            .filter(Boolean);
-        if (urls.length) {
-            return {
-                kind: 'image-sequence',
-                urls,
-                durationMs: Math.max(800, (page.imageSequenceDuration || 3) * 1000),
-            };
-        }
-    }
+const getBackground = (page: PreviewPage): { url?: string; type: 'image' | 'video' } => {
     const url = page.backgroundUrl || page.files?.background?.url;
-    if (!url) return { kind: 'none' };
     const type = (page.backgroundType || page.files?.background?.type || 'image') as 'image' | 'video';
-    return { kind: type, url: getMediaUrl(url) };
+    return { url: url ? getMediaUrl(url) : undefined, type };
 };
 
-interface MediaLayerProps {
+/**
+ * Renders the page background, handling all four media types:
+ *   1. Image sequence (cycles with fade)
+ *   2. Video sequence (plays in order)
+ *   3. Single video background
+ *   4. Single image background
+ *   5. Gradient placeholder (no media)
+ *
+ * `isCurrent` controls playback (only active page autoplays / cycles).
+ * `onSequenceEnd` fires when a video sequence's last clip ends.
+ */
+const MediaLayer: React.FC<{
     page: PreviewPage;
     isCurrent: boolean;
-    onVideoEnded: () => void;
-}
+    onSequenceEnd?: () => void;
+}> = ({ page, isCurrent, onSequenceEnd }) => {
+    // --- Image sequence ---
+    const imgSeq = useMemo(() => {
+        if (!page.useImageSequence || !page.imageSequence?.length) return null;
+        return [...page.imageSequence].sort((a, b) => (a.order || 0) - (b.order || 0));
+    }, [page.useImageSequence, page.imageSequence]);
 
-const MediaLayer: React.FC<MediaLayerProps> = ({ page, isCurrent, onVideoEnded }) => {
-    const media = useMemo(() => resolveMedia(page), [page]);
-    const [seqIndex, setSeqIndex] = useState(0);
-
-    // Cycle image sequence on a timer (only when this card is the active one,
-    // to avoid running timers for every off-screen card).
+    const [imgIdx, setImgIdx] = useState(0);
     useEffect(() => {
-        if (media.kind !== 'image-sequence' || !isCurrent || media.urls.length <= 1) return;
-        setSeqIndex(0);
-        const id = window.setInterval(() => {
-            setSeqIndex(prev => (prev + 1) % media.urls.length);
-        }, media.durationMs);
-        return () => window.clearInterval(id);
-    }, [media, isCurrent]);
+        if (!imgSeq || !isCurrent || imgSeq.length < 2) return;
+        const ms = Math.max(1000, (page.imageSequenceDuration || 3) * 1000);
+        const t = window.setInterval(() => {
+            setImgIdx(i => (i + 1) % imgSeq.length);
+        }, ms);
+        return () => window.clearInterval(t);
+    }, [imgSeq, isCurrent, page.imageSequenceDuration]);
 
-    if (media.kind === 'none') {
-        return <div className="absolute inset-0 bg-gradient-to-b from-slate-700 via-slate-900 to-black" />;
+    // --- Video sequence ---
+    const vidSeq = useMemo(() => {
+        if (!page.useVideoSequence || !page.videoSequence?.length) return null;
+        return [...page.videoSequence].sort((a, b) => (a.order || 0) - (b.order || 0));
+    }, [page.useVideoSequence, page.videoSequence]);
+
+    const [vidIdx, setVidIdx] = useState(0);
+    useEffect(() => {
+        if (isCurrent) setVidIdx(0);
+    }, [isCurrent]);
+
+    if (imgSeq && imgSeq.length > 0) {
+        const current = imgSeq[Math.min(imgIdx, imgSeq.length - 1)];
+        return (
+            <>
+                {imgSeq.map((img, i) => (
+                    <img
+                        key={`${page._id}-img-${i}`}
+                        src={getMediaUrl(img.url)}
+                        alt=""
+                        className="absolute inset-0 w-full h-full object-cover transition-opacity duration-700"
+                        style={{ opacity: i === Math.min(imgIdx, imgSeq.length - 1) ? 1 : 0 }}
+                        draggable={false}
+                        onError={() => console.warn('[SwipeUpPreview] img-seq failed:', img.url)}
+                    />
+                ))}
+                <div className="absolute bottom-3 right-3 z-10 px-2 py-0.5 rounded-full bg-black/50 backdrop-blur-sm text-white text-[10px]">
+                    {Math.min(imgIdx, imgSeq.length - 1) + 1} / {imgSeq.length} • {current?.url ? '' : 'no url'}
+                </div>
+            </>
+        );
     }
-    if (media.kind === 'video') {
+
+    if (vidSeq && vidSeq.length > 0) {
+        const current = vidSeq[Math.min(vidIdx, vidSeq.length - 1)];
+        const isLast = vidIdx >= vidSeq.length - 1;
+        return (
+            <>
+                <video
+                    key={`${page._id}-vid-${vidIdx}`}
+                    src={getMediaUrl(current.url)}
+                    className="absolute inset-0 w-full h-full object-cover"
+                    autoPlay={isCurrent}
+                    muted
+                    playsInline
+                    loop={vidSeq.length === 1 && !page.videoAutoAdvance}
+                    onEnded={() => {
+                        if (!isLast) setVidIdx(i => i + 1);
+                        else if (page.videoAutoAdvance) onSequenceEnd?.();
+                    }}
+                    onError={() => console.warn('[SwipeUpPreview] vid-seq failed:', current.url)}
+                />
+                {vidSeq.length > 1 && (
+                    <div className="absolute bottom-3 right-3 z-10 px-2 py-0.5 rounded-full bg-black/50 backdrop-blur-sm text-white text-[10px]">
+                        {vidIdx + 1} / {vidSeq.length}
+                    </div>
+                )}
+            </>
+        );
+    }
+
+    // Single image / video background
+    const bg = getBackground(page);
+    if (bg.url && bg.type === 'video') {
         return (
             <video
-                src={media.url}
+                src={bg.url}
                 className="absolute inset-0 w-full h-full object-cover"
                 autoPlay={isCurrent}
                 muted
                 playsInline
                 loop={!page.videoAutoAdvance}
-                onEnded={onVideoEnded}
-                onError={(e) => console.warn('[SwipeUpPreview] video failed:', media.url, e)}
+                onEnded={() => page.videoAutoAdvance && onSequenceEnd?.()}
+                onError={() => console.warn('[SwipeUpPreview] video failed:', bg.url)}
             />
         );
     }
-    if (media.kind === 'image') {
+    if (bg.url) {
         return (
             <img
-                src={media.url}
+                src={bg.url}
                 alt=""
                 className="absolute inset-0 w-full h-full object-cover"
                 draggable={false}
-                onError={() => console.warn('[SwipeUpPreview] image failed:', media.url)}
-            />
-        );
-    }
-    if (media.kind === 'video-sequence') {
-        const idx = Math.min(seqIndex, media.urls.length - 1);
-        const isLast = idx >= media.urls.length - 1;
-        return (
-            <video
-                key={`vseq-${idx}-${media.urls[idx]}`}
-                src={media.urls[idx]}
-                className="absolute inset-0 w-full h-full object-cover"
-                autoPlay={isCurrent}
-                muted
-                playsInline
-                onEnded={() => {
-                    if (isLast) {
-                        onVideoEnded();
-                    } else {
-                        setSeqIndex(idx + 1);
-                    }
+                onError={(e) => {
+                    console.warn('[SwipeUpPreview] image failed:', bg.url);
+                    (e.currentTarget as HTMLImageElement).style.display = 'none';
                 }}
-                onError={(e) => console.warn('[SwipeUpPreview] video-seq failed:', media.urls[idx], e)}
             />
         );
     }
-    // image-sequence — crossfade by stacking img layers
-    return (
-        <>
-            {media.urls.map((url, i) => (
-                <img
-                    key={`iseq-${i}-${url}`}
-                    src={url}
-                    alt=""
-                    draggable={false}
-                    className="absolute inset-0 w-full h-full object-cover"
-                    style={{
-                        opacity: i === seqIndex ? 1 : 0,
-                        transition: 'opacity 700ms ease',
-                    }}
-                    onError={() => console.warn('[SwipeUpPreview] image-seq failed:', url)}
-                />
-            ))}
-        </>
-    );
+    return <div className="absolute inset-0 bg-gradient-to-b from-slate-700 via-slate-900 to-black" />;
 };
 
 // Phone frame size: keep 9:19.5 portrait, fit inside viewport with chrome margin.
@@ -234,8 +237,13 @@ const SwipeUpPreview: React.FC = () => {
                 console.log('[SwipeUpPreview] loaded', sorted.length, 'pages. Media:',
                     sorted.map((p: PreviewPage) => ({
                         pageNumber: p.pageNumber,
-                        pageKind: p.pageKind,
-                        media: resolveMedia(p),
+                        kind: p.pageKind,
+                        bgUrl: p.backgroundUrl || p.files?.background?.url,
+                        bgType: p.backgroundType || p.files?.background?.type,
+                        useImageSeq: !!p.useImageSequence,
+                        imgSeqCount: p.imageSequence?.length || 0,
+                        useVideoSeq: !!p.useVideoSequence,
+                        vidSeqCount: p.videoSequence?.length || 0,
                     }))
                 );
             } catch (err) {
@@ -412,7 +420,12 @@ const SwipeUpPreview: React.FC = () => {
                         const text = getCombinedText(page);
                         const firstBox = (page.content?.textBoxes && page.content.textBoxes[0]) || (page.textBoxes && page.textBoxes[0]);
                         const isCurrent = index === currentIndex;
-                        const hasBgMedia = resolveMedia(page).kind !== 'none';
+                        const hasBgMedia = !!(
+                            page.backgroundUrl ||
+                            page.files?.background?.url ||
+                            (page.useImageSequence && page.imageSequence?.length) ||
+                            (page.useVideoSequence && page.videoSequence?.length)
+                        );
                         return (
                             <section
                                 key={page._id || index}
@@ -424,7 +437,7 @@ const SwipeUpPreview: React.FC = () => {
                                 <MediaLayer
                                     page={page}
                                     isCurrent={isCurrent}
-                                    onVideoEnded={() => handleVideoEnded(index)}
+                                    onSequenceEnd={() => handleVideoEnded(index)}
                                 />
 
                                 {isText && (

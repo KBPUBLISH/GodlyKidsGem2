@@ -14,11 +14,7 @@ interface TextBox {
     alignment?: 'left' | 'center' | 'right';
 }
 
-interface SequenceItem {
-    url: string;
-    order?: number;
-    filename?: string;
-}
+interface SequenceItem { url: string; order: number }
 
 interface VerticalPage {
     _id: string;
@@ -33,127 +29,10 @@ interface VerticalPage {
     useImageSequence?: boolean;
     imageSequence?: SequenceItem[];
     imageSequenceDuration?: number;
+    imageSequenceAnimation?: string;
     useVideoSequence?: boolean;
     videoSequence?: SequenceItem[];
 }
-
-type ResolvedMedia =
-    | { kind: 'none' }
-    | { kind: 'image'; url: string }
-    | { kind: 'video'; url: string }
-    | { kind: 'image-sequence'; urls: string[]; durationMs: number }
-    | { kind: 'video-sequence'; urls: string[] };
-
-const resolveMedia = (page: VerticalPage): ResolvedMedia => {
-    if (page.useVideoSequence && page.videoSequence && page.videoSequence.length > 0) {
-        const urls = [...page.videoSequence]
-            .sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
-            .map(v => v.url)
-            .filter(Boolean) as string[];
-        if (urls.length) return { kind: 'video-sequence', urls };
-    }
-    if (page.useImageSequence && page.imageSequence && page.imageSequence.length > 0) {
-        const urls = [...page.imageSequence]
-            .sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
-            .map(i => i.url)
-            .filter(Boolean) as string[];
-        if (urls.length) {
-            return {
-                kind: 'image-sequence',
-                urls,
-                durationMs: Math.max(800, (page.imageSequenceDuration || 3) * 1000),
-            };
-        }
-    }
-    const url = page.backgroundUrl || page.files?.background?.url;
-    if (!url) return { kind: 'none' };
-    const type = (page.backgroundType || page.files?.background?.type || 'image') as 'image' | 'video';
-    return { kind: type, url };
-};
-
-interface VFRMediaLayerProps {
-    page: VerticalPage;
-    isCurrent: boolean;
-    isText: boolean;
-    muted: boolean;
-    onVideoEnded: () => void;
-}
-
-const VFRMediaLayer: React.FC<VFRMediaLayerProps> = ({ page, isCurrent, isText, muted, onVideoEnded }) => {
-    const media = useMemo(() => resolveMedia(page), [page]);
-    const [seqIndex, setSeqIndex] = useState(0);
-
-    useEffect(() => {
-        if (media.kind !== 'image-sequence' || !isCurrent || media.urls.length <= 1) return;
-        setSeqIndex(0);
-        const id = window.setInterval(() => {
-            setSeqIndex(prev => (prev + 1) % media.urls.length);
-        }, media.durationMs);
-        return () => window.clearInterval(id);
-    }, [media, isCurrent]);
-
-    if (media.kind === 'none') {
-        return <div className="absolute inset-0 bg-gradient-to-b from-slate-800 via-slate-900 to-black" />;
-    }
-    if (media.kind === 'video') {
-        return (
-            <video
-                src={media.url}
-                className="absolute inset-0 w-full h-full object-cover"
-                autoPlay={isCurrent}
-                muted={isText || muted}
-                playsInline
-                loop={!page.videoAutoAdvance}
-                onEnded={onVideoEnded}
-            />
-        );
-    }
-    if (media.kind === 'image') {
-        return (
-            <img
-                src={media.url}
-                alt=""
-                className="absolute inset-0 w-full h-full object-cover"
-                draggable={false}
-            />
-        );
-    }
-    if (media.kind === 'video-sequence') {
-        const idx = Math.min(seqIndex, media.urls.length - 1);
-        const isLast = idx >= media.urls.length - 1;
-        return (
-            <video
-                key={`vseq-${idx}-${media.urls[idx]}`}
-                src={media.urls[idx]}
-                className="absolute inset-0 w-full h-full object-cover"
-                autoPlay={isCurrent}
-                muted={isText || muted}
-                playsInline
-                onEnded={() => {
-                    if (isLast) onVideoEnded();
-                    else setSeqIndex(idx + 1);
-                }}
-            />
-        );
-    }
-    return (
-        <>
-            {media.urls.map((url, i) => (
-                <img
-                    key={`iseq-${i}-${url}`}
-                    src={url}
-                    alt=""
-                    draggable={false}
-                    className="absolute inset-0 w-full h-full object-cover"
-                    style={{
-                        opacity: i === seqIndex ? 1 : 0,
-                        transition: 'opacity 700ms ease',
-                    }}
-                />
-            ))}
-        </>
-    );
-};
 
 interface Props {
     bookId: string;
@@ -173,6 +52,112 @@ const getCombinedText = (page: VerticalPage): string => {
         .join('\n\n');
     if (fromBoxes) return fromBoxes;
     return (page.content?.text || '').trim();
+};
+
+const getBackground = (page: VerticalPage): { url?: string; type: 'image' | 'video' } => {
+    const url = page.backgroundUrl || page.files?.background?.url;
+    const type = (page.backgroundType || page.files?.background?.type || 'image') as 'image' | 'video';
+    return { url, type };
+};
+
+/**
+ * Renders the page background, handling all media variants:
+ *   1. Image sequence (cycles)   2. Video sequence (in order)
+ *   3. Single video              4. Single image
+ *   5. Gradient placeholder
+ */
+const FeedMediaLayer: React.FC<{
+    page: VerticalPage;
+    isCurrent: boolean;
+    videoMuted: boolean;
+    onSequenceEnd?: () => void;
+}> = ({ page, isCurrent, videoMuted, onSequenceEnd }) => {
+    const imgSeq = useMemo(() => {
+        if (!page.useImageSequence || !page.imageSequence?.length) return null;
+        return [...page.imageSequence].sort((a, b) => (a.order || 0) - (b.order || 0));
+    }, [page.useImageSequence, page.imageSequence]);
+
+    const [imgIdx, setImgIdx] = useState(0);
+    useEffect(() => {
+        if (!imgSeq || !isCurrent || imgSeq.length < 2) return;
+        const ms = Math.max(1000, (page.imageSequenceDuration || 3) * 1000);
+        const t = window.setInterval(() => {
+            setImgIdx(i => (i + 1) % imgSeq.length);
+        }, ms);
+        return () => window.clearInterval(t);
+    }, [imgSeq, isCurrent, page.imageSequenceDuration]);
+
+    const vidSeq = useMemo(() => {
+        if (!page.useVideoSequence || !page.videoSequence?.length) return null;
+        return [...page.videoSequence].sort((a, b) => (a.order || 0) - (b.order || 0));
+    }, [page.useVideoSequence, page.videoSequence]);
+
+    const [vidIdx, setVidIdx] = useState(0);
+    useEffect(() => { if (isCurrent) setVidIdx(0); }, [isCurrent]);
+
+    if (imgSeq && imgSeq.length > 0) {
+        const activeIdx = Math.min(imgIdx, imgSeq.length - 1);
+        return (
+            <>
+                {imgSeq.map((img, i) => (
+                    <img
+                        key={`${page._id}-img-${i}`}
+                        src={img.url}
+                        alt=""
+                        className="absolute inset-0 w-full h-full object-cover transition-opacity duration-700"
+                        style={{ opacity: i === activeIdx ? 1 : 0 }}
+                        draggable={false}
+                    />
+                ))}
+            </>
+        );
+    }
+
+    if (vidSeq && vidSeq.length > 0) {
+        const current = vidSeq[Math.min(vidIdx, vidSeq.length - 1)];
+        const isLast = vidIdx >= vidSeq.length - 1;
+        return (
+            <video
+                key={`${page._id}-vid-${vidIdx}`}
+                src={current.url}
+                className="absolute inset-0 w-full h-full object-cover"
+                autoPlay={isCurrent}
+                muted={videoMuted}
+                playsInline
+                loop={vidSeq.length === 1 && !page.videoAutoAdvance}
+                onEnded={() => {
+                    if (!isLast) setVidIdx(i => i + 1);
+                    else if (page.videoAutoAdvance) onSequenceEnd?.();
+                }}
+            />
+        );
+    }
+
+    const bg = getBackground(page);
+    if (bg.url && bg.type === 'video') {
+        return (
+            <video
+                src={bg.url}
+                className="absolute inset-0 w-full h-full object-cover"
+                autoPlay={isCurrent}
+                muted={videoMuted}
+                playsInline
+                loop={!page.videoAutoAdvance}
+                onEnded={() => page.videoAutoAdvance && onSequenceEnd?.()}
+            />
+        );
+    }
+    if (bg.url) {
+        return (
+            <img
+                src={bg.url}
+                alt=""
+                className="absolute inset-0 w-full h-full object-cover"
+                draggable={false}
+            />
+        );
+    }
+    return <div className="absolute inset-0 bg-gradient-to-b from-slate-800 via-slate-900 to-black" />;
 };
 
 const VerticalFeedReader: React.FC<Props> = ({ bookId, book: preLoadedBook, shareToken }) => {
@@ -458,52 +443,49 @@ const VerticalFeedReader: React.FC<Props> = ({ bookId, book: preLoadedBook, shar
                     const text = getCombinedText(page);
                     const firstBox = (page.content?.textBoxes && page.content.textBoxes[0]) || (page.textBoxes && page.textBoxes[0]);
                     const isCurrent = index === currentIndex;
-                    const hasBgMedia = resolveMedia(page).kind !== 'none';
                     return (
                         <section
                             key={page._id || index}
                             ref={(el) => { sectionRefs.current[index] = el; }}
                             data-page-index={index}
-                            className="relative w-full h-full snap-start overflow-hidden"
+                            className="relative w-full h-full snap-start"
                             style={{ height: '100dvh' }}
                         >
-                            <VFRMediaLayer
+                            <FeedMediaLayer
                                 page={page}
                                 isCurrent={isCurrent}
-                                isText={isText}
-                                muted={muted}
-                                onVideoEnded={() => handleVideoEnded(index)}
+                                videoMuted={isText || muted}
+                                onSequenceEnd={() => handleVideoEnded(index)}
                             />
 
                             {/* Text overlay for text pages */}
                             {isText && (
                                 <>
-                                    {hasBgMedia && (
-                                        <div
-                                            key={`dim-${page._id}-${isCurrent ? 'on' : 'off'}`}
-                                            className="absolute inset-0"
-                                            style={{
-                                                background: 'radial-gradient(ellipse at center, rgba(0,0,0,0.15) 0%, rgba(0,0,0,0.45) 100%)',
-                                                animation: isCurrent ? 'vfrDimIn 500ms ease-out both' : undefined,
-                                            }}
-                                        />
-                                    )}
+                                    <div
+                                        key={`dim-${page._id}-${index === currentIndex ? 'on' : 'off'}`}
+                                        className="absolute inset-0 bg-gradient-to-b from-black/50 via-black/30 to-black/70"
+                                        style={{
+                                            animation: index === currentIndex
+                                                ? 'vfrDimIn 600ms ease-out both'
+                                                : undefined,
+                                        }}
+                                    />
                                     <div className="absolute inset-0 flex items-center justify-center px-6 pt-20 pb-28">
                                         <div
-                                            key={`text-${page._id}-${isCurrent ? 'on' : 'off'}`}
+                                            key={`text-${page._id}-${index === currentIndex ? 'on' : 'off'}`}
                                             className="max-w-md w-full text-center"
                                             style={{
                                                 fontFamily: firstBox?.fontFamily || 'Patrick Hand, system-ui, sans-serif',
                                                 color: firstBox?.color || '#ffffff',
                                                 fontSize: `clamp(20px, ${(firstBox?.fontSize || 28) * 0.9}px, 36px)`,
                                                 lineHeight: 1.35,
-                                                textShadow: '0 2px 14px rgba(0,0,0,0.75)',
+                                                textShadow: '0 2px 14px rgba(0,0,0,0.7)',
                                                 whiteSpace: 'pre-wrap',
                                                 wordBreak: 'break-word',
-                                                animation: isCurrent
+                                                animation: index === currentIndex
                                                     ? 'vfrTextIn 750ms cubic-bezier(0.22, 1, 0.36, 1) both'
                                                     : undefined,
-                                                animationDelay: isCurrent ? '180ms' : undefined,
+                                                animationDelay: index === currentIndex ? '180ms' : undefined,
                                             }}
                                         >
                                             {text || ' '}

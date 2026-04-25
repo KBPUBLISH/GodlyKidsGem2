@@ -20,6 +20,12 @@ interface TextBox {
     alignment?: 'left' | 'center' | 'right';
 }
 
+interface SequenceItem {
+    url: string;
+    order?: number;
+    filename?: string;
+}
+
 interface PreviewPage {
     _id: string;
     pageNumber: number;
@@ -27,9 +33,16 @@ interface PreviewPage {
     videoAutoAdvance?: boolean;
     backgroundUrl?: string;
     backgroundType?: 'image' | 'video';
+    backgroundImageAnimation?: string;
     files?: { background?: { url?: string; type?: string } };
     textBoxes?: TextBox[];
     content?: { text?: string; textBoxes?: TextBox[] };
+    useImageSequence?: boolean;
+    imageSequence?: SequenceItem[];
+    imageSequenceDuration?: number;
+    imageSequenceAnimation?: string;
+    useVideoSequence?: boolean;
+    videoSequence?: SequenceItem[];
 }
 
 const getCombinedText = (page: PreviewPage): string => {
@@ -44,10 +57,130 @@ const getCombinedText = (page: PreviewPage): string => {
     return (page.content?.text || '').trim();
 };
 
-const getBackground = (page: PreviewPage): { url?: string; type: 'image' | 'video' } => {
+type ResolvedMedia =
+    | { kind: 'none' }
+    | { kind: 'image'; url: string }
+    | { kind: 'video'; url: string }
+    | { kind: 'image-sequence'; urls: string[]; durationMs: number }
+    | { kind: 'video-sequence'; urls: string[] };
+
+const resolveMedia = (page: PreviewPage): ResolvedMedia => {
+    if (page.useVideoSequence && page.videoSequence && page.videoSequence.length > 0) {
+        const urls = [...page.videoSequence]
+            .sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
+            .map(v => getMediaUrl(v.url))
+            .filter(Boolean);
+        if (urls.length) return { kind: 'video-sequence', urls };
+    }
+    if (page.useImageSequence && page.imageSequence && page.imageSequence.length > 0) {
+        const urls = [...page.imageSequence]
+            .sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
+            .map(i => getMediaUrl(i.url))
+            .filter(Boolean);
+        if (urls.length) {
+            return {
+                kind: 'image-sequence',
+                urls,
+                durationMs: Math.max(800, (page.imageSequenceDuration || 3) * 1000),
+            };
+        }
+    }
     const url = page.backgroundUrl || page.files?.background?.url;
+    if (!url) return { kind: 'none' };
     const type = (page.backgroundType || page.files?.background?.type || 'image') as 'image' | 'video';
-    return { url: url ? getMediaUrl(url) : undefined, type };
+    return { kind: type, url: getMediaUrl(url) };
+};
+
+interface MediaLayerProps {
+    page: PreviewPage;
+    isCurrent: boolean;
+    onVideoEnded: () => void;
+}
+
+const MediaLayer: React.FC<MediaLayerProps> = ({ page, isCurrent, onVideoEnded }) => {
+    const media = useMemo(() => resolveMedia(page), [page]);
+    const [seqIndex, setSeqIndex] = useState(0);
+
+    // Cycle image sequence on a timer (only when this card is the active one,
+    // to avoid running timers for every off-screen card).
+    useEffect(() => {
+        if (media.kind !== 'image-sequence' || !isCurrent || media.urls.length <= 1) return;
+        setSeqIndex(0);
+        const id = window.setInterval(() => {
+            setSeqIndex(prev => (prev + 1) % media.urls.length);
+        }, media.durationMs);
+        return () => window.clearInterval(id);
+    }, [media, isCurrent]);
+
+    if (media.kind === 'none') {
+        return <div className="absolute inset-0 bg-gradient-to-b from-slate-700 via-slate-900 to-black" />;
+    }
+    if (media.kind === 'video') {
+        return (
+            <video
+                src={media.url}
+                className="absolute inset-0 w-full h-full object-cover"
+                autoPlay={isCurrent}
+                muted
+                playsInline
+                loop={!page.videoAutoAdvance}
+                onEnded={onVideoEnded}
+                onError={(e) => console.warn('[SwipeUpPreview] video failed:', media.url, e)}
+            />
+        );
+    }
+    if (media.kind === 'image') {
+        return (
+            <img
+                src={media.url}
+                alt=""
+                className="absolute inset-0 w-full h-full object-cover"
+                draggable={false}
+                onError={() => console.warn('[SwipeUpPreview] image failed:', media.url)}
+            />
+        );
+    }
+    if (media.kind === 'video-sequence') {
+        const idx = Math.min(seqIndex, media.urls.length - 1);
+        const isLast = idx >= media.urls.length - 1;
+        return (
+            <video
+                key={`vseq-${idx}-${media.urls[idx]}`}
+                src={media.urls[idx]}
+                className="absolute inset-0 w-full h-full object-cover"
+                autoPlay={isCurrent}
+                muted
+                playsInline
+                onEnded={() => {
+                    if (isLast) {
+                        onVideoEnded();
+                    } else {
+                        setSeqIndex(idx + 1);
+                    }
+                }}
+                onError={(e) => console.warn('[SwipeUpPreview] video-seq failed:', media.urls[idx], e)}
+            />
+        );
+    }
+    // image-sequence — crossfade by stacking img layers
+    return (
+        <>
+            {media.urls.map((url, i) => (
+                <img
+                    key={`iseq-${i}-${url}`}
+                    src={url}
+                    alt=""
+                    draggable={false}
+                    className="absolute inset-0 w-full h-full object-cover"
+                    style={{
+                        opacity: i === seqIndex ? 1 : 0,
+                        transition: 'opacity 700ms ease',
+                    }}
+                    onError={() => console.warn('[SwipeUpPreview] image-seq failed:', url)}
+                />
+            ))}
+        </>
+    );
 };
 
 // Phone frame size: keep 9:19.5 portrait, fit inside viewport with chrome margin.
@@ -98,13 +231,11 @@ const SwipeUpPreview: React.FC = () => {
                     (a: PreviewPage, b: PreviewPage) => (a.pageNumber || 0) - (b.pageNumber || 0)
                 );
                 setPages(sorted);
-                console.log('[SwipeUpPreview] loaded', sorted.length, 'pages. Backgrounds:',
+                console.log('[SwipeUpPreview] loaded', sorted.length, 'pages. Media:',
                     sorted.map((p: PreviewPage) => ({
                         pageNumber: p.pageNumber,
-                        kind: p.pageKind,
-                        bgUrl: p.backgroundUrl || p.files?.background?.url,
-                        bgType: p.backgroundType || p.files?.background?.type,
-                        resolved: getMediaUrl(p.backgroundUrl || p.files?.background?.url || ''),
+                        pageKind: p.pageKind,
+                        media: resolveMedia(p),
                     }))
                 );
             } catch (err) {
@@ -277,12 +408,11 @@ const SwipeUpPreview: React.FC = () => {
                     style={{ scrollbarWidth: 'none' }}
                 >
                     {pages.map((page, index) => {
-                        const bg = getBackground(page);
                         const isText = page.pageKind === 'text';
                         const text = getCombinedText(page);
                         const firstBox = (page.content?.textBoxes && page.content.textBoxes[0]) || (page.textBoxes && page.textBoxes[0]);
                         const isCurrent = index === currentIndex;
-                        const hasBgMedia = !!bg.url;
+                        const hasBgMedia = resolveMedia(page).kind !== 'none';
                         return (
                             <section
                                 key={page._id || index}
@@ -291,31 +421,11 @@ const SwipeUpPreview: React.FC = () => {
                                 className="relative w-full snap-start overflow-hidden bg-black"
                                 style={sectionStyle}
                             >
-                                {bg.url && bg.type === 'video' ? (
-                                    <video
-                                        src={bg.url}
-                                        className="absolute inset-0 w-full h-full object-cover"
-                                        autoPlay={isCurrent}
-                                        muted
-                                        playsInline
-                                        loop={!page.videoAutoAdvance}
-                                        onEnded={() => handleVideoEnded(index)}
-                                        onError={(e) => console.warn('[SwipeUpPreview] video failed:', bg.url, e)}
-                                    />
-                                ) : bg.url ? (
-                                    <img
-                                        src={bg.url}
-                                        alt=""
-                                        className="absolute inset-0 w-full h-full object-cover"
-                                        draggable={false}
-                                        onError={(e) => {
-                                            console.warn('[SwipeUpPreview] image failed:', bg.url);
-                                            (e.currentTarget as HTMLImageElement).style.display = 'none';
-                                        }}
-                                    />
-                                ) : (
-                                    <div className="absolute inset-0 bg-gradient-to-b from-slate-700 via-slate-900 to-black" />
-                                )}
+                                <MediaLayer
+                                    page={page}
+                                    isCurrent={isCurrent}
+                                    onVideoEnded={() => handleVideoEnded(index)}
+                                />
 
                                 {isText && (
                                     <>

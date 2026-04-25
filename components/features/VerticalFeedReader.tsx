@@ -14,6 +14,12 @@ interface TextBox {
     alignment?: 'left' | 'center' | 'right';
 }
 
+interface SequenceItem {
+    url: string;
+    order?: number;
+    filename?: string;
+}
+
 interface VerticalPage {
     _id: string;
     pageNumber: number;
@@ -24,7 +30,130 @@ interface VerticalPage {
     files?: { background?: { url?: string; type?: string } };
     textBoxes?: TextBox[];
     content?: { text?: string; textBoxes?: TextBox[] };
+    useImageSequence?: boolean;
+    imageSequence?: SequenceItem[];
+    imageSequenceDuration?: number;
+    useVideoSequence?: boolean;
+    videoSequence?: SequenceItem[];
 }
+
+type ResolvedMedia =
+    | { kind: 'none' }
+    | { kind: 'image'; url: string }
+    | { kind: 'video'; url: string }
+    | { kind: 'image-sequence'; urls: string[]; durationMs: number }
+    | { kind: 'video-sequence'; urls: string[] };
+
+const resolveMedia = (page: VerticalPage): ResolvedMedia => {
+    if (page.useVideoSequence && page.videoSequence && page.videoSequence.length > 0) {
+        const urls = [...page.videoSequence]
+            .sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
+            .map(v => v.url)
+            .filter(Boolean) as string[];
+        if (urls.length) return { kind: 'video-sequence', urls };
+    }
+    if (page.useImageSequence && page.imageSequence && page.imageSequence.length > 0) {
+        const urls = [...page.imageSequence]
+            .sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
+            .map(i => i.url)
+            .filter(Boolean) as string[];
+        if (urls.length) {
+            return {
+                kind: 'image-sequence',
+                urls,
+                durationMs: Math.max(800, (page.imageSequenceDuration || 3) * 1000),
+            };
+        }
+    }
+    const url = page.backgroundUrl || page.files?.background?.url;
+    if (!url) return { kind: 'none' };
+    const type = (page.backgroundType || page.files?.background?.type || 'image') as 'image' | 'video';
+    return { kind: type, url };
+};
+
+interface VFRMediaLayerProps {
+    page: VerticalPage;
+    isCurrent: boolean;
+    isText: boolean;
+    muted: boolean;
+    onVideoEnded: () => void;
+}
+
+const VFRMediaLayer: React.FC<VFRMediaLayerProps> = ({ page, isCurrent, isText, muted, onVideoEnded }) => {
+    const media = useMemo(() => resolveMedia(page), [page]);
+    const [seqIndex, setSeqIndex] = useState(0);
+
+    useEffect(() => {
+        if (media.kind !== 'image-sequence' || !isCurrent || media.urls.length <= 1) return;
+        setSeqIndex(0);
+        const id = window.setInterval(() => {
+            setSeqIndex(prev => (prev + 1) % media.urls.length);
+        }, media.durationMs);
+        return () => window.clearInterval(id);
+    }, [media, isCurrent]);
+
+    if (media.kind === 'none') {
+        return <div className="absolute inset-0 bg-gradient-to-b from-slate-800 via-slate-900 to-black" />;
+    }
+    if (media.kind === 'video') {
+        return (
+            <video
+                src={media.url}
+                className="absolute inset-0 w-full h-full object-cover"
+                autoPlay={isCurrent}
+                muted={isText || muted}
+                playsInline
+                loop={!page.videoAutoAdvance}
+                onEnded={onVideoEnded}
+            />
+        );
+    }
+    if (media.kind === 'image') {
+        return (
+            <img
+                src={media.url}
+                alt=""
+                className="absolute inset-0 w-full h-full object-cover"
+                draggable={false}
+            />
+        );
+    }
+    if (media.kind === 'video-sequence') {
+        const idx = Math.min(seqIndex, media.urls.length - 1);
+        const isLast = idx >= media.urls.length - 1;
+        return (
+            <video
+                key={`vseq-${idx}-${media.urls[idx]}`}
+                src={media.urls[idx]}
+                className="absolute inset-0 w-full h-full object-cover"
+                autoPlay={isCurrent}
+                muted={isText || muted}
+                playsInline
+                onEnded={() => {
+                    if (isLast) onVideoEnded();
+                    else setSeqIndex(idx + 1);
+                }}
+            />
+        );
+    }
+    return (
+        <>
+            {media.urls.map((url, i) => (
+                <img
+                    key={`iseq-${i}-${url}`}
+                    src={url}
+                    alt=""
+                    draggable={false}
+                    className="absolute inset-0 w-full h-full object-cover"
+                    style={{
+                        opacity: i === seqIndex ? 1 : 0,
+                        transition: 'opacity 700ms ease',
+                    }}
+                />
+            ))}
+        </>
+    );
+};
 
 interface Props {
     bookId: string;
@@ -44,12 +173,6 @@ const getCombinedText = (page: VerticalPage): string => {
         .join('\n\n');
     if (fromBoxes) return fromBoxes;
     return (page.content?.text || '').trim();
-};
-
-const getBackground = (page: VerticalPage): { url?: string; type: 'image' | 'video' } => {
-    const url = page.backgroundUrl || page.files?.background?.url;
-    const type = (page.backgroundType || page.files?.background?.type || 'image') as 'image' | 'video';
-    return { url, type };
 };
 
 const VerticalFeedReader: React.FC<Props> = ({ bookId, book: preLoadedBook, shareToken }) => {
@@ -331,68 +454,56 @@ const VerticalFeedReader: React.FC<Props> = ({ bookId, book: preLoadedBook, shar
                 `}</style>
 
                 {pages.map((page, index) => {
-                    const bg = getBackground(page);
                     const isText = page.pageKind === 'text';
                     const text = getCombinedText(page);
                     const firstBox = (page.content?.textBoxes && page.content.textBoxes[0]) || (page.textBoxes && page.textBoxes[0]);
+                    const isCurrent = index === currentIndex;
+                    const hasBgMedia = resolveMedia(page).kind !== 'none';
                     return (
                         <section
                             key={page._id || index}
                             ref={(el) => { sectionRefs.current[index] = el; }}
                             data-page-index={index}
-                            className="relative w-full h-full snap-start"
+                            className="relative w-full h-full snap-start overflow-hidden"
                             style={{ height: '100dvh' }}
                         >
-                            {/* Background layer (image or video) */}
-                            {bg.url && bg.type === 'video' ? (
-                                <video
-                                    src={bg.url}
-                                    className="absolute inset-0 w-full h-full object-cover"
-                                    autoPlay={index === currentIndex}
-                                    muted={isText || muted}
-                                    playsInline
-                                    loop={!page.videoAutoAdvance}
-                                    onEnded={() => handleVideoEnded(index)}
-                                />
-                            ) : bg.url ? (
-                                <img
-                                    src={bg.url}
-                                    alt=""
-                                    className="absolute inset-0 w-full h-full object-cover"
-                                    draggable={false}
-                                />
-                            ) : (
-                                <div className="absolute inset-0 bg-gradient-to-b from-slate-800 via-slate-900 to-black" />
-                            )}
+                            <VFRMediaLayer
+                                page={page}
+                                isCurrent={isCurrent}
+                                isText={isText}
+                                muted={muted}
+                                onVideoEnded={() => handleVideoEnded(index)}
+                            />
 
                             {/* Text overlay for text pages */}
                             {isText && (
                                 <>
-                                    <div
-                                        key={`dim-${page._id}-${index === currentIndex ? 'on' : 'off'}`}
-                                        className="absolute inset-0 bg-gradient-to-b from-black/50 via-black/30 to-black/70"
-                                        style={{
-                                            animation: index === currentIndex
-                                                ? 'vfrDimIn 600ms ease-out both'
-                                                : undefined,
-                                        }}
-                                    />
+                                    {hasBgMedia && (
+                                        <div
+                                            key={`dim-${page._id}-${isCurrent ? 'on' : 'off'}`}
+                                            className="absolute inset-0"
+                                            style={{
+                                                background: 'radial-gradient(ellipse at center, rgba(0,0,0,0.15) 0%, rgba(0,0,0,0.45) 100%)',
+                                                animation: isCurrent ? 'vfrDimIn 500ms ease-out both' : undefined,
+                                            }}
+                                        />
+                                    )}
                                     <div className="absolute inset-0 flex items-center justify-center px-6 pt-20 pb-28">
                                         <div
-                                            key={`text-${page._id}-${index === currentIndex ? 'on' : 'off'}`}
+                                            key={`text-${page._id}-${isCurrent ? 'on' : 'off'}`}
                                             className="max-w-md w-full text-center"
                                             style={{
                                                 fontFamily: firstBox?.fontFamily || 'Patrick Hand, system-ui, sans-serif',
                                                 color: firstBox?.color || '#ffffff',
                                                 fontSize: `clamp(20px, ${(firstBox?.fontSize || 28) * 0.9}px, 36px)`,
                                                 lineHeight: 1.35,
-                                                textShadow: '0 2px 14px rgba(0,0,0,0.7)',
+                                                textShadow: '0 2px 14px rgba(0,0,0,0.75)',
                                                 whiteSpace: 'pre-wrap',
                                                 wordBreak: 'break-word',
-                                                animation: index === currentIndex
+                                                animation: isCurrent
                                                     ? 'vfrTextIn 750ms cubic-bezier(0.22, 1, 0.36, 1) both'
                                                     : undefined,
-                                                animationDelay: index === currentIndex ? '180ms' : undefined,
+                                                animationDelay: isCurrent ? '180ms' : undefined,
                                             }}
                                         >
                                             {text || ' '}

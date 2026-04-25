@@ -277,13 +277,25 @@ const PageEditor: React.FC = () => {
         fetchPages();
     }, [bookId]);
 
-    // Cleanup object URLs
+    // Cleanup object URLs — IMPORTANT: split per-preview so changing one doesn't
+    // revoke the other. Previously a single effect with [backgroundPreview, scrollPreview]
+    // would revoke the still-in-use blob when the *other* preview changed (closure
+    // captured both prev values), making freshly uploaded images vanish.
     useEffect(() => {
         return () => {
-            if (backgroundPreview && !backgroundPreview.startsWith('http')) URL.revokeObjectURL(backgroundPreview);
-            if (scrollPreview && !scrollPreview.startsWith('http')) URL.revokeObjectURL(scrollPreview);
+            if (backgroundPreview && backgroundPreview.startsWith('blob:')) {
+                URL.revokeObjectURL(backgroundPreview);
+            }
         };
-    }, [backgroundPreview, scrollPreview]);
+    }, [backgroundPreview]);
+
+    useEffect(() => {
+        return () => {
+            if (scrollPreview && scrollPreview.startsWith('blob:')) {
+                URL.revokeObjectURL(scrollPreview);
+            }
+        };
+    }, [scrollPreview]);
 
     // Add new text box
     const addTextBox = () => {
@@ -613,10 +625,13 @@ const PageEditor: React.FC = () => {
     };
 
     // Create new page (reset editor)
-    const createNewPage = () => {
+    const createNewPage = (pagesOverride?: any[]) => {
         setEditingPageId(null);
-        const nextPageNum = existingPages.length > 0
-            ? Math.max(...existingPages.map((p: any) => p.pageNumber)) + 1
+        // Prefer fresh list passed by caller (avoids stale closure right after
+        // a save, where setExistingPages hasn't applied yet).
+        const list = pagesOverride ?? existingPages;
+        const nextPageNum = list.length > 0
+            ? Math.max(...list.map((p: any) => p.pageNumber)) + 1
             : 1;
         setPageNumber(nextPageNum);
         setBackgroundType('image');
@@ -1128,8 +1143,9 @@ const PageEditor: React.FC = () => {
                 if (pageNumber === 1 && !pageTemplate && (scrollUrl || textBoxes.length > 0)) {
                     setShowTemplateDialog(true);
                 } else {
-                    // Reset for new page
-                    createNewPage();
+                    // Reset for new page — pass the fresh pages list because
+                    // setExistingPages above hasn't applied to closure yet.
+                    createNewPage(res.data);
                 }
             }
         } catch (err: any) {
@@ -1161,7 +1177,7 @@ const PageEditor: React.FC = () => {
             
             // If we were editing the deleted page, reset to new page
             if (editingPageId === pageId) {
-                createNewPage();
+                createNewPage(res.data);
             }
             
             alert('Page deleted successfully!');
@@ -1392,6 +1408,9 @@ const PageEditor: React.FC = () => {
                                         setBackgroundFile(file);
                                         setBackgroundPreview(URL.createObjectURL(file));
                                     }
+                                    // Allow re-selecting the same file later (DOM input
+                                    // otherwise won't fire change for an unchanged value).
+                                    e.target.value = '';
                                 }}
                             />
                             <label
@@ -2187,6 +2206,7 @@ const PageEditor: React.FC = () => {
                                         setScrollPreview(URL.createObjectURL(file));
                                         console.log('📜 Selected new scroll file:', file.name);
                                     }
+                                    e.target.value = '';
                                 }}
                             />
                             <label

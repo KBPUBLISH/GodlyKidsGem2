@@ -13,6 +13,23 @@ const pageSchema = new mongoose.Schema({
         required: true,
     },
 
+    // Page kind for swipe_up (vertical feed) reader layout.
+    // - 'media': full-bleed image/video card (default; matches behavior of side_swipe pages)
+    // - 'text':  text-forward card with optional background image/video for style
+    // For side_swipe books this field is informational only and does not change rendering.
+    pageKind: {
+        type: String,
+        enum: ['text', 'media'],
+        default: 'media',
+    },
+
+    // For swipe_up Media pages with a video: auto-scroll to next page when video ends.
+    // No effect on side_swipe books or text pages.
+    videoAutoAdvance: {
+        type: Boolean,
+        default: false,
+    },
+
     // Feature flags
     isColoringPage: {
         type: Boolean,

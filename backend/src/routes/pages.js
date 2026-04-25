@@ -51,6 +51,9 @@ router.post('/', async (req, res) => {
         soundEffectUrl: req.body.soundEffectUrl,
         backgroundAudioUrl: req.body.backgroundAudioUrl, // Auto-extracted from video for iOS audio layering
         textBoxes: req.body.textBoxes,
+        // Swipe Up (vertical feed) layout: page kind & video auto-advance
+        pageKind: req.body.pageKind === 'text' ? 'text' : 'media',
+        videoAutoAdvance: !!req.body.videoAutoAdvance,
         // Coloring page settings
         isColoringPage: req.body.isColoringPage || false,
         coloringEndModalOnly: req.body.coloringEndModalOnly !== false, // Default to true (end modal only)

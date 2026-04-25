@@ -142,6 +142,9 @@ const PageEditor: React.FC = () => {
     const [characterVoices, setCharacterVoices] = useState<Array<{ characterName: string; voiceId: string; color?: string }>>([]);
     // Kids Monthly Book: optional scene prompt for on-demand background image generation
     const [bookType, setBookType] = useState<'standard' | 'kids_monthly'>('standard');
+    const [readerLayout, setReaderLayout] = useState<'side_swipe' | 'swipe_up'>('side_swipe');
+    const [pageKind, setPageKind] = useState<'text' | 'media'>('media');
+    const [videoAutoAdvance, setVideoAutoAdvance] = useState<boolean>(false);
     const [sceneDescription, setSceneDescription] = useState<string>('');
     // Kids Monthly Book: saved characters to reference on this page (for image generation)
     const [referenceCharacterIds, setReferenceCharacterIds] = useState<string[]>([]);
@@ -191,6 +194,7 @@ const PageEditor: React.FC = () => {
                     setCharacterVoices(res.data.characterVoices);
                 }
                 setBookType(res.data.bookType || 'standard');
+                setReaderLayout(res.data.readerLayout === 'swipe_up' ? 'swipe_up' : 'side_swipe');
             } catch (err) {
                 console.error('Failed to fetch book data for character voices:', err);
             }
@@ -530,6 +534,10 @@ const PageEditor: React.FC = () => {
         // Kids Monthly: scene description for on-demand background image generation
         setSceneDescription(page.sceneDescription || '');
         setReferenceCharacterIds(page.referenceCharacterIds ? page.referenceCharacterIds.map((id: any) => String(id)) : []);
+
+        // Load Swipe Up layout per-page settings
+        setPageKind(page.pageKind === 'text' ? 'text' : 'media');
+        setVideoAutoAdvance(!!page.videoAutoAdvance);
 
         // Load coloring page settings
         setIsColoringPage(page.isColoringPage || false);
@@ -1022,6 +1030,9 @@ const PageEditor: React.FC = () => {
                 scrollWidth, // Width as percentage (100 = full width)
                 soundEffectUrl, // Sound effect bubble audio
                 textBoxes: textBoxes.map(({ id, ...rest }) => rest), // Remove ID before sending
+                // Swipe Up (vertical feed) layout per-page settings
+                pageKind: readerLayout === 'swipe_up' ? pageKind : 'media',
+                videoAutoAdvance: readerLayout === 'swipe_up' && pageKind === 'media' && backgroundType === 'video' ? videoAutoAdvance : false,
                 isColoringPage,
                 coloringEndModalOnly: isColoringPage ? coloringEndModalOnly : false, // Only relevant if it's a coloring page
                 // Web View page settings
@@ -1297,11 +1308,52 @@ const PageEditor: React.FC = () => {
                         )}
                     </div>
 
+                    {/* Swipe Up: Page Kind toggle */}
+                    {readerLayout === 'swipe_up' && (
+                        <>
+                            <hr className="border-gray-100" />
+                            <div className="space-y-2">
+                                <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider">Page Kind (Swipe Up)</label>
+                                <div className="flex gap-2">
+                                    <button
+                                        type="button"
+                                        onClick={() => setPageKind('text')}
+                                        className={`flex-1 py-2 text-sm rounded-lg border-2 transition ${
+                                            pageKind === 'text'
+                                                ? 'bg-pink-50 border-pink-400 text-pink-800 font-semibold'
+                                                : 'border-gray-200 text-gray-600 hover:border-gray-300'
+                                        }`}
+                                    >
+                                        📝 Text page
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => setPageKind('media')}
+                                        className={`flex-1 py-2 text-sm rounded-lg border-2 transition ${
+                                            pageKind === 'media'
+                                                ? 'bg-pink-50 border-pink-400 text-pink-800 font-semibold'
+                                                : 'border-gray-200 text-gray-600 hover:border-gray-300'
+                                        }`}
+                                    >
+                                        🎞️ Media page
+                                    </button>
+                                </div>
+                                <p className="text-xs text-gray-500">
+                                    {pageKind === 'text'
+                                        ? 'Full-screen text card. Background image/video is optional and used purely for style. TTS works the same as regular books.'
+                                        : 'Full-screen image or video. No text overlay; user swipes up to advance.'}
+                                </p>
+                            </div>
+                        </>
+                    )}
+
                     <hr className="border-gray-100" />
 
                     {/* Background */}
                     <div className="space-y-3">
-                        <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider">Background</label>
+                        <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                            {readerLayout === 'swipe_up' && pageKind === 'text' ? 'Background (optional, for style)' : 'Background'}
+                        </label>
                         <div className="flex gap-2 mb-2">
                             <button
                                 onClick={() => setBackgroundType('image')}
@@ -1379,6 +1431,24 @@ const PageEditor: React.FC = () => {
                             >
                                 Remove Background
                             </button>
+                        )}
+
+                        {/* Swipe Up: video auto-advance (only when this is a Media page with a video background) */}
+                        {readerLayout === 'swipe_up' && pageKind === 'media' && backgroundType === 'video' && (
+                            <label className="flex items-start gap-2 cursor-pointer bg-pink-50 p-2 rounded-lg border border-pink-200">
+                                <input
+                                    type="checkbox"
+                                    checked={videoAutoAdvance}
+                                    onChange={(e) => setVideoAutoAdvance(e.target.checked)}
+                                    className="w-4 h-4 mt-0.5 text-pink-600 border-gray-300 rounded focus:ring-pink-500"
+                                />
+                                <div>
+                                    <span className="text-sm text-gray-800 font-medium">Auto-advance when video ends</span>
+                                    <p className="text-xs text-pink-700 mt-0.5">
+                                        When the video finishes playing, automatically scroll the reader to the next page.
+                                    </p>
+                                </div>
+                            </label>
                         )}
 
                         {/* Kids Monthly only: image prompt for on-demand background generation */}

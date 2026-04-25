@@ -587,7 +587,7 @@ import PaywallTrialNotifyPage from './pages/PaywallTrialNotifyPage';
 import PremiumOnboardingPage from './pages/PremiumOnboardingPage';
 import TrialStatsPage from './pages/TrialStatsPage';
 import SettingsPage from './pages/SettingsPage';
-import BookReaderPage from './pages/BookReaderPage';
+import BookReaderRouter from './pages/BookReaderRouter';
 import AudioPage from './pages/AudioPage';
 import PlaylistPlayerPage from './pages/PlaylistPlayerPage';
 import PlaylistDetailPage from './pages/PlaylistDetailPage';
@@ -1573,7 +1573,7 @@ const App: React.FC = () => {
                   <Route path="/book-series/:seriesId" element={<BookSeriesDetailPage />} />
                   
                   {/* CONTENT CONSUMPTION - Allow guests to try content, prompt to save progress later */}
-                  <Route path="/read/:bookId" element={<GuestFriendlyRoute contentType="book"><BookReaderPage /></GuestFriendlyRoute>} />
+                  <Route path="/read/:bookId" element={<GuestFriendlyRoute contentType="book"><BookReaderRouter /></GuestFriendlyRoute>} />
                   <Route path="/player/:bookId/:chapterId" element={<GuestFriendlyRoute contentType="audio"><AudioPlayerPage /></GuestFriendlyRoute>} />
                   <Route path="/audio/playlist/:playlistId/play/:itemIndex" element={<GuestFriendlyRoute contentType="audio"><PlaylistPlayerPage /></GuestFriendlyRoute>} />
                   <Route path="/my-playlist/:id" element={<ProtectedRoute><UserPlaylistPage /></ProtectedRoute>} />

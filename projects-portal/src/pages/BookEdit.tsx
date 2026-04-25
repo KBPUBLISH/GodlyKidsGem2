@@ -80,6 +80,7 @@ const BookEdit: React.FC = () => {
     // Book type and featured character (Kids Monthly Book)
     const [bookType, setBookType] = useState<'standard' | 'kids_monthly'>('standard');
     const [featuredCharacterId, setFeaturedCharacterId] = useState<string>('');
+    const [readerLayout, setReaderLayout] = useState<'side_swipe' | 'swipe_up'>('side_swipe');
     const [characters, setCharacters] = useState<Array<{ _id: string; internalTag: string; displayName: string }>>([]);
 
     // Load existing book data
@@ -160,6 +161,7 @@ const BookEdit: React.FC = () => {
                 // Book type and featured character
                 setBookType(b.bookType || 'standard');
                 setFeaturedCharacterId(b.featuredCharacterId?._id || b.featuredCharacterId || '');
+                setReaderLayout(b.readerLayout === 'swipe_up' ? 'swipe_up' : 'side_swipe');
             } catch (err) {
                 console.error('Failed to fetch book:', err);
             } finally {
@@ -504,6 +506,7 @@ const BookEdit: React.FC = () => {
                 goalTags: goalTags, // Learning goal tags for daily session matching
                 bookType: bookType,
                 featuredCharacterId: bookType === 'kids_monthly' && featuredCharacterId ? featuredCharacterId : null,
+                readerLayout: readerLayout,
             };
             console.log('Updating book with payload:', payload);
             await apiClient.put(`/api/books/${bookId}`, payload);
@@ -686,6 +689,46 @@ const BookEdit: React.FC = () => {
                     )}
                 </div>
                 <div className="space-y-4">
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">Reader Layout</label>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 max-w-2xl">
+                            <button
+                                type="button"
+                                onClick={() => setReaderLayout('side_swipe')}
+                                className={`text-left rounded-lg border-2 p-4 transition ${
+                                    readerLayout === 'side_swipe'
+                                        ? 'border-indigo-500 bg-indigo-50'
+                                        : 'border-gray-200 hover:border-gray-300 bg-white'
+                                }`}
+                            >
+                                <div className="flex items-center gap-2 mb-1">
+                                    <span className="text-lg">📖</span>
+                                    <span className="font-semibold text-gray-800">Side Swipe (Regular)</span>
+                                </div>
+                                <p className="text-xs text-gray-600">Classic horizontal page-turn book with parchment text overlays.</p>
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => { setReaderLayout('swipe_up'); setOrientation('portrait'); }}
+                                className={`text-left rounded-lg border-2 p-4 transition ${
+                                    readerLayout === 'swipe_up'
+                                        ? 'border-pink-500 bg-pink-50'
+                                        : 'border-gray-200 hover:border-gray-300 bg-white'
+                                }`}
+                            >
+                                <div className="flex items-center gap-2 mb-1">
+                                    <span className="text-lg">🎬</span>
+                                    <span className="font-semibold text-gray-800">Swipe Up (Vertical Story)</span>
+                                </div>
+                                <p className="text-xs text-gray-600">TikTok-style vertical feed. Each page is a full-screen text or media card. Portrait recommended.</p>
+                            </button>
+                        </div>
+                        {readerLayout === 'swipe_up' && (
+                            <p className="text-xs text-pink-700 mt-2">
+                                In Swipe Up books, each page in the page editor gets a "Page Kind" toggle (Text or Media).
+                            </p>
+                        )}
+                    </div>
                     <div>
                         <label className="block text-sm font-medium text-gray-700 mb-2">Book type</label>
                         <select

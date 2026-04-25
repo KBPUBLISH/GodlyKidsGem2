@@ -481,6 +481,8 @@ router.post('/', async (req, res) => {
             category: req.body.category || 'Other',
             status: req.body.status || 'draft',
             bookType: req.body.bookType || 'standard',
+            readerLayout: req.body.readerLayout === 'swipe_up' ? 'swipe_up' : 'side_swipe',
+            orientation: req.body.orientation === 'landscape' ? 'landscape' : 'portrait',
             text: req.body.text || '',
             games: req.body.games || [],
             bookGames: req.body.bookGames || [],

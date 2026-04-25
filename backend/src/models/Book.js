@@ -52,6 +52,15 @@ const bookSchema = new mongoose.Schema({
         enum: ['portrait', 'landscape'],
         default: 'portrait',
     },
+
+    // Reader layout style
+    // - side_swipe: classic horizontal page-turn book (default; existing behavior)
+    // - swipe_up:  TikTok/Reels-style vertical snap-scroll story feed
+    readerLayout: {
+        type: String,
+        enum: ['side_swipe', 'swipe_up'],
+        default: 'side_swipe',
+    },
     
     // Access control - whether content requires membership
     isMembersOnly: {

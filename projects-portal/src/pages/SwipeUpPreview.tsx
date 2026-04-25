@@ -50,6 +50,23 @@ const getBackground = (page: PreviewPage): { url?: string; type: 'image' | 'vide
     return { url: url ? getMediaUrl(url) : undefined, type };
 };
 
+// Phone frame size: keep 9:19.5 portrait, fit inside viewport with chrome margin.
+function computeFrameSize() {
+    if (typeof window === 'undefined') return { width: 360, height: 780 };
+    const verticalChrome = 130; // top bar + bottom padding + page-list pills
+    const horizontalChrome = 32;
+    const maxH = Math.max(420, window.innerHeight - verticalChrome);
+    const maxW = Math.max(280, window.innerWidth - horizontalChrome);
+    const ratio = 9 / 19.5;
+    let width = Math.min(maxW, maxH * ratio, 420);
+    let height = width / ratio;
+    if (height > maxH) {
+        height = maxH;
+        width = height * ratio;
+    }
+    return { width: Math.round(width), height: Math.round(height) };
+}
+
 const SwipeUpPreview: React.FC = () => {
     const { bookId } = useParams<{ bookId: string }>();
     const navigate = useNavigate();
@@ -81,6 +98,15 @@ const SwipeUpPreview: React.FC = () => {
                     (a: PreviewPage, b: PreviewPage) => (a.pageNumber || 0) - (b.pageNumber || 0)
                 );
                 setPages(sorted);
+                console.log('[SwipeUpPreview] loaded', sorted.length, 'pages. Backgrounds:',
+                    sorted.map((p: PreviewPage) => ({
+                        pageNumber: p.pageNumber,
+                        kind: p.pageKind,
+                        bgUrl: p.backgroundUrl || p.files?.background?.url,
+                        bgType: p.backgroundType || p.files?.background?.type,
+                        resolved: getMediaUrl(p.backgroundUrl || p.files?.background?.url || ''),
+                    }))
+                );
             } catch (err) {
                 console.error('Failed to load swipe up preview:', err);
             } finally {
@@ -137,11 +163,26 @@ const SwipeUpPreview: React.FC = () => {
 
     const isSwipeUp = (book?.readerLayout || 'side_swipe') === 'swipe_up';
     const totalCount = pages.length + 1;
+
+    // Phone frame size — derived from viewport, locked 9/19.5 portrait.
+    // (No aspectRatio + explicit width/height combo, that fights itself.)
+    const [frameSize, setFrameSize] = useState(() => computeFrameSize());
+
+    useEffect(() => {
+        const onResize = () => setFrameSize(computeFrameSize());
+        window.addEventListener('resize', onResize);
+        return () => window.removeEventListener('resize', onResize);
+    }, []);
+
     const phoneFrameStyle = useMemo(() => ({
-        width: 'min(420px, 100vw)',
-        height: 'min(900px, 100vh)',
-        aspectRatio: '9 / 19.5',
-    }), []);
+        width: `${frameSize.width}px`,
+        height: `${frameSize.height}px`,
+    }), [frameSize.width, frameSize.height]);
+
+    const sectionStyle = useMemo(() => ({
+        height: `${frameSize.height}px`,
+        flex: '0 0 auto' as const,
+    }), [frameSize.height]);
 
     if (loading) {
         return (
@@ -218,92 +259,101 @@ const SwipeUpPreview: React.FC = () => {
                     </div>
                 )}
 
+                <style>{`
+                    .swp-feed::-webkit-scrollbar { display: none; }
+                    @keyframes swpTextIn {
+                        from { opacity: 0; transform: translateY(18px); filter: blur(6px); }
+                        to   { opacity: 1; transform: translateY(0);    filter: blur(0); }
+                    }
+                    @keyframes swpDimIn {
+                        from { opacity: 0; }
+                        to   { opacity: 1; }
+                    }
+                `}</style>
+
                 <div
                     ref={containerRef}
-                    className="h-full w-full overflow-y-scroll snap-y snap-mandatory overscroll-contain"
+                    className="swp-feed h-full w-full overflow-y-scroll snap-y snap-mandatory overscroll-contain"
                     style={{ scrollbarWidth: 'none' }}
                 >
-                    <style>{`
-                        .swp-feed::-webkit-scrollbar { display: none; }
-                        @keyframes swpTextIn {
-                            from { opacity: 0; transform: translateY(18px); filter: blur(6px); }
-                            to   { opacity: 1; transform: translateY(0);    filter: blur(0); }
-                        }
-                        @keyframes swpDimIn {
-                            from { opacity: 0; }
-                            to   { opacity: 1; }
-                        }
-                    `}</style>
-
                     {pages.map((page, index) => {
                         const bg = getBackground(page);
                         const isText = page.pageKind === 'text';
                         const text = getCombinedText(page);
                         const firstBox = (page.content?.textBoxes && page.content.textBoxes[0]) || (page.textBoxes && page.textBoxes[0]);
                         const isCurrent = index === currentIndex;
+                        const hasBgMedia = !!bg.url;
                         return (
                             <section
                                 key={page._id || index}
                                 ref={(el) => { sectionRefs.current[index] = el; }}
                                 data-page-index={index}
-                                className="relative w-full snap-start"
-                                style={{ height: '100%' }}
+                                className="relative w-full snap-start overflow-hidden bg-black"
+                                style={sectionStyle}
                             >
-                                <div className="relative w-full h-full">
-                                    {bg.url && bg.type === 'video' ? (
-                                        <video
-                                            src={bg.url}
-                                            className="absolute inset-0 w-full h-full object-cover"
-                                            autoPlay={isCurrent}
-                                            muted
-                                            playsInline
-                                            loop={!page.videoAutoAdvance}
-                                            onEnded={() => handleVideoEnded(index)}
-                                        />
-                                    ) : bg.url ? (
-                                        <img
-                                            src={bg.url}
-                                            alt=""
-                                            className="absolute inset-0 w-full h-full object-cover"
-                                            draggable={false}
-                                        />
-                                    ) : (
-                                        <div className="absolute inset-0 bg-gradient-to-b from-slate-700 via-slate-900 to-black" />
-                                    )}
+                                {bg.url && bg.type === 'video' ? (
+                                    <video
+                                        src={bg.url}
+                                        className="absolute inset-0 w-full h-full object-cover"
+                                        autoPlay={isCurrent}
+                                        muted
+                                        playsInline
+                                        loop={!page.videoAutoAdvance}
+                                        onEnded={() => handleVideoEnded(index)}
+                                        onError={(e) => console.warn('[SwipeUpPreview] video failed:', bg.url, e)}
+                                    />
+                                ) : bg.url ? (
+                                    <img
+                                        src={bg.url}
+                                        alt=""
+                                        className="absolute inset-0 w-full h-full object-cover"
+                                        draggable={false}
+                                        onError={(e) => {
+                                            console.warn('[SwipeUpPreview] image failed:', bg.url);
+                                            (e.currentTarget as HTMLImageElement).style.display = 'none';
+                                        }}
+                                    />
+                                ) : (
+                                    <div className="absolute inset-0 bg-gradient-to-b from-slate-700 via-slate-900 to-black" />
+                                )}
 
-                                    {isText && (
-                                        <>
+                                {isText && (
+                                    <>
+                                        {/* Subtle vignette for legibility — only when there's an actual
+                                            bg image/video; on the gradient placeholder we don't need extra dim. */}
+                                        {hasBgMedia && (
                                             <div
                                                 key={`dim-${page._id}-${isCurrent ? 'on' : 'off'}`}
-                                                className="absolute inset-0 bg-gradient-to-b from-black/50 via-black/30 to-black/70"
+                                                className="absolute inset-0"
                                                 style={{
-                                                    animation: isCurrent ? 'swpDimIn 600ms ease-out both' : undefined,
+                                                    background: 'radial-gradient(ellipse at center, rgba(0,0,0,0.15) 0%, rgba(0,0,0,0.45) 100%)',
+                                                    animation: isCurrent ? 'swpDimIn 500ms ease-out both' : undefined,
                                                 }}
                                             />
-                                            <div className="absolute inset-0 flex items-center justify-center px-6 pt-16 pb-20">
-                                                <div
-                                                    key={`text-${page._id}-${isCurrent ? 'on' : 'off'}`}
-                                                    className="max-w-md w-full text-center"
-                                                    style={{
-                                                        fontFamily: firstBox?.fontFamily || 'Patrick Hand, system-ui, sans-serif',
-                                                        color: firstBox?.color || '#ffffff',
-                                                        fontSize: `clamp(18px, ${(firstBox?.fontSize || 28) * 0.85}px, 32px)`,
-                                                        lineHeight: 1.35,
-                                                        textShadow: '0 2px 14px rgba(0,0,0,0.7)',
-                                                        whiteSpace: 'pre-wrap',
-                                                        wordBreak: 'break-word',
-                                                        animation: isCurrent
-                                                            ? 'swpTextIn 750ms cubic-bezier(0.22, 1, 0.36, 1) both'
-                                                            : undefined,
-                                                        animationDelay: isCurrent ? '180ms' : undefined,
-                                                    }}
-                                                >
-                                                    {text || ' '}
-                                                </div>
+                                        )}
+                                        <div className="absolute inset-0 flex items-center justify-center px-6 pt-16 pb-20">
+                                            <div
+                                                key={`text-${page._id}-${isCurrent ? 'on' : 'off'}`}
+                                                className="max-w-md w-full text-center"
+                                                style={{
+                                                    fontFamily: firstBox?.fontFamily || 'Patrick Hand, system-ui, sans-serif',
+                                                    color: firstBox?.color || '#ffffff',
+                                                    fontSize: `clamp(18px, ${(firstBox?.fontSize || 28) * 0.85}px, 32px)`,
+                                                    lineHeight: 1.35,
+                                                    textShadow: '0 2px 14px rgba(0,0,0,0.75)',
+                                                    whiteSpace: 'pre-wrap',
+                                                    wordBreak: 'break-word',
+                                                    animation: isCurrent
+                                                        ? 'swpTextIn 750ms cubic-bezier(0.22, 1, 0.36, 1) both'
+                                                        : undefined,
+                                                    animationDelay: isCurrent ? '180ms' : undefined,
+                                                }}
+                                            >
+                                                {text || ' '}
                                             </div>
-                                        </>
-                                    )}
-                                </div>
+                                        </div>
+                                    </>
+                                )}
                             </section>
                         );
                     })}
@@ -312,8 +362,8 @@ const SwipeUpPreview: React.FC = () => {
                     <section
                         ref={(el) => { sectionRefs.current[pages.length] = el; }}
                         data-page-index={pages.length}
-                        className="relative w-full snap-start"
-                        style={{ height: '100%' }}
+                        className="relative w-full snap-start overflow-hidden"
+                        style={sectionStyle}
                     >
                         <div className="relative w-full h-full">
                             <div className="absolute inset-0 bg-gradient-to-b from-purple-900 via-indigo-900 to-black" />

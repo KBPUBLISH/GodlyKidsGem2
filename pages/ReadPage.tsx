@@ -71,6 +71,57 @@ const SeriesCard: React.FC<{ series: any; onClick: () => void; isSubscribed?: bo
   </button>
 );
 
+/** Horizontal swipe carousel for book series (scroll-snap on touch / trackpad). */
+const BookSeriesCarousel: React.FC<{
+  seriesList: any[];
+  isSubscribed?: boolean;
+  onSelectSeries: (seriesId: string) => void;
+}> = ({ seriesList, isSubscribed, onSelectSeries }) => {
+  if (!seriesList.length) return null;
+  return (
+    <div className="mb-4">
+      <div className="relative py-2 mb-3 mx-[-2px]">
+        <div
+          className="absolute inset-0 rounded-r-xl shadow-lg transform -skew-x-6 origin-bottom-left border-t-2 border-b-4"
+          style={{
+            backgroundColor: '#5B3A8C',
+            backgroundImage:
+              'repeating-linear-gradient(90deg, transparent, transparent 50px, rgba(0,0,0,0.08) 50px, rgba(0,0,0,0.08) 53px), linear-gradient(to bottom, #7C4DCC, #4A2870)',
+            borderColor: '#9B6DEE',
+            borderBottomColor: '#3d1f5c',
+          }}
+        />
+        <h3 className="relative z-10 text-white font-display text-lg tracking-wide px-6 drop-shadow-md flex items-center gap-2">
+          <BookOpen className="w-5 h-5" />
+          Book Series
+        </h3>
+        <div className="absolute top-1/2 left-2 w-2 h-2 bg-[#2d1848] rounded-full shadow-inner -translate-y-1/2 opacity-80" />
+        <div className="absolute top-1/2 right-2 w-2 h-2 bg-[#2d1848] rounded-full shadow-inner -translate-y-1/2 opacity-80" />
+      </div>
+      <div
+        className="flex gap-3 overflow-x-auto scroll-smooth snap-x snap-mandatory px-4 pb-1 touch-pan-x overscroll-x-contain no-scrollbar"
+        style={{ WebkitOverflowScrolling: 'touch' }}
+      >
+        {seriesList.map((series) => (
+          <div
+            key={series._id}
+            className="snap-start shrink-0 w-[min(42vw,168px)]"
+          >
+            <SeriesCard
+              series={series}
+              onClick={() => onSelectSeries(String(series._id))}
+              isSubscribed={isSubscribed}
+            />
+          </div>
+        ))}
+      </div>
+      <p className="text-white/45 text-[10px] font-display text-center px-4 mt-1">
+        Swipe sideways for more series
+      </p>
+    </div>
+  );
+};
+
 const ReadPage: React.FC = () => {
   const navigate = useNavigate();
   const { books, loading } = useBooks();
@@ -289,13 +340,6 @@ const ReadPage: React.FC = () => {
     s.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
     (s.author && s.author.toLowerCase().includes(searchQuery.toLowerCase()))
   );
-
-  const displayItems = useMemo(() => {
-    const items: Array<{ type: 'book' | 'series'; data: any }> = [];
-    filteredSeries.forEach(series => items.push({ type: 'series', data: series }));
-    filteredBooks.forEach(book => items.push({ type: 'book', data: book }));
-    return items;
-  }, [filteredBooks, filteredSeries]);
 
   /* ───── Content view (full-screen overlay that covers the wheel) ───── */
   if (showContent) {
@@ -591,29 +635,35 @@ const ReadPage: React.FC = () => {
 
           {loading ? (
             <div className="text-white font-display text-center mt-10 px-4">Loading library...</div>
-          ) : displayItems.length === 0 ? (
+          ) : filteredSeries.length === 0 && filteredBooks.length === 0 ? (
             <div className="text-white/80 font-display text-center mt-10 p-6 mx-4 bg-black/20 rounded-xl backdrop-blur-sm">
               {searchQuery ? `No stories found matching "${searchQuery}"` : `No books found in ${selectedCategory}`}
             </div>
           ) : (
-            <div className="grid grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3 max-w-6xl mx-auto px-4">
-              {displayItems.map((item, index) => (
-                item.type === 'series' ? (
-                  <SeriesCard
-                    key={`series-${item.data._id}`}
-                    series={item.data}
-                    onClick={() => navigate(`/book-series/${item.data._id}`)}
-                    isSubscribed={isSubscribed}
-                  />
-                ) : (
-                  <BookCard
-                    key={item.data.id || `book-${index}`}
-                    book={item.data}
-                    onClick={(id) => navigate(`/book/${id}`, { state: { from: '/read' } })}
-                  />
+            <>
+              <BookSeriesCarousel
+                seriesList={filteredSeries}
+                isSubscribed={isSubscribed}
+                onSelectSeries={(id) => navigate(`/book-series/${id}`)}
+              />
+              {filteredBooks.length > 0 ? (
+                <div className="grid grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3 max-w-6xl mx-auto px-4">
+                  {filteredBooks.map((book, index) => (
+                    <BookCard
+                      key={book.id || `book-${index}`}
+                      book={book}
+                      onClick={(id) => navigate(`/book/${id}`, { state: { from: '/read' } })}
+                    />
+                  ))}
+                </div>
+              ) : (
+                filteredSeries.length > 0 && (
+                  <p className="text-white/70 font-display text-center text-sm px-4 pb-4">
+                    No standalone books in this filter — open a series above.
+                  </p>
                 )
-              ))}
-            </div>
+              )}
+            </>
           )}
 
           {/* Footer message + CTA */}

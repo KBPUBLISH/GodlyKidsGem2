@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ChevronUp, Pause, Play, Volume2, VolumeX, X } from 'lucide-react';
-import { ApiService } from '../../services/apiService';
+import { ApiService, getApiBaseUrl } from '../../services/apiService';
 import { authService } from '../../services/authService';
 import { removeEmotionalCues } from '../../utils/textProcessing';
 import { analyticsService } from '../../services/analyticsService';
@@ -49,6 +49,72 @@ interface Props {
 
 const FALLBACK_VOICE_ID = '21m00Tcm4TlvDq8ikWAM';
 
+/** Match BookReader / apiService: relative /uploads paths need API origin on mobile WebView. */
+const resolveMediaUrl = (url: string | undefined | null): string => {
+    if (!url || !String(url).trim()) return '';
+    const u = String(url).trim();
+    if (u.startsWith('http://') || u.startsWith('https://') || u.startsWith('blob:')) return u;
+    const base = getApiBaseUrl().replace(/\/$/, '');
+    const path = u.startsWith('/') ? u : `/${u}`;
+    return `${base}${path}`;
+};
+
+const normalizePageForFeed = (raw: any): VerticalPage => {
+    const p = { ...raw } as VerticalPage;
+    const resolveSeq = (items: SequenceItem[] | undefined): SequenceItem[] =>
+        (items || []).map((item) => ({ ...item, url: resolveMediaUrl(item.url) }));
+
+    const rootImg = raw.imageSequence?.length ? resolveSeq(raw.imageSequence) : null;
+    const filesImg = raw.files?.imageSequence?.length ? resolveSeq(raw.files.imageSequence) : null;
+    if (rootImg?.length) {
+        p.imageSequence = rootImg;
+        p.useImageSequence = true;
+    } else if (filesImg?.length) {
+        p.imageSequence = filesImg;
+        p.useImageSequence = true;
+    }
+
+    if (raw.videoSequence?.length) {
+        p.videoSequence = resolveSeq(raw.videoSequence);
+        p.useVideoSequence = true;
+    } else if (raw.files?.videoSequence?.length && raw.useVideoSequence) {
+        p.videoSequence = resolveSeq(raw.files.videoSequence);
+        p.useVideoSequence = true;
+    }
+
+    if (p.backgroundUrl) p.backgroundUrl = resolveMediaUrl(p.backgroundUrl);
+    if (p.files?.background?.url) {
+        p.files = {
+            ...p.files,
+            background: {
+                ...p.files.background,
+                url: resolveMediaUrl(p.files.background.url),
+            },
+        };
+    }
+    return p;
+};
+
+function findWordIndexAtTime(
+    currentTime: number,
+    words: Array<{ start: number; end: number }>
+): number {
+    if (!words?.length) return -1;
+    for (let i = 0; i < words.length; i++) {
+        const w = words[i];
+        if (currentTime >= w.start && currentTime < w.end) return i;
+    }
+    if (currentTime < words[0].start) return 0;
+    if (currentTime >= words[words.length - 1].end) return words.length - 1;
+    for (let i = 0; i < words.length - 1; i++) {
+        if (currentTime >= words[i].end && currentTime < words[i + 1].start) {
+            const mid = (words[i].end + words[i + 1].start) / 2;
+            return currentTime >= mid ? i + 1 : i;
+        }
+    }
+    return words.length - 1;
+}
+
 const getCombinedText = (page: VerticalPage): string => {
     const boxes = page.content?.textBoxes && page.content.textBoxes.length
         ? page.content.textBoxes
@@ -70,6 +136,15 @@ const getBackground = (page: VerticalPage): { url?: string; type: 'image' | 'vid
 const getTextBoxes = (page: VerticalPage): TextBox[] => {
     if (page.content?.textBoxes && page.content.textBoxes.length) return page.content.textBoxes;
     return page.textBoxes || [];
+};
+
+const hasPositionedText = (page: VerticalPage): boolean =>
+    getTextBoxes(page).some((b) => (b.text || '').trim().length > 0);
+
+/** True when this page has script we can feed to TTS (text card or any combined body copy). */
+const isNarratableCard = (page: VerticalPage | undefined): boolean => {
+    if (!page) return false;
+    return !!removeEmotionalCues(getCombinedText(page) || '').trim();
 };
 
 const resolveShadow = (s?: string): string => {
@@ -147,6 +222,10 @@ const FeedMediaLayer: React.FC<{
 
     const [imgIdx, setImgIdx] = useState(0);
     useEffect(() => {
+        if (isCurrent) setImgIdx(0);
+    }, [isCurrent, page._id]);
+
+    useEffect(() => {
         if (!imgSeq || !isCurrent || imgSeq.length < 2) return;
         const ms = Math.max(1000, (page.imageSequenceDuration || 3) * 1000);
         const t = window.setInterval(() => {
@@ -170,7 +249,7 @@ const FeedMediaLayer: React.FC<{
                 {imgSeq.map((img, i) => (
                     <img
                         key={`${page._id}-img-${i}`}
-                        src={img.url}
+                        src={resolveMediaUrl(img.url)}
                         alt=""
                         className="absolute inset-0 w-full h-full object-cover transition-opacity duration-700"
                         style={{ opacity: i === activeIdx ? 1 : 0 }}
@@ -187,7 +266,7 @@ const FeedMediaLayer: React.FC<{
         return (
             <video
                 key={`${page._id}-vid-${vidIdx}`}
-                src={current.url}
+                src={resolveMediaUrl(current.url)}
                 className="absolute inset-0 w-full h-full object-cover"
                 autoPlay={isCurrent}
                 muted={videoMuted}
@@ -205,7 +284,7 @@ const FeedMediaLayer: React.FC<{
     if (bg.url && bg.type === 'video') {
         return (
             <video
-                src={bg.url}
+                src={resolveMediaUrl(bg.url)}
                 className="absolute inset-0 w-full h-full object-cover"
                 autoPlay={isCurrent}
                 muted={videoMuted}
@@ -218,7 +297,7 @@ const FeedMediaLayer: React.FC<{
     if (bg.url) {
         return (
             <img
-                src={bg.url}
+                src={resolveMediaUrl(bg.url)}
                 alt=""
                 className="absolute inset-0 w-full h-full object-cover"
                 draggable={false}
@@ -233,8 +312,15 @@ const VerticalFeedReader: React.FC<Props> = ({ bookId, book: preLoadedBook, shar
     const containerRef = useRef<HTMLDivElement>(null);
     const sectionRefs = useRef<Array<HTMLDivElement | null>>([]);
     const audioRef = useRef<HTMLAudioElement | null>(null);
-    const ttsCacheRef = useRef<Map<string, string>>(new Map());
+    const ttsCacheRef = useRef<Map<string, { audioUrl: string; alignment?: { words: Array<{ word: string; start: number; end: number }> } }>>(
+        new Map()
+    );
     const advanceTimerRef = useRef<number | null>(null);
+    const currentIndexRef = useRef(0);
+    const autoNarrateRef = useRef(false);
+    const mutedRef = useRef(false);
+    const pagesLenRef = useRef(0);
+    const goToPageRef = useRef<(index: number) => void>(() => {});
 
     const [book, setBook] = useState<any>(preLoadedBook || null);
     const [pages, setPages] = useState<VerticalPage[]>([]);
@@ -244,6 +330,10 @@ const VerticalFeedReader: React.FC<Props> = ({ bookId, book: preLoadedBook, shar
     const [muted, setMuted] = useState(false);
     const [ttsLoading, setTtsLoading] = useState(false);
     const [ttsPlaying, setTtsPlaying] = useState(false);
+    const [ttsAlignment, setTtsAlignment] = useState<{
+        words: Array<{ word: string; start: number; end: number }>;
+    } | null>(null);
+    const [activeWordIndex, setActiveWordIndex] = useState(-1);
     const [showHint, setShowHint] = useState(true);
 
     const selectedVoiceId = useMemo(() => {
@@ -268,9 +358,10 @@ const VerticalFeedReader: React.FC<Props> = ({ bookId, book: preLoadedBook, shar
                 ]);
                 if (cancelled) return;
                 if (bookResult) setBook(bookResult);
-                const sorted = (pagesResult || []).slice().sort(
-                    (a: VerticalPage, b: VerticalPage) => (a.pageNumber || 0) - (b.pageNumber || 0)
-                );
+                const sorted = (pagesResult || [])
+                    .slice()
+                    .sort((a: VerticalPage, b: VerticalPage) => (a.pageNumber || 0) - (b.pageNumber || 0))
+                    .map((pg: any) => normalizePageForFeed(pg));
                 setPages(sorted);
                 if (bookResult?.title) {
                     analyticsService.bookView(bookId, bookResult.title);
@@ -298,11 +389,15 @@ const VerticalFeedReader: React.FC<Props> = ({ bookId, book: preLoadedBook, shar
                         if (attr) bestIdx = parseInt(attr, 10);
                     }
                 });
-                if (bestIdx >= 0 && bestRatio >= 0.6) {
+                if (bestIdx >= 0 && bestRatio >= 0.35) {
                     setCurrentIndex(bestIdx);
                 }
             },
-            { root: containerRef.current, threshold: [0.6, 0.8, 0.95] }
+            {
+                root: containerRef.current,
+                threshold: [0, 0.15, 0.35, 0.55, 0.75, 0.95],
+                rootMargin: '-8% 0px -8% 0px',
+            }
         );
         sectionRefs.current.forEach(el => el && observer.observe(el));
         return () => observer.disconnect();
@@ -310,10 +405,14 @@ const VerticalFeedReader: React.FC<Props> = ({ bookId, book: preLoadedBook, shar
 
     const stopTts = useCallback(() => {
         if (audioRef.current) {
+            audioRef.current.onended = null;
+            audioRef.current.ontimeupdate = null;
             audioRef.current.pause();
             audioRef.current.currentTime = 0;
         }
         setTtsPlaying(false);
+        setTtsAlignment(null);
+        setActiveWordIndex(-1);
     }, []);
 
     const playTtsForPage = useCallback(async (page: VerticalPage, options?: { fromAuto?: boolean }) => {
@@ -324,8 +423,14 @@ const VerticalFeedReader: React.FC<Props> = ({ bookId, book: preLoadedBook, shar
             stopTts();
             setTtsLoading(true);
             const cacheKey = `${page._id}:${voiceId}`;
-            let audioUrl = ttsCacheRef.current.get(cacheKey) || null;
-            if (!audioUrl) {
+            let cached = ttsCacheRef.current.get(cacheKey) || null;
+            let audioUrl: string | null = null;
+            let alignment: { words: Array<{ word: string; start: number; end: number }> } | null = null;
+
+            if (cached?.audioUrl) {
+                audioUrl = resolveMediaUrl(cached.audioUrl);
+                alignment = cached.alignment?.words?.length ? cached.alignment : null;
+            } else {
                 const result = await ApiService.generateTTS(
                     text,
                     voiceId,
@@ -334,18 +439,56 @@ const VerticalFeedReader: React.FC<Props> = ({ bookId, book: preLoadedBook, shar
                     page.pageNumber,
                     0
                 );
-                audioUrl = result?.audioUrl || null;
-                if (audioUrl) ttsCacheRef.current.set(cacheKey, audioUrl);
+                audioUrl = result?.audioUrl ? resolveMediaUrl(result.audioUrl) : null;
+                alignment =
+                    result?.alignment?.words?.length ? result.alignment : null;
+                if (audioUrl) {
+                    ttsCacheRef.current.set(cacheKey, {
+                        audioUrl: result!.audioUrl,
+                        alignment: alignment || undefined,
+                    });
+                }
             }
+
             if (!audioUrl) {
                 setTtsLoading(false);
                 return;
             }
+
+            const alignmentForPlayback =
+                alignment?.words?.length ? { words: alignment.words } : null;
+            setTtsAlignment(alignmentForPlayback);
+
             if (!audioRef.current) audioRef.current = new Audio();
             const audio = audioRef.current;
             audio.src = audioUrl;
-            audio.onended = () => setTtsPlaying(false);
-            audio.onerror = () => { setTtsLoading(false); setTtsPlaying(false); };
+            audio.onerror = () => {
+                setTtsLoading(false);
+                setTtsPlaying(false);
+                setTtsAlignment(null);
+                setActiveWordIndex(-1);
+            };
+
+            audio.ontimeupdate = () => {
+                const words = alignmentForPlayback?.words;
+                if (words?.length) {
+                    const idx = findWordIndexAtTime(audio.currentTime, words);
+                    if (idx >= 0) setActiveWordIndex(idx);
+                }
+            };
+
+            audio.onended = () => {
+                setTtsPlaying(false);
+                setActiveWordIndex(-1);
+                setTtsAlignment(null);
+                if (autoNarrateRef.current && !mutedRef.current) {
+                    const idx = currentIndexRef.current;
+                    if (idx < pagesLenRef.current) {
+                        goToPageRef.current(idx + 1);
+                    }
+                }
+            };
+
             await audio.play();
             setTtsPlaying(true);
             setTtsLoading(false);
@@ -354,6 +497,8 @@ const VerticalFeedReader: React.FC<Props> = ({ bookId, book: preLoadedBook, shar
             console.warn('VerticalFeedReader TTS error:', err);
             setTtsLoading(false);
             setTtsPlaying(false);
+            setTtsAlignment(null);
+            setActiveWordIndex(-1);
         }
     }, [bookId, muted, stopTts, voiceId]);
 
@@ -363,7 +508,7 @@ const VerticalFeedReader: React.FC<Props> = ({ bookId, book: preLoadedBook, shar
         if (pages.length === 0) return;
         const page = pages[currentIndex];
         if (!page) return;
-        if (page.pageKind === 'text' && autoNarrate && !muted) {
+        if (isNarratableCard(page) && autoNarrate && !muted) {
             const t = window.setTimeout(() => {
                 playTtsForPage(page, { fromAuto: true });
             }, 350);
@@ -380,6 +525,22 @@ const VerticalFeedReader: React.FC<Props> = ({ bookId, book: preLoadedBook, shar
         const target = sectionRefs.current[index];
         if (target) target.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }, []);
+
+    useEffect(() => {
+        currentIndexRef.current = currentIndex;
+    }, [currentIndex]);
+    useEffect(() => {
+        autoNarrateRef.current = autoNarrate;
+    }, [autoNarrate]);
+    useEffect(() => {
+        mutedRef.current = muted;
+    }, [muted]);
+    useEffect(() => {
+        pagesLenRef.current = pages.length;
+    }, [pages.length]);
+    useEffect(() => {
+        goToPageRef.current = goToPage;
+    }, [goToPage]);
 
     const handleVideoEnded = useCallback((index: number) => {
         const page = pages[index];
@@ -431,7 +592,7 @@ const VerticalFeedReader: React.FC<Props> = ({ bookId, book: preLoadedBook, shar
 
     const totalCount = pages.length + 1; // +1 for The End card
     const currentPage = pages[currentIndex];
-    const currentIsText = currentPage?.pageKind === 'text';
+    const showNarrationButton = isNarratableCard(currentPage);
 
     return (
         <div className="fixed inset-0 bg-black z-50 select-none">
@@ -457,7 +618,7 @@ const VerticalFeedReader: React.FC<Props> = ({ bookId, book: preLoadedBook, shar
             </div>
 
             {/* Bottom-right TTS play/pause for text cards */}
-            {currentIsText && !muted && (
+            {showNarrationButton && !muted && (
                 <button
                     onClick={() => {
                         if (ttsPlaying) {
@@ -530,9 +691,10 @@ const VerticalFeedReader: React.FC<Props> = ({ bookId, book: preLoadedBook, shar
                             {isText ? (
                                 /* Text-kind page: centered combined text */
                                 <>
+                                    {/* Light scrim: keep artwork visible; readability comes mostly from text shadow */}
                                     <div
                                         key={`dim-${page._id}-${isCurrent ? 'on' : 'off'}`}
-                                        className="absolute inset-0 bg-gradient-to-b from-black/50 via-black/30 to-black/70"
+                                        className="absolute inset-0 pointer-events-none bg-gradient-to-b from-black/[0.08] via-transparent to-black/[0.22]"
                                         style={{
                                             animation: isCurrent ? 'vfrDimIn 600ms ease-out both' : undefined,
                                         }}
@@ -546,7 +708,8 @@ const VerticalFeedReader: React.FC<Props> = ({ bookId, book: preLoadedBook, shar
                                                 color: firstBox?.color || '#ffffff',
                                                 fontSize: `clamp(20px, ${(firstBox?.fontSize || 28) * 0.9}px, 36px)`,
                                                 lineHeight: 1.35,
-                                                textShadow: '0 2px 14px rgba(0,0,0,0.7)',
+                                                textShadow:
+                                                    '0 1px 2px rgba(0,0,0,0.9), 0 2px 12px rgba(0,0,0,0.65), 0 0 24px rgba(0,0,0,0.35)',
                                                 whiteSpace: 'pre-wrap',
                                                 wordBreak: 'break-word',
                                                 animation: isCurrent
@@ -555,17 +718,90 @@ const VerticalFeedReader: React.FC<Props> = ({ bookId, book: preLoadedBook, shar
                                                 animationDelay: isCurrent ? '180ms' : undefined,
                                             }}
                                         >
-                                            {text || ' '}
+                                            {isCurrent &&
+                                            ttsPlaying &&
+                                            ttsAlignment?.words?.length ? (
+                                                <>
+                                                    {ttsAlignment.words.map((w, wi) => (
+                                                        <span
+                                                            key={`${page._id}-w-${wi}`}
+                                                            className={
+                                                                wi === activeWordIndex
+                                                                    ? 'bg-amber-300/85 text-gray-900 rounded px-1 shadow-sm transition-colors duration-75'
+                                                                    : ''
+                                                            }
+                                                        >
+                                                            {w.word}
+                                                            {wi < ttsAlignment.words.length - 1 ? ' ' : ''}
+                                                        </span>
+                                                    ))}
+                                                </>
+                                            ) : (
+                                                text || ' '
+                                            )}
                                         </div>
                                     </div>
                                 </>
                             ) : (
-                                /* Media-kind page: render authored text boxes at their authored positions */
-                                <FeedPositionedTextBoxes
-                                    boxes={boxes}
-                                    isCurrent={isCurrent}
-                                    pageId={page._id || `p${index}`}
-                                />
+                                /* Media-kind: positioned boxes, or centered body text when only content.text exists */
+                                <>
+                                    <FeedPositionedTextBoxes
+                                        boxes={boxes}
+                                        isCurrent={isCurrent}
+                                        pageId={page._id || `p${index}`}
+                                    />
+                                    {!hasPositionedText(page) && text ? (
+                                        <>
+                                            <div
+                                                className="absolute inset-0 pointer-events-none bg-gradient-to-b from-black/[0.08] via-transparent to-black/[0.22]"
+                                                style={{
+                                                    animation: isCurrent ? 'vfrDimIn 600ms ease-out both' : undefined,
+                                                }}
+                                            />
+                                            <div className="absolute inset-0 flex items-center justify-center px-6 pt-20 pb-28 pointer-events-none">
+                                                <div
+                                                    className="max-w-md w-full text-center"
+                                                    style={{
+                                                        fontFamily: firstBox?.fontFamily || 'Patrick Hand, system-ui, sans-serif',
+                                                        color: firstBox?.color || '#ffffff',
+                                                        fontSize: `clamp(20px, ${(firstBox?.fontSize || 28) * 0.9}px, 36px)`,
+                                                        lineHeight: 1.35,
+                                                        textShadow:
+                                                            '0 1px 2px rgba(0,0,0,0.9), 0 2px 12px rgba(0,0,0,0.65), 0 0 24px rgba(0,0,0,0.35)',
+                                                        whiteSpace: 'pre-wrap',
+                                                        wordBreak: 'break-word',
+                                                        animation: isCurrent
+                                                            ? 'vfrTextIn 750ms cubic-bezier(0.22, 1, 0.36, 1) both'
+                                                            : undefined,
+                                                        animationDelay: isCurrent ? '180ms' : undefined,
+                                                    }}
+                                                >
+                                                    {isCurrent &&
+                                                    ttsPlaying &&
+                                                    ttsAlignment?.words?.length ? (
+                                                        <>
+                                                            {ttsAlignment.words.map((w, wi) => (
+                                                                <span
+                                                                    key={`${page._id}-fw-${wi}`}
+                                                                    className={
+                                                                        wi === activeWordIndex
+                                                                            ? 'bg-amber-300/85 text-gray-900 rounded px-1 shadow-sm transition-colors duration-75'
+                                                                            : ''
+                                                                    }
+                                                                >
+                                                                    {w.word}
+                                                                    {wi < ttsAlignment.words.length - 1 ? ' ' : ''}
+                                                                </span>
+                                                            ))}
+                                                        </>
+                                                    ) : (
+                                                        text
+                                                    )}
+                                                </div>
+                                            </div>
+                                        </>
+                                    ) : null}
+                                </>
                             )}
                         </section>
                     );

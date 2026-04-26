@@ -87,6 +87,36 @@ const SeriesCard: React.FC<{ series: any; onClick: () => void; isSubscribed?: bo
   </div>
 );
 
+const BookSeriesCarouselRow: React.FC<{
+  seriesList: any[];
+  isSubscribed?: boolean;
+  onSelectSeries: (seriesId: string) => void;
+}> = ({ seriesList, isSubscribed, onSelectSeries }) => {
+  if (!seriesList.length) return null;
+  return (
+    <div className="mb-6">
+      <div className="px-1 mb-3">
+        <SectionTitle title="Book Series" icon="📚" />
+        <p className="text-white/50 text-xs font-display mt-1">Swipe sideways to browse</p>
+      </div>
+      <div
+        className="flex gap-4 overflow-x-auto scroll-smooth snap-x snap-mandatory pb-2 px-1 touch-pan-x overscroll-x-contain no-scrollbar"
+        style={{ WebkitOverflowScrolling: 'touch' }}
+      >
+        {seriesList.map((series) => (
+          <div key={series._id} className="snap-start shrink-0 w-[min(72vw,240px)]">
+            <SeriesCard
+              series={series}
+              onClick={() => onSelectSeries(String(series._id))}
+              isSubscribed={isSubscribed}
+            />
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+};
+
 const ReadPagePanorama: React.FC = () => {
   const navigate = useNavigate();
   const { books, loading } = useBooks();
@@ -277,23 +307,6 @@ const ReadPagePanorama: React.FC = () => {
     (s.author && s.author.toLowerCase().includes(searchQuery.toLowerCase()))
   );
 
-  // Combine books and series for display
-  const displayItems = useMemo(() => {
-    const items: Array<{ type: 'book' | 'series'; data: any }> = [];
-    
-    // Add series first (they're collections, so show them prominently)
-    filteredSeries.forEach(series => {
-      items.push({ type: 'series', data: series });
-    });
-    
-    // Add standalone books
-    filteredBooks.forEach(book => {
-      items.push({ type: 'book', data: book });
-    });
-    
-    return items;
-  }, [filteredBooks, filteredSeries]);
-
   return (
     <div 
       ref={scrollRef}
@@ -479,29 +492,35 @@ const ReadPagePanorama: React.FC = () => {
            <div className="text-white font-display text-center mt-10">Loading library...</div>
         ) : (
           <>
-            {displayItems.length === 0 ? (
+            {filteredSeries.length === 0 && filteredBooks.length === 0 ? (
                 <div className="text-white/80 font-display text-center mt-10 p-6 bg-black/20 rounded-xl backdrop-blur-sm">
                     {searchQuery ? `No stories found matching "${searchQuery}"` : `No books found in ${selectedCategory}`}
                 </div>
             ) : (
-                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 max-w-6xl mx-auto">
-                    {displayItems.map((item, index) => (
-                      item.type === 'series' ? (
-                        <SeriesCard
-                          key={`series-${item.data._id}`}
-                          series={item.data}
-                          onClick={() => navigate(`/book-series/${item.data._id}`)}
-                          isSubscribed={isSubscribed}
+                <>
+                  <BookSeriesCarouselRow
+                    seriesList={filteredSeries}
+                    isSubscribed={isSubscribed}
+                    onSelectSeries={(id) => navigate(`/book-series/${id}`)}
+                  />
+                  {filteredBooks.length > 0 ? (
+                    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 max-w-6xl mx-auto">
+                      {filteredBooks.map((book, index) => (
+                        <BookCard
+                          key={book.id || `book-${index}`}
+                          book={book}
+                          onClick={(id) => navigate(`/book/${id}`, { state: { from: '/read' } })}
                         />
-                      ) : (
-                        <BookCard 
-                          key={item.data.id || `book-${index}`} 
-                          book={item.data} 
-                          onClick={(id) => navigate(`/book/${id}`, { state: { from: '/read' } })} 
-                        />
-                      )
-                    ))}
-                </div>
+                      ))}
+                    </div>
+                  ) : (
+                    filteredSeries.length > 0 && (
+                      <p className="text-white/70 font-display text-center text-sm py-4">
+                        No standalone books in this category — open a series above.
+                      </p>
+                    )
+                  )}
+                </>
             )}
           </>
         )}

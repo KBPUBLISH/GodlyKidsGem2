@@ -74,6 +74,10 @@ const getTextBoxes = (page: PreviewPage): TextBox[] => {
     return page.textBoxes || [];
 };
 
+const hasPositionedText = (page: PreviewPage): boolean => {
+    return getTextBoxes(page).some((b) => (b.text || '').trim().length > 0);
+};
+
 // Resolve the text-shadow CSS the editor stored as 'white' | 'black' | custom.
 const resolveShadow = (s?: string): string => {
     if (!s || s === 'none') return 'none';
@@ -158,6 +162,10 @@ const MediaLayer: React.FC<{
     }, [page.useImageSequence, page.imageSequence]);
 
     const [imgIdx, setImgIdx] = useState(0);
+    useEffect(() => {
+        if (isCurrent) setImgIdx(0);
+    }, [isCurrent, page._id]);
+
     useEffect(() => {
         if (!imgSeq || !isCurrent || imgSeq.length < 2) return;
         const ms = Math.max(1000, (page.imageSequenceDuration || 3) * 1000);
@@ -344,11 +352,15 @@ const SwipeUpPreview: React.FC = () => {
                         if (attr) bestIdx = parseInt(attr, 10);
                     }
                 });
-                if (bestIdx >= 0 && bestRatio >= 0.6) {
+                if (bestIdx >= 0 && bestRatio >= 0.35) {
                     setCurrentIndex(bestIdx);
                 }
             },
-            { root: containerRef.current, threshold: [0.6, 0.8, 0.95] }
+            {
+                root: containerRef.current,
+                threshold: [0, 0.15, 0.35, 0.55, 0.75, 0.95],
+                rootMargin: '-6% 0px -6% 0px',
+            }
         );
         sectionRefs.current.forEach(el => el && observer.observe(el));
         return () => observer.disconnect();
@@ -552,12 +564,47 @@ const SwipeUpPreview: React.FC = () => {
                                         </div>
                                     </>
                                 ) : (
-                                    /* Media-kind page: render authored text boxes at their authored positions */
-                                    <PositionedTextBoxes
-                                        boxes={boxes}
-                                        isCurrent={isCurrent}
-                                        pageId={page._id || `p${index}`}
-                                    />
+                                    /* Media-kind: positioned text boxes, or centered fallback when only content.text exists */
+                                    <>
+                                        <PositionedTextBoxes
+                                            boxes={boxes}
+                                            isCurrent={isCurrent}
+                                            pageId={page._id || `p${index}`}
+                                        />
+                                        {!hasPositionedText(page) && text ? (
+                                            <>
+                                                {hasBgMedia && (
+                                                    <div
+                                                        className="absolute inset-0 pointer-events-none bg-gradient-to-b from-black/[0.08] via-transparent to-black/[0.22]"
+                                                        style={{
+                                                            animation: isCurrent ? 'swpDimIn 500ms ease-out both' : undefined,
+                                                        }}
+                                                    />
+                                                )}
+                                                <div className="absolute inset-0 flex items-center justify-center px-6 pt-16 pb-20 pointer-events-none">
+                                                    <div
+                                                        className="max-w-md w-full text-center"
+                                                        style={{
+                                                            fontFamily: firstBox?.fontFamily || 'Patrick Hand, system-ui, sans-serif',
+                                                            color: firstBox?.color || '#ffffff',
+                                                            fontSize: `clamp(18px, ${(firstBox?.fontSize || 28) * 0.85}px, 32px)`,
+                                                            lineHeight: 1.35,
+                                                            textShadow:
+                                                                '0 1px 2px rgba(0,0,0,0.9), 0 2px 12px rgba(0,0,0,0.65)',
+                                                            whiteSpace: 'pre-wrap',
+                                                            wordBreak: 'break-word',
+                                                            animation: isCurrent
+                                                                ? 'swpTextIn 750ms cubic-bezier(0.22, 1, 0.36, 1) both'
+                                                                : undefined,
+                                                            animationDelay: isCurrent ? '180ms' : undefined,
+                                                        }}
+                                                    >
+                                                        {text}
+                                                    </div>
+                                                </div>
+                                            </>
+                                        ) : null}
+                                    </>
                                 )}
                             </section>
                         );

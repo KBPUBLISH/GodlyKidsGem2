@@ -162,19 +162,37 @@ const resolveShadow = (s?: string): string => {
 const TEXT_KIND_PAGE_SHADOW =
     '0 1px 2px rgba(0,0,0,0.42), 0 1px 6px rgba(0,0,0,0.22)';
 
-/** One consistent typography for all narratable swipe-up pages (text + media with body copy). */
+/** Default size when the portal has body copy but no text boxes (content.text only). */
 const SWIPE_UP_STORY_FONT_BASE = 28;
 
-const centeredSwipeUpStoryStyle = (firstBox?: TextBox | null): React.CSSProperties => ({
-    fontFamily: firstBox?.fontFamily || 'Patrick Hand, system-ui, sans-serif',
-    color: '#ffffff',
-    fontSize: `clamp(20px, ${SWIPE_UP_STORY_FONT_BASE * 0.9}px, 36px)`,
-    lineHeight: 1.35,
-    fontWeight: 400,
-    textShadow: TEXT_KIND_PAGE_SHADOW,
-    whiteSpace: 'pre-wrap',
-    wordBreak: 'break-word',
-});
+/** Centered swipe-up copy: honor portal text box color / size / shadow when authored; else readable defaults. */
+const centeredSwipeUpStoryStyle = (firstBox?: TextBox | null): React.CSSProperties => {
+    const basePx =
+        firstBox?.fontSize != null && Number(firstBox.fontSize) > 0
+            ? Number(firstBox.fontSize)
+            : SWIPE_UP_STORY_FONT_BASE;
+    const color =
+        firstBox?.color && String(firstBox.color).trim()
+            ? String(firstBox.color).trim()
+            : '#ffffff';
+    const textShadow =
+        firstBox &&
+        firstBox.shadowColor !== undefined &&
+        firstBox.shadowColor !== null &&
+        String(firstBox.shadowColor).trim() !== ''
+            ? resolveShadow(firstBox.shadowColor)
+            : TEXT_KIND_PAGE_SHADOW;
+    return {
+        fontFamily: firstBox?.fontFamily || 'Patrick Hand, system-ui, sans-serif',
+        color,
+        fontSize: `clamp(20px, ${basePx * 0.9}px, 36px)`,
+        lineHeight: 1.35,
+        fontWeight: 400,
+        textShadow,
+        whiteSpace: 'pre-wrap',
+        wordBreak: 'break-word',
+    };
+};
 
 /** Positioned text boxes overlay for media-kind pages in the swipe-up reader. */
 const FeedPositionedTextBoxes: React.FC<{
@@ -722,7 +740,8 @@ const VerticalFeedReader: React.FC<Props> = ({ bookId, book: preLoadedBook, shar
                 {pages.map((page, index) => {
                     const text = getCombinedText(page);
                     const boxes = getTextBoxes(page);
-                    const firstBox = boxes[0];
+                    const styleBox =
+                        boxes.find((b) => (b.text || '').trim()) || boxes[0] || null;
                     const isCurrent = index === currentIndex;
                     /** Media pages often keep default pageKind; use same centered story UI as text cards so TTS highlights + typography match. */
                     const showCenteredStory = isNarratableCard(page);
@@ -755,7 +774,7 @@ const VerticalFeedReader: React.FC<Props> = ({ bookId, book: preLoadedBook, shar
                                             key={`text-${page._id}-${isCurrent ? 'on' : 'off'}`}
                                             className="max-w-md w-full text-center"
                                             style={{
-                                                ...centeredSwipeUpStoryStyle(firstBox),
+                                                ...centeredSwipeUpStoryStyle(styleBox),
                                                 animation: isCurrent
                                                     ? 'vfrTextIn 750ms cubic-bezier(0.22, 1, 0.36, 1) both'
                                                     : undefined,

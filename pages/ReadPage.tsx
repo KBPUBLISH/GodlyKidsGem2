@@ -49,27 +49,67 @@ const BIBLE_RAFT = '/assets/images/bible-raft.webp';
 const SCHOLAR_BUTTON = '/assets/images/scholar-island-button.webp';
 const ISLAND_BUTTON = '/assets/images/island-button.webp';
 
-const SeriesCard: React.FC<{ series: any; onClick: () => void; isSubscribed?: boolean }> = ({ series, onClick, isSubscribed }) => (
-  <button type="button" onClick={onClick} className="w-full cursor-pointer select-none focus:outline-none group text-left">
-    <div className="relative aspect-square rounded-xl overflow-hidden border-2 border-purple-400/30 shadow-lg group-hover:border-purple-400/60 group-hover:scale-105 transition-all">
-      {series.coverImage ? (
-        <img src={series.coverImage} alt={series.title} className="w-full h-full object-cover" loading="lazy" />
-      ) : (
-        <div className="w-full h-full bg-gradient-to-br from-purple-500 to-indigo-600 flex items-center justify-center">
-          <span className="text-3xl">📚</span>
+const SeriesCard: React.FC<{ series: any; onClick: () => void; isSubscribed?: boolean }> = ({ series, onClick, isSubscribed }) => {
+  const startRef = useRef<{ x: number; y: number } | null>(null);
+  const movedRef = useRef(false);
+
+  return (
+    <div
+      role="button"
+      tabIndex={0}
+      className="w-full cursor-pointer select-none focus:outline-none focus-visible:ring-2 focus-visible:ring-white/60 rounded-lg group text-left touch-pan-x"
+      onPointerDown={(e) => {
+        startRef.current = { x: e.clientX, y: e.clientY };
+        movedRef.current = false;
+      }}
+      onPointerMove={(e) => {
+        if (!startRef.current) return;
+        const dx = e.clientX - startRef.current.x;
+        const dy = e.clientY - startRef.current.y;
+        if (Math.hypot(dx, dy) > 10) movedRef.current = true;
+      }}
+      onPointerUp={() => { startRef.current = null; }}
+      onPointerCancel={() => { startRef.current = null; }}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          onClick();
+        }
+      }}
+      onClick={() => {
+        if (movedRef.current) {
+          movedRef.current = false;
+          return;
+        }
+        onClick();
+      }}
+    >
+      <div className="relative aspect-square rounded-xl overflow-hidden border-2 border-purple-400/30 shadow-lg group-hover:border-purple-400/60 group-hover:scale-105 transition-all">
+        {series.coverImage ? (
+          <img
+            src={series.coverImage}
+            alt={series.title}
+            className="w-full h-full object-cover pointer-events-none"
+            loading="lazy"
+            draggable={false}
+          />
+        ) : (
+          <div className="w-full h-full bg-gradient-to-br from-purple-500 to-indigo-600 flex items-center justify-center pointer-events-none">
+            <span className="text-3xl">📚</span>
+          </div>
+        )}
+        <div className="absolute top-1 left-1 bg-purple-600/90 text-white text-[8px] font-bold px-1.5 py-0.5 rounded-md flex items-center gap-0.5 z-10 pointer-events-none">
+          <BookOpen className="w-2.5 h-2.5" />
+          Series
         </div>
-      )}
-      <div className="absolute top-1 left-1 bg-purple-600/90 text-white text-[8px] font-bold px-1.5 py-0.5 rounded-md flex items-center gap-0.5 z-10">
-        <BookOpen className="w-2.5 h-2.5" />
-        Series
+        {series.isMembersOnly && !isSubscribed && (
+          <PremiumBadge className="absolute top-1.5 right-1.5 z-20" />
+        )}
       </div>
-      {series.isMembersOnly && !isSubscribed && (
-        <PremiumBadge className="absolute top-1.5 right-1.5 z-20" />
-      )}
+      <p className="text-white text-[10px] font-display font-bold mt-1 truncate text-center">{series.title}</p>
     </div>
-    <p className="text-white text-[10px] font-display font-bold mt-1 truncate text-center">{series.title}</p>
-  </button>
-);
+  );
+};
 
 /** Horizontal swipe carousel for book series (scroll-snap on touch / trackpad). */
 const BookSeriesCarousel: React.FC<{
@@ -99,13 +139,17 @@ const BookSeriesCarousel: React.FC<{
         <div className="absolute top-1/2 right-2 w-2 h-2 bg-[#2d1848] rounded-full shadow-inner -translate-y-1/2 opacity-80" />
       </div>
       <div
-        className="flex gap-2 overflow-x-auto scroll-smooth snap-x snap-mandatory px-4 pb-1 touch-pan-x overscroll-x-contain no-scrollbar"
-        style={{ WebkitOverflowScrolling: 'touch' }}
+        className="series-carousel-track flex gap-2 overflow-x-auto scroll-smooth snap-x snap-mandatory px-4 pb-1 touch-pan-x overscroll-x-contain no-scrollbar select-none relative z-[1]"
+        style={{
+          WebkitOverflowScrolling: 'touch',
+          touchAction: 'pan-x',
+          overscrollBehaviorX: 'contain',
+        }}
       >
         {seriesList.map((series) => (
           <div
             key={series._id}
-            className="snap-start shrink-0 w-[min(30vw,118px)]"
+            className="snap-start shrink-0 w-[min(30vw,118px)] touch-pan-x"
           >
             <SeriesCard
               series={series}

@@ -41,51 +41,80 @@ const CATEGORY_CONFIG: Record<string, { icon: any; bgColor: string }> = {
   'default': { icon: Crown, bgColor: 'from-slate-400 to-slate-600' },
 };
 
-// Series card component
-const SeriesCard: React.FC<{ series: any; onClick: () => void; isSubscribed?: boolean }> = ({ series, onClick, isSubscribed }) => (
-  <div 
-    onClick={onClick}
-    className="cursor-pointer group"
-  >
-    <div className="bg-white/10 backdrop-blur-sm rounded-2xl overflow-hidden shadow-lg border-2 border-purple-400/30 hover:border-purple-400/60 hover:shadow-2xl hover:scale-105 transition-all">
-      <div className="aspect-[3/4] bg-gradient-to-br from-purple-500 to-indigo-600 relative overflow-hidden">
-        {series.coverImage ? (
-          <img 
-            src={series.coverImage} 
-            alt={series.title} 
-            className="w-full h-full object-cover"
-            loading="lazy"
-          />
-        ) : (
-          <div className="w-full h-full flex items-center justify-center">
-            <span className="text-6xl">📚</span>
+// Series card — div + pan-x so horizontal carousel scrolls inside vertical page (not eaten by <button> / image touches).
+const SeriesCard: React.FC<{ series: any; onClick: () => void; isSubscribed?: boolean }> = ({ series, onClick, isSubscribed }) => {
+  const startRef = useRef<{ x: number; y: number } | null>(null);
+  const movedRef = useRef(false);
+
+  return (
+    <div
+      role="button"
+      tabIndex={0}
+      className="cursor-pointer group select-none touch-pan-x focus:outline-none focus-visible:ring-2 focus-visible:ring-white/50 rounded-2xl"
+      onPointerDown={(e) => {
+        startRef.current = { x: e.clientX, y: e.clientY };
+        movedRef.current = false;
+      }}
+      onPointerMove={(e) => {
+        if (!startRef.current) return;
+        const dx = e.clientX - startRef.current.x;
+        const dy = e.clientY - startRef.current.y;
+        if (Math.hypot(dx, dy) > 10) movedRef.current = true;
+      }}
+      onPointerUp={() => { startRef.current = null; }}
+      onPointerCancel={() => { startRef.current = null; }}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          onClick();
+        }
+      }}
+      onClick={() => {
+        if (movedRef.current) {
+          movedRef.current = false;
+          return;
+        }
+        onClick();
+      }}
+    >
+      <div className="bg-white/10 backdrop-blur-sm rounded-2xl overflow-hidden shadow-lg border-2 border-purple-400/30 hover:border-purple-400/60 hover:shadow-2xl hover:scale-105 transition-all">
+        <div className="aspect-[3/4] bg-gradient-to-br from-purple-500 to-indigo-600 relative overflow-hidden">
+          {series.coverImage ? (
+            <img
+              src={series.coverImage}
+              alt={series.title}
+              className="w-full h-full object-cover pointer-events-none"
+              loading="lazy"
+              draggable={false}
+            />
+          ) : (
+            <div className="w-full h-full flex items-center justify-center pointer-events-none">
+              <span className="text-6xl">📚</span>
+            </div>
+          )}
+          <div className="absolute top-2 left-2 bg-purple-600/90 backdrop-blur-sm text-white text-[10px] font-bold px-2 py-1 rounded-md flex items-center gap-1 pointer-events-none">
+            <BookOpen className="w-3 h-3" />
+            Series
           </div>
-        )}
-        {/* Series badge */}
-        <div className="absolute top-2 left-2 bg-purple-600/90 backdrop-blur-sm text-white text-[10px] font-bold px-2 py-1 rounded-md flex items-center gap-1">
-          <BookOpen className="w-3 h-3" />
-          Series
+          <div className="absolute bottom-2 right-2 bg-black/60 backdrop-blur-sm text-white text-xs font-bold px-2 py-1 rounded-md pointer-events-none">
+            {series.books?.length || 0} books
+          </div>
+          {series.isMembersOnly && !isSubscribed && (
+            <PremiumBadge className="absolute top-2 right-2 z-20" />
+          )}
         </div>
-        {/* Books count badge */}
-        <div className="absolute bottom-2 right-2 bg-black/60 backdrop-blur-sm text-white text-xs font-bold px-2 py-1 rounded-md">
-          {series.books?.length || 0} books
+        <div className="p-2">
+          <h3 className="text-white text-xs font-bold mb-0.5 truncate font-display">
+            {series.title}
+          </h3>
+          {series.author && (
+            <p className="text-white/70 text-[10px] truncate">{series.author}</p>
+          )}
         </div>
-        {/* Premium badge - Only show if user is NOT subscribed */}
-        {series.isMembersOnly && !isSubscribed && (
-          <PremiumBadge className="absolute top-2 right-2 z-20" />
-        )}
-      </div>
-      <div className="p-2">
-        <h3 className="text-white text-xs font-bold mb-0.5 truncate font-display">
-          {series.title}
-        </h3>
-        {series.author && (
-          <p className="text-white/70 text-[10px] truncate">{series.author}</p>
-        )}
       </div>
     </div>
-  </div>
-);
+  );
+};
 
 const BookSeriesCarouselRow: React.FC<{
   seriesList: any[];
@@ -100,11 +129,15 @@ const BookSeriesCarouselRow: React.FC<{
         <p className="text-white/50 text-xs font-display mt-1">Swipe sideways to browse</p>
       </div>
       <div
-        className="flex gap-2 overflow-x-auto scroll-smooth snap-x snap-mandatory pb-2 px-1 touch-pan-x overscroll-x-contain no-scrollbar"
-        style={{ WebkitOverflowScrolling: 'touch' }}
+        className="series-carousel-track flex gap-2 overflow-x-auto scroll-smooth snap-x snap-mandatory pb-2 px-1 touch-pan-x overscroll-x-contain no-scrollbar select-none relative z-[1]"
+        style={{
+          WebkitOverflowScrolling: 'touch',
+          touchAction: 'pan-x',
+          overscrollBehaviorX: 'contain',
+        }}
       >
         {seriesList.map((series) => (
-          <div key={series._id} className="snap-start shrink-0 w-[min(38vw,132px)]">
+          <div key={series._id} className="snap-start shrink-0 w-[min(38vw,132px)] touch-pan-x">
             <SeriesCard
               series={series}
               onClick={() => onSelectSeries(String(series._id))}

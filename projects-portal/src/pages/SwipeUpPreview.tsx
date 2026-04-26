@@ -89,21 +89,38 @@ const resolveShadow = (s?: string): string => {
     return `0 2px 6px ${s}`;
 };
 
-/** Match app VerticalFeedReader: same size/weight for text + media pages with body copy. */
+/** Fallback shadow when the page has no text box shadowColor (e.g. content.text only). */
 const PREVIEW_CENTERED_STORY_SHADOW =
     '0 1px 2px rgba(0,0,0,0.42), 0 1px 6px rgba(0,0,0,0.22)';
 const SWIPE_UP_STORY_FONT_BASE = 28;
 
-const centeredSwipeUpStoryStyle = (firstBox?: TextBox | null): React.CSSProperties => ({
-    fontFamily: firstBox?.fontFamily || 'Patrick Hand, system-ui, sans-serif',
-    color: '#ffffff',
-    fontSize: `clamp(20px, ${SWIPE_UP_STORY_FONT_BASE * 0.9}px, 36px)`,
-    lineHeight: 1.35,
-    fontWeight: 400,
-    textShadow: PREVIEW_CENTERED_STORY_SHADOW,
-    whiteSpace: 'pre-wrap',
-    wordBreak: 'break-word',
-});
+const centeredSwipeUpStoryStyle = (firstBox?: TextBox | null): React.CSSProperties => {
+    const basePx =
+        firstBox?.fontSize != null && Number(firstBox.fontSize) > 0
+            ? Number(firstBox.fontSize)
+            : SWIPE_UP_STORY_FONT_BASE;
+    const color =
+        firstBox?.color && String(firstBox.color).trim()
+            ? String(firstBox.color).trim()
+            : '#ffffff';
+    const textShadow =
+        firstBox &&
+        firstBox.shadowColor !== undefined &&
+        firstBox.shadowColor !== null &&
+        String(firstBox.shadowColor).trim() !== ''
+            ? resolveShadow(firstBox.shadowColor)
+            : PREVIEW_CENTERED_STORY_SHADOW;
+    return {
+        fontFamily: firstBox?.fontFamily || 'Patrick Hand, system-ui, sans-serif',
+        color,
+        fontSize: `clamp(20px, ${basePx * 0.9}px, 36px)`,
+        lineHeight: 1.35,
+        fontWeight: 400,
+        textShadow,
+        whiteSpace: 'pre-wrap',
+        wordBreak: 'break-word',
+    };
+};
 
 /**
  * Render authored text boxes at their authored x/y/% positions, on top of media.
@@ -524,7 +541,8 @@ const SwipeUpPreview: React.FC = () => {
                     {pages.map((page, index) => {
                         const text = getCombinedText(page);
                         const boxes = getTextBoxes(page);
-                        const firstBox = boxes[0];
+                        const styleBox =
+                            boxes.find((b) => (b.text || '').trim()) || boxes[0] || null;
                         const isCurrent = index === currentIndex;
                         const showCenteredStory = !!text.trim();
                         const hasBgMedia = !!(
@@ -563,7 +581,7 @@ const SwipeUpPreview: React.FC = () => {
                                                 key={`text-${page._id}-${isCurrent ? 'on' : 'off'}`}
                                                 className="max-w-md w-full text-center"
                                                 style={{
-                                                    ...centeredSwipeUpStoryStyle(firstBox),
+                                                    ...centeredSwipeUpStoryStyle(styleBox),
                                                     animation: isCurrent
                                                         ? 'swpTextIn 750ms cubic-bezier(0.22, 1, 0.36, 1) both'
                                                         : undefined,

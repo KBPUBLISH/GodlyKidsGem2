@@ -75,12 +75,12 @@ const SeriesCard: React.FC<{ series: any; onClick: () => void; isSubscribed?: bo
           <PremiumBadge className="absolute top-2 right-2 z-20" />
         )}
       </div>
-      <div className="p-3">
-        <h3 className="text-white text-sm font-bold mb-0.5 truncate font-display">
+      <div className="p-2">
+        <h3 className="text-white text-xs font-bold mb-0.5 truncate font-display">
           {series.title}
         </h3>
         {series.author && (
-          <p className="text-white/70 text-xs truncate">{series.author}</p>
+          <p className="text-white/70 text-[10px] truncate">{series.author}</p>
         )}
       </div>
     </div>
@@ -100,11 +100,11 @@ const BookSeriesCarouselRow: React.FC<{
         <p className="text-white/50 text-xs font-display mt-1">Swipe sideways to browse</p>
       </div>
       <div
-        className="flex gap-4 overflow-x-auto scroll-smooth snap-x snap-mandatory pb-2 px-1 touch-pan-x overscroll-x-contain no-scrollbar"
+        className="flex gap-2 overflow-x-auto scroll-smooth snap-x snap-mandatory pb-2 px-1 touch-pan-x overscroll-x-contain no-scrollbar"
         style={{ WebkitOverflowScrolling: 'touch' }}
       >
         {seriesList.map((series) => (
-          <div key={series._id} className="snap-start shrink-0 w-[min(72vw,240px)]">
+          <div key={series._id} className="snap-start shrink-0 w-[min(38vw,132px)]">
             <SeriesCard
               series={series}
               onClick={() => onSelectSeries(String(series._id))}
@@ -311,7 +311,7 @@ const ReadPagePanorama: React.FC = () => {
     <div 
       ref={scrollRef}
       onScroll={handleScroll}
-      className="flex flex-col h-full overflow-y-auto no-scrollbar relative"
+      className="flex flex-col h-full min-h-0 overflow-y-auto no-scrollbar relative"
     >
       <Header isVisible={isHeaderVisible} title="READING" />
 

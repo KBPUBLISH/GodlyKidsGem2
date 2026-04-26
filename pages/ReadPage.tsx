@@ -67,7 +67,7 @@ const SeriesCard: React.FC<{ series: any; onClick: () => void; isSubscribed?: bo
         <PremiumBadge className="absolute top-1.5 right-1.5 z-20" />
       )}
     </div>
-    <p className="text-white text-[11px] font-display font-bold mt-1.5 truncate text-center">{series.title}</p>
+    <p className="text-white text-[10px] font-display font-bold mt-1 truncate text-center">{series.title}</p>
   </button>
 );
 
@@ -99,13 +99,13 @@ const BookSeriesCarousel: React.FC<{
         <div className="absolute top-1/2 right-2 w-2 h-2 bg-[#2d1848] rounded-full shadow-inner -translate-y-1/2 opacity-80" />
       </div>
       <div
-        className="flex gap-3 overflow-x-auto scroll-smooth snap-x snap-mandatory px-4 pb-1 touch-pan-x overscroll-x-contain no-scrollbar"
+        className="flex gap-2 overflow-x-auto scroll-smooth snap-x snap-mandatory px-4 pb-1 touch-pan-x overscroll-x-contain no-scrollbar"
         style={{ WebkitOverflowScrolling: 'touch' }}
       >
         {seriesList.map((series) => (
           <div
             key={series._id}
-            className="snap-start shrink-0 w-[min(42vw,168px)]"
+            className="snap-start shrink-0 w-[min(30vw,118px)]"
           >
             <SeriesCard
               series={series}
@@ -344,7 +344,7 @@ const ReadPage: React.FC = () => {
   /* ───── Content view (full-screen overlay that covers the wheel) ───── */
   if (showContent) {
     return (
-      <div className="fixed inset-0 z-[100] flex flex-col overflow-hidden">
+      <div className="fixed inset-0 z-[100] flex flex-col min-h-0 overflow-hidden">
         {/* Semi-transparent overlay so ocean panorama shows through */}
         <div className="absolute inset-0 bg-black/20" />
 
@@ -361,8 +361,8 @@ const ReadPage: React.FC = () => {
           </button>
         </div>
 
-        {/* Island + scrollable content wrapper */}
-        <div className="relative flex-1 overflow-hidden">
+        {/* Island + scrollable content wrapper (min-h-0 so flex child can shrink and inner scroll works) */}
+        <div className="relative flex-1 min-h-0 overflow-hidden">
           {/* Fixed island behind content */}
           <div className="absolute top-0 left-0 right-0 flex justify-center pt-12 pointer-events-none" style={{ zIndex: 4 }}>
             <img
@@ -387,7 +387,7 @@ const ReadPage: React.FC = () => {
           <div
             ref={scrollRef}
             onScroll={handleScroll}
-            className="relative h-full overflow-y-auto overflow-x-hidden no-scrollbar pb-12"
+            className="relative h-full min-h-0 overflow-y-auto overflow-x-hidden no-scrollbar pb-12"
             style={{ zIndex: 5, overscrollBehavior: 'contain' }}
           >
             {/* Spacer so island is visible initially */}
@@ -693,7 +693,7 @@ const ReadPage: React.FC = () => {
 
   /* ───── Island view (default) ───── */
   return (
-    <div className="flex flex-col h-full overflow-hidden relative">
+    <div className="flex flex-col h-full min-h-0 overflow-hidden relative">
 
       {/* Drifting sky clouds — each a unique shape, all flow right */}
       <div className="absolute inset-0 pointer-events-none overflow-hidden" style={{ zIndex: 0 }} aria-hidden>

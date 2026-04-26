@@ -1340,7 +1340,7 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
 
       {/* Content Wrapper - safe area padding applied here so background is unaffected */}
       <div 
-        className="relative z-10 flex-1 overflow-hidden"
+        className="relative z-10 flex-1 min-h-0 overflow-hidden"
         style={{
           paddingLeft: 'var(--safe-area-left, 0px)',
           paddingRight: 'var(--safe-area-right, 0px)',

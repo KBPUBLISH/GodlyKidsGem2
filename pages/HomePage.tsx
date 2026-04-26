@@ -18,6 +18,7 @@ import TutorialPromptModal, { shouldShowTutorialPrompt, markTutorialPromptShown 
 import { useTutorial } from '../context/TutorialContext';
 import { Key, Brain, Heart, Video, Lock, Check, Play, CheckCircle, Clock, Coins, BookOpen, Sparkles, ChevronRight } from 'lucide-react';
 import { ApiService } from '../services/apiService';
+import { DespiaService } from '../services/despiaService';
 import { authService } from '../services/authService';
 import { 
   isCompleted, 
@@ -1606,8 +1607,10 @@ const HomePage: React.FC = () => {
                 if (isAmazonBook && amazonUrl) {
                   // Track the click for analytics
                   ApiService.trackAmazonBookClick(id);
-                  // Navigate to webview with Amazon URL
-                  navigate(`/game?url=${encodeURIComponent(amazonUrl)}&name=${encodeURIComponent('Shop on Amazon')}`);
+                  // Amazon refuses iframe embedding (X-Frame-Options: sameorigin),
+                  // and affiliate links must leave the in-app webview anyway.
+                  // Open in the system browser / Despia in-app browser instead.
+                  DespiaService.openExternalUrl(amazonUrl);
                 } else if (isPlaylist) {
                   navigate(`/audio/playlist/${id}`);
                 } else {

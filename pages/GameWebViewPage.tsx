@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { ArrowLeft, Loader2, Maximize2, Minimize2, ExternalLink } from 'lucide-react';
 import { usePreventPullToRefresh } from '../hooks/usePreventPullToRefresh';
+import { DespiaService } from '../services/despiaService';
 
 const GameWebViewPage: React.FC = () => {
   const navigate = useNavigate();
@@ -27,6 +28,24 @@ const GameWebViewPage: React.FC = () => {
   const [iframeError, setIframeError] = useState(false);
 
   usePreventPullToRefresh(!!rawGameUrl);
+
+  // Some hosts (Amazon, Apple, PayPal, etc.) explicitly refuse iframe embedding
+  // via X-Frame-Options / CSP frame-ancestors. Detect those up front and bounce
+  // out to the in-app browser so the user actually lands on the destination
+  // instead of staring at a blank loader.
+  const cannotIframe = rawGameUrl ? DespiaService.cannotBeIframed(rawGameUrl) : false;
+  useEffect(() => {
+    if (rawGameUrl && cannotIframe) {
+      console.log('🎮 URL is not iframeable, opening externally:', rawGameUrl);
+      DespiaService.openExternalUrl(rawGameUrl);
+      // Pop back so user isn't stuck on a blank page after coming back.
+      const t = setTimeout(() => {
+        if (window.history.length > 2) navigate(-1);
+        else navigate('/home', { replace: true });
+      }, 250);
+      return () => clearTimeout(t);
+    }
+  }, [rawGameUrl, cannotIframe, navigate]);
 
   const handleBack = () => {
     // Clear any saved route that might have the game URL
@@ -75,6 +94,35 @@ const GameWebViewPage: React.FC = () => {
         <div className="text-center text-white">
           <Loader2 size={48} className="animate-spin mx-auto mb-4" />
           <p className="text-lg">Redirecting...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Un-iframeable host (Amazon, etc.): show a tiny "Opening…" splash with a manual
+  // retry button in case the popup blocker swallowed the auto-redirect.
+  if (cannotIframe) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-[#1a1a2e] to-[#16213e] flex items-center justify-center px-6">
+        <div className="text-center text-white max-w-sm">
+          <Loader2 size={40} className="animate-spin mx-auto mb-4" />
+          <p className="text-lg mb-2">Opening {gameName}…</p>
+          <p className="text-white/60 text-sm mb-6">
+            This site can't be displayed inside the app, so we're opening it in your browser.
+          </p>
+          <button
+            onClick={() => DespiaService.openExternalUrl(rawGameUrl)}
+            className="bg-[#4CAF50] hover:bg-[#45a049] text-white font-bold py-3 px-6 rounded-xl flex items-center gap-2 mx-auto"
+          >
+            <ExternalLink size={18} />
+            Open in Browser
+          </button>
+          <button
+            onClick={handleBack}
+            className="mt-4 text-white/70 hover:text-white underline"
+          >
+            Go Back
+          </button>
         </div>
       </div>
     );

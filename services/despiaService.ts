@@ -110,6 +110,47 @@ export const DespiaService = {
   },
 
   /**
+   * Open an external URL outside the SPA.
+   *
+   * - In Despia native: window.open(url, '_blank') is intercepted by the runtime
+   *   and routed to the in-app browser (or Safari for whitelisted payment domains).
+   *   Ref: https://npm.despia.com/default-guide/native-features/external-link-handling
+   * - On web: opens in a new tab. With noopener,noreferrer for safety.
+   *
+   * IMPORTANT: must be called synchronously from a user gesture (click handler),
+   * otherwise iOS/Safari pop-up blockers will reject it.
+   */
+  openExternalUrl: (url: string): void => {
+    if (!url) return;
+    try {
+      window.open(url, '_blank', 'noopener,noreferrer');
+    } catch (err) {
+      console.warn('Failed to open external URL, falling back to location.href:', err);
+      try { window.location.href = url; } catch {}
+    }
+  },
+
+  /**
+   * Some sites refuse to be displayed in an iframe via X-Frame-Options /
+   * Content-Security-Policy: frame-ancestors. Returns true for hosts we know
+   * will fail in an in-app iframe so callers can route to the in-app browser.
+   */
+  cannotBeIframed: (url: string): boolean => {
+    if (!url) return false;
+    let host = '';
+    try { host = new URL(url).hostname.toLowerCase(); } catch { return false; }
+    const blocked = [
+      'amazon.', 'amzn.',
+      'apple.com', 'itunes.apple.com', 'apps.apple.com',
+      'play.google.com',
+      'ebay.', 'walmart.com', 'target.com', 'bestbuy.com',
+      'paypal.com', 'stripe.com', 'checkout.stripe.com',
+      'facebook.com', 'instagram.com', 'youtube.com',
+    ];
+    return blocked.some(p => host.includes(p));
+  },
+
+  /**
    * Social Share Dialog
    * https://npm.despia.com/default-guide/native-features/social-share-dialog
    */

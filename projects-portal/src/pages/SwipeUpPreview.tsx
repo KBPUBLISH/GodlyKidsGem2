@@ -37,6 +37,7 @@ interface PreviewPage {
     backgroundUrl?: string;
     backgroundType?: 'image' | 'video';
     files?: { background?: { url?: string; type?: string } };
+    text?: string;
     textBoxes?: TextBox[];
     content?: { text?: string; textBoxes?: TextBox[] };
     // Image sequence (cycle of images)
@@ -58,7 +59,9 @@ const getCombinedText = (page: PreviewPage): string => {
         .filter(Boolean)
         .join('\n\n');
     if (fromBoxes) return fromBoxes;
-    return (page.content?.text || '').trim();
+    const fromContent = (page.content?.text || '').trim();
+    if (fromContent) return fromContent;
+    return (page.text || '').trim();
 };
 
 const getBackground = (page: PreviewPage): { url?: string; type: 'image' | 'video' } => {
@@ -85,6 +88,22 @@ const resolveShadow = (s?: string): string => {
     if (s === 'black') return '0 2px 6px rgba(0,0,0,0.85), 0 0 12px rgba(0,0,0,0.6)';
     return `0 2px 6px ${s}`;
 };
+
+/** Match app VerticalFeedReader: same size/weight for text + media pages with body copy. */
+const PREVIEW_CENTERED_STORY_SHADOW =
+    '0 1px 2px rgba(0,0,0,0.42), 0 1px 6px rgba(0,0,0,0.22)';
+const SWIPE_UP_STORY_FONT_BASE = 28;
+
+const centeredSwipeUpStoryStyle = (firstBox?: TextBox | null): React.CSSProperties => ({
+    fontFamily: firstBox?.fontFamily || 'Patrick Hand, system-ui, sans-serif',
+    color: '#ffffff',
+    fontSize: `clamp(20px, ${SWIPE_UP_STORY_FONT_BASE * 0.9}px, 36px)`,
+    lineHeight: 1.35,
+    fontWeight: 400,
+    textShadow: PREVIEW_CENTERED_STORY_SHADOW,
+    whiteSpace: 'pre-wrap',
+    wordBreak: 'break-word',
+});
 
 /**
  * Render authored text boxes at their authored x/y/% positions, on top of media.
@@ -503,11 +522,11 @@ const SwipeUpPreview: React.FC = () => {
                     style={{ scrollbarWidth: 'none' }}
                 >
                     {pages.map((page, index) => {
-                        const isText = page.pageKind === 'text';
                         const text = getCombinedText(page);
                         const boxes = getTextBoxes(page);
                         const firstBox = boxes[0];
                         const isCurrent = index === currentIndex;
+                        const showCenteredStory = !!text.trim();
                         const hasBgMedia = !!(
                             page.backgroundUrl ||
                             page.files?.background?.url ||
@@ -528,15 +547,13 @@ const SwipeUpPreview: React.FC = () => {
                                     onSequenceEnd={() => handleVideoEnded(index)}
                                 />
 
-                                {isText ? (
-                                    /* Text-kind page: centered combined text (Swipe Up "text card") */
+                                {showCenteredStory ? (
                                     <>
                                         {hasBgMedia && (
                                             <div
                                                 key={`dim-${page._id}-${isCurrent ? 'on' : 'off'}`}
-                                                className="absolute inset-0"
+                                                className="absolute inset-0 pointer-events-none bg-gradient-to-b from-black/[0.08] via-transparent to-black/[0.22]"
                                                 style={{
-                                                    background: 'radial-gradient(ellipse at center, rgba(0,0,0,0.15) 0%, rgba(0,0,0,0.45) 100%)',
                                                     animation: isCurrent ? 'swpDimIn 500ms ease-out both' : undefined,
                                                 }}
                                             />
@@ -546,13 +563,7 @@ const SwipeUpPreview: React.FC = () => {
                                                 key={`text-${page._id}-${isCurrent ? 'on' : 'off'}`}
                                                 className="max-w-md w-full text-center"
                                                 style={{
-                                                    fontFamily: firstBox?.fontFamily || 'Patrick Hand, system-ui, sans-serif',
-                                                    color: firstBox?.color || '#ffffff',
-                                                    fontSize: `clamp(18px, ${(firstBox?.fontSize || 28) * 0.85}px, 32px)`,
-                                                    lineHeight: 1.35,
-                                                    textShadow: '0 2px 14px rgba(0,0,0,0.75)',
-                                                    whiteSpace: 'pre-wrap',
-                                                    wordBreak: 'break-word',
+                                                    ...centeredSwipeUpStoryStyle(firstBox),
                                                     animation: isCurrent
                                                         ? 'swpTextIn 750ms cubic-bezier(0.22, 1, 0.36, 1) both'
                                                         : undefined,
@@ -564,47 +575,13 @@ const SwipeUpPreview: React.FC = () => {
                                         </div>
                                     </>
                                 ) : (
-                                    /* Media-kind: positioned text boxes, or centered fallback when only content.text exists */
-                                    <>
+                                    hasPositionedText(page) && (
                                         <PositionedTextBoxes
                                             boxes={boxes}
                                             isCurrent={isCurrent}
                                             pageId={page._id || `p${index}`}
                                         />
-                                        {!hasPositionedText(page) && text ? (
-                                            <>
-                                                {hasBgMedia && (
-                                                    <div
-                                                        className="absolute inset-0 pointer-events-none bg-gradient-to-b from-black/[0.08] via-transparent to-black/[0.22]"
-                                                        style={{
-                                                            animation: isCurrent ? 'swpDimIn 500ms ease-out both' : undefined,
-                                                        }}
-                                                    />
-                                                )}
-                                                <div className="absolute inset-0 flex items-center justify-center px-6 pt-16 pb-20 pointer-events-none">
-                                                    <div
-                                                        className="max-w-md w-full text-center"
-                                                        style={{
-                                                            fontFamily: firstBox?.fontFamily || 'Patrick Hand, system-ui, sans-serif',
-                                                            color: firstBox?.color || '#ffffff',
-                                                            fontSize: `clamp(18px, ${(firstBox?.fontSize || 28) * 0.85}px, 32px)`,
-                                                            lineHeight: 1.35,
-                                                            textShadow:
-                                                                '0 1px 2px rgba(0,0,0,0.9), 0 2px 12px rgba(0,0,0,0.65)',
-                                                            whiteSpace: 'pre-wrap',
-                                                            wordBreak: 'break-word',
-                                                            animation: isCurrent
-                                                                ? 'swpTextIn 750ms cubic-bezier(0.22, 1, 0.36, 1) both'
-                                                                : undefined,
-                                                            animationDelay: isCurrent ? '180ms' : undefined,
-                                                        }}
-                                                    >
-                                                        {text}
-                                                    </div>
-                                                </div>
-                                            </>
-                                        ) : null}
-                                    </>
+                                    )
                                 )}
                             </section>
                         );

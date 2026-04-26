@@ -31,6 +31,8 @@ interface VerticalPage {
     backgroundUrl?: string;
     backgroundType?: 'image' | 'video';
     files?: { background?: { url?: string; type?: string } };
+    /** Legacy / API: body copy sometimes at root */
+    text?: string;
     textBoxes?: TextBox[];
     content?: { text?: string; textBoxes?: TextBox[] };
     useImageSequence?: boolean;
@@ -124,7 +126,9 @@ const getCombinedText = (page: VerticalPage): string => {
         .filter(Boolean)
         .join('\n\n');
     if (fromBoxes) return fromBoxes;
-    return (page.content?.text || '').trim();
+    const fromContent = (page.content?.text || '').trim();
+    if (fromContent) return fromContent;
+    return (page.text || '').trim();
 };
 
 const getBackground = (page: VerticalPage): { url?: string; type: 'image' | 'video' } => {
@@ -153,6 +157,24 @@ const resolveShadow = (s?: string): string => {
     if (s === 'black') return '0 2px 6px rgba(0,0,0,0.85), 0 0 12px rgba(0,0,0,0.6)';
     return `0 2px 6px ${s}`;
 };
+
+/** Softer shadow for text-kind swipe-up pages (readable without heavy glow). */
+const TEXT_KIND_PAGE_SHADOW =
+    '0 1px 2px rgba(0,0,0,0.42), 0 1px 6px rgba(0,0,0,0.22)';
+
+/** One consistent typography for all narratable swipe-up pages (text + media with body copy). */
+const SWIPE_UP_STORY_FONT_BASE = 28;
+
+const centeredSwipeUpStoryStyle = (firstBox?: TextBox | null): React.CSSProperties => ({
+    fontFamily: firstBox?.fontFamily || 'Patrick Hand, system-ui, sans-serif',
+    color: '#ffffff',
+    fontSize: `clamp(20px, ${SWIPE_UP_STORY_FONT_BASE * 0.9}px, 36px)`,
+    lineHeight: 1.35,
+    fontWeight: 400,
+    textShadow: TEXT_KIND_PAGE_SHADOW,
+    whiteSpace: 'pre-wrap',
+    wordBreak: 'break-word',
+});
 
 /** Positioned text boxes overlay for media-kind pages in the swipe-up reader. */
 const FeedPositionedTextBoxes: React.FC<{
@@ -316,6 +338,8 @@ const VerticalFeedReader: React.FC<Props> = ({ bookId, book: preLoadedBook, shar
         new Map()
     );
     const advanceTimerRef = useRef<number | null>(null);
+    /** Set when TTS finished and we auto-scrolled to the next page (for image dwell + advance). */
+    const fromTtsAutoAdvanceRef = useRef(false);
     const currentIndexRef = useRef(0);
     const autoNarrateRef = useRef(false);
     const mutedRef = useRef(false);
@@ -484,6 +508,7 @@ const VerticalFeedReader: React.FC<Props> = ({ bookId, book: preLoadedBook, shar
                 if (autoNarrateRef.current && !mutedRef.current) {
                     const idx = currentIndexRef.current;
                     if (idx < pagesLenRef.current) {
+                        fromTtsAutoAdvanceRef.current = true;
                         goToPageRef.current(idx + 1);
                     }
                 }
@@ -501,20 +526,6 @@ const VerticalFeedReader: React.FC<Props> = ({ bookId, book: preLoadedBook, shar
             setActiveWordIndex(-1);
         }
     }, [bookId, muted, stopTts, voiceId]);
-
-    // When current page changes: stop TTS, optionally auto-play if text card and autoNarrate is on
-    useEffect(() => {
-        stopTts();
-        if (pages.length === 0) return;
-        const page = pages[currentIndex];
-        if (!page) return;
-        if (isNarratableCard(page) && autoNarrate && !muted) {
-            const t = window.setTimeout(() => {
-                playTtsForPage(page, { fromAuto: true });
-            }, 350);
-            return () => window.clearTimeout(t);
-        }
-    }, [currentIndex, pages, autoNarrate, muted, playTtsForPage, stopTts]);
 
     // Hide swipe hint after first scroll
     useEffect(() => {
@@ -541,6 +552,47 @@ const VerticalFeedReader: React.FC<Props> = ({ bookId, book: preLoadedBook, shar
     useEffect(() => {
         goToPageRef.current = goToPage;
     }, [goToPage]);
+
+    // When current page changes: stop TTS, optionally auto-play if text card and autoNarrate is on;
+    // after TTS auto-advanced to a silent image page, advance again after 3s.
+    useEffect(() => {
+        stopTts();
+        if (pages.length === 0) return;
+        const fromTtsEnd = fromTtsAutoAdvanceRef.current;
+        fromTtsAutoAdvanceRef.current = false;
+        const page = pages[currentIndex];
+        if (!page) return;
+
+        if (isNarratableCard(page) && autoNarrate && !muted) {
+            const t = window.setTimeout(() => {
+                playTtsForPage(page, { fromAuto: true });
+            }, 350);
+            return () => window.clearTimeout(t);
+        }
+
+        if (
+            fromTtsEnd &&
+            !isNarratableCard(page) &&
+            autoNarrate &&
+            !muted &&
+            currentIndex + 1 <= pages.length
+        ) {
+            const nextIdx = currentIndex + 1;
+            if (advanceTimerRef.current) window.clearTimeout(advanceTimerRef.current);
+            advanceTimerRef.current = window.setTimeout(() => {
+                advanceTimerRef.current = null;
+                goToPageRef.current(nextIdx);
+            }, 3000);
+            return () => {
+                if (advanceTimerRef.current) {
+                    window.clearTimeout(advanceTimerRef.current);
+                    advanceTimerRef.current = null;
+                }
+            };
+        }
+
+        return undefined;
+    }, [currentIndex, pages, autoNarrate, muted, playTtsForPage, stopTts]);
 
     const handleVideoEnded = useCallback((index: number) => {
         const page = pages[index];
@@ -668,11 +720,12 @@ const VerticalFeedReader: React.FC<Props> = ({ bookId, book: preLoadedBook, shar
                 `}</style>
 
                 {pages.map((page, index) => {
-                    const isText = page.pageKind === 'text';
                     const text = getCombinedText(page);
                     const boxes = getTextBoxes(page);
                     const firstBox = boxes[0];
                     const isCurrent = index === currentIndex;
+                    /** Media pages often keep default pageKind; use same centered story UI as text cards so TTS highlights + typography match. */
+                    const showCenteredStory = isNarratableCard(page);
                     return (
                         <section
                             key={page._id || index}
@@ -684,14 +737,12 @@ const VerticalFeedReader: React.FC<Props> = ({ bookId, book: preLoadedBook, shar
                             <FeedMediaLayer
                                 page={page}
                                 isCurrent={isCurrent}
-                                videoMuted={isText || muted}
+                                videoMuted={showCenteredStory || muted}
                                 onSequenceEnd={() => handleVideoEnded(index)}
                             />
 
-                            {isText ? (
-                                /* Text-kind page: centered combined text */
+                            {showCenteredStory ? (
                                 <>
-                                    {/* Light scrim: keep artwork visible; readability comes mostly from text shadow */}
                                     <div
                                         key={`dim-${page._id}-${isCurrent ? 'on' : 'off'}`}
                                         className="absolute inset-0 pointer-events-none bg-gradient-to-b from-black/[0.08] via-transparent to-black/[0.22]"
@@ -704,14 +755,7 @@ const VerticalFeedReader: React.FC<Props> = ({ bookId, book: preLoadedBook, shar
                                             key={`text-${page._id}-${isCurrent ? 'on' : 'off'}`}
                                             className="max-w-md w-full text-center"
                                             style={{
-                                                fontFamily: firstBox?.fontFamily || 'Patrick Hand, system-ui, sans-serif',
-                                                color: firstBox?.color || '#ffffff',
-                                                fontSize: `clamp(20px, ${(firstBox?.fontSize || 28) * 0.9}px, 36px)`,
-                                                lineHeight: 1.35,
-                                                textShadow:
-                                                    '0 1px 2px rgba(0,0,0,0.9), 0 2px 12px rgba(0,0,0,0.65), 0 0 24px rgba(0,0,0,0.35)',
-                                                whiteSpace: 'pre-wrap',
-                                                wordBreak: 'break-word',
+                                                ...centeredSwipeUpStoryStyle(firstBox),
                                                 animation: isCurrent
                                                     ? 'vfrTextIn 750ms cubic-bezier(0.22, 1, 0.36, 1) both'
                                                     : undefined,
@@ -727,8 +771,8 @@ const VerticalFeedReader: React.FC<Props> = ({ bookId, book: preLoadedBook, shar
                                                             key={`${page._id}-w-${wi}`}
                                                             className={
                                                                 wi === activeWordIndex
-                                                                    ? 'bg-amber-300/85 text-gray-900 rounded px-1 shadow-sm transition-colors duration-75'
-                                                                    : ''
+                                                                    ? 'bg-amber-300/85 text-gray-900 rounded px-1 shadow-sm transition-colors duration-75 font-normal'
+                                                                    : 'font-normal'
                                                             }
                                                         >
                                                             {w.word}
@@ -743,65 +787,13 @@ const VerticalFeedReader: React.FC<Props> = ({ bookId, book: preLoadedBook, shar
                                     </div>
                                 </>
                             ) : (
-                                /* Media-kind: positioned boxes, or centered body text when only content.text exists */
-                                <>
+                                hasPositionedText(page) && (
                                     <FeedPositionedTextBoxes
                                         boxes={boxes}
                                         isCurrent={isCurrent}
                                         pageId={page._id || `p${index}`}
                                     />
-                                    {!hasPositionedText(page) && text ? (
-                                        <>
-                                            <div
-                                                className="absolute inset-0 pointer-events-none bg-gradient-to-b from-black/[0.08] via-transparent to-black/[0.22]"
-                                                style={{
-                                                    animation: isCurrent ? 'vfrDimIn 600ms ease-out both' : undefined,
-                                                }}
-                                            />
-                                            <div className="absolute inset-0 flex items-center justify-center px-6 pt-20 pb-28 pointer-events-none">
-                                                <div
-                                                    className="max-w-md w-full text-center"
-                                                    style={{
-                                                        fontFamily: firstBox?.fontFamily || 'Patrick Hand, system-ui, sans-serif',
-                                                        color: firstBox?.color || '#ffffff',
-                                                        fontSize: `clamp(20px, ${(firstBox?.fontSize || 28) * 0.9}px, 36px)`,
-                                                        lineHeight: 1.35,
-                                                        textShadow:
-                                                            '0 1px 2px rgba(0,0,0,0.9), 0 2px 12px rgba(0,0,0,0.65), 0 0 24px rgba(0,0,0,0.35)',
-                                                        whiteSpace: 'pre-wrap',
-                                                        wordBreak: 'break-word',
-                                                        animation: isCurrent
-                                                            ? 'vfrTextIn 750ms cubic-bezier(0.22, 1, 0.36, 1) both'
-                                                            : undefined,
-                                                        animationDelay: isCurrent ? '180ms' : undefined,
-                                                    }}
-                                                >
-                                                    {isCurrent &&
-                                                    ttsPlaying &&
-                                                    ttsAlignment?.words?.length ? (
-                                                        <>
-                                                            {ttsAlignment.words.map((w, wi) => (
-                                                                <span
-                                                                    key={`${page._id}-fw-${wi}`}
-                                                                    className={
-                                                                        wi === activeWordIndex
-                                                                            ? 'bg-amber-300/85 text-gray-900 rounded px-1 shadow-sm transition-colors duration-75'
-                                                                            : ''
-                                                                    }
-                                                                >
-                                                                    {w.word}
-                                                                    {wi < ttsAlignment.words.length - 1 ? ' ' : ''}
-                                                                </span>
-                                                            ))}
-                                                        </>
-                                                    ) : (
-                                                        text
-                                                    )}
-                                                </div>
-                                            </div>
-                                        </>
-                                    ) : null}
-                                </>
+                                )
                             )}
                         </section>
                     );

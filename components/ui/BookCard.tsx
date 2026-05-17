@@ -4,14 +4,15 @@ import { BookOpen, Headphones, Heart, Lock } from 'lucide-react';
 import PremiumBadge from './PremiumBadge';
 import { useUser } from '../../context/UserContext';
 import { useLanguage } from '../../context/LanguageContext';
+import { DEFAULT_BOOK_COVER } from '../../utils/placeholderImage';
 
 interface BookCardProps {
   book: Book;
   onClick: (id: string) => void;
 }
 
-// Default placeholder image
-const DEFAULT_COVER = 'https://via.placeholder.com/400x400/8B4513/FFFFFF?text=Book+Cover';
+// Local SVG data-URI placeholder (the old via.placeholder.com service is dead).
+const DEFAULT_COVER = DEFAULT_BOOK_COVER;
 
 const BookCard: React.FC<BookCardProps> = ({ book, onClick }) => {
   const [imageError, setImageError] = useState(false);

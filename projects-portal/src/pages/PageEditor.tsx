@@ -28,6 +28,14 @@ import {
     Gamepad2,
     Users
 } from 'lucide-react';
+import {
+    APP_BOOK_REF_VIEWPORT_WIDTH,
+    appSideSwipeAuthoredFontSizePx,
+    appSideSwipeFontFamily,
+    appSideSwipeTextShadow,
+    appStoryParagraphExtras,
+    scaleAuthoredFontToCanvas,
+} from '../utils/appBookTypography';
 
 interface TextBox {
     id: string;
@@ -3147,35 +3155,35 @@ const PageEditor: React.FC = () => {
                         const textTop = scrollPreview 
                             ? `max(${box.y}%, ${scrollTopPosition})`
                             : `${box.y}%`;
+
+                        const boxX = typeof box.x === 'number' ? box.x : 0;
+                        const authoredFontPx = scaleAuthoredFontToCanvas(appSideSwipeAuthoredFontSizePx(box), canvasWidth);
                         
                         return (
                         <div
                             key={box.id}
                             onMouseDown={(e) => handleMouseDown(e, box.id)}
-                            className={`absolute cursor-move p-2 z-20 group ${selectedBoxId === box.id ? 'ring-2 ring-indigo-500' : 'hover:ring-1 hover:ring-indigo-300'
+                            className={`absolute cursor-move z-20 group ${selectedBoxId === box.id ? 'ring-2 ring-indigo-500' : 'hover:ring-1 hover:ring-indigo-300'
                                 }`}
                             style={{
-                                left: `${box.x}%`,
+                                // Match kid app margins / width clamp (safe-area resolves to 0 in desktop browsers)
+                                left: `calc(max(${boxX}%, 3%) + env(safe-area-inset-left, 0px))`,
                                 top: textTop,
-                                width: `${box.width || 30}%`,
+                                width: `min(${box.width || 30}%, calc(100% - max(${boxX}%, 3%) - 3% - env(safe-area-inset-left, 0px) - env(safe-area-inset-right, 0px)))`,
                                 transform: 'translate(0, 0)', // Remove centering transform to make resizing easier to reason about
                                 textAlign: box.alignment,
-                                color: box.color,
-                                fontFamily: box.fontFamily,
-                                fontSize: `${box.fontSize}px`,
+                                color: box.color || '#4a3b2a',
+                                fontFamily: appSideSwipeFontFamily(box.fontFamily),
+                                fontSize: `${authoredFontPx}px`,
                                 height: 'auto', // Allow height to grow
                                 minHeight: '50px',
+                                padding: box.showBackground === true ? '12px 16px' : '8px',
                                 // Smooth transition when scroll height changes
                                 transition: 'top 0.3s ease-in-out',
-                                // Show background styling preview
+                                // Show background styling preview (same as app reader)
                                 backgroundColor: box.showBackground ? (box.backgroundColor || 'rgba(255,255,255,0.85)') : 'transparent',
                                 borderRadius: box.showBackground ? '12px' : '0',
-                                // Text shadow/glow - color controlled by shadowColor setting
-                                textShadow: box.showBackground 
-                                    ? '1px 1px 2px rgba(255,255,255,0.8)'
-                                    : box.shadowColor === 'black'
-                                        ? '0 0 8px rgba(0,0,0,0.9), 0 0 16px rgba(0,0,0,0.7), 1px 1px 4px rgba(0,0,0,0.8)'
-                                        : '0 0 8px rgba(255,255,255,0.9), 0 0 16px rgba(255,255,255,0.7), 1px 1px 4px rgba(255,255,255,0.8)',
+                                textShadow: appSideSwipeTextShadow(box),
                             }}
                         >
                             {/* Drag Handle Icon (visible on hover or select) */}
@@ -3196,7 +3204,7 @@ const PageEditor: React.FC = () => {
                                 </div>
                             )}
 
-                            <span style={{ whiteSpace: 'pre-wrap' }}>{box.text}</span>
+                            <p style={{ whiteSpace: 'pre-wrap', margin: 0, ...appStoryParagraphExtras() }}>{box.text}</p>
                         </div>
                         );
                     })}
@@ -3232,8 +3240,13 @@ const PageEditor: React.FC = () => {
                     )}
                 </div>
 
-                <div className="absolute bottom-4 right-4 text-gray-500 text-xs bg-white/80 px-2 py-1 rounded">
-                    Canvas: {canvasWidth}x{canvasHeight}px
+                <div className="absolute bottom-4 right-4 text-gray-500 text-xs bg-white/80 px-2 py-1 rounded max-w-sm text-right leading-snug">
+                    <div>
+                        Canvas: {canvasWidth}×{canvasHeight}px
+                    </div>
+                    <div className="text-[10px] text-gray-500 mt-0.5">
+                        Text size scales vs {APP_BOOK_REF_VIEWPORT_WIDTH}px-wide reference viewport (kid app portrait)
+                    </div>
                 </div>
             </div>
 

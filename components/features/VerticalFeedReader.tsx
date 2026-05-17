@@ -243,6 +243,99 @@ const FeedPositionedTextBoxes: React.FC<{
     );
 };
 
+/** Keyframes for image sequence camera motion (portal / BookPageRenderer parity). */
+const VFR_IMAGE_SEQ_KEYFRAMES = `
+@keyframes vfrImgZoomIn {
+  from { transform: scale(1) translate(0, 0); }
+  to { transform: scale(1.15) translate(0, 0); }
+}
+@keyframes vfrImgZoomOut {
+  from { transform: scale(1.15) translate(0, 0); }
+  to { transform: scale(1) translate(0, 0); }
+}
+@keyframes vfrImgPanLeft {
+  from { transform: scale(1.1) translateX(3%); }
+  to { transform: scale(1.1) translateX(-3%); }
+}
+@keyframes vfrImgPanRight {
+  from { transform: scale(1.1) translateX(-3%); }
+  to { transform: scale(1.1) translateX(3%); }
+}
+@keyframes vfrImgPanUp {
+  from { transform: scale(1.1) translateY(3%); }
+  to { transform: scale(1.1) translateY(-3%); }
+}
+@keyframes vfrImgPanDown {
+  from { transform: scale(1.1) translateY(-3%); }
+  to { transform: scale(1.1) translateY(3%); }
+}
+@keyframes vfrImgKen1 {
+  from { transform: scale(1) translate(0, 0); }
+  to { transform: scale(1.12) translate(-2%, -1%); }
+}
+@keyframes vfrImgKen2 {
+  from { transform: scale(1.12) translate(2%, 1%); }
+  to { transform: scale(1) translate(-1%, 2%); }
+}
+@keyframes vfrImgKen3 {
+  from { transform: scale(1) translate(1%, -1%); }
+  to { transform: scale(1.1) translate(2%, 1%); }
+}
+@keyframes vfrImgKen4 {
+  from { transform: scale(1.1) translate(-1%, 2%); }
+  to { transform: scale(1) translate(0, -1%); }
+}
+`;
+
+/** Returns motion styles for the active slide, or null for static / fade-only crossfade. */
+function vfrImageSequenceMotionStyle(
+    animRaw: string | undefined,
+    durationSec: number,
+    slideIndex: number
+): React.CSSProperties | null {
+    const anim = String(animRaw || 'kenBurns').trim().toLowerCase();
+    if (anim === 'none' || anim === 'fade' || anim === '') return null;
+
+    const base: React.CSSProperties = {
+        position: 'absolute',
+        objectFit: 'cover',
+        animationDuration: `${durationSec}s`,
+        animationTimingFunction: 'ease-in-out',
+        animationFillMode: 'forwards',
+        animationIterationCount: 1,
+        minWidth: '110%',
+        minHeight: '110%',
+        left: '-5%',
+        top: '-5%',
+        width: 'auto',
+        height: 'auto',
+    };
+
+    switch (anim) {
+        case 'zoomin':
+            return { ...base, animationName: 'vfrImgZoomIn' };
+        case 'zoomout':
+            return { ...base, animationName: 'vfrImgZoomOut' };
+        case 'panleft':
+            return { ...base, animationName: 'vfrImgPanLeft' };
+        case 'panright':
+            return { ...base, animationName: 'vfrImgPanRight' };
+        case 'panup':
+            return { ...base, animationName: 'vfrImgPanUp' };
+        case 'pandown':
+            return { ...base, animationName: 'vfrImgPanDown' };
+        case 'zoom':
+            return { ...base, animationName: 'vfrImgZoomIn' };
+        case 'slide':
+            return { ...base, animationName: 'vfrImgPanLeft' };
+        case 'kenburns':
+        default: {
+            const variants = ['vfrImgKen1', 'vfrImgKen2', 'vfrImgKen3', 'vfrImgKen4'] as const;
+            return { ...base, animationName: variants[slideIndex % 4] };
+        }
+    }
+}
+
 /**
  * Renders the page background, handling all media variants:
  *   1. Image sequence (cycles)   2. Video sequence (in order)
@@ -261,15 +354,22 @@ const FeedMediaLayer: React.FC<{
     }, [page.useImageSequence, page.imageSequence]);
 
     const [imgIdx, setImgIdx] = useState(0);
+    const [motionEpoch, setMotionEpoch] = useState(0);
     useEffect(() => {
-        if (isCurrent) setImgIdx(0);
+        if (isCurrent) {
+            setImgIdx(0);
+            setMotionEpoch((e) => e + 1);
+        }
     }, [isCurrent, page._id]);
 
     useEffect(() => {
-        if (!imgSeq || !isCurrent || imgSeq.length < 2) return;
+        if (!imgSeq || !isCurrent) return;
         const ms = Math.max(1000, (page.imageSequenceDuration || 3) * 1000);
         const t = window.setInterval(() => {
-            setImgIdx(i => (i + 1) % imgSeq.length);
+            setMotionEpoch((e) => e + 1);
+            if (imgSeq.length >= 2) {
+                setImgIdx((i) => (i + 1) % imgSeq.length);
+            }
         }, ms);
         return () => window.clearInterval(t);
     }, [imgSeq, isCurrent, page.imageSequenceDuration]);
@@ -284,19 +384,60 @@ const FeedMediaLayer: React.FC<{
 
     if (imgSeq && imgSeq.length > 0) {
         const activeIdx = Math.min(imgIdx, imgSeq.length - 1);
+        const dur = Math.max(1, page.imageSequenceDuration || 3);
+        const motion = vfrImageSequenceMotionStyle(page.imageSequenceAnimation, dur, activeIdx);
+
         return (
-            <>
-                {imgSeq.map((img, i) => (
-                    <img
-                        key={`${page._id}-img-${i}`}
-                        src={resolveMediaUrl(img.url)}
-                        alt=""
-                        className="absolute inset-0 w-full h-full object-cover transition-opacity duration-700"
-                        style={{ opacity: i === activeIdx ? 1 : 0 }}
-                        draggable={false}
-                    />
-                ))}
-            </>
+            <div className="absolute inset-0 w-full h-full overflow-hidden">
+                <style>{VFR_IMAGE_SEQ_KEYFRAMES}</style>
+                {imgSeq.map((img, i) => {
+                    const active = i === activeIdx;
+                    const motionForLayer = active ? motion : null;
+                    const style: React.CSSProperties = active
+                        ? motionForLayer
+                            ? {
+                                  ...motionForLayer,
+                                  opacity: 1,
+                                  zIndex: 2,
+                                  transition: 'opacity 700ms ease-in-out',
+                              }
+                            : {
+                                  position: 'absolute',
+                                  inset: 0,
+                                  width: '100%',
+                                  height: '100%',
+                                  objectFit: 'cover',
+                                  opacity: 1,
+                                  zIndex: 2,
+                                  transition: 'opacity 700ms ease-in-out',
+                              }
+                        : {
+                              position: 'absolute',
+                              inset: 0,
+                              width: '100%',
+                              height: '100%',
+                              objectFit: 'cover',
+                              opacity: 0,
+                              zIndex: 1,
+                              transition: 'opacity 700ms ease-in-out',
+                              pointerEvents: 'none',
+                          };
+
+                    return (
+                        <img
+                            key={
+                                active
+                                    ? `vfr-${page._id}-seq-${i}-e${motionEpoch}`
+                                    : `vfr-${page._id}-seq-${i}`
+                            }
+                            src={resolveMediaUrl(img.url)}
+                            alt=""
+                            style={style}
+                            draggable={false}
+                        />
+                    );
+                })}
+            </div>
         );
     }
 
@@ -790,8 +931,8 @@ const VerticalFeedReader: React.FC<Props> = ({ bookId, book: preLoadedBook, shar
                                                             key={`${page._id}-w-${wi}`}
                                                             className={
                                                                 wi === activeWordIndex
-                                                                    ? 'bg-amber-300/85 text-gray-900 rounded px-1 shadow-sm transition-colors duration-75 font-normal'
-                                                                    : 'font-normal'
+                                                                    ? 'gk-readalong-word gk-readalong-word--current font-normal rounded px-1 bg-amber-300/95 text-gray-950 shadow-[0_0_20px_rgba(251,191,36,0.55),0_3px_10px_rgba(0,0,0,0.12)] ring-2 ring-amber-200/70'
+                                                                    : 'gk-readalong-word font-normal text-inherit opacity-95'
                                                             }
                                                         >
                                                             {w.word}

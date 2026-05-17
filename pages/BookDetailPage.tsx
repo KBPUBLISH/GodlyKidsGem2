@@ -23,8 +23,10 @@ import PrayerGameModal from '../components/features/PrayerGameModal';
 import CommentSection from '../components/features/CommentSection';
 import { CHARACTER_STYLES } from '../components/features/CharacterStyleSelector';
 
-// Default placeholder image
-const DEFAULT_COVER = 'https://via.placeholder.com/400x400/8B4513/FFFFFF?text=Book+Cover';
+import { DEFAULT_BOOK_COVER } from '../utils/placeholderImage';
+
+// Local SVG data-URI placeholder (the old via.placeholder.com service is dead).
+const DEFAULT_COVER = DEFAULT_BOOK_COVER;
 
 // Mock Chapters Data for Audio Books
 const AUDIO_CHAPTERS = [

@@ -92,6 +92,32 @@
       input::placeholder {
         opacity: 0.6;
       }
+
+      /*
+       * Read-along word highlight motion (VerticalFeedReader, BookPageRenderer, AudioStoryPlayer)
+       */
+      @keyframes gk-readalong-pop {
+        0% {
+          transform: scale(0.9) translateY(0.14em);
+        }
+        55% {
+          transform: scale(1.09) translateY(-0.16em);
+        }
+        100% {
+          transform: scale(1.05) translateY(-0.04em);
+        }
+      }
+
+      .gk-readalong-word {
+        transition: color 90ms ease, background-color 90ms ease, box-shadow 120ms ease, text-shadow 120ms ease,
+          opacity 90ms ease;
+      }
+
+      .gk-readalong-word--current {
+        display: inline-block;
+        vertical-align: baseline;
+        animation: gk-readalong-pop 0.38s cubic-bezier(0.32, 1.22, 0.55, 1) both;
+      }
     </style>
     <script>
       tailwind.config = {

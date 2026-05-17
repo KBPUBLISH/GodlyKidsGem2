@@ -41,6 +41,25 @@ import { isSessionCompletedToday, getSessionStreak, hasSessionToday } from '../s
 import DailyLessonWidget from '../components/features/DailyLessonWidget';
 import PremiumBadge from '../components/ui/PremiumBadge';
 import { FEATURE_CREATE_YOUR_STORY } from '../constants';
+import { placeholderImage } from '../utils/placeholderImage';
+
+// Local SVG data-URI fallbacks for cover thumbnails. These replace the old
+// `via.placeholder.com` URLs which now return ERR_CONNECTION_CLOSED and
+// caused the <img onError> handler to loop indefinitely.
+const FALLBACK_LESSON_COVER = placeholderImage(150, 200, '9C27B0', '\u{1F4FA}'); // 📺
+const FALLBACK_RECOMMENDED_COVER = placeholderImage(150, 200, 'E91E63', '\u{1F49D}'); // 💝
+const FALLBACK_EPISODE_COVER = placeholderImage(150, 200, 'FF6B35', '\u{1F3B5}'); // 🎵
+const FALLBACK_BOOK_COVER = placeholderImage(150, 200, '4CAF50', '\u{1F4DA}'); // 📚
+
+// Swaps the <img> src to a guaranteed-load data URI on error, then disables
+// further onerror handling so the React re-render cycle can't restart the
+// fetch loop.
+const swapToFallback = (e: React.SyntheticEvent<HTMLImageElement>, fallback: string) => {
+  const img = e.currentTarget;
+  if (img.src === fallback) return; // already swapped — nothing to do
+  img.onerror = null;
+  img.src = fallback;
+};
 
 // Helper to format date as YYYY-MM-DD in local time
 const formatLocalDateKey = (d: Date): string => {
@@ -1154,9 +1173,7 @@ const HomePage: React.FC = () => {
                               src={thumbnailUrl}
                               alt={lesson.title}
                               className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                              onError={(e) => {
-                                (e.target as HTMLImageElement).src = 'https://via.placeholder.com/150x200/9C27B0/FFFFFF?text=📺';
-                              }}
+                              onError={(e) => swapToFallback(e, FALLBACK_LESSON_COVER)}
                             />
                           ) : (
                             <div className="w-full h-full bg-gradient-to-br from-purple-600 to-purple-900 flex items-center justify-center">
@@ -1646,12 +1663,10 @@ const HomePage: React.FC = () => {
                     {/* Cover Image */}
                     <div className="relative aspect-[3/4] rounded-2xl overflow-hidden shadow-lg border-2 border-white/20 group-hover:border-pink-400/50 transition-all">
                       <img
-                        src={item.coverUrl || item.coverImage || item.files?.coverImage}
+                        src={item.coverUrl || item.coverImage || item.files?.coverImage || FALLBACK_RECOMMENDED_COVER}
                         alt={item.title}
                         className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                        onError={(e) => {
-                          (e.target as HTMLImageElement).src = 'https://via.placeholder.com/150x200/E91E63/FFFFFF?text=💝';
-                        }}
+                        onError={(e) => swapToFallback(e, FALLBACK_RECOMMENDED_COVER)}
                       />
                       {/* Play overlay for audio */}
                       {item.isAudio && (
@@ -1703,12 +1718,10 @@ const HomePage: React.FC = () => {
                     {/* Cover Image - Same 3:4 aspect ratio as books */}
                     <div className="relative aspect-[3/4] rounded-2xl overflow-hidden shadow-lg border-2 border-white/20 group-hover:border-orange-400/50 transition-all">
                       <img
-                        src={episode.coverImage || episode.playlist.coverImage}
+                        src={episode.coverImage || episode.playlist.coverImage || FALLBACK_EPISODE_COVER}
                         alt={episode.title}
                         className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                        onError={(e) => {
-                          (e.target as HTMLImageElement).src = 'https://via.placeholder.com/150x200/FF6B35/FFFFFF?text=🎵';
-                        }}
+                        onError={(e) => swapToFallback(e, FALLBACK_EPISODE_COVER)}
                       />
                       {/* Play overlay */}
                       <div className="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
@@ -1758,12 +1771,10 @@ const HomePage: React.FC = () => {
                     {/* Cover Image */}
                     <div className="relative aspect-[3/4] rounded-2xl overflow-hidden shadow-lg border-2 border-white/20 group-hover:border-green-400/50 transition-all">
                       <img
-                        src={book.coverUrl || book.coverImage || book.files?.coverImage}
+                        src={book.coverUrl || book.coverImage || book.files?.coverImage || FALLBACK_BOOK_COVER}
                         alt={book.title}
                         className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                        onError={(e) => {
-                          (e.target as HTMLImageElement).src = 'https://via.placeholder.com/150x200/4CAF50/FFFFFF?text=📚';
-                        }}
+                        onError={(e) => swapToFallback(e, FALLBACK_BOOK_COVER)}
                       />
                       {/* Play overlay */}
                       <div className="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">

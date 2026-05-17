@@ -1,6 +1,12 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { apiClient, getMediaUrl } from '../services/apiClient';
+import {
+    appSideSwipeAuthoredFontSizePx,
+    appSideSwipeFontFamily,
+    appSideSwipeTextShadow,
+    appStoryParagraphExtras,
+} from '../utils/appBookTypography';
 import { ChevronLeft, ChevronRight, X, Play, Square, Volume2, ChevronDown } from 'lucide-react';
 
 interface Voice {
@@ -604,6 +610,7 @@ const BookReader: React.FC = () => {
                                     // Calculate where scroll starts (from top)
                                     const scrollStartPercent = 100 - currentScrollHeight - scrollOffset + 3;
                                     const boxY = typeof box.y === 'number' ? box.y : 0;
+                                    const boxX = typeof box.x === 'number' ? box.x : 0;
                                     // Ensure text stays inside scroll area
                                     const effectiveTop = scrollUrl ? Math.max(boxY, scrollStartPercent) : boxY;
                                     // Calculate max height to stay within scroll bounds
@@ -615,39 +622,30 @@ const BookReader: React.FC = () => {
                                     return (
                                         <div
                                             key={idx}
-                                            className={`absolute pointer-events-auto overflow-y-auto p-2 ${currentTextBoxIndex === idx && isPlaying ? 'ring-2 ring-orange-400 ring-opacity-75' : ''}`}
+                                            className={`absolute pointer-events-auto overflow-y-auto ${currentTextBoxIndex === idx && isPlaying ? 'ring-2 ring-orange-400 ring-opacity-75' : ''}`}
                                             style={{
-                                                left: `${box.x}%`,
+                                                left: `calc(max(${boxX}%, 3%) + env(safe-area-inset-left, 0px))`,
                                                 top: `${effectiveTop}%`,
-                                                width: `${box.width || 30}%`,
+                                                width: `min(${box.width || 30}%, calc(100% - max(${boxX}%, 3%) - 3% - env(safe-area-inset-left, 0px) - env(safe-area-inset-right, 0px)))`,
                                                 transform: 'translate(0, 0)',
                                                 textAlign: box.alignment,
                                                 color: box.color || '#4a3b2a',
-                                                // Match app: use Patrick Hand (Google Font) with fallbacks
-                                                fontFamily: box.fontFamily === 'Comic Sans MS' 
-                                                    ? "'Patrick Hand', 'Comic Sans MS', 'Bubblegum Sans', cursive" 
-                                                    : (box.fontFamily || "'Patrick Hand', 'Comic Sans MS', cursive"),
-                                                // Match app: scale up 20% when using Patrick Hand (renders smaller than Comic Sans)
-                                                fontSize: (box.fontFamily === 'Comic Sans MS' || !box.fontFamily)
-                                                    ? `${Math.round((box.fontSize || 24) * 1.2)}px`
-                                                    : `${box.fontSize || 24}px`,
+                                                fontFamily: appSideSwipeFontFamily(box.fontFamily),
+                                                fontSize: `${appSideSwipeAuthoredFontSizePx(box)}px`,
                                                 // Calculate max height based on the effective top position
                                                 maxHeight: effectiveMaxHeight,
                                                 overflowY: 'auto',
                                                 WebkitOverflowScrolling: 'touch',
+                                                touchAction: 'pan-y',
                                                 // Background box styling
                                                 backgroundColor: box.showBackground ? (box.backgroundColor || 'rgba(255,255,255,0.85)') : 'transparent',
                                                 borderRadius: box.showBackground ? '12px' : '0',
-                                                padding: box.showBackground ? '12px 16px' : '8px',
-                                                // Text shadow/glow - color controlled by shadowColor setting
-                                                textShadow: box.showBackground 
-                                                    ? '1px 1px 2px rgba(255,255,255,0.8)'
-                                                    : box.shadowColor === 'dark'
-                                                        ? '0 0 8px rgba(0,0,0,0.9), 0 0 16px rgba(0,0,0,0.7), 1px 1px 4px rgba(0,0,0,0.8)'
-                                                        : '0 0 8px rgba(255,255,255,0.9), 0 0 16px rgba(255,255,255,0.7), 1px 1px 4px rgba(255,255,255,0.8)',
+                                                padding: box.showBackground === true ? '12px 16px' : '8px',
+                                                textShadow: appSideSwipeTextShadow(box),
+                                                scrollBehavior: 'smooth',
                                             }}
                                         >
-                                            <span style={{ whiteSpace: 'pre-wrap' }}>{box.text}</span>
+                                            <p style={{ whiteSpace: 'pre-wrap', margin: 0, ...appStoryParagraphExtras() }}>{box.text}</p>
                                         </div>
                                     );
                                 })}

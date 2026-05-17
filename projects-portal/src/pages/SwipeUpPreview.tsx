@@ -155,7 +155,7 @@ const PositionedTextBoxes: React.FC<{
                             textAlign: align,
                             fontFamily: b.fontFamily || 'Patrick Hand, system-ui, sans-serif',
                             color: b.color || '#4a3b2a',
-                            fontSize: `clamp(12px, ${(b.fontSize || 24) * 0.7}px, ${(b.fontSize || 24)}px)`,
+                            fontSize: `clamp(14px, ${(b.fontSize || 24) * 0.7}px, ${(b.fontSize || 24)}px)`,
                             lineHeight: 1.3,
                             textShadow: resolveShadow(b.shadowColor),
                             background: b.showBackground ? (b.backgroundColor || 'rgba(255,255,255,0.85)') : 'transparent',

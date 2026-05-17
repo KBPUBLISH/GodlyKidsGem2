@@ -1008,9 +1008,9 @@ export const BookPageRenderer: React.FC<BookPageRendererProps> = ({
                                                         key={wIdx}
                                                         data-word-index={wIdx}
                                                         className={`
-                                                            transition-all duration-150 rounded px-0.5
+                                                            gk-readalong-word rounded px-0.5
                                                             ${isHighlighted
-                                                                ? 'bg-[#FFD700] text-black font-bold scale-110 inline-block shadow-sm'
+                                                                ? 'gk-readalong-word--current bg-[#FFD700] text-black font-bold shadow-[0_0_22px_rgba(255,215,0,0.55),0_3px_8px_rgba(0,0,0,0.15)] ring-2 ring-amber-200/80'
                                                                 : ''
                                                             }
                                                         `}

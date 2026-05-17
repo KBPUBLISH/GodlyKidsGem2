@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { apiClient, getMediaUrl } from '../services/apiClient';
 import {
@@ -7,7 +7,7 @@ import {
     appSideSwipeTextShadow,
     appStoryParagraphExtras,
 } from '../utils/appBookTypography';
-import { ChevronLeft, ChevronRight, X, Play, Square, Volume2, ChevronDown } from 'lucide-react';
+import { ChevronLeft, ChevronRight, X, Play, Square, Volume2, VolumeX, ChevronDown } from 'lucide-react';
 import TrimmedPlaybackVideo from '../components/TrimmedPlaybackVideo';
 import { removeEmotionalCues } from '../utils/readAlongText';
 
@@ -140,6 +140,8 @@ const BookReader: React.FC = () => {
     // Video sequence state
     const [currentVideoIndex, setCurrentVideoIndex] = useState(0);
     const videoRef = useRef<HTMLVideoElement>(null);
+    /** Page background / sequence videos autoplay muted; user can unmute (browser requires a tap). */
+    const [pageVideoSoundOn, setPageVideoSoundOn] = useState(false);
     
     // TTS State
     const [voices, setVoices] = useState<Voice[]>([]);
@@ -225,6 +227,14 @@ const BookReader: React.FC = () => {
     }, []);
 
     const currentPage = pages[currentPageIndex];
+
+    const pageHasRenderableVideo = useMemo(() => {
+        if (!currentPage) return false;
+        if (currentPage.useVideoSequence && (currentPage.videoSequence?.length ?? 0) > 0) return true;
+        const bgUrl = currentPage.backgroundUrl || currentPage.files?.background?.url;
+        const bgType = currentPage.backgroundType || currentPage.files?.background?.type;
+        return !!(bgUrl && bgType === 'video');
+    }, [currentPage]);
     
     // Reset image/video index when page changes (but preserve scroll state!)
     useEffect(() => {
@@ -691,7 +701,7 @@ const BookReader: React.FC = () => {
                                             className="w-full h-full object-cover"
                                             autoPlay
                                             loop={shouldLoop}
-                                            muted
+                                            muted={!pageVideoSoundOn}
                                             playsInline
                                             trimStartSec={currentVideo.trimStartSec}
                                             trimEndSec={currentVideo.trimEndSec}
@@ -725,11 +735,12 @@ const BookReader: React.FC = () => {
                             if (bgType === 'video') {
                                 return (
                                     <TrimmedPlaybackVideo
+                                        ref={videoRef}
                                         src={resolveUrl(bgUrl)}
                                         className="w-full h-full object-cover"
                                         autoPlay
                                         loop
-                                        muted
+                                        muted={!pageVideoSoundOn}
                                         playsInline
                                         trimStartSec={currentPage.backgroundTrimStartSec}
                                         trimEndSec={currentPage.backgroundTrimEndSec}
@@ -863,9 +874,9 @@ const BookReader: React.FC = () => {
                                                                     ${isHighlighted
                                                                         ? 'gk-readalong-word--current opacity-100 bg-[#FFD700] text-black font-bold shadow-[0_0_22px_rgba(255,215,0,0.55),0_3px_8px_rgba(0,0,0,0.15)] ring-2 ring-amber-200/80'
                                                                         : isUpcoming
-                                                                            ? 'opacity-42'
+                                                                            ? 'opacity-[0.42]'
                                                                             : isPast
-                                                                                ? 'opacity-78'
+                                                                                ? 'opacity-[0.78]'
                                                                                 : ''
                                                                     }
                                                                 `}
@@ -947,11 +958,11 @@ const BookReader: React.FC = () => {
                         Page {currentPageIndex + 1} of {pages.length}
                     </div>
                     
-                    {/* Play Button - positioned like in app */}
-                    <div 
-                        className="absolute left-4 pointer-events-auto z-30"
+                    {/* Play + page video sound (background / sequence) */}
+                    <div
+                        className="absolute left-4 pointer-events-auto z-30 flex flex-col gap-2 items-center"
                         style={{
-                            bottom: (!currentPage?.scrollUrl || scrollState === 'hidden') ? '1rem' : '2rem'
+                            bottom: (!currentPage?.scrollUrl || scrollState === 'hidden') ? '1rem' : '2rem',
                         }}
                     >
                         <button
@@ -961,8 +972,8 @@ const BookReader: React.FC = () => {
                             }}
                             disabled={ttsLoading}
                             className={`w-14 h-14 rounded-full flex items-center justify-center shadow-lg transition-all ${
-                                isPlaying 
-                                    ? 'bg-red-500 hover:bg-red-600' 
+                                isPlaying
+                                    ? 'bg-red-500 hover:bg-red-600'
                                     : 'bg-orange-500 hover:bg-orange-600'
                             } ${ttsLoading ? 'opacity-75 cursor-wait' : ''}`}
                         >
@@ -974,6 +985,37 @@ const BookReader: React.FC = () => {
                                 <Play className="w-6 h-6 text-white ml-1" fill="white" />
                             )}
                         </button>
+
+                        {pageHasRenderableVideo && (
+                            <button
+                                type="button"
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    setPageVideoSoundOn((on) => {
+                                        const next = !on;
+                                        if (next) {
+                                            setTimeout(() => {
+                                                void videoRef.current?.play().catch(() => {});
+                                            }, 0);
+                                        }
+                                        return next;
+                                    });
+                                }}
+                                className={`w-11 h-11 rounded-full flex items-center justify-center shadow-lg border border-white/20 transition-all ${
+                                    pageVideoSoundOn
+                                        ? 'bg-emerald-600/90 hover:bg-emerald-500 text-white'
+                                        : 'bg-black/45 hover:bg-black/60 text-white backdrop-blur-sm'
+                                }`}
+                                title={pageVideoSoundOn ? 'Mute page video' : 'Hear page video audio'}
+                                aria-label={pageVideoSoundOn ? 'Mute page video' : 'Unmute page video'}
+                            >
+                                {pageVideoSoundOn ? (
+                                    <Volume2 className="w-5 h-5" />
+                                ) : (
+                                    <VolumeX className="w-5 h-5" />
+                                )}
+                            </button>
+                        )}
                     </div>
                     
                     {/* Voice Selector - top right */}

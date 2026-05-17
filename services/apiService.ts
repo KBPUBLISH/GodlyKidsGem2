@@ -795,13 +795,16 @@ export const ApiService = {
     try {
       const baseUrl = getApiBaseUrl();
 
-      // Get or generate device info
+      // Single canonical device id (web uses godlykids_device_id; legacy key device_id)
       const getDeviceId = (): string => {
-        let deviceId = localStorage.getItem('device_id');
+        let deviceId =
+          localStorage.getItem('godlykids_device_id') ||
+          localStorage.getItem('device_id');
         if (!deviceId) {
           deviceId = `device_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-          localStorage.setItem('device_id', deviceId);
         }
+        localStorage.setItem('godlykids_device_id', deviceId);
+        localStorage.setItem('device_id', deviceId);
         return deviceId;
       };
 
@@ -897,9 +900,35 @@ export const ApiService = {
         if (data.user) {
           authService.setUser(data.user);
           console.log('✅ User data stored:', data.user);
-          
+
+          const loginEmail = (data.user.email || credentials?.email || '').toLowerCase().trim();
+          if (loginEmail) {
+            localStorage.setItem('godlykids_user_email', loginEmail);
+          }
+
+          // Link device profile to email (merges web Stripe on device id into email account)
+          const deviceId = getDeviceId();
+          if (deviceId && loginEmail) {
+            try {
+              await fetchWithTimeout(`${baseUrl}app-user/link-email`, {
+                method: 'POST',
+                body: JSON.stringify({ deviceId, email: loginEmail }),
+              });
+            } catch (linkErr) {
+              console.warn('⚠️ link-email on login failed (non-fatal):', linkErr);
+            }
+          }
+
+          // Apply server-side premium (web Stripe / AppUser) immediately on mobile sign-in
+          if (data.isPremium || data.subscriptionRestored || data.user.isPremium) {
+            localStorage.setItem('godlykids_premium', 'true');
+            if (typeof window !== 'undefined') {
+              window.dispatchEvent(new CustomEvent('revenuecat:premiumChanged', { detail: { isPremium: true } }));
+            }
+            console.log('✅ Premium subscription restored from server on login');
+          }
+
           // Link same ID to OneSignal that we use for create-your-story (email/deviceId)
-          // so "your story is ready" notifications reach the app and web.
           const userId = authService.getUserIdForBackend();
           if (userId) {
             DespiaService.setOneSignalUserId(userId);
@@ -907,7 +936,7 @@ export const ApiService = {
           }
         }
 
-        // Trigger books reload by dispatching event
+        // Trigger books reload and subscription re-check
         if (typeof window !== 'undefined') {
           window.dispatchEvent(new Event('authTokenUpdated'));
         }
@@ -916,7 +945,9 @@ export const ApiService = {
           success: true,
           token: token,
           refreshToken: refreshToken,
-          user: data.user
+          user: data.user,
+          isPremium: !!(data.isPremium || data.subscriptionRestored || data.user?.isPremium),
+          subscriptionRestored: !!(data.subscriptionRestored || data.isPremium || data.user?.isPremium),
         };
       } else {
         // Handle error response

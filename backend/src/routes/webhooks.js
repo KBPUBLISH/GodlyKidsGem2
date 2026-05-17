@@ -32,12 +32,19 @@ const isValidObjectId = (id) => {
 
 // Helper to build safe query for finding users by various IDs
 const buildUserQuery = (externalId) => {
+    const normalized = typeof externalId === 'string' && externalId.includes('@')
+        ? externalId.toLowerCase().trim()
+        : externalId;
     const conditions = [
-        { email: externalId },
-        { deviceId: externalId }
+        { email: normalized },
+        { deviceId: normalized }
     ];
-    if (isValidObjectId(externalId)) {
-        conditions.unshift({ _id: externalId });
+    // Case-insensitive email match for legacy records
+    if (typeof normalized === 'string' && normalized.includes('@')) {
+        conditions.push({ email: { $regex: new RegExp(`^${normalized.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i') } });
+    }
+    if (isValidObjectId(normalized)) {
+        conditions.unshift({ _id: normalized });
     }
     return { $or: conditions };
 };

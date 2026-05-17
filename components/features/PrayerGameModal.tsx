@@ -115,7 +115,7 @@ const PRAYER_TEXTS: Record<string, string[]> = {
 
 const PrayerGameModal: React.FC<PrayerGameModalProps> = ({ isOpen, onClose }) => {
   const { addCoins } = useUser();
-  const { playClick, playSuccess, playTab, setGameMode, currentPlaylist } = useAudio();
+  const { playClick, playSuccess, playTab, setMusicPaused, currentPlaylist } = useAudio();
   const { t } = useLanguage();
   
   // Check if MiniPlayer is visible (playlist is playing)
@@ -147,15 +147,14 @@ const PrayerGameModal: React.FC<PrayerGameModalProps> = ({ isOpen, onClose }) =>
 
   // --- SETUP ---
   useEffect(() => {
-    if (isOpen) {
-      setGameMode(false); // Stop all music for prayer time (pauses all tracks)
-      initializeGame();
-    } else {
-      setGameState('intro');
+    if (!isOpen) return;
+    setMusicPaused(true);
+    initializeGame();
+    return () => {
+      setMusicPaused(false);
       cleanup();
-    }
-    return cleanup;
-  }, [isOpen, setGameMode]);
+    };
+  }, [isOpen, setMusicPaused]);
 
   // Cleanup function
   const cleanup = () => {

@@ -197,6 +197,12 @@ const SignInPage: React.FC = () => {
           localStorage.setItem('godlykids_user_email', (result as any).email.toLowerCase().trim());
           console.log('📧 Stored OAuth user email for subscription:', (result as any).email);
         }
+
+        // Web Stripe subscribers: apply premium from sign-in response immediately
+        if ((result as any).user?.isPremium || (result as any).isPremium) {
+          subscribe();
+          console.log('✅ Premium access restored on sign-in');
+        }
         
         // If email needs confirmation, navigate to onboarding instead of home
         if ((result as any).needsConfirmation) {

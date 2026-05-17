@@ -32,6 +32,14 @@ export interface Playlist {
 
 // Premium preview constants
 const AUDIO_PREVIEW_SECONDS = 120; // 2 minute preview for premium audio
+const STORAGE_BG_MUSIC_ENABLED = 'godlykids_bg_music_enabled';
+
+interface AppBackgroundTrack {
+    audioUrl: string;
+    defaultVolume: number;
+    loop: boolean;
+    name: string;
+}
 
 interface AudioContextType {
     // Background Music & SFX (simplified - disabled by default)
@@ -107,8 +115,19 @@ export const useAudio = () => useContext(AudioContext);
 export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     // --- State ---
     const [musicVolume, setMusicVolumeState] = useState(0.5);
-    const [musicEnabled, setMusicEnabled] = useState(false); // Background music disabled by default
+    const [musicEnabled, setMusicEnabled] = useState(() => {
+        try {
+            return localStorage.getItem(STORAGE_BG_MUSIC_ENABLED) === 'true';
+        } catch {
+            return false;
+        }
+    });
     const [sfxEnabled, setSfxEnabled] = useState(true);
+    const [appBackgroundTrack, setAppBackgroundTrack] = useState<AppBackgroundTrack | null>(null);
+    /** When true, book reader / lessons / modals asked to duck or stop app-loop music */
+    const [contentMusicPaused, setContentMusicPaused] = useState(false);
+    /** Reserved for mini-games that need to own the mix (strength, etc.) */
+    const [gameModeActive, setGameModeActive] = useState(false);
 
     // --- Playlist Player State ---
     const [currentPlaylist, setCurrentPlaylist] = useState<Playlist | null>(null);
@@ -127,6 +146,8 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
     // --- Refs ---
     const audioRef = useRef<HTMLAudioElement | null>(null);
+    /** Separate from playlist `audioRef` so book/playlist never clobber the ambience loop */
+    const appBgAudioRef = useRef<HTMLAudioElement | null>(null);
     const sfxContextRef = useRef<AudioContext | null>(null);
 
     // Get or create SFX AudioContext (reuse for all sound effects)
@@ -333,6 +354,89 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
             audio.src = '';
         };
     }, []);
+
+    useEffect(() => {
+        try {
+            localStorage.setItem(STORAGE_BG_MUSIC_ENABLED, musicEnabled ? 'true' : 'false');
+        } catch {
+            /* ignore quota / privacy mode */
+        }
+    }, [musicEnabled]);
+
+    // App-wide background loop — dedicated element so playlists never overwrite it
+    useEffect(() => {
+        const el = document.createElement('audio');
+        el.setAttribute('data-gk-role', 'app-background');
+        el.preload = 'auto';
+        appBgAudioRef.current = el;
+
+        let cancelled = false;
+        (async () => {
+            const map = await ApiService.getActiveMusic();
+            if (cancelled || !map) return;
+            const raw = map['app-background'];
+            if (raw?.audioUrl) {
+                setAppBackgroundTrack({
+                    audioUrl: raw.audioUrl,
+                    defaultVolume: typeof raw.defaultVolume === 'number' ? raw.defaultVolume : 0.35,
+                    loop: raw.loop !== false,
+                    name: raw.name || 'Background',
+                });
+            }
+        })();
+
+        return () => {
+            cancelled = true;
+            el.pause();
+            el.removeAttribute('src');
+            appBgAudioRef.current = null;
+        };
+    }, []);
+
+    useEffect(() => {
+        const el = appBgAudioRef.current;
+        if (!el || !appBackgroundTrack?.audioUrl) {
+            return;
+        }
+
+        const desired = appBackgroundTrack.audioUrl;
+        const baseVol = typeof appBackgroundTrack.defaultVolume === 'number' ? appBackgroundTrack.defaultVolume : 0.35;
+        el.loop = appBackgroundTrack.loop !== false;
+        el.volume = Math.min(1, Math.max(0, baseVol * musicVolume));
+
+        const stripQuery = (u: string) => u.split('?')[0];
+        const cur = el.currentSrc || el.src || '';
+        if (!cur || stripQuery(cur) !== stripQuery(desired)) {
+            el.src = desired;
+            try {
+                el.load();
+            } catch {
+                /* ignore */
+            }
+        }
+
+        const shouldPlay =
+            musicEnabled &&
+            !contentMusicPaused &&
+            !gameModeActive &&
+            currentPlaylist == null;
+
+        if (!shouldPlay) {
+            el.pause();
+            return;
+        }
+
+        el.play().catch(() => {
+            /* Autoplay may be blocked until the user turns this on in Settings (gesture) */
+        });
+    }, [
+        musicEnabled,
+        musicVolume,
+        contentMusicPaused,
+        gameModeActive,
+        currentPlaylist,
+        appBackgroundTrack,
+    ]);
 
     // Load track when playlist or index changes
     useEffect(() => {
@@ -668,12 +772,17 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         setPreviewLimitReached(false);
     }, []);
 
-    // Stub methods for background music (disabled)
-    const toggleMusic = useCallback(() => setMusicEnabled(prev => !prev), []);
-    const toggleSfx = useCallback(() => setSfxEnabled(prev => !prev), []);
+    const toggleMusic = useCallback(() => {
+        setMusicEnabled((prev) => !prev);
+    }, []);
+    const toggleSfx = useCallback(() => setSfxEnabled((prev) => !prev), []);
     const setMusicVolume = useCallback((v: number) => setMusicVolumeState(v), []);
-    const setGameMode = useCallback(() => { }, []);
-    const setMusicPaused = useCallback(() => { }, []);
+    const setMusicPaused = useCallback((paused: boolean) => {
+        setContentMusicPaused(paused);
+    }, []);
+    const setGameMode = useCallback((active: boolean, _type?: 'default' | 'workout') => {
+        setGameModeActive(active);
+    }, []);
 
     return (
         <AudioContext.Provider value={{

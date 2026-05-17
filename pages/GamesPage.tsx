@@ -9,6 +9,8 @@ import AvatarCompositor from '../components/avatar/AvatarCompositor';
 const WARRIOR_ISLAND = '/assets/images/warrior-island.webp';
 const ISLAND_BUTTON = '/assets/images/island-button.webp';
 const VOLCANO_ISLAND = '/assets/images/volcano-island.webp';
+const BUILD_A_PARROT_SIGN = '/assets/images/build-a-parrot-sign.webp';
+const PARROT_ISLAND = '/assets/images/parrot-island.webp';
 
 interface GameItem {
   _id?: string;
@@ -55,12 +57,16 @@ const GamesPage: React.FC = () => {
 
   const handleIslandClick = useCallback(() => {
     if (isZoomingIn) return;
+    // Same “tap island → perch flies” cue as earlier builds (avatar compositor = parrot on this screen).
+    if (hasCompleteAvatar) {
+      setIsParrotFlying(true);
+    }
     setIsZoomingIn(true);
     setTimeout(() => {
       setShowContent(true);
       setTimeout(() => setIsZoomingIn(false), 300);
     }, 950);
-  }, [isZoomingIn]);
+  }, [isZoomingIn, hasCompleteAvatar]);
 
   useEffect(() => {
     const fetchGames = async () => {
@@ -360,6 +366,44 @@ const GamesPage: React.FC = () => {
         </div>
       )}
 
+      {/* Build-a-Parrot island — left of warrior (mirrors World map island) */}
+      <button
+        type="button"
+        onClick={() => window.dispatchEvent(new CustomEvent('open_avatar_shop'))}
+        className="absolute overflow-visible transition-opacity duration-300 cursor-pointer select-none focus:outline-none active:scale-95 parrot-island-drift"
+        style={{ zIndex: 5, left: '-2%', top: '16%', width: '34vw', maxWidth: 170, opacity: isZoomingIn ? 0 : 1 }}
+        aria-label="Build a Parrot - Open Avatar Shop"
+      >
+        <div className="absolute pointer-events-none" style={{ zIndex: 0, inset: '-10% -10%', bottom: '-6%' }}>
+          <div className="games-parrot-wave-1" style={{
+            position: 'absolute', left: '0', right: '0', bottom: '4%', height: '44%',
+            borderRadius: '50%',
+            border: '2.5px solid rgba(180,230,255,0.3)',
+            boxShadow: '0 0 8px 3px rgba(140,210,255,0.15)',
+          }} />
+          <div className="games-parrot-wave-2" style={{
+            position: 'absolute', left: '-5%', right: '-5%', bottom: '0%', height: '48%',
+            borderRadius: '50%',
+            border: '2px solid rgba(180,230,255,0.2)',
+            boxShadow: '0 0 10px 4px rgba(140,210,255,0.1)',
+          }} />
+        </div>
+        <img
+          src={BUILD_A_PARROT_SIGN}
+          alt="Build a Parrot"
+          className="absolute left-1/2 -translate-x-1/2 w-[85%] h-auto object-contain drop-shadow-md pointer-events-none"
+          style={{ top: '-28%', zIndex: 2 }}
+          draggable={false}
+        />
+        <img
+          src={PARROT_ISLAND}
+          alt="Parrot Island"
+          className="relative w-full h-auto object-contain drop-shadow-lg"
+          style={{ zIndex: 1 }}
+          draggable={false}
+        />
+      </button>
+
       {/* Volcano island — right side */}
       <div className="absolute overflow-visible transition-opacity duration-300" style={{ zIndex: 5, right: '-2%', top: '16%', width: '34vw', maxWidth: 170, opacity: isZoomingIn ? 0 : 1 }}>
         <div className="absolute pointer-events-none" style={{ zIndex: 0, inset: '-10% -10%', bottom: '-6%' }}>
@@ -481,6 +525,32 @@ const GamesPage: React.FC = () => {
       </div>
 
       <style>{`
+        .parrot-island-drift {
+          animation: games-parrot-drift 8s ease-in-out infinite;
+        }
+        @keyframes games-parrot-drift {
+          0%   { transform: translate(0, 0) rotate(0deg); }
+          25%  { transform: translate(-4px, -3px) rotate(0.5deg); }
+          50%  { transform: translate(2px, 3px) rotate(-0.3deg); }
+          75%  { transform: translate(5px, -2px) rotate(0.4deg); }
+          100% { transform: translate(0, 0) rotate(0deg); }
+        }
+        .games-parrot-wave-1 {
+          animation: games-parrot-wave-shrink 3.5s ease-in-out infinite;
+          transform-origin: center 70%;
+        }
+        .games-parrot-wave-2 {
+          animation: games-parrot-wave-shrink 4.5s ease-in-out infinite;
+          animation-delay: -1.5s;
+          transform-origin: center 70%;
+        }
+        @keyframes games-parrot-wave-shrink {
+          0%   { transform: scale(1.15); opacity: 0; }
+          20%  { opacity: 0.7; }
+          60%  { opacity: 0.4; }
+          100% { transform: scale(0.95); opacity: 0; }
+        }
+
         .volcano-wave-1 {
           animation: volcano-wave-shrink 3.5s ease-in-out infinite;
           transform-origin: center 70%;

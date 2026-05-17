@@ -1,5 +1,6 @@
 const express = require('express');
 const router = express.Router();
+const { grantPremiumAccess, collectPremiumIds } = require('../utils/premiumAccess');
 
 // Initialize Stripe with secret key
 const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
@@ -150,57 +151,21 @@ router.post('/webhook', express.raw({ type: 'application/json' }), async (req, r
       const session = event.data.object;
       console.log('✅ Checkout completed:', session.id);
       
-      // Get user ID from metadata (email, deviceId, or 'anonymous' for guest)
       const userId = session.metadata?.userId;
       const plan = session.metadata?.plan;
-      // Guest purchases: Stripe collects email in checkout; use it so premium syncs when they create account later
       const customerEmail = (session.customer_details?.email || session.customer_email || '').toLowerCase().trim();
-      const effectiveUserId = (userId && userId !== 'anonymous') ? userId : (customerEmail || null);
-      
-      if (effectiveUserId) {
-        // Update user's premium status in database
+      // Grant to BOTH metadata id (device/email from checkout) AND Stripe receipt email so mobile login by email works
+      const premiumIds = collectPremiumIds(userId, customerEmail);
+
+      if (premiumIds.length > 0) {
         try {
-          const User = require('../models/User');
-          const AppUser = require('../models/AppUser');
-          const normalizedUserId = typeof effectiveUserId === 'string' && effectiveUserId.includes('@') ? effectiveUserId.toLowerCase().trim() : effectiveUserId;
-
-          // Update User collection (auth users)
-          if (normalizedUserId.includes('@')) {
-            await User.findOneAndUpdate(
-              { email: normalizedUserId },
-              { isPremium: true, subscriptionPlan: plan },
-              { upsert: false }
-            );
-          }
-
-          // Update AppUser collection - use subscriptionStatus (not isPremium; AppUser schema uses subscriptionStatus)
-          let appUser = await AppUser.findOne({
-            $or: [
-              { email: normalizedUserId },
-              { deviceId: normalizedUserId }
-            ]
-          });
-          if (appUser) {
-            appUser.subscriptionStatus = 'active';
-            appUser.subscriptionStartDate = appUser.subscriptionStartDate || new Date();
-            appUser.subscriptionPlan = plan;
-            if (normalizedUserId.includes('@')) appUser.email = normalizedUserId;
-            await appUser.save();
-          } else {
-            // User paid but has no AppUser - create one so they get premium (guest flow; syncs when they sign up)
-            appUser = await AppUser.create({
-              email: normalizedUserId.includes('@') ? normalizedUserId : undefined,
-              deviceId: normalizedUserId.includes('@') ? undefined : normalizedUserId,
-              subscriptionStatus: 'active',
-              subscriptionStartDate: new Date(),
-              subscriptionPlan: plan,
-            });
-          }
-
-          console.log(`✅ Updated premium status for user: ${effectiveUserId}`);
+          await grantPremiumAccess(premiumIds, plan);
+          console.log(`✅ Updated premium for identifiers: ${premiumIds.join(', ')}`);
         } catch (dbError) {
           console.error('❌ Database update error:', dbError);
         }
+      } else {
+        console.warn('⚠️ Checkout completed but no userId or customer email to grant premium');
       }
       break;
     }

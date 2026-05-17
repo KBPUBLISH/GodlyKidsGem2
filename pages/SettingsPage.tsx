@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ChevronLeft, Volume2, Bell, Shield, FileText, LogOut, Crown, HelpCircle, Mic, Trash2, RefreshCw, CheckCircle, AlertCircle, Globe, Check, ChevronRight, UserPlus, LogIn, Paintbrush } from 'lucide-react';
+import { ChevronLeft, Volume2, Bell, Shield, FileText, LogOut, Crown, HelpCircle, Mic, Trash2, RefreshCw, CheckCircle, AlertCircle, Globe, Check, ChevronRight, UserPlus, LogIn, Paintbrush, Music } from 'lucide-react';
 import WoodButton from '../components/ui/WoodButton';
 import { useUser } from '../context/UserContext';
 import { useAudio } from '../context/AudioContext';
@@ -19,7 +19,7 @@ import { useTheme, AppTheme } from '../context/ThemeContext';
 const SettingsPage: React.FC = () => {
   const navigate = useNavigate();
   const { isSubscribed, isVoiceUnlocked, setIsSubscribed, resetUser } = useUser();
-  const { sfxEnabled, toggleSfx, playBack } = useAudio();
+  const { sfxEnabled, toggleSfx, musicEnabled, toggleMusic, playBack } = useAudio();
   const { currentLanguage, setLanguage, supportedLanguages, isTranslating, t } = useLanguage();
   const { theme, setTheme } = useTheme();
   const [clonedVoices, setClonedVoices] = useState<ClonedVoice[]>([]);
@@ -293,6 +293,32 @@ const SettingsPage: React.FC = () => {
                             className={`w-12 h-7 rounded-full relative transition-colors duration-200 border-2 ${sfxEnabled ? 'bg-[#8bc34a] border-[#689f38]' : 'bg-gray-300 border-gray-400'}`}
                         >
                             <div className={`absolute top-0.5 w-5 h-5 bg-white rounded-full shadow-sm transition-all duration-200 ${sfxEnabled ? 'left-5' : 'left-0.5'}`}></div>
+                        </button>
+                    </div>
+
+                    {/* App background music (API: Music target app-background) */}
+                    <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-3 text-[#5c2e0b] flex-1 min-w-0 pr-2">
+                            <div className="w-8 h-8 rounded-full bg-[#e1bee7] flex items-center justify-center text-[#7b1fa2] shrink-0">
+                                <Music size={18} />
+                            </div>
+                            <div className="min-w-0">
+                                <span className="font-bold block">{t('backgroundMusic')}</span>
+                                <span className="text-xs text-[#8B4513]/75 leading-tight block">
+                                    Soft loop while you browse. Off during books, playlists, and lessons.
+                                </span>
+                            </div>
+                        </div>
+                        <button
+                            type="button"
+                            onClick={() => {
+                                playBack();
+                                toggleMusic();
+                            }}
+                            className={`w-12 h-7 shrink-0 rounded-full relative transition-colors duration-200 border-2 ${musicEnabled ? 'bg-[#8bc34a] border-[#689f38]' : 'bg-gray-300 border-gray-400'}`}
+                            aria-pressed={musicEnabled}
+                        >
+                            <div className={`absolute top-0.5 w-5 h-5 bg-white rounded-full shadow-sm transition-all duration-200 ${musicEnabled ? 'left-5' : 'left-0.5'}`}></div>
                         </button>
                     </div>
 

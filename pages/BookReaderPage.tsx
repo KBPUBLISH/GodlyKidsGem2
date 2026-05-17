@@ -1038,7 +1038,11 @@ const BookReaderPage: React.FC = () => {
                 if (bookBackgroundMusicRef.current && audio === bookBackgroundMusicRef.current) {
                     return;
                 }
-                // Force pause and mute only app background music
+                // App-wide background loop is owned by AudioContext — pause only via setMusicPaused / settings
+                if (audio.getAttribute('data-gk-role') === 'app-background') {
+                    return;
+                }
+                // Force pause and mute stray page / plugin audio outside our readers
                 audio.pause();
                 audio.volume = 0;
                 audio.currentTime = 0; // Reset position

@@ -35,7 +35,7 @@ const Layout: React.FC = () => {
         { path: '/games', icon: Gamepad2, label: 'Games' },
         { path: '/amazon-books', icon: ShoppingCart, label: 'Amazon Book Store' },
         { path: '/notifications', icon: Bell, label: 'Notifications' },
-        { path: '/music', icon: Music2, label: 'Music' },
+        { path: '/music', icon: Music2, label: 'App & UI Music' },
         { path: '/radio', icon: Radio, label: 'Radio Station' },
         { path: '/karaoke', icon: Mic, label: 'Karaoke' },
         { path: '/email-subscribers', icon: Mail, label: 'Email Subscribers' },

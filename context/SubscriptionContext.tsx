@@ -57,7 +57,7 @@ const getAllUserIds = (): string[] => {
   const user = authService.getUser();
   if (user) {
     // Email is most important - subscriptions are often linked by email
-    if (user.email) ids.push(user.email);
+    if (user.email) ids.push(user.email.toLowerCase().trim());
     // MongoDB ID
     if ((user as any)._id) ids.push((user as any)._id);
     if ((user as any).id && (user as any).id !== (user as any)._id) ids.push((user as any).id);
@@ -68,7 +68,9 @@ const getAllUserIds = (): string[] => {
   if (legacyUserStr) {
     try {
       const legacyUser = JSON.parse(legacyUserStr);
-      if (legacyUser.email && !ids.includes(legacyUser.email)) ids.push(legacyUser.email);
+      if (legacyUser.email && !ids.includes(legacyUser.email.toLowerCase().trim())) {
+        ids.push(legacyUser.email.toLowerCase().trim());
+      }
       if (legacyUser._id && !ids.includes(legacyUser._id)) ids.push(legacyUser._id);
     } catch {
       // ignore
@@ -77,7 +79,10 @@ const getAllUserIds = (): string[] => {
   
   // Email stored separately
   const storedEmail = localStorage.getItem('godlykids_user_email');
-  if (storedEmail && !ids.includes(storedEmail)) ids.push(storedEmail);
+  if (storedEmail) {
+    const normalized = storedEmail.toLowerCase().trim();
+    if (!ids.includes(normalized)) ids.push(normalized);
+  }
 
   // Device ID as fallback
   const deviceId = localStorage.getItem('godlykids_device_id') || localStorage.getItem('device_id');
@@ -108,14 +113,16 @@ export const SubscriptionProvider: React.FC<SubscriptionProviderProps> = ({ chil
   });
 
   // Check subscription status from localStorage and backend (NO automatic restore - that shows UI)
-  const checkSubscriptionFromAllSources = useCallback(async (): Promise<boolean> => {
+  const checkSubscriptionFromAllSources = useCallback(async (options?: { skipLocalCache?: boolean }): Promise<boolean> => {
     console.log('🔍 Checking subscription status...');
     
-    // 1. Check localStorage first (fastest)
-    const localPremium = localStorage.getItem('godlykids_premium') === 'true';
-    if (localPremium) {
-      console.log('✅ Premium found in localStorage');
-      return true;
+    // 1. Check localStorage first (fastest) — skipped after login so web Stripe subs are re-fetched by email
+    if (!options?.skipLocalCache) {
+      const localPremium = localStorage.getItem('godlykids_premium') === 'true';
+      if (localPremium) {
+        console.log('✅ Premium found in localStorage');
+        return true;
+      }
     }
     
     // 1.5. Check for active reverse trial in localStorage
@@ -144,8 +151,9 @@ export const SubscriptionProvider: React.FC<SubscriptionProviderProps> = ({ chil
           if (data.isPremium) {
             console.log(`✅ Premium confirmed by backend for: ${userId}`);
             localStorage.setItem('godlykids_premium', 'true');
-            // NOTE: Don't dispatch event here - caller will update state directly
-            // Dispatching events here caused infinite loops (stack overflow)
+            if (typeof window !== 'undefined') {
+              window.dispatchEvent(new CustomEvent('revenuecat:premiumChanged', { detail: { isPremium: true } }));
+            }
             return true;
           }
         }
@@ -192,8 +200,11 @@ export const SubscriptionProvider: React.FC<SubscriptionProviderProps> = ({ chil
     // When auth token changes (login/logout), re-check subscription automatically.
     const handleAuthChange = async () => {
       try {
-        const hasPremium = await checkSubscriptionFromAllSources();
+        const hasPremium = await checkSubscriptionFromAllSources({ skipLocalCache: true });
         setIsPremium(hasPremium);
+        if (hasPremium && typeof window !== 'undefined') {
+          window.dispatchEvent(new CustomEvent('revenuecat:premiumChanged', { detail: { isPremium: true } }));
+        }
       } catch {
         // ignore
       }

@@ -332,9 +332,18 @@ const BookReaderPage: React.FC = () => {
     /** Drives UI: hide non-active text boxes while advancing through multi-box narration. */
     const [sequentialMultiBoxTts, setSequentialMultiBoxTts] = useState(false);
 
+    /** One `/tts/generate-batch` payload for sequential multi–text-box play on the current page. */
+    type MultiBoxBatchCache = {
+        pageIndex: number;
+        lang: string;
+        byBoxIndex: Map<number, { audioUrl: string; alignment: unknown }>;
+    };
+    const multiBoxBatchDataRef = useRef<MultiBoxBatchCache | null>(null);
+
     const clearSequentialTextBoxQueue = useCallback(() => {
         pendingTextBoxesRef.current = [];
         isSequentialPlaybackRef.current = false;
+        multiBoxBatchDataRef.current = null;
         setSequentialMultiBoxTts(false);
     }, []);
 
@@ -649,6 +658,72 @@ const BookReaderPage: React.FC = () => {
         ));
         
         return validSegments;
+    };
+
+    /** When several text boxes auto-play in order, load all clips in one HTTP round-trip before box 1 starts. Skips boxes that need multi-segment @Character narration. */
+    const prefetchSequentialMultiBoxTtsBatch = async (
+        translatedBoxes: ReadonlyArray<{ text: string }>,
+        actualPageIdx: number
+    ) => {
+        const currentLang = selectedLanguageRef.current;
+        if (translatedBoxes.length <= 1) {
+            return;
+        }
+        const batchItems: { text: string; voiceId: string; textBoxIndex: number }[] = [];
+        for (let tbIdx = 0; tbIdx < translatedBoxes.length; tbIdx++) {
+            const segs = parseTextIntoSegments(translatedBoxes[tbIdx].text);
+            if (segs.length !== 1) {
+                console.log(
+                    '📭 Sequential multi-box: skipping batch prefetch (needs multi-segment narration in at least one text box)'
+                );
+                multiBoxBatchDataRef.current = null;
+                return;
+            }
+            const seg = segs[0];
+            let voiceId = seg.voiceId;
+            if (!voiceId) {
+                voiceId = effectiveNarratorVoiceId;
+            }
+            const processed = processTextWithEmotionalCues(seg.text);
+            const ttsText =
+                currentLang !== 'en' ? removeEmotionalCues(seg.text) : processed.processedText;
+            const trimmed = ttsText.trim();
+            if (!trimmed) {
+                multiBoxBatchDataRef.current = null;
+                return;
+            }
+            batchItems.push({ text: trimmed, voiceId, textBoxIndex: tbIdx });
+        }
+        if (batchItems.length !== translatedBoxes.length) {
+            multiBoxBatchDataRef.current = null;
+            return;
+        }
+
+        console.log(`📦 Loading TTS batch for ${batchItems.length} text boxes (single request)...`);
+        const rows = await ApiService.generateTTSBatch(
+            batchItems,
+            bookId || undefined,
+            currentLang !== 'en' ? currentLang : undefined,
+            actualPageIdx + 1
+        );
+        if (!rows?.length || rows.length !== batchItems.length) {
+            multiBoxBatchDataRef.current = null;
+            return;
+        }
+        const map = new Map<number, { audioUrl: string; alignment: unknown }>();
+        for (const r of rows) {
+            if (typeof r.textBoxIndex !== 'number' || !r.audioUrl) continue;
+            map.set(r.textBoxIndex, { audioUrl: r.audioUrl, alignment: r.alignment });
+        }
+        if (map.size !== translatedBoxes.length) {
+            multiBoxBatchDataRef.current = null;
+            return;
+        }
+        multiBoxBatchDataRef.current = {
+            pageIndex: actualPageIdx,
+            lang: currentLang,
+            byBoxIndex: map,
+        };
     };
     
     /**
@@ -2527,6 +2602,7 @@ const BookReaderPage: React.FC = () => {
             if (translatedTextBoxes.length > 1) {
                 console.log(`📚 Setting up sequential playback for ${translatedTextBoxes.length} text boxes`);
             }
+            await prefetchSequentialMultiBoxTtsBatch(translatedTextBoxes, currentPageIndexRef.current);
             
             // Play the first text box
             const firstBoxText = translatedTextBoxes[0]?.text || pageTextBoxes[0].text;
@@ -2711,6 +2787,10 @@ const BookReaderPage: React.FC = () => {
         }
     }, [currentPageIndex, effectiveVoiceId, pages.length, selectedLanguage, translatedContent.size, voiceSettingsLoaded]);
 
+    useEffect(() => {
+        multiBoxBatchDataRef.current = null;
+    }, [currentPageIndex, selectedLanguage]);
+
     // Auto-play TTS when book first loads (after intro video if any)
     useEffect(() => {
         // Don't auto-play if:
@@ -2769,18 +2849,19 @@ const BookReaderPage: React.FC = () => {
         // Longer delay to ensure intro video transition is complete
         // and the first page is fully rendered
         setTimeout(() => {
-            // Get translated text if available
-            const translatedTextBoxes = getTranslatedTextBoxes(currentPage);
-            const firstBoxText = translatedTextBoxes[0]?.text || pageTextBoxes[0].text;
-            
-            setupSequentialTextBoxQueue(translatedTextBoxes);
-            if (translatedTextBoxes.length > 1) {
-                console.log(`📚 Auto-play: Setting up sequential playback for ${translatedTextBoxes.length} text boxes`);
-            }
-            
-            // Create synthetic event and trigger playback
-            const syntheticEvent = { stopPropagation: () => {} } as React.MouseEvent;
-            handlePlayText(firstBoxText, 0, syntheticEvent, shouldAutoPlay);
+            void (async () => {
+                const translatedTextBoxes = getTranslatedTextBoxes(currentPage);
+                setupSequentialTextBoxQueue(translatedTextBoxes);
+                if (translatedTextBoxes.length > 1) {
+                    console.log(
+                        `📚 Auto-play: Setting up sequential playback for ${translatedTextBoxes.length} text boxes`
+                    );
+                }
+                await prefetchSequentialMultiBoxTtsBatch(translatedTextBoxes, currentPageIndexRef.current);
+                const firstBoxText = translatedTextBoxes[0]?.text || pageTextBoxes[0].text;
+                const syntheticEvent = { stopPropagation: () => {} } as React.MouseEvent;
+                handlePlayText(firstBoxText, 0, syntheticEvent, shouldAutoPlay);
+            })();
         }, 1500); // 1.5s delay to let intro video fade out and page fully settle
         
     }, [loading, introVideoChecked, showIntroVideo, currentPageIndex, effectiveVoiceId, pages, translatedContent.size, voiceSettingsLoaded]);
@@ -3189,16 +3270,24 @@ const BookReaderPage: React.FC = () => {
                                         if (nextPage && nextPageTextBoxes?.length > 0) {
                                             // Use translated text if available - set up sequential queue
                                             const translatedTextBoxes = getTranslatedTextBoxes(nextPage);
-                                            
                                             setupSequentialTextBoxQueue(translatedTextBoxes);
-                                            
-                                            const firstBoxText = translatedTextBoxes[0]?.text || nextPageTextBoxes[0].text;
-                                            
-                                            console.log('▶️ Multi-segment: Playing next page TTS', { textLength: firstBoxText?.length });
-                                            isAutoPlayingRef.current = false;
-                                            // Re-ensure autoPlayMode is true before calling handlePlayText
-                                            autoPlayModeRef.current = true;
-                                            handlePlayText(firstBoxText, 0, { stopPropagation: () => {} } as React.MouseEvent, true);
+
+                                            void (async () => {
+                                                const firstBoxText =
+                                                    translatedTextBoxes[0]?.text || nextPageTextBoxes[0].text;
+                                                await prefetchSequentialMultiBoxTtsBatch(translatedTextBoxes, nextPageIndex);
+                                                console.log('▶️ Multi-segment: Playing next page TTS', {
+                                                    textLength: firstBoxText?.length,
+                                                });
+                                                isAutoPlayingRef.current = false;
+                                                autoPlayModeRef.current = true;
+                                                handlePlayText(
+                                                    firstBoxText,
+                                                    0,
+                                                    { stopPropagation: () => {} } as React.MouseEvent,
+                                                    true
+                                                );
+                                            })();
                                         } else {
                                             console.log('⚠️ Multi-segment: No text boxes found in any location, stopping auto-play');
                                             setAutoPlayMode(false);
@@ -3420,7 +3509,23 @@ const BookReaderPage: React.FC = () => {
             // Include language AND voice in cache key for multilingual + character voice support
             const cacheKey = `${actualPageIndex}-${index}-${voiceForText}${currentLang !== 'en' ? `-${currentLang}` : ''}`;
             let result = audioPreloadCacheRef.current.get(cacheKey);
-            
+
+            const batchCache = multiBoxBatchDataRef.current;
+            if (
+                !result &&
+                isSequentialPlaybackRef.current &&
+                batchCache?.pageIndex === actualPageIndex &&
+                batchCache.lang === currentLang &&
+                batchCache.byBoxIndex.has(index)
+            ) {
+                result = batchCache.byBoxIndex.get(index) as typeof result;
+                if (result) {
+                    console.log(
+                        `🎵 Using multi–text-box batch TTS for page ${actualPageIndex + 1}, text box ${index + 1} (lang ${currentLang})`
+                    );
+                }
+            }
+
             // If preloading is in progress for this key, wait for it instead of making duplicate request
             if (!result && preloadingInProgressRef.current.has(cacheKey)) {
                 console.log(`⏳ Waiting for preload to complete for page ${actualPageIndex + 1}, text box ${index + 1}...`);
@@ -3791,14 +3896,21 @@ const BookReaderPage: React.FC = () => {
                                             if (nextPage && nextPageTextBoxes && nextPageTextBoxes.length > 0) {
                                                 // Use translated text if available - set up sequential queue
                                                 const translatedTextBoxes = getTranslatedTextBoxes(nextPage);
-                                                
                                                 setupSequentialTextBoxQueue(translatedTextBoxes);
-                                                
-                                                const firstBoxText = translatedTextBoxes[0]?.text || nextPageTextBoxes[0].text;
-                                                console.log('▶️ Auto-play: Starting next page audio');
-                                                isAutoPlayingRef.current = false; // Reset flag before calling
-                                                const syntheticEvent = { stopPropagation: () => { } } as React.MouseEvent;
-                                                handlePlayText(firstBoxText, 0, syntheticEvent, true);
+                                                void (async () => {
+                                                    const firstBoxText =
+                                                        translatedTextBoxes[0]?.text || nextPageTextBoxes[0].text;
+                                                    await prefetchSequentialMultiBoxTtsBatch(
+                                                        translatedTextBoxes,
+                                                        nextPageIndex
+                                                    );
+                                                    console.log('▶️ Auto-play: Starting next page audio');
+                                                    isAutoPlayingRef.current = false;
+                                                    const syntheticEvent = {
+                                                        stopPropagation: () => {},
+                                                    } as React.MouseEvent;
+                                                    handlePlayText(firstBoxText, 0, syntheticEvent, true);
+                                                })();
                                             } else {
                                                 console.log('⏹️ Auto-play: No text boxes on next page, stopping');
                                                 setAutoPlayMode(false);
@@ -3890,14 +4002,21 @@ const BookReaderPage: React.FC = () => {
                                             if (nextPage && nextPageTextBoxes && nextPageTextBoxes.length > 0) {
                                                 // Use translated text if available - set up sequential queue
                                                 const translatedTextBoxes = getTranslatedTextBoxes(nextPage);
-                                                
                                                 setupSequentialTextBoxQueue(translatedTextBoxes);
-                                                
-                                                const firstBoxText = translatedTextBoxes[0]?.text || nextPageTextBoxes[0].text;
-                                                console.log('▶️ Auto-play: Starting next page audio');
-                                                isAutoPlayingRef.current = false; // Reset flag before calling
-                                                const syntheticEvent = { stopPropagation: () => { } } as React.MouseEvent;
-                                                handlePlayText(firstBoxText, 0, syntheticEvent, true);
+                                                void (async () => {
+                                                    const firstBoxText =
+                                                        translatedTextBoxes[0]?.text || nextPageTextBoxes[0].text;
+                                                    await prefetchSequentialMultiBoxTtsBatch(
+                                                        translatedTextBoxes,
+                                                        nextPageIndex
+                                                    );
+                                                    console.log('▶️ Auto-play: Starting next page audio');
+                                                    isAutoPlayingRef.current = false;
+                                                    const syntheticEvent = {
+                                                        stopPropagation: () => {},
+                                                    } as React.MouseEvent;
+                                                    handlePlayText(firstBoxText, 0, syntheticEvent, true);
+                                                })();
                                             } else {
                                                 console.log('⏹️ Auto-play: No text boxes on next page, stopping');
                                                 setAutoPlayMode(false);

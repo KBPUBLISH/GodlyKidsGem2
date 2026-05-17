@@ -157,282 +157,236 @@ const processAlignmentToWords = (text, alignment) => {
     };
 };
 
+/**
+ * Single TTS generation with caching (used by /generate and /generate-batch).
+ * fileLabel distinguishes batch files that share page + text box + cache hash stem.
+ */
+async function generateSingleCachedTTS(opts) {
+    const { text, voiceId, bookId, languageCode, pageNumber, textBoxIndex, fileLabel } = opts;
+
+    if (!text || !voiceId) {
+        throw new Error('Text and voiceId are required');
+    }
+
+    if (bookId && pageNumber !== undefined) {
+        const tb = textBoxIndex !== undefined ? `, textbox ${textBoxIndex}` : '';
+        const fl = fileLabel ? ` (${fileLabel})` : '';
+        console.log(`📄 Generating TTS for book ${bookId}, page ${pageNumber}${tb}${fl}`);
+    }
+
+    const normalizedText = normalizeTextForCache(text);
+    const cacheKey = languageCode && languageCode !== 'en'
+        ? `${normalizedText}${voiceId}${languageCode}`
+        : `${normalizedText}${voiceId}`;
+    const textHash = crypto.createHash('md5').update(cacheKey).digest('hex');
+    const cached = await TTSCache.findOne({ textHash, voiceId });
+
+    if (cached) {
+        const isLocalPath = cached.audioUrl && cached.audioUrl.startsWith('/uploads/');
+        const gcsConfigured = bucket && process.env.GCS_BUCKET_NAME;
+        if (isLocalPath && gcsConfigured) {
+            console.log('TTS Cache Hit - local path while GCS on, regenerating...');
+            await TTSCache.deleteOne({ _id: cached._id });
+        } else {
+            console.log(isLocalPath ? 'TTS Cache Hit - local' : 'TTS Cache Hit - GCS URL');
+            return { audioUrl: cached.audioUrl, alignment: cached.alignmentData };
+        }
+    }
+
+    console.log('TTS Cache Miss - Generating Audio with Timestamps');
+    let audioBuffer;
+    let alignmentData;
+
+    const apiKey = process.env.ELEVENLABS_API_KEY;
+    if (!apiKey) throw new Error('apiKey is not defined');
+
+    const isMultilingual = languageCode && languageCode !== 'en';
+    const modelId = isMultilingual ? 'eleven_multilingual_v2' : 'eleven_v3';
+
+    let processedText = text;
+    const bracketRegex = /\[[^\]]+\]/g;
+    const brackets = text.match(bracketRegex);
+    if (brackets && brackets.length > 0) {
+        processedText = text.replace(bracketRegex, '').replace(/\s+/g, ' ').trim();
+        console.log(`🔧 Stripped ${brackets.length} bracketed expression(s): ${brackets.join(', ')}`);
+    }
+
+    console.log(`🎤 Generating TTS with ElevenLabs model: ${modelId} (language: ${languageCode || 'en'})`);
+    console.log(`📝 Text length: ${processedText.length} chars`);
+
+    try {
+        const response = await axios.post(
+            `https://api.elevenlabs.io/v1/text-to-speech/${voiceId}/with-timestamps`,
+            {
+                text: processedText,
+                model_id: modelId,
+                voice_settings: { stability: 0.5, similarity_boost: 0.75 },
+            },
+            {
+                headers: {
+                    'xi-api-key': apiKey,
+                    'Content-Type': 'application/json',
+                    Accept: 'application/json',
+                },
+                params: { output_format: 'mp3_44100_128' },
+            },
+        );
+        const { audio_base64, alignment } = response.data;
+        audioBuffer = Buffer.from(audio_base64, 'base64');
+        alignmentData = processAlignmentToWords(processedText, alignment);
+        console.log('✅ Got alignment:', { chars: alignment?.characters?.length || 0, words: alignmentData?.words?.length || 0 });
+    } catch (error) {
+        console.error('❌ ElevenLabs API Error:', error.response?.status, error.response?.data);
+        const FALLBACK_VOICE_ID = 'EXAVITQu4vr4xnSDxMaL';
+        const isVoiceNotFound =
+            error.response?.status === 404 ||
+            error.response?.data?.detail?.status === 'voice_not_found' ||
+            (typeof error.response?.data === 'string' && error.response?.data.includes('voice_not_found'));
+        const shouldUseFallback = isVoiceNotFound && voiceId !== FALLBACK_VOICE_ID;
+
+        if (shouldUseFallback) console.log(`⚠️ Voice ${voiceId} not found, fallback ${FALLBACK_VOICE_ID}...`);
+        else if (isVoiceNotFound && voiceId === FALLBACK_VOICE_ID) {
+            throw new Error('Voice not found and fallback not accessible');
+        } else console.log('⚠️ Falling back without timestamps');
+
+        try {
+            const fallbackVoice = shouldUseFallback ? FALLBACK_VOICE_ID : voiceId;
+            const fallbackResponse = await axios.post(
+                `https://api.elevenlabs.io/v1/text-to-speech/${fallbackVoice}`,
+                { text: processedText, model_id: modelId, voice_settings: { stability: 0.5, similarity_boost: 0.75 } },
+                {
+                    headers: { 'xi-api-key': apiKey, 'Content-Type': 'application/json' },
+                    responseType: 'arraybuffer',
+                    params: { output_format: 'mp3_44100_128' },
+                },
+            );
+            audioBuffer = fallbackResponse.data;
+            const words = processedText.split(/\s+/).filter((w) => w.length > 0);
+            const estimatedDurationPerWord = 0.4;
+            alignmentData = {
+                words: words.map((word, index) => ({
+                    word,
+                    start: index * estimatedDurationPerWord,
+                    end: (index + 1) * estimatedDurationPerWord,
+                })),
+                isEstimated: true,
+            };
+        } catch (fallbackError) {
+            if (!shouldUseFallback && voiceId !== FALLBACK_VOICE_ID) {
+                const lastResortResponse = await axios.post(
+                    `https://api.elevenlabs.io/v1/text-to-speech/${FALLBACK_VOICE_ID}`,
+                    { text: processedText, model_id: modelId, voice_settings: { stability: 0.5, similarity_boost: 0.75 } },
+                    {
+                        headers: { 'xi-api-key': apiKey, 'Content-Type': 'application/json' },
+                        responseType: 'arraybuffer',
+                        params: { output_format: 'mp3_44100_128' },
+                    },
+                );
+                audioBuffer = lastResortResponse.data;
+                const words = processedText.split(/\s+/).filter((w) => w.length > 0);
+                alignmentData = {
+                    words: words.map((word, index) => ({
+                        word,
+                        start: index * 0.4,
+                        end: (index + 1) * 0.4,
+                    })),
+                    isEstimated: true,
+                };
+                console.log('✅ Last-resort fallback');
+            } else throw fallbackError;
+        }
+    }
+
+    let filename;
+    const labelPart = fileLabel ? `${String(fileLabel)}_` : '';
+    if (pageNumber !== undefined && textBoxIndex !== undefined) {
+        filename = `p${pageNumber}_tb${textBoxIndex}_${labelPart}${textHash.substring(0, 8)}.mp3`;
+    } else if (pageNumber !== undefined) {
+        filename = `p${pageNumber}_${labelPart}${textHash.substring(0, 8)}.mp3`;
+    } else {
+        filename = `${Date.now()}_${textHash.substring(0, 12)}.mp3`;
+    }
+    const audioUrl = await saveAudioFile(audioBuffer, filename, bookId, pageNumber);
+
+    try {
+        await new TTSCache({
+            textHash,
+            voiceId,
+            text,
+            audioUrl,
+            alignmentData,
+            bookId: bookId || null,
+        }).save();
+    } catch (cacheError) {
+        if (cacheError.code === 11000) console.log('TTS Cache dup key (race), ok');
+        else console.warn('TTS Cache save warning:', cacheError.message);
+    }
+
+    return { audioUrl, alignment: alignmentData };
+}
+
+/** Sequential multi–text-box TTS in one HTTP round-trip (same server-side cache entries as singles). */
+router.post('/generate-batch', async (req, res) => {
+    try {
+        const { items, bookId, languageCode, pageNumber } = req.body;
+        if (!Array.isArray(items) || items.length === 0) {
+            return res.status(400).json({ message: 'items must be a non-empty array' });
+        }
+        const results = [];
+        for (let i = 0; i < items.length; i++) {
+            const row = items[i];
+            if (!row.text || !row.voiceId) {
+                return res.status(400).json({ message: `items[${i}] needs text and voiceId` });
+            }
+            const tb = typeof row.textBoxIndex === 'number' ? row.textBoxIndex : i;
+            const one = await generateSingleCachedTTS({
+                text: row.text,
+                voiceId: row.voiceId,
+                bookId,
+                languageCode,
+                pageNumber,
+                textBoxIndex: tb,
+                fileLabel: `batch${i}`,
+            });
+            results.push({ textBoxIndex: tb, audioUrl: one.audioUrl, alignment: one.alignment });
+        }
+        res.json({ results });
+    } catch (error) {
+        console.error('TTS Batch Error:', error.response?.data || error.message);
+        res.status(500).json({ message: 'TTS Batch Failed', error: error.message });
+    }
+});
+
 // POST /generate - Generate TTS audio
 router.post('/generate', async (req, res) => {
     try {
         const { text, voiceId, bookId, languageCode, pageNumber, textBoxIndex } = req.body;
-
-        if (!text || !voiceId) {
-            return res.status(400).json({ message: 'Text and voiceId are required' });
-        }
-        
-        // Log page info for debugging
-        if (bookId && pageNumber !== undefined) {
-            console.log(`📄 Generating TTS for book ${bookId}, page ${pageNumber}${textBoxIndex !== undefined ? `, textbox ${textBoxIndex}` : ''}`);
-        }
-
-        // Cache key: normalized text + voiceId + language (when not en). No TTL - cache is permanent to save ElevenLabs credits.
-        const normalizedText = normalizeTextForCache(text);
-        const cacheKey = languageCode && languageCode !== 'en'
-            ? `${normalizedText}${voiceId}${languageCode}`
-            : `${normalizedText}${voiceId}`;
-
-        // 1. Check Cache (permanent - entries are never expired by time)
-        const textHash = crypto.createHash('md5').update(cacheKey).digest('hex');
-        const cached = await TTSCache.findOne({ textHash, voiceId });
-
-        if (cached) {
-            // Check if cached URL is a local path but GCS is now configured
-            // If so, we need to regenerate with GCS
-            const isLocalPath = cached.audioUrl && cached.audioUrl.startsWith('/uploads/');
-            const gcsConfigured = bucket && process.env.GCS_BUCKET_NAME;
-            
-            if (isLocalPath && gcsConfigured) {
-                console.log('TTS Cache Hit - but URL is local path and GCS is configured, regenerating...');
-                // Delete old cache entry so we regenerate with GCS
-                await TTSCache.deleteOne({ _id: cached._id });
-                // Fall through to generate new audio
-            } else if (isLocalPath) {
-                console.log('TTS Cache Hit - local path (GCS not configured)');
-                return res.json({
-                    audioUrl: cached.audioUrl,
-                    alignment: cached.alignmentData
-                });
-            } else {
-                console.log('TTS Cache Hit - GCS URL');
-                return res.json({
-                    audioUrl: cached.audioUrl,
-                    alignment: cached.alignmentData
-                });
-            }
-        }
-
-        console.log('TTS Cache Miss - Generating Audio with Timestamps');
-        let audioBuffer;
-        let alignmentData;
-
-        // ELEVENLABS GENERATION WITH TIMESTAMPS
-        const apiKey = process.env.ELEVENLABS_API_KEY;
-        if (!apiKey) {
-            return res.status(500).json({ message: 'TTS Generation Failed', error: 'apiKey is not defined' });
-        }
-
-        // Use multilingual model for non-English languages
-        const isMultilingual = languageCode && languageCode !== 'en';
-        const modelId = isMultilingual ? "eleven_multilingual_v2" : "eleven_v3";
-        
-        // Strip emotional cues from text before sending to ElevenLabs
-        // These are bracketed expressions like [happy], [Niños riendo], [long pause], etc.
-        // The multilingual model doesn't handle them, and they can interfere with TTS quality
-        let processedText = text;
-        const bracketRegex = /\[[^\]]+\]/g;
-        const brackets = text.match(bracketRegex);
-        if (brackets && brackets.length > 0) {
-            processedText = text.replace(bracketRegex, '').replace(/\s+/g, ' ').trim();
-            console.log(`🔧 Stripped ${brackets.length} bracketed expression(s): ${brackets.join(', ')}`);
-        }
-        
-        console.log(`🎤 Generating TTS with ElevenLabs model: ${modelId} (language: ${languageCode || 'en'})`);
-        console.log(`📝 Text length: ${processedText.length} chars`);
-
         try {
-            // Use the /with-timestamps endpoint to get word-level timing
-            const response = await axios.post(
-                `https://api.elevenlabs.io/v1/text-to-speech/${voiceId}/with-timestamps`,
-                {
-                    text: processedText, // Use processed text with brackets stripped
-                    model_id: modelId,
-                    voice_settings: {
-                        stability: 0.5,
-                        similarity_boost: 0.75
-                    }
-                },
-                {
-                    headers: {
-                        'xi-api-key': apiKey,
-                        'Content-Type': 'application/json',
-                        'Accept': 'application/json'
-                    },
-                    params: {
-                        output_format: 'mp3_44100_128'
-                    }
-                }
-            );
-
-            // Response contains: audio_base64, alignment (with characters and timing)
-            const { audio_base64, alignment } = response.data;
-            
-            // Convert base64 audio to buffer
-            audioBuffer = Buffer.from(audio_base64, 'base64');
-            
-            // Process character-level alignment into word-level timing (use processed text for accurate alignment)
-            alignmentData = processAlignmentToWords(processedText, alignment);
-            
-            console.log('✅ Got alignment data:', {
-                characters: alignment?.characters?.length || 0,
-                words: alignmentData?.words?.length || 0
-            });
-
-        } catch (error) {
-            console.error('❌ ElevenLabs API Error:', error.response?.status, error.response?.data);
-            console.error('❌ Failed voice ID:', voiceId);
-            
-            // Check for voice_not_found error - can be in status code OR response body
-            const FALLBACK_VOICE_ID = 'EXAVITQu4vr4xnSDxMaL'; // Sarah - a reliable ElevenLabs premade voice
-            const isVoiceNotFound = 
-                error.response?.status === 404 || 
-                error.response?.data?.detail?.status === 'voice_not_found' ||
-                (typeof error.response?.data === 'string' && error.response?.data.includes('voice_not_found'));
-            
-            const shouldUseFallback = isVoiceNotFound && voiceId !== FALLBACK_VOICE_ID;
-            
-            if (shouldUseFallback) {
-                console.log(`⚠️ Voice ${voiceId} not found, trying fallback voice ${FALLBACK_VOICE_ID}...`);
-            } else if (isVoiceNotFound && voiceId === FALLBACK_VOICE_ID) {
-                console.log('❌ Even the fallback voice is not accessible - check your ElevenLabs API key');
-                throw new Error('Voice not found and fallback voice also not accessible');
-            } else {
-                console.log('⚠️ Falling back to TTS without timestamps (same voice)...');
-            }
-            
-            try {
-                const fallbackVoice = shouldUseFallback ? FALLBACK_VOICE_ID : voiceId;
-                console.log(`🔄 Attempting TTS with voice: ${fallbackVoice}`);
-                
-                const fallbackResponse = await axios.post(
-                    `https://api.elevenlabs.io/v1/text-to-speech/${fallbackVoice}`,
-                    {
-                        text: processedText, // Use processed text with brackets stripped
-                        model_id: modelId,
-                        voice_settings: {
-                            stability: 0.5,
-                            similarity_boost: 0.75
-                        }
-                    },
-                    {
-                        headers: {
-                            'xi-api-key': apiKey,
-                            'Content-Type': 'application/json'
-                        },
-                        responseType: 'arraybuffer',
-                        params: {
-                            output_format: 'mp3_44100_128'
-                        }
-                    }
-                );
-                audioBuffer = fallbackResponse.data;
-                
-                // Generate estimated word timing as fallback (use processed text)
-                const words = processedText.split(/\s+/).filter(w => w.length > 0);
-                const estimatedDurationPerWord = 0.4;
-                alignmentData = {
-                    words: words.map((word, index) => ({
-                        word,
-                        start: index * estimatedDurationPerWord,
-                        end: (index + 1) * estimatedDurationPerWord
-                    })),
-                    isEstimated: true
-                };
-                
-                if (shouldUseFallback) {
-                    console.log('✅ Fallback voice (Sarah) worked!');
-                } else {
-                    console.log('✅ TTS without timestamps succeeded');
-                }
-            } catch (fallbackError) {
-                console.error('❌ Fallback TTS also failed:', fallbackError.response?.status, fallbackError.response?.data || fallbackError.message);
-                
-                // If we haven't tried the fallback voice yet, try it now
-                if (!shouldUseFallback && voiceId !== FALLBACK_VOICE_ID) {
-                    console.log(`⚠️ Original voice failed, trying fallback voice ${FALLBACK_VOICE_ID} as last resort...`);
-                    try {
-                        const lastResortResponse = await axios.post(
-                            `https://api.elevenlabs.io/v1/text-to-speech/${FALLBACK_VOICE_ID}`,
-                            {
-                                text: processedText,
-                                model_id: modelId,
-                                voice_settings: {
-                                    stability: 0.5,
-                                    similarity_boost: 0.75
-                                }
-                            },
-                            {
-                                headers: {
-                                    'xi-api-key': apiKey,
-                                    'Content-Type': 'application/json'
-                                },
-                                responseType: 'arraybuffer',
-                                params: {
-                                    output_format: 'mp3_44100_128'
-                                }
-                            }
-                        );
-                        audioBuffer = lastResortResponse.data;
-                        
-                        const words = processedText.split(/\s+/).filter(w => w.length > 0);
-                        const estimatedDurationPerWord = 0.4;
-                        alignmentData = {
-                            words: words.map((word, index) => ({
-                                word,
-                                start: index * estimatedDurationPerWord,
-                                end: (index + 1) * estimatedDurationPerWord
-                            })),
-                            isEstimated: true
-                        };
-                        console.log('✅ Last resort fallback voice worked!');
-                    } catch (lastResortError) {
-                        console.error('❌ Last resort fallback also failed:', lastResortError.response?.status, lastResortError.message);
-                        throw lastResortError;
-                    }
-                } else {
-                    throw fallbackError;
-                }
-            }
-        }
-
-        // 3. Save Audio with descriptive filename
-        // Include page and textbox info if available for easier identification in GCS
-        let filename;
-        if (pageNumber !== undefined && textBoxIndex !== undefined) {
-            filename = `p${pageNumber}_tb${textBoxIndex}_${textHash.substring(0, 8)}.mp3`;
-        } else if (pageNumber !== undefined) {
-            filename = `p${pageNumber}_${textHash.substring(0, 8)}.mp3`;
-        } else {
-            filename = `${Date.now()}_${textHash.substring(0, 12)}.mp3`;
-        }
-        const audioUrl = await saveAudioFile(audioBuffer, filename, bookId, pageNumber);
-
-        // 5. Save to Cache (handle duplicate key errors gracefully)
-        try {
-            const newCache = new TTSCache({
-                textHash,
-                voiceId,
+            const out = await generateSingleCachedTTS({
                 text,
-                audioUrl,
-                alignmentData,
-                bookId: bookId || null // Store bookId for cache clearing by book
+                voiceId,
+                bookId,
+                languageCode,
+                pageNumber,
+                textBoxIndex,
+                fileLabel: undefined,
             });
-            await newCache.save();
-        } catch (cacheError) {
-            // If it's a duplicate key error, that's fine - another request already cached it
-            if (cacheError.code === 11000) {
-                console.log('TTS Cache: Entry already exists (race condition), continuing...');
-            } else {
-                console.warn('TTS Cache save warning:', cacheError.message);
+            return res.json(out);
+        } catch (e) {
+            if (e.message === 'Text and voiceId are required') {
+                return res.status(400).json({ message: e.message });
             }
-            // Don't fail the request - we still have the audio
+            if (e.message === 'apiKey is not defined') {
+                return res.status(500).json({ message: 'TTS Generation Failed', error: e.message });
+            }
+            throw e;
         }
-
-        res.json({
-            audioUrl,
-            alignment: alignmentData
-        });
-
     } catch (error) {
         console.error('TTS Error:', error.response?.data || error.message);
         res.status(500).json({ message: 'TTS Generation Failed', error: error.message });
     }
 });
+
 
 // POST /enhance - Add ElevenLabs emotion prompts to text
 router.post('/enhance', async (req, res) => {

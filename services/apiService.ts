@@ -1407,6 +1407,37 @@ export const ApiService = {
     }
   },
 
+  /** One HTTP request: synthesize multiple text boxes (sequential narration). Uses same caches as singles. */
+  generateTTSBatch: async (
+    items: Array<{ text: string; voiceId: string; textBoxIndex: number }>,
+    bookId?: string,
+    languageCode?: string,
+    pageNumber?: number
+  ): Promise<Array<{ textBoxIndex: number; audioUrl: string; alignment: any }> | null> => {
+    try {
+      const baseUrl = getApiBaseUrl();
+      const n = Math.max(items.length, 1);
+      const response = await fetchWithTimeout(`${baseUrl}tts/generate-batch`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ items, bookId, languageCode, pageNumber }),
+        timeout: Math.min(120000 + n * 45000, 600000),
+      });
+      if (response.ok) {
+        const body = await response.json();
+        return Array.isArray(body.results) ? body.results : null;
+      }
+      console.error('TTS Batch failed:', await response.text());
+      return null;
+    } catch (error: any) {
+      if (error?.name === 'AbortError' || error?.message?.includes('aborted')) {
+        return null;
+      }
+      console.error('TTS Batch error:', error);
+      return null;
+    }
+  },
+
   // TTS: Get Voices (from enabled voices only - synced with portal)
   getVoices: async (): Promise<any[]> => {
     try {

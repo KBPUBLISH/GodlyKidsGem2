@@ -8,6 +8,7 @@ import {
     appStoryParagraphExtras,
 } from '../utils/appBookTypography';
 import { ChevronLeft, ChevronRight, X, Play, Square, Volume2, ChevronDown } from 'lucide-react';
+import TrimmedPlaybackVideo from '../components/TrimmedPlaybackVideo';
 
 interface Voice {
     voice_id: string;
@@ -32,6 +33,8 @@ interface VideoSequenceItem {
     url: string;
     filename?: string;
     order: number;
+    trimStartSec?: number;
+    trimEndSec?: number;
 }
 
 interface ImageSequenceItem {
@@ -45,6 +48,8 @@ interface Page {
     pageNumber: number;
     backgroundUrl?: string;
     backgroundType?: 'image' | 'video';
+    backgroundTrimStartSec?: number;
+    backgroundTrimEndSec?: number;
     scrollUrl?: string;
     scrollHeight?: number;
     scrollMidHeight?: number;
@@ -512,7 +517,7 @@ const BookReader: React.FC = () => {
                                 
                                 return (
                                     <div className="relative w-full h-full">
-                                        <video
+                                        <TrimmedPlaybackVideo
                                             ref={videoRef}
                                             key={currentVideo.url}
                                             src={resolveUrl(currentVideo.url)}
@@ -521,6 +526,8 @@ const BookReader: React.FC = () => {
                                             loop={shouldLoop}
                                             muted
                                             playsInline
+                                            trimStartSec={currentVideo.trimStartSec}
+                                            trimEndSec={currentVideo.trimEndSec}
                                             onEnded={handleVideoEnded}
                                         />
                                         {/* Video sequence indicator */}
@@ -550,13 +557,15 @@ const BookReader: React.FC = () => {
                             // Video background (single video, loops)
                             if (bgType === 'video') {
                                 return (
-                                    <video
+                                    <TrimmedPlaybackVideo
                                         src={resolveUrl(bgUrl)}
                                         className="w-full h-full object-cover"
                                         autoPlay
                                         loop
                                         muted
                                         playsInline
+                                        trimStartSec={currentPage.backgroundTrimStartSec}
+                                        trimEndSec={currentPage.backgroundTrimEndSec}
                                     />
                                 );
                             }

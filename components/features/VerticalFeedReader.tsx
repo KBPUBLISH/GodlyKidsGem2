@@ -5,6 +5,7 @@ import { ApiService, getApiBaseUrl } from '../../services/apiService';
 import { authService } from '../../services/authService';
 import { removeEmotionalCues } from '../../utils/textProcessing';
 import { analyticsService } from '../../services/analyticsService';
+import TrimmedPlaybackVideo from '../media/TrimmedPlaybackVideo';
 
 interface TextBox {
     text?: string;
@@ -21,7 +22,12 @@ interface TextBox {
     shadowColor?: string;
 }
 
-interface SequenceItem { url: string; order: number }
+interface SequenceItem {
+    url: string;
+    order: number;
+    trimStartSec?: number;
+    trimEndSec?: number;
+}
 
 interface VerticalPage {
     _id: string;
@@ -30,6 +36,8 @@ interface VerticalPage {
     videoAutoAdvance?: boolean;
     backgroundUrl?: string;
     backgroundType?: 'image' | 'video';
+    backgroundTrimStartSec?: number;
+    backgroundTrimEndSec?: number;
     files?: { background?: { url?: string; type?: string } };
     /** Legacy / API: body copy sometimes at root */
     text?: string;
@@ -445,7 +453,7 @@ const FeedMediaLayer: React.FC<{
         const current = vidSeq[Math.min(vidIdx, vidSeq.length - 1)];
         const isLast = vidIdx >= vidSeq.length - 1;
         return (
-            <video
+            <TrimmedPlaybackVideo
                 key={`${page._id}-vid-${vidIdx}`}
                 src={resolveMediaUrl(current.url)}
                 className="absolute inset-0 w-full h-full object-cover"
@@ -453,6 +461,8 @@ const FeedMediaLayer: React.FC<{
                 muted={videoMuted}
                 playsInline
                 loop={vidSeq.length === 1 && !page.videoAutoAdvance}
+                trimStartSec={current.trimStartSec}
+                trimEndSec={current.trimEndSec}
                 onEnded={() => {
                     if (!isLast) setVidIdx(i => i + 1);
                     else if (page.videoAutoAdvance) onSequenceEnd?.();
@@ -464,13 +474,15 @@ const FeedMediaLayer: React.FC<{
     const bg = getBackground(page);
     if (bg.url && bg.type === 'video') {
         return (
-            <video
+            <TrimmedPlaybackVideo
                 src={resolveMediaUrl(bg.url)}
                 className="absolute inset-0 w-full h-full object-cover"
                 autoPlay={isCurrent}
                 muted={videoMuted}
                 playsInline
                 loop={!page.videoAutoAdvance}
+                trimStartSec={page.backgroundTrimStartSec}
+                trimEndSec={page.backgroundTrimEndSec}
                 onEnded={() => page.videoAutoAdvance && onSequenceEnd?.()}
             />
         );

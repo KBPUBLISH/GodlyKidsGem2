@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { ArrowLeft, ChevronUp } from 'lucide-react';
 import { apiClient, getMediaUrl } from '../services/apiClient';
+import TrimmedPlaybackVideo from '../components/TrimmedPlaybackVideo';
 
 /**
  * Portal-only preview of the Swipe Up (vertical TikTok-style) reader.
@@ -27,7 +28,12 @@ interface TextBox {
     shadowColor?: string;  // 'white' | 'black' | custom
 }
 
-interface SequenceItem { url: string; order: number }
+interface SequenceItem {
+    url: string;
+    order: number;
+    trimStartSec?: number;
+    trimEndSec?: number;
+}
 
 interface PreviewPage {
     _id: string;
@@ -36,6 +42,8 @@ interface PreviewPage {
     videoAutoAdvance?: boolean;
     backgroundUrl?: string;
     backgroundType?: 'image' | 'video';
+    backgroundTrimStartSec?: number;
+    backgroundTrimEndSec?: number;
     files?: { background?: { url?: string; type?: string } };
     text?: string;
     textBoxes?: TextBox[];
@@ -249,7 +257,7 @@ const MediaLayer: React.FC<{
         const isLast = vidIdx >= vidSeq.length - 1;
         return (
             <>
-                <video
+                <TrimmedPlaybackVideo
                     key={`${page._id}-vid-${vidIdx}`}
                     src={getMediaUrl(current.url)}
                     className="absolute inset-0 w-full h-full object-cover"
@@ -257,6 +265,8 @@ const MediaLayer: React.FC<{
                     muted
                     playsInline
                     loop={vidSeq.length === 1 && !page.videoAutoAdvance}
+                    trimStartSec={current.trimStartSec}
+                    trimEndSec={current.trimEndSec}
                     onEnded={() => {
                         if (!isLast) setVidIdx(i => i + 1);
                         else if (page.videoAutoAdvance) onSequenceEnd?.();
@@ -276,13 +286,15 @@ const MediaLayer: React.FC<{
     const bg = getBackground(page);
     if (bg.url && bg.type === 'video') {
         return (
-            <video
+            <TrimmedPlaybackVideo
                 src={bg.url}
                 className="absolute inset-0 w-full h-full object-cover"
                 autoPlay={isCurrent}
                 muted
                 playsInline
                 loop={!page.videoAutoAdvance}
+                trimStartSec={page.backgroundTrimStartSec}
+                trimEndSec={page.backgroundTrimEndSec}
                 onEnded={() => page.videoAutoAdvance && onSequenceEnd?.()}
                 onError={() => console.warn('[SwipeUpPreview] video failed:', bg.url)}
             />

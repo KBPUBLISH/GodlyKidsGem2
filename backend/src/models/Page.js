@@ -147,6 +147,9 @@ const pageSchema = new mongoose.Schema({
         filename: { type: String },
         order: { type: Number, required: true },
         audioUrl: { type: String }, // Auto-extracted audio for this video (iOS audio layering)
+        /** Optional playback trim relative to uploaded file (seconds) */
+        trimStartSec: { type: Number },
+        trimEndSec: { type: Number },
         uploadedAt: { type: Date, default: Date.now },
     }],
     // Flag to use video sequence instead of single background video
@@ -183,6 +186,12 @@ const pageSchema = new mongoose.Schema({
     scrollWidth: { type: Number, default: 100 }, // Width of scroll as percentage (100 = full width)
     scrollOpacity: { type: Number, default: 100 }, // 0–100: transparency of scroll overlay (100 = opaque)
     soundEffectUrl: { type: String }, // URL for sound effect bubble audio
+    /**
+     * Optional trim for single background videos (ignored for images).
+     * Seconds relative to uploaded file — readers clamp playback inside [start, end).
+     */
+    backgroundTrimStartSec: { type: Number },
+    backgroundTrimEndSec: { type: Number },
     // Background audio - extracted from video or separate ambient audio that loops with the page
     // This plays as a separate <audio> element so it can layer with TTS (unlike video audio on iOS)
     backgroundAudioUrl: { type: String },

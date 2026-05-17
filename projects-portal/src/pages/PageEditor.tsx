@@ -24,6 +24,7 @@ import {
     ChevronLeft,
     ChevronRight,
     Film,
+    Scissors,
     Globe,
     Gamepad2,
     Users
@@ -61,6 +62,9 @@ interface VideoSequenceItem {
     order: number;
     file?: File;
     preview?: string;
+    /** Seconds from start of uploaded file — optional playback trim */
+    trimStartSec?: number;
+    trimEndSec?: number;
 }
 
 interface ImageSequenceItem {
@@ -79,6 +83,13 @@ interface Game {
     url?: string;
     coverImage?: string;
     gameType: 'modal' | 'webview';
+}
+
+/** Normalize API/template font sizes so controls stay numeric and clamped */
+function coerceTextBoxFontPx(v: unknown): number {
+    const n = typeof v === 'number' ? v : parseInt(String(v ?? ''), 10);
+    if (!Number.isFinite(n)) return 24;
+    return Math.min(120, Math.max(8, Math.round(n)));
 }
 
 const PageEditor: React.FC = () => {
@@ -117,6 +128,10 @@ const PageEditor: React.FC = () => {
     // Video sequence settings (multiple videos that play in order)
     const [useVideoSequence, setUseVideoSequence] = useState(false);
     const [videoSequence, setVideoSequence] = useState<VideoSequenceItem[]>([]);
+
+    /** Optional trim for single background videos (seconds, relative to file). */
+    const [backgroundTrimStartSec, setBackgroundTrimStartSec] = useState<number | undefined>(undefined);
+    const [backgroundTrimEndSec, setBackgroundTrimEndSec] = useState<number | undefined>(undefined);
     
     // Image sequence settings (multiple images that cycle with transitions)
     const [useImageSequence, setUseImageSequence] = useState(false);
@@ -270,7 +285,11 @@ const PageEditor: React.FC = () => {
                         if (template.textBoxes && template.textBoxes.length > 0) {
                             const boxesWithIds = template.textBoxes.map((box: any, idx: number) => ({
                                 ...box,
-                                id: `template-${Date.now()}-${idx}`
+                                id: `template-${Date.now()}-${idx}`,
+                                fontFamily: box.fontFamily || 'Comic Sans MS',
+                                fontSize: coerceTextBoxFontPx(box.fontSize),
+                                color: box.color || '#4a3b2a',
+                                width: box.width || 30
                             }));
                             setTextBoxes(boxesWithIds);
                         }
@@ -470,6 +489,18 @@ const PageEditor: React.FC = () => {
         console.log('🎬 Background type determined:', bgType);
         setBackgroundType(bgType);
 
+        // Optional background video trim (seconds)
+        setBackgroundTrimStartSec(
+            typeof page.backgroundTrimStartSec === 'number' && page.backgroundTrimStartSec > 0
+                ? page.backgroundTrimStartSec
+                : undefined
+        );
+        setBackgroundTrimEndSec(
+            typeof page.backgroundTrimEndSec === 'number' && page.backgroundTrimEndSec > 0
+                ? page.backgroundTrimEndSec
+                : undefined
+        );
+
         // Set background preview if URL exists (check ALL possible locations)
         const bgUrl = page.backgroundUrl || page.files?.background?.url || page.content?.backgroundUrl || page.imageUrl;
         console.log('🖼️ Background URL determined:', bgUrl);
@@ -541,7 +572,7 @@ const PageEditor: React.FC = () => {
                 ...box,
                 id: `${page._id}-${idx}`,
                 fontFamily: box.fontFamily || 'Comic Sans MS',
-                fontSize: box.fontSize || 24,
+                fontSize: coerceTextBoxFontPx(box.fontSize),
                 color: box.color || '#4a3b2a',
                 width: box.width || 30
             }));
@@ -599,6 +630,10 @@ const PageEditor: React.FC = () => {
                 audioUrl: v.audioUrl, // Load auto-extracted audio URL
                 filename: v.filename || `Video ${v.order}`,
                 order: v.order,
+                trimStartSec:
+                    typeof v.trimStartSec === 'number' && v.trimStartSec > 0 ? v.trimStartSec : undefined,
+                trimEndSec:
+                    typeof v.trimEndSec === 'number' && v.trimEndSec > 0 ? v.trimEndSec : undefined,
             }));
             setVideoSequence(loadedVideos);
         } else {
@@ -645,6 +680,8 @@ const PageEditor: React.FC = () => {
         setBackgroundType('image');
         setBackgroundFile(null);
         setBackgroundPreview(null);
+        setBackgroundTrimStartSec(undefined);
+        setBackgroundTrimEndSec(undefined);
         setSceneDescription('');
         setReferenceCharacterIds([]);
         setScrollFile(null);
@@ -694,6 +731,9 @@ const PageEditor: React.FC = () => {
                 const boxesWithIds = pageTemplate.textBoxes.map((box: any, idx: number) => ({
                     ...box,
                     id: `new-${Date.now()}-${idx}`,
+                    fontFamily: box.fontFamily || 'Comic Sans MS',
+                    fontSize: coerceTextBoxFontPx(box.fontSize),
+                    color: box.color || '#4a3b2a',
                     width: box.width || 30
                 }));
                 setTextBoxes(boxesWithIds);
@@ -982,6 +1022,12 @@ const PageEditor: React.FC = () => {
                                 filename: video.filename,
                                 order: video.order,
                                 audioUrl: res.data.backgroundAudioUrl, // Auto-extracted audio for iOS layering
+                                ...(video.trimStartSec != null && video.trimStartSec > 0
+                                    ? { trimStartSec: video.trimStartSec }
+                                    : {}),
+                                ...(video.trimEndSec != null && video.trimEndSec > 0
+                                    ? { trimEndSec: video.trimEndSec }
+                                    : {}),
                             });
                             if (res.data.backgroundAudioUrl) {
                                 console.log(`🎬 Auto-extracted audio for video ${video.order}:`, res.data.backgroundAudioUrl);
@@ -997,6 +1043,12 @@ const PageEditor: React.FC = () => {
                             filename: video.filename,
                             order: video.order,
                             audioUrl: (video as any).audioUrl, // Preserve existing audio URL
+                            ...(video.trimStartSec != null && video.trimStartSec > 0
+                                ? { trimStartSec: video.trimStartSec }
+                                : {}),
+                            ...(video.trimEndSec != null && video.trimEndSec > 0
+                                ? { trimEndSec: video.trimEndSec }
+                                : {}),
                         });
                     }
                 }
@@ -1057,6 +1109,17 @@ const PageEditor: React.FC = () => {
                 // Swipe Up (vertical feed) layout per-page settings
                 pageKind: readerLayout === 'swipe_up' ? pageKind : 'media',
                 videoAutoAdvance: readerLayout === 'swipe_up' && pageKind === 'media' && backgroundType === 'video' ? videoAutoAdvance : false,
+                // Optional video trim (seconds) — clear when not using a background video
+                ...(backgroundType === 'video' && !useVideoSequence
+                    ? {
+                          ...(backgroundTrimStartSec != null && backgroundTrimStartSec > 0
+                              ? { backgroundTrimStartSec }
+                              : {}),
+                          ...(backgroundTrimEndSec != null && backgroundTrimEndSec > 0
+                              ? { backgroundTrimEndSec }
+                              : {}),
+                      }
+                    : { backgroundTrimStartSec: null, backgroundTrimEndSec: null }),
                 isColoringPage,
                 coloringEndModalOnly: isColoringPage ? coloringEndModalOnly : false, // Only relevant if it's a coloring page
                 // Web View page settings
@@ -1391,7 +1454,11 @@ const PageEditor: React.FC = () => {
                         </label>
                         <div className="flex gap-2 mb-2">
                             <button
-                                onClick={() => setBackgroundType('image')}
+                                onClick={() => {
+                                    setBackgroundType('image');
+                                    setBackgroundTrimStartSec(undefined);
+                                    setBackgroundTrimEndSec(undefined);
+                                }}
                                 className={`flex-1 py-1.5 text-sm rounded border ${backgroundType === 'image' ? 'bg-indigo-50 border-indigo-200 text-indigo-700' : 'border-gray-200 text-gray-600'}`}
                             >
                                 Image
@@ -1448,6 +1515,8 @@ const PageEditor: React.FC = () => {
                                         e.stopPropagation();
                                         setBackgroundFile(null);
                                         setBackgroundPreview(null);
+                                        setBackgroundTrimStartSec(undefined);
+                                        setBackgroundTrimEndSec(undefined);
                                     }}
                                     className="absolute top-1 right-1 bg-red-500 text-white p-1 rounded-full hover:bg-red-600 transition shadow-md z-10"
                                     title="Remove background"
@@ -1464,11 +1533,72 @@ const PageEditor: React.FC = () => {
                                 onClick={() => {
                                     setBackgroundFile(null);
                                     setBackgroundPreview(null);
+                                    setBackgroundTrimStartSec(undefined);
+                                    setBackgroundTrimEndSec(undefined);
                                 }}
                                 className="w-full py-2 text-xs text-red-600 hover:bg-red-50 rounded-lg transition"
                             >
                                 Remove Background
                             </button>
+                        )}
+
+                        {/* Optional trim — single background video only (ignored when using video sequence) */}
+                        {backgroundType === 'video' && !useVideoSequence && backgroundPreview && (
+                            <div className="rounded-lg border border-amber-200 bg-amber-50/80 p-2 space-y-1.5">
+                                <div className="flex items-center gap-1.5 text-xs font-medium text-amber-900">
+                                    <Scissors className="w-3.5 h-3.5 shrink-0" />
+                                    Trim video (seconds from source file)
+                                </div>
+                                <p className="text-[10px] text-amber-800/90 leading-snug">
+                                    Leave end empty to play to the natural end of the clip. Playback is clamped — the file is not re-encoded.
+                                </p>
+                                <div className="flex gap-2 flex-wrap items-center">
+                                    <label className="flex flex-col gap-0.5 text-[10px] text-gray-600">
+                                        Start
+                                        <input
+                                            type="number"
+                                            min={0}
+                                            step={0.1}
+                                            className="w-20 px-1.5 py-1 rounded border border-gray-200 text-xs"
+                                            placeholder="0"
+                                            value={backgroundTrimStartSec ?? ''}
+                                            onChange={(e) => {
+                                                const raw = e.target.value.trim();
+                                                if (!raw) {
+                                                    setBackgroundTrimStartSec(undefined);
+                                                    return;
+                                                }
+                                                const n = parseFloat(raw);
+                                                setBackgroundTrimStartSec(
+                                                    Number.isFinite(n) ? Math.max(0, n) : undefined
+                                                );
+                                            }}
+                                        />
+                                    </label>
+                                    <label className="flex flex-col gap-0.5 text-[10px] text-gray-600">
+                                        End
+                                        <input
+                                            type="number"
+                                            min={0}
+                                            step={0.1}
+                                            className="w-20 px-1.5 py-1 rounded border border-gray-200 text-xs"
+                                            placeholder="…"
+                                            value={backgroundTrimEndSec ?? ''}
+                                            onChange={(e) => {
+                                                const raw = e.target.value.trim();
+                                                if (!raw) {
+                                                    setBackgroundTrimEndSec(undefined);
+                                                    return;
+                                                }
+                                                const n = parseFloat(raw);
+                                                setBackgroundTrimEndSec(
+                                                    Number.isFinite(n) ? Math.max(0, n) : undefined
+                                                );
+                                            }}
+                                        />
+                                    </label>
+                                </div>
+                            </div>
                         )}
 
                         {/* Swipe Up: video auto-advance (only when this is a Media page with a video background) */}
@@ -1807,8 +1937,9 @@ const PageEditor: React.FC = () => {
                                         {videoSequence.sort((a, b) => a.order - b.order).map((video, index) => (
                                             <div 
                                                 key={video.id}
-                                                className="flex items-center gap-2 bg-white p-2 rounded-lg border border-gray-200 shadow-sm"
+                                                className="flex flex-col gap-1.5 bg-white p-2 rounded-lg border border-gray-200 shadow-sm"
                                             >
+                                                <div className="flex items-center gap-2">
                                                 {/* Order badge */}
                                                 <div className="w-6 h-6 bg-indigo-600 text-white rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0">
                                                     {video.order}
@@ -1892,6 +2023,72 @@ const PageEditor: React.FC = () => {
                                                 >
                                                     <Trash2 className="w-3 h-3" />
                                                 </button>
+                                                </div>
+                                                <div className="flex flex-wrap items-center gap-2 pl-8 text-[10px] text-gray-600">
+                                                    <span className="inline-flex items-center gap-1 font-medium text-indigo-800">
+                                                        <Scissors className="w-3 h-3" />
+                                                        Trim (s)
+                                                    </span>
+                                                    <label className="inline-flex items-center gap-1">
+                                                        start
+                                                        <input
+                                                            type="number"
+                                                            min={0}
+                                                            step={0.1}
+                                                            className="w-16 px-1 py-0.5 rounded border border-gray-200 text-[11px]"
+                                                            placeholder="—"
+                                                            value={video.trimStartSec ?? ''}
+                                                            onChange={(e) => {
+                                                                const raw = e.target.value.trim();
+                                                                const n = raw === '' ? undefined : parseFloat(raw);
+                                                                setVideoSequence((prev) =>
+                                                                    prev.map((v) =>
+                                                                        v.id === video.id
+                                                                            ? {
+                                                                                  ...v,
+                                                                                  trimStartSec:
+                                                                                      n !== undefined &&
+                                                                                      Number.isFinite(n)
+                                                                                          ? Math.max(0, n)
+                                                                                          : undefined,
+                                                                              }
+                                                                            : v
+                                                                    )
+                                                                );
+                                                            }}
+                                                        />
+                                                    </label>
+                                                    <label className="inline-flex items-center gap-1">
+                                                        end
+                                                        <input
+                                                            type="number"
+                                                            min={0}
+                                                            step={0.1}
+                                                            className="w-16 px-1 py-0.5 rounded border border-gray-200 text-[11px]"
+                                                            placeholder="—"
+                                                            value={video.trimEndSec ?? ''}
+                                                            onChange={(e) => {
+                                                                const raw = e.target.value.trim();
+                                                                const n = raw === '' ? undefined : parseFloat(raw);
+                                                                setVideoSequence((prev) =>
+                                                                    prev.map((v) =>
+                                                                        v.id === video.id
+                                                                            ? {
+                                                                                  ...v,
+                                                                                  trimEndSec:
+                                                                                      n !== undefined &&
+                                                                                      Number.isFinite(n)
+                                                                                          ? Math.max(0, n)
+                                                                                          : undefined,
+                                                                              }
+                                                                            : v
+                                                                    )
+                                                                );
+                                                            }}
+                                                        />
+                                                    </label>
+                                                    <span className="text-gray-400">empty end → full clip</span>
+                                                </div>
                                             </div>
                                         ))}
                                     </div>
@@ -2755,6 +2952,104 @@ const PageEditor: React.FC = () => {
                                 </button>
                             </div>
 
+                            {/* Typography (font size visible here — separate from "% box size" below) */}
+                            <div className="space-y-2 p-2 bg-white rounded border border-indigo-200">
+                                <label className="text-xs font-semibold text-gray-600">Typography</label>
+                                <div className="space-y-1">
+                                    <label className="text-xs text-gray-500">Font family</label>
+                                    <select
+                                        value={selectedBox.fontFamily}
+                                        onChange={e => updateTextBox(selectedBox.id, { fontFamily: e.target.value })}
+                                        className="w-full text-sm p-2 border rounded focus:ring-2 focus:ring-indigo-300 outline-none"
+                                    >
+                                        <option value="Comic Sans MS">Comic Sans MS</option>
+                                        <option value="Bubblegum Sans">Bubblegum Sans</option>
+                                        <option value="Fredoka One">Fredoka One</option>
+                                        <option value="Baloo 2">Baloo 2</option>
+                                        <option value="Chewy">Chewy</option>
+                                        <option value="Luckiest Guy">Luckiest Guy</option>
+                                        <option value="Bangers">Bangers</option>
+                                        <option value="Pacifico">Pacifico</option>
+                                        <option value="Caveat">Caveat</option>
+                                        <option value="Patrick Hand">Patrick Hand</option>
+                                    </select>
+                                </div>
+                                <div className="space-y-1">
+                                    <label className="text-xs text-gray-500">Font size (px)</label>
+                                    <div className="flex items-center gap-2">
+                                        <input
+                                            type="number"
+                                            min={8}
+                                            max={120}
+                                            step={1}
+                                            value={
+                                                Number.isFinite(selectedBox.fontSize)
+                                                    ? Math.round(selectedBox.fontSize)
+                                                    : 24
+                                            }
+                                            onChange={e =>
+                                                updateTextBox(selectedBox.id, {
+                                                    fontSize: Math.min(
+                                                        120,
+                                                        Math.max(8, Number(e.target.value) || 24),
+                                                    ),
+                                                })
+                                            }
+                                            className="w-20 shrink-0 text-sm p-2 border rounded focus:ring-2 focus:ring-indigo-300 outline-none"
+                                            aria-label="Font size in pixels"
+                                        />
+                                        <input
+                                            type="range"
+                                            min={8}
+                                            max={120}
+                                            value={
+                                                Number.isFinite(selectedBox.fontSize)
+                                                    ? Math.round(
+                                                          Math.min(120, Math.max(8, selectedBox.fontSize)),
+                                                      )
+                                                    : 24
+                                            }
+                                            onChange={e =>
+                                                updateTextBox(selectedBox.id, {
+                                                    fontSize: parseInt(e.target.value, 10),
+                                                })
+                                            }
+                                            className="flex-1 min-w-0"
+                                            aria-label="Adjust font size"
+                                        />
+                                    </div>
+                                </div>
+
+                                {/* Text color */}
+                                <div className="space-y-1">
+                                    <label className="text-xs text-gray-500">Text color</label>
+                                    <div className="grid grid-cols-5 gap-2">
+                                        {['#4a3b2a', '#000000', '#ffffff', '#ff6b6b', '#4ecdc4', '#45b7d1', '#f9ca24', '#6c5ce7', '#fd79a8', '#a29bfe'].map(color => (
+                                            <button
+                                                key={color}
+                                                type="button"
+                                                onClick={() => updateTextBox(selectedBox.id, { color })}
+                                                className={`w-8 h-8 rounded border-2 ${selectedBox.color === color ? 'border-indigo-600 scale-110' : 'border-gray-300'} transition-transform`}
+                                                style={{ backgroundColor: color }}
+                                            />
+                                        ))}
+                                    </div>
+                                    <input
+                                        type="color"
+                                        value={
+                                            /^#[0-9A-Fa-f]{6}$/.test(selectedBox.color || '')
+                                                ? selectedBox.color
+                                                : '#4a3b2a'
+                                        }
+                                        onChange={e =>
+                                            updateTextBox(selectedBox.id, { color: e.target.value })
+                                        }
+                                        className="w-full h-8 rounded border"
+                                        title="Pick a text color"
+                                    />
+                                </div>
+                            </div>
+
                             {/* Position Controls */}
                             <div className="space-y-2 p-2 bg-white rounded border border-gray-200">
                                 <label className="text-xs font-semibold text-gray-600">Position</label>
@@ -2785,12 +3080,12 @@ const PageEditor: React.FC = () => {
                                 <p className="text-xs text-gray-400">Lower Y = higher on page. Try Y: 40-45 for top of 60% scroll.</p>
                             </div>
                             
-                            {/* Size Controls */}
+                            {/* Box layout on page (percent of canvas — not font size) */}
                             <div className="space-y-2 p-2 bg-white rounded border border-gray-200">
-                                <label className="text-xs font-semibold text-gray-600">Size (%)</label>
+                                <label className="text-xs font-semibold text-gray-600">Text box on canvas (%)</label>
                                 <div className="grid grid-cols-2 gap-2">
                                     <div>
-                                        <label className="text-xs text-gray-500">Width</label>
+                                        <label className="text-xs text-gray-500">Width %</label>
                                         <input
                                             type="number"
                                             value={Math.round(selectedBox.width || 30)}
@@ -2801,7 +3096,7 @@ const PageEditor: React.FC = () => {
                                         />
                                     </div>
                                     <div>
-                                        <label className="text-xs text-gray-500">Height (0=auto)</label>
+                                        <label className="text-xs text-gray-500">Height % (0 = auto)</label>
                                         <input
                                             type="number"
                                             value={Math.round(selectedBox.height || 0)}
@@ -2816,62 +3111,9 @@ const PageEditor: React.FC = () => {
                                         />
                                     </div>
                                 </div>
-                                <p className="text-xs text-gray-400">Height 0 = auto-size based on text content.</p>
-                            </div>
-
-                            {/* Font Family */}
-                            <div className="space-y-1">
-                                <label className="text-xs font-semibold text-gray-600">Font</label>
-                                <select
-                                    value={selectedBox.fontFamily}
-                                    onChange={e => updateTextBox(selectedBox.id, { fontFamily: e.target.value })}
-                                    className="w-full text-sm p-2 border rounded focus:ring-2 focus:ring-indigo-300 outline-none"
-                                >
-                                    <option value="Comic Sans MS">Comic Sans MS</option>
-                                    <option value="Bubblegum Sans">Bubblegum Sans</option>
-                                    <option value="Fredoka One">Fredoka One</option>
-                                    <option value="Baloo 2">Baloo 2</option>
-                                    <option value="Chewy">Chewy</option>
-                                    <option value="Luckiest Guy">Luckiest Guy</option>
-                                    <option value="Bangers">Bangers</option>
-                                    <option value="Pacifico">Pacifico</option>
-                                    <option value="Caveat">Caveat</option>
-                                    <option value="Patrick Hand">Patrick Hand</option>
-                                </select>
-                            </div>
-
-                            {/* Font Size */}
-                            <div className="space-y-1">
-                                <label className="text-xs font-semibold text-gray-600">Size: {selectedBox.fontSize}px</label>
-                                <input
-                                    type="range"
-                                    min="12"
-                                    max="72"
-                                    value={selectedBox.fontSize}
-                                    onChange={e => updateTextBox(selectedBox.id, { fontSize: parseInt(e.target.value) })}
-                                    className="w-full"
-                                />
-                            </div>
-
-                            {/* Color */}
-                            <div className="space-y-1">
-                                <label className="text-xs font-semibold text-gray-600">Text Color</label>
-                                <div className="grid grid-cols-5 gap-2">
-                                    {['#4a3b2a', '#000000', '#ffffff', '#ff6b6b', '#4ecdc4', '#45b7d1', '#f9ca24', '#6c5ce7', '#fd79a8', '#a29bfe'].map(color => (
-                                        <button
-                                            key={color}
-                                            onClick={() => updateTextBox(selectedBox.id, { color })}
-                                            className={`w-8 h-8 rounded border-2 ${selectedBox.color === color ? 'border-indigo-600 scale-110' : 'border-gray-300'} transition-transform`}
-                                            style={{ backgroundColor: color }}
-                                        />
-                                    ))}
-                                </div>
-                                <input
-                                    type="color"
-                                    value={selectedBox.color}
-                                    onChange={e => updateTextBox(selectedBox.id, { color: e.target.value })}
-                                    className="w-full h-8 rounded border"
-                                />
+                                <p className="text-xs text-gray-400">
+                                    How wide/tall the hit area is on the page. For letter size, use <strong>Typography → Font size</strong> above.
+                                </p>
                             </div>
 
                             {/* Background Box Toggle */}

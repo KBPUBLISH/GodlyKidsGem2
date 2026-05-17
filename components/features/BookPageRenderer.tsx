@@ -1,5 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { removeEmotionalCues } from '../../utils/textProcessing';
+import { attachPlaybackTrim } from '../../utils/playbackTrim';
+import TrimmedPlaybackVideo from '../media/TrimmedPlaybackVideo';
 import { Music } from 'lucide-react';
 
 interface TextBox {
@@ -17,11 +19,19 @@ interface TextBox {
     endTime?: number;
 }
 
+/** First playback position inside authored trim (defaults to start of file). */
+function playbackClipStart(trimStartSec?: number | null): number {
+    const n = trimStartSec;
+    return typeof n === 'number' && Number.isFinite(n) && n > 0 ? n : 0;
+}
+
 interface VideoSequenceItem {
     url: string;
     filename?: string;
     order: number;
     audioUrl?: string; // Auto-extracted audio for this video (iOS audio layering)
+    trimStartSec?: number;
+    trimEndSec?: number;
 }
 
 interface ImageSequenceItem {
@@ -67,6 +77,9 @@ interface PageData {
     // Background audio - extracted video audio or ambient sound that loops with the page
     // Plays as separate <audio> element so it can layer with TTS (unlike video audio on iOS)
     backgroundAudioUrl?: string;
+    /** Optional trim for single background video (paired with layered background audio URL). */
+    backgroundTrimStartSec?: number;
+    backgroundTrimEndSec?: number;
     // Video sequence - multiple videos that play in order
     useVideoSequence?: boolean;
     videoSequence?: VideoSequenceItem[];
@@ -180,65 +193,103 @@ export const BookPageRenderer: React.FC<BookPageRendererProps> = ({
         setCurrentImageIndex(0);
     }, [page.id]);
     
+    const clipForBufferA = React.useMemo(() => {
+        if (!sortedVideoSequence.length) return undefined;
+        const idx = activeBuffer === 'A' ? currentVideoIndex : nextVideoIndex;
+        return sortedVideoSequence[idx];
+    }, [sortedVideoSequence, activeBuffer, currentVideoIndex, nextVideoIndex]);
+
+    const clipForBufferB = React.useMemo(() => {
+        if (!sortedVideoSequence.length) return undefined;
+        const idx = activeBuffer === 'B' ? currentVideoIndex : nextVideoIndex;
+        return sortedVideoSequence[idx];
+    }, [sortedVideoSequence, activeBuffer, currentVideoIndex, nextVideoIndex]);
+
     // Background audio - plays extracted video audio or ambient sound as separate <audio> element
     // This allows it to layer with TTS (unlike video audio which conflicts on iOS)
     // Handles both single background video audio AND video sequence audio
     useEffect(() => {
         const audio = backgroundAudioRef.current;
         if (!audio) return;
-        
-        // Determine which audio URL to use
+
+        let detachTrim: (() => void) | undefined;
+
         let audioUrl: string | undefined;
-        let shouldLoop = true;
-        
+        let trimStartSec: number | undefined;
+        let trimEndSec: number | undefined;
+        let shouldSegmentLoopNative = false; // Matches video: loop single clip, advance when sequence has multiple
+
         if (page.useVideoSequence && sortedVideoSequence.length > 0) {
-            // For video sequences, play the audio from the current video in sequence
             const currentVideo = sortedVideoSequence[currentVideoIndex];
             audioUrl = currentVideo?.audioUrl;
-            shouldLoop = false; // Don't loop - will switch to next video's audio when video ends
+            const ts = currentVideo?.trimStartSec;
+            const te = currentVideo?.trimEndSec;
+            trimStartSec = typeof ts === 'number' && ts > 0 ? ts : undefined;
+            trimEndSec = typeof te === 'number' && te > 0 ? te : undefined;
+            shouldSegmentLoopNative = sortedVideoSequence.length === 1;
             console.log(`🔊 Video sequence audio: playing audio for video ${currentVideoIndex + 1}`, audioUrl ? 'has audio' : 'no audio');
         } else if (page.backgroundAudioUrl) {
-            // For single background video, use the extracted audio
             audioUrl = page.backgroundAudioUrl;
-            shouldLoop = true; // Loop for single video
+            const ts = page.backgroundTrimStartSec;
+            const te = page.backgroundTrimEndSec;
+            trimStartSec = typeof ts === 'number' && ts > 0 ? ts : undefined;
+            trimEndSec = typeof te === 'number' && te > 0 ? te : undefined;
+            shouldSegmentLoopNative = true;
         }
-        
+
+        const trimMaybe =
+            (typeof trimStartSec === 'number' && trimStartSec > 0) ||
+            (typeof trimEndSec === 'number' && trimEndSec > 0);
+
+        // Disable native loop when clamps may apply (handled by attachPlaybackTrim + segmentLoop)
+        audio.loop = !trimMaybe && shouldSegmentLoopNative;
+
         if (audioUrl) {
-            // Set up the audio
             if (audio.src !== audioUrl) {
                 audio.src = audioUrl;
-                audio.loop = shouldLoop;
-                audio.volume = 0.7; // Slightly lower volume so TTS is clear
+                audio.volume = 0.7;
                 audio.load();
             }
-            
-            // Play when ready
+
+            detachTrim?.();
+            detachTrim = attachPlaybackTrim(audio, {
+                trimStartSec,
+                trimEndSec,
+                segmentLoop: () => !!shouldSegmentLoopNative,
+            });
+
             const playAudio = () => {
                 audio.play().catch(err => {
                     console.warn('🔊 Background audio autoplay prevented:', err);
                 });
             };
-            
+
             if (audio.readyState >= 3) {
                 playAudio();
             } else {
                 audio.addEventListener('canplaythrough', playAudio, { once: true });
             }
         } else {
-            // No audio for this video/page - stop any playing audio
+            detachTrim?.();
             audio.pause();
             audio.src = '';
         }
-        
-        // Cleanup - stop audio when page changes or unmounts
+
         return () => {
-            if (audio) {
-                audio.pause();
-                audio.currentTime = 0;
-            }
+            detachTrim?.();
+            audio.pause();
+            audio.currentTime = 0;
         };
-    }, [page.id, page.backgroundAudioUrl, page.useVideoSequence, sortedVideoSequence, currentVideoIndex]);
-    
+    }, [
+        page.id,
+        page.backgroundAudioUrl,
+        page.backgroundTrimStartSec,
+        page.backgroundTrimEndSec,
+        page.useVideoSequence,
+        sortedVideoSequence,
+        currentVideoIndex,
+    ]);
+
     // Swipe detection for scroll height changes
     const touchStartY = useRef<number>(0);
     const touchEndY = useRef<number>(0);
@@ -396,7 +447,7 @@ export const BookPageRenderer: React.FC<BookPageRendererProps> = ({
             // Single video background
             if (videoRef.current && page.backgroundType === 'video') {
                 console.log('🎬 Page changed - ensuring video plays');
-                videoRef.current.currentTime = 0; // Start from beginning
+                videoRef.current.currentTime = playbackClipStart(page.backgroundTrimStartSec);
                 videoRef.current.play().catch(err => {
                     console.warn('Could not play video on page change:', err);
                 });
@@ -404,7 +455,8 @@ export const BookPageRenderer: React.FC<BookPageRendererProps> = ({
             // Video sequence - play buffer A
             if (page.useVideoSequence && videoRefA.current) {
                 console.log('🎬 Page changed - ensuring video sequence plays');
-                videoRefA.current.currentTime = 0;
+                const firstClip = sortedVideoSequence[0];
+                videoRefA.current.currentTime = playbackClipStart(firstClip?.trimStartSec);
                 videoRefA.current.play().catch(err => {
                     console.warn('Could not play video sequence on page change:', err);
                 });
@@ -426,13 +478,15 @@ export const BookPageRenderer: React.FC<BookPageRendererProps> = ({
             
             // Switch to the other buffer (which should be preloaded)
             const newActiveBuffer = activeBuffer === 'A' ? 'B' : 'A';
+            const nextClip = sortedVideoSequence[nextIndex];
+            const segStart = playbackClipStart(nextClip?.trimStartSec);
             setActiveBuffer(newActiveBuffer);
             setCurrentVideoIndex(nextIndex);
             
             // Start playing the newly active buffer
             const newActiveRef = newActiveBuffer === 'A' ? videoRefA : videoRefB;
             if (newActiveRef.current) {
-                newActiveRef.current.currentTime = 0;
+                newActiveRef.current.currentTime = segStart;
                 newActiveRef.current.play().catch(err => {
                     console.warn('Could not autoplay next video:', err);
                 });
@@ -491,7 +545,7 @@ export const BookPageRenderer: React.FC<BookPageRendererProps> = ({
                 {page.useVideoSequence && sortedVideoSequence.length > 0 ? (
                     <>
                         {/* Buffer A - current or preloading */}
-                        <video
+                        <TrimmedPlaybackVideo
                             ref={videoRefA}
                             src={bufferAVideoUrl || ''}
                             className="absolute inset-0 w-full h-full object-cover min-w-full min-h-full transition-opacity duration-300"
@@ -500,6 +554,8 @@ export const BookPageRenderer: React.FC<BookPageRendererProps> = ({
                             muted // Always muted - use separate sound effects MP3 instead
                             playsInline
                             preload="auto"
+                            trimStartSec={clipForBufferA?.trimStartSec}
+                            trimEndSec={clipForBufferA?.trimEndSec}
                             onEnded={activeBuffer === 'A' ? handleVideoEnded : undefined}
                             onLoadedData={() => {
                                 setBufferAReady(true);
@@ -526,7 +582,7 @@ export const BookPageRenderer: React.FC<BookPageRendererProps> = ({
                             }}
                         />
                         {/* Buffer B - current or preloading */}
-                        <video
+                        <TrimmedPlaybackVideo
                             ref={videoRefB}
                             src={bufferBVideoUrl || ''}
                             className="absolute inset-0 w-full h-full object-cover min-w-full min-h-full transition-opacity duration-300"
@@ -535,6 +591,8 @@ export const BookPageRenderer: React.FC<BookPageRendererProps> = ({
                             muted // Always muted - use separate sound effects MP3 instead
                             playsInline
                             preload="auto"
+                            trimStartSec={clipForBufferB?.trimStartSec}
+                            trimEndSec={clipForBufferB?.trimEndSec}
                             onEnded={activeBuffer === 'B' ? handleVideoEnded : undefined}
                             onLoadedData={() => {
                                 setBufferBReady(true);
@@ -681,7 +739,7 @@ export const BookPageRenderer: React.FC<BookPageRendererProps> = ({
                 ) : /* Auto-detect video based on backgroundType OR file extension */
                 (page.backgroundType === 'video' || 
                   (page.backgroundUrl && /\.(mp4|webm|mov|m4v)$/i.test(page.backgroundUrl))) ? (
-                    <video
+                    <TrimmedPlaybackVideo
                         ref={videoRef}
                         src={page.backgroundUrl}
                         className="absolute inset-0 w-full h-full object-cover min-w-full min-h-full"
@@ -690,6 +748,8 @@ export const BookPageRenderer: React.FC<BookPageRendererProps> = ({
                         muted // Always muted - use separate sound effects MP3 instead
                         playsInline
                         preload="auto"
+                        trimStartSec={page.backgroundTrimStartSec}
+                        trimEndSec={page.backgroundTrimEndSec}
                         onLoadedData={() => {
                             if (videoRef.current) {
                                 // Ensure video is playing

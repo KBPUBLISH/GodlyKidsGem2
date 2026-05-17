@@ -63,6 +63,8 @@ router.post('/', async (req, res) => {
         // Video sequence settings
         videoSequence: req.body.videoSequence || [],
         useVideoSequence: req.body.useVideoSequence || false,
+        backgroundTrimStartSec: req.body.backgroundTrimStartSec,
+        backgroundTrimEndSec: req.body.backgroundTrimEndSec,
         // Image sequence settings
         imageSequence: req.body.imageSequence || [],
         useImageSequence: req.body.useImageSequence || false,

@@ -9,6 +9,7 @@ import {
 } from '../utils/appBookTypography';
 import { ChevronLeft, ChevronRight, X, Play, Square, Volume2, ChevronDown } from 'lucide-react';
 import TrimmedPlaybackVideo from '../components/TrimmedPlaybackVideo';
+import { removeEmotionalCues } from '../utils/readAlongText';
 
 interface Voice {
     voice_id: string;
@@ -80,6 +81,47 @@ interface Page {
     imageSequenceAnimation?: string; // animation effect type
 }
 
+type WordTiming = { word: string; start: number; end: number };
+
+/** Mirrors kid app timing lookup (handles gaps between alignment words). */
+function findWordIndexAtTime(currentTime: number, words: WordTiming[]): number {
+    if (!words?.length) return -1;
+    for (let i = 0; i < words.length; i++) {
+        const w = words[i];
+        if (currentTime >= w.start && currentTime < w.end) return i;
+    }
+    if (currentTime < words[0].start) return 0;
+    if (currentTime >= words[words.length - 1].end) return words.length - 1;
+    for (let i = 0; i < words.length - 1; i++) {
+        const cw = words[i];
+        const nw = words[i + 1];
+        if (currentTime >= cw.end && currentTime < nw.start) {
+            const gapMidpoint = (cw.end + nw.start) / 2;
+            return currentTime >= gapMidpoint ? i + 1 : i;
+        }
+    }
+    return words.length - 1;
+}
+
+function mapAlignIndexToDisplay(alignIdx: number, alignLen: number, displayLen: number): number {
+    if (displayLen <= 0) return -1;
+    if (alignIdx < 0) return 0;
+    if (alignLen <= 0) return Math.min(displayLen - 1, alignIdx);
+    if (alignLen === displayLen) return Math.min(displayLen - 1, alignIdx);
+    const r = alignLen > 1 ? alignIdx / (alignLen - 1) : 0;
+    return Math.min(displayLen - 1, Math.max(0, Math.round(r * Math.max(displayLen - 1, 0))));
+}
+
+function buildEvenWordTiming(displayCount: number, durationSec: number): WordTiming[] {
+    if (displayCount <= 0 || durationSec <= 0) return [];
+    const w = durationSec / displayCount;
+    return Array.from({ length: displayCount }, (_, i) => ({
+        word: '',
+        start: i * w,
+        end: (i + 1) * w,
+    }));
+}
+
 const BookReader: React.FC = () => {
     const { bookId } = useParams<{ bookId: string }>();
     const navigate = useNavigate();
@@ -108,6 +150,28 @@ const BookReader: React.FC = () => {
     const [currentTextBoxIndex, setCurrentTextBoxIndex] = useState(0);
     const audioRef = useRef<HTMLAudioElement | null>(null);
     const allTextBoxesRef = useRef<TextBox[]>([]);
+    const highlightIntervalRef = useRef<number | null>(null);
+    const alignWordsRef = useRef<WordTiming[]>([]);
+    const displayWordCountRef = useRef(0);
+
+    const [highlightedWordIndex, setHighlightedWordIndex] = useState(-1);
+    /** True while "play page" is chaining multiple text boxes (matches kid app single-box focus). */
+    const [sequentialReadActive, setSequentialReadActive] = useState(false);
+    /** Alignment timing available for the active clip (mirror kid app gated read-along). */
+    const [readAlongTimingReady, setReadAlongTimingReady] = useState(false);
+
+    const stopHighlightTicker = useCallback(() => {
+        if (highlightIntervalRef.current != null) {
+            window.clearInterval(highlightIntervalRef.current);
+            highlightIntervalRef.current = null;
+        }
+    }, []);
+
+    const tearDownPlayback = useCallback(() => {
+        stopHighlightTicker();
+        setHighlightedWordIndex(-1);
+        setReadAlongTimingReady(false);
+    }, [stopHighlightTicker]);
 
     // Device dimensions
     const deviceStyles = {
@@ -165,7 +229,16 @@ const BookReader: React.FC = () => {
         setCurrentVideoIndex(0);
         setImageTransition('none');
         setCurrentTextBoxIndex(0);
-        
+        setHighlightedWordIndex(-1);
+        setSequentialReadActive(false);
+        setReadAlongTimingReady(false);
+        alignWordsRef.current = [];
+        displayWordCountRef.current = 0;
+        if (highlightIntervalRef.current != null) {
+            window.clearInterval(highlightIntervalRef.current);
+            highlightIntervalRef.current = null;
+        }
+
         // Stop any playing audio when changing pages
         if (audioRef.current) {
             audioRef.current.pause();
@@ -183,81 +256,172 @@ const BookReader: React.FC = () => {
         // This allows scroll position to persist across pages like in the app
     }, [currentPageIndex]);
     
-    // Generate TTS for text and play it
+    const generateAndPlayTTSRef = useRef<(t: string, i: number) => Promise<void>>(async () => {});
+    
+    // Generate TTS for text and play it (portal preview: ElevenLabs alignment → kid-style read-along)
     const generateAndPlayTTS = useCallback(async (text: string, textBoxIdx: number) => {
         if (!text || !selectedVoice) return;
-        
+
+        const displayWords = removeEmotionalCues(text.trim()).split(/\s+/).filter(Boolean);
+        displayWordCountRef.current = displayWords.length;
+
         setTtsLoading(true);
         setCurrentTextBoxIndex(textBoxIdx);
-        
+        tearDownPlayback();
+
         try {
             const res = await apiClient.post('/api/tts/generate', {
                 text: text.trim(),
                 voiceId: selectedVoice,
-                bookId: bookId
+                bookId,
+                pageNumber: currentPageIndex + 1,
+                textBoxIndex: textBoxIdx,
             });
-            
-            if (res.data?.audioUrl) {
-                // Stop any existing audio
-                if (audioRef.current) {
-                    audioRef.current.pause();
-                }
-                
-                const audio = new Audio(getMediaUrl(res.data.audioUrl));
-                audioRef.current = audio;
-                
-                audio.onended = () => {
-                    setIsPlaying(false);
-                    // Try to play next text box if there is one
-                    const allBoxes = allTextBoxesRef.current;
-                    const nextIdx = textBoxIdx + 1;
-                    if (nextIdx < allBoxes.length) {
-                        generateAndPlayTTS(allBoxes[nextIdx].text, nextIdx);
-                    }
-                };
-                
-                audio.onerror = () => {
-                    console.error('Audio playback error');
-                    setIsPlaying(false);
-                    setTtsLoading(false);
-                };
-                
-                await audio.play();
-                setIsPlaying(true);
+
+            if (!res.data?.audioUrl) {
+                return;
             }
+
+            const rawWords: unknown[] = Array.isArray(res.data?.alignment?.words)
+                ? res.data.alignment.words
+                : [];
+
+            const parsedTiming: WordTiming[] = rawWords
+                .map((w): WordTiming | null => {
+                    if (!w || typeof w !== 'object') return null;
+                    const word = typeof (w as { word?: string }).word === 'string' ? (w as { word: string }).word : '';
+                    const start = Number((w as { start?: number }).start);
+                    const end = Number((w as { end?: number }).end);
+                    if (!Number.isFinite(start) || !Number.isFinite(end)) return null;
+                    return { word, start, end };
+                })
+                .filter((x): x is WordTiming => x !== null);
+
+            // Stop prior audio element
+            if (audioRef.current) {
+                audioRef.current.pause();
+                audioRef.current = null;
+            }
+
+            const audio = new Audio(getMediaUrl(res.data.audioUrl));
+            audioRef.current = audio;
+
+            const startReadAlongTicker = () => {
+                if (audioRef.current !== audio) return;
+
+                const durationSec = Number.isFinite(audio.duration) && audio.duration > 0 ? audio.duration : 0;
+
+                let timings = parsedTiming;
+                if (timings.length === 0 && displayWords.length > 0 && durationSec > 0) {
+                    timings = buildEvenWordTiming(displayWords.length, durationSec);
+                }
+                alignWordsRef.current = timings;
+
+                stopHighlightTicker();
+                setReadAlongTimingReady(timings.length > 0 && displayWords.length > 0);
+
+                if (timings.length > 0 && displayWords.length > 0) {
+                    highlightIntervalRef.current = window.setInterval(() => {
+                        const alignWords = alignWordsRef.current;
+                        const displayLen = displayWordCountRef.current;
+                        if (!alignWords.length || !displayLen || !audioRef.current) return;
+                        const rawIdx = findWordIndexAtTime(audioRef.current.currentTime, alignWords);
+                        const mapped = mapAlignIndexToDisplay(
+                            rawIdx,
+                            alignWords.length,
+                            displayLen,
+                        );
+                        setHighlightedWordIndex(mapped);
+                    }, 50);
+                }
+            };
+
+            audio.onloadedmetadata = () => {
+                startReadAlongTicker();
+            };
+            audio.addEventListener('durationchange', startReadAlongTicker);
+
+            audio.onended = () => {
+                stopHighlightTicker();
+                setHighlightedWordIndex(-1);
+                setReadAlongTimingReady(false);
+                audioRef.current = null;
+
+                const allBoxes = allTextBoxesRef.current;
+                const nextIdx = textBoxIdx + 1;
+                if (nextIdx < allBoxes.length) {
+                    void generateAndPlayTTSRef.current(allBoxes[nextIdx].text, nextIdx);
+                } else {
+                    setIsPlaying(false);
+                    setSequentialReadActive(false);
+                }
+            };
+
+            audio.onerror = () => {
+                console.error('Audio playback error');
+                tearDownPlayback();
+                setIsPlaying(false);
+                setSequentialReadActive(false);
+                audioRef.current = null;
+                setTtsLoading(false);
+            };
+
+            await audio.play();
+            setIsPlaying(true);
+            startReadAlongTicker();
         } catch (err) {
             console.error('TTS generation failed:', err);
+            tearDownPlayback();
+            setIsPlaying(false);
+            setSequentialReadActive(false);
         } finally {
             setTtsLoading(false);
         }
-    }, [selectedVoice, bookId]);
-    
+    }, [
+        selectedVoice,
+        bookId,
+        currentPageIndex,
+        tearDownPlayback,
+        stopHighlightTicker,
+    ]);
+
+    generateAndPlayTTSRef.current = generateAndPlayTTS;
+
     // Play all text boxes on current page
     const handlePlay = useCallback(() => {
         if (isPlaying) {
-            // Stop playback
+            tearDownPlayback();
             if (audioRef.current) {
                 audioRef.current.pause();
                 audioRef.current = null;
             }
             setIsPlaying(false);
+            setSequentialReadActive(false);
             return;
         }
-        
-        // Get text boxes for current page
-        const currentPage = pages[currentPageIndex];
-        const contentBoxes = currentPage?.content?.textBoxes;
-        const textBoxes = (contentBoxes && contentBoxes.length > 0) ? contentBoxes : currentPage?.textBoxes;
-        
+
+        const pg = pages[currentPageIndex];
+        const contentBoxes = pg?.content?.textBoxes;
+        const textBoxes = (contentBoxes && contentBoxes.length > 0) ? contentBoxes : pg?.textBoxes;
+
         if (!textBoxes || textBoxes.length === 0) {
             console.log('No text boxes to read');
             return;
         }
-        
-        // Store all text boxes and start playing from first
+
         allTextBoxesRef.current = textBoxes;
-        generateAndPlayTTS(textBoxes[0].text, 0);
-    }, [isPlaying, pages, currentPageIndex, generateAndPlayTTS]);
+        setSequentialReadActive(textBoxes.length > 1);
+        void generateAndPlayTTSRef.current(textBoxes[0].text, 0);
+    }, [isPlaying, pages, currentPageIndex, tearDownPlayback]);
+
+    // Unmount cleanup
+    useEffect(() => () => {
+        tearDownPlayback();
+        if (audioRef.current) {
+            audioRef.current.pause();
+            audioRef.current = null;
+        }
+    }, [tearDownPlayback]);
     
     // Toggle scroll state: hidden -> mid -> max -> hidden
     const cycleScrollState = useCallback(() => {
@@ -628,10 +792,32 @@ const BookReader: React.FC = () => {
                                         ? `calc(${100 - scrollBottomBuffer}% - ${effectiveTop}%)`
                                         : `calc(100% - ${effectiveTop}% - 40px)`;
 
+                                    if (sequentialReadActive && idx !== currentTextBoxIndex) {
+                                        return null;
+                                    }
+
+                                    const cleanedText = removeEmotionalCues(box.text);
+                                    const splitWords = cleanedText.split(/\s+/).filter((w) => w.length > 0);
+                                    const showReadAlong =
+                                        idx === currentTextBoxIndex &&
+                                        readAlongTimingReady &&
+                                        highlightedWordIndex >= 0 &&
+                                        splitWords.length > 0;
+
                                     return (
                                         <div
                                             key={idx}
-                                            className={`absolute pointer-events-auto overflow-y-auto ${currentTextBoxIndex === idx && isPlaying ? 'ring-2 ring-orange-400 ring-opacity-75' : ''}`}
+                                            className={`
+                                                absolute pointer-events-auto overflow-y-auto transition-all duration-300
+                                                ${idx === currentTextBoxIndex && showReadAlong
+                                                    ? 'shadow-[0_0_15px_rgba(255,215,0,0.4)] scale-[1.02]'
+                                                    : ''
+                                                }
+                                                ${currentTextBoxIndex === idx && isPlaying && !showReadAlong
+                                                    ? 'ring-2 ring-orange-400 ring-opacity-75'
+                                                    : ''
+                                                }
+                                            `}
                                             style={{
                                                 left: `calc(max(${boxX}%, 3%) + env(safe-area-inset-left, 0px))`,
                                                 top: `${effectiveTop}%`,
@@ -654,7 +840,41 @@ const BookReader: React.FC = () => {
                                                 scrollBehavior: 'smooth',
                                             }}
                                         >
-                                            <p style={{ whiteSpace: 'pre-wrap', margin: 0, ...appStoryParagraphExtras() }}>{box.text}</p>
+                                            <p
+                                                className="gk-readalong-p leading-relaxed relative drop-shadow-[0_1px_2px_rgba(255,255,255,0.9)]"
+                                                style={{ whiteSpace: 'pre-wrap', margin: 0, ...appStoryParagraphExtras() }}
+                                            >
+                                                {showReadAlong ? (
+                                                    splitWords.map((word, wIdx) => {
+                                                        const isHighlighted = wIdx === highlightedWordIndex;
+                                                        const isUpcoming =
+                                                            highlightedWordIndex >= 0 && wIdx > highlightedWordIndex;
+                                                        const isPast =
+                                                            highlightedWordIndex >= 0 && wIdx < highlightedWordIndex;
+                                                        return (
+                                                            <span
+                                                                key={wIdx}
+                                                                data-word-index={wIdx}
+                                                                className={`
+                                                                    gk-readalong-word rounded px-0.5
+                                                                    ${isHighlighted
+                                                                        ? 'gk-readalong-word--current opacity-100 bg-[#FFD700] text-black font-bold shadow-[0_0_22px_rgba(255,215,0,0.55),0_3px_8px_rgba(0,0,0,0.15)] ring-2 ring-amber-200/80'
+                                                                        : isUpcoming
+                                                                            ? 'opacity-42'
+                                                                            : isPast
+                                                                                ? 'opacity-78'
+                                                                                : ''
+                                                                    }
+                                                                `}
+                                                            >
+                                                                {word}{' '}
+                                                            </span>
+                                                        );
+                                                    })
+                                                ) : (
+                                                    cleanedText
+                                                )}
+                                            </p>
                                         </div>
                                     );
                                 })}

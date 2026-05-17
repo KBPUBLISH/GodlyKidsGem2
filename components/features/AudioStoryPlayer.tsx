@@ -330,12 +330,12 @@ const AudioStoryPlayer: React.FC<AudioStoryPlayerProps> = ({
                                         <span
                                             key={idx}
                                             ref={isHighlighted ? highlightedWordRef : null}
-                                            className={`gk-readalong-word transition-opacity duration-150 ${
+                                            className={`gk-readalong-word transition-opacity duration-200 ${
                                                 isHighlighted
-                                                    ? 'gk-readalong-word--current text-[#FFD700] font-semibold bg-[#FFD700]/25 rounded px-1 -mx-1 shadow-[0_0_18px_rgba(255,215,0,0.45)] ring-1 ring-amber-400/60'
+                                                    ? 'gk-readalong-word--current text-[#FFD700] font-semibold bg-[#FFD700]/25 rounded px-1 -mx-1 shadow-[0_0_18px_rgba(255,215,0,0.45)] ring-1 ring-amber-400/60 opacity-100'
                                                     : isPast
-                                                        ? 'text-white/70'
-                                                        : 'text-white/90'
+                                                        ? 'text-white/75'
+                                                        : 'text-white/42'
                                             }`}
                                         >
                                             {word}{' '}

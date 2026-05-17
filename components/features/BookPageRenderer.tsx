@@ -110,6 +110,8 @@ interface BookPageRendererProps {
     isTTSPlaying?: boolean; // When true, duck layered page video / ambient audio for TTS
     /** Separate from TTS mute: layered background-video audio (extracted URL). Defaults on. */
     ambientVideoSoundEnabled?: boolean;
+    /** When true and page has 2+ text boxes: show only the box being read (sequential page / auto TTS). */
+    sequentialMultiBoxTts?: boolean;
     // Character overlay props
     characterPoses?: CharacterPoses; // User's generated character poses
     showCharacterOverlay?: boolean; // Book-level setting to show character
@@ -126,6 +128,7 @@ export const BookPageRenderer: React.FC<BookPageRendererProps> = ({
     onVideoTransition,
     isTTSPlaying = false,
     ambientVideoSoundEnabled,
+    sequentialMultiBoxTts = false,
     characterPoses,
     showCharacterOverlay = false
 }) => {
@@ -970,6 +973,12 @@ export const BookPageRenderer: React.FC<BookPageRendererProps> = ({
                 } : {}}
             >
                 {page.textBoxes?.map((box, idx) => {
+                    const tbCount = page.textBoxes?.length ?? 0;
+                    const hideThisBoxSequential =
+                        sequentialMultiBoxTts &&
+                        tbCount > 1 &&
+                        (activeTextBoxIndex === null ? true : idx !== activeTextBoxIndex);
+
                     // Validate box has required position properties
                     const boxX = typeof box.x === 'number' ? box.x : 0;
                     const boxY = typeof box.y === 'number' ? box.y : 0;
@@ -1018,6 +1027,7 @@ export const BookPageRenderer: React.FC<BookPageRendererProps> = ({
                             ref={(el) => { textBoxRefs.current[idx] = el; }}
                             data-scroll-container="true"
                             className="absolute pointer-events-auto overflow-y-auto p-2 group"
+                            aria-hidden={hideThisBoxSequential}
                             style={{
                                 // Add safe area padding for landscape mode (notch/Dynamic Island)
                                 // Use calc to ensure minimum 3% from edge + safe area
@@ -1046,9 +1056,11 @@ export const BookPageRenderer: React.FC<BookPageRendererProps> = ({
                                     : '0 0 8px rgba(255,255,255,0.9), 0 0 16px rgba(255,255,255,0.7), 1px 1px 4px rgba(255,255,255,0.8)',
                                 scrollBehavior: 'smooth',
                                 // Only use opacity for smooth hide/show - no translateY to avoid layout jump
-                                opacity: shouldHideTextBoxes ? 0 : 1,
+                                opacity: hideThisBoxSequential ? 0 : shouldHideTextBoxes ? 0 : 1,
                                 transition: 'opacity 0.4s ease-in-out, top 0.5s ease-in-out',
-                                pointerEvents: shouldHideTextBoxes ? 'none' : 'auto',
+                                pointerEvents:
+                                    hideThisBoxSequential || shouldHideTextBoxes ? 'none' : 'auto',
+                                ...(hideThisBoxSequential ? { display: 'none' as const } : {}),
                                 // Show background box if user explicitly enabled it
                                 backgroundColor: showBg ? (box.backgroundColor || 'rgba(255,255,255,0.85)') : 'transparent',
                                 borderRadius: showBg ? '12px' : '0',
@@ -1076,6 +1088,10 @@ export const BookPageRenderer: React.FC<BookPageRendererProps> = ({
                                         if (isActive && wordAlignment && highlightedWordIndex >= 0) {
                                             return words.map((word, wIdx) => {
                                                 const isHighlighted = wIdx === highlightedWordIndex;
+                                                const isUpcoming =
+                                                    highlightedWordIndex >= 0 && wIdx > highlightedWordIndex;
+                                                const isPast =
+                                                    highlightedWordIndex >= 0 && wIdx < highlightedWordIndex;
                                                 return (
                                                     <span
                                                         key={wIdx}
@@ -1083,8 +1099,12 @@ export const BookPageRenderer: React.FC<BookPageRendererProps> = ({
                                                         className={`
                                                             gk-readalong-word rounded px-0.5
                                                             ${isHighlighted
-                                                                ? 'gk-readalong-word--current bg-[#FFD700] text-black font-bold shadow-[0_0_22px_rgba(255,215,0,0.55),0_3px_8px_rgba(0,0,0,0.15)] ring-2 ring-amber-200/80'
-                                                                : ''
+                                                                ? 'gk-readalong-word--current opacity-100 bg-[#FFD700] text-black font-bold shadow-[0_0_22px_rgba(255,215,0,0.55),0_3px_8px_rgba(0,0,0,0.15)] ring-2 ring-amber-200/80'
+                                                                : isUpcoming
+                                                                    ? 'opacity-42'
+                                                                    : isPast
+                                                                        ? 'opacity-78'
+                                                                        : ''
                                                             }
                                                         `}
                                                     >

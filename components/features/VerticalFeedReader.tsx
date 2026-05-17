@@ -965,19 +965,30 @@ const VerticalFeedReader: React.FC<Props> = ({ bookId, book: preLoadedBook, shar
                                             ttsPlaying &&
                                             ttsAlignment?.words?.length ? (
                                                 <>
-                                                    {ttsAlignment.words.map((w, wi) => (
-                                                        <span
-                                                            key={`${page._id}-w-${wi}`}
-                                                            className={
-                                                                wi === activeWordIndex
-                                                                    ? 'gk-readalong-word gk-readalong-word--current font-normal rounded px-1 bg-amber-300/95 text-gray-950 shadow-[0_0_20px_rgba(251,191,36,0.55),0_3px_10px_rgba(0,0,0,0.12)] ring-2 ring-amber-200/70'
-                                                                    : 'gk-readalong-word font-normal text-inherit opacity-95'
-                                                            }
-                                                        >
-                                                            {w.word}
-                                                            {wi < ttsAlignment.words.length - 1 ? ' ' : ''}
-                                                        </span>
-                                                    ))}
+                                                    {ttsAlignment.words.map((w, wi) => {
+                                                        const isCurrent = wi === activeWordIndex;
+                                                        const synced = activeWordIndex >= 0;
+                                                        const isUpcoming = synced && wi > activeWordIndex;
+                                                        const isPast = synced && wi < activeWordIndex;
+                                                        let readAlongCls =
+                                                            'gk-readalong-word font-normal text-inherit';
+                                                        if (isCurrent) {
+                                                            readAlongCls +=
+                                                                ' gk-readalong-word--current rounded px-1 bg-amber-300/95 text-gray-950 opacity-100 shadow-[0_0_20px_rgba(251,191,36,0.55),0_3px_10px_rgba(0,0,0,0.12)] ring-2 ring-amber-200/70';
+                                                        } else if (isUpcoming) {
+                                                            readAlongCls += ' opacity-38';
+                                                        } else if (isPast) {
+                                                            readAlongCls += ' opacity-76';
+                                                        } else {
+                                                            readAlongCls += ' opacity-95';
+                                                        }
+                                                        return (
+                                                            <span key={`${page._id}-w-${wi}`} className={readAlongCls}>
+                                                                {w.word}
+                                                                {wi < ttsAlignment.words.length - 1 ? ' ' : ''}
+                                                            </span>
+                                                        );
+                                                    })}
                                                 </>
                                             ) : (
                                                 text || ' '

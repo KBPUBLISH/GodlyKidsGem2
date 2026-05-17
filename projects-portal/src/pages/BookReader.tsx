@@ -202,17 +202,20 @@ const BookReader: React.FC = () => {
         const fetchVoices = async () => {
             try {
                 const res = await apiClient.get('/api/tts/voices');
-                if (res.data?.voices) {
-                    setVoices(res.data.voices);
+                /** Backend GET /api/tts/voices returns a bare array; some callers wrap as { voices }. */
+                const data = res.data;
+                const list: Voice[] = Array.isArray(data) ? data : (data?.voices ?? []);
+                if (list.length > 0) {
+                    setVoices(list);
                     // Set default voice if none selected
-                    if (!selectedVoice && res.data.voices.length > 0) {
-                        // Try to find a good default narrator voice
-                        const defaultVoice = res.data.voices.find((v: Voice) => 
-                            v.name?.toLowerCase().includes('aria') || 
-                            v.name?.toLowerCase().includes('jessica')
-                        ) || res.data.voices[0];
-                        setSelectedVoice(defaultVoice.voice_id);
-                    }
+                    setSelectedVoice((prev) => {
+                        if (prev) return prev;
+                        const defaultVoice = list.find((v: Voice) =>
+                            v.name?.toLowerCase().includes('aria') ||
+                            v.name?.toLowerCase().includes('jessica'),
+                        ) || list[0];
+                        return defaultVoice.voice_id;
+                    });
                 }
             } catch (err) {
                 console.error('Failed to fetch voices:', err);

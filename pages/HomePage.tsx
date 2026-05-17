@@ -1764,8 +1764,8 @@ const HomePage: React.FC = () => {
               <div className="flex space-x-4 px-4">
                 {trendingBooks.map((book: any, index: number) => (
                   <div
-                    key={book._id}
-                    onClick={() => navigate(`/book/${book._id}`)}
+                    key={book.id || book._id || index}
+                    onClick={() => handleBookClick(book.id || book._id)}
                     className="relative flex-shrink-0 w-44 snap-center cursor-pointer group"
                   >
                     {/* Cover Image */}

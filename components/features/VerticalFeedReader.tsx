@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ChevronUp, Pause, Play, Volume2, VolumeX, X } from 'lucide-react';
+import { ChevronUp, Pause, Play, Speaker, Volume2, VolumeX, X } from 'lucide-react';
 import { ApiService, getApiBaseUrl } from '../../services/apiService';
 import { authService } from '../../services/authService';
 import { removeEmotionalCues } from '../../utils/textProcessing';
@@ -27,6 +27,7 @@ interface SequenceItem {
     order: number;
     trimStartSec?: number;
     trimEndSec?: number;
+    audioUrl?: string;
 }
 
 interface VerticalPage {
@@ -143,6 +144,15 @@ const getBackground = (page: VerticalPage): { url?: string; type: 'image' | 'vid
     const url = page.backgroundUrl || page.files?.background?.url;
     const type = (page.backgroundType || page.files?.background?.type || 'image') as 'image' | 'video';
     return { url, type };
+};
+
+/** True when swipe-up playback uses `<video>` (muxed soundtrack), so a mute/unmute toggle is meaningful. */
+const verticalFeedShowsVideoSoundControl = (page: VerticalPage | undefined): boolean => {
+    if (!page) return false;
+    if (page.useImageSequence && page.imageSequence && page.imageSequence.length > 0) return false;
+    if (page.useVideoSequence && page.videoSequence && page.videoSequence.length > 0) return true;
+    const bg = getBackground(page);
+    return !!(bg.url && bg.type === 'video');
 };
 
 const getTextBoxes = (page: VerticalPage): TextBox[] => {
@@ -523,6 +533,8 @@ const VerticalFeedReader: React.FC<Props> = ({ bookId, book: preLoadedBook, shar
     const [currentIndex, setCurrentIndex] = useState(0);
     const [autoNarrate, setAutoNarrate] = useState(false);
     const [muted, setMuted] = useState(false);
+    /** Independent of narration mute: muxed soundtrack on background `<video>` (swipe-up reader). */
+    const [videoSoundOn, setVideoSoundOn] = useState(true);
     const [ttsLoading, setTtsLoading] = useState(false);
     const [ttsPlaying, setTtsPlaying] = useState(false);
     const [ttsAlignment, setTtsAlignment] = useState<{
@@ -816,6 +828,7 @@ const VerticalFeedReader: React.FC<Props> = ({ bookId, book: preLoadedBook, shar
     const totalCount = pages.length + 1; // +1 for The End card
     const currentPage = pages[currentIndex];
     const showNarrationButton = isNarratableCard(currentPage);
+    const showVideoSoundControl = verticalFeedShowsVideoSoundControl(currentPage);
 
     return (
         <div className="fixed inset-0 bg-black z-50 select-none">
@@ -831,13 +844,27 @@ const VerticalFeedReader: React.FC<Props> = ({ bookId, book: preLoadedBook, shar
                 <div className="px-3 py-1 rounded-full bg-black/40 backdrop-blur-md text-white text-xs font-medium">
                     {Math.min(currentIndex + 1, totalCount)} / {totalCount}
                 </div>
-                <button
-                    onClick={toggleMute}
-                    className="w-10 h-10 rounded-full bg-black/40 backdrop-blur-md text-white flex items-center justify-center active:scale-95 transition"
-                    aria-label={muted ? 'Unmute narration' : 'Mute narration'}
-                >
-                    {muted ? <VolumeX className="w-5 h-5" /> : <Volume2 className="w-5 h-5" />}
-                </button>
+                <div className="flex items-center gap-2">
+                    {showVideoSoundControl && (
+                        <button
+                            type="button"
+                            onClick={() => setVideoSoundOn((v) => !v)}
+                            className="w-10 h-10 rounded-full bg-black/40 backdrop-blur-md text-white flex items-center justify-center active:scale-95 transition"
+                            aria-label={videoSoundOn ? 'Mute video sound' : 'Unmute video sound'}
+                            title={videoSoundOn ? 'Mute video sound' : 'Unmute video sound'}
+                        >
+                            <Speaker className={`w-5 h-5 ${videoSoundOn ? 'text-white' : 'text-white/40'}`} />
+                        </button>
+                    )}
+                    <button
+                        onClick={toggleMute}
+                        className="w-10 h-10 rounded-full bg-black/40 backdrop-blur-md text-white flex items-center justify-center active:scale-95 transition"
+                        aria-label={muted ? 'Unmute narration' : 'Mute narration'}
+                        title={muted ? 'Unmute narration' : 'Mute narration'}
+                    >
+                        {muted ? <VolumeX className="w-5 h-5" /> : <Volume2 className="w-5 h-5" />}
+                    </button>
+                </div>
             </div>
 
             {/* Bottom-right TTS play/pause for text cards */}
@@ -909,7 +936,7 @@ const VerticalFeedReader: React.FC<Props> = ({ bookId, book: preLoadedBook, shar
                             <FeedMediaLayer
                                 page={page}
                                 isCurrent={isCurrent}
-                                videoMuted={showCenteredStory || muted}
+                                videoMuted={showCenteredStory || !videoSoundOn}
                                 onSequenceEnd={() => handleVideoEnded(index)}
                             />
 

@@ -135,8 +135,16 @@ const transformBook = (apiBook: any): Book => {
     apiBook.recommended_age ||
     '0+';
 
+  const resolvedIdRaw = apiBook.id || apiBook._id;
+  const resolvedId =
+    resolvedIdRaw != null && resolvedIdRaw !== ''
+      ? String(resolvedIdRaw)
+      : String(Math.random());
+
   return {
-    id: apiBook.id || apiBook._id || String(apiBook.id || apiBook._id || Math.random()),
+    id: resolvedId,
+    /** Mirrors Mongo `_id`; some carousels still navigate with `book._id`. */
+    _id: resolvedId,
     title: apiBook.title || apiBook.name || 'Untitled',
     coverUrl: normalizeCoverUrl(rawCoverUrl),
     level: String(level),

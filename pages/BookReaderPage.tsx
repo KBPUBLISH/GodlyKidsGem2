@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useLayoutEffect, useRef, useCallback } from 'react';
 import { useParams, useNavigate, useSearchParams, useLocation } from 'react-router-dom';
-import { ChevronLeft, ChevronRight, X, Play, Pause, Volume2, Mic, Check, Music, Home, Heart, Star, RotateCcw, Lock, Sparkles, HelpCircle, Share2, Copy, Smartphone, Grid3X3, Loader2, Globe, BookOpen, SkipForward, FileText, RefreshCw, Crown } from 'lucide-react';
+import { ChevronLeft, ChevronRight, X, Play, Pause, Volume2, Mic, Check, Music, Speaker, Home, Heart, Star, RotateCcw, Lock, Sparkles, HelpCircle, Share2, Copy, Smartphone, Grid3X3, Loader2, Globe, BookOpen, SkipForward, FileText, RefreshCw, Crown } from 'lucide-react';
 import { ApiService } from '../services/apiService';
 import { voiceCloningService, ClonedVoice } from '../services/voiceCloningService';
 import { translationService, SUPPORTED_LANGUAGES } from '../services/translationService';
@@ -39,6 +39,10 @@ interface VideoSequenceItem {
     url: string;
     filename?: string;
     order: number;
+    /** Extracted muxed soundtrack for iOS layering (plays on separate `<audio>` with video muted). */
+    audioUrl?: string;
+    trimStartSec?: number;
+    trimEndSec?: number;
 }
 
 interface ImageSequenceItem {
@@ -100,6 +104,23 @@ interface Page {
         };
     };
     soundEffectUrl?: string;
+    /** Separate audio extracted from background video — plays with `<video>` muted. */
+    backgroundAudioUrl?: string;
+    backgroundTrimStartSec?: number;
+    backgroundTrimEndSec?: number;
+}
+
+/** Page has authored layered video soundtrack (kid reader can toggle independently of narration). */
+function pageHasLayeredVideoSound(page: Page | null | undefined): boolean {
+    if (!page) return false;
+    if ((page.backgroundAudioUrl || '').trim()) return true;
+    if (
+        page.useVideoSequence &&
+        Array.isArray(page.videoSequence) &&
+        page.videoSequence.some((v) => (v.audioUrl || '').trim())
+    )
+        return true;
+    return false;
 }
 
 /**
@@ -697,6 +718,8 @@ const BookReaderPage: React.FC = () => {
     const preloadedBackgroundsRef = useRef<Set<string>>(new Set());
     
     const [bookMusicEnabled, setBookMusicEnabled] = useState(true); // Default to enabled
+    /** Kid toggle for layered soundtrack from uploaded video (`backgroundAudioUrl` / clip `audioUrl`), separate from narration. */
+    const [pageVideoSoundEnabled, setPageVideoSoundEnabled] = useState(true);
     const [musicVolume] = useState(0.4); // Fixed volume at 40%
 
     // Use ref to track music enabled state for intervals/callbacks
@@ -4410,6 +4433,31 @@ const BookReaderPage: React.FC = () => {
                         </div>
                     )}
 
+                    {pageHasLayeredVideoSound(currentPage) ? (
+                        <button
+                            type="button"
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                setPageVideoSoundEnabled((v) => !v);
+                            }}
+                            className={`bg-black/50 backdrop-blur-md rounded-full p-3 hover:bg-black/70 transition-all border ${
+                                pageVideoSoundEnabled
+                                    ? 'border-cyan-400/50 shadow-lg shadow-cyan-400/20'
+                                    : 'border-white/20'
+                            }`}
+                            title={
+                                pageVideoSoundEnabled
+                                    ? 'Mute video soundtrack on this page'
+                                    : 'Play video soundtrack on this page'
+                            }
+                            aria-label={
+                                pageVideoSoundEnabled ? 'Mute page video soundtrack' : 'Unmute page video soundtrack'
+                            }
+                        >
+                            <Speaker className={`w-6 h-6 ${pageVideoSoundEnabled ? 'text-cyan-300' : 'text-white/50'}`} />
+                        </button>
+                    ) : null}
+
                     {/* Voice Selector */}
                     <div
                         ref={voiceDropdownRef}
@@ -4850,6 +4898,7 @@ const BookReaderPage: React.FC = () => {
                                 highlightedWordIndex={currentWordIndex}
                                 wordAlignment={wordAlignment}
                                 isTTSPlaying={playing}
+                                ambientVideoSoundEnabled={pageVideoSoundEnabled}
                                 // Character overlay props
                                 showCharacterOverlay={showCharacterOverlay && !!currentKidPoses}
                                 characterPoses={currentKidPoses || undefined}

@@ -107,7 +107,9 @@ interface BookPageRendererProps {
     highlightedWordIndex?: number;
     wordAlignment?: { words: Array<{ word: string; start: number; end: number }> } | null;
     onVideoTransition?: () => void; // Called when video loops/plays to resume TTS if suspended
-    isTTSPlaying?: boolean; // When true, mute video to prevent audio conflicts on iOS
+    isTTSPlaying?: boolean; // When true, duck layered page video / ambient audio for TTS
+    /** Separate from TTS mute: layered background-video audio (extracted URL). Defaults on. */
+    ambientVideoSoundEnabled?: boolean;
     // Character overlay props
     characterPoses?: CharacterPoses; // User's generated character poses
     showCharacterOverlay?: boolean; // Book-level setting to show character
@@ -123,6 +125,7 @@ export const BookPageRenderer: React.FC<BookPageRendererProps> = ({
     wordAlignment,
     onVideoTransition,
     isTTSPlaying = false,
+    ambientVideoSoundEnabled,
     characterPoses,
     showCharacterOverlay = false
 }) => {
@@ -289,6 +292,16 @@ export const BookPageRenderer: React.FC<BookPageRendererProps> = ({
         sortedVideoSequence,
         currentVideoIndex,
     ]);
+
+    // Duck or silence layered page video audio when narration plays or viewer turns it off.
+    useEffect(() => {
+        const audio = backgroundAudioRef.current;
+        if (!audio?.src?.trim()) return;
+        const enabled = ambientVideoSoundEnabled !== false;
+        const audible = enabled && !isTTSPlaying;
+        audio.muted = !audible;
+        audio.volume = audible ? 0.7 : 0;
+    }, [ambientVideoSoundEnabled, isTTSPlaying, page.id, page.backgroundAudioUrl, page.useVideoSequence, sortedVideoSequence, currentVideoIndex]);
 
     // Swipe detection for scroll height changes
     const touchStartY = useRef<number>(0);

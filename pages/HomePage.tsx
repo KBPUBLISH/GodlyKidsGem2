@@ -526,9 +526,10 @@ const HomePage: React.FC = () => {
       setFeaturedLoading(false);
       setGamesLoading(false);
       
-      // Always fetch trending data since it's not cached (real-time updates)
+      // Always fetch trending + games (portal may update game URLs; don't use stale session cache)
       fetchTrendingEpisodes();
       fetchTrendingBooks();
+      fetchDynamicGames();
       return;
     }
     
@@ -559,7 +560,7 @@ const HomePage: React.FC = () => {
   const fetchDynamicGames = async () => {
     try {
       console.log('🎮 Fetching dynamic games...');
-      const games = await ApiService.getDailyTaskGames();
+      const games = await ApiService.getDailyTaskGames({ forceRefresh: true });
       console.log('🎮 Dynamic games received:', games.length, games);
       setDynamicGames(games);
       cacheData('games', games);

@@ -68,19 +68,31 @@ const GamesPage: React.FC = () => {
     }, 950);
   }, [isZoomingIn, hasCompleteAvatar]);
 
+  const loadGames = useCallback(async (forceRefresh = false) => {
+    try {
+      const data = await ApiService.getEnabledGames({ forceRefresh });
+      setGames(data);
+    } catch (error) {
+      console.error('Failed to fetch games:', error);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
   useEffect(() => {
-    const fetchGames = async () => {
-      try {
-        const data = await ApiService.getEnabledGames();
-        setGames(data);
-      } catch (error) {
-        console.error('Failed to fetch games:', error);
-      } finally {
-        setLoading(false);
+    loadGames(true);
+  }, [loadGames]);
+
+  // Refresh when returning to Games so portal URL edits apply without waiting on cache
+  useEffect(() => {
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') {
+        loadGames(true);
       }
     };
-    fetchGames();
-  }, []);
+    document.addEventListener('visibilitychange', onVisible);
+    return () => document.removeEventListener('visibilitychange', onVisible);
+  }, [loadGames]);
 
   useEffect(() => {
     if (showContent) {
@@ -369,10 +381,10 @@ const GamesPage: React.FC = () => {
       {/* Build-a-Parrot island — left of warrior (mirrors World map island) */}
       <button
         type="button"
-        onClick={() => window.dispatchEvent(new CustomEvent('open_avatar_shop'))}
+        onClick={() => navigate('/world', { state: { openShop: true, builderMode: true } })}
         className="absolute overflow-visible transition-opacity duration-300 cursor-pointer select-none focus:outline-none active:scale-95 parrot-island-drift"
         style={{ zIndex: 5, left: '-2%', top: '16%', width: '34vw', maxWidth: 170, opacity: isZoomingIn ? 0 : 1 }}
-        aria-label="Build a Parrot - Open Avatar Shop"
+        aria-label="Build a Parrot - Open Builder"
       >
         <div className="absolute pointer-events-none" style={{ zIndex: 0, inset: '-10% -10%', bottom: '-6%' }}>
           <div className="games-parrot-wave-1" style={{

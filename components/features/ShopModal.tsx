@@ -17,6 +17,8 @@ interface ShopModalProps {
     isOpen: boolean;
     onClose: () => void;
     initialTab?: ShopTab;
+    /** Open directly in avatar builder mode (wrench / part positioning UI). */
+    initialBuilderMode?: boolean;
     hideCloseButton?: boolean; // Hide X button during tutorial
 }
 
@@ -135,7 +137,7 @@ const SHOP_BACKGROUNDS: ShopItem[] = [
 
 type ShopTab = 'head' | 'hat' | 'body' | 'arms' | 'legs' | 'moves' | 'voices' | 'backgrounds' | 'saves';
 
-const ShopModal: React.FC<ShopModalProps> = ({ isOpen, onClose, initialTab, hideCloseButton = false }) => {
+const ShopModal: React.FC<ShopModalProps> = ({ isOpen, onClose, initialTab, initialBuilderMode = false, hideCloseButton = false }) => {
     const navigate = useNavigate();
     const { t } = useLanguage();
     const [activeTab, setActiveTab] = useState<ShopTab>(initialTab || 'head');
@@ -174,6 +176,22 @@ const ShopModal: React.FC<ShopModalProps> = ({ isOpen, onClose, initialTab, hide
             setActiveTab(initialTab);
         }
     }, [initialTab]);
+
+    // Parrot Island / deep links: land in builder mode when the shop opens
+    useEffect(() => {
+        if (isOpen && initialBuilderMode) {
+            setIsBuilderMode(true);
+            setSelectedPart('head');
+            setIsMenuMinimized(false);
+        }
+    }, [isOpen, initialBuilderMode]);
+
+    useEffect(() => {
+        if (!isOpen) {
+            setIsBuilderMode(false);
+            setSelectedPart(null);
+        }
+    }, [isOpen]);
 
     // Fetch voices when voices tab is active
     useEffect(() => {

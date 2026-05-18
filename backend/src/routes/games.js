@@ -34,6 +34,7 @@ router.get('/enabled', async (req, res) => {
         }
 
         const games = await Game.find({ enabled: true }).sort({ gameId: 1 });
+        res.set('Cache-Control', 'no-store');
         res.json(games);
     } catch (error) {
         console.error('Error fetching enabled games:', error);
@@ -57,6 +58,7 @@ router.get('/daily-tasks', async (req, res) => {
             showInDailyTasks: true 
         }).sort({ createdAt: -1 });
         
+        res.set('Cache-Control', 'no-store');
         res.json(games);
     } catch (error) {
         console.error('Error fetching daily task games:', error);

@@ -1903,23 +1903,32 @@ export const ApiService = {
     }
   },
 
-  // Games API - Get all enabled games
-  getEnabledGames: async (): Promise<any[]> => {
-    const cacheKey = 'enabled_games';
-    const cached = getCached<any[]>(cacheKey);
-    if (cached) return cached;
+  /** Clear cached game lists (portal URL updates must show immediately in the app). */
+  invalidateGamesCache: (): void => {
+    clearCacheByPattern('games');
+    try {
+      sessionStorage.removeItem('godlykids_home_games');
+    } catch {
+      // ignore
+    }
+  },
+
+  // Games API - Get all enabled games (not cached — URLs change in portal often)
+  getEnabledGames: async (options?: { forceRefresh?: boolean }): Promise<any[]> => {
+    if (options?.forceRefresh) {
+      ApiService.invalidateGamesCache();
+    }
 
     try {
       const baseUrl = getApiBaseUrl();
       const response = await fetchWithTimeout(`${baseUrl}games/enabled`, {
         method: 'GET',
+        cache: 'no-store',
       });
 
       if (response.ok) {
         const data = await response.json();
-        const result = Array.isArray(data) ? data : [];
-        setCache(cacheKey, result);
-        return result;
+        return Array.isArray(data) ? data : [];
       }
       return [];
     } catch (error) {
@@ -1928,25 +1937,24 @@ export const ApiService = {
     }
   },
 
-  // Games API - Get games for Daily Tasks & IQ Games section
-  getDailyTaskGames: async (): Promise<any[]> => {
-    const cacheKey = 'daily_task_games';
-    const cached = getCached<any[]>(cacheKey);
-    if (cached) return cached;
+  // Games API - Get games for Daily Tasks & IQ Games section (not cached)
+  getDailyTaskGames: async (options?: { forceRefresh?: boolean }): Promise<any[]> => {
+    if (options?.forceRefresh) {
+      ApiService.invalidateGamesCache();
+    }
 
     try {
       const baseUrl = getApiBaseUrl();
       console.log('🎮 Fetching daily task games from:', `${baseUrl}games/daily-tasks`);
       const response = await fetchWithTimeout(`${baseUrl}games/daily-tasks`, {
         method: 'GET',
+        cache: 'no-store',
       });
 
       if (response.ok) {
         const data = await response.json();
         console.log('🎮 Daily task games:', data);
-        const result = Array.isArray(data) ? data : [];
-        setCache(cacheKey, result);
-        return result;
+        return Array.isArray(data) ? data : [];
       }
 
       console.warn('⚠️ Failed to fetch daily task games:', response.status);

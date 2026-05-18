@@ -300,10 +300,10 @@ export const PersistentWorldIsland: React.FC = () => {
       {/* Build-a-Parrot island — right side */}
       <button
         type="button"
-        onClick={() => window.dispatchEvent(new CustomEvent('open_avatar_shop'))}
+        onClick={() => window.dispatchEvent(new CustomEvent('open_avatar_shop', { detail: { builderMode: true } }))}
         className="absolute overflow-visible transition-opacity duration-300 cursor-pointer select-none focus:outline-none active:scale-95 parrot-island-drift"
         style={{ zIndex: 12, right: '2%', top: '22%', width: '28vw', maxWidth: 155, opacity: isZoomingIn ? 0 : 1 }}
-        aria-label="Build a Parrot - Open Avatar Shop"
+        aria-label="Build a Parrot - Open Builder"
       >
         <img
           src="/assets/images/build-a-parrot-sign.webp"

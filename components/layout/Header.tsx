@@ -28,6 +28,7 @@ const Header: React.FC<HeaderProps> = ({ isVisible, title = "GODLY KIDS" }) => {
   const { isStepActive, nextStep, isTutorialActive, currentStep } = useTutorial();
   const { isPremium } = useSubscription();
   const [isShopOpen, setIsShopOpen] = useState(false);
+  const [shopBuilderMode, setShopBuilderMode] = useState(false);
   const [isDetailOpen, setIsDetailOpen] = useState(false);
   const [isCoinHistoryOpen, setIsCoinHistoryOpen] = useState(false);
   const [isReportCardOpen, setIsReportCardOpen] = useState(false);
@@ -136,7 +137,8 @@ const Header: React.FC<HeaderProps> = ({ isVisible, title = "GODLY KIDS" }) => {
     }
   };
 
-  const handleShopClick = useCallback(() => {
+  const handleShopClick = useCallback((builderMode = false) => {
+    setShopBuilderMode(builderMode);
     setIsShopOpen(true);
     if (isStepActive('shop_highlight')) {
       nextStep();
@@ -145,13 +147,17 @@ const Header: React.FC<HeaderProps> = ({ isVisible, title = "GODLY KIDS" }) => {
 
   // Listen for external requests to open the avatar shop (e.g. Parrot Island tap)
   useEffect(() => {
-    const handler = () => handleShopClick();
+    const handler = (event: Event) => {
+      const builderMode = Boolean((event as CustomEvent).detail?.builderMode);
+      handleShopClick(builderMode);
+    };
     window.addEventListener('open_avatar_shop', handler);
     return () => window.removeEventListener('open_avatar_shop', handler);
   }, [handleShopClick]);
 
   const handleShopClose = () => {
     setIsShopOpen(false);
+    setShopBuilderMode(false);
     if (isStepActive('shop_open')) {
       nextStep(); // Advance to navigate_to_games
     }
@@ -162,6 +168,7 @@ const Header: React.FC<HeaderProps> = ({ isVisible, title = "GODLY KIDS" }) => {
   // Check for openShop in navigation state
   useEffect(() => {
     if (location.state && (location.state as any).openShop) {
+      setShopBuilderMode(Boolean((location.state as any).builderMode));
       setIsShopOpen(true);
       // Clear the state to prevent reopening on refresh/back
       window.history.replaceState({}, document.title);
@@ -396,7 +403,12 @@ const Header: React.FC<HeaderProps> = ({ isVisible, title = "GODLY KIDS" }) => {
 
       {isShopOpen && (
         <Suspense fallback={null}>
-          <ShopModal isOpen={isShopOpen} onClose={handleShopClose} hideCloseButton={isTutorialActive} />
+          <ShopModal
+            isOpen={isShopOpen}
+            onClose={handleShopClose}
+            initialBuilderMode={shopBuilderMode}
+            hideCloseButton={isTutorialActive}
+          />
         </Suspense>
       )}
       <CoinHistoryModal 

@@ -954,8 +954,9 @@ const PaywallPage: React.FC = () => {
               </>
               )}
 
-              {/* Lifetime Option - shown when from deal page (links to iOS/Android lifetime IAP) or legacy paywall */}
-              {(showLifetimeOption || !isCreateYourStoryPaywall) && (
+              {/* Lifetime Option - shown when from deal page (links to iOS/Android lifetime IAP) or legacy paywall.
+                  Temporarily hidden during onboarding (unless coming from the explicit lifetime deal page). */}
+              {(showLifetimeOption || (!isCreateYourStoryPaywall && !fromOnboarding)) && (
               <div 
                 onClick={() => setSelectedPlan('lifetime')}
                 className={`relative w-full rounded-2xl border-2 overflow-hidden cursor-pointer transition-all ${

@@ -142,6 +142,8 @@ const PaywallPage: React.FC = () => {
     return fromState === 'lifetime-offer' ? 'lifetime' : 'annual';
   });
   const [planSelectorExpanded, setPlanSelectorExpanded] = useState(fromState === 'lifetime-offer');
+  // Monthly plan is hidden by default; revealed via the "monthly billing" dropdown toggle.
+  const [showMonthlyOption, setShowMonthlyOption] = useState(false);
   const [showParentGate, setShowParentGate] = useState(false);
   const [isPurchasing, setIsPurchasing] = useState(false);
   const [isRestoring, setIsRestoring] = useState(false);
@@ -924,7 +926,8 @@ const PaywallPage: React.FC = () => {
                 </div>
               </div>
 
-              {/* Monthly Option */}
+              {/* Monthly Option - hidden by default; revealed via the dropdown toggle below. */}
+              {(showMonthlyOption || selectedPlan === 'monthly') ? (
               <div 
                 onClick={() => { setSelectedPlan('monthly'); if (isCreateYourStoryPaywall) setPlanSelectorExpanded(false); }}
                 className={`relative w-full rounded-2xl border-2 overflow-hidden cursor-pointer transition-all ${
@@ -951,12 +954,22 @@ const PaywallPage: React.FC = () => {
                   </div>
                 </div>
               </div>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => setShowMonthlyOption(true)}
+                  className="w-full flex items-center justify-center gap-1 text-[#6366f1] text-sm font-medium py-2"
+                >
+                  Prefer monthly billing?
+                  <ChevronDown size={16} />
+                </button>
+              )}
               </>
               )}
 
-              {/* Lifetime Option - shown when from deal page (links to iOS/Android lifetime IAP) or legacy paywall.
-                  Temporarily hidden during onboarding (unless coming from the explicit lifetime deal page). */}
-              {(showLifetimeOption || (!isCreateYourStoryPaywall && !fromOnboarding)) && (
+              {/* Lifetime Option - TEMPORARILY HIDDEN on the standard paywall.
+                  Only shown when coming from the explicit lifetime deal/exit-intent page. */}
+              {showLifetimeOption && (
               <div 
                 onClick={() => setSelectedPlan('lifetime')}
                 className={`relative w-full rounded-2xl border-2 overflow-hidden cursor-pointer transition-all ${

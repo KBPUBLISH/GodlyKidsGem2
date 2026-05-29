@@ -398,7 +398,7 @@ const PaywallStep: React.FC<{
         {/* Hero Badge */}
         <div className="text-center mb-4">
           <div className="inline-block bg-gradient-to-r from-[#FFD700] to-[#FFA500] px-5 py-2 rounded-full animate-pulse shadow-lg">
-            <span className="text-[#3E1F07] font-extrabold text-base">🎁 7-DAY FREE TRIAL</span>
+            <span className="text-[#3E1F07] font-extrabold text-base">🎁 3-DAY FREE TRIAL</span>
           </div>
         </div>
 
@@ -567,7 +567,7 @@ const PaywallStep: React.FC<{
               </span>
             ) : (
               <span className="flex flex-col items-center">
-                <span className="text-lg font-bold">🎁 START 7-DAY FREE TRIAL</span>
+                <span className="text-lg font-bold">🎁 START 3-DAY FREE TRIAL</span>
                 <span className="text-xs opacity-80 font-normal">Cancel anytime • No charge until trial ends</span>
               </span>
             )}

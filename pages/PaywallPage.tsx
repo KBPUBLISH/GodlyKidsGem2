@@ -139,7 +139,7 @@ const PaywallPage: React.FC = () => {
   const [selectedPlan, setSelectedPlan] = useState<'annual' | 'monthly' | 'lifetime'>(() => {
     const s = (location.state as any)?.selectedPlan;
     if (s === 'annual' || s === 'monthly' || s === 'lifetime') return s;
-    return fromState === 'lifetime-offer' ? 'lifetime' : 'monthly';
+    return fromState === 'lifetime-offer' ? 'lifetime' : 'annual';
   });
   const [planSelectorExpanded, setPlanSelectorExpanded] = useState(fromState === 'lifetime-offer');
   const [showParentGate, setShowParentGate] = useState(false);
@@ -814,15 +814,11 @@ const PaywallPage: React.FC = () => {
                     ) : (
                       <>
                         <span className="sr-only">
-                          Start 14-day free trial, zero dollars today
+                          Start 3-day free trial, zero dollars today
                         </span>
                         <span className="text-center leading-tight" aria-hidden="true">
                           <span className="inline-flex flex-wrap items-center justify-center gap-x-1">
-                            <span>Start</span>
-                            <span className="line-through decoration-2 decoration-red-500 px-0.5 text-white/95 drop-shadow-sm">
-                              7
-                            </span>
-                            <span>14-Day Free Trial — $0.00</span>
+                            <span>Start 3-Day Free Trial — $0.00</span>
                           </span>
                         </span>
                       </>
@@ -845,10 +841,10 @@ const PaywallPage: React.FC = () => {
                   </div>
                   <p className="text-gray-500 text-xs text-center">
                     {selectedPlan === 'annual'
-                      ? `14-day free trial, then $${annualPrice}/year. Cancel anytime.`
+                      ? `3-day free trial, then $${annualPrice}/year. Cancel anytime.`
                       : selectedPlan === 'lifetime'
                       ? `$${lifetimeSalePrice} one-time • Lifetime access`
-                      : `14-day free trial, then $${monthlyPrice}/month. Cancel anytime.`}
+                      : `3-day free trial, then $${monthlyPrice}/month. Cancel anytime.`}
                   </p>
                 </div>
               </>
@@ -918,7 +914,7 @@ const PaywallPage: React.FC = () => {
                   
                   <div className="flex-1">
                     <p className="font-bold text-[#1e1b4b]">Annual</p>
-                    <p className="text-xs text-gray-500">14-day free trial, then <span className="font-semibold text-green-600">$39.99/year</span></p>
+                    <p className="text-xs text-gray-500">3-day free trial, then <span className="font-semibold text-green-600">$39.99/year</span></p>
                   </div>
                   
                   <div className="text-right">
@@ -1098,8 +1094,8 @@ const PaywallPage: React.FC = () => {
                 </div>
                 <p className="text-gray-500 text-xs text-center">
                   {selectedPlan === 'annual'
-                    ? `14-day free trial, then $${annualPrice}/year. Cancel anytime.`
-                    : `14-day free trial, then $${monthlyPrice}/month. Cancel anytime.`}
+                    ? `3-day free trial, then $${annualPrice}/year. Cancel anytime.`
+                    : `3-day free trial, then $${monthlyPrice}/month. Cancel anytime.`}
                 </p>
               </div>
             )}
@@ -1136,7 +1132,7 @@ const PaywallPage: React.FC = () => {
 
             {/* Fine Print */}
             <p className="text-gray-400 text-[10px] text-center px-4 w-full leading-relaxed">
-              Free trial for 14 days, then subscription automatically renews unless cancelled at least 24-hours before the trial ends. Cancel anytime in App Store or Google Play.
+              Free trial for 3 days, then subscription automatically renews unless cancelled at least 24-hours before the trial ends. Cancel anytime in App Store or Google Play.
             </p>
 
             <div

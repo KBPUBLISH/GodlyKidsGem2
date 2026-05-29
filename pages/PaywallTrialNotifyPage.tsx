@@ -44,7 +44,7 @@ function notificationsAlreadyEnabled(): boolean {
 }
 
 /**
- * Shown after "Start 14-Day Free Trial" — explains billing reminder + optional notification opt-in.
+ * Shown after "Start 3-Day Free Trial" — explains billing reminder + optional notification opt-in.
  */
 const PaywallTrialNotifyPage: React.FC = () => {
   const navigate = useNavigate();
@@ -160,7 +160,7 @@ const PaywallTrialNotifyPage: React.FC = () => {
           </h1>
           <p className="text-[#475569] text-lg leading-relaxed">
             We&apos;ll let you know{' '}
-            <span className="font-semibold text-[#6366f1]">2 days before</span> your trial ends so there are no
+            <span className="font-semibold text-[#6366f1]">1 day before</span> your trial ends so there are no
             surprises—only blessings.
           </p>
         </div>

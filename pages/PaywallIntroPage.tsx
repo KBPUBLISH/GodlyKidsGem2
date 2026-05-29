@@ -49,14 +49,11 @@ const PaywallIntroPage: React.FC = () => {
         <div className="text-center max-w-md mx-auto space-y-8">
           <div className="space-y-4">
             <p className="text-[#64748b] text-lg sm:text-xl leading-snug">
-              We used to offer{' '}
-              <span className="relative inline-block text-[#94a3b8]">
-                <span className="line-through decoration-2 decoration-[#94a3b8]/80">7 days free</span>
-              </span>
+              Try Godly Kids Premium with a
             </p>
             <div className="relative">
               <p className="font-display font-extrabold text-4xl sm:text-5xl leading-none tracking-tight bg-gradient-to-r from-[#6366f1] via-[#8b5cf6] to-[#ec4899] bg-clip-text text-transparent">
-                14 days free
+                3-day free trial
               </p>
               <span
                 className="absolute -right-1 -top-2 text-2xl animate-bounce select-none"

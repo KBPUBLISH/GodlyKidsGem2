@@ -173,7 +173,7 @@ export const TUTORIAL_STEP_CONFIG: Record<TutorialStep, {
   },
   paywall: {
     title: 'Start Your Adventure',
-    description: 'Start Free 14 Day Adventure - only $3.33/mo with annual plan (50% off)',
+    description: 'Start Free 3 Day Adventure - only $3.33/mo with annual plan (50% off)',
     requiresClick: true,
   },
   complete: { title: '', description: '' },

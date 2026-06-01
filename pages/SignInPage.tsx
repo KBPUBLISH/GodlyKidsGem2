@@ -42,7 +42,9 @@ const hydrateProfileFromCloud = async (email: string): Promise<boolean> => {
       equippedShip: cloud.equippedShip ?? existing.equippedShip,
       equippedWheel: cloud.equippedWheel ?? existing.equippedWheel,
       equippedPet: cloud.equippedPet ?? existing.equippedPet,
-      unlockedVoices: cloud.unlockedVoices ?? existing.unlockedVoices,
+      unlockedVoices: [
+        ...new Set([...(existing.unlockedVoices ?? []), ...(cloud.unlockedVoices ?? [])]),
+      ],
     };
 
     localStorage.setItem(USER_DATA_KEY, JSON.stringify(merged));

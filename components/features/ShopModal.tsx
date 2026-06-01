@@ -432,12 +432,12 @@ const ShopModal: React.FC<ShopModalProps> = ({ isOpen, onClose, initialTab, init
     const {
         coins,
         purchaseItem,
+        purchaseVoice,
         equipItem,
         unequipItem,
         isOwned,
         isSubscribed,
         isVoiceUnlocked,
-        unlockVoice,
         equippedFrame,
         equippedAvatar,
         equippedHat,
@@ -469,26 +469,24 @@ const ShopModal: React.FC<ShopModalProps> = ({ isOpen, onClose, initialTab, init
 
     const handleBuy = async (item: ShopItem) => {
         if (item.type === 'voice') {
-            if (coins >= item.price) {
-                purchaseItem(item);
-                unlockVoice(item.value);
-                // Persist to backend so unlock survives refresh and syncs across devices
-                const userId = authService.getUserIdForBackend();
-                if (userId) {
-                    try {
-                        const base = getMonthlyBookBaseUrl();
-                        const res = await fetch(`${base}/voices/unlock`, {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ userId, voiceId: item.value }),
-                        });
-                        const data = await res.json();
-                        if (!data.success && !data.alreadyUnlocked) {
-                            console.warn('Shop: voice unlock API failed', data);
-                        }
-                    } catch (err) {
-                        console.warn('Shop: voice unlock API error', err);
+            const success = purchaseVoice(item);
+            if (!success) return;
+            // Persist to backend so unlock survives refresh and syncs across devices
+            const userId = authService.getUserIdForBackend();
+            if (userId) {
+                try {
+                    const base = getMonthlyBookBaseUrl();
+                    const res = await fetch(`${base}/voices/unlock`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ userId, voiceId: item.value }),
+                    });
+                    const data = await res.json();
+                    if (!data.success && !data.alreadyUnlocked) {
+                        console.warn('Shop: voice unlock API failed', data);
                     }
+                } catch (err) {
+                    console.warn('Shop: voice unlock API error', err);
                 }
             }
         } else {
@@ -1055,9 +1053,15 @@ const ShopModal: React.FC<ShopModalProps> = ({ isOpen, onClose, initialTab, init
 
                 {/* Preview Area (Live updates) */}
                 <div
-                    className={`w-full relative shrink-0 shadow-inner overflow-hidden flex flex-col items-center transition-all duration-500 ease-in-out bg-cover bg-center ${(isMenuMinimized || (isBuilderMode && selectedPart)) ? 'flex-1' : 'h-[16rem] shrink-0'}`}
+                    className={`w-full relative shadow-inner overflow-hidden flex flex-col items-center transition-all duration-500 ease-in-out bg-cover bg-center ${
+                        isBuilderMode && selectedPart
+                            ? 'flex-1 min-h-0 shrink'
+                            : isMenuMinimized
+                                ? 'flex-1 min-h-0'
+                                : 'h-[16rem] shrink-0'
+                    }`}
                     style={{ backgroundImage: `url('/assets/images/dressing-room.jpg')` }}
-                    onClick={toggleDrawerMinimized}
+                    onClick={isBuilderMode && selectedPart ? undefined : toggleDrawerMinimized}
                 >
 
                     {/* Toolbar: Builder Mode & Play */}
@@ -1177,7 +1181,10 @@ const ShopModal: React.FC<ShopModalProps> = ({ isOpen, onClose, initialTab, init
                     </div>
                 </div>
 
-                {/* Drawer handle — z-60 so it stays above builder controls overlay */}
+                {/* Drawer + shop menu — hidden while adjusting a part so controls aren't clipped */}
+                {!(isBuilderMode && selectedPart) && (
+                <>
+                {/* Drawer handle */}
                 <div
                     ref={drawerHandleRef}
                     className="relative z-[60] -mt-6 shrink-0 bg-[#f3e5ab] border-t-4 border-[#8B4513] rounded-t-3xl shadow-[0_-4px_20px_rgba(0,0,0,0.15)]"
@@ -1198,7 +1205,7 @@ const ShopModal: React.FC<ShopModalProps> = ({ isOpen, onClose, initialTab, init
                 {/* Menu Container - tabs + items */}
                 <div 
                     ref={menuContainerRef}
-                    className={`flex flex-col bg-[#f3e5ab] relative z-20 shadow-[0_-10px_40px_rgba(0,0,0,0.4)] transition-all duration-500 ease-in-out ${(isMenuMinimized || (isBuilderMode && selectedPart)) ? 'h-auto shrink-0' : 'flex-1 min-h-0'}`}
+                    className={`flex flex-col bg-[#f3e5ab] relative z-20 shadow-[0_-10px_40px_rgba(0,0,0,0.4)] transition-all duration-500 ease-in-out ${isMenuMinimized ? 'h-auto shrink-0' : 'flex-1 min-h-0'}`}
                 >
 
                     {/* Tabs Scroller - Updated visual cues */}
@@ -1260,7 +1267,7 @@ const ShopModal: React.FC<ShopModalProps> = ({ isOpen, onClose, initialTab, init
 
                     {/* Scrollable Items Content - Touch-friendly scrolling */}
                     <div 
-                        className={`overflow-y-auto overscroll-contain p-4 bg-[#f3e5ab] relative transition-all duration-500 ${(isMenuMinimized || (isBuilderMode && selectedPart)) ? 'h-0 p-0 opacity-0 pointer-events-none' : 'flex-1 opacity-100'}`}
+                        className={`overflow-y-auto overscroll-contain p-4 bg-[#f3e5ab] relative transition-all duration-500 ${isMenuMinimized ? 'h-0 p-0 opacity-0 pointer-events-none' : 'flex-1 opacity-100'}`}
                         style={{ WebkitOverflowScrolling: 'touch' }}
                     >
                         {activeTab === 'saves' ? (
@@ -1296,12 +1303,17 @@ const ShopModal: React.FC<ShopModalProps> = ({ isOpen, onClose, initialTab, init
                         )}
                     </div>
                 </div>
+                </>
+                )}
 
-                {/* Builder Controls Overlay */}
+                {/* Builder part adjustment controls — in flex flow (not absolute) so nothing is clipped */}
                 {isBuilderMode && selectedPart && (
-                    <div className="absolute bottom-0 left-0 right-0 bg-[#2b1d13] border-t-4 border-[#8B4513] p-4 rounded-t-3xl z-50 animate-in slide-in-from-bottom-10 shadow-[0_-10px_40px_rgba(0,0,0,0.5)]">
+                    <div
+                        className="shrink-0 bg-[#2b1d13] border-t-4 border-[#8B4513] px-3 pt-3 rounded-t-3xl z-50 animate-in slide-in-from-bottom-10 shadow-[0_-10px_40px_rgba(0,0,0,0.5)]"
+                        style={{ paddingBottom: 'max(1rem, var(--safe-area-bottom, 0px))' }}
+                    >
 
-                        <div className="flex justify-between items-center mb-3">
+                        <div className="flex justify-between items-center mb-2">
                             <div className="flex items-center gap-2">
                                 <div className="bg-[#FFD700] w-2 h-5 rounded-full"></div>
                                 <span className="text-white font-display font-bold text-sm uppercase tracking-wider">
@@ -1316,7 +1328,8 @@ const ShopModal: React.FC<ShopModalProps> = ({ isOpen, onClose, initialTab, init
                             </button>
                         </div>
 
-                        <div className="flex justify-between items-start gap-1.5 px-0">
+                        <div className="overflow-x-auto overscroll-x-contain -mx-1 px-1">
+                        <div className="flex justify-center items-start gap-2 min-w-max mx-auto pb-1">
                             <div className="flex flex-col gap-0.5 items-center flex-shrink-0">
                                 <span className="text-[9px] text-[#eecaa0]/60 font-bold uppercase tracking-wider">Move</span>
                                 <div className="grid grid-cols-2 gap-0.5">
@@ -1391,6 +1404,7 @@ const ShopModal: React.FC<ShopModalProps> = ({ isOpen, onClose, initialTab, init
                                     </div>
                                 </>
                             )}
+                        </div>
                         </div>
                     </div>
                 )}

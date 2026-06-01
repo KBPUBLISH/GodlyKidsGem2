@@ -131,6 +131,7 @@ interface UserContextType {
   setEquippedAvatar: (url: string) => void; // Exposed for onboarding
 
   purchaseItem: (item: ShopItem) => boolean;
+  purchaseVoice: (item: ShopItem) => boolean;
   equipItem: (type: ShopItem['type'], value: string) => void;
   unequipItem: (type: ShopItem['type']) => void;
   isOwned: (id: string) => boolean;
@@ -204,6 +205,7 @@ const UserContext = createContext<UserContextType>({
   swapArms: () => {},
   setEquippedAvatar: () => {},
   purchaseItem: () => false,
+  purchaseVoice: () => false,
   equipItem: () => {},
   unequipItem: () => {},
   isOwned: () => false,
@@ -222,6 +224,33 @@ export const useUser = () => useContext(UserContext);
 
 const STORAGE_KEY = 'godly_kids_data_v6'; // Version bump for saves
 const FREE_KID_LIMIT = 1; // Free users can only have 1 kid profile
+const DEFAULT_OWNED_ITEMS = ['f1', 'anim1', 'bg1'];
+
+/** Merge sparse cloud kid rows into local profiles without wiping shop/avatar progress. */
+const mergeCloudKids = (
+  localKids: Array<{ id: string; name: string; [key: string]: unknown }>,
+  cloudKids: CloudProfile['kids']
+) => {
+  if (!cloudKids?.length) return localKids;
+  if (!localKids.length) return cloudKids as typeof localKids;
+
+  const merged = localKids.map((localKid) => {
+    const cloudKid = cloudKids.find(
+      (ck) => ck.id === localKid.id || (ck.name && ck.name === localKid.name)
+    );
+    if (!cloudKid) return localKid;
+    return { ...cloudKid, ...localKid, name: cloudKid.name ?? localKid.name, age: cloudKid.age ?? localKid.age };
+  });
+
+  for (const cloudKid of cloudKids) {
+    const exists = merged.some(
+      (lk) => lk.id === cloudKid.id || (cloudKid.name && lk.name === cloudKid.name)
+    );
+    if (!exists) merged.push(cloudKid as (typeof localKids)[number]);
+  }
+
+  return merged;
+};
 
 export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   
@@ -484,10 +513,15 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
             setParentName(cloudProfile.parentName);
           }
           
-          // Load kid profiles - cloud data takes priority
+          // Merge kid profiles — cloud payloads are sparse; never wipe local shop/avatar data
           if (cloudProfile.kids && cloudProfile.kids.length > 0) {
-            console.log(`☁️ Loading ${cloudProfile.kids.length} kid profile(s) from cloud`);
-            setKids(cloudProfile.kids);
+            console.log(`☁️ Merging ${cloudProfile.kids.length} kid profile(s) from cloud`);
+            setKids((prev) => mergeCloudKids(prev, cloudProfile.kids));
+          }
+
+          // Merge purchased avatar/shop items from cloud
+          if (cloudProfile.unlockedAvatarItems && cloudProfile.unlockedAvatarItems.length > 0) {
+            setOwnedItems((prev) => [...new Set([...prev, ...cloudProfile.unlockedAvatarItems])]);
           }
           
           // Load equipped items
@@ -504,10 +538,10 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
             setEquippedPet(cloudProfile.equippedPet);
           }
           
-          // Load unlocked items - these are account progress, MUST be preserved
+          // Merge unlocked voices — never replace local purchases with a stale cloud list
           if (cloudProfile.unlockedVoices && cloudProfile.unlockedVoices.length > 0) {
-            console.log(`☁️ Loading ${cloudProfile.unlockedVoices.length} unlocked voice(s) from cloud`);
-            setUnlockedVoices(cloudProfile.unlockedVoices);
+            console.log(`☁️ Merging ${cloudProfile.unlockedVoices.length} unlocked voice(s) from cloud`);
+            setUnlockedVoices((prev) => [...new Set([...prev, ...cloudProfile.unlockedVoices])]);
           }
           
           // Load default voice if set
@@ -518,18 +552,11 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
           console.log('☁️ Profile loaded from cloud successfully!');
         }
         
-        // ALWAYS sync coins - take the HIGHER value to prevent coin loss
-        if (cloudProfile.coins && cloudProfile.coins > coins) {
-          const difference = cloudProfile.coins - coins;
-          console.log(`☁️ Syncing ${difference} coins from cloud (cloud: ${cloudProfile.coins}, local: ${coins})`);
+        // Only overwrite local coins on forced sign-in sync (new device).
+        // Passive loads must not restore a stale cloud balance after local purchases.
+        if (forceLoad && cloudProfile.coins !== undefined) {
+          console.log(`☁️ Applying cloud coin balance after sign-in: ${cloudProfile.coins}`);
           setCoins(cloudProfile.coins);
-          setCoinTransactions(prev => [{
-            id: `cloud-sync-${Date.now()}`,
-            amount: difference,
-            reason: 'Synced from cloud',
-            source: 'referral',
-            timestamp: Date.now()
-          }, ...prev]);
         }
       } else {
         console.log('☁️ No cloud profile found for this email');
@@ -547,7 +574,7 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
       console.warn('☁️ Failed to sync profile from cloud:', error);
       setHasLoadedFromCloud(true);
     }
-  }, [coins, setParentName, setKids, setEquippedAvatar, setEquippedShip, setEquippedWheel, setEquippedPet, setUnlockedVoices, setCoins, setCoinTransactions]);
+  }, [setParentName, setKids, setEquippedAvatar, setEquippedShip, setEquippedWheel, setEquippedPet, setUnlockedVoices, setOwnedItems, setCoins]);
   
   // Load from cloud on initial mount if already signed in
   useEffect(() => {
@@ -661,6 +688,46 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
     
     console.log('💾 Saving user data:', { parentName, kidsCount: kids.length, kidNames: kids.map(k => k.name) });
+
+    // Inline active profile economy + avatar into the kid row so reload never loses shop progress
+    const kidsForSave =
+      currentProfileId === null
+        ? kids
+        : kids.map((kid) =>
+            kid.id === currentProfileId
+              ? {
+                  ...kid,
+                  coins,
+                  coinTransactions,
+                  ownedItems,
+                  unlockedVoices,
+                  redeemedCodes,
+                  avatar: equippedAvatar,
+                  frame: equippedFrame,
+                  hat: equippedHat,
+                  body: equippedBody,
+                  leftArm: equippedLeftArm,
+                  rightArm: equippedRightArm,
+                  legs: equippedLegs,
+                  animation: equippedAnimation,
+                  leftArmRotation: equippedLeftArmRotation,
+                  rightArmRotation: equippedRightArmRotation,
+                  legsRotation: equippedLegsRotation,
+                  leftArmOffset,
+                  rightArmOffset,
+                  legsOffset,
+                  headOffset,
+                  bodyOffset,
+                  hatOffset,
+                  leftArmScale,
+                  rightArmScale,
+                  legsScale,
+                  headScale,
+                  bodyScale,
+                  hatScale,
+                }
+              : kid
+          );
     
     const stateToSave = {
       coins,
@@ -670,7 +737,7 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
       ownedItems,
       unlockedVoices,
       parentName,
-      kids,
+      kids: kidsForSave,
       currentProfileId,
       equippedAvatar,
       equippedFrame,
@@ -723,6 +790,7 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
         equippedShip,
         equippedWheel,
         equippedPet,
+        unlockedAvatarItems: ownedItems,
         unlockedVoices,
         defaultVoiceId: defaultVoice || null,
       };
@@ -1074,9 +1142,63 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   // Track if this is the initial mount to avoid unnecessary saves
   const isInitialMount = useRef(true);
+  const isInitialEconomyMount = useRef(true);
+  const hasHydratedActiveProfile = useRef(false);
   
   // Flag to prevent persistence effect from writing after signout/reset
   const isResetting = useRef(false);
+
+  // On first load, hydrate wallet + avatar from the active kid profile (not stale root defaults)
+  useEffect(() => {
+    if (hasHydratedActiveProfile.current) return;
+    hasHydratedActiveProfile.current = true;
+
+    if (currentProfileId === null) {
+      if (parentEconomyData) applyEconomyState(parentEconomyData);
+      if (parentAvatarData) applyAvatarState(parentAvatarData);
+      return;
+    }
+
+    const kid = kids.find((k) => k.id === currentProfileId);
+    if (!kid) return;
+
+    applyEconomyState({
+      coins: Math.min(kid.coins ?? coins, coins),
+      coinTransactions: kid.coinTransactions?.length ? kid.coinTransactions : coinTransactions,
+      ownedItems: [...new Set([...(kid.ownedItems ?? DEFAULT_OWNED_ITEMS), ...ownedItems])],
+      unlockedVoices: [...new Set([...(kid.unlockedVoices ?? []), ...unlockedVoices])],
+      redeemedCodes: [...new Set([...(kid.redeemedCodes ?? []), ...redeemedCodes])],
+    });
+
+    if (kid.avatar !== undefined) {
+      applyAvatarState({
+        avatar: kid.avatar || kid.avatarSeed || equippedAvatar || '/avatars/heads/head-1.png',
+        frame: kid.frame || equippedFrame || 'border-[#8B4513]',
+        hat: kid.hat ?? equippedHat ?? null,
+        body: kid.body ?? equippedBody ?? null,
+        leftArm: kid.leftArm ?? equippedLeftArm ?? null,
+        rightArm: kid.rightArm ?? equippedRightArm ?? null,
+        legs: kid.legs ?? equippedLegs ?? null,
+        animation: kid.animation || equippedAnimation || 'anim-breathe',
+        leftArmRotation: kid.leftArmRotation ?? equippedLeftArmRotation ?? 0,
+        rightArmRotation: kid.rightArmRotation ?? equippedRightArmRotation ?? 0,
+        legsRotation: kid.legsRotation ?? equippedLegsRotation ?? 0,
+        leftArmOffset: kid.leftArmOffset ?? leftArmOffset ?? { x: 0, y: 0 },
+        rightArmOffset: kid.rightArmOffset ?? rightArmOffset ?? { x: 0, y: 0 },
+        legsOffset: kid.legsOffset ?? legsOffset ?? { x: 0, y: 0 },
+        headOffset: kid.headOffset ?? headOffset ?? { x: 0, y: 0 },
+        bodyOffset: kid.bodyOffset ?? bodyOffset ?? { x: 0, y: 0 },
+        hatOffset: kid.hatOffset ?? hatOffset ?? { x: 0, y: 0 },
+        leftArmScale: kid.leftArmScale ?? leftArmScale ?? 1,
+        rightArmScale: kid.rightArmScale ?? rightArmScale ?? 1,
+        legsScale: kid.legsScale ?? legsScale ?? 1,
+        headScale: kid.headScale ?? headScale ?? 1,
+        bodyScale: kid.bodyScale ?? bodyScale ?? 1,
+        hatScale: kid.hatScale ?? hatScale ?? 1,
+      });
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Auto-save avatar changes to current profile (with debounce to avoid excessive saves)
   useEffect(() => {
@@ -1100,6 +1222,28 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
     leftArmScale, rightArmScale, legsScale, headScale, bodyScale, hatScale, legsSpread,
     currentProfileId,
     saveCurrentProfileAvatar
+  ]);
+
+  // Auto-save economy (coins, purchases, voices) to the active profile
+  useEffect(() => {
+    if (isInitialEconomyMount.current) {
+      isInitialEconomyMount.current = false;
+      return;
+    }
+
+    const timeoutId = setTimeout(() => {
+      saveCurrentProfileEconomy();
+    }, 100);
+
+    return () => clearTimeout(timeoutId);
+  }, [
+    coins,
+    coinTransactions,
+    ownedItems,
+    unlockedVoices,
+    redeemedCodes,
+    currentProfileId,
+    saveCurrentProfileEconomy,
   ]);
 
   const switchProfile = (profileId: string | null) => {
@@ -1222,6 +1366,10 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (savedDefaultVoice === voiceId) {
       return true;
     }
+
+    if (ownedItems.includes(`voice-${voiceId}`)) {
+      return true;
+    }
     
     return unlockedVoices.includes(voiceId);
   };
@@ -1231,9 +1379,36 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (coins >= item.price) {
       setCoins(prev => prev - item.price);
       setOwnedItems(prev => [...prev, item.id]);
+      setCoinTransactions(prev => [{
+        id: Date.now().toString(),
+        amount: -item.price,
+        reason: `Purchased ${item.name}`,
+        source: 'purchase',
+        timestamp: Date.now(),
+      }, ...prev].slice(0, 100));
       return true;
     }
     return false;
+  };
+
+  /** Spend coins, mark owned, and unlock a narrator voice in one update. */
+  const purchaseVoice = (item: ShopItem): boolean => {
+    if (item.type !== 'voice') return false;
+    if (isVoiceUnlocked(item.value)) return true;
+    if (coins < item.price) return false;
+
+    setCoins(prev => prev - item.price);
+    setOwnedItems(prev => (prev.includes(item.id) ? prev : [...prev, item.id]));
+    setUnlockedVoices(prev => (prev.includes(item.value) ? prev : [...prev, item.value]));
+    setCoinTransactions(prev => [{
+      id: Date.now().toString(),
+      amount: -item.price,
+      reason: `Purchased voice: ${item.name}`,
+      source: 'purchase',
+      timestamp: Date.now(),
+    }, ...prev].slice(0, 100));
+    console.log(`🎤 Voice purchased: ${item.name} (${item.value})`);
+    return true;
   };
 
   const equipItem = (type: ShopItem['type'], value: string) => {
@@ -1514,6 +1689,7 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
       currentProfileId,
       switchProfile,
       purchaseItem,
+      purchaseVoice,
       equipItem,
       unequipItem,
       isOwned,

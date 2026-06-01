@@ -4841,7 +4841,7 @@ const BookReaderPage: React.FC = () => {
                     // Lock background in place - prevent overscroll/bounce
                     overscrollBehavior: 'none',
                     // For web view pages, allow all touch actions so iframe can receive events
-                    touchAction: currentPage?.isWebViewPage ? 'auto' : 'pan-x',
+                    touchAction: currentPage?.isWebViewPage ? 'auto' : 'pan-x pan-y',
                 }}
                 onClick={currentPage?.isWebViewPage ? undefined : handleBackgroundTap}
                 onTouchStart={currentPage?.isWebViewPage ? undefined : handleTouchStart}

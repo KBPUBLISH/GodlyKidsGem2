@@ -348,30 +348,33 @@ export const BookPageRenderer: React.FC<BookPageRendererProps> = ({
         };
     }, [page.id, scrollMaxH, scrollMidH]);
 
-    // Swipe detection for scroll height changes
+    // Swipe detection for scroll height changes (handle + pull-tab only — not whole page)
     const touchStartY = useRef<number>(0);
     const touchEndY = useRef<number>(0);
-    
+
+    const applyScrollPanelGesture = (deltaY: number) => {
+        const minSwipeDistance = 50;
+        if (Math.abs(deltaY) <= minSwipeDistance || !onScrollStateChange) return;
+        if (deltaY > 0) {
+            const newState: ScrollState =
+                scrollState === 'hidden' ? 'mid' : scrollState === 'mid' ? 'max' : 'max';
+            onScrollStateChange(newState);
+        } else {
+            const newState: ScrollState =
+                scrollState === 'max' ? 'mid' : scrollState === 'mid' ? 'hidden' : 'hidden';
+            onScrollStateChange(newState);
+        }
+    };
+
     const handleScrollTouchStart = (e: React.TouchEvent) => {
+        e.stopPropagation();
         touchStartY.current = e.touches[0].clientY;
     };
-    
+
     const handleScrollTouchEnd = (e: React.TouchEvent) => {
+        e.stopPropagation();
         touchEndY.current = e.changedTouches[0].clientY;
-        const deltaY = touchStartY.current - touchEndY.current;
-        const minSwipeDistance = 50; // Minimum distance for a swipe
-        
-        if (Math.abs(deltaY) > minSwipeDistance && onScrollStateChange) {
-            if (deltaY > 0) {
-                // Swipe up - increase scroll height
-                const newState: ScrollState = scrollState === 'hidden' ? 'mid' : scrollState === 'mid' ? 'max' : 'max';
-                onScrollStateChange(newState);
-            } else {
-                // Swipe down - decrease scroll height
-                const newState: ScrollState = scrollState === 'max' ? 'mid' : scrollState === 'mid' ? 'hidden' : 'hidden';
-                onScrollStateChange(newState);
-            }
-        }
+        applyScrollPanelGesture(touchStartY.current - touchEndY.current);
     };
     
     const handleScrollClick = (e: React.MouseEvent) => {
@@ -580,13 +583,11 @@ export const BookPageRenderer: React.FC<BookPageRendererProps> = ({
             style={{
                 // Lock background in place - prevent iOS overscroll/bounce
                 overscrollBehavior: 'none',
-                // pan-y only: vertical swipes change scroll state here; horizontal swipes bubble to parent for page turn (critical for Android / kids monthly books)
-                touchAction: 'pan-y',
+                // Let text boxes own vertical scroll; page turns stay on horizontal swipes in parent
+                touchAction: 'manipulation',
                 position: 'relative',
             }}
             onClick={handleScrollClick}
-            onTouchStart={handleScrollTouchStart}
-            onTouchEnd={handleScrollTouchEnd}
         >
             {/* Hidden audio element for background audio (extracted video audio or ambient sound) */}
             {/* This plays as separate <audio> so it can layer with TTS - unlike video audio on iOS */}
@@ -1000,6 +1001,44 @@ export const BookPageRenderer: React.FC<BookPageRendererProps> = ({
                 </div>
             )}
 
+            {/* Resize handle — swipe here to expand/shrink panel (not on story text) */}
+            {page.scrollUrl && scrollState !== 'hidden' && onScrollStateChange && (
+                <div
+                    className="absolute left-1/2 z-[22] pointer-events-auto"
+                    style={{
+                        bottom: `calc(${currentScrollHeightNum}% + ${scrollOffset}% - 6px)`,
+                        width: 'min(72%, 280px)',
+                        height: '44px',
+                        transform: 'translateX(-50%)',
+                        touchAction: 'none',
+                    }}
+                    onTouchStart={handleScrollTouchStart}
+                    onTouchEnd={handleScrollTouchEnd}
+                    onClick={(e) => e.stopPropagation()}
+                    aria-label="Swipe to resize reading panel"
+                />
+            )}
+
+            {/* Pull tab when panel is hidden */}
+            {page.scrollUrl && scrollState === 'hidden' && onScrollStateChange && (
+                <div
+                    className="absolute bottom-0 left-0 right-0 z-[22] h-14 pointer-events-auto flex items-center justify-center"
+                    style={{ touchAction: 'none' }}
+                    onTouchStart={handleScrollTouchStart}
+                    onTouchEnd={handleScrollTouchEnd}
+                    onClick={(e) => {
+                        e.stopPropagation();
+                        onToggleScrollVisibility?.();
+                    }}
+                    aria-label="Swipe up to show reading panel"
+                >
+                    <div className="flex flex-col items-center gap-1 opacity-60">
+                        <div className="w-10 h-1 bg-white rounded-full shadow" />
+                        <span className="text-white/90 text-[9px] font-medium drop-shadow">↑ Show text</span>
+                    </div>
+                </div>
+            )}
+
             {/* Text Boxes Layer - Below swipe zone */}
             {/* Text boxes layer - z-50 to appear above play button (z-40) */}
             {/* When scroll exists, clip text to scroll bounds (top AND bottom) to prevent overflow */}
@@ -1071,7 +1110,9 @@ export const BookPageRenderer: React.FC<BookPageRendererProps> = ({
                                     : `${box.fontSize || 24}px`,
                                 maxHeight: textMaxHeightStyle,
                                 overflowY: 'auto',
-                                // pan-y: only vertical scroll in this box; horizontal swipes bubble to parent for page turn (fixes Android)
+                                overscrollBehavior: 'contain',
+                                WebkitOverflowScrolling: 'touch',
+                                // pan-y: vertical scroll in this box; horizontal swipes bubble to parent for page turn
                                 touchAction: 'pan-y',
                                 // Text shadow/glow for readability - color controlled by shadowColor setting
                                 textShadow: box.shadowColor === 'black'

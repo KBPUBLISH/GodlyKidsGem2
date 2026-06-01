@@ -19,7 +19,7 @@ import { useTheme, AppTheme } from '../context/ThemeContext';
 const SettingsPage: React.FC = () => {
   const navigate = useNavigate();
   const { isSubscribed, isVoiceUnlocked, setIsSubscribed, resetUser } = useUser();
-  const { sfxEnabled, toggleSfx, musicEnabled, toggleMusic, playBack } = useAudio();
+  const { sfxEnabled, toggleSfx, musicEnabled, toggleMusic, musicVolume, setMusicVolume, playBack } = useAudio();
   const { currentLanguage, setLanguage, supportedLanguages, isTranslating, t } = useLanguage();
   const { theme, setTheme } = useTheme();
   const [clonedVoices, setClonedVoices] = useState<ClonedVoice[]>([]);
@@ -297,29 +297,47 @@ const SettingsPage: React.FC = () => {
                     </div>
 
                     {/* App background music (API: Music target app-background) */}
-                    <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-3 text-[#5c2e0b] flex-1 min-w-0 pr-2">
-                            <div className="w-8 h-8 rounded-full bg-[#e1bee7] flex items-center justify-center text-[#7b1fa2] shrink-0">
-                                <Music size={18} />
+                    <div className="space-y-3">
+                        <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-3 text-[#5c2e0b] flex-1 min-w-0 pr-2">
+                                <div className="w-8 h-8 rounded-full bg-[#e1bee7] flex items-center justify-center text-[#7b1fa2] shrink-0">
+                                    <Music size={18} />
+                                </div>
+                                <div className="min-w-0">
+                                    <span className="font-bold block">{t('backgroundMusic')}</span>
+                                    <span className="text-xs text-[#8B4513]/75 leading-tight block">
+                                        Soft loop while you browse. Off during books, playlists, and lessons.
+                                    </span>
+                                </div>
                             </div>
-                            <div className="min-w-0">
-                                <span className="font-bold block">{t('backgroundMusic')}</span>
-                                <span className="text-xs text-[#8B4513]/75 leading-tight block">
-                                    Soft loop while you browse. Off during books, playlists, and lessons.
-                                </span>
-                            </div>
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    playBack();
+                                    toggleMusic();
+                                }}
+                                className={`w-12 h-7 shrink-0 rounded-full relative transition-colors duration-200 border-2 ${musicEnabled ? 'bg-[#8bc34a] border-[#689f38]' : 'bg-gray-300 border-gray-400'}`}
+                                aria-pressed={musicEnabled}
+                            >
+                                <div className={`absolute top-0.5 w-5 h-5 bg-white rounded-full shadow-sm transition-all duration-200 ${musicEnabled ? 'left-5' : 'left-0.5'}`}></div>
+                            </button>
                         </div>
-                        <button
-                            type="button"
-                            onClick={() => {
-                                playBack();
-                                toggleMusic();
-                            }}
-                            className={`w-12 h-7 shrink-0 rounded-full relative transition-colors duration-200 border-2 ${musicEnabled ? 'bg-[#8bc34a] border-[#689f38]' : 'bg-gray-300 border-gray-400'}`}
-                            aria-pressed={musicEnabled}
-                        >
-                            <div className={`absolute top-0.5 w-5 h-5 bg-white rounded-full shadow-sm transition-all duration-200 ${musicEnabled ? 'left-5' : 'left-0.5'}`}></div>
-                        </button>
+                        <div className={`flex items-center gap-3 pl-11 pr-2 ${musicEnabled ? '' : 'opacity-50'}`}>
+                            <span className="text-xs font-bold text-[#8B4513]/80 w-14 shrink-0">Volume</span>
+                            <input
+                                type="range"
+                                min={0}
+                                max={100}
+                                value={Math.round(musicVolume * 100)}
+                                disabled={!musicEnabled}
+                                onChange={(e) => setMusicVolume(Number(e.target.value) / 100)}
+                                className="flex-1 h-2 bg-[#d7ccc8] rounded-lg appearance-none cursor-pointer accent-[#7b1fa2] disabled:cursor-not-allowed"
+                                aria-label="Background music volume"
+                            />
+                            <span className="text-xs font-bold text-[#8B4513]/70 w-10 text-right tabular-nums">
+                                {Math.round(musicVolume * 100)}%
+                            </span>
+                        </div>
                     </div>
 
                     {/* Notifications Toggle */}

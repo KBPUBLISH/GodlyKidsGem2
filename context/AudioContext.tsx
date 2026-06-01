@@ -34,6 +34,7 @@ export interface Playlist {
 // Premium preview constants
 const AUDIO_PREVIEW_SECONDS = 120; // 2 minute preview for premium audio
 const STORAGE_BG_MUSIC_ENABLED = 'godlykids_bg_music_enabled';
+const STORAGE_BG_MUSIC_VOLUME = 'godlykids_bg_music_volume';
 
 interface AppBackgroundTrack {
     audioUrl: string;
@@ -115,7 +116,18 @@ export const useAudio = () => useContext(AudioContext);
 
 export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     // --- State ---
-    const [musicVolume, setMusicVolumeState] = useState(0.5);
+    const [musicVolume, setMusicVolumeState] = useState(() => {
+        try {
+            const saved = localStorage.getItem(STORAGE_BG_MUSIC_VOLUME);
+            if (saved != null) {
+                const n = parseFloat(saved);
+                if (Number.isFinite(n)) return Math.min(1, Math.max(0, n));
+            }
+        } catch {
+            /* ignore */
+        }
+        return 0.5;
+    });
     const [musicEnabled, setMusicEnabled] = useState(() => {
         try {
             return localStorage.getItem(STORAGE_BG_MUSIC_ENABLED) === 'true';
@@ -364,6 +376,14 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
             /* ignore quota / privacy mode */
         }
     }, [musicEnabled]);
+
+    useEffect(() => {
+        try {
+            localStorage.setItem(STORAGE_BG_MUSIC_VOLUME, String(musicVolume));
+        } catch {
+            /* ignore quota / privacy mode */
+        }
+    }, [musicVolume]);
 
     // App-wide background loop — dedicated element so playlists never overwrite it
     useEffect(() => {
@@ -784,7 +804,10 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         setMusicEnabled((prev) => !prev);
     }, []);
     const toggleSfx = useCallback(() => setSfxEnabled((prev) => !prev), []);
-    const setMusicVolume = useCallback((v: number) => setMusicVolumeState(v), []);
+    const setMusicVolume = useCallback((v: number) => {
+        const clamped = Math.min(1, Math.max(0, v));
+        setMusicVolumeState(clamped);
+    }, []);
     const setMusicPaused = useCallback((paused: boolean) => {
         setContentMusicPaused(paused);
     }, []);

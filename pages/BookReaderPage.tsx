@@ -195,7 +195,7 @@ const BookReaderPage: React.FC = () => {
     // Premium preview state
     const [isBookPremium, setIsBookPremium] = useState(false);
     const [showPreviewLimitModal, setShowPreviewLimitModal] = useState(false);
-    const [scrollState, setScrollState] = useState<ScrollState>('max'); // Default to max (60%) - matches portal editing view; kid monthly books start at 'mid' (25%)
+    const [scrollState, setScrollState] = useState<ScrollState>('mid'); // Default mid (30%) — matches portal reader preview
     const [isKidMonthlyBook, setIsKidMonthlyBook] = useState(false);
     const [bookTitle, setBookTitle] = useState<string>('Book');
     const [bookOrientation, setBookOrientation] = useState<'portrait' | 'landscape'>('portrait');
@@ -229,8 +229,8 @@ const BookReaderPage: React.FC = () => {
     const introVideoRef = useRef<HTMLVideoElement>(null);
 
     // Keep ref in sync with state
-    const scrollStateRef = useRef<ScrollState>('max');
-    const scrollBeforeHideRef = useRef<ScrollState>('max');
+    const scrollStateRef = useRef<ScrollState>('mid');
+    const scrollBeforeHideRef = useRef<ScrollState>('mid');
     useEffect(() => {
         scrollStateRef.current = scrollState;
     }, [scrollState]);
@@ -1214,13 +1214,8 @@ const BookReaderPage: React.FC = () => {
                     const orientation = rawData?.orientation || (book as any)?.orientation || 'portrait';
                     setBookOrientation(orientation);
                     console.log('📖 Book orientation:', orientation);
-                    // Kid monthly (Create Your Story) books: start scroll at 25% height
                     const kidMonthly = rawData?.bookType === 'kids_monthly' || (book as any)?.isUserCreated === true;
                     setIsKidMonthlyBook(!!kidMonthly);
-                    if (kidMonthly) {
-                        setScrollState('mid');
-                        scrollStateRef.current = 'mid';
-                    }
                     // Check if book should show character overlay (never for Create Your Story: characters are already in the art)
                     const hasCharacterOverlay = !kidMonthly && (rawData?.showCharacterOverlay || (book as any)?.showCharacterOverlay || false);
                     setShowCharacterOverlay(hasCharacterOverlay);
@@ -2123,9 +2118,10 @@ const BookReaderPage: React.FC = () => {
         e.stopPropagation();
         if (isPageTurning) return;
         
-        // Auto-play if TTS has been started at least once this session
-        const shouldAutoPlayOnSwipe = hasStartedTTSRef.current;
-        stopAudio();
+        // Auto-play if user had narration going and did not explicitly stop it
+        const shouldAutoPlayOnSwipe =
+            hasStartedTTSRef.current && !userStoppedPlaybackRef.current;
+        stopAudio('transition');
         
         // Check preview limit for premium books (3 pages allowed)
         const nextIndex = currentPageIndex + 1;
@@ -2224,8 +2220,10 @@ const BookReaderPage: React.FC = () => {
         if (isPageTurning) return;
         
         // Check if TTS was playing before we stop it (for auto-play on prev page)
-        const wasPlayingTTS = playing || playingRef.current || isPlayingMultiSegmentRef.current;
-        stopAudio();
+        const shouldAutoPlayOnPrev =
+            (playing || playingRef.current || isPlayingMultiSegmentRef.current) &&
+            !userStoppedPlaybackRef.current;
+        stopAudio('transition');
         if (currentPageIndex > 0) {
             // Preserve scroll state when turning pages manually - use ref to get latest value
             const currentScrollState = scrollStateRef.current;
@@ -2255,7 +2253,7 @@ const BookReaderPage: React.FC = () => {
                 }
                 
                 // Auto-play narration after manual swipe back (only if TTS was playing before)
-                if (wasPlayingTTS) {
+                if (shouldAutoPlayOnPrev) {
                     setTimeout(() => {
                         const newPage = pages[prevIndex];
                         const contentTextBoxes = newPage?.content?.textBoxes;
@@ -2380,13 +2378,11 @@ const BookReaderPage: React.FC = () => {
             if (diffX > 0) {
                 // Swipe left - next page
                 if (currentPageIndex < pages.length - 1) {
-                    stopAudio();
                     handleNext({ stopPropagation: () => { } } as React.MouseEvent);
                 }
             } else {
                 // Swipe right - previous page
                 if (currentPageIndex > 0) {
-                    stopAudio();
                     handlePrev({ stopPropagation: () => { } } as React.MouseEvent);
                 }
             }
@@ -2514,7 +2510,7 @@ const BookReaderPage: React.FC = () => {
         if (autoPlayMode || autoPlayModeRef.current) {
             // Turn to next page if available
             if (currentPageIndex < pages.length - 1) {
-                stopAudio();
+                stopAudio('transition');
                 handleNext({ stopPropagation: () => { } } as React.MouseEvent);
                 // NOTE: Do NOT force the scroll/reading panel to 'hidden' here. Doing so
                 // minimized the panel and that hidden state was then preserved on every
@@ -2527,11 +2523,13 @@ const BookReaderPage: React.FC = () => {
         }
     };
 
-    const stopAudio = () => {
-        console.log('🛑 stopAudio called');
-        
-        // Mark that user explicitly stopped playback - prevents auto-resume from pending listeners
-        userStoppedPlaybackRef.current = true;
+    const stopAudio = (reason: 'user' | 'transition' = 'user') => {
+        console.log('🛑 stopAudio called', reason);
+
+        // Only mark user-stopped when they explicitly pause/stop — not on page turns
+        if (reason === 'user') {
+            userStoppedPlaybackRef.current = true;
+        }
         
         // Stop single-track audio using ref (more reliable than state)
         if (currentAudioRef.current) {

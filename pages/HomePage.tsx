@@ -1625,9 +1625,9 @@ const HomePage: React.FC = () => {
                 if (isAmazonBook && amazonUrl) {
                   // Track the click for analytics
                   ApiService.trackAmazonBookClick(id);
-                  // Amazon refuses iframe embedding (X-Frame-Options: sameorigin),
-                  // and affiliate links must leave the in-app webview anyway.
-                  // Open in the system browser / Despia in-app browser instead.
+                  // Opens in the Despia native in-app browser so the user stays in
+                  // the app. This is a native browser overlay (not an iframe), so
+                  // Amazon's X-Frame-Options does not block it. On web it opens a tab.
                   DespiaService.openExternalUrl(amazonUrl);
                 } else if (isPlaylist) {
                   navigate(`/audio/playlist/${id}`);

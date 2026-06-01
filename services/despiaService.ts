@@ -110,12 +110,18 @@ export const DespiaService = {
   },
 
   /**
-   * Open an external URL outside the SPA.
+   * Open an external URL.
    *
    * - In Despia native: window.open(url, '_blank') is intercepted by the runtime
-   *   and routed to the in-app browser (or Safari for whitelisted payment domains).
+   *   and routed to the native in-app browser, so the user stays inside the app
+   *   (a SFSafariViewController / Chrome Custom Tab — NOT an iframe, so sites that
+   *   block iframe embedding like Amazon still load fine). Only domains explicitly
+   *   whitelisted in Despia project settings are forced out to Safari (for payment
+   *   compliance). CRITICAL: do NOT pass a window-features string here — on iOS
+   *   WKWebView, window.open(url, '_blank', 'noopener,noreferrer') is treated as a
+   *   popup and handed off to the system browser, which kicks the user OUT of the app.
    *   Ref: https://npm.despia.com/default-guide/native-features/external-link-handling
-   * - On web: opens in a new tab. With noopener,noreferrer for safety.
+   * - On web: opens in a new tab with noopener,noreferrer for safety.
    *
    * IMPORTANT: must be called synchronously from a user gesture (click handler),
    * otherwise iOS/Safari pop-up blockers will reject it.
@@ -123,7 +129,12 @@ export const DespiaService = {
   openExternalUrl: (url: string): void => {
     if (!url) return;
     try {
-      window.open(url, '_blank', 'noopener,noreferrer');
+      if (isDespia()) {
+        // Let the Despia runtime intercept and open the in-app browser.
+        window.open(url, '_blank');
+      } else {
+        window.open(url, '_blank', 'noopener,noreferrer');
+      }
     } catch (err) {
       console.warn('Failed to open external URL, falling back to location.href:', err);
       try { window.location.href = url; } catch {}

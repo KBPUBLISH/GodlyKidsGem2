@@ -822,18 +822,18 @@ const ShopModal: React.FC<ShopModalProps> = ({ isOpen, onClose, initialTab, init
                         </>
                     )}
                     {isWingPair(item) && (
-                        <div className="flex items-center justify-center w-full h-full gap-0.5">
+                        <div className="flex items-center justify-center w-full h-full">
                             <AvatarPartImage
                                 src={item.value}
                                 alt="left wing"
-                                className="h-full w-1/2 object-contain p-0.5"
+                                className="h-full w-1/2 object-contain scale-150"
                                 thumb
                                 loading="lazy"
                             />
                             <AvatarPartImage
                                 src={item.pairValue}
                                 alt="right wing"
-                                className="h-full w-1/2 object-contain p-0.5"
+                                className="h-full w-1/2 object-contain scale-150"
                                 thumb
                                 loading="lazy"
                             />
@@ -1114,7 +1114,7 @@ const ShopModal: React.FC<ShopModalProps> = ({ isOpen, onClose, initialTab, init
                             transform: isBuilderMode && selectedPart
                                 ? 'scale(0.8)'
                                 : isMenuMinimized
-                                    ? 'scale(1.25)'
+                                    ? 'scale(1.25) translateY(-1.75rem)'
                                     : 'scale(0.5)',
                             marginTop: isBuilderMode && selectedPart
                                 ? '4rem'

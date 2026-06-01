@@ -102,8 +102,10 @@ router.post('/sync', async (req, res) => {
             user.referredBy = referredBy;
         }
 
-        // Update kid profiles (always overwrite with latest from client)
-        if (kidProfiles && Array.isArray(kidProfiles)) {
+        // Update kid profiles. SAFETY: never wipe existing kids with an empty list.
+        // A fresh/secondary device can send an empty array before it has loaded the
+        // cloud profile — replacing here would erase kids set up on another device.
+        if (kidProfiles && Array.isArray(kidProfiles) && kidProfiles.length > 0) {
             user.kidProfiles = kidProfiles.map(kid => ({
                 name: kid.name,
                 age: kid.age,
@@ -111,6 +113,8 @@ router.post('/sync', async (req, res) => {
                 createdAt: kid.createdAt || new Date()
             }));
             console.log(`👶 Synced ${kidProfiles.length} kid profile(s) for ${user.email || userId}`);
+        } else if (kidProfiles && Array.isArray(kidProfiles) && kidProfiles.length === 0 && (user.kidProfiles?.length || 0) > 0) {
+            console.log(`🛡️ Ignored empty kidProfiles for ${user.email || userId} — keeping ${user.kidProfiles.length} existing kid(s)`);
         }
 
         // Update platform if provided
@@ -452,8 +456,10 @@ router.post('/profile/save', async (req, res) => {
         if (unlockedVoices !== undefined) user.unlockedVoices = unlockedVoices;
         if (defaultVoiceId !== undefined) user.defaultVoiceId = defaultVoiceId;
         
-        // Update kid profiles (full replacement)
-        if (kids && Array.isArray(kids)) {
+        // Update kid profiles. SAFETY: never wipe existing kids with an empty list.
+        // A fresh/secondary device can send an empty array before it has loaded the
+        // cloud profile — replacing here would erase kids set up on another device.
+        if (kids && Array.isArray(kids) && kids.length > 0) {
             user.kidProfiles = kids.map(kid => ({
                 frontendId: kid.id || kid._id || kid.frontendId,
                 name: kid.name,
@@ -461,6 +467,8 @@ router.post('/profile/save', async (req, res) => {
                 avatar: kid.avatar,
                 avatarSeed: kid.avatarSeed,
             }));
+        } else if (kids && Array.isArray(kids) && kids.length === 0 && (user.kidProfiles?.length || 0) > 0) {
+            console.log(`🛡️ Ignored empty kids for ${user.email || userId} — keeping ${user.kidProfiles.length} existing kid(s)`);
         }
 
         user.lastActiveAt = new Date();

@@ -1190,10 +1190,10 @@ const DailySessionPage: React.FC = () => {
         {/* Question */}
         <div className="text-center px-6 mb-4">
           <h2 className="text-[#FFD700] font-display font-bold text-xl drop-shadow-lg">
-            {childName ? `What does ${childName} need today?` : 'What would you like to help your child with today?'}
+            {childName ? `What do you want to learn today, ${childName}?` : 'What do you want to learn today?'}
           </h2>
           <p className="text-[#f3e5ab]/70 text-sm mt-2 font-display">
-            Select a learning focus for this session
+            Pick something you'd like to explore!
           </p>
         </div>
 
@@ -1287,7 +1287,7 @@ const DailySessionPage: React.FC = () => {
           // Start the first step - call handleStartStep to show the modal
           handleStartStep();
         }
-      }, 800);
+      }, 1000);
     };
     
     return (
@@ -1433,7 +1433,7 @@ const DailySessionPage: React.FC = () => {
             refreshBooks();
           }
         }
-      }, 800);
+      }, 1000);
     };
     
     return (
@@ -1452,50 +1452,51 @@ const DailySessionPage: React.FC = () => {
 
         {/* Centered Content */}
         <div className="flex-1 flex flex-col items-center justify-center px-8">
-          {bookCountdown !== null ? (
-            // Countdown display
-            <div className="text-center animate-pulse">
-              <div className="text-[180px] font-display font-bold text-[#FFD700] drop-shadow-2xl leading-none"
-                style={{ textShadow: '0 0 40px rgba(255, 215, 0, 0.5), 0 4px 8px rgba(0,0,0,0.5)' }}
-              >
-                {bookCountdown}
-              </div>
-            </div>
-          ) : (
-            // Ready button with book info
-            <div className="text-center">
-              {/* Book cover and info */}
-              <div className="mb-6">
-                <p className="text-[#f3e5ab] font-display text-lg mb-4">Story Time</p>
-                
-                {/* Book Cover */}
-                {pendingBookNavigation.coverUrl ? (
-                  <div className="relative mx-auto mb-4 w-32 h-44 rounded-lg overflow-hidden shadow-2xl border-4 border-[#8B5A2B]"
-                    style={{ boxShadow: '0 8px 24px rgba(0,0,0,0.4)' }}
-                  >
-                    <img 
-                      src={pendingBookNavigation.coverUrl} 
-                      alt={pendingBookNavigation.title}
-                      className="w-full h-full object-cover"
-                    />
-                  </div>
-                ) : (
-                  <div className="text-7xl mb-4">📚</div>
-                )}
-                
-                {/* Book Title */}
-                <p className="text-[#FFD700] font-bold text-xl max-w-xs mx-auto mb-2">
-                  {pendingBookNavigation.title}
-                </p>
-                
-                {/* Reading Time Estimate */}
-                {pendingBookNavigation.pageCount && pendingBookNavigation.pageCount > 0 && (
-                  <p className="text-[#f3e5ab]/70 text-sm">
-                    ~{Math.max(1, Math.ceil(pendingBookNavigation.pageCount * 0.5))} min read • {pendingBookNavigation.pageCount} pages
-                  </p>
-                )}
-              </div>
+          {/* Book cover and info - stays visible during the countdown so it
+              doesn't vanish behind a giant number (kids couldn't see it before). */}
+          <div className="text-center">
+            <div className="mb-6">
+              <p className="text-[#f3e5ab] font-display text-lg mb-4">Story Time</p>
               
+              {/* Book Cover */}
+              {pendingBookNavigation.coverUrl ? (
+                <div className="relative mx-auto mb-4 w-32 h-44 rounded-lg overflow-hidden shadow-2xl border-4 border-[#8B5A2B]"
+                  style={{ boxShadow: '0 8px 24px rgba(0,0,0,0.4)' }}
+                >
+                  <img 
+                    src={pendingBookNavigation.coverUrl} 
+                    alt={pendingBookNavigation.title}
+                    className="w-full h-full object-cover"
+                  />
+                </div>
+              ) : (
+                <div className="text-7xl mb-4">📚</div>
+              )}
+              
+              {/* Book Title */}
+              <p className="text-[#FFD700] font-bold text-xl max-w-xs mx-auto mb-2">
+                {pendingBookNavigation.title}
+              </p>
+              
+              {/* Reading Time Estimate */}
+              {pendingBookNavigation.pageCount && pendingBookNavigation.pageCount > 0 && (
+                <p className="text-[#f3e5ab]/70 text-sm">
+                  ~{Math.max(1, Math.ceil(pendingBookNavigation.pageCount * 0.5))} min read • {pendingBookNavigation.pageCount} pages
+                </p>
+              )}
+            </div>
+
+            {bookCountdown !== null ? (
+              // Countdown shown BELOW the book info (book stays on screen)
+              <div className="text-center">
+                <div className="text-[110px] font-display font-bold text-[#FFD700] drop-shadow-2xl leading-none animate-pulse"
+                  style={{ textShadow: '0 0 40px rgba(255, 215, 0, 0.5), 0 4px 8px rgba(0,0,0,0.5)' }}
+                >
+                  {bookCountdown}
+                </div>
+                <p className="text-[#f3e5ab]/70 text-base font-display mt-2">Get ready...</p>
+              </div>
+            ) : (
               <button
                 onClick={handleBookReadyClick}
                 className="group transition-all transform hover:scale-105 active:scale-95"
@@ -1511,8 +1512,8 @@ const DailySessionPage: React.FC = () => {
                   Tap to start reading
                 </p>
               </button>
-            </div>
-          )}
+            )}
+          </div>
         </div>
 
         {/* Avatar - Bottom Right */}
@@ -1592,7 +1593,7 @@ const DailySessionPage: React.FC = () => {
           // Show the prayer modal
           setShowPrayerModal(true);
         }
-      }, 800);
+      }, 1000);
     };
     
     return (

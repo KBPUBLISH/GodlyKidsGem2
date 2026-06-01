@@ -3,10 +3,12 @@ import React, { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import WoodButton from '../ui/WoodButton';
-import { X, ShoppingBag, Check, Trash2, Crown, Wrench, Play, Pause, ArrowUpToLine, ArrowDownToLine, MoveHorizontal, RotateCcw, RotateCw, ArrowLeftRight, Activity, Save, User, ZoomIn, ZoomOut, Mic } from 'lucide-react';
+import { X, ShoppingBag, Check, Trash2, Crown, Wrench, Play, Pause, ArrowUpToLine, ArrowDownToLine, MoveHorizontal, RotateCcw, RotateCw, ArrowLeftRight, Save, User, ZoomIn, ZoomOut, Mic, Volume2 } from 'lucide-react';
 import { useUser, ShopItem, SavedCharacter } from '../../context/UserContext';
 import AvatarCompositor from '../avatar/AvatarCompositor';
+import AvatarPartImage from '../avatar/AvatarPartImage';
 import { AVATAR_ASSETS } from '../avatar/AvatarAssets';
+import { getShopThumbUrl, isAvatarPngPath } from '../../utils/avatarImageUrl';
 import { ApiService, getMonthlyBookBaseUrl } from '../../services/apiService';
 import { authService } from '../../services/authService';
 import { filterVisibleVoices } from '../../services/voiceManagementService';
@@ -103,6 +105,28 @@ const SHOP_RIGHT_WINGS: ShopItem[] = generateShopItems(30, 'rightArm', '/avatars
 
 const SHOP_ARMS: ShopItem[] = [...SHOP_LEFT_WINGS, ...SHOP_RIGHT_WINGS];
 
+// Wings are designed as matched left+right pairs (e.g. wing-left-1 + wing-right-2).
+// Listing all 30 lefts then all 30 rights put a design's two halves 30 tiles apart,
+// so kids thought they could only add one wing. We present ONE tile per design that
+// owns/equips BOTH halves together as a coordinated pair.
+export interface WingPairItem extends ShopItem {
+  pairValue: string; // matching right-wing value (item.value holds the left wing)
+  pairId: string;    // matching right-wing id
+}
+
+const SHOP_WING_PAIRS: WingPairItem[] = SHOP_LEFT_WINGS.map((left, i) => {
+  const right = SHOP_RIGHT_WINGS[i];
+  return {
+    ...left,
+    type: 'leftArm',
+    pairValue: right.value,
+    pairId: right.id,
+  };
+});
+
+const isWingPair = (item: ShopItem): item is WingPairItem =>
+  (item as WingPairItem).pairValue !== undefined;
+
 // New file-based feet/legs (30 feet: 9 non-premium [3 free], 21 premium)
 const SHOP_LEGS: ShopItem[] = generateShopItems(30, 'legs', '/avatars/feet/feet-', 'f');
 
@@ -121,6 +145,23 @@ const SHOP_ANIMATIONS: ShopItem[] = [
     { id: 'anim6', name: 'Spin', price: 600, type: 'animation', value: 'anim-spin', isPremium: true },
 ];
 
+// Per-move preview metadata: a distinct kid-friendly emoji whose tile animates with the
+// real motion CSS class (defined in AvatarCompositor) so each move looks unique and previews itself.
+const ANIMATION_PREVIEWS: Record<string, { emoji: string; previewClass: string }> = {
+    'anim-breathe': { emoji: '😌', previewClass: 'anim-breathe' },
+    'anim-wiggle': { emoji: '🪱', previewClass: 'anim-wiggle' },
+    'anim-jiggle': { emoji: '🍮', previewClass: 'anim-jiggle' },
+    'anim-bounce': { emoji: '🏀', previewClass: 'anim-bounce' },
+    'anim-sway': { emoji: '🌴', previewClass: 'anim-sway' },
+    'anim-wobble': { emoji: '🐧', previewClass: 'anim-wobble' },
+    'anim-shake': { emoji: '📳', previewClass: 'anim-shake' },
+    'anim-hop': { emoji: '🐰', previewClass: 'anim-hop' },
+    'anim-float': { emoji: '🎈', previewClass: 'anim-float' },
+    'anim-pulse': { emoji: '⚡', previewClass: 'anim-pulse' },
+    'anim-heartbeat': { emoji: '❤️', previewClass: 'anim-heartbeat' },
+    'anim-spin': { emoji: '🌀', previewClass: 'anim-rotate' },
+};
+
 // Background themes - purchasable with gold coins
 const SHOP_BACKGROUNDS: ShopItem[] = [
     // Default (free - already owned by everyone)
@@ -137,15 +178,21 @@ const SHOP_BACKGROUNDS: ShopItem[] = [
 
 type ShopTab = 'head' | 'hat' | 'body' | 'arms' | 'legs' | 'moves' | 'voices' | 'backgrounds' | 'saves';
 
+type VoiceShopItem = ShopItem & { characterImage?: string; previewUrl?: string };
+
+const VOICE_PREVIEW_TEXT = 'Hello Godly Kid! Are you ready for an adventure?';
+
 const ShopModal: React.FC<ShopModalProps> = ({ isOpen, onClose, initialTab, initialBuilderMode = false, hideCloseButton = false }) => {
     const navigate = useNavigate();
     const { t } = useLanguage();
     const [activeTab, setActiveTab] = useState<ShopTab>(initialTab || 'head');
-    const [availableVoices, setAvailableVoices] = useState<any[]>([]);
+    const [availableVoices, setAvailableVoices] = useState<VoiceShopItem[]>([]);
     const [loadingVoices, setLoadingVoices] = useState(false);
+    const [previewingVoiceId, setPreviewingVoiceId] = useState<string | null>(null);
     const [isMenuMinimized, setIsMenuMinimized] = useState(false);
     const [isBuilderMode, setIsBuilderMode] = useState(false);
     const [isPlaying, setIsPlaying] = useState(false);
+    const [previewAnimation, setPreviewAnimation] = useState<string | null>(null);
     const [selectedPart, setSelectedPart] = useState<'leftArm' | 'rightArm' | 'legs' | 'head' | 'body' | 'hat' | null>(null);
     const [isSavedFeedback, setIsSavedFeedback] = useState(false);
     const [showScrollHint, setShowScrollHint] = useState(false);
@@ -154,8 +201,40 @@ const ShopModal: React.FC<ShopModalProps> = ({ isOpen, onClose, initialTab, init
     const hatHintTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const tabsContainerRef = useRef<HTMLDivElement>(null);
     const menuContainerRef = useRef<HTMLDivElement>(null);
+    const drawerHandleRef = useRef<HTMLDivElement>(null);
     const touchStartY = useRef<number>(0);
     const touchStartTime = useRef<number>(0);
+    const voiceAudioRef = useRef<HTMLAudioElement | null>(null);
+    const voicePreviewCacheRef = useRef<Record<string, string>>({});
+    const voicePreviewRevokeRef = useRef<string | null>(null);
+
+    const handleDrawerTouchStart = (e: React.TouchEvent) => {
+        touchStartY.current = e.touches[0].clientY;
+        touchStartTime.current = Date.now();
+    };
+
+    const handleDrawerTouchEnd = (e: React.TouchEvent) => {
+        const touchEndY = e.changedTouches[0].clientY;
+        const deltaY = touchStartY.current - touchEndY;
+        const timeDelta = Date.now() - touchStartTime.current;
+
+        if (timeDelta < 300 && Math.abs(deltaY) > 50) {
+            if (deltaY > 0) {
+                setIsMenuMinimized(false);
+            } else {
+                setIsMenuMinimized(true);
+                if (selectedPart) setSelectedPart(null);
+            }
+        }
+    };
+
+    const toggleDrawerMinimized = () => {
+        setIsMenuMinimized((prev) => {
+            const next = !prev;
+            if (next && selectedPart) setSelectedPart(null);
+            return next;
+        });
+    };
     
     // Wrapper for onClose that dispatches event for referral prompt
     const handleClose = () => {
@@ -190,8 +269,34 @@ const ShopModal: React.FC<ShopModalProps> = ({ isOpen, onClose, initialTab, init
         if (!isOpen) {
             setIsBuilderMode(false);
             setSelectedPart(null);
+            setPreviewAnimation(null);
+            stopVoicePreview();
         }
     }, [isOpen]);
+
+    useEffect(() => {
+        if (activeTab !== 'voices') {
+            stopVoicePreview();
+        }
+        if (activeTab !== 'moves') {
+            setPreviewAnimation(null);
+        }
+    }, [activeTab]);
+
+    const stopVoicePreview = () => {
+        if (voiceAudioRef.current) {
+            voiceAudioRef.current.pause();
+            voiceAudioRef.current.src = '';
+            voiceAudioRef.current = null;
+        }
+        if (voicePreviewRevokeRef.current) {
+            URL.revokeObjectURL(voicePreviewRevokeRef.current);
+            voicePreviewRevokeRef.current = null;
+        }
+        setPreviewingVoiceId(null);
+    };
+
+    useEffect(() => () => stopVoicePreview(), []);
 
     // Fetch voices when voices tab is active
     useEffect(() => {
@@ -225,7 +330,7 @@ const ShopModal: React.FC<ShopModalProps> = ({ isOpen, onClose, initialTab, init
 
                 // Convert to ShopItem format
                 // All voices cost coins - premium just unlocks ACCESS to buy the other 70%
-                const voiceItems: ShopItem[] = visibleVoices.map((voice, index) => {
+                const voiceItems: VoiceShopItem[] = visibleVoices.map((voice, index) => {
                     // First 30% are available to all users, rest require premium subscription to purchase
                     const isFreeTier = index < freeTierCount;
 
@@ -236,7 +341,8 @@ const ShopModal: React.FC<ShopModalProps> = ({ isOpen, onClose, initialTab, init
                         type: 'voice',
                         value: voice.voice_id,
                         isPremium: !isFreeTier, // Premium-only if not in first 30% (requires subscription to BUY)
-                        characterImage: voice.characterImage, // Add character image
+                        characterImage: voice.characterImage,
+                        previewUrl: voice.preview_url,
                     };
                 });
                 setAvailableVoices(voiceItems);
@@ -299,7 +405,29 @@ const ShopModal: React.FC<ShopModalProps> = ({ isOpen, onClose, initialTab, init
         return () => container.removeEventListener('scroll', handleScroll);
     }, [showScrollHint]);
 
+    // Warm-cache WebP thumbs for the active tab (first screenful) on iPhone
+    useEffect(() => {
+        if (!isOpen || activeTab === 'saves') return;
 
+        const items =
+            activeTab === 'head' ? SHOP_AVATARS
+            : activeTab === 'hat' ? SHOP_HATS
+            : activeTab === 'body' ? SHOP_BODIES
+            : activeTab === 'arms' ? SHOP_WING_PAIRS
+            : activeTab === 'legs' ? SHOP_LEGS
+            : activeTab === 'moves' ? SHOP_ANIMATIONS
+            : activeTab === 'voices' ? availableVoices
+            : activeTab === 'backgrounds' ? SHOP_BACKGROUNDS
+            : [];
+
+        items.slice(0, 12).forEach((item) => {
+            if (isAvatarPngPath(item.value)) {
+                const img = new Image();
+                img.decoding = 'async';
+                img.src = getShopThumbUrl(item.value);
+            }
+        });
+    }, [isOpen, activeTab, availableVoices]);
 
     const {
         coins,
@@ -372,8 +500,15 @@ const ShopModal: React.FC<ShopModalProps> = ({ isOpen, onClose, initialTab, init
     };
 
     const handleEquip = (item: ShopItem) => {
+        if (isWingPair(item)) {
+            // Equip both halves so the wings always come as a matching pair.
+            equipItem('leftArm', item.value);
+            equipItem('rightArm', item.pairValue);
+            return;
+        }
         equipItem(item.type, item.value);
         if (item.type === 'animation') {
+            setPreviewAnimation(null);
             setIsPlaying(true);
         }
         if (item.type === 'hat') {
@@ -387,51 +522,116 @@ const ShopModal: React.FC<ShopModalProps> = ({ isOpen, onClose, initialTab, init
         unequipItem(type);
     };
 
+    // Unequip helper that removes both halves when the item is a wing pair.
+    const handleUnequipItem = (item: ShopItem) => {
+        if (isWingPair(item)) {
+            unequipItem('leftArm');
+            unequipItem('rightArm');
+            return;
+        }
+        unequipItem(item.type);
+    };
+
     const handleQuickSave = () => {
         saveCurrentCharacter();
         setIsPlaying(false); // Stop animation on save to prevent weirdness
+        setSelectedPart(null); // Dismiss builder controls so drawer handle stays reachable
         setIsSavedFeedback(true);
         setTimeout(() => setIsSavedFeedback(false), 1500);
     };
 
     const isBodyEquipped = !!equippedBody;
 
+    const handleVoicePreview = async (item: VoiceShopItem) => {
+        const voiceId = item.value;
+        if (previewingVoiceId === voiceId) {
+            stopVoicePreview();
+            return;
+        }
+        stopVoicePreview();
+        setPreviewingVoiceId(voiceId);
+
+        try {
+            let audioUrl = item.previewUrl || voicePreviewCacheRef.current[voiceId];
+            if (!audioUrl) {
+                const base = getMonthlyBookBaseUrl();
+                const res = await fetch(`${base}/devotional-stories/preview-voice`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ voiceId, text: VOICE_PREVIEW_TEXT }),
+                });
+                if (res.ok) {
+                    const data = await res.json().catch(() => ({}));
+                    audioUrl = data.audioUrl ?? (data.audioBase64 ? `data:audio/mpeg;base64,${data.audioBase64}` : undefined);
+                    if (audioUrl) voicePreviewCacheRef.current[voiceId] = audioUrl;
+                }
+            }
+            if (!audioUrl) {
+                const result = await ApiService.generateTTS(VOICE_PREVIEW_TEXT, voiceId);
+                audioUrl = result?.audioUrl;
+                if (audioUrl) voicePreviewCacheRef.current[voiceId] = audioUrl;
+            }
+            if (!audioUrl) throw new Error('No preview audio');
+
+            let playUrl = audioUrl;
+            if (audioUrl.startsWith('data:audio/mpeg;base64,')) {
+                try {
+                    const base64 = audioUrl.slice(audioUrl.indexOf(',') + 1);
+                    const binary = atob(base64);
+                    const bytes = new Uint8Array(binary.length);
+                    for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+                    const blob = new Blob([bytes], { type: 'audio/mpeg' });
+                    voicePreviewRevokeRef.current = playUrl = URL.createObjectURL(blob);
+                } catch {
+                    // fallback to data URL
+                }
+            }
+
+            const audio = new Audio(playUrl);
+            voiceAudioRef.current = audio;
+            audio.onended = () => stopVoicePreview();
+            audio.onerror = () => stopVoicePreview();
+            await audio.play();
+        } catch (err) {
+            console.warn('Shop voice preview failed:', err);
+            stopVoicePreview();
+        }
+    };
+
+    const handleVoiceBuy = (item: VoiceShopItem) => {
+        if (isVoiceUnlocked(item.value)) return;
+
+        if (item.isPremium && !isSubscribed) {
+            handleClose();
+            navigate('/paywall');
+            return;
+        }
+
+        const voicePrice = item.price > 0 ? item.price : 200;
+        if (coins >= voicePrice) {
+            handleBuy({ ...item, price: voicePrice });
+        } else {
+            setShowCoinHistory(true);
+        }
+    };
+
     const handleCardClick = (item: ShopItem) => {
-        // For voices, check if already unlocked
         if (item.type === 'voice') {
-            const voiceUnlocked = isVoiceUnlocked(item.value);
-            if (voiceUnlocked) {
-                // Already unlocked, do nothing
-                return;
-            }
-            
-            // Check if user can purchase this voice
-            if (item.isPremium && !isSubscribed) {
-                // Premium-only voice and user isn't subscribed - go to paywall
-                handleClose();
-                navigate('/paywall');
-                return;
-            }
-            
-            // User can purchase - check if they have enough coins
-            // All voices cost coins (even for premium users)
-            const voicePrice = item.price > 0 ? item.price : 200; // Default price for premium voices
-            if (coins >= voicePrice) {
-                handleBuy({ ...item, price: voicePrice });
-            } else {
-                // Not enough coins - redirect to Gold Coins page to earn more
-                setShowCoinHistory(true);
-            }
+            handleVoicePreview(item as VoiceShopItem);
+            return;
+        }
+
+        // Tapping a move previews it live on the avatar (even before buying); WEAR/buy button equips it
+        if (item.type === 'animation') {
+            setPreviewAnimation(item.value);
+            setIsPlaying(true);
             return;
         }
         
-        // Non-voice items
+        // Non-voice items (animations handled above via the preview branch)
         if (isOwned(item.id)) {
             if (isEquipped(item)) {
-                // Animations cannot be unequipped to null, only swapped
-                if (item.type !== 'animation') {
-                    handleUnequip(item.type);
-                }
+                handleUnequipItem(item);
             } else {
                 const isLimb = ['leftArm', 'rightArm', 'legs'].includes(item.type);
                 if (isLimb && !isBodyEquipped) return;
@@ -452,7 +652,7 @@ const ShopModal: React.FC<ShopModalProps> = ({ isOpen, onClose, initialTab, init
             case 'head': return SHOP_AVATARS;
             case 'hat': return SHOP_HATS;
             case 'body': return SHOP_BODIES;
-            case 'arms': return SHOP_ARMS;
+            case 'arms': return SHOP_WING_PAIRS;
             case 'legs': return SHOP_LEGS;
             case 'moves': return SHOP_ANIMATIONS;
             case 'voices': return availableVoices;
@@ -463,6 +663,9 @@ const ShopModal: React.FC<ShopModalProps> = ({ isOpen, onClose, initialTab, init
     };
 
     const isEquipped = (item: ShopItem) => {
+        if (isWingPair(item)) {
+            return equippedLeftArm === item.value && equippedRightArm === item.pairValue;
+        }
         switch (item.type) {
             case 'avatar': return equippedAvatar === item.value;
             case 'hat': return equippedHat === item.value;
@@ -543,7 +746,9 @@ const ShopModal: React.FC<ShopModalProps> = ({ isOpen, onClose, initialTab, init
         
         // For voices, check if unlocked; for other items, check premium status
         const isVoice = item.type === 'voice';
+        const voiceItem = isVoice ? (item as VoiceShopItem) : null;
         const voiceUnlocked = isVoice ? isVoiceUnlocked(item.value) : false;
+        const isPreviewingVoice = isVoice && previewingVoiceId === item.value;
         // For voices: locked = premium-only voice AND user is not subscribed (can't even buy it)
         // Premium users can BUY all voices, but don't get them automatically
         // Non-premium users can only BUY the 30% that aren't marked isPremium
@@ -567,19 +772,35 @@ const ShopModal: React.FC<ShopModalProps> = ({ isOpen, onClose, initialTab, init
                                 </svg>
                             </div>
                         ) : (
-                            <img src={item.value} alt={item.name} className="w-full h-full object-cover" />
+                            <AvatarPartImage
+                                src={item.value}
+                                alt={item.name}
+                                className="w-full h-full object-cover"
+                                thumb
+                                loading="lazy"
+                            />
                         )
                     )}
                     {item.type === 'animation' && (
-                        <div className="flex flex-col items-center justify-center text-[#8B4513]">
-                            <Activity size={32} className="animate-pulse" />
-                        </div>
+                        <>
+                            <span
+                                className={`text-4xl leading-none select-none ${ANIMATION_PREVIEWS[item.value]?.previewClass ?? 'anim-breathe'}`}
+                                style={{ display: 'inline-block' }}
+                            >
+                                {ANIMATION_PREVIEWS[item.value]?.emoji ?? '✨'}
+                            </span>
+                            {!isLocked && (
+                                <div className="absolute bottom-1 right-1 bg-black/50 rounded-full p-1">
+                                    <Play size={12} className="text-white" fill="currentColor" />
+                                </div>
+                            )}
+                        </>
                     )}
                     {item.type === 'voice' && (
                         <>
-                            {(item as any).characterImage ? (
+                            {voiceItem?.characterImage ? (
                                 <img
-                                    src={(item as any).characterImage}
+                                    src={voiceItem.characterImage}
                                     alt={item.name}
                                     className="w-full h-full object-cover rounded-lg"
                                 />
@@ -588,11 +809,45 @@ const ShopModal: React.FC<ShopModalProps> = ({ isOpen, onClose, initialTab, init
                                     <Mic size={32} className="text-[#8B4513]" />
                                 </div>
                             )}
+                            {isPreviewingVoice && (
+                                <div className="absolute inset-0 bg-black/40 flex items-center justify-center rounded-lg">
+                                    <div className="w-8 h-8 border-2 border-[#FFD700] border-t-transparent rounded-full animate-spin" />
+                                </div>
+                            )}
+                            {!isPreviewingVoice && !isLocked && (
+                                <div className="absolute bottom-1 right-1 bg-black/50 rounded-full p-1">
+                                    <Volume2 size={12} className="text-white" />
+                                </div>
+                            )}
                         </>
                     )}
-                    {(['hat', 'body', 'leftArm', 'rightArm', 'legs'].includes(item.type)) && (
+                    {isWingPair(item) && (
+                        <div className="flex items-center justify-center w-full h-full gap-0.5">
+                            <AvatarPartImage
+                                src={item.value}
+                                alt="left wing"
+                                className="h-full w-1/2 object-contain p-0.5"
+                                thumb
+                                loading="lazy"
+                            />
+                            <AvatarPartImage
+                                src={item.pairValue}
+                                alt="right wing"
+                                className="h-full w-1/2 object-contain p-0.5"
+                                thumb
+                                loading="lazy"
+                            />
+                        </div>
+                    )}
+                    {(['hat', 'body', 'leftArm', 'rightArm', 'legs'].includes(item.type)) && !isWingPair(item) && (
                         item.value.startsWith('/') ? (
-                            <img src={item.value} alt={item.name || item.type} className="w-full h-full object-contain p-1" />
+                            <AvatarPartImage
+                                src={item.value}
+                                alt={item.name || item.type}
+                                className="w-full h-full object-contain p-1"
+                                thumb
+                                loading="lazy"
+                            />
                         ) : AVATAR_ASSETS[item.value] ? (
                             <svg viewBox="0 0 100 100" className="w-full h-full p-2 overflow-visible">
                                 {AVATAR_ASSETS[item.value]}
@@ -636,19 +891,27 @@ const ShopModal: React.FC<ShopModalProps> = ({ isOpen, onClose, initialTab, init
                 ) : (owned || (isVoice && voiceUnlocked)) ? (
                     <div className="flex w-full gap-1">
                         {isVoice ? (
-                            // Voices show "Unlocked" status
-                            <button
-                                disabled
-                                className="flex-1 bg-[#2e7d32] text-white font-bold text-[10px] py-1.5 rounded-lg flex items-center justify-center gap-1 border border-white/20 shadow-inner"
-                            >
-                                <Check size={12} />
-                                <span>{t('unlocked').toUpperCase()}</span>
-                            </button>
+                            <>
+                                <button
+                                    onClick={(e) => { e.stopPropagation(); handleVoicePreview(voiceItem!); }}
+                                    className="flex-1 bg-[#f3e5ab] hover:bg-[#fff5cc] text-[#5c2e0b] font-bold text-[10px] py-1.5 rounded-lg flex items-center justify-center gap-1 border border-[#d4a373] shadow-[0_2px_0_#d4a373] active:translate-y-[2px]"
+                                >
+                                    <Volume2 size={12} />
+                                    <span>{isPreviewingVoice ? 'PLAYING' : 'PREVIEW'}</span>
+                                </button>
+                                <button
+                                    disabled
+                                    className="flex-1 bg-[#2e7d32] text-white font-bold text-[10px] py-1.5 rounded-lg flex items-center justify-center gap-1 border border-white/20 shadow-inner"
+                                >
+                                    <Check size={12} />
+                                    <span>{t('unlocked').toUpperCase()}</span>
+                                </button>
+                            </>
                         ) : equipped ? (
                             <button
                                 onClick={(e) => {
                                     e.stopPropagation();
-                                    if (item.type !== 'animation') handleUnequip(item.type);
+                                    if (item.type !== 'animation') handleUnequipItem(item);
                                 }}
                                 disabled={item.type === 'animation'} // Can't unequip animation, must swap
                                 className={`flex-1 bg-[#2e7d32] text-white font-bold text-[10px] py-1.5 rounded-lg flex items-center justify-center gap-1 border border-white/20 shadow-inner ${item.type !== 'animation' ? 'hover:bg-[#d32f2f] group-hover:content-["UNEQUIP"]' : ''}`}
@@ -678,6 +941,10 @@ const ShopModal: React.FC<ShopModalProps> = ({ isOpen, onClose, initialTab, init
                         className={`text-[10px] py-1.5 ${isDisabled ? 'opacity-50 grayscale cursor-not-allowed' : coins < item.price ? 'bg-gradient-to-r from-[#FFD700]/80 to-[#B8860B]/80 animate-pulse' : ''}`}
                         onClick={(e) => { 
                             e.stopPropagation(); 
+                            if (isVoice) {
+                                handleVoiceBuy(voiceItem!);
+                                return;
+                            }
                             // If not enough coins, redirect to Gold Coins page to earn more
                             if (coins < item.price && !isDisabled) {
                                 setShowCoinHistory(true);
@@ -687,7 +954,9 @@ const ShopModal: React.FC<ShopModalProps> = ({ isOpen, onClose, initialTab, init
                         }}
                         disabled={isDisabled}
                     >
-                        {isDisabled ? t('needBody').toUpperCase() : item.price === 0 ? t('free').toUpperCase() : coins < item.price ? `GET COINS` : `${item.price} ${t('gold')}`}
+                        {isVoice
+                            ? (coins < item.price ? 'GET COINS' : `${item.price} ${t('gold')}`)
+                            : isDisabled ? t('needBody').toUpperCase() : item.price === 0 ? t('free').toUpperCase() : coins < item.price ? `GET COINS` : `${item.price} ${t('gold')}`}
                     </WoodButton>
                 )}
             </div>
@@ -788,7 +1057,7 @@ const ShopModal: React.FC<ShopModalProps> = ({ isOpen, onClose, initialTab, init
                 <div
                     className={`w-full relative shrink-0 shadow-inner overflow-hidden flex flex-col items-center transition-all duration-500 ease-in-out bg-cover bg-center ${(isMenuMinimized || (isBuilderMode && selectedPart)) ? 'flex-1' : 'h-[16rem] shrink-0'}`}
                     style={{ backgroundImage: `url('/assets/images/dressing-room.jpg')` }}
-                    onClick={() => setIsMenuMinimized(!isMenuMinimized)}
+                    onClick={toggleDrawerMinimized}
                 >
 
                     {/* Toolbar: Builder Mode & Play */}
@@ -867,7 +1136,7 @@ const ShopModal: React.FC<ShopModalProps> = ({ isOpen, onClose, initialTab, init
                                 leftArm={equippedLeftArm}
                                 rightArm={equippedRightArm}
                                 legs={equippedLegs}
-                                animationStyle={equippedAnimation}
+                                animationStyle={previewAnimation ?? equippedAnimation}
                                 leftArmRotation={equippedLeftArmRotation}
                                 rightArmRotation={equippedRightArmRotation}
                                 legsRotation={equippedLegsRotation}
@@ -908,42 +1177,29 @@ const ShopModal: React.FC<ShopModalProps> = ({ isOpen, onClose, initialTab, init
                     </div>
                 </div>
 
-                {/* Menu Container - Swipeable */}
-                <div 
-                    ref={menuContainerRef}
-                    className={`flex flex-col bg-[#f3e5ab] border-t-4 border-[#8B4513] rounded-t-3xl -mt-6 relative z-20 shadow-[0_-10px_40px_rgba(0,0,0,0.4)] transition-all duration-500 ease-in-out ${(isMenuMinimized || (isBuilderMode && selectedPart)) ? 'h-auto shrink-0' : 'flex-1 min-h-0'}`}
-                    onTouchStart={(e) => {
-                        touchStartY.current = e.touches[0].clientY;
-                        touchStartTime.current = Date.now();
-                    }}
-                    onTouchEnd={(e) => {
-                        const touchEndY = e.changedTouches[0].clientY;
-                        const deltaY = touchStartY.current - touchEndY;
-                        const timeDelta = Date.now() - touchStartTime.current;
-                        
-                        // Only trigger if it's a quick swipe (under 300ms) and significant distance (over 50px)
-                        if (timeDelta < 300 && Math.abs(deltaY) > 50) {
-                            if (deltaY > 0) {
-                                // Swiped UP - expand the menu (show items)
-                                setIsMenuMinimized(false);
-                            } else {
-                                // Swiped DOWN - minimize the menu (hide items)
-                                setIsMenuMinimized(true);
-                            }
-                        }
-                    }}
+                {/* Drawer handle — z-60 so it stays above builder controls overlay */}
+                <div
+                    ref={drawerHandleRef}
+                    className="relative z-[60] -mt-6 shrink-0 bg-[#f3e5ab] border-t-4 border-[#8B4513] rounded-t-3xl shadow-[0_-4px_20px_rgba(0,0,0,0.15)]"
+                    onTouchStart={handleDrawerTouchStart}
+                    onTouchEnd={handleDrawerTouchEnd}
                 >
-
-                    {/* Handle Bar - Visual indicator for swiping */}
                     <div
-                        className="w-full h-9 flex flex-col items-center justify-center cursor-pointer shrink-0 hover:bg-black/5 transition-colors rounded-t-3xl"
-                        onClick={() => setIsMenuMinimized(!isMenuMinimized)}
+                        className="w-full h-9 flex flex-col items-center justify-center cursor-pointer shrink-0 hover:bg-black/5 transition-colors rounded-t-3xl touch-none"
+                        onClick={toggleDrawerMinimized}
                     >
-                        <div className={`w-12 h-1.5 rounded-full bg-[#8B4513]/30 transition-all duration-300`}></div>
+                        <div className="w-12 h-1.5 rounded-full bg-[#8B4513]/30 transition-all duration-300" />
                         <span className="text-[8px] text-[#8B4513]/40 font-bold mt-1">
                             {isMenuMinimized ? '↑ SWIPE UP' : '↓ SWIPE DOWN'}
                         </span>
                     </div>
+                </div>
+
+                {/* Menu Container - tabs + items */}
+                <div 
+                    ref={menuContainerRef}
+                    className={`flex flex-col bg-[#f3e5ab] relative z-20 shadow-[0_-10px_40px_rgba(0,0,0,0.4)] transition-all duration-500 ease-in-out ${(isMenuMinimized || (isBuilderMode && selectedPart)) ? 'h-auto shrink-0' : 'flex-1 min-h-0'}`}
+                >
 
                     {/* Tabs Scroller - Updated visual cues */}
                     <div className="relative w-full border-b border-[#8B4513]/20 bg-[#eecaa0]/30 shrink-0">
@@ -1006,7 +1262,6 @@ const ShopModal: React.FC<ShopModalProps> = ({ isOpen, onClose, initialTab, init
                     <div 
                         className={`overflow-y-auto overscroll-contain p-4 bg-[#f3e5ab] relative transition-all duration-500 ${(isMenuMinimized || (isBuilderMode && selectedPart)) ? 'h-0 p-0 opacity-0 pointer-events-none' : 'flex-1 opacity-100'}`}
                         style={{ WebkitOverflowScrolling: 'touch' }}
-                        onTouchStart={(e) => e.stopPropagation()} // Prevent menu swipe when scrolling items
                     >
                         {activeTab === 'saves' ? (
                             <div className="flex flex-col gap-4 pb-20">

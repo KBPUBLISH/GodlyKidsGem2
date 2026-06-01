@@ -5,6 +5,57 @@ import WoodButton from '../components/ui/WoodButton';
 import { ApiService, getApiBaseUrl } from '../services/apiService';
 import { useUser } from '../context/UserContext';
 import { facebookPixelService } from '../services/facebookPixelService';
+import { profileService } from '../services/profileService';
+
+// Local storage key used by UserContext for the cached profile.
+const USER_DATA_KEY = 'godly_kids_data_v6';
+
+// Pull the signed-in account's profile from the cloud and merge it into the
+// local cache BEFORE we route. This guarantees a fresh device (e.g. a second
+// iPad) recognizes the existing account instead of dropping into first-time
+// setup — which previously overwrote the kids set up on the first device.
+// Returns true if the cloud account already has kid profiles.
+const hydrateProfileFromCloud = async (email: string): Promise<boolean> => {
+  try {
+    const cloud = await profileService.loadFromCloud(email);
+    if (!cloud) return false;
+
+    let existing: any = {};
+    try {
+      const raw = localStorage.getItem(USER_DATA_KEY);
+      if (raw) existing = JSON.parse(raw);
+    } catch {
+      existing = {};
+    }
+
+    const cloudHasKids = !!(cloud.kids && cloud.kids.length > 0);
+
+    const merged = {
+      ...existing,
+      parentName:
+        cloud.parentName && cloud.parentName !== 'Parent'
+          ? cloud.parentName
+          : existing.parentName,
+      kids: cloudHasKids ? cloud.kids : existing.kids,
+      coins: Math.max(cloud.coins || 0, existing.coins || 0),
+      equippedAvatar: cloud.equippedAvatar ?? existing.equippedAvatar,
+      equippedShip: cloud.equippedShip ?? existing.equippedShip,
+      equippedWheel: cloud.equippedWheel ?? existing.equippedWheel,
+      equippedPet: cloud.equippedPet ?? existing.equippedPet,
+      unlockedVoices: cloud.unlockedVoices ?? existing.unlockedVoices,
+    };
+
+    localStorage.setItem(USER_DATA_KEY, JSON.stringify(merged));
+    if (cloud.defaultVoiceId) {
+      localStorage.setItem('godlykids_default_voice', cloud.defaultVoiceId);
+    }
+
+    return cloudHasKids;
+  } catch (e) {
+    console.warn('Failed to hydrate profile from cloud on sign-in:', e);
+    return false;
+  }
+};
 
 const SignInPage: React.FC = () => {
   const navigate = useNavigate();
@@ -118,9 +169,19 @@ const SignInPage: React.FC = () => {
         
         // Skip welcome page for returning users
         localStorage.setItem('godlykids_welcome_seen', 'true');
-        // Navigate to home
+
+        // Pull existing profile from the cloud before routing so we don't drop a
+        // returning user into first-time setup on a fresh device.
+        const emailForCloud = (legacyEmail || '').toLowerCase().trim();
+        let routeTarget = '/world';
+        if (emailForCloud) {
+          const cloudHasKids = await hydrateProfileFromCloud(emailForCloud);
+          if (cloudHasKids) routeTarget = '/profile';
+        }
+
+        // Navigate to home/profile
         window.dispatchEvent(new Event('authTokenUpdated'));
-        setTimeout(() => navigate('/world'), 100);
+        setTimeout(() => navigate(routeTarget), 100);
       } else {
         setLegacyError(data.msg || data.message || 'Migration failed. Please try again.');
       }
@@ -211,13 +272,30 @@ const SignInPage: React.FC = () => {
         } else {
           // Skip welcome page for returning users who sign in
           localStorage.setItem('godlykids_welcome_seen', 'true');
-          // Force books to reload by dispatching event and then navigating
+
+          // Pull the account's profile from the cloud BEFORE routing so a fresh
+          // device doesn't fall into first-time setup (which would overwrite the
+          // kids set up on another device). Route to profile selection if the
+          // account already has kids, otherwise continue to the world.
+          const emailForCloud =
+            (provider === 'email' ? (emailValue || email) : (result as any).email) ||
+            localStorage.getItem('godlykids_user_email') ||
+            '';
+          let routeTarget = '/world';
+          if (emailForCloud) {
+            const cloudHasKids = await hydrateProfileFromCloud(
+              emailForCloud.toLowerCase().trim()
+            );
+            if (cloudHasKids) routeTarget = '/profile';
+          }
+
+          // Force books/profile to reload by dispatching event and then navigating
           window.dispatchEvent(new Event('authTokenUpdated'));
           // Small delay to ensure token is stored before navigation
           setTimeout(() => {
-            navigate('/world');
-            // Force a page refresh to ensure books reload
-            window.location.hash = '#/world';
+            navigate(routeTarget);
+            // Force a page refresh to ensure data reloads
+            window.location.hash = `#${routeTarget}`;
           }, 100);
         }
       } else if ((result as any).code === 'LEGACY_ACCOUNT') {

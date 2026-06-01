@@ -566,6 +566,10 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const user = authService.getUser();
       if (user?.email) {
         console.log('🔐 Auth token updated - user signed in, loading cloud profile...');
+        // Disable cloud saves until we've pulled the account's profile down. This
+        // prevents a fresh device from pushing its empty/default local state to the
+        // cloud (which would erase kids set up on another device) before sync runs.
+        setHasLoadedFromCloud(false);
         // Force load from cloud to get user's saved data
         loadProfileFromCloud(true);
       }
@@ -709,15 +713,11 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (userId && hasLoadedFromCloud) {
       // Save important profile data to cloud for cross-device sync
       const defaultVoice = localStorage.getItem('godlykids_default_voice');
-      profileService.saveToCloud(userId, {
+      // SAFETY: only send kids when we actually have some. Sending an empty array
+      // could wipe kids that exist in the cloud / on another device. The backend
+      // also guards against this, but we avoid even attempting the overwrite.
+      const cloudPayload: Parameters<typeof profileService.saveToCloud>[1] = {
         parentName,
-        kids: kids.map(k => ({
-          id: k.id,
-          name: k.name,
-          age: k.age || 0,
-          avatar: k.avatar,
-          avatarSeed: k.avatarSeed,
-        })),
         coins,
         equippedAvatar,
         equippedShip,
@@ -725,7 +725,17 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
         equippedPet,
         unlockedVoices,
         defaultVoiceId: defaultVoice || null,
-      });
+      };
+      if (kids.length > 0) {
+        cloudPayload.kids = kids.map(k => ({
+          id: k.id,
+          name: k.name,
+          age: k.age || 0,
+          avatar: k.avatar,
+          avatarSeed: k.avatarSeed,
+        }));
+      }
+      profileService.saveToCloud(userId, cloudPayload);
     }
   }, [
     coins, coinTransactions, referralCode, redeemedCodes, ownedItems, unlockedVoices, parentName, kids, currentProfileId, parentEconomyData,

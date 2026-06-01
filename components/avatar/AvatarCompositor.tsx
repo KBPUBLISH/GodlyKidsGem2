@@ -1,6 +1,7 @@
 
 import React from 'react';
 import { AVATAR_ASSETS } from './AvatarAssets';
+import AvatarPartImage from './AvatarPartImage';
 
 interface AvatarCompositorProps {
   headUrl: string;
@@ -162,11 +163,12 @@ const AvatarCompositor: React.FC<AvatarCompositorProps> = ({
                       </svg>
                   ) : (
                       // IMAGE HEAD - use object-contain for proper centering
-                      <img 
-                        src={headUrl || ''} 
-                        alt="Head" 
-                        className="w-full h-full object-contain object-center pointer-events-none" 
+                      <AvatarPartImage
+                        src={headUrl || ''}
+                        alt="Head"
+                        className="w-full h-full object-contain object-center pointer-events-none"
                         style={{ transform: 'scale(1.15)' }}
+                        loading="eager"
                       />
                   )}
               </div>
@@ -191,7 +193,7 @@ const AvatarCompositor: React.FC<AvatarCompositorProps> = ({
                     onClick={(e) => onPartClick && handlePartClick(e, 'hat')}
                  >
                       {isFilePath(hat) ? (
-                        <img src={hat} alt="Hat" className="w-full h-full object-contain object-center pointer-events-none filter drop-shadow-md" />
+                        <AvatarPartImage src={hat} alt="Hat" className="w-full h-full object-contain object-center pointer-events-none filter drop-shadow-md" loading="eager" />
                       ) : (
                         <svg viewBox="0 0 100 80" className="w-full h-full p-1 overflow-visible filter drop-shadow-md">
                             {AVATAR_ASSETS[hat]}
@@ -222,7 +224,7 @@ const AvatarCompositor: React.FC<AvatarCompositorProps> = ({
                   style={{ transformOrigin: 'top center' }}
               >
                   {isFilePath(legs) ? (
-                    <img src={legs} alt="Feet" className="w-full h-full object-contain object-center pointer-events-none" />
+                    <AvatarPartImage src={legs} alt="Feet" className="w-full h-full object-contain object-center pointer-events-none" loading="eager" />
                   ) : (
                     <svg viewBox="0 0 100 60" className="w-full h-full overflow-visible">
                         {AVATAR_ASSETS[legs]}
@@ -256,7 +258,7 @@ const AvatarCompositor: React.FC<AvatarCompositorProps> = ({
                   style={{ width: '100%', height: '100%' }}
                 >
                    {isFilePath(body) ? (
-                     <img src={body} alt="Body" className="w-full h-full object-contain object-center pointer-events-none" style={{ transform: 'scale(1.3)' }} />
+                     <AvatarPartImage src={body} alt="Body" className="w-full h-full object-contain object-center pointer-events-none" style={{ transform: 'scale(1.3)' }} loading="eager" />
                    ) : (
                      <svg viewBox="0 0 100 80" className="w-full h-full overflow-visible pointer-events-none" style={{ transform: 'scale(1.3)' }}>
                         {AVATAR_ASSETS[body]}
@@ -283,7 +285,7 @@ const AvatarCompositor: React.FC<AvatarCompositorProps> = ({
                         style={{ transformOrigin: '50% 50%' }} 
                       >
                            {isFilePath(leftArm) ? (
-                             <img src={leftArm} alt="Left Wing" className="w-full h-full object-contain object-center pointer-events-none" />
+                             <AvatarPartImage src={leftArm} alt="Left Wing" className="w-full h-full object-contain object-center pointer-events-none" loading="eager" />
                            ) : (
                              <svg viewBox="0 0 50 100" className="w-full h-full overflow-visible">
                                 {AVATAR_ASSETS[leftArm]}
@@ -312,7 +314,7 @@ const AvatarCompositor: React.FC<AvatarCompositorProps> = ({
                         style={{ transformOrigin: '50% 50%' }} 
                       >
                            {isFilePath(rightArm) ? (
-                             <img src={rightArm} alt="Right Wing" className="w-full h-full object-contain object-center pointer-events-none" />
+                             <AvatarPartImage src={rightArm} alt="Right Wing" className="w-full h-full object-contain object-center pointer-events-none" loading="eager" />
                            ) : (
                              <svg viewBox="0 0 50 100" className="w-full h-full overflow-visible">
                                 {AVATAR_ASSETS[rightArm]}

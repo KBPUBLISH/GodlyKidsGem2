@@ -21,6 +21,7 @@ import { activityTrackingService } from '../services/activityTrackingService';
 import { authService } from '../services/authService';
 import { useTutorial } from '../context/TutorialContext';
 import { isValidBookId } from '../utils/bookUtils';
+import { attachReliableLoop } from '../utils/audioLoop';
 
 const API_BASE_URL = (import.meta as any).env?.VITE_API_BASE_URL || 'https://backendgk2-0.onrender.com';
 
@@ -229,6 +230,7 @@ const BookReaderPage: React.FC = () => {
 
     // Keep ref in sync with state
     const scrollStateRef = useRef<ScrollState>('max');
+    const scrollBeforeHideRef = useRef<ScrollState>('max');
     useEffect(() => {
         scrollStateRef.current = scrollState;
     }, [scrollState]);
@@ -760,6 +762,7 @@ const BookReaderPage: React.FC = () => {
     }, [selectedLanguage]);
     const wordAlignmentRef = useRef<{ words: Array<{ word: string; start: number; end: number }> } | null>(null);
     const bookBackgroundMusicRef = useRef<HTMLAudioElement | null>(null);
+    const bookMusicLoopDetachRef = useRef<(() => void) | null>(null);
     // iOS/WKWebView often ignores HTMLAudioElement.volume. Use WebAudio GainNode for reliable volume control.
     const bookMusicCtxRef = useRef<AudioContext | null>(null);
     const bookMusicGainRef = useRef<GainNode | null>(null);
@@ -788,6 +791,7 @@ const BookReaderPage: React.FC = () => {
     const isPlayingMultiSegmentRef = useRef(false); // Track if we're in multi-segment playback mode
     const multiSegmentAudioRef = useRef<HTMLAudioElement | null>(null); // Current playing audio in multi-segment mode
     const multiSegmentPlaybackIdRef = useRef(0); // Unique ID to prevent overlapping playback sessions
+    const playRequestIdRef = useRef(0); // Unique ID per handlePlayText call - invalidates stale single-segment requests
     
     const [isPageTurning, setIsPageTurning] = useState(false);
     const [flipState, setFlipState] = useState<{ direction: 'next' | 'prev', isFlipping: boolean } | null>(null);
@@ -1293,11 +1297,14 @@ const BookReaderPage: React.FC = () => {
                         if (bookBackgroundMusicRef.current) {
                             bookBackgroundMusicRef.current.pause();
                         }
+                        bookMusicLoopDetachRef.current?.();
+                        bookMusicLoopDetachRef.current = null;
 
                         const audio = new Audio(musicUrl);
                         audio.loop = true;
                         audio.preload = 'auto';
                         bookBackgroundMusicRef.current = audio;
+                        bookMusicLoopDetachRef.current = attachReliableLoop(audio, true);
                         ensureBookMusicGraph(audio);
 
                         // Start playing book music automatically when loaded
@@ -1349,6 +1356,8 @@ const BookReaderPage: React.FC = () => {
             if (killInterval) clearInterval(killInterval);
 
             // Stop and destroy book background music
+            bookMusicLoopDetachRef.current?.();
+            bookMusicLoopDetachRef.current = null;
             if (bookBackgroundMusicRef.current) {
                 bookBackgroundMusicRef.current.pause();
                 bookBackgroundMusicRef.current.src = '';
@@ -1416,6 +1425,8 @@ const BookReaderPage: React.FC = () => {
         isPlayingMultiSegmentRef.current = false;
         multiSegmentPlaybackIdRef.current += 1; // Invalidate any in-flight segments
         // Stop book background music
+        bookMusicLoopDetachRef.current?.();
+        bookMusicLoopDetachRef.current = null;
         if (bookBackgroundMusicRef.current) {
             try {
                 bookBackgroundMusicRef.current.pause();
@@ -2189,8 +2200,11 @@ const BookReaderPage: React.FC = () => {
                         const pageTextBoxes = contentTextBoxes || newPage?.textBoxes || (newPage as any)?.content?.textBoxes || [];
                         
                         if (pageTextBoxes.length > 0) {
-                            const translatedTextBoxes = translatedContent.get(nextIndex);
-                            const firstBoxText = translatedTextBoxes?.[0]?.text || pageTextBoxes[0].text;
+                            // Set up the sequential queue so EVERY text box on the page is read,
+                            // not just the first one (otherwise multi-box pages get skipped).
+                            const translatedTextBoxes = getTranslatedTextBoxes(newPage);
+                            setupSequentialTextBoxQueue(translatedTextBoxes);
+                            const firstBoxText = translatedTextBoxes[0]?.text || pageTextBoxes[0].text;
                             
                             if (firstBoxText) {
                                 console.log('▶️ Auto-playing TTS after swipe to page', nextIndex + 1);
@@ -2248,8 +2262,10 @@ const BookReaderPage: React.FC = () => {
                         const pageTextBoxes = contentTextBoxes || newPage?.textBoxes || (newPage as any)?.content?.textBoxes || [];
                         
                         if (pageTextBoxes.length > 0) {
-                            const translatedTextBoxes = translatedContent.get(prevIndex);
-                            const firstBoxText = translatedTextBoxes?.[0]?.text || pageTextBoxes[0].text;
+                            // Set up the sequential queue so EVERY text box on the page is read.
+                            const translatedTextBoxes = getTranslatedTextBoxes(newPage);
+                            setupSequentialTextBoxQueue(translatedTextBoxes);
+                            const firstBoxText = translatedTextBoxes[0]?.text || pageTextBoxes[0].text;
                             
                             if (firstBoxText) {
                                 console.log('▶️ Auto-playing TTS after swipe back to page', prevIndex + 1);
@@ -2386,6 +2402,9 @@ const BookReaderPage: React.FC = () => {
 
     // Handle scroll state changes
     const handleScrollStateChange = (newState: ScrollState) => {
+        if (newState !== 'hidden') {
+            scrollBeforeHideRef.current = newState;
+        }
         setScrollState(newState);
         scrollStateRef.current = newState;
     };
@@ -2441,16 +2460,19 @@ const BookReaderPage: React.FC = () => {
         });
     };
 
-    // Cycle scroll state: mid -> hidden (tap to hide)
+    // Cycle scroll state: mid -> hidden (tap to hide); restore pre-hide height when showing again
     const toggleScrollVisibility = (e?: React.MouseEvent) => {
         // Stop propagation to prevent music unlock
         if (e) {
             e.stopPropagation();
         }
 
-        // Tap to toggle between mid and hidden
         setScrollState(prev => {
-            const newState: ScrollState = prev === 'hidden' ? 'mid' : 'hidden';
+            const newState: ScrollState =
+                prev === 'hidden' ? scrollBeforeHideRef.current : 'hidden';
+            if (prev !== 'hidden') {
+                scrollBeforeHideRef.current = prev;
+            }
             scrollStateRef.current = newState;
             return newState;
         });
@@ -2488,17 +2510,16 @@ const BookReaderPage: React.FC = () => {
 
         e.stopPropagation();
 
-        // If auto-play is active, turn page and lower scroll
+        // If auto-play is active, turn page (keep the reading panel as-is)
         if (autoPlayMode || autoPlayModeRef.current) {
             // Turn to next page if available
             if (currentPageIndex < pages.length - 1) {
                 stopAudio();
                 handleNext({ stopPropagation: () => { } } as React.MouseEvent);
-                // Lower scroll (user preference from last page)
-                if (scrollState !== 'hidden') {
-                    setScrollState('hidden');
-                    scrollStateRef.current = 'hidden';
-                }
+                // NOTE: Do NOT force the scroll/reading panel to 'hidden' here. Doing so
+                // minimized the panel and that hidden state was then preserved on every
+                // subsequent page turn, so most pages opened with the story text hidden.
+                // The panel now keeps the user's chosen expand state across pages.
             }
         } else {
             // Normal mode: just toggle scroll visibility
@@ -3443,7 +3464,14 @@ const BookReaderPage: React.FC = () => {
         // Otherwise, generate/fetch new audio
         // Reset user-stopped flag since we're starting fresh playback
         userStoppedPlaybackRef.current = false;
-        
+
+        // Unique token for THIS playback request. If a newer playback starts (or the
+        // user stops / turns the page) while we're awaiting TTS generation, this token
+        // becomes stale and we abort instead of playing late audio over the new page.
+        const playRequestId = ++playRequestIdRef.current;
+        // Page this request belongs to (use ref - state can be stale in async callbacks).
+        const actualPageIndex = currentPageIndexRef.current;
+
         setActiveTextBoxIndex(index);
         setLoadingAudio(true);
         setShowLoadingPopup(true); // Show dismissible loading popup
@@ -3453,8 +3481,6 @@ const BookReaderPage: React.FC = () => {
         alignmentWarningShownRef.current = false; // Reset warning flag for new audio
 
         try {
-            // Check preload cache first - use ref for accurate page index (state might be stale)
-            const actualPageIndex = currentPageIndexRef.current;
             // Use ref for language to get latest value in async context
             const currentLang = selectedLanguageRef.current;
             
@@ -3575,6 +3601,20 @@ const BookReaderPage: React.FC = () => {
                     actualPageIndex + 1, // Page number (1-based)
                     index // Text box index
                 ) || undefined;
+            }
+
+            // Abort if this playback was superseded while we awaited TTS generation
+            // (user stopped, turned the page, or a newer playback started). This prevents
+            // stale audio from "kicking in" later and from triggering a phantom page turn.
+            if (
+                playRequestId !== playRequestIdRef.current ||
+                userStoppedPlaybackRef.current ||
+                currentPageIndexRef.current !== actualPageIndex
+            ) {
+                console.log('🛑 Playback superseded before audio start - aborting stale request');
+                setLoadingAudio(false);
+                setShowLoadingPopup(false);
+                return;
             }
 
             // Use audio URL (from cache or freshly generated)
@@ -4109,13 +4149,63 @@ const BookReaderPage: React.FC = () => {
                     audio.load(); // Ensure loading starts
                 }
             } else {
-                console.error('No audio URL returned');
-                alert('Failed to generate audio. Please check the API key.');
+                // No audio came back. This is almost always a transient backend/network
+                // hiccup (e.g. right after toggling narration off and on again), NOT a
+                // problem with the API key. Retry once silently before bothering the user.
+                console.warn('No audio URL returned - retrying once before surfacing an error');
+                const processedRetry = processTextWithEmotionalCues(textToSpeak);
+                const retryText = currentLang !== 'en'
+                    ? removeEmotionalCues(textToSpeak)
+                    : processedRetry.processedText;
+                const retryResult = await ApiService.generateTTS(
+                    retryText,
+                    voiceForText,
+                    bookId || undefined,
+                    currentLang !== 'en' ? currentLang : undefined,
+                    actualPageIndex + 1,
+                    index
+                ) || undefined;
+
+                // If the user moved on (stopped, turned the page, or started new audio)
+                // during the retry, bail out quietly - no error, no late audio.
+                if (
+                    playRequestId !== playRequestIdRef.current ||
+                    userStoppedPlaybackRef.current ||
+                    currentPageIndexRef.current !== actualPageIndex
+                ) {
+                    setShowLoadingPopup(false);
+                    setActiveTextBoxIndex(null);
+                    return;
+                }
+
+                if (retryResult && retryResult.audioUrl) {
+                    // Retry succeeded - cache it and replay this text box cleanly.
+                    audioPreloadCacheRef.current.set(cacheKey, retryResult);
+                    setShowLoadingPopup(false);
+                    handlePlayText(text, index, { stopPropagation: () => {} } as React.MouseEvent, isAutoPlay);
+                    return;
+                }
+
+                console.error('No audio URL returned after retry');
+                // Stop auto-advancing so we don't silently skip the rest of the book.
+                setAutoPlayMode(false);
+                autoPlayModeRef.current = false;
                 setActiveTextBoxIndex(null);
+                setShowLoadingPopup(false);
+                alert("Sorry, the story narration couldn't start right now. Please try again in a moment.");
             }
         } catch (error) {
             console.error('Failed to play audio:', error);
-            alert('Failed to play audio. The TTS service might be unavailable.');
+            // Don't alarm the user if this request was already superseded.
+            if (
+                playRequestId === playRequestIdRef.current &&
+                !userStoppedPlaybackRef.current &&
+                currentPageIndexRef.current === actualPageIndex
+            ) {
+                setAutoPlayMode(false);
+                autoPlayModeRef.current = false;
+                alert("Sorry, the story narration couldn't start right now. Please try again in a moment.");
+            }
             setActiveTextBoxIndex(null);
             setShowLoadingPopup(false);
         } finally {
@@ -4988,6 +5078,7 @@ const BookReaderPage: React.FC = () => {
                                 activeTextBoxIndex={activeTextBoxIndex}
                                 scrollState={scrollState}
                                 onScrollStateChange={handleScrollStateChange}
+                                onToggleScrollVisibility={() => toggleScrollVisibility()}
                                 onPlayText={handlePlayText}
                                 highlightedWordIndex={currentWordIndex}
                                 wordAlignment={wordAlignment}

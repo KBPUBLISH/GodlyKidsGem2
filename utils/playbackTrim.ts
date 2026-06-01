@@ -94,11 +94,13 @@ export function attachPlaybackTrim(media: HTMLMediaElement, cfg: PlaybackTrimCon
         }
     };
 
+    const shouldLoopSegment = (): boolean =>
+        typeof cfg.segmentLoop === 'function' ? cfg.segmentLoop() : !!cfg.segmentLoop;
+
     const onTimeUpdate = () => {
         if (!snapshot()) return;
         if (media.currentTime >= end - epsilon) {
-            const shouldLoop = typeof cfg.segmentLoop === 'function' ? cfg.segmentLoop() : !!cfg.segmentLoop;
-            if (shouldLoop) {
+            if (shouldLoopSegment()) {
                 media.currentTime = start;
                 segmentEndedFired = false;
                 return;
@@ -112,9 +114,21 @@ export function attachPlaybackTrim(media: HTMLMediaElement, cfg: PlaybackTrimCon
         }
     };
 
+    /** iOS/WKWebView may stop after one cycle despite loop=true — restart manually. */
+    const onEnded = () => {
+        if (!shouldLoopSegment()) return;
+        if (snapshot()) {
+            media.currentTime = start;
+        } else {
+            media.currentTime = 0;
+        }
+        media.play().catch(() => {});
+    };
+
     media.addEventListener('loadedmetadata', onLoadedMeta);
     media.addEventListener('play', onPlay);
     media.addEventListener('timeupdate', onTimeUpdate);
+    media.addEventListener('ended', onEnded);
 
     if (media.readyState >= HTMLMediaElement.HAVE_METADATA) {
         onLoadedMeta();
@@ -124,5 +138,6 @@ export function attachPlaybackTrim(media: HTMLMediaElement, cfg: PlaybackTrimCon
         media.removeEventListener('loadedmetadata', onLoadedMeta);
         media.removeEventListener('play', onPlay);
         media.removeEventListener('timeupdate', onTimeUpdate);
+        media.removeEventListener('ended', onEnded);
     };
 }

@@ -5,6 +5,7 @@ import { playHistoryService } from '../services/playHistoryService';
 import { analyticsService } from '../services/analyticsService';
 import { activityTrackingService } from '../services/activityTrackingService';
 import { incrementActivityCounter } from '../components/features/ReviewPromptModal';
+import { attachReliableLoop } from '../utils/audioLoop';
 
 // --- Interfaces ---
 export interface AudioItem {
@@ -148,6 +149,7 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     const audioRef = useRef<HTMLAudioElement | null>(null);
     /** Separate from playlist `audioRef` so book/playlist never clobber the ambience loop */
     const appBgAudioRef = useRef<HTMLAudioElement | null>(null);
+    const appBgLoopEnabledRef = useRef(true);
     const sfxContextRef = useRef<AudioContext | null>(null);
 
     // Get or create SFX AudioContext (reuse for all sound effects)
@@ -369,6 +371,7 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         el.setAttribute('data-gk-role', 'app-background');
         el.preload = 'auto';
         appBgAudioRef.current = el;
+        const detachReliableLoop = attachReliableLoop(el, () => appBgLoopEnabledRef.current);
 
         let cancelled = false;
         (async () => {
@@ -387,11 +390,16 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
         return () => {
             cancelled = true;
+            detachReliableLoop();
             el.pause();
             el.removeAttribute('src');
             appBgAudioRef.current = null;
         };
     }, []);
+
+    useEffect(() => {
+        appBgLoopEnabledRef.current = appBackgroundTrack?.loop !== false;
+    }, [appBackgroundTrack?.loop]);
 
     useEffect(() => {
         const el = appBgAudioRef.current;

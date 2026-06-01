@@ -166,8 +166,16 @@ const DrawingCanvas = forwardRef<DrawingCanvasRef, DrawingCanvasProps>(({ prompt
     // Crayon brush settings
     const CRAYON_MIN_SIZE = 10;
     const CRAYON_MAX_SIZE = 35;
-    // Higher opacity in layered mode since lines stay on top
-    const CRAYON_OPACITY = layeredMode ? 0.7 : 0.3;
+    // In layered mode the line art sits on its own top layer, so coloring can be
+    // fully opaque. Drawing opaque strokes avoids the semi-transparent round-cap
+    // overlap that left "dotted"/beaded circles along each stroke.
+    const CRAYON_OPACITY = layeredMode ? 1 : 0.35;
+
+    // Aspect ratio of the line art and the resulting fitted display box. These keep
+    // the canvas/overlay from being stretched (squished) to the container shape.
+    const [artAspect, setArtAspect] = useState<number | null>(null);
+    const [displaySize, setDisplaySize] = useState<{ w: number; h: number } | null>(null);
+    const hasLoadedRef = useRef(false);
     
     // Storage key for this coloring page
     const STORAGE_PREFIX = 'godlykids_coloring_';
@@ -181,6 +189,11 @@ const DrawingCanvas = forwardRef<DrawingCanvasRef, DrawingCanvasProps>(({ prompt
             img.crossOrigin = 'anonymous';
             
             img.onload = () => {
+                // Record the natural aspect ratio so the canvas/overlay can be
+                // fitted (contain) instead of stretched to the container.
+                if (img.width > 0 && img.height > 0) {
+                    setArtAspect(img.width / img.height);
+                }
                 try {
                     // Create temporary canvas for processing
                     const tempCanvas = document.createElement('canvas');
@@ -320,7 +333,8 @@ const DrawingCanvas = forwardRef<DrawingCanvasRef, DrawingCanvasProps>(({ prompt
         };
     }, []);
 
-    // Initialize canvas
+    // Initialize canvas once so drawing can begin immediately. Precise sizing to
+    // the fitted display box happens in the displaySize effect below.
     useEffect(() => {
         const canvas = canvasRef.current;
         if (!canvas) return;
@@ -328,33 +342,89 @@ const DrawingCanvas = forwardRef<DrawingCanvasRef, DrawingCanvasProps>(({ prompt
         const ctx = canvas.getContext('2d');
         if (!ctx) return;
 
-        const resizeCanvas = () => {
-            const rect = canvas.getBoundingClientRect();
-            const dpr = window.devicePixelRatio || 1;
+        const rect = canvas.getBoundingClientRect();
+        const dpr = window.devicePixelRatio || 1;
 
-            // Set actual size in memory (scaled for device pixel ratio)
-            canvas.width = rect.width * dpr;
-            canvas.height = rect.height * dpr;
+        canvas.width = Math.max(1, Math.round(rect.width * dpr));
+        canvas.height = Math.max(1, Math.round(rect.height * dpr));
+        ctx.setTransform(1, 0, 0, 1, 0, 0);
+        ctx.scale(dpr, dpr);
+        ctx.fillStyle = '#FFFFFF';
+        ctx.fillRect(0, 0, rect.width, rect.height);
 
-            // Scale the drawing context to account for device pixel ratio
-            ctx.scale(dpr, dpr);
+        setCanvasReady(true);
+    }, []);
 
-            // Set display size (CSS pixels)
-            canvas.style.width = rect.width + 'px';
-            canvas.style.height = rect.height + 'px';
+    // Compute the fitted (contain) display box so the line art keeps its aspect
+    // ratio in both portrait and landscape instead of being stretched/squished.
+    // Recomputes on container resize (covers iPad orientation changes).
+    useEffect(() => {
+        const container = containerRef.current;
+        if (!container) return;
 
-            // Fill with white background
-            ctx.fillStyle = '#FFFFFF';
-            ctx.fillRect(0, 0, rect.width, rect.height);
+        const recompute = () => {
+            const rect = container.getBoundingClientRect();
+            if (rect.width === 0 || rect.height === 0) return;
+
+            if (layeredMode && artAspect) {
+                let w = rect.width;
+                let h = rect.width / artAspect;
+                if (h > rect.height) {
+                    h = rect.height;
+                    w = rect.height * artAspect;
+                }
+                setDisplaySize({ w: Math.round(w), h: Math.round(h) });
+            } else {
+                setDisplaySize({ w: Math.round(rect.width), h: Math.round(rect.height) });
+            }
         };
 
-        resizeCanvas();
-        setCanvasReady(true);
+        recompute();
+        const ro = new ResizeObserver(recompute);
+        ro.observe(container);
+        return () => ro.disconnect();
+    }, [layeredMode, artAspect]);
 
-        // Handle window resize
-        window.addEventListener('resize', resizeCanvas);
-        return () => window.removeEventListener('resize', resizeCanvas);
-    }, []);
+    // Resize the canvas backing store to the fitted display box (accounting for
+    // devicePixelRatio) while preserving any existing artwork. This keeps the
+    // drawing crisp and prevents squishing when the box or orientation changes.
+    useEffect(() => {
+        if (!displaySize) return;
+        const canvas = canvasRef.current;
+        if (!canvas) return;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) return;
+
+        const dpr = window.devicePixelRatio || 1;
+        const cssW = displaySize.w;
+        const cssH = displaySize.h;
+        const targetW = Math.max(1, Math.round(cssW * dpr));
+        const targetH = Math.max(1, Math.round(cssH * dpr));
+
+        if (canvas.width === targetW && canvas.height === targetH) return;
+
+        // Snapshot current pixels so coloring survives a resize/orientation change.
+        let snapshot: HTMLCanvasElement | null = null;
+        if (canvas.width > 0 && canvas.height > 0) {
+            snapshot = document.createElement('canvas');
+            snapshot.width = canvas.width;
+            snapshot.height = canvas.height;
+            snapshot.getContext('2d')?.drawImage(canvas, 0, 0);
+        }
+
+        canvas.width = targetW;
+        canvas.height = targetH;
+        canvas.style.width = cssW + 'px';
+        canvas.style.height = cssH + 'px';
+
+        ctx.setTransform(1, 0, 0, 1, 0, 0);
+        ctx.scale(dpr, dpr);
+        ctx.fillStyle = '#FFFFFF';
+        ctx.fillRect(0, 0, cssW, cssH);
+        if (snapshot) {
+            ctx.drawImage(snapshot, 0, 0, cssW, cssH);
+        }
+    }, [displaySize]);
 
     // Load background image when URL changes or canvas is ready
     useEffect(() => {
@@ -431,19 +501,24 @@ const DrawingCanvas = forwardRef<DrawingCanvasRef, DrawingCanvasProps>(({ prompt
     // Load saved progress after canvas and image are ready
     useEffect(() => {
         if (!canvasReady || !storageKey) return;
+        if (hasLoadedRef.current) return;
         
         // In layered mode, wait for image processing to complete
         // In non-layered mode, wait for image to load
         if (layeredMode && !processedLineArt) return;
         if (!layeredMode && backgroundImageUrl && !imageLoaded) return;
+        // Wait until the canvas has been sized to its fitted box so the saved
+        // artwork is drawn at the correct dimensions.
+        if (!displaySize) return;
         
         // Small delay to ensure canvas is fully rendered
         const loadTimeout = setTimeout(() => {
+            hasLoadedRef.current = true;
             loadProgress();
-        }, 100);
+        }, 120);
         
         return () => clearTimeout(loadTimeout);
-    }, [canvasReady, storageKey, layeredMode, processedLineArt, imageLoaded, backgroundImageUrl, loadProgress]);
+    }, [canvasReady, storageKey, layeredMode, processedLineArt, imageLoaded, backgroundImageUrl, loadProgress, displaySize]);
 
     // Apply crayon stroke style
     const applyCrayonStyle = useCallback((ctx: CanvasRenderingContext2D) => {
@@ -452,7 +527,10 @@ const DrawingCanvas = forwardRef<DrawingCanvasRef, DrawingCanvasProps>(({ prompt
         ctx.lineJoin = 'round';
     }, [CRAYON_OPACITY]);
 
-    // Draw with crayon texture effect - 30% transparent so lines clearly show through
+    // Draw a single crayon segment. Opacity is applied once via globalAlpha (not
+    // baked per-segment into a translucent colour), so overlapping round caps of
+    // consecutive segments don't accumulate and create beaded "dots" along the
+    // stroke. In layered mode CRAYON_OPACITY is 1, giving a clean solid fill.
     const drawWithCrayonTexture = useCallback((
         ctx: CanvasRenderingContext2D,
         fromX: number,
@@ -462,31 +540,13 @@ const DrawingCanvas = forwardRef<DrawingCanvasRef, DrawingCanvasProps>(({ prompt
         size: number,
         color: string
     ) => {
-        // Convert color to rgba with 50% opacity
-        const getRGBA = (hexOrName: string) => {
-            // Create temp element to resolve color
-            const temp = document.createElement('div');
-            temp.style.color = hexOrName;
-            document.body.appendChild(temp);
-            const computed = getComputedStyle(temp).color;
-            document.body.removeChild(temp);
-            // Extract rgb values
-            const match = computed.match(/rgb\((\d+),\s*(\d+),\s*(\d+)\)/);
-            if (match) {
-                return `rgba(${match[1]}, ${match[2]}, ${match[3]}, ${CRAYON_OPACITY})`;
-            }
-            return `rgba(0, 0, 0, ${CRAYON_OPACITY})`;
-        };
-        
-        const transparentColor = getRGBA(color);
-        
-        // Simpler crayon effect - single stroke with transparency
-        ctx.globalAlpha = 1; // We bake alpha into the color instead
+        ctx.globalCompositeOperation = 'source-over';
+        ctx.globalAlpha = CRAYON_OPACITY;
         ctx.lineCap = 'round';
         ctx.lineJoin = 'round';
         ctx.lineWidth = size;
-        ctx.strokeStyle = transparentColor;
-        
+        ctx.strokeStyle = color;
+
         ctx.beginPath();
         ctx.moveTo(fromX, fromY);
         ctx.lineTo(toX, toY);
@@ -495,44 +555,25 @@ const DrawingCanvas = forwardRef<DrawingCanvasRef, DrawingCanvasProps>(({ prompt
 
     const getCoordinates = useCallback((e: any) => {
         const canvas = canvasRef.current;
-        const container = containerRef.current;
-        if (!canvas || !container) return { x: 0, y: 0 };
+        if (!canvas) return { x: 0, y: 0 };
 
         // Handle both React synthetic events and native DOM events
         const clientX = e.touches ? e.touches[0].clientX : e.clientX;
         const clientY = e.touches ? e.touches[0].clientY : e.clientY;
 
-        // When NOT zoomed (scale === 1 and no pan), use simple direct coordinates
-        // This ensures no shift when zoom mode is toggled
-        if (scale === 1 && panOffset.x === 0 && panOffset.y === 0) {
-            const rect = canvas.getBoundingClientRect();
-            return {
-                x: clientX - rect.left,
-                y: clientY - rect.top,
-            };
-        }
-
-        // When zoomed, we need to convert screen coordinates to canvas coordinates
-        const containerRect = container.getBoundingClientRect();
-        
-        // Get position relative to container center (since transformOrigin is center)
-        const containerCenterX = containerRect.width / 2;
-        const containerCenterY = containerRect.height / 2;
-        
-        // Position relative to container
-        const relX = clientX - containerRect.left;
-        const relY = clientY - containerRect.top;
-        
-        // Convert from screen space to canvas space
-        // Account for scale and pan offset
-        const canvasX = (relX - containerCenterX - panOffset.x) / scale + containerCenterX;
-        const canvasY = (relY - containerCenterY - panOffset.y) / scale + containerCenterY;
+        // getBoundingClientRect already reflects the CSS transform (zoom + pan)
+        // applied to the ancestor, and the canvas may be letterboxed within its
+        // container. Normalising by the canvas' own rect therefore yields correct
+        // CSS-pixel coordinates in every orientation and at every zoom level.
+        const rect = canvas.getBoundingClientRect();
+        const sx = rect.width / (canvas.clientWidth || rect.width || 1);
+        const sy = rect.height / (canvas.clientHeight || rect.height || 1);
 
         return {
-            x: canvasX,
-            y: canvasY,
+            x: (clientX - rect.left) / sx,
+            y: (clientY - rect.top) / sy,
         };
-    }, [scale, panOffset]);
+    }, []);
 
     const startDrawing = useCallback((e: any) => {
         if (e.cancelable) e.preventDefault();
@@ -642,10 +683,12 @@ const DrawingCanvas = forwardRef<DrawingCanvasRef, DrawingCanvasProps>(({ prompt
         if (!canvas) return;
 
         const handleTouchStart = (e: TouchEvent) => {
+            // Always block the browser's native pan/zoom so a finger (or a kid's
+            // palm + finger = multi-touch) paints instead of dragging the picture.
+            if (e.cancelable) e.preventDefault();
+
             // In zoom mode: disable drawing, use touches for panning/zooming only
             if (zoomMode) {
-                e.preventDefault();
-                
                 if (e.touches.length === 2) {
                     // Two fingers: pinch to zoom
                     lastPinchDistanceRef.current = getTouchDistance(e.touches);
@@ -666,10 +709,12 @@ const DrawingCanvas = forwardRef<DrawingCanvasRef, DrawingCanvasProps>(({ prompt
         };
 
         const handleTouchMove = (e: TouchEvent) => {
+            // Always block native scroll/zoom so dragging a finger paints rather
+            // than panning the whole image.
+            if (e.cancelable) e.preventDefault();
+
             // In zoom mode: handle pan/zoom only (no drawing)
             if (zoomMode) {
-                e.preventDefault();
-                
                 if (e.touches.length === 2) {
                     // Two fingers: pinch zoom AND pan simultaneously
                     const newDistance = getTouchDistance(e.touches);
@@ -799,7 +844,7 @@ const DrawingCanvas = forwardRef<DrawingCanvasRef, DrawingCanvasProps>(({ prompt
             <div 
                 ref={containerRef}
                 className="flex-1 bg-white rounded-lg overflow-hidden shadow-lg mb-2 relative min-h-0"
-                style={{ maxHeight: 'calc(100% - 200px)' }} /* Leave room for crayons & tools */
+                style={{ maxHeight: 'calc(100% - 200px)', touchAction: 'none' }} /* Leave room for crayons & tools */
             >
                 {/* Zoom indicator */}
                 {zoomMode && (
@@ -817,40 +862,48 @@ const DrawingCanvas = forwardRef<DrawingCanvasRef, DrawingCanvasProps>(({ prompt
                     </div>
                 )}
 
-                {/* Zoomable/Pannable Container */}
+                {/* Zoomable/Pannable Container - centers the fitted art box */}
                 <div
                     ref={zoomContainerRef}
-                    className="absolute inset-0"
+                    className="absolute inset-0 flex items-center justify-center"
                     style={{
                         transform: `scale(${scale}) translate(${panOffset.x / scale}px, ${panOffset.y / scale}px)`,
                         transformOrigin: 'center center',
                         transition: isPanning ? 'none' : 'transform 0.1s ease-out'
                     }}
                 >
-                    {/* Bottom Layer: Drawing Canvas (user colors here) */}
-                    <canvas
-                        ref={canvasRef}
-                        className={`absolute inset-0 w-full h-full touch-none ${zoomMode ? 'cursor-move' : 'cursor-crosshair'}`}
-                        onMouseDown={zoomMode ? undefined : startDrawing}
-                        onMouseMove={zoomMode ? undefined : draw}
-                        onMouseUp={zoomMode ? undefined : stopDrawing}
-                        onMouseLeave={zoomMode ? undefined : handleMouseLeave}
-                    />
-                    
-                    {/* Top Layer: Line art overlay (in layered mode) */}
-                    {layeredMode && processedLineArt && (
-                        <img
-                            ref={overlayRef}
-                            src={processedLineArt}
-                            alt="Coloring lines"
-                            className="absolute inset-0 w-full h-full pointer-events-none"
-                            style={{ 
-                                zIndex: 10,
-                                mixBlendMode: 'multiply', // Makes white transparent, keeps black lines
-                                // No objectFit - stretch to fill same as canvas for perfect alignment
-                            }}
+                    {/* Art box sized to the line-art aspect ratio so nothing is squished */}
+                    <div
+                        className="relative"
+                        style={displaySize
+                            ? { width: displaySize.w, height: displaySize.h }
+                            : { width: '100%', height: '100%' }}
+                    >
+                        {/* Bottom Layer: Drawing Canvas (user colors here) */}
+                        <canvas
+                            ref={canvasRef}
+                            className={`absolute inset-0 w-full h-full touch-none ${zoomMode ? 'cursor-move' : 'cursor-crosshair'}`}
+                            onMouseDown={zoomMode ? undefined : startDrawing}
+                            onMouseMove={zoomMode ? undefined : draw}
+                            onMouseUp={zoomMode ? undefined : stopDrawing}
+                            onMouseLeave={zoomMode ? undefined : handleMouseLeave}
                         />
-                    )}
+
+                        {/* Top Layer: Line art overlay (in layered mode) */}
+                        {layeredMode && processedLineArt && (
+                            <img
+                                ref={overlayRef}
+                                src={processedLineArt}
+                                alt="Coloring lines"
+                                className="absolute inset-0 w-full h-full pointer-events-none"
+                                style={{ 
+                                    zIndex: 10,
+                                    mixBlendMode: 'multiply', // Makes white transparent, keeps black lines
+                                    // Box matches the art aspect ratio, so filling it keeps alignment without distortion
+                                }}
+                            />
+                        )}
+                    </div>
                 </div>
                 
                 {/* Loading indicator */}

@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { removeEmotionalCues } from '../../utils/textProcessing';
 import { attachPlaybackTrim } from '../../utils/playbackTrim';
 import TrimmedPlaybackVideo from '../media/TrimmedPlaybackVideo';
@@ -98,11 +98,20 @@ interface PageData {
 // Scroll state types
 export type ScrollState = 'hidden' | 'mid' | 'max';
 
+/** Resolve scroll band heights; legacy pages may only have scrollHeight. */
+function resolveScrollHeights(page: PageData): { max: number; mid: number } {
+    const max = page.scrollMaxHeight ?? page.scrollHeight ?? 60;
+    const mid = page.scrollMidHeight ?? Math.max(30, max - 30);
+    return { max, mid };
+}
+
 interface BookPageRendererProps {
     page: PageData;
     activeTextBoxIndex: number | null;
     scrollState: ScrollState;
     onScrollStateChange?: (newState: ScrollState) => void;
+    /** Tap scroll/text area to hide or restore scroll (parent remembers pre-hide state). */
+    onToggleScrollVisibility?: () => void;
     onPlayText?: (text: string, index: number, e: React.MouseEvent) => void;
     highlightedWordIndex?: number;
     wordAlignment?: { words: Array<{ word: string; start: number; end: number }> } | null;
@@ -122,6 +131,7 @@ export const BookPageRenderer: React.FC<BookPageRendererProps> = ({
     activeTextBoxIndex,
     scrollState,
     onScrollStateChange,
+    onToggleScrollVisibility,
     onPlayText,
     highlightedWordIndex,
     wordAlignment,
@@ -132,8 +142,15 @@ export const BookPageRenderer: React.FC<BookPageRendererProps> = ({
     characterPoses,
     showCharacterOverlay = false
 }) => {
+    const { max: scrollMaxH, mid: scrollMidH } = resolveScrollHeights(page);
+    const currentScrollHeightNum = scrollState === 'max' ? scrollMaxH : scrollMidH;
+    const scrollOffset = page.scrollOffsetY || 0;
+    const motionEnabled = scrollState !== 'hidden';
+
     // For backward compatibility
     const showScroll = scrollState !== 'hidden';
+    const containerRef = useRef<HTMLDivElement>(null);
+    const [layoutReady, setLayoutReady] = useState(false);
     // Refs for text box containers to enable scrolling
     const textBoxRefs = useRef<{ [key: number]: HTMLDivElement | null }>({});
     const soundEffectRef = useRef<HTMLAudioElement | null>(null);
@@ -306,6 +323,31 @@ export const BookPageRenderer: React.FC<BookPageRendererProps> = ({
         audio.volume = audible ? 0.7 : 0;
     }, [ambientVideoSoundEnabled, isTTSPlaying, page.id, page.backgroundAudioUrl, page.useVideoSequence, sortedVideoSequence, currentVideoIndex]);
 
+    // iOS/iPad: percentage clip-path and top can mis-measure until the container has a stable size.
+    useLayoutEffect(() => {
+        setLayoutReady(false);
+        const el = containerRef.current;
+        if (!el) {
+            setLayoutReady(true);
+            return;
+        }
+        let raf2 = 0;
+        const raf1 = requestAnimationFrame(() => {
+            void el.offsetHeight;
+            raf2 = requestAnimationFrame(() => setLayoutReady(true));
+        });
+        const ro = new ResizeObserver(() => {
+            void el.offsetHeight;
+            setLayoutReady(true);
+        });
+        ro.observe(el);
+        return () => {
+            cancelAnimationFrame(raf1);
+            if (raf2) cancelAnimationFrame(raf2);
+            ro.disconnect();
+        };
+    }, [page.id, scrollMaxH, scrollMidH]);
+
     // Swipe detection for scroll height changes
     const touchStartY = useRef<number>(0);
     const touchEndY = useRef<number>(0);
@@ -333,9 +375,11 @@ export const BookPageRenderer: React.FC<BookPageRendererProps> = ({
     };
     
     const handleScrollClick = (e: React.MouseEvent) => {
-        // Tap on scroll to toggle visibility (mid <-> hidden)
+        // Tap on scroll to toggle visibility (restore pre-hide state via parent when available)
         e.stopPropagation();
-        if (onScrollStateChange) {
+        if (onToggleScrollVisibility) {
+            onToggleScrollVisibility();
+        } else if (onScrollStateChange) {
             const newState: ScrollState = scrollState === 'hidden' ? 'mid' : 'hidden';
             onScrollStateChange(newState);
         }
@@ -531,6 +575,7 @@ export const BookPageRenderer: React.FC<BookPageRendererProps> = ({
 
     return (
         <div
+            ref={containerRef}
             className="w-full h-full relative bg-gradient-to-b from-[#fdf6e3] to-[#e8d5b7] overflow-hidden shadow-2xl"
             style={{
                 // Lock background in place - prevent iOS overscroll/bounce
@@ -913,13 +958,10 @@ export const BookPageRenderer: React.FC<BookPageRendererProps> = ({
             {/* Scroll Image Layer - Three states: hidden, mid, max */}
             {page.scrollUrl && (
                 <div
-                    className="absolute transition-all duration-500 ease-in-out"
+                    className="absolute ease-in-out"
                     style={{ 
                         zIndex: 15, // Between z-10 (gradient) and z-20 (text boxes)
-                        // Use scrollMidHeight/scrollMaxHeight if set, otherwise fallback to defaults
-                        height: scrollState === 'max' 
-                            ? `${page.scrollMaxHeight || 60}%` 
-                            : `${page.scrollMidHeight || 30}%`,
+                        height: `${currentScrollHeightNum}%`,
                         width: `${page.scrollWidth || 100}%`,
                         // Position horizontally: center + offset
                         left: `calc(50% + ${page.scrollOffsetX || 0}%)`,
@@ -927,7 +969,8 @@ export const BookPageRenderer: React.FC<BookPageRendererProps> = ({
                         transform: scrollState === 'hidden' 
                             ? 'translateX(-50%) translateY(100%)' 
                             : 'translateX(-50%)',
-                        bottom: `${page.scrollOffsetY || 0}%` // Apply vertical offset
+                        bottom: `${scrollOffset}%`, // Apply vertical offset
+                        transition: layoutReady && motionEnabled ? 'all 0.5s ease-in-out' : 'none',
                     }}
                 >
                     <img
@@ -942,11 +985,10 @@ export const BookPageRenderer: React.FC<BookPageRendererProps> = ({
             {/* Swipe Indicator - Inside the scroll, at the top */}
             {page.scrollUrl && scrollState !== 'hidden' && (
                 <div 
-                    className="absolute left-1/2 transform -translate-x-1/2 z-20 pointer-events-none transition-all duration-500 ease-in-out"
+                    className="absolute left-1/2 transform -translate-x-1/2 z-20 pointer-events-none ease-in-out"
                     style={{
-                        bottom: scrollState === 'max' 
-                            ? `calc(${page.scrollMaxHeight || 60}% + ${page.scrollOffsetY || 0}% - 24px)` 
-                            : `calc(${page.scrollMidHeight || 30}% + ${page.scrollOffsetY || 0}% - 24px)`
+                        bottom: `calc(${currentScrollHeightNum}% + ${scrollOffset}% - 24px)`,
+                        transition: layoutReady && motionEnabled ? 'all 0.5s ease-in-out' : 'none',
                     }}
                 >
                     <div className="flex flex-col items-center gap-0.5 opacity-50">
@@ -964,12 +1006,10 @@ export const BookPageRenderer: React.FC<BookPageRendererProps> = ({
             <div
                 className="absolute inset-0 pointer-events-none z-50"
                 style={page.scrollUrl ? {
-                    // Clip to the scroll area - text should not appear above OR below it
-                    // inset(top right bottom left) - clips from each edge
                     clipPath: scrollState === 'hidden' 
                         ? 'inset(100% 0 0 0)' // Hide all when scroll is hidden
-                        : `inset(${100 - (scrollState === 'max' ? (page.scrollMaxHeight || 60) : (page.scrollMidHeight || 30)) - (page.scrollOffsetY || 0)}% 0 ${(page.scrollOffsetY || 0) + 5}% 0)`,
-                    transition: 'clip-path 0.5s ease-in-out',
+                        : `inset(${100 - currentScrollHeightNum - scrollOffset}% 0 ${scrollOffset + 5}% 0)`,
+                    transition: layoutReady && motionEnabled ? 'clip-path 0.5s ease-in-out' : 'none',
                 } : {}}
             >
                 {page.textBoxes?.map((box, idx) => {
@@ -983,38 +1023,21 @@ export const BookPageRenderer: React.FC<BookPageRendererProps> = ({
                     const boxX = typeof box.x === 'number' ? box.x : 0;
                     const boxY = typeof box.y === 'number' ? box.y : 0;
                     
-                    // Portal shows 60% scroll height when editing - that's where text was positioned
-                    // The "design" scroll height is the MAX height (what portal shows)
-                    const designScrollHeight = page.scrollMaxHeight || 60; // Portal shows max height when editing
-                    const designScrollTop = 100 - designScrollHeight; // e.g., 40% from top for 60% scroll
-                    const scrollOffset = page.scrollOffsetY || 0;
-                    
-                    // Current scroll height depends on app state (mid/max/hidden)
-                    const currentScrollHeightNum = scrollState === 'max' 
-                        ? (page.scrollMaxHeight || 60) 
-                        : (page.scrollMidHeight || 30);
-                    const currentScrollTop = 100 - currentScrollHeightNum - scrollOffset;
-                    
                     const isActive = activeTextBoxIndex === idx;
                     const shouldHideTextBoxes = page.scrollUrl && scrollState === 'hidden';
                     
-                    // Calculate text position
+                    // Calculate text position (match portal PageEditor: max(boxY, scroll top + buffer))
                     let textTopStyle: string;
                     let textMaxHeightStyle: string;
                     
                     if (page.scrollUrl) {
-                        // Position text inside scroll area with small buffer from top
+                        const scrollTopPosition = `calc(100% - ${currentScrollHeightNum}% - ${scrollOffset}% + 12px)`;
+                        textTopStyle = `max(${boxY}%, ${scrollTopPosition})`;
                         const scrollStartPercent = 100 - currentScrollHeightNum - scrollOffset + 3;
-                        // Text starts at scroll top + buffer, or boxY if it's lower
-                        const effectiveTop = Math.max(boxY, scrollStartPercent);
-                        textTopStyle = `${effectiveTop}%`;
-                        // Max height: from effectiveTop to bottom of scroll (with buffer)
-                        // Scroll bottom is at scrollOffset% from viewport bottom
-                        // So max height = (100% - scrollOffset% - buffer) - effectiveTop%
-                        const scrollBottomBuffer = scrollOffset + 8; // 8% buffer from scroll bottom
-                        textMaxHeightStyle = `calc(${100 - scrollBottomBuffer}% - ${effectiveTop}%)`;
+                        const effectiveTopPercent = Math.max(boxY, scrollStartPercent);
+                        const scrollBottomBuffer = scrollOffset + 8;
+                        textMaxHeightStyle = `calc(${100 - scrollBottomBuffer}% - ${effectiveTopPercent}%)`;
                     } else {
-                        // No scroll - use boxY position directly
                         textTopStyle = `${boxY}%`;
                         textMaxHeightStyle = `calc(100% - ${boxY}% - 40px)`;
                     }
@@ -1057,7 +1080,9 @@ export const BookPageRenderer: React.FC<BookPageRendererProps> = ({
                                 scrollBehavior: 'smooth',
                                 // Only use opacity for smooth hide/show - no translateY to avoid layout jump
                                 opacity: hideThisBoxSequential ? 0 : shouldHideTextBoxes ? 0 : 1,
-                                transition: 'opacity 0.4s ease-in-out, top 0.5s ease-in-out',
+                                transition: layoutReady
+                                    ? 'opacity 0.4s ease-in-out, top 0.5s ease-in-out, max-height 0.5s ease-in-out'
+                                    : 'none',
                                 pointerEvents:
                                     hideThisBoxSequential || shouldHideTextBoxes ? 'none' : 'auto',
                                 ...(hideThisBoxSequential ? { display: 'none' as const } : {}),

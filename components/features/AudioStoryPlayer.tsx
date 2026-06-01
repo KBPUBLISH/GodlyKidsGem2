@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { Play, Pause, RotateCcw, SkipForward, Volume2, VolumeX, X, Sparkles } from 'lucide-react';
+import { attachReliableLoop } from '../../utils/audioLoop';
 
 // Word alignment from TTS API
 interface WordAlignment {
@@ -46,6 +47,7 @@ const AudioStoryPlayer: React.FC<AudioStoryPlayerProps> = ({
     // Refs
     const narrationRef = useRef<HTMLAudioElement>(null);
     const musicRef = useRef<HTMLAudioElement>(null);
+    const musicLoopDetachRef = useRef<(() => void) | null>(null);
     const textContainerRef = useRef<HTMLDivElement>(null);
     const highlightedWordRef = useRef<HTMLSpanElement>(null);
 
@@ -76,10 +78,12 @@ const AudioStoryPlayer: React.FC<AudioStoryPlayerProps> = ({
             
             // Set up background music
             if (musicRef.current && story.backgroundMusicUrl) {
+                musicLoopDetachRef.current?.();
                 musicRef.current.src = story.backgroundMusicUrl;
                 musicRef.current.volume = 0.15;
                 musicRef.current.loop = true;
                 musicRef.current.load();
+                musicLoopDetachRef.current = attachReliableLoop(musicRef.current, true);
             }
             
             // Set up word alignment
@@ -104,6 +108,8 @@ const AudioStoryPlayer: React.FC<AudioStoryPlayerProps> = ({
             if (narrationRef.current) {
                 narrationRef.current.pause();
             }
+            musicLoopDetachRef.current?.();
+            musicLoopDetachRef.current = null;
             if (musicRef.current) {
                 musicRef.current.pause();
             }

@@ -53,7 +53,7 @@ const PaywallIntroPage: React.FC = () => {
             </p>
             <div className="relative">
               <p className="font-display font-extrabold text-4xl sm:text-5xl leading-none tracking-tight bg-gradient-to-r from-[#6366f1] via-[#8b5cf6] to-[#ec4899] bg-clip-text text-transparent">
-                3-day free trial
+                14-day free trial
               </p>
               <span
                 className="absolute -right-1 -top-2 text-2xl animate-bounce select-none"

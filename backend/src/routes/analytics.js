@@ -361,7 +361,7 @@ router.get('/users', async (req, res) => {
                       : 'app';
 
             const subStatus = user.subscriptionStatus || 'free';
-            /** Email/password login (User row) but still on free tier — never started 3-day trial / subscription. */
+            /** Email/password login (User row) but still on free tier — never started 14-day trial / subscription. */
             const loginNoTrialYet = resolvedSource === 'auth' && subStatus === 'free';
 
             return {
@@ -426,7 +426,7 @@ router.get('/users', async (req, res) => {
         const authUserCount = statsUsers.filter(u => u.source === 'auth').length;
         const appOnlyUserCount = statsUsers.filter(u => u.source === 'app').length;
 
-        /** Login (User) accounts still on free tier — did not start 3-day trial / paid subscription. */
+        /** Login (User) accounts still on free tier — did not start 14-day trial / paid subscription. */
         const loginNeverStartedTrialStats = statsUsers.filter(
             (u) => u.source === 'auth' && (u.subscriptionStatus || 'free') === 'free'
         ).length;

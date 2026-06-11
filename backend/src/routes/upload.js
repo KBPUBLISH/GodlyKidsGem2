@@ -11,6 +11,10 @@ const ffmpeg = require('fluent-ffmpeg');
 const ffmpegInstaller = require('@ffmpeg-installer/ffmpeg');
 const axios = require('axios');
 const Book = require('../models/Book');
+const { processCoverImage } = require('../utils/imageProcessing');
+
+// Long-lived cache for immutable cover assets (paths are timestamp-unique).
+const COVER_CACHE_CONTROL = 'public, max-age=31536000, immutable';
 
 // Configure ffmpeg binary (bundled via @ffmpeg-installer/ffmpeg)
 let ffmpegAvailable = false;
@@ -218,16 +222,19 @@ const extractAudioFromVideo = (videoBuffer, originalFilename) => {
 };
 
 // Upload buffer to GCS and return public URL
-const uploadBufferToGCS = (buffer, filePath, contentType) => {
+const uploadBufferToGCS = (buffer, filePath, contentType, options = {}) => {
     return new Promise((resolve, reject) => {
         if (!bucket) {
             reject(new Error('GCS not configured'));
             return;
         }
         
+        const metadata = { contentType };
+        if (options.cacheControl) metadata.cacheControl = options.cacheControl;
+
         const blob = bucket.file(filePath);
         const blobStream = blob.createWriteStream({
-            metadata: { contentType },
+            metadata,
             resumable: false
         });
         
@@ -465,6 +472,44 @@ router.post('/image', upload.single('file'), async (req, res) => {
             // Fallback to simple structure for backward compatibility
             filePath = `images/${Date.now()}_${req.file.originalname}`;
             console.log('Using fallback structure (no bookId/type):', filePath);
+        }
+
+        // Optimize cover art: convert to WebP and generate a small thumbnail
+        // variant. Both book covers and playlist/audiobook covers use type=cover.
+        if (type === 'cover' && req.file.mimetype?.startsWith('image/')) {
+            try {
+                const variants = await processCoverImage(req.file.buffer, filePath);
+                const fullVariant = variants.find((v) => v.variant === 'full');
+                const originalSize = req.file.buffer.length;
+
+                if (bucket && process.env.GCS_BUCKET_NAME) {
+                    await Promise.all(
+                        variants.map((v) =>
+                            uploadBufferToGCS(v.buffer, v.path, v.contentType, {
+                                cacheControl: COVER_CACHE_CONTROL,
+                            })
+                        )
+                    );
+                    const publicUrl = `https://storage.googleapis.com/${bucket.name}/${fullVariant.path}`;
+                    console.log(
+                        `🖼️ Cover optimized to WebP: ${(originalSize / 1024).toFixed(0)}KB → ` +
+                        `${(fullVariant.buffer.length / 1024).toFixed(0)}KB (+ thumb)`
+                    );
+                    return res.status(200).json({ url: publicUrl, path: fullVariant.path, optimized: true });
+                }
+
+                // Local fallback: write every variant to disk.
+                let fullUrl = null;
+                for (const v of variants) {
+                    const u = await saveFileLocally({ buffer: v.buffer }, v.path, req);
+                    if (v.variant === 'full') fullUrl = u;
+                }
+                console.log(`🖼️ Cover optimized to WebP (local): ${fullVariant.path}`);
+                return res.status(200).json({ url: fullUrl, path: fullVariant.path, optimized: true });
+            } catch (optErr) {
+                console.warn('⚠️ Cover optimization failed, uploading original:', optErr.message);
+                // fall through to the standard upload path below
+            }
         }
 
         // Check if GCS is configured

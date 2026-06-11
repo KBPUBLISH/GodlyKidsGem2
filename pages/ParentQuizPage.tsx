@@ -839,7 +839,7 @@ const ParentQuizPage: React.FC = () => {
                   ✨ Founding Family Plan ✨
                 </p>
                 <div className="bg-white/80 rounded-xl p-4 my-4">
-                  <p className="text-sm text-stone-500 mb-1">3-day free trial, then</p>
+                  <p className="text-sm text-stone-500 mb-1">14-day free trial, then</p>
                   <div className="flex items-center justify-center gap-3">
                     <div>
                       <p className="text-2xl font-bold text-amber-600">$39.99/yr</p>
@@ -859,7 +859,7 @@ const ParentQuizPage: React.FC = () => {
                 onClick={handleSubscribeClick}
                 className="w-full py-4 bg-gradient-to-r from-amber-500 to-amber-600 text-white font-semibold text-lg rounded-2xl shadow-lg shadow-amber-500/25 hover:shadow-amber-500/40 transition-all duration-300 active:scale-[0.98] flex items-center justify-center gap-2 mb-4"
               >
-                🎓 Start 3-Day Free Trial
+                🎓 Start 14-Day Free Trial
                 <ChevronRight className="w-5 h-5" />
               </button>
 

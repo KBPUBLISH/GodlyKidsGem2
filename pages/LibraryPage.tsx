@@ -14,6 +14,7 @@ import { getApiBaseUrl, getMonthlyBookBaseUrl } from '../services/apiService';
 import { userPlaylistService, UserPlaylist } from '../services/userPlaylistService';
 import { authService } from '../services/authService';
 import { FEATURE_CREATE_YOUR_STORY } from '../constants';
+import { getCoverThumb } from '../utils/coverImage';
 
 const ageOptions = ['All Ages', '3+', '4+', '5+', '6+', '7+', '8+', '9+', '10+'];
 
@@ -366,7 +367,7 @@ const LibraryPage: React.FC = () => {
               <div className="aspect-square bg-gradient-to-br from-purple-500 to-pink-600 relative overflow-hidden">
                 {playlist.coverImage ? (
                   <img
-                    src={playlist.coverImage}
+                    src={getCoverThumb(playlist.coverImage)}
                     alt={playlist.name}
                     className="w-full h-full object-cover"
                     loading="lazy"
@@ -404,7 +405,7 @@ const LibraryPage: React.FC = () => {
               <div className="aspect-square bg-gradient-to-br from-indigo-500 to-purple-600 relative overflow-hidden">
                 {playlist.coverImage ? (
                   <img
-                    src={playlist.coverImage}
+                    src={getCoverThumb(playlist.coverImage)}
                     alt={playlist.title}
                     className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-300"
                     loading="lazy"

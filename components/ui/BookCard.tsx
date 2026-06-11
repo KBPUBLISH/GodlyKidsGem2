@@ -5,6 +5,7 @@ import PremiumBadge from './PremiumBadge';
 import { useUser } from '../../context/UserContext';
 import { useLanguage } from '../../context/LanguageContext';
 import { DEFAULT_BOOK_COVER } from '../../utils/placeholderImage';
+import { getCoverThumb } from '../../utils/coverImage';
 
 interface BookCardProps {
   book: Book;
@@ -45,7 +46,8 @@ const BookCard: React.FC<BookCardProps> = ({ book, onClick }) => {
   const getImageSrc = useCallback(() => {
     if (imageError) return DEFAULT_COVER;
     if (!book.coverUrl || book.coverUrl.trim() === '') return DEFAULT_COVER;
-    return book.coverUrl;
+    // Grid cards are small — use the lightweight thumbnail variant when available.
+    return getCoverThumb(book.coverUrl);
   }, [book.coverUrl, imageError]);
 
   const handleImageError = () => {
@@ -67,6 +69,7 @@ const BookCard: React.FC<BookCardProps> = ({ book, onClick }) => {
           alt={book.title}
           className={`w-full h-full object-cover ${isLocked ? 'brightness-75' : ''}`}
           loading="lazy"
+          decoding="async"
           onError={handleImageError}
         />
         {isLocked && (

@@ -84,8 +84,8 @@ router.post('/create-checkout-session', async (req, res) => {
           userId: userId || 'anonymous',
           plan: plan,
         },
-        // 3-day free trial
-        trial_period_days: 3,
+        // 14-day free trial
+        trial_period_days: 14,
       };
     }
 

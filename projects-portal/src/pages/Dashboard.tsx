@@ -55,7 +55,7 @@ interface UserData {
     onboardingCompletedAt?: string;
     /** Row origin: login table vs app-only profile */
     source?: 'auth' | 'app';
-    /** Email/password login (User) and still on free tier — never started 3-day trial (server-computed). */
+    /** Email/password login (User) and still on free tier — never started 14-day trial (server-computed). */
     loginNoTrialYet?: boolean;
 }
 
@@ -473,7 +473,7 @@ const Dashboard: React.FC = () => {
                         type="button"
                         onClick={downloadLoginNoTrialCsv}
                         disabled={!data?.users?.length}
-                        title="Export only email/password logins still on free (never started 3-day trial)"
+                        title="Export only email/password logins still on free (never started 14-day trial)"
                         className="flex items-center gap-2 px-4 py-2 bg-amber-50 border border-amber-200 text-amber-900 rounded-lg hover:bg-amber-100 disabled:opacity-50 text-sm font-medium"
                     >
                         <Download className="w-4 h-4" />
@@ -1101,7 +1101,7 @@ const Dashboard: React.FC = () => {
                                                         {isLoginAccountNoTrial(user) && (
                                                             <span
                                                                 className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-amber-100 text-amber-900 border border-amber-200"
-                                                                title="Email/password login, still on free — did not start 3-day trial"
+                                                                title="Email/password login, still on free — did not start 14-day trial"
                                                             >
                                                                 No trial
                                                             </span>

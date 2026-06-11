@@ -403,7 +403,7 @@ const DemoTimer: React.FC = () => {
             Unlock Full Access
           </button>
           <p className="text-gray-400 text-xs mt-3">
-            3-day free trial • Cancel anytime
+            14-day free trial • Cancel anytime
           </p>
         </div>
       </div>
@@ -549,7 +549,7 @@ const DemoTimer: React.FC = () => {
               {/* Free Trial Badge */}
               <div className="text-center mb-4">
                 <div className="inline-block bg-gradient-to-r from-[#FFD700] to-[#FFA500] px-4 py-1.5 rounded-full shadow-md">
-                  <span className="text-[#3E1F07] font-extrabold text-sm">🎁 3-DAY FREE TRIAL</span>
+                  <span className="text-[#3E1F07] font-extrabold text-sm">🎁 14-DAY FREE TRIAL</span>
                 </div>
               </div>
               
@@ -599,7 +599,7 @@ const DemoTimer: React.FC = () => {
                   <Crown className="w-5 h-5" />
                   Create Account & Start Free Trial
                 </span>
-                <span className="text-xs font-normal opacity-80">No charge for 3 days • Cancel anytime</span>
+                <span className="text-xs font-normal opacity-80">No charge for 14 days • Cancel anytime</span>
               </button>
               
               {/* Continue Demo Link */}

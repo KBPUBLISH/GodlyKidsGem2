@@ -351,14 +351,14 @@ async function gatherPageReferenceImages(customBook, pageDoc) {
 
 /**
  * Vertex AI image model for page generation.
- * - gemini-2.5-flash-image (default): ~$30/image output, GA, regional endpoints.
- * - gemini-3-pro-image-preview: ~$120/image output (4×), preview, higher quality; use VERTEX_AI_IMAGE_LOCATION=global.
- * Override with VERTEX_AI_IMAGE_MODEL only if you need 3 Pro and accept the higher cost.
+ * - gemini-3.1-flash-image (default): fast, cost-effective, regional endpoints.
+ * - gemini-3-pro-image-preview: higher quality, higher cost; use VERTEX_AI_IMAGE_LOCATION=global.
+ * Override with VERTEX_AI_IMAGE_MODEL to use a different model.
  */
-const VERTEX_IMAGE_MODEL = (process.env.VERTEX_AI_IMAGE_MODEL || 'gemini-2.5-flash-image').trim() || 'gemini-2.5-flash-image';
+const VERTEX_IMAGE_MODEL = (process.env.VERTEX_AI_IMAGE_MODEL || 'gemini-3.1-flash-image').trim() || 'gemini-3.1-flash-image';
 
 /**
- * Vertex AI regions that support Gemini 2.5 Flash Image (Standard PayGo & Provisioned Throughput).
+ * Vertex AI regions that support the Gemini flash image model (Standard PayGo & Provisioned Throughput).
  * Per model availability: Global, US (7), Europe (6). Use VERTEX_AI_IMAGE_LOCATION=global for global endpoint.
  * Round-robin across these to spread load and reduce 429s.
  */
@@ -370,7 +370,7 @@ const VERTEX_IMAGE_REGIONS_DEFAULT = [
 let _vertexRegionsLogged = false;
 
 /**
- * Get Vertex AI endpoint for Gemini 2.5 Flash Image.
+ * Get Vertex AI endpoint for the Gemini flash image model.
  * - VERTEX_AI_IMAGE_LOCATION=global → use global endpoint (separate quota, can reduce 429s).
  * - VERTEX_AI_IMAGE_REGIONS=us-central1,us-east1,... → round-robin across those regions only.
  * - Otherwise round-robin across VERTEX_IMAGE_REGIONS_DEFAULT (all supported regions) to maximize effective RPM.
@@ -411,7 +411,7 @@ function getVertexImageEndpoint(pageIndex, attemptOffset) {
 }
 
 /**
- * Generate one page image with Vertex Gemini 2.5 Flash Image for all pages (superior consistency).
+ * Generate one page image with the Vertex Gemini flash image model for all pages (superior consistency).
  * Uses child + portal character reference images when available; supports text-only when no refs.
  * attemptOffset: 0 = first try, 1 = first retry (use next region), 2 = second retry (use next region).
  * Returns { imageUrl: string | null, httpStatus: number } so caller can use longer backoff on 429.
@@ -571,7 +571,7 @@ async function generatePageImageWithVertexGemini(customBook, pageDoc, characterS
         });
         await blob.makePublic().catch(() => {});
         const imageUrl = `https://storage.googleapis.com/${bucket.name}/${filename}`;
-        console.log('MonthlyBookGenerator: Generated page', pageNumber, 'with Vertex Gemini 2.5 Flash Image', imageUrl);
+        console.log('MonthlyBookGenerator: Generated page', pageNumber, 'with Vertex Gemini image model', VERTEX_IMAGE_MODEL, imageUrl);
         return { imageUrl, httpStatus: 200 };
     } catch (err) {
         const status = err.response?.status;
@@ -604,7 +604,7 @@ function vertexBackoffMs(attempt, is429) {
 }
 
 /**
- * Gemini 2.5 Flash Image uses Standard PayGo (shared capacity). Use exponential backoff on 429
+ * The Gemini flash image model uses Standard PayGo (shared capacity). Use exponential backoff on 429
  * and smooth request rate (delay between pages). See:
  * https://cloud.google.com/vertex-ai/generative-ai/docs/standard-paygo
  * https://cloud.google.com/vertex-ai/generative-ai/docs/provisioned-throughput/error-code-429
@@ -613,7 +613,7 @@ function vertexBackoffMs(attempt, is429) {
 const DELAY_BETWEEN_PAGES_MS = parseInt(process.env.MONTHLY_BOOK_DELAY_BETWEEN_PAGES_MS, 10) || 5000;
 
 /**
- * Generate one page background image for Book-based flow. Gemini 2.5 Flash only; retries up to PAGE_GEMINI_MAX_ATTEMPTS.
+ * Generate one page background image for Book-based flow. Gemini flash image only; retries up to PAGE_GEMINI_MAX_ATTEMPTS.
  * No Imagen fallback. Uses page.sceneDescription or page text + character style; uploads to GCS and returns URL.
  * mainCharacterStyleDesc: style for the main character (kid) only.
  * wholeBookStyleDesc: style for the entire book (all characters + environment); can differ from main character.
@@ -649,7 +649,7 @@ async function generatePageImageForBook(customBook, pageDoc, characterStylePromp
             await new Promise((r) => setTimeout(r, delayMs));
         }
     }
-    throw new Error('Page ' + pageNumber + ': Gemini 2.5 Flash Image failed after ' + PAGE_GEMINI_MAX_ATTEMPTS + ' attempts (last status ' + lastHttpStatus + '). Use exponential backoff; consider MONTHLY_BOOK_DELAY_BETWEEN_PAGES_MS or Provisioned Throughput.');
+    throw new Error('Page ' + pageNumber + ': Gemini flash image failed after ' + PAGE_GEMINI_MAX_ATTEMPTS + ' attempts (last status ' + lastHttpStatus + '). Use exponential backoff; consider MONTHLY_BOOK_DELAY_BETWEEN_PAGES_MS or Provisioned Throughput.');
 }
 
 /**

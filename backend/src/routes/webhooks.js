@@ -75,6 +75,7 @@ const findUserInAllCollections = async (externalId) => {
  * RevenueCat sends events like:
  * - INITIAL_PURCHASE
  * - RENEWAL
+ * - NON_RENEWING_PURCHASE (one-time / lifetime purchases)
  * - CANCELLATION
  * - EXPIRATION
  * - etc.
@@ -121,6 +122,7 @@ router.post('/revenuecat', async (req, res) => {
             case 'RENEWAL':
             case 'PRODUCT_CHANGE':
             case 'RESTORE':
+            case 'NON_RENEWING_PURCHASE': // One-time / lifetime purchases (e.g. App Store "Lifetimepurchase")
                 // User has active subscription
                 console.log(`✅ User ${primaryId} has active subscription`);
                 

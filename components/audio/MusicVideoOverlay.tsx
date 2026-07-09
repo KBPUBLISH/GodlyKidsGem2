@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { X } from 'lucide-react';
+import { X, Airplay } from 'lucide-react';
 
 export interface MusicVideo {
     _id: string;
@@ -27,6 +27,8 @@ const MusicVideoOverlay: React.FC<MusicVideoOverlayProps> = ({ video, onClose })
     // When a landscape (wide) video plays on a portrait screen we rotate it 90°
     // so it fills the whole screen in its native aspect ratio (like fullscreen video).
     const [rotate, setRotate] = useState(false);
+    // Whether the WebKit Remote Playback API (explicit AirPlay picker) is available.
+    const [canShowAirPlayPicker, setCanShowAirPlayPicker] = useState(false);
 
     const recomputeRotation = useCallback(() => {
         const v = videoRef.current;
@@ -44,6 +46,26 @@ const MusicVideoOverlay: React.FC<MusicVideoOverlayProps> = ({ video, onClose })
             window.removeEventListener('orientationchange', recomputeRotation);
         };
     }, [recomputeRotation]);
+
+    // Enable AirPlay: `x-webkit-airplay="allow"` lets iOS/Safari show the AirPlay
+    // route picker in the native video controls. It's a non-standard attribute so
+    // we set it imperatively rather than via JSX. We also detect the explicit
+    // WebKit Remote Playback picker API so we can render our own AirPlay button.
+    useEffect(() => {
+        const v = videoRef.current;
+        if (!v) return;
+        v.setAttribute('x-webkit-airplay', 'allow');
+        setCanShowAirPlayPicker(
+            typeof (v as any).webkitShowPlaybackTargetPicker === 'function'
+        );
+    }, []);
+
+    const showAirPlayPicker = useCallback(() => {
+        const v = videoRef.current as any;
+        if (v && typeof v.webkitShowPlaybackTargetPicker === 'function') {
+            v.webkitShowPlaybackTargetPicker();
+        }
+    }, []);
 
     // Lock background scroll while the fullscreen player is open.
     useEffect(() => {
@@ -65,6 +87,17 @@ const MusicVideoOverlay: React.FC<MusicVideoOverlayProps> = ({ video, onClose })
             >
                 <X size={24} strokeWidth={2.5} />
             </button>
+
+            {canShowAirPlayPicker && (
+                <button
+                    onClick={showAirPlayPicker}
+                    className="absolute right-[68px] z-10 w-11 h-11 rounded-full bg-white/15 backdrop-blur-md border border-white/30 flex items-center justify-center text-white active:scale-90 transition-transform"
+                    style={{ top: 'calc(var(--safe-area-top, 12px) + 8px)' }}
+                    aria-label="AirPlay"
+                >
+                    <Airplay size={22} strokeWidth={2.5} />
+                </button>
+            )}
 
             {!rotate && (
                 <div

@@ -13,37 +13,70 @@ const formatDuration = (seconds?: number) => {
     return `${mins}:${secs.toString().padStart(2, '0')}`;
 };
 
-// Marquee-style light bulbs evenly spaced around the container frame,
-// with a classic alternating twinkle (like a theater/cinema sign).
+// Marquee-style multi-color light bulbs that hug the container's rounded frame.
+// Bulbs run along the straight edges AND follow the corner arcs (radius R),
+// so they match the container's border-radius instead of cutting the corners.
+const BULB_COLORS = ['#ff4d6d', '#ffd60a', '#4cc9f0', '#52ffb8', '#b06bff', '#ff9e3d', '#ff8fd6'];
+
 const FrameLights: React.FC = () => {
-    const H = 15; // bulbs across the top/bottom edges
-    const V = 8;  // bulbs down the left/right edges
-    const bulbs: { key: string; style: React.CSSProperties }[] = [];
-    for (let i = 0; i <= H; i++) {
-        const left = `${(i / H) * 100}%`;
-        bulbs.push({ key: `t${i}`, style: { left, top: 0 } });
-        bulbs.push({ key: `b${i}`, style: { left, top: '100%' } });
+    const R = 24; // must match the container's rounded-3xl (1.5rem = 24px)
+    const bulbs: React.CSSProperties[] = [];
+
+    // Straight edges between the corner tangent points (calc mixes % and px).
+    // Everything is expressed via left/top so the -50%/-50% transform centers each
+    // bulb exactly on the frame line.
+    const edgePos = (t: number) => `calc(${R}px + ${t} * (100% - ${2 * R}px))`;
+    const topBottomN = 6; // segments along each horizontal edge
+    const leftRightN = 3; // segments along each vertical edge
+    for (let k = 0; k <= topBottomN; k++) {
+        const p = edgePos(k / topBottomN);
+        bulbs.push({ left: p, top: 0 });
+        bulbs.push({ left: p, top: '100%' });
     }
-    for (let j = 1; j < V; j++) {
-        const top = `${(j / V) * 100}%`;
-        bulbs.push({ key: `l${j}`, style: { left: 0, top } });
-        bulbs.push({ key: `r${j}`, style: { left: '100%', top } });
+    for (let k = 1; k < leftRightN; k++) {
+        const p = edgePos(k / leftRightN);
+        bulbs.push({ left: 0, top: p });
+        bulbs.push({ left: '100%', top: p });
     }
+
+    // Corner arcs (interior points only; tangent points already covered by edges).
+    const cornerN = 2; // interior bulbs per corner
+    const rad = (deg: number) => (deg * Math.PI) / 180;
+    const cos = Math.cos, sin = Math.sin;
+    for (let k = 1; k <= cornerN; k++) {
+        const f = k / (cornerN + 1);
+        // top-left: 180°→270°
+        let a = rad(180 + f * 90);
+        bulbs.push({ left: `${R + R * cos(a)}px`, top: `${R + R * sin(a)}px` });
+        // top-right: 270°→360°
+        a = rad(270 + f * 90);
+        bulbs.push({ left: `calc(100% - ${R - R * cos(a)}px)`, top: `${R + R * sin(a)}px` });
+        // bottom-right: 0°→90°
+        a = rad(0 + f * 90);
+        bulbs.push({ left: `calc(100% - ${R - R * cos(a)}px)`, top: `calc(100% - ${R - R * sin(a)}px)` });
+        // bottom-left: 90°→180°
+        a = rad(90 + f * 90);
+        bulbs.push({ left: `${R + R * cos(a)}px`, top: `calc(100% - ${R - R * sin(a)}px)` });
+    }
+
     return (
         <div className="pointer-events-none absolute inset-0 z-20">
-            <style>{`@keyframes gkBulbTwinkle{0%,100%{opacity:1;filter:brightness(1.15)}50%{opacity:.28;filter:brightness(.7)}}`}</style>
-            {bulbs.map((b, idx) => (
-                <span
-                    key={b.key}
-                    className="absolute w-[7px] h-[7px] rounded-full -translate-x-1/2 -translate-y-1/2"
-                    style={{
-                        ...b.style,
-                        background: 'radial-gradient(circle, #fffdf0 0%, #FFE066 45%, #FFB347 75%, rgba(255,179,71,0) 100%)',
-                        boxShadow: '0 0 5px 1.5px rgba(255,224,102,0.95), 0 0 12px 3px rgba(255,159,64,0.6)',
-                        animation: `gkBulbTwinkle 1.5s ease-in-out ${(idx % 2) * 0.75}s infinite`,
-                    }}
-                />
-            ))}
+            <style>{`@keyframes gkBulbTwinkle{0%,100%{opacity:1;filter:brightness(1.2)}50%{opacity:.25;filter:brightness(.65)}}`}</style>
+            {bulbs.map((pos, idx) => {
+                const c = BULB_COLORS[idx % BULB_COLORS.length];
+                return (
+                    <span
+                        key={idx}
+                        className="absolute w-[7px] h-[7px] rounded-full -translate-x-1/2 -translate-y-1/2"
+                        style={{
+                            ...pos,
+                            background: `radial-gradient(circle, #ffffff 0%, ${c} 55%, ${c}00 100%)`,
+                            boxShadow: `0 0 5px 1.5px ${c}F2, 0 0 12px 3px ${c}99`,
+                            animation: `gkBulbTwinkle 1.5s ease-in-out ${(idx % 3) * 0.5}s infinite`,
+                        }}
+                    />
+                );
+            })}
         </div>
     );
 };

@@ -1,6 +1,6 @@
 import React from 'react';
 import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom';
-import { Book, BookOpen, Music, Layout as LayoutIcon, Home, Tag, Volume2, Gamepad2, Video, LogOut, Bell, Music2, Star, CalendarDays, BarChart3, Library, Sparkles, TrendingUp, Radio, Mail, Heart, Users, ClipboardCheck, ShoppingCart, BookHeart, Disc, Image, Mic } from 'lucide-react';
+import { Book, BookOpen, Music, Layout as LayoutIcon, Home, Tag, Volume2, Gamepad2, Video, LogOut, Bell, Music2, Star, CalendarDays, BarChart3, Library, Sparkles, TrendingUp, Radio, Mail, Heart, Users, ClipboardCheck, ShoppingCart, BookHeart, Disc, Image, Mic, Film } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 
 const Layout: React.FC = () => {
@@ -25,6 +25,7 @@ const Layout: React.FC = () => {
         { path: '/monthly-books', icon: BookOpen, label: 'Kids Monthly Book Character Design' },
         { path: '/book-series', icon: Library, label: 'Book Series' },
         { path: '/playlists', icon: Music, label: 'Playlists' },
+        { path: '/music-videos', icon: Film, label: 'Music Videos' },
         { path: '/lessons', icon: Video, label: 'Lessons' },
         { path: '/lessons/calendar', icon: CalendarDays, label: 'Lesson Calendar' },
         { path: '/devotional-stories', icon: BookHeart, label: 'Devotional Stories' },

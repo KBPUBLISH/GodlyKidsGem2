@@ -609,6 +609,7 @@ import KaraokePlayerPage from './pages/KaraokePlayerPage';
 import KaraokeSharePage from './pages/KaraokeSharePage';
 import InterestSelectionPage from './pages/InterestSelectionPage';
 import DailySessionPage from './pages/DailySessionPage';
+import MusicVideosPage from './pages/MusicVideosPage';
 
 // Check if user has an account (auth token or email stored)
 const hasUserAccount = (): boolean => {
@@ -1581,6 +1582,7 @@ const App: React.FC = () => {
                   <Route path="/lessons" element={<ProtectedRoute><LessonsPage /></ProtectedRoute>} />
                   <Route path="/lesson/:lessonId" element={<ProtectedRoute><LessonPlayerPage /></ProtectedRoute>} />
                   <Route path="/games" element={<GamesPage />} />
+                  <Route path="/music-videos" element={<MusicVideosPage />} />
                   <Route path="/karaoke" element={<KaraokePage />} />
                   <Route path="/karaoke/share/:recordingId" element={<KaraokeSharePage />} />
                   <Route path="/karaoke/:id" element={<KaraokePlayerPage />} />

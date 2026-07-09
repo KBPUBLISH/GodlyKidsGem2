@@ -20,6 +20,11 @@ const audioItemSchema = new mongoose.Schema({
         type: String, // URL to GCS
         required: true,
     },
+    // Optional music video for this song/episode (members-only playback in the app)
+    videoUrl: {
+        type: String, // URL to GCS
+        required: false,
+    },
     duration: {
         type: Number, // Duration in seconds
     },

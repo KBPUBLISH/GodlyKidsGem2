@@ -14,6 +14,8 @@ export interface AudioItem {
     author?: string;
     coverImage?: string;
     audioUrl: string;
+    /** Optional music video (members-only playback in the app) */
+    videoUrl?: string;
     duration?: number;
     order: number;
 }

@@ -24,6 +24,7 @@ const MusicVideoForm: React.FC = () => {
     const [loading, setLoading] = useState(false);
     const [uploadingThumb, setUploadingThumb] = useState(false);
     const [uploadingVideo, setUploadingVideo] = useState(false);
+    const [videoProgress, setVideoProgress] = useState(0);
     const [formData, setFormData] = useState<MusicVideoFormData>({
         title: '',
         author: 'Kingdom Builders Publishing',
@@ -89,27 +90,88 @@ const MusicVideoForm: React.FC = () => {
         }
     };
 
+    // Upload the video straight to Google Cloud Storage using signed URLs.
+    // This bypasses the backend (no memory buffering, no server-side FFmpeg pass),
+    // which is what made large video uploads hang and time out. The file is sent in
+    // chunks (kept <= 32 so GCS `compose` can stitch them) directly to GCS.
+    const uploadVideoViaSignedUrl = async (file: File, onProgress: (pct: number) => void): Promise<string> => {
+        const contentType = file.type || 'video/mp4';
+        const MAX_CHUNKS = 32; // GCS compose supports up to 32 source objects
+        const MIN_CHUNK = 8 * 1024 * 1024; // 8MB floor
+        const chunkSize = Math.max(MIN_CHUNK, Math.ceil(file.size / MAX_CHUNKS));
+        const totalChunks = Math.max(1, Math.ceil(file.size / chunkSize));
+        const sessionId = `mv-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+        const tempObjectNames: string[] = [];
+
+        for (let i = 0; i < totalChunks; i++) {
+            const start = i * chunkSize;
+            const blob = file.slice(start, Math.min(file.size, start + chunkSize));
+
+            const { data } = await apiClient.post('/api/upload/signed-url-chunk', {
+                bookId: 'music-videos',
+                type: 'video',
+                contentType,
+                filename: file.name,
+                chunkIdx: i,
+                totalChunks,
+                sessionId,
+            });
+
+            // PUT the chunk directly to GCS. Content-Type MUST match the signed value.
+            const putRes = await fetch(data.uploadUrl, {
+                method: 'PUT',
+                headers: { 'Content-Type': contentType },
+                body: blob,
+            });
+            if (!putRes.ok) {
+                throw new Error(`Chunk ${i + 1}/${totalChunks} upload failed (HTTP ${putRes.status})`);
+            }
+            tempObjectNames.push(data.tempObjectName);
+            onProgress(Math.round(((i + 1) / totalChunks) * 100));
+        }
+
+        const { data: composed } = await apiClient.post('/api/upload/compose-chunks', {
+            bookId: 'music-videos',
+            type: 'video',
+            filename: file.name,
+            tempObjectNames,
+            sessionId,
+        });
+        return composed.url as string;
+    };
+
     const handleVideoUpload = async (file: File) => {
         if (!file.type.startsWith('video/')) {
             alert('Please upload a video file (MP4 recommended)');
             return;
         }
         setUploadingVideo(true);
+        setVideoProgress(0);
         try {
-            const fd = new FormData();
-            fd.append('file', file);
-            const res = await apiClient.post(
-                `/api/upload/video?bookId=music-videos&type=video`,
-                fd,
-                { headers: { 'Content-Type': 'multipart/form-data' }, timeout: 600000 }
-            );
-            const url = res.data.url;
+            let url: string;
+            try {
+                // Preferred path: direct-to-GCS chunked upload (fast + reliable for large files).
+                url = await uploadVideoViaSignedUrl(file, setVideoProgress);
+            } catch (signedErr: any) {
+                // Fallback (e.g. local dev without GCS configured): route through the backend.
+                const status = signedErr?.response?.status;
+                if (status && status !== 503) throw signedErr;
+                console.warn('Signed-URL upload unavailable, falling back to backend upload:', signedErr?.message);
+                const fd = new FormData();
+                fd.append('file', file);
+                const res = await apiClient.post(
+                    `/api/upload/video?bookId=music-videos&type=video`,
+                    fd,
+                    { headers: { 'Content-Type': 'multipart/form-data' }, timeout: 600000 }
+                );
+                url = res.data.url;
+            }
 
             // Read duration from the uploaded video's metadata
             let duration = 0;
             try {
                 const probe = document.createElement('video');
-                probe.src = url;
+                probe.src = getMediaUrl(url);
                 await new Promise<void>((resolve) => {
                     probe.onloadedmetadata = () => { duration = Math.floor(probe.duration) || 0; resolve(); };
                     probe.onerror = () => resolve();
@@ -123,6 +185,7 @@ const MusicVideoForm: React.FC = () => {
             alert(`Failed to upload video: ${err.response?.data?.message || err.message}`);
         } finally {
             setUploadingVideo(false);
+            setVideoProgress(0);
         }
     };
 
@@ -239,7 +302,9 @@ const MusicVideoForm: React.FC = () => {
                         )}
                         <label className="inline-flex items-center gap-2 bg-gray-100 hover:bg-gray-200 px-4 py-2 rounded-lg cursor-pointer transition-colors">
                             <Upload className="w-4 h-4" />
-                            {uploadingVideo ? 'Uploading…' : formData.videoUrl ? 'Replace Video' : 'Upload Video'}
+                            {uploadingVideo
+                                ? (videoProgress > 0 ? `Uploading… ${videoProgress}%` : 'Uploading…')
+                                : formData.videoUrl ? 'Replace Video' : 'Upload Video'}
                             <input
                                 type="file"
                                 accept="video/mp4,video/quicktime,video/*"
@@ -250,6 +315,19 @@ const MusicVideoForm: React.FC = () => {
                         </label>
                         {formData.duration > 0 && (
                             <span className="ml-3 text-sm text-gray-500">Duration: {Math.floor(formData.duration / 60)}:{String(formData.duration % 60).padStart(2, '0')}</span>
+                        )}
+                        {uploadingVideo && (
+                            <div className="mt-3 w-full max-w-md">
+                                <div className="h-2 rounded-full bg-gray-200 overflow-hidden">
+                                    <div
+                                        className="h-full bg-indigo-500 transition-all duration-200"
+                                        style={{ width: `${videoProgress || 5}%` }}
+                                    />
+                                </div>
+                                <p className="mt-1 text-xs text-gray-500">
+                                    Uploading directly to cloud storage — large videos may take a minute.
+                                </p>
+                            </div>
                         )}
                     </div>
 

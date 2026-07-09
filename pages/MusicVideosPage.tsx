@@ -25,7 +25,8 @@ const MusicVideosPage: React.FC = () => {
         (async () => {
             try {
                 const baseUrl = getApiBaseUrl();
-                const res = await fetch(`${baseUrl}music-videos`);
+                // Cache-bust so newly published videos aren't hidden by a stale cached feed.
+                const res = await fetch(`${baseUrl}music-videos?_t=${Date.now()}`, { cache: 'no-store' });
                 if (!res.ok) throw new Error('Failed to load music videos');
                 const json = await res.json();
                 const list: MusicVideo[] = Array.isArray(json) ? json : (json.data || []);

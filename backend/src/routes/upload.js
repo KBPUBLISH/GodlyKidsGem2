@@ -821,8 +821,10 @@ router.post('/video', (req, res, next) => {
                 console.log('Video uploaded successfully to GCS:', publicUrl);
                 
                 // Auto-extract audio for page background videos AND video sequences
-                // This allows video sound effects to play alongside TTS on iOS
-                const shouldExtractAudio = bookId && (type === 'pages' || type === 'video' || type === 'sequence');
+                // This allows video sound effects to play alongside TTS on iOS.
+                // Standalone music videos play their own soundtrack via <video>, so skip
+                // the extra FFmpeg pass (it only slows the upload down and produces an unused file).
+                const shouldExtractAudio = bookId && bookId !== 'music-videos' && (type === 'pages' || type === 'video' || type === 'sequence');
                 let backgroundAudioUrl = null;
                 
                 if (shouldExtractAudio) {

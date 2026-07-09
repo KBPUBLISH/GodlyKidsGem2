@@ -13,6 +13,41 @@ const formatDuration = (seconds?: number) => {
     return `${mins}:${secs.toString().padStart(2, '0')}`;
 };
 
+// Marquee-style light bulbs evenly spaced around the container frame,
+// with a classic alternating twinkle (like a theater/cinema sign).
+const FrameLights: React.FC = () => {
+    const H = 15; // bulbs across the top/bottom edges
+    const V = 8;  // bulbs down the left/right edges
+    const bulbs: { key: string; style: React.CSSProperties }[] = [];
+    for (let i = 0; i <= H; i++) {
+        const left = `${(i / H) * 100}%`;
+        bulbs.push({ key: `t${i}`, style: { left, top: 0 } });
+        bulbs.push({ key: `b${i}`, style: { left, top: '100%' } });
+    }
+    for (let j = 1; j < V; j++) {
+        const top = `${(j / V) * 100}%`;
+        bulbs.push({ key: `l${j}`, style: { left: 0, top } });
+        bulbs.push({ key: `r${j}`, style: { left: '100%', top } });
+    }
+    return (
+        <div className="pointer-events-none absolute inset-0 z-20">
+            <style>{`@keyframes gkBulbTwinkle{0%,100%{opacity:1;filter:brightness(1.15)}50%{opacity:.28;filter:brightness(.7)}}`}</style>
+            {bulbs.map((b, idx) => (
+                <span
+                    key={b.key}
+                    className="absolute w-[7px] h-[7px] rounded-full -translate-x-1/2 -translate-y-1/2"
+                    style={{
+                        ...b.style,
+                        background: 'radial-gradient(circle, #fffdf0 0%, #FFE066 45%, #FFB347 75%, rgba(255,179,71,0) 100%)',
+                        boxShadow: '0 0 5px 1.5px rgba(255,224,102,0.95), 0 0 12px 3px rgba(255,159,64,0.6)',
+                        animation: `gkBulbTwinkle 1.5s ease-in-out ${(idx % 2) * 0.75}s infinite`,
+                    }}
+                />
+            ))}
+        </div>
+    );
+};
+
 const Badge: React.FC<{ video: MusicVideo }> = ({ video }) => {
     if (video.isPopular) {
         return (
@@ -100,17 +135,10 @@ const MusicVideosShelf: React.FC = () => {
     return (
         <div className="mb-5 px-3">
           <div className="relative">
-            {/* Neon glow: rotating multi-color lights around the container */}
-            <div className="pointer-events-none absolute -inset-[3px] rounded-[28px] overflow-hidden">
-                <div
-                    className="absolute left-1/2 top-1/2 h-[220%] w-[220%] -translate-x-1/2 -translate-y-1/2 animate-spin blur-md opacity-90 [animation-duration:7s]"
-                    style={{ background: 'conic-gradient(from 0deg, #f0abfc, #d946ef, #22d3ee, #a855f7, #22d3ee, #d946ef, #f0abfc)' }}
-                />
-            </div>
-            {/* Soft outer neon halo that gently pulses */}
+            {/* Soft warm halo behind the frame so the bulbs read as glowing lights */}
             <div
-                className="pointer-events-none absolute -inset-2 rounded-[32px] blur-2xl opacity-60 animate-pulse"
-                style={{ background: 'linear-gradient(120deg, #d946ef, #a855f7, #22d3ee)' }}
+                className="pointer-events-none absolute -inset-2 rounded-[32px] blur-2xl opacity-50 animate-pulse"
+                style={{ background: 'radial-gradient(ellipse at center, rgba(255,200,90,0.55), rgba(217,70,239,0.25) 60%, transparent 80%)' }}
             />
 
             <div
@@ -248,6 +276,9 @@ const MusicVideosShelf: React.FC = () => {
                     <ChevronRight className="w-5 h-5 text-white/70" />
                 </button>
             </div>
+
+            {/* Light bulbs around the frame */}
+            <FrameLights />
           </div>
 
             {activeVideo && (

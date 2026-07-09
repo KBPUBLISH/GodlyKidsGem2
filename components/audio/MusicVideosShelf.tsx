@@ -99,11 +99,25 @@ const MusicVideosShelf: React.FC = () => {
 
     return (
         <div className="mb-5 px-3">
+          <div className="relative">
+            {/* Neon glow: rotating multi-color lights around the container */}
+            <div className="pointer-events-none absolute -inset-[3px] rounded-[28px] overflow-hidden">
+                <div
+                    className="absolute left-1/2 top-1/2 h-[220%] w-[220%] -translate-x-1/2 -translate-y-1/2 animate-spin blur-md opacity-90 [animation-duration:7s]"
+                    style={{ background: 'conic-gradient(from 0deg, #f0abfc, #d946ef, #22d3ee, #a855f7, #22d3ee, #d946ef, #f0abfc)' }}
+                />
+            </div>
+            {/* Soft outer neon halo that gently pulses */}
+            <div
+                className="pointer-events-none absolute -inset-2 rounded-[32px] blur-2xl opacity-60 animate-pulse"
+                style={{ background: 'linear-gradient(120deg, #d946ef, #a855f7, #22d3ee)' }}
+            />
+
             <div
                 className="relative rounded-3xl p-3 sm:p-4 border-2 border-fuchsia-400/40 overflow-hidden"
                 style={{
                     background: 'linear-gradient(160deg, #2a1650 0%, #3b1d6e 45%, #1b1030 100%)',
-                    boxShadow: '0 10px 40px rgba(120, 40, 200, 0.35), inset 0 1px 0 rgba(255,255,255,0.08)',
+                    boxShadow: '0 0 18px rgba(217,70,239,0.55), 0 0 45px rgba(168,85,247,0.35), 0 10px 40px rgba(120, 40, 200, 0.35), inset 0 1px 0 rgba(255,255,255,0.08)',
                 }}
             >
                 {/* Title */}
@@ -234,6 +248,7 @@ const MusicVideosShelf: React.FC = () => {
                     <ChevronRight className="w-5 h-5 text-white/70" />
                 </button>
             </div>
+          </div>
 
             {activeVideo && (
                 <MusicVideoOverlay video={activeVideo} onClose={() => setActiveVideo(null)} />

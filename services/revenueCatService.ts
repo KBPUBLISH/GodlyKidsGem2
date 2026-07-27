@@ -133,6 +133,24 @@ let purchaseResolve: ((value: { success: boolean; error?: string }) => void) | n
 let purchaseTimeout: ReturnType<typeof setTimeout> | null = null;
 let purchasePollInterval: ReturnType<typeof setInterval> | null = null;
 let purchaseSuccessHandled = false; // Guard against multiple callbacks
+/** Set when Despia/RC reports store success but no entitlement — keep webhook polling. */
+let purchaseSoftEntitlementMiss = false;
+
+/**
+ * RevenueCat/Despia returns this when the Store charge succeeded but the product
+ * is not attached to an entitlement (e.g. lifetime not linked to "premium").
+ * The purchase DID go through — do not treat as a hard failure; wait for webhook.
+ */
+const isEntitlementConfigError = (message?: string | null): boolean => {
+  if (!message || typeof message !== 'string') return false;
+  const m = message.toLowerCase();
+  return (
+    m.includes('no active entitlement') ||
+    m.includes('no entitlements') ||
+    m.includes('without any entitlements') ||
+    (m.includes('entitlement') && m.includes('not active'))
+  );
+};
 
 // Clean up any pending purchase state
 const cleanupPurchaseState = () => {
@@ -205,9 +223,22 @@ const setupPurchaseListener = () => {
   });
 
   window.addEventListener('despia-purchase-failed', (event: any) => {
-    console.log('❌ DeSpia purchase failed event received');
+    const message = event?.detail?.message || event?.detail?.error || 'Purchase failed';
+    console.log('❌ DeSpia purchase failed event received:', message);
+
+    // Store charged but product not on an entitlement — keep polling webhook
+    if (isEntitlementConfigError(message) && purchaseResolve) {
+      console.warn(
+        '⚠️ RevenueCat: purchase succeeded but no active entitlements. ' +
+          'Usually the lifetime product is not attached to the "premium" entitlement. ' +
+          'Continuing to poll backend webhook…'
+      );
+      purchaseSoftEntitlementMiss = true;
+      return;
+    }
+
     if (purchaseResolve) {
-      purchaseResolve({ success: false, error: event?.detail?.message || 'Purchase failed' });
+      purchaseResolve({ success: false, error: message });
       purchaseResolve = null;
     }
     cleanupPurchaseState();
@@ -231,9 +262,19 @@ const setupPurchaseListener = () => {
         console.log('📱✅ Purchase complete message received:', data);
         handlePurchaseSuccess();
       } else if (data?.type === 'revenuecat_purchase_failed' || data?.type === 'despia_purchase_failed') {
+        const message = data?.error || data?.message || 'Purchase failed';
         console.log('❌ Purchase failed message received:', data);
+
+        if (isEntitlementConfigError(message) && purchaseResolve) {
+          console.warn(
+            '⚠️ RevenueCat: purchase succeeded but no active entitlements. Continuing webhook poll…'
+          );
+          purchaseSoftEntitlementMiss = true;
+          return;
+        }
+
         if (purchaseResolve) {
-          purchaseResolve({ success: false, error: data?.error || 'Purchase failed' });
+          purchaseResolve({ success: false, error: message });
           purchaseResolve = null;
         }
         cleanupPurchaseState();
@@ -319,6 +360,8 @@ export const RevenueCatService = {
     // This prevents stale localStorage from granting instant premium
     console.log('🧹 Clearing any existing premium status before purchase...');
     localStorage.removeItem('godlykids_premium');
+    purchaseSoftEntitlementMiss = false;
+    purchaseSuccessHandled = false;
     
     if (!isNativeApp()) {
       // Web-based billing via RevenueCat Web SDK
@@ -388,17 +431,25 @@ export const RevenueCatService = {
           }
           
           try {
-            const response = await fetch(`${apiBaseUrl}/api/webhooks/purchase-status/${encodeURIComponent(userId)}`);
-            const data = await response.json();
-            
-            if (data.isPremium && !resolved) {
-              resolved = true;
-              console.log('✅ Premium confirmed by backend webhook after', elapsedSeconds.toFixed(1), 'seconds');
-              localStorage.setItem('godlykids_premium', 'true');
-              cleanupPurchaseState();
-              resolve({ success: true });
-              purchaseResolve = null;
-              return;
+            // Poll every known identifier — purchase may be under email or device ID
+            const idsToCheck = [userId];
+            const email = localStorage.getItem('godlykids_user_email');
+            const deviceId = localStorage.getItem('godlykids_device_id');
+            if (email && !idsToCheck.includes(email)) idsToCheck.push(email);
+            if (deviceId && !idsToCheck.includes(deviceId)) idsToCheck.push(deviceId);
+
+            for (const id of idsToCheck) {
+              const response = await fetch(`${apiBaseUrl}/api/webhooks/purchase-status/${encodeURIComponent(id)}`);
+              const data = await response.json();
+              if (data.isPremium && !resolved) {
+                resolved = true;
+                console.log('✅ Premium confirmed by backend webhook after', elapsedSeconds.toFixed(1), 'seconds for', id);
+                localStorage.setItem('godlykids_premium', 'true');
+                cleanupPurchaseState();
+                resolve({ success: true });
+                purchaseResolve = null;
+                return;
+              }
             }
             
             if (Math.floor(elapsedSeconds) % 10 === 0 && elapsedSeconds > 1) {
@@ -418,6 +469,21 @@ export const RevenueCatService = {
               console.log('✅ Premium found in final check');
               resolve({ success: true });
               purchaseResolve = null;
+              return;
+            }
+
+            // Despia said "no active entitlements" — store likely charged; don't call it cancelled
+            if (purchaseSoftEntitlementMiss) {
+              console.warn(
+                '⚠️ Timed out after entitlement-config miss. Payment may have succeeded — user should Restore Purchases.'
+              );
+              resolve({
+                success: false,
+                error:
+                  'Your payment may have gone through, but premium did not unlock automatically. Please tap Restore Purchases. If access is still missing, email hello@kbpublish.org with your purchase receipt.',
+              });
+              purchaseResolve = null;
+              purchaseSoftEntitlementMiss = false;
               return;
             }
             

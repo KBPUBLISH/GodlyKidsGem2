@@ -6,7 +6,7 @@ const { authenticateAdmin } = require('../middleware/auth');
 // Map friendly tiers to Claude model IDs.
 // Overridable via env in case Anthropic ships new model IDs.
 const MODEL_TIERS = {
-    opus: process.env.ANTHROPIC_MODEL_OPUS || 'claude-opus-4-8',
+    opus: process.env.ANTHROPIC_MODEL_OPUS || 'claude-opus-5',
     sonnet: process.env.ANTHROPIC_MODEL_SONNET || 'claude-sonnet-5',
 };
 

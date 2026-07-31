@@ -1208,7 +1208,6 @@ ${contextBits ? `Pack context:\n${contextBits}` : ''}`;
         const message = await anthropic.messages.create({
             model,
             max_tokens: 3500,
-            temperature: 0.7,
             system: systemPrompt,
             messages: chatMessages,
         });
@@ -1402,13 +1401,12 @@ ${sourceText.slice(0, 12000)}`;
         const anthropic = new Anthropic({ apiKey });
         const model =
             process.env.ANTHROPIC_READING_MODEL ||
-            process.env.ANTHROPIC_MODEL_SONNET ||
-            'claude-sonnet-5';
+            process.env.ANTHROPIC_MODEL_OPUS ||
+            'claude-opus-5';
 
         const message = await anthropic.messages.create({
             model,
             max_tokens: 8000,
-            temperature: 0.6,
             system: systemPrompt,
             messages: [{ role: 'user', content: userContent }],
         });

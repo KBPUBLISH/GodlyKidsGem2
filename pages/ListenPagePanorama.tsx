@@ -11,6 +11,7 @@ import PremiumBadge from '../components/ui/PremiumBadge';
 import CoverImage from '../components/ui/CoverImage';
 import { getApiBaseUrl, ApiService } from '../services/apiService';
 import StormySeaError from '../components/ui/StormySeaError';
+import MusicVideosShelf from '../components/audio/MusicVideosShelf';
 
 const ageOptions = ['All Ages', '3+', '4+', '5+', '6+', '7+', '8+', '9+', '10+'];
 
@@ -340,6 +341,11 @@ const ListenPagePanorama: React.FC = () => {
               </div>
             )}
           </div>
+        </div>
+
+        {/* Music Videos shelf */}
+        <div className="-mx-4 mt-4">
+          <MusicVideosShelf />
         </div>
 
         {/* Collapsible Category Section */}

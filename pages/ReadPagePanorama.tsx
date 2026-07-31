@@ -51,7 +51,7 @@ const SeriesCard: React.FC<{ series: any; onClick: () => void; isSubscribed?: bo
     <div
       role="button"
       tabIndex={0}
-      className="cursor-pointer group select-none touch-pan-x focus:outline-none focus-visible:ring-2 focus-visible:ring-white/50 rounded-2xl"
+      className="cursor-pointer group select-none touch-auto focus:outline-none focus-visible:ring-2 focus-visible:ring-white/50 rounded-2xl"
       onPointerDown={(e) => {
         startRef.current = { x: e.clientX, y: e.clientY };
         movedRef.current = false;
@@ -129,15 +129,17 @@ const BookSeriesCarouselRow: React.FC<{
         <p className="text-white/50 text-xs font-display mt-1">Swipe sideways to browse</p>
       </div>
       <div
-        className="series-carousel-track flex gap-2 overflow-x-auto scroll-smooth snap-x snap-mandatory pb-2 px-1 touch-pan-x overscroll-x-contain no-scrollbar select-none relative z-[1]"
+        className="series-carousel-track flex gap-2 overflow-x-auto scroll-smooth snap-x snap-mandatory pb-2 px-1 overscroll-x-contain no-scrollbar select-none relative z-[1]"
         style={{
           WebkitOverflowScrolling: 'touch',
-          touchAction: 'pan-x',
+          // Allow BOTH horizontal carousel panning and vertical page scroll.
+          // (pan-x alone blocked upward swipes from scrolling the page.)
+          touchAction: 'pan-x pan-y',
           overscrollBehaviorX: 'contain',
         }}
       >
         {seriesList.map((series) => (
-          <div key={series._id} className="snap-start shrink-0 w-[min(38vw,132px)] touch-pan-x">
+          <div key={series._id} className="snap-start shrink-0 w-[min(38vw,132px)]">
             <SeriesCard
               series={series}
               onClick={() => onSelectSeries(String(series._id))}

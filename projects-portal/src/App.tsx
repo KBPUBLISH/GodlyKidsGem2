@@ -53,6 +53,8 @@ import KaraokeForm from './pages/KaraokeForm';
 import BibleMapHub from './pages/BibleMapHub';
 import BibleMapIslandForm from './pages/BibleMapIslandForm';
 import BibleMapStoryForm from './pages/BibleMapStoryForm';
+import MusicVideoManagement from './pages/MusicVideoManagement';
+import MusicVideoForm from './pages/MusicVideoForm';
 
 // Godly Hub - Creator Portal
 import CreatorLogin from './pages/CreatorLogin';
@@ -151,6 +153,9 @@ function App() {
             <Route path="karaoke" element={<KaraokeManagement />} />
             <Route path="karaoke/new" element={<KaraokeForm />} />
             <Route path="karaoke/edit/:id" element={<KaraokeForm />} />
+            <Route path="music-videos" element={<MusicVideoManagement />} />
+            <Route path="music-videos/new" element={<MusicVideoForm />} />
+            <Route path="music-videos/edit/:id" element={<MusicVideoForm />} />
 
             <Route path="bible-map" element={<BibleMapHub />} />
             <Route path="bible-map/islands/new" element={<BibleMapIslandForm />} />

@@ -13,6 +13,7 @@ import { getApiBaseUrl, ApiService } from '../services/apiService';
 import StormySeaError from '../components/ui/StormySeaError';
 import { playHistoryService } from '../services/playHistoryService';
 import CoverImage from '../components/ui/CoverImage';
+import MusicVideosShelf from '../components/audio/MusicVideosShelf';
 
 const ageOptions = ['All Ages', '3+', '4+', '5+', '6+', '7+', '8+', '9+', '10+'];
 
@@ -434,6 +435,9 @@ const ListenPage: React.FC = () => {
           >
             {/* Spacer so island is visible initially */}
             <div style={{ height: '260px' }} />
+
+          {/* Music Videos shelf */}
+          <MusicVideosShelf />
 
           {/* Featured Audio Carousel */}
           {featuredCarouselItems.length > 0 && (

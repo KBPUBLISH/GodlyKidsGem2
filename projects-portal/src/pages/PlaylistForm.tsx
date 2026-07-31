@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeft, Upload, Plus, Trash2, GripVertical, Music, Save, X, Lock, Unlock, Star } from 'lucide-react';
+import { ArrowLeft, Upload, Plus, Trash2, GripVertical, Music, Save, X, Lock, Unlock, Star, Video } from 'lucide-react';
 import apiClient from '../services/apiClient';
 import ContentAnalytics from '../components/ContentAnalytics';
 
@@ -11,6 +11,7 @@ interface AudioItem {
     description?: string;
     coverImage?: string;
     audioUrl: string;
+    videoUrl?: string; // Optional music video (members-only playback in the app)
     duration?: number;
     order: number;
     isMembersOnly?: boolean; // Whether this specific song/episode requires membership
@@ -148,7 +149,7 @@ const PlaylistForm: React.FC = () => {
         }
     };
 
-    const handleFileUpload = async (file: File, type: 'cover' | 'audio' | 'itemCover', itemIndex?: number) => {
+    const handleFileUpload = async (file: File, type: 'cover' | 'audio' | 'itemCover' | 'video', itemIndex?: number) => {
         setUploading(true);
         const formDataUpload = new FormData();
         formDataUpload.append('file', file);
@@ -169,13 +170,17 @@ const PlaylistForm: React.FC = () => {
                 // Audio file (MP3) - always use playlists folder
                 endpoint = '/api/upload/audio';
                 queryParams = `?bookId=playlists&type=audio`;
+            } else if (type === 'video' && itemIndex !== undefined) {
+                // Music video - always use playlists folder (server compresses to mp4)
+                endpoint = '/api/upload/video';
+                queryParams = `?bookId=playlists&type=video`;
             } else {
                 throw new Error('Invalid upload type or missing parameters');
             }
             
             const response = await apiClient.post(`${endpoint}${queryParams}`, formDataUpload, {
                 headers: { 'Content-Type': 'multipart/form-data' },
-                timeout: 120000, // 2 minutes for large audio files
+                timeout: 600000, // 10 minutes for large video/audio files
             });
 
             if (type === 'cover') {
@@ -187,6 +192,10 @@ const PlaylistForm: React.FC = () => {
             } else if (type === 'audio' && itemIndex !== undefined) {
                 const newItems = [...formData.items];
                 newItems[itemIndex].audioUrl = response.data.url;
+                setFormData({ ...formData, items: newItems });
+            } else if (type === 'video' && itemIndex !== undefined) {
+                const newItems = [...formData.items];
+                newItems[itemIndex].videoUrl = response.data.url;
                 setFormData({ ...formData, items: newItems });
             }
         } catch (error: any) {
@@ -649,6 +658,60 @@ const PlaylistForm: React.FC = () => {
                                                         />
                                                     </label>
                                                 </div>
+                                            </div>
+
+                                            {/* Music Video (optional, members-only in app) */}
+                                            <div className="md:col-span-2">
+                                                <label className="block text-sm font-medium text-gray-700 mb-1 flex items-center gap-2">
+                                                    <Video className="w-4 h-4 text-indigo-500" />
+                                                    Music Video <span className="text-gray-400 font-normal">(optional · 👑 members-only)</span>
+                                                </label>
+                                                <div className="flex gap-2">
+                                                    <input
+                                                        type="text"
+                                                        value={item.videoUrl || ''}
+                                                        onChange={(e) => updateItem(index, 'videoUrl', e.target.value)}
+                                                        className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                                                        placeholder="No video — upload to add a watchable music video"
+                                                        readOnly
+                                                    />
+                                                    {item.videoUrl && (
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => updateItem(index, 'videoUrl', '')}
+                                                            className="bg-red-50 hover:bg-red-100 text-red-600 px-3 py-2 rounded-lg flex items-center gap-1 transition-colors"
+                                                            title="Remove video"
+                                                        >
+                                                            <X className="w-4 h-4" />
+                                                        </button>
+                                                    )}
+                                                    <label className="bg-gray-100 hover:bg-gray-200 px-4 py-2 rounded-lg cursor-pointer flex items-center gap-2 transition-colors whitespace-nowrap">
+                                                        <Upload className="w-4 h-4" />
+                                                        {item.videoUrl ? 'Replace' : 'Upload Video'}
+                                                        <input
+                                                            type="file"
+                                                            accept="video/mp4,video/quicktime,video/*"
+                                                            onChange={(e) => {
+                                                                const file = e.target.files?.[0];
+                                                                if (file) {
+                                                                    if (!file.type.startsWith('video/')) {
+                                                                        alert('Please upload a video file (MP4 recommended)');
+                                                                        return;
+                                                                    }
+                                                                    handleFileUpload(file, 'video', index);
+                                                                }
+                                                            }}
+                                                            className="hidden"
+                                                        />
+                                                    </label>
+                                                </div>
+                                                {item.videoUrl && (
+                                                    <video
+                                                        src={item.videoUrl}
+                                                        controls
+                                                        className="mt-2 w-full max-w-xs rounded-lg border border-gray-200 bg-black"
+                                                    />
+                                                )}
                                             </div>
                                             
                                             {/* Access Control for Individual Item */}

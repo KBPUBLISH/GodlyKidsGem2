@@ -296,7 +296,7 @@ const SettingsPage: React.FC = () => {
                         </button>
                     </div>
 
-                    {/* App background music (API: Music target app-background) */}
+                    {/* App background music (API: Music target app-background; plays on Explore when enabled) */}
                     <div className="space-y-3">
                         <div className="flex items-center justify-between">
                             <div className="flex items-center gap-3 text-[#5c2e0b] flex-1 min-w-0 pr-2">
@@ -306,7 +306,7 @@ const SettingsPage: React.FC = () => {
                                 <div className="min-w-0">
                                     <span className="font-bold block">{t('backgroundMusic')}</span>
                                     <span className="text-xs text-[#8B4513]/75 leading-tight block">
-                                        Soft loop while you browse. Off during books, playlists, and lessons.
+                                        Soft loop on Explore. Off during books, playlists, and lessons.
                                     </span>
                                 </div>
                             </div>

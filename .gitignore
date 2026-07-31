@@ -28,16 +28,47 @@ dist-ssr
 .AppleDouble
 .LSOverride
 
-# Environment variables
+# Environment variables (templates are re-included below)
 .env
-.env.local
-.env.*.local
+.env.*
+!.env.example
+!.env.sample
+!.env.*.example
+!.env.*.sample
+
+# Credentials / keys — never commit
+*.pem
+*.p12
+*.pfx
+*.keystore
+*.jks
+google-services.json
+GoogleService-Info.plist
+service-account*.json
+*-service-account*.json
+gcp-credentials*.json
+firebase-adminsdk*.json
 
 # Build outputs
 build
+dist/
+.vite/
+.expo/
+android/app/build/
+ios/build/
 *.tsbuildinfo
 backend/service-account-key.json
 backend/uploads/
 backend/service-account-key-copy.json
 backend/service-account-key*.json
 ai-service/venv/
+
+# Test / tooling output
+test-results/
+playwright-report/
+blob-report/
+coverage/
+
+# Scratch files
+.tmp-*
+.cursor/*.png

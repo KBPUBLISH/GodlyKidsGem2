@@ -17,6 +17,11 @@ interface TextBox {
     alignment?: 'left' | 'center' | 'right' | 'justify';
     startTime?: number;
     endTime?: number;
+    /** Bible Map: word indices kids must tap before advancing */
+    interactiveWordIndices?: number[];
+    showBackground?: boolean;
+    backgroundColor?: string;
+    shadowColor?: string;
 }
 
 /** First playback position inside authored trim (defaults to start of file). */
@@ -124,6 +129,9 @@ interface BookPageRendererProps {
     // Character overlay props
     characterPoses?: CharacterPoses; // User's generated character poses
     showCharacterOverlay?: boolean; // Book-level setting to show character
+    /** Bible Map tap-words: indices already tapped for the current page (boxIndex:wordIndex keys). */
+    tappedInteractiveKeys?: Set<string>;
+    onInteractiveWordTap?: (boxIndex: number, wordIndex: number) => void;
 }
 
 export const BookPageRenderer: React.FC<BookPageRendererProps> = ({
@@ -140,7 +148,9 @@ export const BookPageRenderer: React.FC<BookPageRendererProps> = ({
     ambientVideoSoundEnabled,
     sequentialMultiBoxTts = false,
     characterPoses,
-    showCharacterOverlay = false
+    showCharacterOverlay = false,
+    tappedInteractiveKeys,
+    onInteractiveWordTap,
 }) => {
     const { max: scrollMaxH, mid: scrollMidH } = resolveScrollHeights(page);
     const currentScrollHeightNum = scrollState === 'max' ? scrollMaxH : scrollMidH;
@@ -807,7 +817,12 @@ export const BookPageRenderer: React.FC<BookPageRendererProps> = ({
                         className="absolute inset-0 w-full h-full object-cover min-w-full min-h-full"
                         autoPlay
                         loop
-                        muted // Always muted - use separate sound effects MP3 instead
+                        muted={
+                            // Prefer separate extracted audio when present; otherwise allow native video audio
+                            !!page.backgroundAudioUrl ||
+                            ambientVideoSoundEnabled === false ||
+                            !!isTTSPlaying
+                        }
                         playsInline
                         preload="auto"
                         trimStartSec={page.backgroundTrimStartSec}
@@ -1134,6 +1149,10 @@ export const BookPageRenderer: React.FC<BookPageRendererProps> = ({
                             }}
                             onClick={(e) => {
                                 e.stopPropagation(); // Prevent scroll toggle when tapping text
+                                // Don't start TTS when tapping interactive words
+                                if ((e.target as HTMLElement)?.closest?.('[data-interactive-word]')) {
+                                    return;
+                                }
                                 onPlayText && onPlayText(box.text, idx, e);
                             }}
                         >
@@ -1149,7 +1168,13 @@ export const BookPageRenderer: React.FC<BookPageRendererProps> = ({
                                         // Always use the cleaned text from the original
                                         const cleanedText = removeEmotionalCues(box.text);
                                         const words = cleanedText.split(/\s+/).filter(w => w.length > 0);
-                                        
+                                        const tapIndices = new Set(
+                                            Array.isArray(box.interactiveWordIndices)
+                                                ? box.interactiveWordIndices
+                                                : [],
+                                        );
+                                        const hasTapWords = tapIndices.size > 0 && !!onInteractiveWordTap;
+
                                         // If active with word alignment, show with highlighting
                                         if (isActive && wordAlignment && highlightedWordIndex >= 0) {
                                             return words.map((word, wIdx) => {
@@ -1158,10 +1183,21 @@ export const BookPageRenderer: React.FC<BookPageRendererProps> = ({
                                                     highlightedWordIndex >= 0 && wIdx > highlightedWordIndex;
                                                 const isPast =
                                                     highlightedWordIndex >= 0 && wIdx < highlightedWordIndex;
+                                                const isTapTarget = tapIndices.has(wIdx);
+                                                const tapped = tappedInteractiveKeys?.has(`${idx}:${wIdx}`);
                                                 return (
                                                     <span
                                                         key={wIdx}
                                                         data-word-index={wIdx}
+                                                        data-interactive-word={isTapTarget ? '1' : undefined}
+                                                        onClick={
+                                                            isTapTarget && onInteractiveWordTap
+                                                                ? (ev) => {
+                                                                      ev.stopPropagation();
+                                                                      onInteractiveWordTap(idx, wIdx);
+                                                                  }
+                                                                : undefined
+                                                        }
                                                         className={`
                                                             gk-readalong-word rounded px-0.5
                                                             ${isHighlighted
@@ -1172,7 +1208,38 @@ export const BookPageRenderer: React.FC<BookPageRendererProps> = ({
                                                                         ? 'opacity-78'
                                                                         : ''
                                                             }
+                                                            ${isTapTarget && !tapped ? 'underline decoration-amber-500 decoration-2 bg-amber-200/50' : ''}
+                                                            ${tapped ? 'bg-emerald-200/70' : ''}
                                                         `}
+                                                    >
+                                                        {word}{' '}
+                                                    </span>
+                                                );
+                                            });
+                                        }
+
+                                        if (hasTapWords) {
+                                            return words.map((word, wIdx) => {
+                                                const isTapTarget = tapIndices.has(wIdx);
+                                                const tapped = tappedInteractiveKeys?.has(`${idx}:${wIdx}`);
+                                                return (
+                                                    <span
+                                                        key={wIdx}
+                                                        data-word-index={wIdx}
+                                                        data-interactive-word={isTapTarget ? '1' : undefined}
+                                                        onClick={
+                                                            isTapTarget && onInteractiveWordTap
+                                                                ? (ev) => {
+                                                                      ev.stopPropagation();
+                                                                      onInteractiveWordTap(idx, wIdx);
+                                                                  }
+                                                                : undefined
+                                                        }
+                                                        className={`rounded px-0.5 ${
+                                                            isTapTarget && !tapped
+                                                                ? 'underline decoration-amber-500 decoration-2 bg-amber-200/60'
+                                                                : ''
+                                                        } ${tapped ? 'bg-emerald-200/70' : ''}`}
                                                     >
                                                         {word}{' '}
                                                     </span>

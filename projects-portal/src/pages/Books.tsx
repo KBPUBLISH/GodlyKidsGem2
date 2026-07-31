@@ -277,6 +277,11 @@ const Books: React.FC = () => {
                                                     Kids Monthly
                                                 </span>
                                             )}
+                                            {book.bookType === 'bible_map' && (
+                                                <span className="inline-block px-3 py-1 rounded-full text-sm bg-emerald-100 text-emerald-800 font-medium">
+                                                    Bible Map
+                                                </span>
+                                            )}
                                         </div>
                                     </div>
                                     <div className="mt-4 flex space-x-2 flex-wrap gap-2">

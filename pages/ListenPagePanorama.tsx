@@ -8,6 +8,7 @@ import { useUser } from '../context/UserContext';
 import { useTutorial } from '../context/TutorialContext';
 import { Search, Music, ChevronDown, Lock, BookOpen, Heart, Sparkles, TreePine, Sword, Star, Book, Users, Crown, Compass, Smile } from 'lucide-react';
 import PremiumBadge from '../components/ui/PremiumBadge';
+import CoverImage from '../components/ui/CoverImage';
 import { getApiBaseUrl, ApiService } from '../services/apiService';
 import StormySeaError from '../components/ui/StormySeaError';
 
@@ -510,11 +511,10 @@ const ListenPagePanorama: React.FC = () => {
                         {/* Cover Image - Same structure as BookCard */}
                         <div className="aspect-square bg-gradient-to-br from-indigo-500 to-purple-600 relative overflow-hidden">
                           {playlist.coverImage ? (
-                            <img
+                            <CoverImage
                               src={playlist.coverImage}
                               alt={playlist.title}
                               className={`w-full h-full object-cover group-hover:scale-110 transition-transform duration-300 ${isPlaylistLocked ? 'filter brightness-75' : ''}`}
-                              loading="lazy"
                             />
                           ) : (
                             <div className="w-full h-full flex items-center justify-center">

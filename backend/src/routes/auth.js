@@ -95,12 +95,17 @@ router.post('/register', async (req, res) => {
 router.post('/login', async (req, res) => {
     const { email, password } = req.body;
 
+    if (!email || !password) {
+        return res.status(400).json({ msg: 'Email and password are required' });
+    }
+
     try {
-        let user = await User.findOne({ email: email.toLowerCase().trim() });
+        const normalizedEmail = String(email).toLowerCase().trim();
+        let user = await User.findOne({ email: normalizedEmail });
         
         if (!user) {
             // User not found in new backend - check if they exist in old backend
-            const oldBackendCheck = await checkOldBackendEmail(email);
+            const oldBackendCheck = await checkOldBackendEmail(normalizedEmail);
             
             if (oldBackendCheck.exists) {
                 // They have an account in the old system!

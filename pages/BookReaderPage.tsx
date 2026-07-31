@@ -22,8 +22,27 @@ import { authService } from '../services/authService';
 import { useTutorial } from '../context/TutorialContext';
 import { isValidBookId } from '../utils/bookUtils';
 import { attachReliableLoop } from '../utils/audioLoop';
+import {
+    collectPageInteractiveTargets,
+    playInteractiveWordDing,
+    sanitizeInteractiveWordIndices,
+} from '../utils/interactiveWords';
 
 const API_BASE_URL = (import.meta as any).env?.VITE_API_BASE_URL || 'https://backendgk2-0.onrender.com';
+
+type ReadingLevelKey = 'ages_3_5' | 'ages_6_7' | 'ages_8_plus';
+const READING_LEVEL_KEYS: ReadingLevelKey[] = ['ages_3_5', 'ages_6_7', 'ages_8_plus'];
+
+function parseReadingLevel(raw: unknown): ReadingLevelKey | null {
+    if (typeof raw !== 'string') return null;
+    return READING_LEVEL_KEYS.includes(raw as ReadingLevelKey) ? (raw as ReadingLevelKey) : null;
+}
+
+function readingLevelFontSize(level: ReadingLevelKey): number {
+    if (level === 'ages_3_5') return 28;
+    if (level === 'ages_6_7') return 24;
+    return 22;
+}
 
 interface TextBox {
     text: string;
@@ -34,6 +53,7 @@ interface TextBox {
     fontFamily?: string;
     fontSize?: number;
     color?: string;
+    interactiveWordIndices?: number[];
 }
 
 interface VideoSequenceItem {
@@ -109,18 +129,59 @@ interface Page {
     backgroundAudioUrl?: string;
     backgroundTrimStartSec?: number;
     backgroundTrimEndSec?: number;
+    readingLevels?: {
+        ages_3_5?: { text?: string; interactiveWordIndices?: number[] };
+        ages_6_7?: { text?: string; interactiveWordIndices?: number[] };
+        ages_8_plus?: { text?: string; interactiveWordIndices?: number[] };
+    };
 }
 
-/** Page has authored layered video soundtrack (kid reader can toggle independently of narration). */
+/** Prefer age-leveled text when present; otherwise leave page as-is (legacy textBoxes). */
+function applyReadingLevelToPage(page: Page, level: ReadingLevelKey | null): Page {
+    if (!level || !page.readingLevels) return page;
+    const entry = page.readingLevels[level];
+    const text = typeof entry?.text === 'string' ? entry.text.trim() : '';
+    if (!text) return page;
+    const indices = sanitizeInteractiveWordIndices(text, entry?.interactiveWordIndices);
+    const textBox: TextBox = {
+        text,
+        x: 10,
+        y: 38,
+        width: 80,
+        fontSize: readingLevelFontSize(level),
+        fontFamily: 'Patrick Hand',
+        color: '#4a3b2a',
+        alignment: 'center',
+        interactiveWordIndices: indices,
+    };
+    return {
+        ...page,
+        textBoxes: [textBox],
+        content: {
+            ...(page.content || {}),
+            text,
+            textBoxes: [textBox],
+        },
+    };
+}
+
+/** Page has video soundtrack the kid can mute/unmute (layered audio or native video track). */
 function pageHasLayeredVideoSound(page: Page | null | undefined): boolean {
     if (!page) return false;
     if ((page.backgroundAudioUrl || '').trim()) return true;
     if (
         page.useVideoSequence &&
         Array.isArray(page.videoSequence) &&
-        page.videoSequence.some((v) => (v.audioUrl || '').trim())
+        page.videoSequence.some((v) => (v.audioUrl || '').trim() || (v.url || '').trim())
     )
         return true;
+    if (
+        page.backgroundType === 'video' ||
+        (page.backgroundUrl && /\.(mp4|webm|mov|m4v)$/i.test(page.backgroundUrl)) ||
+        page.files?.background?.type === 'video'
+    ) {
+        return !!(page.backgroundUrl || page.files?.background?.url);
+    }
     return false;
 }
 
@@ -182,6 +243,9 @@ const BookReaderPage: React.FC = () => {
     const location = useLocation();
     const fromDailySession = (location.state as any)?.fromDailySession || false;
     const [searchParams] = useSearchParams();
+    const readingLevel =
+        parseReadingLevel(searchParams.get('readingLevel')) ||
+        parseReadingLevel((location.state as { readingLevel?: string } | null)?.readingLevel);
     const readerShareToken = searchParams.get('share') || undefined;
     const bookDetailUrl = bookId ? `/book/${bookId}${readerShareToken ? `?share=${encodeURIComponent(readerShareToken)}` : ''}` : '';
     const { setGameMode, setMusicPaused, currentPlaylist, isPlaying, togglePlayPause } = useAudio();
@@ -189,8 +253,38 @@ const BookReaderPage: React.FC = () => {
     const { isTutorialActive, isStepActive, onPageSwipe, onBookEndModalOpen, onQuizStart, onBookQuizComplete, currentStep, goToStep } = useTutorial();
     const wasMusicEnabledRef = useRef<boolean>(false);
     const [pages, setPages] = useState<Page[]>([]);
+    const pagesRef = useRef<Page[]>([]);
+    useEffect(() => {
+        pagesRef.current = pages;
+    }, [pages]);
     const [currentPageIndex, setCurrentPageIndex] = useState(0);
     const [loading, setLoading] = useState(true);
+    /** Bible Map tap-words: keys `${boxIndex}:${wordIndex}` tapped on the current page */
+    const [tappedInteractiveKeys, setTappedInteractiveKeys] = useState<Set<string>>(() => new Set());
+    const tappedInteractiveKeysRef = useRef<Set<string>>(new Set());
+    useEffect(() => {
+        tappedInteractiveKeysRef.current = tappedInteractiveKeys;
+    }, [tappedInteractiveKeys]);
+
+    const pageTapWordsComplete = useCallback(
+        (page: Page | undefined, tapped: Set<string> = tappedInteractiveKeysRef.current): boolean => {
+            if (!page || page._id === 'the-end-page') return true;
+            const contentBoxes = page.content?.textBoxes;
+            const boxes =
+                contentBoxes && contentBoxes.length > 0 ? contentBoxes : page.textBoxes || [];
+            const targets = collectPageInteractiveTargets(boxes);
+            if (targets.length === 0) return true;
+            return targets.every((t) => tapped.has(`${t.boxIndex}:${t.wordIndex}`));
+        },
+        [],
+    );
+
+    /** Used by TTS auto-advance (async) — must not skip tap-word gating. */
+    const canAutoAdvanceFromCurrentPage = useCallback((): boolean => {
+        const idx = currentPageIndexRef.current;
+        const page = pagesRef.current[idx];
+        return pageTapWordsComplete(page, tappedInteractiveKeysRef.current);
+    }, [pageTapWordsComplete]);
     
     // Premium preview state
     const [isBookPremium, setIsBookPremium] = useState(false);
@@ -1689,8 +1783,11 @@ const BookReaderPage: React.FC = () => {
                     textBoxes: [], // Empty - no text on the page itself, modal will show on top
                 };
 
+                // Apply age-leveled text when opened from Bible Map READ STORY age picker
+                const leveledPages = regularPages.map((p: Page) => applyReadingLevelToPage(p, readingLevel));
+
                 // Regular pages + inline coloring pages + The End page
-                setPages([...regularPages, theEndPage]);
+                setPages([...leveledPages, theEndPage]);
 
                 // Check if page is specified in URL (from Continue button)
                 // URL param "page" = continue from specific page
@@ -1707,7 +1804,7 @@ const BookReaderPage: React.FC = () => {
                     if (!isNaN(pageNum) && pageNum >= 1 && pageNum <= data.length) {
                         let pageIndex = pageNum - 1; // Convert to 0-based
                         // Enforce preview limit for non-subscribed users on premium books
-                        if (bookIsMembersOnly && !isSubscribed && pageIndex >= BOOK_PREVIEW_PAGES) {
+                        if (isBookPremium && !isSubscribed && pageIndex >= BOOK_PREVIEW_PAGES) {
                             console.log(`📖 Preview limit enforced: redirecting from page ${pageNum} to page ${BOOK_PREVIEW_PAGES}`);
                             pageIndex = BOOK_PREVIEW_PAGES - 1;
                         }
@@ -1722,7 +1819,7 @@ const BookReaderPage: React.FC = () => {
                     if (progress && progress.currentPageIndex >= 0 && progress.currentPageIndex < data.length) {
                         let pageIndex = progress.currentPageIndex;
                         // Enforce preview limit for non-subscribed users on premium books
-                        if (bookIsMembersOnly && !isSubscribed && pageIndex >= BOOK_PREVIEW_PAGES) {
+                        if (isBookPremium && !isSubscribed && pageIndex >= BOOK_PREVIEW_PAGES) {
                             console.log(`📖 Preview limit enforced: redirecting from saved page ${pageIndex + 1} to page ${BOOK_PREVIEW_PAGES}`);
                             pageIndex = BOOK_PREVIEW_PAGES - 1;
                         }
@@ -1817,7 +1914,12 @@ const BookReaderPage: React.FC = () => {
             console.log(`✅ Loaded ${cloned.length} cloned voice(s) from local storage`);
         };
         loadClonedVoices();
-    }, [bookId]);
+    }, [bookId, readingLevel]);
+
+    // Reset tap-word progress when the page changes
+    useEffect(() => {
+        setTappedInteractiveKeys(new Set());
+    }, [currentPageIndex]);
 
     // Deep link: /read/:bookId?coloring=<pageNumber|pageId> opens coloring modal directly
     useEffect(() => {
@@ -2117,6 +2219,12 @@ const BookReaderPage: React.FC = () => {
     const handleNext = (e: React.MouseEvent) => {
         e.stopPropagation();
         if (isPageTurning) return;
+
+        // Bible Map: require tapping marked words before advancing
+        if (!pageTapWordsComplete(pages[currentPageIndex])) {
+            console.log('📖 Tap required words before advancing');
+            return;
+        }
         
         // Auto-play if user had narration going and did not explicitly stop it
         const shouldAutoPlayOnSwipe =
@@ -2296,7 +2404,8 @@ const BookReaderPage: React.FC = () => {
             // Re-fetch pages
             const freshPages = await ApiService.getBookPages(bookId);
             if (freshPages && freshPages.length > 0) {
-                setPages(freshPages);
+                const leveled = freshPages.map((p: Page) => applyReadingLevelToPage(p, readingLevel));
+                setPages(leveled);
                 console.log('✅ Book refreshed with', freshPages.length, 'pages');
             }
         } catch (error) {
@@ -3100,7 +3209,7 @@ const BookReaderPage: React.FC = () => {
                         
                         // Auto-play to next page
                         const currentPageIdx = currentPageIndexRef.current;
-                        if (autoPlayModeRef.current && !isAutoPlayingRef.current && currentPageIdx < pages.length - 1) {
+                        if (autoPlayModeRef.current && !isAutoPlayingRef.current && currentPageIdx < pages.length - 1 && canAutoAdvanceFromCurrentPage()) {
                             isAutoPlayingRef.current = true;
                             const nextPageIndex = currentPageIdx + 1;
                             console.log('🔄 Auto-play after failed segment: Moving to page', nextPageIndex + 1);
@@ -3242,7 +3351,7 @@ const BookReaderPage: React.FC = () => {
                             canGoNext: currentPageIdx < pages.length - 1
                         });
                         
-                        if (autoPlayModeRef.current && !isAutoPlayingRef.current && currentPageIdx < pages.length - 1) {
+                        if (autoPlayModeRef.current && !isAutoPlayingRef.current && currentPageIdx < pages.length - 1 && canAutoAdvanceFromCurrentPage()) {
                             isAutoPlayingRef.current = true;
                             const nextPageIndex = currentPageIdx + 1;
                             console.log('🔄 Multi-segment auto-play: Moving to page', nextPageIndex + 1);
@@ -3897,7 +4006,7 @@ const BookReaderPage: React.FC = () => {
                             // Auto-play: Move to next page if enabled
                             // Use refs to get latest values (closure-safe)
                             const currentPageIdx = currentPageIndexRef.current;
-                            if (autoPlayModeRef.current && !isAutoPlayingRef.current && currentPageIdx < pages.length - 1) {
+                            if (autoPlayModeRef.current && !isAutoPlayingRef.current && currentPageIdx < pages.length - 1 && canAutoAdvanceFromCurrentPage()) {
                                 isAutoPlayingRef.current = true; // Prevent multiple calls
                                 const nextPageIndex = currentPageIdx + 1;
                                 console.log('🔄 Auto-play: Moving to page', nextPageIndex + 1, `(from page ${currentPageIdx + 1})`);
@@ -4000,7 +4109,7 @@ const BookReaderPage: React.FC = () => {
                             // Auto-play: Move to next page if enabled
                             // Use refs to get latest values (closure-safe)
                             const currentPageIdx = currentPageIndexRef.current;
-                            if (autoPlayModeRef.current && !isAutoPlayingRef.current && currentPageIdx < pages.length - 1) {
+                            if (autoPlayModeRef.current && !isAutoPlayingRef.current && currentPageIdx < pages.length - 1 && canAutoAdvanceFromCurrentPage()) {
                                 isAutoPlayingRef.current = true; // Prevent multiple calls
                                 const nextPageIndex = currentPageIdx + 1;
                                 console.log('🔄 Auto-play: Moving to page', nextPageIndex + 1, `(from page ${currentPageIdx + 1})`);
@@ -5086,9 +5195,52 @@ const BookReaderPage: React.FC = () => {
                                 // Character overlay props
                                 showCharacterOverlay={showCharacterOverlay && !!currentKidPoses}
                                 characterPoses={currentKidPoses || undefined}
+                                tappedInteractiveKeys={tappedInteractiveKeys}
+                                onInteractiveWordTap={(boxIndex, wordIndex) => {
+                                    const key = `${boxIndex}:${wordIndex}`;
+                                    setTappedInteractiveKeys((prev) => {
+                                        if (prev.has(key)) return prev;
+                                        const next = new Set(prev);
+                                        next.add(key);
+                                        return next;
+                                    });
+                                    playInteractiveWordDing();
+                                }}
                             />
                         )}
                     </div>
+
+                    {/* Bible Map tap-word progress */}
+                    {(() => {
+                        const page = pages[currentPageIndex];
+                        if (!page || page._id === 'the-end-page') return null;
+                        const contentBoxes = page.content?.textBoxes;
+                        const boxes =
+                            contentBoxes && contentBoxes.length > 0
+                                ? contentBoxes
+                                : page.textBoxes || [];
+                        const targets = collectPageInteractiveTargets(boxes);
+                        if (targets.length === 0) return null;
+                        const tappedCount = targets.filter((t) =>
+                            tappedInteractiveKeys.has(`${t.boxIndex}:${t.wordIndex}`),
+                        ).length;
+                        const allDone = tappedCount >= targets.length;
+                        return (
+                            <div className="absolute bottom-16 left-1/2 -translate-x-1/2 z-40 pointer-events-none">
+                                <div
+                                    className={`px-3 py-1.5 rounded-full text-xs font-medium backdrop-blur-sm shadow ${
+                                        allDone
+                                            ? 'bg-emerald-600 text-white'
+                                            : 'bg-black/50 text-white'
+                                    }`}
+                                >
+                                    {allDone
+                                        ? 'All words found — next page unlocked'
+                                        : `Tap words ${tappedCount}/${targets.length}`}
+                                </div>
+                            </div>
+                        );
+                    })()}
 
                     {/* High-sheen glossy white page that curls over */}
                     {flipState && (

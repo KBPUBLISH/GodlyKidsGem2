@@ -57,6 +57,8 @@ interface AudioContextType {
     playTab: () => void;
     setGameMode: (active: boolean, type?: 'default' | 'workout') => void;
     setMusicPaused: (paused: boolean) => void;
+    /** Pages that want the app-background loop call this on mount; cleanup on unmount. */
+    acquireAppAmbient: () => () => void;
 
     // Playlist Player
     currentPlaylist: Playlist | null;
@@ -92,6 +94,7 @@ const AudioContext = createContext<AudioContextType>({
     playTab: () => { },
     setGameMode: () => { },
     setMusicPaused: () => { },
+    acquireAppAmbient: () => () => { },
 
     currentPlaylist: null,
     currentTrackIndex: 0,
@@ -141,6 +144,8 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     const [contentMusicPaused, setContentMusicPaused] = useState(false);
     /** Reserved for mini-games that need to own the mix (strength, etc.) */
     const [gameModeActive, setGameModeActive] = useState(false);
+    /** Count of pages currently requesting the app-background ambient loop (e.g. Explore). */
+    const [ambientHolders, setAmbientHolders] = useState(0);
 
     // --- Playlist Player State ---
     const [currentPlaylist, setCurrentPlaylist] = useState<Playlist | null>(null);
@@ -445,6 +450,7 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
         const shouldPlay =
             musicEnabled &&
+            ambientHolders > 0 &&
             !contentMusicPaused &&
             !gameModeActive &&
             currentPlaylist == null;
@@ -464,6 +470,7 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         gameModeActive,
         currentPlaylist,
         appBackgroundTrack,
+        ambientHolders,
     ]);
 
     // Load track when playlist or index changes
@@ -814,11 +821,20 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     const setGameMode = useCallback((active: boolean, _type?: 'default' | 'workout') => {
         setGameModeActive(active);
     }, []);
+    const acquireAppAmbient = useCallback(() => {
+        setAmbientHolders((n) => n + 1);
+        let released = false;
+        return () => {
+            if (released) return;
+            released = true;
+            setAmbientHolders((n) => Math.max(0, n - 1));
+        };
+    }, []);
 
     return (
         <AudioContext.Provider value={{
             musicEnabled, sfxEnabled, musicVolume, toggleMusic, toggleSfx, setMusicVolume,
-            playClick, playBack, playSuccess, playTab, setGameMode, setMusicPaused,
+            playClick, playBack, playSuccess, playTab, setGameMode, setMusicPaused, acquireAppAmbient,
             currentPlaylist, currentTrackIndex, isPlaying, progress, currentTime, duration,
             playPlaylist, togglePlayPause, nextTrack, prevTrack, seek, closePlayer,
             isPreviewMode, previewLimitReached, previewTimeRemaining, dismissPreviewLimit
@@ -827,3 +843,16 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         </AudioContext.Provider>
     );
 };
+
+/**
+ * Request the shared app-background ambient loop while a page is mounted.
+ * Respects Settings → Background Music (`musicEnabled`), content pause, game mode,
+ * and the global playlist player (won't fight MiniPlayer).
+ */
+export function useAppAmbientMusic(active = true) {
+    const { acquireAppAmbient } = useAudio();
+    useEffect(() => {
+        if (!active) return;
+        return acquireAppAmbient();
+    }, [active, acquireAppAmbient]);
+}

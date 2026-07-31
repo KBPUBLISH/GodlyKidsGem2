@@ -2,6 +2,7 @@ import React, { useEffect, useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { activityTrackingService } from '../services/activityTrackingService';
 import { ApiService } from '../services/apiService';
+import { getCoverThumb } from '../utils/coverImage';
 
 const STORAGE_KEY = 'godly_kids_data_v6';
 
@@ -18,7 +19,7 @@ const ContentCarousel: React.FC = () => {
         const bookCovers = books
           .filter(b => b.coverUrl && b.coverUrl.length > 10)
           .slice(0, 12)
-          .map(b => b.coverUrl);
+          .map(b => getCoverThumb(b.coverUrl));
         
         if (bookCovers.length > 0) {
           setCovers(bookCovers);
@@ -88,7 +89,8 @@ const CarouselScroller: React.FC<{ covers: string[]; scrollRef: React.RefObject<
               src={cover} 
               alt=""
               className="w-full h-full object-cover"
-              loading="eager"
+              loading="lazy"
+              decoding="async"
               onError={(e) => {
                 // Hide broken image container entirely
                 (e.target as HTMLImageElement).parentElement!.style.display = 'none';

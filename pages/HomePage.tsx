@@ -40,6 +40,7 @@ import { getPreferenceTags, getSavedPreferences } from './InterestSelectionPage'
 import { isSessionCompletedToday, getSessionStreak, hasSessionToday } from '../services/dailySessionService';
 import DailyLessonWidget from '../components/features/DailyLessonWidget';
 import PremiumBadge from '../components/ui/PremiumBadge';
+import CoverImage from '../components/ui/CoverImage';
 import { FEATURE_CREATE_YOUR_STORY } from '../constants';
 import { placeholderImage } from '../utils/placeholderImage';
 
@@ -53,7 +54,7 @@ const FALLBACK_BOOK_COVER = placeholderImage(150, 200, '4CAF50', '\u{1F4DA}'); /
 
 // Swaps the <img> src to a guaranteed-load data URI on error, then disables
 // further onerror handling so the React re-render cycle can't restart the
-// fetch loop.
+// fetch loop. Kept for non-cover assets (lesson thumbs, etc.).
 const swapToFallback = (e: React.SyntheticEvent<HTMLImageElement>, fallback: string) => {
   const img = e.currentTarget;
   if (img.src === fallback) return; // already swapped — nothing to do
@@ -1663,11 +1664,11 @@ const HomePage: React.FC = () => {
                   >
                     {/* Cover Image */}
                     <div className="relative aspect-[3/4] rounded-2xl overflow-hidden shadow-lg border-2 border-white/20 group-hover:border-pink-400/50 transition-all">
-                      <img
-                        src={item.coverUrl || item.coverImage || item.files?.coverImage || FALLBACK_RECOMMENDED_COVER}
+                      <CoverImage
+                        src={item.coverUrl || item.coverImage || item.files?.coverImage}
                         alt={item.title}
+                        fallback={FALLBACK_RECOMMENDED_COVER}
                         className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                        onError={(e) => swapToFallback(e, FALLBACK_RECOMMENDED_COVER)}
                       />
                       {/* Play overlay for audio */}
                       {item.isAudio && (
@@ -1718,11 +1719,11 @@ const HomePage: React.FC = () => {
                   >
                     {/* Cover Image - Same 3:4 aspect ratio as books */}
                     <div className="relative aspect-[3/4] rounded-2xl overflow-hidden shadow-lg border-2 border-white/20 group-hover:border-orange-400/50 transition-all">
-                      <img
-                        src={episode.coverImage || episode.playlist.coverImage || FALLBACK_EPISODE_COVER}
+                      <CoverImage
+                        src={episode.coverImage || episode.playlist.coverImage}
                         alt={episode.title}
+                        fallback={FALLBACK_EPISODE_COVER}
                         className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                        onError={(e) => swapToFallback(e, FALLBACK_EPISODE_COVER)}
                       />
                       {/* Play overlay */}
                       <div className="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
@@ -1771,11 +1772,11 @@ const HomePage: React.FC = () => {
                   >
                     {/* Cover Image */}
                     <div className="relative aspect-[3/4] rounded-2xl overflow-hidden shadow-lg border-2 border-white/20 group-hover:border-green-400/50 transition-all">
-                      <img
-                        src={book.coverUrl || book.coverImage || book.files?.coverImage || FALLBACK_BOOK_COVER}
+                      <CoverImage
+                        src={book.coverUrl || book.coverImage || book.files?.coverImage}
                         alt={book.title}
+                        fallback={FALLBACK_BOOK_COVER}
                         className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                        onError={(e) => swapToFallback(e, FALLBACK_BOOK_COVER)}
                       />
                       {/* Play overlay */}
                       <div className="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
@@ -1950,8 +1951,8 @@ const HomePage: React.FC = () => {
                     <div className={`relative aspect-[9/16] rounded-2xl overflow-hidden transition-all border-3 shadow-xl ${isLocked ? 'border-[#FFD700]' : 'border-[#4CAF50]'}`}>
                       {/* Cover Image or Gradient Background */}
                       {game.coverImage ? (
-                        <img 
-                          src={game.coverImage} 
+                        <CoverImage
+                          src={game.coverImage}
                           alt={game.name}
                           className={`absolute inset-0 w-full h-full object-cover ${isLocked ? 'brightness-50' : ''}`}
                         />
@@ -2033,11 +2034,10 @@ const HomePage: React.FC = () => {
                         <div className="bg-white/10 backdrop-blur-sm rounded-2xl overflow-hidden shadow-lg border-2 border-white/20 hover:shadow-2xl hover:scale-105 transition-all">
                           <div className="aspect-square bg-gradient-to-br from-purple-500 to-indigo-600 relative overflow-hidden">
                             {item.coverImage ? (
-                              <img
+                              <CoverImage
                                 src={item.coverImage}
                                 alt={item.title}
                                 className="w-full h-full object-cover"
-                                loading="lazy"
                               />
                             ) : (
                               <div className="w-full h-full flex items-center justify-center">
@@ -2242,9 +2242,9 @@ const HomePage: React.FC = () => {
                     <div className="bg-white/10 backdrop-blur-sm rounded-2xl overflow-hidden shadow-lg border-2 border-white/20 hover:shadow-2xl hover:scale-105 transition-all">
                       <div className="aspect-square bg-gradient-to-br from-purple-500 to-indigo-600 relative overflow-hidden">
                         {series.coverImage ? (
-                          <img 
-                            src={series.coverImage} 
-                            alt={series.title} 
+                          <CoverImage
+                            src={series.coverImage}
+                            alt={series.title}
                             className="w-full h-full object-cover"
                           />
                         ) : (

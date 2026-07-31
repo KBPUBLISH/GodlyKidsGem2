@@ -5,8 +5,7 @@ import LandingPage from './pages/LandingPage';
 import SignInPage from './pages/SignInPage';
 import ResetPasswordPage from './pages/ResetPasswordPage';
 import OnboardingPage from './pages/OnboardingPage';
-import HomePage from './pages/HomePage';
-import WorldPage, { PersistentWorldIsland } from './pages/WorldPage';
+import WorldPage from './pages/WorldPage';
 import ReferralPromptModal from './components/features/ReferralPromptModal';
 import LifetimeOfferModal from './components/features/LifetimeOfferModal';
 import CreateAccountModal from './components/modals/CreateAccountModal';
@@ -604,6 +603,14 @@ import SharePlaylistPage from './pages/SharePlaylistPage';
 import ShareBookPage from './pages/ShareBookPage';
 import ParentQuizPage from './pages/ParentQuizPage';
 import GamesPage from './pages/GamesPage';
+import MapPage from './pages/MapPage';
+import SailScenePage from './pages/SailScenePage';
+import IslandScenePage from './pages/IslandScenePage';
+import IslandLessonPage from './pages/IslandLessonPage';
+import IslandSlidingPuzzlePage from './pages/IslandSlidingPuzzlePage';
+import IslandColoringPage from './pages/IslandColoringPage';
+import IslandQuizPage from './pages/IslandQuizPage';
+import CrewPage from './pages/CrewPage';
 import KaraokePage from './pages/KaraokePage';
 import KaraokePlayerPage from './pages/KaraokePlayerPage';
 import KaraokeSharePage from './pages/KaraokeSharePage';
@@ -780,11 +787,10 @@ const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) =
 };
 
 // Explore page wrapper - shows welcome screen for new users, save progress prompt for guests
-// Renders WorldPage (island buttons) as the main explore view
+// Renders WorldPage (Map-centered wood Explore layout)
 const WorldPageWithWelcomeCheck: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
-  const { isPanorama } = useTheme();
   const [showSaveProgressModal, setShowSaveProgressModal] = useState(false);
   const [showTrialExpiredModal, setShowTrialExpiredModal] = useState(false);
   const [hasAccount, setHasAccount] = useState(() => hasUserAccount());
@@ -903,7 +909,7 @@ const WorldPageWithWelcomeCheck: React.FC = () => {
 
   return (
     <>
-      {isPanorama ? <HomePage /> : <WorldPage />}
+      <WorldPage />
       {showSaveProgressModal && (
         <SaveProgressModal
           isOpen={true}
@@ -1004,7 +1010,7 @@ const CloudSVG: React.FC<{ width: number; opacity?: number; flip?: boolean }> = 
 );
 
 const PRELOAD_IMAGES = [
-  '/assets/images/daily-adventure-island.webp',
+  '/assets/images/explore-island-genesis.webp',
   '/assets/images/volcano-island.webp',
   '/assets/images/wooden-raft.webp',
   '/assets/images/island-button.webp',
@@ -1154,7 +1160,7 @@ const ReferralPromptWrapper: React.FC<{ children: React.ReactNode }> = ({ childr
   );
 };
 
-const MAIN_NAV_PAGES = ['/world', '/home', '/listen', '/read', '/games'];
+const MAIN_NAV_PAGES = ['/world', '/home', '/listen', '/read', '/games', '/map'];
 
 const ThemedReadPage: React.FC = () => {
   const { isPanorama } = useTheme();
@@ -1171,7 +1177,6 @@ const LIFETIME_OFFER_SESSION_KEY = 'godlykids_lifetime_offer_session_checked';
 
 const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const location = useLocation();
-  const { isIsland } = useTheme();
   const prevPathRef = useRef(location.pathname);
   const [isTransitioning, setIsTransitioning] = useState(false);
   const fadeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -1312,13 +1317,14 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const isParentQuiz = location.pathname === '/parentquiz';
   const isSharePage = location.pathname.startsWith('/share/') || location.pathname.startsWith('/s/') || (location.pathname.startsWith('/playlist/') && !location.pathname.startsWith('/playlist-detail'));
   const isDailySession = location.pathname === '/daily-session';
+  const isSailScene = location.pathname === '/sail' || location.pathname.startsWith('/sail/');
   const isPremiumOnboarding = location.pathname === '/premium-onboarding';
   const isTrialStats = location.pathname === '/trial-stats';
   const isBookCreating = location.pathname.startsWith('/library/creating/');
   const isKaraokePage = location.pathname === '/karaoke' || location.pathname.startsWith('/karaoke/');
 
   // Standalone pages that don't need the app chrome (background, navigation, etc.)
-  const isStandalonePage = isParentQuiz || isSharePage || isReadyToJumpIn || isDailySession || isPremiumOnboarding || isTrialStats;
+  const isStandalonePage = isParentQuiz || isSharePage || isReadyToJumpIn || isDailySession || isSailScene || isPremiumOnboarding || isTrialStats;
 
   // For standalone pages, render just the children without app styling
   if (isStandalonePage) {
@@ -1331,20 +1337,12 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
       <PanoramaBackground />
       <AssetPreloader />
 
-      {/* Persistent island layer — only mounted in island theme, visibility toggled by route */}
-      {isIsland && (
-        <div style={{ opacity: isTransitioning ? 0 : 1, transition: isTransitioning ? 'none' : 'opacity 0.4s ease-in-out' }}>
-          <PersistentWorldIsland />
-        </div>
-      )}
-
       {/* Content Wrapper - safe area padding applied here so background is unaffected */}
       <div 
         className="relative z-10 flex-1 min-h-0 overflow-hidden"
         style={{
           paddingLeft: 'var(--safe-area-left, 0px)',
           paddingRight: 'var(--safe-area-right, 0px)',
-          pointerEvents: (isIsland && (location.pathname === '/world' || location.pathname === '/home')) ? 'none' : 'auto',
           opacity: isTransitioning ? 0 : 1,
           transition: isTransitioning ? 'none' : 'opacity 0.4s ease-in-out',
         }}
@@ -1356,7 +1354,7 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
       <MiniPlayer />
 
       {/* Only show BottomNavigation on main tab pages */}
-      {(location.pathname === '/world' || location.pathname === '/home' || location.pathname === '/listen' || location.pathname === '/read' || location.pathname === '/games') && <BottomNavigation />}
+      {(location.pathname === '/world' || location.pathname === '/home' || location.pathname === '/listen' || location.pathname === '/read' || location.pathname === '/games' || location.pathname === '/map') && <BottomNavigation />}
 
       {/* Onboarding Tutorial Overlay */}
       <OnboardingTutorial />
@@ -1555,6 +1553,14 @@ const App: React.FC = () => {
                   <Route path="/payment-success" element={<PaymentSuccessPage />} />
                   <Route path="/interests" element={<InterestSelectionPage />} />
                   <Route path="/daily-session" element={<DailySessionPage />} />
+                  <Route path="/sail" element={<SailScenePage />} />
+                  <Route path="/sail/:islandId" element={<SailScenePage />} />
+                  <Route path="/sail/:islandId/lesson" element={<IslandScenePage />} />
+                  <Route path="/sail/:islandId/lesson/hub" element={<IslandLessonPage />} />
+                  <Route path="/sail/:islandId/lesson/puzzle" element={<IslandSlidingPuzzlePage />} />
+                  <Route path="/sail/:islandId/lesson/coloring" element={<IslandColoringPage />} />
+                  <Route path="/sail/:islandId/lesson/quiz" element={<IslandQuizPage />} />
+                  <Route path="/crew" element={<CrewPage />} />
                   {/* BROWSING PAGES - No account required, users can explore freely */}
                   <Route path="/world" element={<WorldPageWithWelcomeCheck />} />
                   {/* /home redirects to /world so island buttons are the main explore view */}
@@ -1581,6 +1587,7 @@ const App: React.FC = () => {
                   <Route path="/lessons" element={<ProtectedRoute><LessonsPage /></ProtectedRoute>} />
                   <Route path="/lesson/:lessonId" element={<ProtectedRoute><LessonPlayerPage /></ProtectedRoute>} />
                   <Route path="/games" element={<GamesPage />} />
+                  <Route path="/map" element={<MapPage />} />
                   <Route path="/karaoke" element={<KaraokePage />} />
                   <Route path="/karaoke/share/:recordingId" element={<KaraokeSharePage />} />
                   <Route path="/karaoke/:id" element={<KaraokePlayerPage />} />

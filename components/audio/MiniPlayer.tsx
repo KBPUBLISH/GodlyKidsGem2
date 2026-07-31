@@ -3,7 +3,7 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { Play, Pause, X, Music, SkipBack, SkipForward, Crown, Lock } from 'lucide-react';
 import { useAudio } from '../../context/AudioContext';
 import { useUser } from '../../context/UserContext';
-import { getCoverThumb } from '../../utils/coverImage';
+import CoverImage from '../ui/CoverImage';
 
 const MiniPlayer: React.FC = () => {
     const {
@@ -152,10 +152,11 @@ const MiniPlayer: React.FC = () => {
                         className="w-12 h-12 rounded-lg border-2 border-[#d4a373] overflow-hidden shrink-0 cursor-pointer"
                     >
                         {currentTrack.coverImage || currentPlaylist.coverImage ? (
-                            <img
-                                src={getCoverThumb(currentTrack.coverImage || currentPlaylist.coverImage)}
+                            <CoverImage
+                                src={currentTrack.coverImage || currentPlaylist.coverImage}
                                 alt={currentTrack.title}
                                 className="w-full h-full object-cover"
+                                loading="eager"
                             />
                         ) : (
                             <div className="w-full h-full bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center">
@@ -260,7 +261,7 @@ const MiniPlayer: React.FC = () => {
                                 <div className="flex items-center justify-center gap-3">
                                     <div className="w-12 h-12 rounded-lg overflow-hidden border-2 border-[#FFD700]/50">
                                         {currentPlaylist?.coverImage ? (
-                                            <img src={currentPlaylist.coverImage} alt="" className="w-full h-full object-cover" />
+                                            <CoverImage src={currentPlaylist.coverImage} alt="" className="w-full h-full object-cover" />
                                         ) : (
                                             <div className="w-full h-full bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center">
                                                 <Music className="w-6 h-6 text-white/50" />

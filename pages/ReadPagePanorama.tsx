@@ -9,6 +9,7 @@ import { useUser } from '../context/UserContext';
 import { ApiService } from '../services/apiService';
 import { Search, ChevronDown, BookOpen, Heart, Sparkles, TreePine, Sword, Star, Book, Users, Crown, Compass, Smile, Castle } from 'lucide-react';
 import PremiumBadge from '../components/ui/PremiumBadge';
+import CoverImage from '../components/ui/CoverImage';
 
 const ageOptions = ['All Ages', '3+', '4+', '5+', '6+', '7+', '8+', '9+', '10+'];
 
@@ -80,11 +81,10 @@ const SeriesCard: React.FC<{ series: any; onClick: () => void; isSubscribed?: bo
       <div className="bg-white/10 backdrop-blur-sm rounded-2xl overflow-hidden shadow-lg border-2 border-purple-400/30 hover:border-purple-400/60 hover:shadow-2xl hover:scale-105 transition-all">
         <div className="aspect-[3/4] bg-gradient-to-br from-purple-500 to-indigo-600 relative overflow-hidden">
           {series.coverImage ? (
-            <img
+            <CoverImage
               src={series.coverImage}
               alt={series.title}
               className="w-full h-full object-cover pointer-events-none"
-              loading="lazy"
               draggable={false}
             />
           ) : (

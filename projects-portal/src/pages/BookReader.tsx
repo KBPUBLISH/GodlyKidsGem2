@@ -7,9 +7,15 @@ import {
     appSideSwipeTextShadow,
     appStoryParagraphExtras,
 } from '../utils/appBookTypography';
-import { ChevronLeft, ChevronRight, X, Play, Square, Volume2, VolumeX, ChevronDown } from 'lucide-react';
+import { ChevronLeft, ChevronRight, X, Play, Square, Volume2, VolumeX, ChevronDown, Check } from 'lucide-react';
 import TrimmedPlaybackVideo from '../components/TrimmedPlaybackVideo';
 import { removeEmotionalCues } from '../utils/readAlongText';
+import {
+    collectPageInteractiveTargets,
+    playInteractiveWordDing,
+    sanitizeInteractiveWordIndices,
+    splitInteractiveWords,
+} from '../utils/interactiveWords';
 
 interface Voice {
     voice_id: string;
@@ -28,6 +34,7 @@ interface TextBox {
     showBackground?: boolean;
     backgroundColor?: string;
     shadowColor?: string;
+    interactiveWordIndices?: number[];
 }
 
 interface VideoSequenceItem {
@@ -128,6 +135,11 @@ const BookReader: React.FC = () => {
     const [pages, setPages] = useState<Page[]>([]);
     const [currentPageIndex, setCurrentPageIndex] = useState(0);
     const [loading, setLoading] = useState(true);
+    const [bookType, setBookType] = useState<'standard' | 'kids_monthly' | 'bible_map'>('standard');
+    const [bookTitle, setBookTitle] = useState('');
+    /** Keys: `${boxIndex}:${wordIndex}` — words tapped on the current page */
+    const [tappedInteractiveKeys, setTappedInteractiveKeys] = useState<Set<string>>(new Set());
+    const [showTapHint, setShowTapHint] = useState(false);
     // Scroll state: 'hidden' | 'mid' | 'max' - matches app behavior
     const [scrollState, setScrollState] = useState<'hidden' | 'mid' | 'max'>('mid');
     const [viewMode, setViewMode] = useState<'fullscreen' | 'tablet-p' | 'tablet-l' | 'phone-p' | 'phone-l'>('fullscreen');
@@ -188,8 +200,13 @@ const BookReader: React.FC = () => {
         const fetchPages = async () => {
             if (!bookId) return;
             try {
-                const res = await apiClient.get(`/api/pages/book/${bookId}`);
-                setPages(res.data);
+                const [pagesRes, bookRes] = await Promise.all([
+                    apiClient.get(`/api/pages/book/${bookId}`),
+                    apiClient.get(`/api/books/${bookId}`),
+                ]);
+                setPages(pagesRes.data);
+                setBookType(bookRes.data?.bookType || 'standard');
+                setBookTitle(bookRes.data?.title || '');
             } catch (err) {
                 console.error('Failed to fetch pages:', err);
             } finally {
@@ -228,6 +245,28 @@ const BookReader: React.FC = () => {
 
     const currentPage = pages[currentPageIndex];
 
+    const currentPageTextBoxes = useMemo(() => {
+        if (!currentPage) return [] as TextBox[];
+        const contentBoxes = currentPage.content?.textBoxes;
+        return (contentBoxes && contentBoxes.length > 0)
+            ? contentBoxes
+            : (currentPage.textBoxes || []);
+    }, [currentPage]);
+
+    const interactiveTargets = useMemo(
+        () => collectPageInteractiveTargets(currentPageTextBoxes),
+        [currentPageTextBoxes],
+    );
+
+    const isInteractivePreview = bookType === 'bible_map' || interactiveTargets.length > 0;
+
+    const allInteractiveTapped = useMemo(() => {
+        if (interactiveTargets.length === 0) return true;
+        return interactiveTargets.every(
+            (t) => tappedInteractiveKeys.has(`${t.boxIndex}:${t.wordIndex}`),
+        );
+    }, [interactiveTargets, tappedInteractiveKeys]);
+
     const pageHasRenderableVideo = useMemo(() => {
         if (!currentPage) return false;
         if (currentPage.useVideoSequence && (currentPage.videoSequence?.length ?? 0) > 0) return true;
@@ -247,6 +286,8 @@ const BookReader: React.FC = () => {
         setReadAlongTimingReady(false);
         alignWordsRef.current = [];
         displayWordCountRef.current = 0;
+        setTappedInteractiveKeys(new Set());
+        setShowTapHint(false);
         if (highlightIntervalRef.current != null) {
             window.clearInterval(highlightIntervalRef.current);
             highlightIntervalRef.current = null;
@@ -489,8 +530,24 @@ const BookReader: React.FC = () => {
         setCurrentVideoIndex(prev => (prev + 1) % sortedVideos.length);
     };
 
+    const handleTapInteractiveWord = (boxIndex: number, wordIndex: number) => {
+        const key = `${boxIndex}:${wordIndex}`;
+        setTappedInteractiveKeys((prev) => {
+            if (prev.has(key)) return prev;
+            const next = new Set(prev);
+            next.add(key);
+            return next;
+        });
+        playInteractiveWordDing();
+        setShowTapHint(false);
+    };
+
     const handleNext = (e: React.MouseEvent) => {
         e.stopPropagation();
+        if (isInteractivePreview && !allInteractiveTapped) {
+            setShowTapHint(true);
+            return;
+        }
         if (currentPageIndex < pages.length - 1) {
             setCurrentPageIndex(prev => prev + 1);
             // NOTE: Scroll state is preserved across pages
@@ -545,6 +602,14 @@ const BookReader: React.FC = () => {
                         Back
                     </button>
                     <div className="h-6 w-px bg-gray-700 mx-2" />
+                    {bookTitle && (
+                        <span className="text-sm font-medium text-white truncate max-w-[200px]">{bookTitle}</span>
+                    )}
+                    {bookType === 'bible_map' && (
+                        <span className="text-xs px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/40">
+                            Bible Map
+                        </span>
+                    )}
                     <span className="text-sm font-medium text-gray-400">Preview Mode:</span>
                     <div className="flex bg-gray-900 rounded-lg p-1">
                         <button
@@ -789,11 +854,7 @@ const BookReader: React.FC = () => {
                                 } : {}}
                             >
                                 {/* Use content.textBoxes first (if has items), fall back to root textBoxes (legacy) */}
-                                {(() => {
-                                    const contentBoxes = currentPage.content?.textBoxes;
-                                    const textBoxes = (contentBoxes && contentBoxes.length > 0) ? contentBoxes : currentPage.textBoxes;
-                                    return textBoxes;
-                                })()?.map((box, idx) => {
+                                {currentPageTextBoxes.map((box, idx) => {
                                     // Calculate where scroll starts (from top)
                                     const scrollStartPercent = 100 - currentScrollHeight - scrollOffset + 3;
                                     const boxY = typeof box.y === 'number' ? box.y : 0;
@@ -806,13 +867,20 @@ const BookReader: React.FC = () => {
                                         ? `calc(${100 - scrollBottomBuffer}% - ${effectiveTop}%)`
                                         : `calc(100% - ${effectiveTop}% - 40px)`;
 
-                                    if (sequentialReadActive && idx !== currentTextBoxIndex) {
+                                    if (sequentialReadActive && idx !== currentTextBoxIndex && !(isInteractivePreview && interactiveTargets.length > 0)) {
                                         return null;
                                     }
 
                                     const cleanedText = removeEmotionalCues(box.text);
                                     const splitWords = cleanedText.split(/\s+/).filter((w) => w.length > 0);
+                                    const interactiveIndices = new Set(
+                                        sanitizeInteractiveWordIndices(box.text || '', box.interactiveWordIndices),
+                                    );
+                                    // Prefer raw-text indices for bible_map taps; fall back to cleaned split when texts match length
+                                    const tapWords = splitInteractiveWords(box.text || '');
+                                    const useInteractiveWords = isInteractivePreview && interactiveIndices.size > 0;
                                     const showReadAlong =
+                                        !useInteractiveWords &&
                                         idx === currentTextBoxIndex &&
                                         readAlongTimingReady &&
                                         highlightedWordIndex >= 0 &&
@@ -858,7 +926,38 @@ const BookReader: React.FC = () => {
                                                 className="gk-readalong-p leading-relaxed relative drop-shadow-[0_1px_2px_rgba(255,255,255,0.9)]"
                                                 style={{ whiteSpace: 'pre-wrap', margin: 0, ...appStoryParagraphExtras() }}
                                             >
-                                                {showReadAlong ? (
+                                                {useInteractiveWords ? (
+                                                    tapWords.map((word, wIdx) => {
+                                                        const isTarget = interactiveIndices.has(wIdx);
+                                                        const tapped = tappedInteractiveKeys.has(`${idx}:${wIdx}`);
+                                                        if (!isTarget) {
+                                                            return <span key={wIdx}>{word}{' '}</span>;
+                                                        }
+                                                        return (
+                                                            <button
+                                                                key={wIdx}
+                                                                type="button"
+                                                                onClick={(e) => {
+                                                                    e.stopPropagation();
+                                                                    if (!tapped) handleTapInteractiveWord(idx, wIdx);
+                                                                }}
+                                                                className={`inline-flex items-center gap-1 mx-0.5 px-2 py-0.5 rounded-md border-2 align-baseline transition ${
+                                                                    tapped
+                                                                        ? 'border-emerald-500 bg-white text-inherit shadow-sm'
+                                                                        : 'border-emerald-500/80 bg-white/95 text-inherit hover:bg-emerald-50 cursor-pointer'
+                                                                }`}
+                                                                style={{ font: 'inherit', color: 'inherit' }}
+                                                            >
+                                                                {word}
+                                                                {tapped && (
+                                                                    <span className="inline-flex items-center justify-center w-4 h-4 rounded-full bg-emerald-500 text-white shrink-0">
+                                                                        <Check className="w-2.5 h-2.5" strokeWidth={3} />
+                                                                    </span>
+                                                                )}
+                                                            </button>
+                                                        );
+                                                    })
+                                                ) : showReadAlong ? (
                                                     splitWords.map((word, wIdx) => {
                                                         const isHighlighted = wIdx === highlightedWordIndex;
                                                         const isUpcoming =
@@ -946,12 +1045,43 @@ const BookReader: React.FC = () => {
                         <button
                             onClick={handleNext}
                             disabled={currentPageIndex === pages.length - 1}
-                            className={`pointer-events-auto p-3 rounded-full bg-black/30 text-white backdrop-blur-sm hover:bg-black/50 transition ${currentPageIndex === pages.length - 1 ? 'opacity-0 cursor-default' : 'opacity-100'
-                                }`}
+                            className={`pointer-events-auto p-3 rounded-full backdrop-blur-sm transition ${
+                                currentPageIndex === pages.length - 1
+                                    ? 'opacity-0 cursor-default bg-black/30 text-white'
+                                    : isInteractivePreview && !allInteractiveTapped
+                                        ? 'opacity-50 cursor-not-allowed bg-black/30 text-white'
+                                        : 'opacity-100 bg-emerald-600/90 text-white hover:bg-emerald-500'
+                            }`}
+                            title={
+                                isInteractivePreview && !allInteractiveTapped
+                                    ? 'Tap all circled words to continue'
+                                    : 'Next page'
+                            }
                         >
                             <ChevronRight className="w-8 h-8" />
                         </button>
                     </div>
+
+                    {/* Interactive word progress / hint */}
+                    {isInteractivePreview && interactiveTargets.length > 0 && (
+                        <div className="absolute bottom-16 left-1/2 -translate-x-1/2 z-40 pointer-events-none">
+                            <div
+                                className={`px-3 py-1.5 rounded-full text-xs font-medium backdrop-blur-sm shadow ${
+                                    showTapHint
+                                        ? 'bg-amber-500 text-white'
+                                        : allInteractiveTapped
+                                            ? 'bg-emerald-600 text-white'
+                                            : 'bg-black/50 text-white'
+                                }`}
+                            >
+                                {allInteractiveTapped
+                                    ? 'All words found — next page unlocked'
+                                    : showTapHint
+                                        ? 'Tap the circled words first'
+                                        : `Tap words ${interactiveTargets.filter((t) => tappedInteractiveKeys.has(`${t.boxIndex}:${t.wordIndex}`)).length}/${interactiveTargets.length}`}
+                            </div>
+                        </div>
+                    )}
 
                     {/* Page Indicator */}
                     <div className="absolute bottom-4 left-1/2 -translate-x-1/2 bg-black/40 text-white px-3 py-1 rounded-full text-sm backdrop-blur-sm pointer-events-none">

@@ -9,6 +9,7 @@ import { useUser } from '../context/UserContext';
 import { ApiService } from '../services/apiService';
 import { Search, ChevronDown, BookOpen, Heart, Sparkles, TreePine, Sword, Star, Book, Users, Crown, Compass, Smile, Castle } from 'lucide-react';
 import PremiumBadge from '../components/ui/PremiumBadge';
+import CoverImage from '../components/ui/CoverImage';
 import { readingProgressService } from '../services/readingProgressService';
 import { FEATURE_CREATE_YOUR_STORY } from '../constants';
 
@@ -86,11 +87,10 @@ const SeriesCard: React.FC<{ series: any; onClick: () => void; isSubscribed?: bo
     >
       <div className="relative aspect-square rounded-xl overflow-hidden border-2 border-purple-400/30 shadow-lg group-hover:border-purple-400/60 group-hover:scale-105 transition-all">
         {series.coverImage ? (
-          <img
+          <CoverImage
             src={series.coverImage}
             alt={series.title}
             className="w-full h-full object-cover pointer-events-none"
-            loading="lazy"
             draggable={false}
           />
         ) : (
@@ -498,7 +498,7 @@ const ReadPage: React.FC = () => {
                         {i + 1}
                       </div>
                       {book.coverUrl ? (
-                        <img src={book.coverUrl} alt={book.title} className="w-full h-full object-cover" loading="lazy" />
+                        <CoverImage src={book.coverUrl} alt={book.title} className="w-full h-full object-cover" />
                       ) : (
                         <div className="w-full h-full bg-gradient-to-br from-purple-500 to-indigo-600 flex items-center justify-center">
                           <span className="text-3xl">📚</span>
@@ -540,7 +540,7 @@ const ReadPage: React.FC = () => {
                   >
                     <div className="relative aspect-[3/4] rounded-xl overflow-hidden border-2 border-emerald-400/40 shadow-lg group-hover:border-emerald-400/70 group-hover:scale-105 transition-all">
                       {book.coverUrl ? (
-                        <img src={book.coverUrl} alt={book.title} className="w-full h-full object-cover" loading="lazy" />
+                        <CoverImage src={book.coverUrl} alt={book.title} className="w-full h-full object-cover" />
                       ) : (
                         <div className="w-full h-full bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center">
                           <span className="text-3xl"><BookOpen className="w-8 h-8 text-white opacity-50" /></span>

@@ -114,6 +114,7 @@ app.use('/api/featured', require('./routes/featured'));
 app.use('/api/stripe', require('./routes/stripe'));
 app.use('/api/user-playlists', require('./routes/userPlaylists'));
 app.use('/api/ai', require('./routes/aiGenerate'));
+app.use('/api/ai', require('./routes/aiInsights'));
 app.use('/api/book-comments', require('./routes/bookComments'));
 app.use('/api/playlist-comments', require('./routes/playlistComments'));
 app.use('/api/play-events', require('./routes/playEvents'));
@@ -157,6 +158,9 @@ app.use('/api/story-backgrounds', require('./routes/story-backgrounds'));
 
 // Monthly Custom Book (create your story with Bible character)
 app.use('/api/monthly-book', require('./routes/monthly-book'));
+
+// Bible Map voyage (islands + story packs)
+app.use('/api/bible-map', require('./routes/bibleMap'));
 
 // ===========================================
 // HEALTH & STATUS ENDPOINTS

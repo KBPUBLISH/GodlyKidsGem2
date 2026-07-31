@@ -1,6 +1,6 @@
 import React from 'react';
 import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom';
-import { Book, BookOpen, Music, Layout as LayoutIcon, Home, Tag, Volume2, Gamepad2, Video, LogOut, Bell, Music2, Star, CalendarDays, BarChart3, Library, Sparkles, TrendingUp, Radio, Mail, Heart, Users, ClipboardCheck, ShoppingCart, BookHeart, Disc, Image, Mic } from 'lucide-react';
+import { Book, BookOpen, Music, Layout as LayoutIcon, Home, Tag, Volume2, Gamepad2, Video, LogOut, Bell, Music2, Star, CalendarDays, BarChart3, Library, Sparkles, TrendingUp, Radio, Mail, Heart, Users, ClipboardCheck, ShoppingCart, BookHeart, Disc, Image, Mic, Map } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 
 const Layout: React.FC = () => {
@@ -8,7 +8,14 @@ const Layout: React.FC = () => {
     const navigate = useNavigate();
     const { logout } = useAuth();
 
-    const isActive = (path: string) => location.pathname === path;
+    const isActive = (path: string) => {
+        if (path === '/') return location.pathname === '/';
+        // Nested section (hub + child editors)
+        if (path === '/bible-map') {
+            return location.pathname === path || location.pathname.startsWith(`${path}/`);
+        }
+        return location.pathname === path;
+    };
 
     const handleLogout = () => {
         logout();
@@ -19,9 +26,11 @@ const Layout: React.FC = () => {
         { path: '/', icon: Home, label: 'Dashboard' },
         { path: '/analytics', icon: BarChart3, label: 'Content Analytics' },
         { path: '/onboarding-analytics', icon: TrendingUp, label: 'Onboarding Analytics' },
+        { path: '/ai-insights', icon: Sparkles, label: 'AI Insights' },
         { path: '/featured', icon: Star, label: 'Featured' },
         { path: '/new-user-welcome', icon: Sparkles, label: 'New User Welcome' },
         { path: '/books', icon: Book, label: 'Books' },
+        { path: '/bible-map', icon: Map, label: 'Bible Map' },
         { path: '/monthly-books', icon: BookOpen, label: 'Kids Monthly Book Character Design' },
         { path: '/book-series', icon: Library, label: 'Book Series' },
         { path: '/playlists', icon: Music, label: 'Playlists' },

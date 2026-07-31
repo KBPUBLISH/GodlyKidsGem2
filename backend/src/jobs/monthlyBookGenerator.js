@@ -351,14 +351,24 @@ async function gatherPageReferenceImages(customBook, pageDoc) {
 
 /**
  * Vertex AI image model for page generation.
- * - gemini-3.1-flash-image (default): fast, cost-effective, regional endpoints.
- * - gemini-3-pro-image-preview: higher quality, higher cost; use VERTEX_AI_IMAGE_LOCATION=global.
- * Override with VERTEX_AI_IMAGE_MODEL to use a different model.
+ * - gemini-3.1-flash-image (default): GA, global endpoint only (Vertex locations docs).
+ * - gemini-2.5-flash-image: GA, regional + global; used automatically if 3.1 returns 404.
+ * - gemini-3-pro-image: higher quality; global endpoint only.
+ * Override with VERTEX_AI_IMAGE_MODEL.
  */
 const VERTEX_IMAGE_MODEL = (process.env.VERTEX_AI_IMAGE_MODEL || 'gemini-3.1-flash-image').trim() || 'gemini-3.1-flash-image';
+const VERTEX_IMAGE_FALLBACK_MODEL = 'gemini-2.5-flash-image';
+
+/** Models that Vertex only serves on the global endpoint (regional URLs return 404). */
+const VERTEX_IMAGE_GLOBAL_ONLY_MODELS = new Set([
+    'gemini-3.1-flash-image',
+    'gemini-3.1-flash-lite-image',
+    'gemini-3-pro-image',
+    'gemini-3-pro-image-preview',
+]);
 
 /**
- * Vertex AI regions that support the Gemini flash image model (Standard PayGo & Provisioned Throughput).
+ * Vertex AI regions that support gemini-2.5-flash-image (Standard PayGo & Provisioned Throughput).
  * Per model availability: Global, US (7), Europe (6). Use VERTEX_AI_IMAGE_LOCATION=global for global endpoint.
  * Round-robin across these to spread load and reduce 429s.
  */
@@ -370,18 +380,21 @@ const VERTEX_IMAGE_REGIONS_DEFAULT = [
 let _vertexRegionsLogged = false;
 
 /**
- * Get Vertex AI endpoint for the Gemini flash image model.
- * - VERTEX_AI_IMAGE_LOCATION=global → use global endpoint (separate quota, can reduce 429s).
+ * Get Vertex AI endpoint for the configured Gemini image model.
+ * - Global-only models (3.1 flash image, 3 pro image) always use the global endpoint.
+ * - VERTEX_AI_IMAGE_LOCATION=global → use global endpoint.
  * - VERTEX_AI_IMAGE_REGIONS=us-central1,us-east1,... → round-robin across those regions only.
  * - Otherwise round-robin across VERTEX_IMAGE_REGIONS_DEFAULT (all supported regions) to maximize effective RPM.
  * @param {number} pageIndex - Used for round-robin (first attempt).
  * @param {number} [attemptOffset=0] - Added to pageIndex for retries so each retry uses a different region (avoids re-hitting same region's 429).
+ * @param {string} [model] - Model id (defaults to VERTEX_IMAGE_MODEL).
  * @returns {{ baseUrl: string, location: string }}
  */
-function getVertexImageEndpoint(pageIndex, attemptOffset) {
+function getVertexImageEndpoint(pageIndex, attemptOffset, model) {
+    const modelId = (model || VERTEX_IMAGE_MODEL || '').trim();
     const offset = Math.max(0, parseInt(attemptOffset, 10) || 0);
     const loc = (process.env.VERTEX_AI_IMAGE_LOCATION || '').trim().toLowerCase();
-    if (loc === 'global') {
+    if (loc === 'global' || VERTEX_IMAGE_GLOBAL_ONLY_MODELS.has(modelId)) {
         return {
             baseUrl: 'https://aiplatform.googleapis.com/v1',
             location: 'global',
@@ -414,11 +427,13 @@ function getVertexImageEndpoint(pageIndex, attemptOffset) {
  * Generate one page image with the Vertex Gemini flash image model for all pages (superior consistency).
  * Uses child + portal character reference images when available; supports text-only when no refs.
  * attemptOffset: 0 = first try, 1 = first retry (use next region), 2 = second retry (use next region).
+ * modelOverride: optional model id (e.g. fallback to gemini-2.5-flash-image after 404 on 3.1).
  * Returns { imageUrl: string | null, httpStatus: number } so caller can use longer backoff on 429.
  */
-async function generatePageImageWithVertexGemini(customBook, pageDoc, characterStylePrompt, pageIndex, attemptOffset, mainCharacterStyleDesc, wholeBookStyleDesc) {
+async function generatePageImageWithVertexGemini(customBook, pageDoc, characterStylePrompt, pageIndex, attemptOffset, mainCharacterStyleDesc, wholeBookStyleDesc, modelOverride) {
     const customMonthlyBookId = String(customBook._id);
     const pageNumber = pageIndex + 1;
+    const imageModel = (modelOverride || VERTEX_IMAGE_MODEL).trim() || VERTEX_IMAGE_MODEL;
     const token = await getImagenAccessToken();
     const credentialsJson = process.env.GCS_CREDENTIALS_JSON || process.env.GOOGLE_SERVICE_ACCOUNT_JSON;
     let projectId = null;
@@ -428,7 +443,8 @@ async function generatePageImageWithVertexGemini(customBook, pageDoc, characterS
     if (!token || !projectId || !bucket) return { imageUrl: null, httpStatus: 0 };
     if (!_vertexImageModelLogged) {
         _vertexImageModelLogged = true;
-        console.log('MonthlyBookGenerator: Vertex image model:', VERTEX_IMAGE_MODEL);
+        console.log('MonthlyBookGenerator: Vertex image model:', imageModel,
+            VERTEX_IMAGE_GLOBAL_ONLY_MODELS.has(imageModel) ? '(global endpoint only)' : '');
     }
 
     const characterNames = (customBook.characters && customBook.characters.length > 0)
@@ -447,8 +463,8 @@ async function generatePageImageWithVertexGemini(customBook, pageDoc, characterS
 
     // Log prompt preview for every page (including Page 1) so it's clear what prompt is used.
     const promptPreview = prompt.slice(0, 100) + (prompt.length > 100 ? '...' : '');
-    const { baseUrl, location } = getVertexImageEndpoint(pageIndex, attemptOffset || 0);
-    console.log('MonthlyBookGenerator: Page', pageNumber, 'prompt:', promptPreview, 'location:', location + (attemptOffset ? ` (retry ${attemptOffset})` : ''));
+    const { baseUrl, location } = getVertexImageEndpoint(pageIndex, attemptOffset || 0, imageModel);
+    console.log('MonthlyBookGenerator: Page', pageNumber, 'prompt:', promptPreview, 'model:', imageModel, 'location:', location + (attemptOffset ? ` (retry ${attemptOffset})` : ''));
 
     // When 2–3 refs are all user characters (kids), each must keep ONLY their own appearance—no swapping accessories.
     const isUserRef = (label) => /^(the child|child|character 1|character 2|character 3)$/i.test(String(label || '').trim());
@@ -527,7 +543,7 @@ async function generatePageImageWithVertexGemini(customBook, pageDoc, characterS
     }
 
     try {
-        const url = `${baseUrl}/projects/${projectId}/locations/${location}/publishers/google/models/${VERTEX_IMAGE_MODEL}:generateContent`;
+        const url = `${baseUrl}/projects/${projectId}/locations/${location}/publishers/google/models/${imageModel}:generateContent`;
         const res = await axios.post(
             url,
             {
@@ -547,7 +563,16 @@ async function generatePageImageWithVertexGemini(customBook, pageDoc, characterS
             }
         );
         if (res.status !== 200) {
-            console.warn('MonthlyBookGenerator: Gemini page', pageNumber, 'failed', res.status, res.status === 429 ? '(rate limit)' : '', typeof res.data === 'string' ? res.data.slice(0, 150) : '');
+            const bodyPreview = typeof res.data === 'string'
+                ? res.data.slice(0, 200)
+                : (res.data ? JSON.stringify(res.data).slice(0, 200) : '');
+            console.warn(
+                'MonthlyBookGenerator: Gemini page', pageNumber, 'failed', res.status,
+                res.status === 429 ? '(rate limit)' : '',
+                `model=${imageModel}`,
+                `location=${location}`,
+                bodyPreview
+            );
             return { imageUrl: null, httpStatus: res.status };
         }
         const outParts = res.data.candidates?.[0]?.content?.parts || [];
@@ -571,7 +596,7 @@ async function generatePageImageWithVertexGemini(customBook, pageDoc, characterS
         });
         await blob.makePublic().catch(() => {});
         const imageUrl = `https://storage.googleapis.com/${bucket.name}/${filename}`;
-        console.log('MonthlyBookGenerator: Generated page', pageNumber, 'with Vertex Gemini image model', VERTEX_IMAGE_MODEL, imageUrl);
+        console.log('MonthlyBookGenerator: Generated page', pageNumber, 'with Vertex Gemini image model', imageModel, imageUrl);
         return { imageUrl, httpStatus: 200 };
     } catch (err) {
         const status = err.response?.status;
@@ -638,18 +663,40 @@ async function generatePageImageForBook(customBook, pageDoc, characterStylePromp
     }
 
     let lastHttpStatus = 0;
+    let imageModel = VERTEX_IMAGE_MODEL;
     for (let attempt = 1; attempt <= PAGE_GEMINI_MAX_ATTEMPTS; attempt++) {
         const attemptOffset = attempt - 1; // 0 = first try, 1 = first retry (different region), etc.
-        const { imageUrl: geminiUrl, httpStatus } = await generatePageImageWithVertexGemini(customBook, pageDoc, characterStylePrompt, pageIndex, attemptOffset, mainCharacterStyleDesc, wholeBookStyleDesc);
+        const { imageUrl: geminiUrl, httpStatus } = await generatePageImageWithVertexGemini(
+            customBook, pageDoc, characterStylePrompt, pageIndex, attemptOffset,
+            mainCharacterStyleDesc, wholeBookStyleDesc, imageModel
+        );
         if (geminiUrl) return geminiUrl;
         lastHttpStatus = httpStatus;
+        // 404 usually means wrong endpoint/model (e.g. 3.1 on a regional URL, or project without model access).
+        // Fall back once to gemini-2.5-flash-image (regional) instead of burning all retries on the same 404.
+        if (httpStatus === 404 && imageModel !== VERTEX_IMAGE_FALLBACK_MODEL) {
+            console.warn(
+                'MonthlyBookGenerator: Gemini page', pageNumber,
+                'model', imageModel, 'returned 404; falling back to', VERTEX_IMAGE_FALLBACK_MODEL
+            );
+            imageModel = VERTEX_IMAGE_FALLBACK_MODEL;
+            _vertexImageModelLogged = false; // log the new model once
+            continue;
+        }
         if (attempt < PAGE_GEMINI_MAX_ATTEMPTS) {
             const delayMs = vertexBackoffMs(attempt, httpStatus === 429);
-            console.log('MonthlyBookGenerator: Gemini page', pageNumber, 'attempt', attempt, 'failed' + (httpStatus === 429 ? ' (429 rate limit)' : '') + '; exponential backoff: retrying in', delayMs, 'ms (different region)...');
+            const retryHint = VERTEX_IMAGE_GLOBAL_ONLY_MODELS.has(imageModel)
+                ? 'same global endpoint'
+                : 'different region';
+            console.log(
+                'MonthlyBookGenerator: Gemini page', pageNumber, 'attempt', attempt,
+                'failed' + (httpStatus === 429 ? ' (429 rate limit)' : '') +
+                '; exponential backoff: retrying in', delayMs, 'ms (' + retryHint + ')...'
+            );
             await new Promise((r) => setTimeout(r, delayMs));
         }
     }
-    throw new Error('Page ' + pageNumber + ': Gemini flash image failed after ' + PAGE_GEMINI_MAX_ATTEMPTS + ' attempts (last status ' + lastHttpStatus + '). Use exponential backoff; consider MONTHLY_BOOK_DELAY_BETWEEN_PAGES_MS or Provisioned Throughput.');
+    throw new Error('Page ' + pageNumber + ': Gemini flash image failed after ' + PAGE_GEMINI_MAX_ATTEMPTS + ' attempts (last status ' + lastHttpStatus + ', model ' + imageModel + '). Use exponential backoff; consider MONTHLY_BOOK_DELAY_BETWEEN_PAGES_MS or Provisioned Throughput.');
 }
 
 /**

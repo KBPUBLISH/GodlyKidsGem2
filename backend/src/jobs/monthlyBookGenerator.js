@@ -1,5 +1,6 @@
 const crypto = require('crypto');
 const axios = require('axios');
+const FormData = require('form-data');
 const CustomMonthlyBook = require('../models/CustomMonthlyBook');
 const MonthlyBookTemplate = require('../models/MonthlyBookTemplate');
 const SavedCharacter = require('../models/SavedCharacter');
@@ -7,6 +8,12 @@ const Book = require('../models/Book');
 const Page = require('../models/Page');
 const { sendNotificationToUser } = require('../services/notificationService');
 const { bucket } = require('../config/storage');
+
+/** OpenAI GPT Image model for Bible Map (and other portal) page art. Override with OPENAI_IMAGE_MODEL. */
+const OPENAI_IMAGE_MODEL =
+    (process.env.OPENAI_IMAGE_MODEL || 'gpt-image-2').trim() || 'gpt-image-2';
+/** Portrait size closest to 9:16 for storybook pages. */
+const OPENAI_IMAGE_SIZE = (process.env.OPENAI_IMAGE_SIZE || '1024x1536').trim() || '1024x1536';
 
 const PLACEHOLDER_PAGE_IMAGE = 'https://picsum.photos/seed/story/800/600';
 
@@ -1219,8 +1226,195 @@ async function runMonthlyBookGeneration(customMonthlyBookId) {
 }
 
 /**
+ * Upload a PNG buffer to GCS under monthly-books/ and return a public URL.
+ */
+async function uploadPageImageBuffer(bookId, pageNumber, buffer) {
+    if (!bucket) {
+        throw new Error('GCS bucket not configured (GCS_BUCKET_NAME). Cannot upload page image.');
+    }
+    const hash = crypto
+        .createHash('md5')
+        .update(String(bookId) + pageNumber + Date.now())
+        .digest('hex')
+        .slice(0, 8);
+    const filename = `monthly-books/${bookId}/page-${pageNumber}-${hash}.png`;
+    const blob = bucket.file(filename);
+    await blob.save(buffer, {
+        metadata: { contentType: 'image/png', cacheControl: 'public, max-age=86400' },
+    });
+    await blob.makePublic().catch(() => {});
+    return `https://storage.googleapis.com/${bucket.name}/${filename}`;
+}
+
+/**
+ * Generate one page image with OpenAI GPT Image (default gpt-image-2).
+ * When SavedCharacter reference photos exist, uses /v1/images/edits with those inputs
+ * (same character-ref idea as Gemini). Without refs, uses /v1/images/generations + text prompt.
+ */
+async function generatePageImageWithOpenAI(customBook, pageDoc, characterStylePrompt, pageIndex, wholeBookStyleDesc) {
+    const openaiKey = process.env.OPENAI_API_KEY;
+    if (!openaiKey) {
+        const err = new Error(
+            'OPENAI_API_KEY is not configured. Set it on the backend to use ChatGPT / OpenAI image generation.',
+        );
+        err.status = 503;
+        throw err;
+    }
+    if (!bucket) {
+        throw new Error('GCS bucket not configured (GCS_BUCKET_NAME). Cannot upload page image.');
+    }
+
+    const pageNumber = pageIndex + 1;
+    const characterNames =
+        customBook.characters && customBook.characters.length > 0
+            ? customBook.characters
+                  .map((c) => (c && c.name && String(c.name).trim()) || '')
+                  .filter(Boolean)
+            : [customBook.childName].filter(Boolean);
+    const { prompt } = await buildScenePrompt(
+        pageDoc,
+        characterStylePrompt,
+        customBook.childName,
+        wholeBookStyleDesc,
+        characterNames,
+    );
+    const referenceImages = await gatherPageReferenceImages(customBook, pageDoc);
+    const model = OPENAI_IMAGE_MODEL;
+
+    let openaiPrompt = prompt;
+    if (referenceImages.length) {
+        const refLines = referenceImages
+            .map(
+                (r, i) =>
+                    `Reference image ${i + 1} is ${r.label} — match their appearance (face, hair, clothing, age) from that photo.`,
+            )
+            .join(' ');
+        openaiPrompt =
+            `${refLines} Create a new children's Bible storybook illustration (not a photo edit collage): ${prompt} ` +
+            `Include every referenced character when the scene calls for them. Vertical portrait composition, no text in image.`;
+    }
+
+    console.log(
+        'MonthlyBookGenerator: OpenAI page',
+        pageNumber,
+        'model:',
+        model,
+        'refs:',
+        referenceImages.length,
+        'prompt:',
+        openaiPrompt.slice(0, 100) + (openaiPrompt.length > 100 ? '...' : ''),
+    );
+
+    let imageBase64 = null;
+
+    if (referenceImages.length > 0) {
+        const form = new FormData();
+        form.append('model', model);
+        form.append('prompt', openaiPrompt.slice(0, 32000));
+        form.append('size', OPENAI_IMAGE_SIZE);
+        form.append('n', '1');
+        // Preserve character likeness from reference photos when supported
+        form.append('input_fidelity', 'high');
+        for (let i = 0; i < referenceImages.length; i++) {
+            const buf = Buffer.from(referenceImages[i].base64, 'base64');
+            form.append('image', buf, {
+                filename: `ref-${i + 1}.png`,
+                contentType: 'image/png',
+            });
+        }
+        const editRes = await axios.post('https://api.openai.com/v1/images/edits', form, {
+            headers: {
+                Authorization: `Bearer ${openaiKey}`,
+                ...form.getHeaders(),
+            },
+            timeout: 180000,
+            maxBodyLength: Infinity,
+            maxContentLength: Infinity,
+            validateStatus: () => true,
+        });
+        if (editRes.status !== 200) {
+            const errText =
+                typeof editRes.data === 'string'
+                    ? editRes.data.slice(0, 400)
+                    : JSON.stringify(editRes.data || {}).slice(0, 400);
+            console.warn(
+                'MonthlyBookGenerator: OpenAI edits page',
+                pageNumber,
+                'failed',
+                editRes.status,
+                errText,
+            );
+            throw new Error(
+                `OpenAI image edit failed for page ${pageNumber} (HTTP ${editRes.status}): ${errText}`,
+            );
+        }
+        imageBase64 = editRes.data?.data?.[0]?.b64_json || null;
+    } else {
+        const genRes = await axios.post(
+            'https://api.openai.com/v1/images/generations',
+            {
+                model,
+                prompt: openaiPrompt.slice(0, 32000),
+                n: 1,
+                size: OPENAI_IMAGE_SIZE,
+            },
+            {
+                headers: {
+                    Authorization: `Bearer ${openaiKey}`,
+                    'Content-Type': 'application/json',
+                },
+                timeout: 180000,
+                validateStatus: () => true,
+            },
+        );
+        if (genRes.status !== 200) {
+            const errText =
+                typeof genRes.data === 'string'
+                    ? genRes.data.slice(0, 400)
+                    : JSON.stringify(genRes.data || {}).slice(0, 400);
+            console.warn(
+                'MonthlyBookGenerator: OpenAI generations page',
+                pageNumber,
+                'failed',
+                genRes.status,
+                errText,
+            );
+            throw new Error(
+                `OpenAI image generation failed for page ${pageNumber} (HTTP ${genRes.status}): ${errText}`,
+            );
+        }
+        imageBase64 = genRes.data?.data?.[0]?.b64_json || null;
+        // dall-e-3 fallback may return url instead of b64
+        if (!imageBase64 && genRes.data?.data?.[0]?.url) {
+            const imgRes = await axios.get(genRes.data.data[0].url, {
+                responseType: 'arraybuffer',
+                timeout: 60000,
+            });
+            imageBase64 = Buffer.from(imgRes.data).toString('base64');
+        }
+    }
+
+    if (!imageBase64) {
+        throw new Error(`OpenAI returned no image data for page ${pageNumber}`);
+    }
+
+    const buffer = Buffer.from(imageBase64, 'base64');
+    const imageUrl = await uploadPageImageBuffer(customBook._id, pageNumber, buffer);
+    console.log(
+        'MonthlyBookGenerator: Generated page',
+        pageNumber,
+        'with OpenAI',
+        model,
+        imageUrl,
+    );
+    return imageUrl;
+}
+
+/**
  * Generate one page image for Bible Map (or other portal book flows).
- * Reuses the Vertex Gemini flash-image + SavedCharacter reference path.
+ * Providers:
+ * - gemini (default): Vertex Gemini flash-image + SavedCharacter reference images
+ * - openai / chatgpt: OpenAI GPT Image (gpt-image-2) with optional reference images via edits
  */
 async function generatePageImageForBibleMap(bookId, pageDoc, pageIndex, options = {}) {
     const customBook = {
@@ -1235,6 +1429,20 @@ async function generatePageImageForBibleMap(bookId, pageDoc, pageIndex, options 
     const wholeBookStyleDesc =
         options.wholeBookStyle ||
         "Illustrated children's Bible storybook, consistent soft painted look across pages";
+    const provider = String(options.imageProvider || 'gemini')
+        .trim()
+        .toLowerCase();
+
+    if (provider === 'openai' || provider === 'chatgpt') {
+        return generatePageImageWithOpenAI(
+            customBook,
+            pageDoc,
+            characterStylePrompt,
+            pageIndex,
+            wholeBookStyleDesc,
+        );
+    }
+
     return generatePageImageForBook(
         customBook,
         pageDoc,
@@ -1249,4 +1457,5 @@ module.exports = {
     runMonthlyBookGeneration,
     generatePageImageForBook,
     generatePageImageForBibleMap,
+    generatePageImageWithOpenAI,
 };

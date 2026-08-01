@@ -37,13 +37,33 @@ function sceneTextFromReadingPage(page) {
         .slice(0, 600);
 }
 
+function normalizeImageProvider(raw, fallback = 'gemini') {
+    const v = String(raw || fallback)
+        .trim()
+        .toLowerCase();
+    if (v === 'openai' || v === 'chatgpt') return 'openai';
+    return 'gemini';
+}
+
 /**
- * Generate / refresh page background images for a Bible Map story using Vertex Gemini
- * flash-image + SavedCharacter reference photos.
+ * Generate / refresh page background images for a Bible Map story.
+ * Providers: gemini (Vertex flash-image + refs) or openai (GPT Image / ChatGPT).
  */
 async function generateImagesForStoryPages(story, options = {}) {
     const bookId = story.bookId;
     if (!bookId) throw new Error('Story has no linked book');
+
+    const imageProvider = normalizeImageProvider(
+        options.imageProvider != null ? options.imageProvider : story.imageProvider,
+        'gemini',
+    );
+    if (imageProvider === 'openai' && !process.env.OPENAI_API_KEY) {
+        const err = new Error(
+            'OPENAI_API_KEY is not configured. Set it on the backend to use ChatGPT / OpenAI image generation.',
+        );
+        err.status = 503;
+        throw err;
+    }
 
     const refIds = (
         Array.isArray(options.referenceCharacterIds)
@@ -91,7 +111,11 @@ async function generateImagesForStoryPages(story, options = {}) {
                 bookId,
                 page.toObject ? page.toObject() : page,
                 i,
-                { stylePrompt: options.stylePrompt, wholeBookStyle: options.wholeBookStyle },
+                {
+                    stylePrompt: options.stylePrompt,
+                    wholeBookStyle: options.wholeBookStyle,
+                    imageProvider,
+                },
             );
             page.backgroundUrl = imageUrl;
             page.backgroundType = 'image';
@@ -1026,6 +1050,7 @@ function sanitizeStoryPayload(body = {}) {
         'status',
         'bookId',
         'referenceCharacterIds',
+        'imageProvider',
         'quizMode',
         'customQuestions',
         'quiz',
@@ -1044,6 +1069,9 @@ function sanitizeStoryPayload(body = {}) {
     // Allow clearing book link / scene music
     if (body.bookId === null || body.bookId === '') out.bookId = null;
     if (body.sceneMusicUrl === null || body.sceneMusicUrl === '') out.sceneMusicUrl = null;
+    if (body.imageProvider !== undefined) {
+        out.imageProvider = normalizeImageProvider(body.imageProvider, 'gemini');
+    }
 
     // Normalize leveled quiz + keep customQuestions synced to easy for legacy readers
     if (body.quiz !== undefined || body.customQuestions !== undefined) {
@@ -1610,6 +1638,11 @@ ${sourceText.slice(0, 12000)}`;
             : [];
         if (refIds.length) {
             story.referenceCharacterIds = refIds;
+        }
+        if (req.body?.imageProvider != null) {
+            story.imageProvider = normalizeImageProvider(req.body.imageProvider, story.imageProvider || 'gemini');
+        }
+        if (refIds.length || req.body?.imageProvider != null) {
             await story.save();
         }
 
@@ -1628,12 +1661,29 @@ ${sourceText.slice(0, 12000)}`;
                     onlyMissing: req.body?.onlyMissingImages !== false,
                     stylePrompt: req.body?.stylePrompt,
                     wholeBookStyle: req.body?.wholeBookStyle,
+                    imageProvider: story.imageProvider || req.body?.imageProvider,
                 });
             } catch (imgErr) {
                 console.error(
                     'generate-reading-levels image step failed:',
                     imgErr?.message || imgErr,
                 );
+                if (imgErr?.status === 503) {
+                    const pagesOnError = await Page.find({
+                        bookId: book._id,
+                        isColoringPage: { $ne: true },
+                    })
+                        .sort({ pageNumber: 1 })
+                        .lean();
+                    return res.status(503).json({
+                        error: 'Image provider unavailable',
+                        message: imgErr.message,
+                        bookId: book._id,
+                        pageCount: pagesOnError.length,
+                        pages: pagesOnError,
+                        configured: true,
+                    });
+                }
                 imageResults = [{ error: imgErr?.message || 'Image generation failed' }];
             }
         }
@@ -1666,7 +1716,8 @@ ${sourceText.slice(0, 12000)}`;
 
 /**
  * POST /api/bible-map/stories/:id/generate-page-images
- * Generate page backgrounds from script text + SavedCharacter reference images (Vertex Gemini).
+ * Generate page backgrounds from script text.
+ * Body: imageProvider 'gemini' | 'openai', referenceCharacterIds, onlyMissing, …
  */
 router.post('/stories/:id/generate-page-images', async (req, res) => {
     try {
@@ -1682,14 +1733,28 @@ router.post('/stories/:id/generate-page-images', async (req, res) => {
 
         if (refIds.length) {
             story.referenceCharacterIds = refIds;
+        }
+        if (req.body?.imageProvider != null) {
+            story.imageProvider = normalizeImageProvider(
+                req.body.imageProvider,
+                story.imageProvider || 'gemini',
+            );
+        }
+        if (refIds.length || req.body?.imageProvider != null) {
             await story.save();
         }
+
+        const imageProvider = normalizeImageProvider(
+            req.body?.imageProvider != null ? req.body.imageProvider : story.imageProvider,
+            'gemini',
+        );
 
         const results = await generateImagesForStoryPages(story, {
             referenceCharacterIds: refIds,
             onlyMissing: req.body?.onlyMissing === true,
             stylePrompt: req.body?.stylePrompt,
             wholeBookStyle: req.body?.wholeBookStyle,
+            imageProvider,
         });
 
         const pages = await Page.find({
@@ -1704,11 +1769,13 @@ router.post('/stories/:id/generate-page-images', async (req, res) => {
             results,
             pages,
             referenceCharacterIds: refIds,
+            imageProvider,
         });
     } catch (error) {
         console.error('generate-page-images error:', error?.message || error);
-        res.status(500).json({
-            error: 'Failed to generate page images',
+        const status = error?.status === 503 ? 503 : 500;
+        res.status(status).json({
+            error: status === 503 ? 'Image provider unavailable' : 'Failed to generate page images',
             message: error?.message || 'Image generation failed',
         });
     }

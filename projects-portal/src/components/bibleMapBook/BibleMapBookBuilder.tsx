@@ -57,6 +57,8 @@ const BibleMapBookBuilder: React.FC<BibleMapBookBuilderProps> = ({
     const [characters, setCharacters] = useState<PortalCharacter[]>([]);
     const [selectedCharacterIds, setSelectedCharacterIds] = useState<string[]>([]);
     const [autoImages, setAutoImages] = useState(true);
+    /** gemini = Vertex + character refs; openai = ChatGPT GPT Image (gpt-image-2) */
+    const [imageProvider, setImageProvider] = useState<'gemini' | 'openai'>('gemini');
     const [imageStatus, setImageStatus] = useState<string | null>(null);
 
     const loadPages = useCallback(async () => {
@@ -109,6 +111,12 @@ const BibleMapBookBuilder: React.FC<BibleMapBookBuilderProps> = ({
                     ? storyRes.data.referenceCharacterIds.map((id: string) => String(id))
                     : [];
                 if (saved.length) setSelectedCharacterIds(saved);
+                const provider = String(storyRes.data?.imageProvider || '').toLowerCase();
+                if (provider === 'openai' || provider === 'chatgpt') {
+                    setImageProvider('openai');
+                } else if (provider === 'gemini') {
+                    setImageProvider('gemini');
+                }
             } catch (err) {
                 console.error(err);
             }
@@ -140,6 +148,7 @@ const BibleMapBookBuilder: React.FC<BibleMapBookBuilderProps> = ({
                     referenceCharacterIds: selectedCharacterIds,
                     generateImages: autoImages,
                     onlyMissingImages: true,
+                    imageProvider,
                 },
                 // Image gen can take several minutes
                 { timeout: 600000 },
@@ -198,6 +207,7 @@ const BibleMapBookBuilder: React.FC<BibleMapBookBuilderProps> = ({
                 {
                     referenceCharacterIds: selectedCharacterIds,
                     onlyMissing,
+                    imageProvider,
                 },
                 { timeout: 600000 },
             );
@@ -287,6 +297,29 @@ const BibleMapBookBuilder: React.FC<BibleMapBookBuilderProps> = ({
                     Auto-generate images after scripts
                 </label>
             </div>
+            <div className="flex flex-wrap items-center gap-3">
+                <span className="text-xs font-medium text-violet-900">Image provider</span>
+                <label className="text-xs text-violet-800 flex items-center gap-1.5">
+                    <input
+                        type="radio"
+                        name="bible-map-image-provider"
+                        checked={imageProvider === 'gemini'}
+                        onChange={() => setImageProvider('gemini')}
+                        className="border-violet-300"
+                    />
+                    Gemini (character refs)
+                </label>
+                <label className="text-xs text-violet-800 flex items-center gap-1.5">
+                    <input
+                        type="radio"
+                        name="bible-map-image-provider"
+                        checked={imageProvider === 'openai'}
+                        onChange={() => setImageProvider('openai')}
+                        className="border-violet-300"
+                    />
+                    ChatGPT / OpenAI
+                </label>
+            </div>
             {characters.length === 0 ? (
                 <p className="text-[11px] text-violet-700/80">
                     No character reference images found. Add them under Kids Monthly character
@@ -323,8 +356,10 @@ const BibleMapBookBuilder: React.FC<BibleMapBookBuilderProps> = ({
                 </div>
             )}
             <p className="text-[11px] text-violet-700/80">
-                Uses Vertex Gemini flash-image with these reference photos (same path as Kids
-                Monthly). Pick up to 4 characters (e.g. Jesus, Noah).
+                {imageProvider === 'openai'
+                    ? 'Uses OpenAI gpt-image-2. Character photos are sent as reference inputs when selected (images/edits). Requires OPENAI_API_KEY.'
+                    : 'Uses Vertex Gemini flash-image with these reference photos (same path as Kids Monthly).'}{' '}
+                Pick up to 4 characters (e.g. Jesus, Noah).
             </p>
             {imageStatus && (
                 <p className="text-[11px] text-emerald-800 font-medium">{imageStatus}</p>
@@ -493,7 +528,9 @@ const BibleMapBookBuilder: React.FC<BibleMapBookBuilderProps> = ({
                         {generating
                             ? 'Generating age scripts' +
                               (autoImages ? ', then page images (this can take a few minutes)…' : '…')
-                            : 'Generating page images with character references…'}
+                            : `Generating page images via ${
+                                  imageProvider === 'openai' ? 'ChatGPT / OpenAI' : 'Gemini'
+                              }…`}
                     </p>
                 )}
             </div>

@@ -63,13 +63,22 @@ const mapStorySchema = new mongoose.Schema(
             ref: 'Book',
             default: null,
         },
-        /** SavedCharacter IDs used as Vertex Gemini reference images for page art */
+        /** SavedCharacter IDs used as reference images for page art */
         referenceCharacterIds: [
             {
                 type: mongoose.Schema.Types.ObjectId,
                 ref: 'SavedCharacter',
             },
         ],
+        /**
+         * Page image generator for Bible Map book builder.
+         * gemini = Vertex Gemini flash-image + refs; openai = ChatGPT GPT Image (gpt-image-2).
+         */
+        imageProvider: {
+            type: String,
+            enum: ['gemini', 'openai'],
+            default: 'gemini',
+        },
 
         // —— QUIZ ——
         // book_quiz: use AI/cached BookQuiz for bookId

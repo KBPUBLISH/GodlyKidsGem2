@@ -132,6 +132,11 @@ interface BookPageRendererProps {
     /** Bible Map tap-words: indices already tapped for the current page (boxIndex:wordIndex keys). */
     tappedInteractiveKeys?: Set<string>;
     onInteractiveWordTap?: (boxIndex: number, wordIndex: number) => void;
+    /**
+     * Bible Map layout: crop page art to the upper region above the parchment/scroll
+     * so characters are not covered by text (3:4 art above, scroll+text below).
+     */
+    bibleMapLayout?: boolean;
 }
 
 export const BookPageRenderer: React.FC<BookPageRendererProps> = ({
@@ -151,6 +156,7 @@ export const BookPageRenderer: React.FC<BookPageRendererProps> = ({
     showCharacterOverlay = false,
     tappedInteractiveKeys,
     onInteractiveWordTap,
+    bibleMapLayout = false,
 }) => {
     const { max: scrollMaxH, mid: scrollMidH } = resolveScrollHeights(page);
     const currentScrollHeightNum = scrollState === 'max' ? scrollMaxH : scrollMidH;
@@ -606,11 +612,21 @@ export const BookPageRenderer: React.FC<BookPageRendererProps> = ({
             {/* Background Layer - warm parchment gradient as fallback instead of black */}
             {/* Fixed position prevents movement during touch/swipe gestures */}
             <div 
-                className="absolute inset-0 bg-gradient-to-b from-[#fdf6e3] to-[#e8d5b7] overflow-hidden"
+                className={
+                    bibleMapLayout
+                        ? 'absolute top-0 left-0 right-0 bg-gradient-to-b from-[#fdf6e3] to-[#e8d5b7] overflow-hidden'
+                        : 'absolute inset-0 bg-gradient-to-b from-[#fdf6e3] to-[#e8d5b7] overflow-hidden'
+                }
                 style={{
                     // Ensure background stays locked in place
                     touchAction: 'none',
                     pointerEvents: 'none',
+                    ...(bibleMapLayout
+                        ? {
+                              // Leave lower band for parchment/scroll (~48% mid)
+                              height: `${Math.max(35, 100 - (scrollState === 'hidden' ? 0 : currentScrollHeightNum) - scrollOffset)}%`,
+                          }
+                        : {}),
                 }}
             >
                 {/* Video Sequence Mode - double buffered for seamless transitions */}
@@ -814,7 +830,11 @@ export const BookPageRenderer: React.FC<BookPageRendererProps> = ({
                     <TrimmedPlaybackVideo
                         ref={videoRef}
                         src={page.backgroundUrl}
-                        className="absolute inset-0 w-full h-full object-cover min-w-full min-h-full"
+                        className={
+                            bibleMapLayout
+                                ? 'absolute inset-0 w-full h-full object-cover object-top min-w-full min-h-full'
+                                : 'absolute inset-0 w-full h-full object-cover min-w-full min-h-full'
+                        }
                         autoPlay
                         loop
                         muted={
@@ -876,7 +896,7 @@ export const BookPageRenderer: React.FC<BookPageRendererProps> = ({
                                 <img
                                     src={page.backgroundUrl}
                                     alt={`Page ${page.pageNumber}`}
-                                    className="w-full h-full object-cover"
+                                    className={bibleMapLayout ? 'w-full h-full object-cover object-top' : 'w-full h-full object-cover'}
                                     loading="eager"
                                     style={{
                                         position: 'absolute',

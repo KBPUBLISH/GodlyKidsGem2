@@ -20,6 +20,87 @@ const BIBLE_MAP_IMAGE_DELAY_MS = Math.max(
         5000,
 );
 
+/** Default parchment scroll for Bible Map reading pages (art above, text on scroll below). */
+const BIBLE_MAP_DEFAULT_SCROLL_LOCAL = path.join(
+    __dirname,
+    '../assets/bible-map-default-scroll.png',
+);
+const BIBLE_MAP_DEFAULT_SCROLL_GCS = 'shared/bible-map/default-scroll.png';
+/** Scroll band heights tuned so 3:4 art stays visible in the upper page region. */
+const BIBLE_MAP_DEFAULT_SCROLL_MID = 48;
+const BIBLE_MAP_DEFAULT_SCROLL_MAX = 58;
+
+let _cachedBibleMapScrollUrl =
+    (process.env.BIBLE_MAP_DEFAULT_SCROLL_URL || '').trim() || null;
+
+async function resolveDefaultBibleMapScrollUrl() {
+    if (_cachedBibleMapScrollUrl) return _cachedBibleMapScrollUrl;
+    const fromEnv = (process.env.BIBLE_MAP_DEFAULT_SCROLL_URL || '').trim();
+    if (fromEnv) {
+        _cachedBibleMapScrollUrl = fromEnv;
+        return fromEnv;
+    }
+    if (!bucket) {
+        console.warn('Bible Map: no GCS bucket — cannot upload default scroll');
+        return '';
+    }
+    try {
+        const blob = bucket.file(BIBLE_MAP_DEFAULT_SCROLL_GCS);
+        const [exists] = await blob.exists();
+        if (!exists) {
+            if (!fs.existsSync(BIBLE_MAP_DEFAULT_SCROLL_LOCAL)) {
+                console.warn(
+                    'Bible Map: default scroll asset missing at',
+                    BIBLE_MAP_DEFAULT_SCROLL_LOCAL,
+                );
+                return '';
+            }
+            const buf = fs.readFileSync(BIBLE_MAP_DEFAULT_SCROLL_LOCAL);
+            await blob.save(buf, {
+                metadata: {
+                    contentType: 'image/png',
+                    cacheControl: 'public, max-age=31536000',
+                },
+            });
+            await blob.makePublic().catch(() => {});
+            console.log('Bible Map: uploaded default scroll to GCS');
+        }
+        _cachedBibleMapScrollUrl = `https://storage.googleapis.com/${bucket.name}/${BIBLE_MAP_DEFAULT_SCROLL_GCS}`;
+        return _cachedBibleMapScrollUrl;
+    } catch (err) {
+        console.warn('Bible Map: failed to resolve default scroll', err?.message || err);
+        return '';
+    }
+}
+
+/**
+ * Ensure a reading page has parchment scroll + heights for the upper-art / lower-text layout.
+ * Mutates page doc fields; caller should save.
+ */
+async function ensureBibleMapScrollOnPage(page) {
+    const existing = String(page.scrollUrl || page.files?.scroll?.url || '').trim();
+    const scrollUrl = existing || (await resolveDefaultBibleMapScrollUrl());
+    if (!scrollUrl) return false;
+
+    page.scrollUrl = scrollUrl;
+    if (!page.files) page.files = {};
+    page.files.scroll = { ...(page.files.scroll || {}), url: scrollUrl };
+    if (page.scrollMidHeight == null || !Number.isFinite(Number(page.scrollMidHeight))) {
+        page.scrollMidHeight = BIBLE_MAP_DEFAULT_SCROLL_MID;
+    }
+    if (page.scrollMaxHeight == null || !Number.isFinite(Number(page.scrollMaxHeight))) {
+        page.scrollMaxHeight = BIBLE_MAP_DEFAULT_SCROLL_MAX;
+    }
+    if (page.scrollHeight == null || !Number.isFinite(Number(page.scrollHeight))) {
+        page.scrollHeight = BIBLE_MAP_DEFAULT_SCROLL_MID;
+    }
+    if (page.scrollWidth == null) page.scrollWidth = 100;
+    if (page.scrollOpacity == null) page.scrollOpacity = 100;
+    if (page.scrollOffsetY == null) page.scrollOffsetY = 0;
+    if (page.scrollOffsetX == null) page.scrollOffsetX = 0;
+    return true;
+}
+
 function sceneTextFromReadingPage(page) {
     const levels = page?.readingLevels || {};
     const primary =
@@ -83,10 +164,16 @@ async function generateImagesForStoryPages(story, options = {}) {
         const existingUrl =
             page.backgroundUrl || page.files?.background?.url || '';
         if (onlyMissing && existingUrl && page.backgroundType !== 'video') {
+            const hadScroll = !!(page.scrollUrl || page.files?.scroll?.url);
+            if (!hadScroll) {
+                await ensureBibleMapScrollOnPage(page);
+                await page.save();
+            }
             results.push({
                 pageNumber: page.pageNumber,
                 backgroundUrl: existingUrl,
                 skipped: true,
+                scrollAttached: !hadScroll,
             });
             continue;
         }
@@ -126,6 +213,7 @@ async function generateImagesForStoryPages(story, options = {}) {
                 type: 'image',
                 filename: page.files.background?.filename || `page-${page.pageNumber}.png`,
             };
+            await ensureBibleMapScrollOnPage(page);
             await page.save();
             results.push({ pageNumber: page.pageNumber, backgroundUrl: imageUrl });
         } catch (err) {
@@ -1447,10 +1535,10 @@ function readingLevelsHaveText(levels) {
 function defaultParchmentTextBox(text, interactiveWordIndices = []) {
     return {
         text: text || '',
-        x: 12,
-        y: 55,
-        width: 76,
-        height: 28,
+        x: 10,
+        y: 56,
+        width: 80,
+        height: 36,
         alignment: 'center',
         fontFamily: 'Patrick Hand',
         fontSize: 22,
@@ -1620,6 +1708,29 @@ ${sourceText.slice(0, 12000)}`;
                     },
                 });
                 saved.push(created);
+            }
+        }
+
+        // Auto-attach parchment scroll when missing (art above, text on scroll below)
+        const defaultScrollUrl = await resolveDefaultBibleMapScrollUrl();
+        if (defaultScrollUrl) {
+            for (const p of saved) {
+                if (!p) continue;
+                const hasScroll = !!(p.scrollUrl || p.files?.scroll?.url);
+                if (hasScroll) continue;
+                await Page.findByIdAndUpdate(p._id, {
+                    $set: {
+                        scrollUrl: defaultScrollUrl,
+                        scrollMidHeight: BIBLE_MAP_DEFAULT_SCROLL_MID,
+                        scrollMaxHeight: BIBLE_MAP_DEFAULT_SCROLL_MAX,
+                        scrollHeight: BIBLE_MAP_DEFAULT_SCROLL_MID,
+                        scrollWidth: 100,
+                        scrollOpacity: 100,
+                        scrollOffsetY: 0,
+                        scrollOffsetX: 0,
+                        'files.scroll': { url: defaultScrollUrl },
+                    },
+                });
             }
         }
 
@@ -1841,13 +1952,22 @@ router.put('/stories/:id/reading-pages', async (req, res) => {
                     ? 'video'
                     : 'image';
             const backgroundAudioUrl = String(raw.backgroundAudioUrl || '').trim();
-            const scrollUrl = String(raw.scrollUrl || raw.files?.scroll?.url || '').trim();
+            let scrollUrl = String(raw.scrollUrl || raw.files?.scroll?.url || '').trim();
+            if (!scrollUrl) {
+                scrollUrl = await resolveDefaultBibleMapScrollUrl();
+            }
             const scrollHeight =
-                raw.scrollHeight != null ? Number(raw.scrollHeight) : undefined;
+                raw.scrollHeight != null
+                    ? Number(raw.scrollHeight)
+                    : BIBLE_MAP_DEFAULT_SCROLL_MID;
             const scrollMidHeight =
-                raw.scrollMidHeight != null ? Number(raw.scrollMidHeight) : undefined;
+                raw.scrollMidHeight != null
+                    ? Number(raw.scrollMidHeight)
+                    : BIBLE_MAP_DEFAULT_SCROLL_MID;
             const scrollMaxHeight =
-                raw.scrollMaxHeight != null ? Number(raw.scrollMaxHeight) : undefined;
+                raw.scrollMaxHeight != null
+                    ? Number(raw.scrollMaxHeight)
+                    : BIBLE_MAP_DEFAULT_SCROLL_MAX;
             const scrollOffsetY =
                 raw.scrollOffsetY != null ? Number(raw.scrollOffsetY) : 0;
             const scrollOffsetX =

@@ -766,8 +766,14 @@ const BookReader: React.FC = () => {
                         </button>
                     )}
 
-                    {/* Background Layer */}
-                    <div className="absolute inset-0 flex items-center justify-center">
+                    {/* Background Layer — bible_map: crop art to upper region above scroll */}
+                    <div
+                        className={
+                            bookType === 'bible_map'
+                                ? 'absolute top-0 left-0 right-0 h-[54%] overflow-hidden bg-[#2d5a3d]'
+                                : 'absolute inset-0 flex items-center justify-center'
+                        }
+                    >
                         {(() => {
                             // Check for image sequence first
                             if (currentPage.useImageSequence && currentPage.imageSequence && currentPage.imageSequence.length > 0) {
@@ -864,7 +870,7 @@ const BookReader: React.FC = () => {
                                     <TrimmedPlaybackVideo
                                         ref={videoRef}
                                         src={resolveUrl(bgUrl)}
-                                        className="w-full h-full object-cover"
+                                        className={bookType === 'bible_map' ? 'w-full h-full object-cover object-top' : 'w-full h-full object-cover'}
                                         autoPlay
                                         loop
                                         muted={!pageVideoSoundOn}
@@ -880,7 +886,7 @@ const BookReader: React.FC = () => {
                                 <img
                                     src={resolveUrl(bgUrl)}
                                     alt={`Page ${currentPage.pageNumber}`}
-                                    className="w-full h-full object-cover"
+                                    className={bookType === 'bible_map' ? 'w-full h-full object-cover object-top' : 'w-full h-full object-cover'}
                                     onError={(e) => {
                                         // Hide broken image and show placeholder
                                         e.currentTarget.style.display = 'none';
@@ -895,9 +901,11 @@ const BookReader: React.FC = () => {
                         const scrollUrl = currentPage.scrollUrl || currentPage.files?.scroll?.url;
                         const scrollOffset = currentPage.scrollOffsetY || 0;
                         // Calculate scroll height based on state (like app)
+                        const defaultMid = bookType === 'bible_map' ? 48 : 30;
+                        const defaultMax = bookType === 'bible_map' ? 58 : 60;
                         const currentScrollHeight = scrollState === 'max' 
-                            ? (currentPage.scrollMaxHeight || 60)
-                            : (currentPage.scrollMidHeight || 30);
+                            ? (currentPage.scrollMaxHeight || defaultMax)
+                            : (currentPage.scrollMidHeight || defaultMid);
                         
                         // Calculate clip-path to hide text outside scroll area (top AND bottom)
                         const clipInsetTop = scrollUrl 
@@ -1084,9 +1092,12 @@ const BookReader: React.FC = () => {
                         if (!scrollUrl) return null;
                         
                         // Calculate height based on scroll state
+                        // bible_map defaults leave upper ~half for 3:4 art
+                        const defaultMid = bookType === 'bible_map' ? 48 : 30;
+                        const defaultMax = bookType === 'bible_map' ? 58 : 60;
                         const currentScrollHeight = scrollState === 'max'
-                            ? (currentPage.scrollMaxHeight || 60)
-                            : (currentPage.scrollMidHeight || 30);
+                            ? (currentPage.scrollMaxHeight || defaultMax)
+                            : (currentPage.scrollMidHeight || defaultMid);
                         
                         return (
                             <div

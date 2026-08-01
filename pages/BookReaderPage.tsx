@@ -291,6 +291,7 @@ const BookReaderPage: React.FC = () => {
     const [showPreviewLimitModal, setShowPreviewLimitModal] = useState(false);
     const [scrollState, setScrollState] = useState<ScrollState>('mid'); // Default mid (30%) — matches portal reader preview
     const [isKidMonthlyBook, setIsKidMonthlyBook] = useState(false);
+    const [isBibleMapBook, setIsBibleMapBook] = useState(false);
     const [bookTitle, setBookTitle] = useState<string>('Book');
     const [bookOrientation, setBookOrientation] = useState<'portrait' | 'landscape'>('portrait');
     const [invalidBookId, setInvalidBookId] = useState(false);
@@ -1310,6 +1311,8 @@ const BookReaderPage: React.FC = () => {
                     console.log('📖 Book orientation:', orientation);
                     const kidMonthly = rawData?.bookType === 'kids_monthly' || (book as any)?.isUserCreated === true;
                     setIsKidMonthlyBook(!!kidMonthly);
+                    const bibleMap = rawData?.bookType === 'bible_map' || (book as any)?.bookType === 'bible_map';
+                    setIsBibleMapBook(!!bibleMap);
                     // Check if book should show character overlay (never for Create Your Story: characters are already in the art)
                     const hasCharacterOverlay = !kidMonthly && (rawData?.showCharacterOverlay || (book as any)?.showCharacterOverlay || false);
                     setShowCharacterOverlay(hasCharacterOverlay);
@@ -5181,7 +5184,12 @@ const BookReaderPage: React.FC = () => {
                                     ...(isKidMonthlyBook && currentPage && (currentPage.scrollMidHeight == null)
                                         ? { scrollMidHeight: 25 }
                                         : {}),
+                                    // Bible Map: leave upper band for 3:4 art above parchment
+                                    ...(isBibleMapBook && currentPage && (currentPage.scrollMidHeight == null)
+                                        ? { scrollMidHeight: 48, scrollMaxHeight: currentPage.scrollMaxHeight ?? 58 }
+                                        : {}),
                                 }}
+                                bibleMapLayout={isBibleMapBook}
                                 activeTextBoxIndex={activeTextBoxIndex}
                                 scrollState={scrollState}
                                 onScrollStateChange={handleScrollStateChange}

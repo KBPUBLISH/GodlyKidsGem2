@@ -8,8 +8,121 @@ const MapIsland = require('../models/MapIsland');
 const MapStory = require('../models/MapStory');
 const Book = require('../models/Book');
 const Page = require('../models/Page');
+const SavedCharacter = require('../models/SavedCharacter');
 const { segmentLineArt, DEFAULT_PALETTE } = require('../services/coloringRegionService');
 const { bucket } = require('../config/storage');
+const { generatePageImageForBibleMap } = require('../jobs/monthlyBookGenerator');
+
+const BIBLE_MAP_IMAGE_DELAY_MS = Math.max(
+    0,
+    parseInt(process.env.BIBLE_MAP_DELAY_BETWEEN_PAGES_MS, 10) ||
+        parseInt(process.env.MONTHLY_BOOK_DELAY_BETWEEN_PAGES_MS, 10) ||
+        5000,
+);
+
+function sceneTextFromReadingPage(page) {
+    const levels = page?.readingLevels || {};
+    const primary =
+        levels.ages_8_plus?.text ||
+        levels.ages_6_7?.text ||
+        levels.ages_3_5?.text ||
+        '';
+    if (primary && String(primary).trim()) return String(primary).trim().slice(0, 600);
+    const boxes = page?.content?.textBoxes || page?.textBoxes || [];
+    return boxes
+        .map((b) => b?.text)
+        .filter(Boolean)
+        .join(' ')
+        .trim()
+        .slice(0, 600);
+}
+
+/**
+ * Generate / refresh page background images for a Bible Map story using Vertex Gemini
+ * flash-image + SavedCharacter reference photos.
+ */
+async function generateImagesForStoryPages(story, options = {}) {
+    const bookId = story.bookId;
+    if (!bookId) throw new Error('Story has no linked book');
+
+    const refIds = (
+        Array.isArray(options.referenceCharacterIds)
+            ? options.referenceCharacterIds
+            : story.referenceCharacterIds || []
+    )
+        .map((id) => String(id || '').trim())
+        .filter(Boolean);
+
+    const onlyMissing = options.onlyMissing !== false;
+    const pages = await Page.find({ bookId, isColoringPage: { $ne: true } })
+        .sort({ pageNumber: 1 });
+
+    const results = [];
+    for (let i = 0; i < pages.length; i++) {
+        const page = pages[i];
+        const existingUrl =
+            page.backgroundUrl || page.files?.background?.url || '';
+        if (onlyMissing && existingUrl && page.backgroundType !== 'video') {
+            results.push({
+                pageNumber: page.pageNumber,
+                backgroundUrl: existingUrl,
+                skipped: true,
+            });
+            continue;
+        }
+
+        const sceneDescription =
+            String(page.sceneDescription || '').trim() || sceneTextFromReadingPage(page);
+        if (!sceneDescription) {
+            results.push({
+                pageNumber: page.pageNumber,
+                error: 'No scene text',
+                skipped: true,
+            });
+            continue;
+        }
+
+        page.sceneDescription = sceneDescription;
+        page.referenceCharacterIds = refIds;
+        await page.save();
+
+        try {
+            const imageUrl = await generatePageImageForBibleMap(
+                bookId,
+                page.toObject ? page.toObject() : page,
+                i,
+                { stylePrompt: options.stylePrompt, wholeBookStyle: options.wholeBookStyle },
+            );
+            page.backgroundUrl = imageUrl;
+            page.backgroundType = 'image';
+            if (!page.files) page.files = {};
+            page.files.background = {
+                ...(page.files.background || {}),
+                url: imageUrl,
+                type: 'image',
+                filename: page.files.background?.filename || `page-${page.pageNumber}.png`,
+            };
+            await page.save();
+            results.push({ pageNumber: page.pageNumber, backgroundUrl: imageUrl });
+        } catch (err) {
+            console.error(
+                'Bible Map page image failed for page',
+                page.pageNumber,
+                err?.message || err,
+            );
+            results.push({
+                pageNumber: page.pageNumber,
+                error: err?.message || 'Image generation failed',
+            });
+        }
+
+        if (i < pages.length - 1 && BIBLE_MAP_IMAGE_DELAY_MS > 0) {
+            await new Promise((r) => setTimeout(r, BIBLE_MAP_IMAGE_DELAY_MS));
+        }
+    }
+
+    return results;
+}
 
 function dbUnavailableResponse(res) {
     return res.status(503).json({
@@ -1491,6 +1604,39 @@ ${sourceText.slice(0, 12000)}`;
         book.hasReadingLevels = true;
         await book.save();
 
+        const refIds = Array.isArray(req.body?.referenceCharacterIds)
+            ? req.body.referenceCharacterIds.map((id) => String(id || '').trim()).filter(Boolean)
+            : [];
+        if (refIds.length) {
+            story.referenceCharacterIds = refIds;
+            await story.save();
+        }
+
+        const wantImages =
+            req.body?.generateImages === true ||
+            req.body?.generateImages === 'true' ||
+            req.body?.generateImages === 1;
+
+        let imageResults = null;
+        if (wantImages) {
+            try {
+                imageResults = await generateImagesForStoryPages(story, {
+                    referenceCharacterIds: refIds.length
+                        ? refIds
+                        : story.referenceCharacterIds,
+                    onlyMissing: req.body?.onlyMissingImages !== false,
+                    stylePrompt: req.body?.stylePrompt,
+                    wholeBookStyle: req.body?.wholeBookStyle,
+                });
+            } catch (imgErr) {
+                console.error(
+                    'generate-reading-levels image step failed:',
+                    imgErr?.message || imgErr,
+                );
+                imageResults = [{ error: imgErr?.message || 'Image generation failed' }];
+            }
+        }
+
         const pages = await Page.find({ bookId: book._id, isColoringPage: { $ne: true } })
             .sort({ pageNumber: 1 })
             .lean();
@@ -1500,6 +1646,7 @@ ${sourceText.slice(0, 12000)}`;
             pageCount: pages.length,
             pages,
             configured: true,
+            images: imageResults,
         });
     } catch (error) {
         console.error('generate-reading-levels error:', error?.message || error);
@@ -1513,6 +1660,76 @@ ${sourceText.slice(0, 12000)}`;
             error: 'Failed to generate reading levels',
             message: error?.message || 'Anthropic request failed',
         });
+    }
+});
+
+/**
+ * POST /api/bible-map/stories/:id/generate-page-images
+ * Generate page backgrounds from script text + SavedCharacter reference images (Vertex Gemini).
+ */
+router.post('/stories/:id/generate-page-images', async (req, res) => {
+    try {
+        const story = await MapStory.findById(req.params.id);
+        if (!story) return res.status(404).json({ error: 'Story not found' });
+        if (!story.bookId) {
+            return res.status(400).json({ error: 'Story has no linked book — generate scripts first' });
+        }
+
+        const refIds = Array.isArray(req.body?.referenceCharacterIds)
+            ? req.body.referenceCharacterIds.map((id) => String(id || '').trim()).filter(Boolean)
+            : (story.referenceCharacterIds || []).map((id) => String(id));
+
+        if (refIds.length) {
+            story.referenceCharacterIds = refIds;
+            await story.save();
+        }
+
+        const results = await generateImagesForStoryPages(story, {
+            referenceCharacterIds: refIds,
+            onlyMissing: req.body?.onlyMissing === true,
+            stylePrompt: req.body?.stylePrompt,
+            wholeBookStyle: req.body?.wholeBookStyle,
+        });
+
+        const pages = await Page.find({
+            bookId: story.bookId,
+            isColoringPage: { $ne: true },
+        })
+            .sort({ pageNumber: 1 })
+            .lean();
+
+        res.json({
+            bookId: story.bookId,
+            results,
+            pages,
+            referenceCharacterIds: refIds,
+        });
+    } catch (error) {
+        console.error('generate-page-images error:', error?.message || error);
+        res.status(500).json({
+            error: 'Failed to generate page images',
+            message: error?.message || 'Image generation failed',
+        });
+    }
+});
+
+/**
+ * GET /api/bible-map/characters
+ * Portal character library (SavedCharacter) for Bible Map image references.
+ */
+router.get('/characters', async (req, res) => {
+    try {
+        const characters = await SavedCharacter.find({ status: { $ne: 'archived' } })
+            .select('displayName internalTag referenceImageUrl styleId stylePrompt status order')
+            .sort({ order: 1, displayName: 1 })
+            .lean();
+        res.json({ characters });
+    } catch (error) {
+        console.error('bible-map characters error:', error?.message || error);
+        if (error.name === 'MongooseError' || error.name === 'MongoServerError') {
+            return dbUnavailableResponse(res);
+        }
+        res.status(500).json({ error: 'Failed to load characters' });
     }
 });
 

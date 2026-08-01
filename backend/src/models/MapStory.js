@@ -63,6 +63,13 @@ const mapStorySchema = new mongoose.Schema(
             ref: 'Book',
             default: null,
         },
+        /** SavedCharacter IDs used as Vertex Gemini reference images for page art */
+        referenceCharacterIds: [
+            {
+                type: mongoose.Schema.Types.ObjectId,
+                ref: 'SavedCharacter',
+            },
+        ],
 
         // —— QUIZ ——
         // book_quiz: use AI/cached BookQuiz for bookId

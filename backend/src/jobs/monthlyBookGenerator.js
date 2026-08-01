@@ -1218,4 +1218,35 @@ async function runMonthlyBookGeneration(customMonthlyBookId) {
     }
 }
 
-module.exports = { runMonthlyBookGeneration };
+/**
+ * Generate one page image for Bible Map (or other portal book flows).
+ * Reuses the Vertex Gemini flash-image + SavedCharacter reference path.
+ */
+async function generatePageImageForBibleMap(bookId, pageDoc, pageIndex, options = {}) {
+    const customBook = {
+        _id: bookId,
+        childName: '',
+        childCharacterImageUrl: null,
+        characters: [],
+    };
+    const characterStylePrompt =
+        options.stylePrompt ||
+        "Illustrated children's Bible storybook style, soft watercolor and digital painting blend, warm inviting colors";
+    const wholeBookStyleDesc =
+        options.wholeBookStyle ||
+        "Illustrated children's Bible storybook, consistent soft painted look across pages";
+    return generatePageImageForBook(
+        customBook,
+        pageDoc,
+        characterStylePrompt,
+        pageIndex,
+        null,
+        wholeBookStyleDesc,
+    );
+}
+
+module.exports = {
+    runMonthlyBookGeneration,
+    generatePageImageForBook,
+    generatePageImageForBibleMap,
+};

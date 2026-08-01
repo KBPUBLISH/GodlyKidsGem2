@@ -44,6 +44,18 @@ export function collectPageInteractiveTargets(
     return targets;
 }
 
+/** Visible blank slot length roughly matching the hidden word. */
+export function blankSlotUnits(word: string): number {
+    const letters = word.replace(/[^\p{L}\p{N}]/gu, '');
+    return Math.min(Math.max(letters.length || word.length || 3, 3), 14);
+}
+
+/** Speakable form of a tap word (strip edge punctuation). */
+export function wordForSpeech(word: string): string {
+    const cleaned = word.replace(/^[^\p{L}\p{N}]+|[^\p{L}\p{N}]+$/gu, '');
+    return cleaned || word;
+}
+
 /** Short pleasant “ding” via Web Audio (no asset required). */
 export function playInteractiveWordDing(): void {
     try {

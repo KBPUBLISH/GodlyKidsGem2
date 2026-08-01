@@ -1025,6 +1025,7 @@ function sanitizeStoryPayload(body = {}) {
         'sceneMusicUrl',
         'status',
         'bookId',
+        'referenceCharacterIds',
         'quizMode',
         'customQuestions',
         'quiz',

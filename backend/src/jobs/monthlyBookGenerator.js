@@ -380,6 +380,24 @@ async function gatherPageReferenceImages(customBook, pageDoc) {
 }
 
 /**
+ * Fetch optional story-wide style reference (Bible Map).
+ * Returned as role:'style' so generators can treat it separately from character identity refs.
+ */
+async function gatherStyleReferenceImage(styleReferenceImageUrl) {
+    const url = String(styleReferenceImageUrl || '').trim();
+    if (!url) return null;
+    const base64 = await fetchImageAsBase64(url);
+    if (!base64) {
+        console.warn(
+            'MonthlyBookGenerator: Failed to fetch style reference image from',
+            url.slice(0, 80) + '...',
+        );
+        return null;
+    }
+    return { base64, label: 'story style reference', role: 'style' };
+}
+
+/**
  * Vertex AI image model for page generation.
  * - gemini-3.1-flash-image (default): GA, global endpoint only (Vertex locations docs).
  * - gemini-2.5-flash-image: GA, regional + global; used automatically if 3.1 returns 404.
@@ -481,9 +499,18 @@ async function generatePageImageWithVertexGemini(customBook, pageDoc, characterS
         ? customBook.characters.map((c) => (c && c.name && String(c.name).trim()) || '').filter(Boolean)
         : [customBook.childName].filter(Boolean);
     const { prompt } = await buildScenePrompt(pageDoc, characterStylePrompt, customBook.childName, wholeBookStyleDesc, characterNames);
-    const referenceImages = await gatherPageReferenceImages(customBook, pageDoc);
+    const subjectReferenceImages = await gatherPageReferenceImages(customBook, pageDoc);
+    const styleRef = await gatherStyleReferenceImage(
+        customBook.styleReferenceImageUrl || pageDoc.styleReferenceImageUrl,
+    );
+    // Style ref first (Image 1), then character identity refs (Image 2+)
+    const referenceImages = styleRef
+        ? [styleRef, ...subjectReferenceImages]
+        : subjectReferenceImages;
+    const styleOffset = styleRef ? 1 : 0;
+    const subjectImageBase = 1 + styleOffset; // first character identity image number
 
-    const firstLabel = referenceImages.length > 0 ? referenceImages[0].label : '';
+    const firstLabel = subjectReferenceImages.length > 0 ? subjectReferenceImages[0].label : '';
     const childRefIncluded = firstLabel === 'the child' || firstLabel === 'child' || firstLabel === 'character 1';
     console.log('MonthlyBookGenerator: Page', pageNumber, 'sending', referenceImages.length, 'reference image(s); child/first ref included:', childRefIncluded);
     const hasUserCharacter = customBook.childCharacterImageUrl || (customBook.characters && customBook.characters.length > 0);
@@ -498,53 +525,62 @@ async function generatePageImageWithVertexGemini(customBook, pageDoc, characterS
 
     // When 2–3 refs are all user characters (kids), each must keep ONLY their own appearance—no swapping accessories.
     const isUserRef = (label) => /^(the child|child|character 1|character 2|character 3)$/i.test(String(label || '').trim());
-    const allRefsAreUserCharacters = referenceImages.length >= 2 && referenceImages.every((r) => isUserRef(r.label));
+    const allRefsAreUserCharacters = subjectReferenceImages.length >= 2 && subjectReferenceImages.every((r) => isUserRef(r.label));
     if (allRefsAreUserCharacters) {
         console.log('MonthlyBookGenerator: Page', pageNumber, '— multiple user characters detected; enforcing per-person accessories (no hat/headphones swap).');
     }
 
     // Describe reference images so the model does not assume "child" — use age-neutral wording for the main character.
-    const refDescription = referenceImages.length
-        ? referenceImages.map((r, i) => {
-            const imgNum = i + 1;
+    const styleRefDescription = styleRef
+        ? `Image 1: STORY STYLE REFERENCE ONLY — match this image's art style, brushwork, color palette, lighting, shading, line quality, and rendering EXACTLY for the entire page (characters + environment). Do NOT copy its specific characters or composition unless the scene prompt asks for them. Render every character in this exact style.`
+        : '';
+    const subjectRefDescription = subjectReferenceImages.length
+        ? subjectReferenceImages.map((r, i) => {
+            const imgNum = i + subjectImageBase;
             if (allRefsAreUserCharacters) {
-                return `Image ${imgNum}: ${r.label} — match this person ONLY from this reference photo. Draw only the face, hair, clothing, and accessories that are visible in THIS image. Do not add hat, cap, headphones, or glasses unless they appear in this photo. Do NOT give this person any accessory (hat, headphones, glasses, etc.) that appears on a different reference image—each person keeps only what is in their own photo.`;
+                return `Image ${imgNum}: ${r.label} — match this person ONLY from this reference photo. Draw only the face, hair, clothing, and accessories that are visible in THIS image. Do not add hat, cap, headphones, or glasses unless they appear in this photo. Do NOT give this person any accessory (hat, headphones, glasses, etc.) that appears on a different reference image—each person keeps only what is in their own photo. Render them in the story style reference look.`;
             }
             const isFirstPerson = i === 0 && (r.label === 'the child' || r.label === 'child' || r.label === 'character 1');
             return isFirstPerson
-                ? `Image ${imgNum}: the main character (match this person's exact age and appearance from the photo—only what is visible in the photo; do not add hat, cap, or headphones if not in the photo; if adult with beard depict adult, if child depict child; do not age down or change their features)`
-                : `Image ${imgNum}: ${r.label} (this is a different character—draw them ONLY from this reference; do NOT give them the main character's hat, headphones, tattoo, watch, or any modern accessory; biblical characters have their own traditional appearance)`;
+                ? `Image ${imgNum}: the main character (match this person's exact age and appearance from the photo—only what is visible in the photo; do not add hat, cap, or headphones if not in the photo; if adult with beard depict adult, if child depict child; do not age down or change their features). Render in the story style reference look.`
+                : `Image ${imgNum}: ${r.label} (this is a different character—draw them ONLY from this reference; do NOT give them the main character's hat, headphones, tattoo, watch, or any modern accessory; biblical characters have their own traditional appearance). Render in the story style reference look.`;
         }).join('. ')
         : '';
-    const firstRefIsPerson = referenceImages.length > 0 && (referenceImages[0].label === 'the child' || referenceImages[0].label === 'child' || referenceImages[0].label === 'character 1');
+    const refDescription = [styleRefDescription, subjectRefDescription].filter(Boolean).join('. ');
+    const firstRefIsPerson = subjectReferenceImages.length > 0 && (subjectReferenceImages[0].label === 'the child' || subjectReferenceImages[0].label === 'child' || subjectReferenceImages[0].label === 'character 1');
     // When user selected a book style (e.g. Pixar), enforce it for the ENTIRE image so we don't get cartoon/Disney 2D instead.
     const hasWholeBookStyle = wholeBookStyleDesc && String(wholeBookStyleDesc).trim().length > 0;
-    const wholeImageStyleLock = hasWholeBookStyle
-        ? ` CRITICAL — Style: The ENTIRE image (all characters, background, and environment) MUST be rendered in this exact style: "${String(wholeBookStyleDesc).trim()}". Do NOT use a flat 2D cartoon style, 2D Disney animation style, or storybook watercolor illustration style. Use the selected style (e.g. Pixar 3D animated, with rounded volumes and 3D lighting) for the whole scene—consistent from page to page. `
+    const styleImageLock = styleRef
+        ? ` CRITICAL — STORY STYLE IMAGE: Image 1 is the mandatory style reference for this entire story. The ENTIRE generated image (all characters, background, and environment) MUST match Image 1's art style EXACTLY — same rendering, brushwork, colors, lighting, and finish. Character photos (Image ${subjectImageBase}+) are for identity only (face/hair/clothing); redraw those people in the style of Image 1. Keep this style consistent on every page. `
         : '';
+    const wholeImageStyleLock = styleImageLock || (hasWholeBookStyle
+        ? ` CRITICAL — Style: The ENTIRE image (all characters, background, and environment) MUST be rendered in this exact style: "${String(wholeBookStyleDesc).trim()}". Do NOT use a flat 2D cartoon style, 2D Disney animation style, or storybook watercolor illustration style. Use the selected style (e.g. Pixar 3D animated, with rounded volumes and 3D lighting) for the whole scene—consistent from page to page. `
+        : '');
     const compositionHint = compositionHintForAspectRatio(aspectRatio);
     const styleClosing = hasWholeBookStyle
         ? `Render the entire image in the selected style above. Warm inviting colors, soft lighting, suitable for ages 4-12, no text in image. ${compositionHint}. Do not add biblical characters (e.g. Jesus, prophets, angels) unless explicitly named in the prompt.`
         : `Children's book illustration style, warm inviting colors, soft lighting, suitable for ages 4-12, no text in image. ${compositionHint}. Do not add biblical characters (e.g. Jesus, prophets, angels) unless explicitly named in the prompt.`;
     // Use user-selected main character style (e.g. Pixar) when provided; otherwise fall back to characterStylePrompt.
     const styleForMain = (mainCharacterStyleDesc && mainCharacterStyleDesc.trim()) || (characterStylePrompt && characterStylePrompt.trim());
-    const styleLock = styleForMain
-        ? ` The main character (reference Image 1) MUST be drawn in this exact art style: "${styleForMain.trim()}". Do NOT draw the main character in a classical religious, biblical, or traditional Jesus painting style. Keep the main character in the selected style (e.g. Pixar 3D, Disney, illustrated) on every page—do not shift their look toward other characters' style. `
-        : ` Do NOT draw the main character in a classical religious or biblical painting style; keep them in the selected storybook/animation style (e.g. Pixar, Disney, illustrated) on every page. `;
+    const styleLock = styleRef
+        ? ` The main character (reference Image ${subjectImageBase}) must keep their identity from that photo but MUST be rendered in the exact art style of Image 1 (story style reference). `
+        : (styleForMain
+        ? ` The main character (reference Image ${subjectImageBase}) MUST be drawn in this exact art style: "${styleForMain.trim()}". Do NOT draw the main character in a classical religious, biblical, or traditional Jesus painting style. Keep the main character in the selected style (e.g. Pixar 3D, Disney, illustrated) on every page—do not shift their look toward other characters' style. `
+        : ` Do NOT draw the main character in a classical religious or biblical painting style; keep them in the selected storybook/animation style (e.g. Pixar, Disney, illustrated) on every page. `);
     const heightConsistency = ` The main character must appear at the SAME height and scale on every page. If the reference photo shows an ADULT, the main character must be drawn at ADULT height (clearly taller than any children in the scene). If the reference shows a child, use child height. Do not make the main character taller, shorter, or a different size from page to page—keep their scale consistent across all scenes. `;
     // MANDATORY height rule: adults must be same scale—never draw one adult as giant and another as tiny (fixes Jesus/main-character disproportion)
-    const mandatoryHeightRule = referenceImages.length >= 2
-        ? ` CRITICAL — HEIGHT AND SCALE: When the main character (Image 1) is an ADULT and another reference (e.g. Jesus, Joseph) is also an ADULT, BOTH must be drawn at the SAME adult scale. They must be roughly the same height—within normal human variation (e.g. a few inches). NEVER draw Jesus or biblical figures shorter, smaller, or child-sized when the main character is an adult. NEVER draw one adult twice the height of another. If the main character is a child and Jesus is an adult, Jesus must be clearly taller (adult vs child). If both are adults, they MUST appear as two adults of similar size standing together. Do not put Jesus on a stool or elevated surface to compensate—draw him at full adult height. `
+    const mandatoryHeightRule = subjectReferenceImages.length >= 2
+        ? ` CRITICAL — HEIGHT AND SCALE: When the main character (Image ${subjectImageBase}) is an ADULT and another reference (e.g. Jesus, Joseph) is also an ADULT, BOTH must be drawn at the SAME adult scale. They must be roughly the same height—within normal human variation (e.g. a few inches). NEVER draw Jesus or biblical figures shorter, smaller, or child-sized when the main character is an adult. NEVER draw one adult twice the height of another. If the main character is a child and Jesus is an adult, Jesus must be clearly taller (adult vs child). If both are adults, they MUST appear as two adults of similar size standing together. Do not put Jesus on a stool or elevated surface to compensate—draw him at full adult height. `
         : '';
     // When multiple user characters (2–3 refs): keep realistic relative heights—adult taller than child, two adults similar height; no giant/tiny disproportion
-    const multiCharacterHeight = referenceImages.length >= 2
+    const multiCharacterHeight = subjectReferenceImages.length >= 2
         ? ` Draw all characters from the reference images at realistic, consistent relative heights. If one reference shows an adult and another a child, the adult must be clearly taller. If both (or all) are adults, draw them at similar height—do not make one character disproportionately large (giant) or small (tiny). Keep natural human proportions and scale between characters. `
         : '';
     const personConsistencyInstruction = firstRefIsPerson
-        ? ` CRITICAL — character consistency: The person in reference Image 1 must look EXACTLY like the photo in every image: same face, same AGE (if adult with beard = draw adult with beard; do NOT turn them into a child), same eye color (e.g. brown eyes stay brown), same hair (including streaks or gray), same clothing, and only the accessories that appear in the reference (if the photo has no hat and no headphones, draw them with no hat and no headphones—do NOT add hats, caps, or headphones unless visible in the reference). Do NOT age them down, change eye color, remove beard, or replace their real outfit with costumes. If the reference is an adult, draw them at adult height (taller than children). Preserve identical appearance on every page.${styleLock}${heightConsistency} `
+        ? ` CRITICAL — character consistency: The person in reference Image ${subjectImageBase} must look EXACTLY like the photo in every image: same face, same AGE (if adult with beard = draw adult with beard; do NOT turn them into a child), same eye color (e.g. brown eyes stay brown), same hair (including streaks or gray), same clothing, and only the accessories that appear in the reference (if the photo has no hat and no headphones, draw them with no hat and no headphones—do NOT add hats, caps, or headphones unless visible in the reference). Do NOT age them down, change eye color, remove beard, or replace their real outfit with costumes. If the reference is an adult, draw them at adult height (taller than children). Preserve identical appearance on every page.${styleLock}${heightConsistency} `
         : '';
     // When multiple user characters: require ALL to appear on every page; never omit one.
-    const numUserRefs = referenceImages.length;
+    const numUserRefs = subjectReferenceImages.length;
     const allMustAppearInstruction = allRefsAreUserCharacters && numUserRefs >= 2
         ? ` MANDATORY: You MUST include every person from the ${numUserRefs} reference images in this scene. All ${numUserRefs} people must be visible in the illustration—do not omit any character. If there are 2 reference images, show 2 people; if 3, show 3 people. Every reference image corresponds to one person who must appear. `
         : '';
@@ -557,15 +593,15 @@ async function generatePageImageWithVertexGemini(customBook, pageDoc, characterS
     const hatOnlyOnOwnerInstruction = allRefsAreUserCharacters && numUserRefs >= 2
         ? ` CRITICAL — Hats and accessories: Look at EACH reference photo. Only the person whose OWN reference photo shows a hat/cap may be drawn wearing a hat. If Reference Image 1 has NO hat, the person from Image 1 must be drawn with NO hat—never give them a hat from another reference. If Reference Image 2 has a hat, ONLY the person from Image 2 may wear that hat—never put the same hat on the person from Image 1 or 3. Never draw identical hats on multiple people. Never copy one character's hat onto another character. Each person gets ONLY what is in their own photo. `
         : '';
-    const multiPersonInstruction = referenceImages.length >= 2
+    const multiPersonInstruction = subjectReferenceImages.length >= 2
         ? allRefsAreUserCharacters
-            ? ` CRITICAL — these reference images are DIFFERENT people (e.g. two or three children). Do NOT blend, combine, or mix their faces or appearances. You MUST include all ${numUserRefs} people in this scene; do not omit any. Each person must look ONLY like their own reference: Image 1 = first person—use ONLY Image 1 for their face, hair, clothing, and accessories (if Image 1 has no cap, do not draw a cap on them; if Image 1 has a cap, ONLY the person from Image 1 may wear a cap—never put that cap on the person from Image 2 or 3). Image 2 = second person—use ONLY Image 2; do NOT give them the first person's hat, cap, headphones, or glasses. Image 3 (if present) = third person—use ONLY Image 3; do NOT give them accessories from Image 1 or 2. Never transfer, swap, or copy accessories (hat, cap, headphones, glasses) from one person to another. A hat/cap belongs only on the person whose reference photo shows a hat/cap; glasses only on the person whose reference shows glasses. Each person keeps exactly what is visible in their own reference photo. NEVER draw the same hat on two different people—only one person can wear a hat, and only if their own reference shows a hat.${hatOnlyOnOwnerInstruction}${multiCharacterHeight} `
-            : ` CRITICAL — these reference images are DIFFERENT people. Do NOT blend, combine, or mix their faces or appearances. Image 1 = the main character (the kid/user): use ONLY Image 1 for that person's face, body, clothing, and accessories. Image 2 and any later images = other characters (e.g. Jesus, Joseph, biblical figures): use ONLY their own reference image for each.${mandatoryHeightRule} Biblical characters (Jesus, Joseph, Moses, etc.) are ADULTS—draw them at adult height, the SAME scale as the main character when Image 1 is an adult. Do NOT draw Jesus or biblical figures small, short, or child-sized; they MUST be similar height to the main character when both are adults. Do NOT put the main character's clothing or accessories (e.g. hat, cap, headphones, tattoo, watch, smartwatch, modern clothes) on Jesus or any other biblical character—only the main character (Image 1) may have these; Jesus and biblical figures must look ONLY like their own reference. Biblical and story characters must keep their own traditional appearance from their reference; only the person from Image 1 may have modern accessories if they appear in Image 1. Do not transfer features (beard, hair, skin, clothing, accessories) from one reference to another.${multiCharacterHeight} `
+            ? ` CRITICAL — these reference images are DIFFERENT people (e.g. two or three children). Do NOT blend, combine, or mix their faces or appearances. You MUST include all ${numUserRefs} people in this scene; do not omit any. Each person must look ONLY like their own reference: Image ${subjectImageBase} = first person—use ONLY Image ${subjectImageBase} for their face, hair, clothing, and accessories (if Image ${subjectImageBase} has no cap, do not draw a cap on them; if Image ${subjectImageBase} has a cap, ONLY the person from Image ${subjectImageBase} may wear a cap—never put that cap on the person from Image ${subjectImageBase + 1} or ${subjectImageBase + 2}). Image ${subjectImageBase + 1} = second person—use ONLY Image ${subjectImageBase + 1}; do NOT give them the first person's hat, cap, headphones, or glasses. Image ${subjectImageBase + 2} (if present) = third person—use ONLY Image ${subjectImageBase + 2}; do NOT give them accessories from Image ${subjectImageBase} or ${subjectImageBase + 1}. Never transfer, swap, or copy accessories (hat, cap, headphones, glasses) from one person to another. A hat/cap belongs only on the person whose reference photo shows a hat/cap; glasses only on the person whose reference shows glasses. Each person keeps exactly what is visible in their own reference photo. NEVER draw the same hat on two different people—only one person can wear a hat, and only if their own reference shows a hat.${hatOnlyOnOwnerInstruction}${multiCharacterHeight} `
+            : ` CRITICAL — these reference images are DIFFERENT people. Do NOT blend, combine, or mix their faces or appearances. Image ${subjectImageBase} = the main character (the kid/user): use ONLY Image ${subjectImageBase} for that person's face, body, clothing, and accessories. Image ${subjectImageBase + 1} and any later images = other characters (e.g. Jesus, Joseph, biblical figures): use ONLY their own reference image for each.${mandatoryHeightRule} Biblical characters (Jesus, Joseph, Moses, etc.) are ADULTS—draw them at adult height, the SAME scale as the main character when Image ${subjectImageBase} is an adult. Do NOT draw Jesus or biblical figures small, short, or child-sized; they MUST be similar height to the main character when both are adults. Do NOT put the main character's clothing or accessories (e.g. hat, cap, headphones, tattoo, watch, smartwatch, modern clothes) on Jesus or any other biblical character—only the main character (Image ${subjectImageBase}) may have these; Jesus and biblical figures must look ONLY like their own reference. Biblical and story characters must keep their own traditional appearance from their reference; only the person from Image ${subjectImageBase} may have modern accessories if they appear in Image ${subjectImageBase}. Do not transfer features (beard, hair, skin, clothing, accessories) from one reference to another.${multiCharacterHeight} `
         : '';
     const geminiPrompt = referenceImages.length
         ? allRefsAreUserCharacters
-            ? `${wholeImageStyleLock}${allMustAppearInstruction}${multiUserAntiArtifacts}${personConsistencyInstruction}${multiPersonInstruction}Using the provided reference images (${refDescription}), generate one image: ${prompt} Remember: all ${numUserRefs} people must appear in the scene. Each person (Image 1, Image 2, Image 3) must match ONLY their own reference—same face, hair, clothing, and accessories as in that photo. Do not add hat, cap, or headphones to anyone unless visible in their own reference; if their reference shows a hat, draw the hat on that person only. NEVER copy one person's hat onto another—if only the child's reference has a hat, only the child may wear a hat; the other person(s) must have NO hat. Never put one person's hat, glasses, or accessories on another person. Do not draw anyone holding an extra pair of shoes. Place each character in the scene as described. ${styleClosing}`
-            : `${wholeImageStyleLock}${personConsistencyInstruction}${multiPersonInstruction}Using the provided reference images (${refDescription}), generate one image: ${prompt} Remember: Image 1 (main character) only—same age, eye color, hair, clothing and accessories as in their photo (no hat/headphones unless in photo). Other characters (Image 2+) must look only like their own reference—never give Jesus or biblical figures the main character's hat, headphones, tattoo, watch, smartwatch, or modern clothes; biblical characters have their own traditional appearance from their reference image. Place each character in the scene as described. IMPORTANT: When both the main character and Jesus/biblical figures are adults, they must be drawn at the same adult scale—no giant main character with tiny Jesus, and no tiny main character with giant Jesus. ${styleClosing}`
+            ? `${wholeImageStyleLock}${allMustAppearInstruction}${multiUserAntiArtifacts}${personConsistencyInstruction}${multiPersonInstruction}Using the provided reference images (${refDescription}), generate one image: ${prompt} Remember: all ${numUserRefs} people must appear in the scene. Each character identity image must match ONLY their own reference—same face, hair, clothing, and accessories as in that photo—while the whole page matches the story style reference. Do not add hat, cap, or headphones to anyone unless visible in their own reference; if their reference shows a hat, draw the hat on that person only. NEVER copy one person's hat onto another—if only the child's reference has a hat, only the child may wear a hat; the other person(s) must have NO hat. Never put one person's hat, glasses, or accessories on another person. Do not draw anyone holding an extra pair of shoes. Place each character in the scene as described. ${styleClosing}`
+            : `${wholeImageStyleLock}${personConsistencyInstruction}${multiPersonInstruction}Using the provided reference images (${refDescription}), generate one image: ${prompt} Remember: Image ${subjectImageBase} (main character) only—same age, eye color, hair, clothing and accessories as in their photo (no hat/headphones unless in photo). Other character images must look only like their own reference—never give Jesus or biblical figures the main character's hat, headphones, tattoo, watch, smartwatch, or modern clothes; biblical characters have their own traditional appearance from their reference image. Place each character in the scene as described. IMPORTANT: When both the main character and Jesus/biblical figures are adults, they must be drawn at the same adult scale—no giant main character with tiny Jesus, and no tiny main character with giant Jesus. ${styleClosing}`
         : `Generate one image: ${prompt} ${styleClosing}`;
 
     const parts = [{ text: geminiPrompt }];
@@ -1304,20 +1340,30 @@ async function generatePageImageWithOpenAI(customBook, pageDoc, characterStylePr
         wholeBookStyleDesc,
         characterNames,
     );
-    const referenceImages = await gatherPageReferenceImages(customBook, pageDoc);
+    const subjectReferenceImages = await gatherPageReferenceImages(customBook, pageDoc);
+    const styleRef = await gatherStyleReferenceImage(
+        customBook.styleReferenceImageUrl || pageDoc.styleReferenceImageUrl,
+    );
+    const referenceImages = styleRef
+        ? [styleRef, ...subjectReferenceImages]
+        : subjectReferenceImages;
     const model = OPENAI_IMAGE_MODEL;
 
     let openaiPrompt = prompt;
     if (referenceImages.length) {
-        const refLines = referenceImages
+        const styleLine = styleRef
+            ? 'Reference image 1 is the STORY STYLE REFERENCE — match its art style, brushwork, colors, lighting, shading, and rendering EXACTLY for the entire illustration. Do not copy its characters/composition unless the scene requires them. '
+            : '';
+        const subjectOffset = styleRef ? 1 : 0;
+        const subjectLines = subjectReferenceImages
             .map(
                 (r, i) =>
-                    `Reference image ${i + 1} is ${r.label} — match their appearance (face, hair, clothing, age) from that photo.`,
+                    `Reference image ${i + 1 + subjectOffset} is ${r.label} — match their identity (face, hair, clothing, age) from that photo, but redraw them in the exact art style of the style reference.`,
             )
             .join(' ');
         openaiPrompt =
-            `${refLines} Create a new children's Bible storybook illustration (not a photo edit collage): ${prompt} ` +
-            `Include every referenced character when the scene calls for them. ${compositionHint}, no text in image.`;
+            `${styleLine}${subjectLines} Create a new children's Bible storybook illustration (not a photo edit collage): ${prompt} ` +
+            `Include every referenced character when the scene calls for them. High fidelity to character likeness AND exact style match. ${compositionHint}, no text in image.`;
     } else {
         openaiPrompt = `${prompt} ${compositionHint}, no text in image.`;
     }
@@ -1454,6 +1500,7 @@ async function generatePageImageForBibleMap(bookId, pageDoc, pageIndex, options 
         childName: '',
         childCharacterImageUrl: null,
         characters: [],
+        styleReferenceImageUrl: String(options.styleReferenceImageUrl || '').trim() || null,
     };
     const characterStylePrompt =
         options.stylePrompt ||
@@ -1466,6 +1513,9 @@ async function generatePageImageForBibleMap(bookId, pageDoc, pageIndex, options 
         .toLowerCase();
     // Bible Map: 3:4 art above parchment/scroll (not full-bleed 9:16)
     const aspectRatio = String(options.aspectRatio || BIBLE_MAP_ASPECT_RATIO).trim() || BIBLE_MAP_ASPECT_RATIO;
+    if (customBook.styleReferenceImageUrl) {
+        pageDoc = { ...pageDoc, styleReferenceImageUrl: customBook.styleReferenceImageUrl };
+    }
 
     if (provider === 'openai' || provider === 'chatgpt') {
         return generatePageImageWithOpenAI(

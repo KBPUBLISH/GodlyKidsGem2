@@ -79,6 +79,15 @@ const mapStorySchema = new mongoose.Schema(
             enum: ['gemini', 'openai'],
             default: 'gemini',
         },
+        /**
+         * Story-wide art style reference image. Page generators must match this look
+         * exactly (style/lighting/rendering) across all pages; character refs supply identity.
+         */
+        styleReferenceImageUrl: {
+            type: String,
+            trim: true,
+            default: null,
+        },
 
         // —— QUIZ ——
         // book_quiz: use AI/cached BookQuiz for bookId

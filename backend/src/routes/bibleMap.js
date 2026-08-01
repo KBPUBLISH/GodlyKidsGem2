@@ -202,6 +202,10 @@ async function generateImagesForStoryPages(story, options = {}) {
                     stylePrompt: options.stylePrompt,
                     wholeBookStyle: options.wholeBookStyle,
                     imageProvider,
+                    styleReferenceImageUrl:
+                        options.styleReferenceImageUrl ||
+                        story.styleReferenceImageUrl ||
+                        '',
                 },
             );
             page.backgroundUrl = imageUrl;
@@ -1139,6 +1143,7 @@ function sanitizeStoryPayload(body = {}) {
         'bookId',
         'referenceCharacterIds',
         'imageProvider',
+        'styleReferenceImageUrl',
         'quizMode',
         'customQuestions',
         'quiz',
@@ -1159,6 +1164,11 @@ function sanitizeStoryPayload(body = {}) {
     if (body.sceneMusicUrl === null || body.sceneMusicUrl === '') out.sceneMusicUrl = null;
     if (body.imageProvider !== undefined) {
         out.imageProvider = normalizeImageProvider(body.imageProvider, 'gemini');
+    }
+    if (body.styleReferenceImageUrl === null || body.styleReferenceImageUrl === '') {
+        out.styleReferenceImageUrl = null;
+    } else if (body.styleReferenceImageUrl !== undefined) {
+        out.styleReferenceImageUrl = String(body.styleReferenceImageUrl || '').trim() || null;
     }
 
     // Normalize leveled quiz + keep customQuestions synced to easy for legacy readers
@@ -1753,7 +1763,15 @@ ${sourceText.slice(0, 12000)}`;
         if (req.body?.imageProvider != null) {
             story.imageProvider = normalizeImageProvider(req.body.imageProvider, story.imageProvider || 'gemini');
         }
-        if (refIds.length || req.body?.imageProvider != null) {
+        if (req.body?.styleReferenceImageUrl !== undefined) {
+            const su = String(req.body.styleReferenceImageUrl || '').trim();
+            story.styleReferenceImageUrl = su || null;
+        }
+        if (
+            refIds.length ||
+            req.body?.imageProvider != null ||
+            req.body?.styleReferenceImageUrl !== undefined
+        ) {
             await story.save();
         }
 
@@ -1773,6 +1791,7 @@ ${sourceText.slice(0, 12000)}`;
                     stylePrompt: req.body?.stylePrompt,
                     wholeBookStyle: req.body?.wholeBookStyle,
                     imageProvider: story.imageProvider || req.body?.imageProvider,
+                    styleReferenceImageUrl: story.styleReferenceImageUrl,
                 });
             } catch (imgErr) {
                 console.error(
@@ -1851,7 +1870,15 @@ router.post('/stories/:id/generate-page-images', async (req, res) => {
                 story.imageProvider || 'gemini',
             );
         }
-        if (refIds.length || req.body?.imageProvider != null) {
+        if (req.body?.styleReferenceImageUrl !== undefined) {
+            const su = String(req.body.styleReferenceImageUrl || '').trim();
+            story.styleReferenceImageUrl = su || null;
+        }
+        if (
+            refIds.length ||
+            req.body?.imageProvider != null ||
+            req.body?.styleReferenceImageUrl !== undefined
+        ) {
             await story.save();
         }
 
@@ -1866,6 +1893,7 @@ router.post('/stories/:id/generate-page-images', async (req, res) => {
             stylePrompt: req.body?.stylePrompt,
             wholeBookStyle: req.body?.wholeBookStyle,
             imageProvider,
+            styleReferenceImageUrl: story.styleReferenceImageUrl,
         });
 
         const pages = await Page.find({

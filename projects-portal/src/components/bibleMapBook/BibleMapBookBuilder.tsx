@@ -1,12 +1,14 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
     BookOpen,
     ImagePlus,
     Loader2,
+    Palette,
     Plus,
     Save,
     Sparkles,
     Trash2,
+    X,
 } from 'lucide-react';
 import apiClient, { getMediaUrl } from '../../services/apiClient';
 import BookPageEditor from './BookPageEditor';
@@ -59,6 +61,10 @@ const BibleMapBookBuilder: React.FC<BibleMapBookBuilderProps> = ({
     const [autoImages, setAutoImages] = useState(true);
     /** gemini = Vertex + character refs; openai = ChatGPT GPT Image (gpt-image-2) */
     const [imageProvider, setImageProvider] = useState<'gemini' | 'openai'>('gemini');
+    /** Story-wide art style reference — matched exactly on every page image */
+    const [styleReferenceImageUrl, setStyleReferenceImageUrl] = useState('');
+    const [uploadingStyleRef, setUploadingStyleRef] = useState(false);
+    const styleRefInputRef = useRef<HTMLInputElement>(null);
     const [imageStatus, setImageStatus] = useState<string | null>(null);
 
     const loadPages = useCallback(async () => {
@@ -117,6 +123,8 @@ const BibleMapBookBuilder: React.FC<BibleMapBookBuilderProps> = ({
                 } else if (provider === 'gemini') {
                     setImageProvider('gemini');
                 }
+                const styleUrl = String(storyRes.data?.styleReferenceImageUrl || '').trim();
+                if (styleUrl) setStyleReferenceImageUrl(styleUrl);
             } catch (err) {
                 console.error(err);
             }
@@ -128,6 +136,33 @@ const BibleMapBookBuilder: React.FC<BibleMapBookBuilderProps> = ({
         setSelectedCharacterIds((prev) =>
             prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id].slice(0, 4),
         );
+    };
+
+    const persistStyleReference = async (url: string | null) => {
+        await apiClient.put(`/api/bible-map/stories/${storyId}`, {
+            styleReferenceImageUrl: url,
+        });
+        setStyleReferenceImageUrl(url || '');
+    };
+
+    const uploadStyleReference = async (file: File) => {
+        setUploadingStyleRef(true);
+        try {
+            const formData = new FormData();
+            formData.append('file', file);
+            const q = bookId
+                ? `bookId=${encodeURIComponent(bookId)}&type=map-art`
+                : 'type=map-art';
+            const res = await apiClient.post(`/api/upload/image?${q}`, formData);
+            const url = String(res.data?.url || '').trim();
+            if (!url) throw new Error('No URL returned');
+            await persistStyleReference(url);
+        } catch (err) {
+            console.error(err);
+            alert('Failed to upload style reference image');
+        } finally {
+            setUploadingStyleRef(false);
+        }
     };
 
     const handleGenerate = async () => {
@@ -149,6 +184,7 @@ const BibleMapBookBuilder: React.FC<BibleMapBookBuilderProps> = ({
                     generateImages: autoImages,
                     onlyMissingImages: true,
                     imageProvider,
+                    styleReferenceImageUrl: styleReferenceImageUrl || undefined,
                 },
                 // Image gen can take several minutes
                 { timeout: 600000 },
@@ -208,6 +244,7 @@ const BibleMapBookBuilder: React.FC<BibleMapBookBuilderProps> = ({
                     referenceCharacterIds: selectedCharacterIds,
                     onlyMissing,
                     imageProvider,
+                    styleReferenceImageUrl: styleReferenceImageUrl || undefined,
                 },
                 { timeout: 600000 },
             );
@@ -282,7 +319,67 @@ const BibleMapBookBuilder: React.FC<BibleMapBookBuilderProps> = ({
     };
 
     const characterPicker = (
-        <div className="space-y-2">
+        <div className="space-y-3">
+            <div className="space-y-2 rounded-lg border border-amber-200 bg-amber-50/80 p-3">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                    <label className="text-xs font-medium text-amber-950 inline-flex items-center gap-1.5">
+                        <Palette className="w-3.5 h-3.5" />
+                        Story style reference (required for consistent art)
+                    </label>
+                    <input
+                        ref={styleRefInputRef}
+                        type="file"
+                        accept="image/*"
+                        className="hidden"
+                        onChange={(e) => {
+                            const f = e.target.files?.[0];
+                            e.target.value = '';
+                            if (f) void uploadStyleReference(f);
+                        }}
+                    />
+                    <button
+                        type="button"
+                        disabled={uploadingStyleRef}
+                        onClick={() => styleRefInputRef.current?.click()}
+                        className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg border border-amber-300 bg-white text-xs text-amber-950 hover:bg-amber-100 disabled:opacity-50"
+                    >
+                        {uploadingStyleRef ? (
+                            <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                        ) : (
+                            <ImagePlus className="w-3.5 h-3.5" />
+                        )}
+                        {styleReferenceImageUrl ? 'Replace style image' : 'Upload style image'}
+                    </button>
+                </div>
+                {styleReferenceImageUrl ? (
+                    <div className="flex items-start gap-3">
+                        <img
+                            src={getMediaUrl(styleReferenceImageUrl)}
+                            alt="Story style reference"
+                            className="w-20 h-20 rounded-lg object-cover border border-amber-300 shadow-sm"
+                        />
+                        <div className="min-w-0 flex-1">
+                            <p className="text-[11px] text-amber-900/90">
+                                Every page will match this image&apos;s art style, lighting, and
+                                rendering. Character photos below supply identity only.
+                            </p>
+                            <button
+                                type="button"
+                                onClick={() => void persistStyleReference(null)}
+                                className="mt-1.5 inline-flex items-center gap-1 text-[11px] text-amber-800 hover:text-red-700"
+                            >
+                                <X className="w-3 h-3" />
+                                Remove
+                            </button>
+                        </div>
+                    </div>
+                ) : (
+                    <p className="text-[11px] text-amber-900/80">
+                        Upload one reference illustration for the whole story. Gemini and ChatGPT
+                        will match it exactly across pages.
+                    </p>
+                )}
+            </div>
             <div className="flex flex-wrap items-center justify-between gap-2">
                 <label className="text-xs font-medium text-violet-900">
                     Character references (for page images)
@@ -357,9 +454,9 @@ const BibleMapBookBuilder: React.FC<BibleMapBookBuilderProps> = ({
             )}
             <p className="text-[11px] text-violet-700/80">
                 {imageProvider === 'openai'
-                    ? 'Uses OpenAI gpt-image-2. Character photos are sent as reference inputs when selected (images/edits). Requires OPENAI_API_KEY.'
-                    : 'Uses Vertex Gemini flash-image with these reference photos (same path as Kids Monthly).'}{' '}
-                Pick up to 4 characters (e.g. Jesus, Noah).
+                    ? 'Uses OpenAI gpt-image-2. Style image + character photos go to images/edits with high fidelity. Requires OPENAI_API_KEY.'
+                    : 'Uses Vertex Gemini flash-image: style image first, then character identity refs.'}{' '}
+                Pick up to 4 characters (e.g. Jesus, Noah). Page art is 3:4 above the parchment scroll.
             </p>
             {imageStatus && (
                 <p className="text-[11px] text-emerald-800 font-medium">{imageStatus}</p>

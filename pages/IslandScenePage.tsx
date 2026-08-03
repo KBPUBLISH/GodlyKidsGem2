@@ -377,11 +377,13 @@ const IslandScenePage: React.FC = () => {
   const videoRef = useRef<HTMLVideoElement>(null);
   const bgVideoRef = useRef<HTMLVideoElement>(null);
   const triggerVideoRef = useRef<HTMLVideoElement>(null);
-  /** Uploaded scene videos: start muted for autoplay; kid can unmute. */
-  const [sceneSoundOn, setSceneSoundOn] = useState(false);
+  /** Prefer sound on; if unmuted autoplay is blocked, fall back muted then unlock on next gesture. */
+  const [sceneSoundOn, setSceneSoundOn] = useState(true);
   const [menuIconFailed, setMenuIconFailed] = useState(false);
   const [boardImgFailed, setBoardImgFailed] = useState(false);
-  const sceneSoundOnRef = useRef(false);
+  const sceneSoundOnRef = useRef(true);
+  /** True after autoplay-with-sound was blocked — unmute on the next user gesture. */
+  const pendingAutoUnmuteRef = useRef(false);
   useEffect(() => {
     sceneSoundOnRef.current = sceneSoundOn;
   }, [sceneSoundOn]);
@@ -680,6 +682,13 @@ const IslandScenePage: React.FC = () => {
     }
     finishingRef.current = true;
 
+    // Skip / tap is a user gesture — restore sound if autoplay had forced mute
+    if (pendingAutoUnmuteRef.current) {
+      pendingAutoUnmuteRef.current = false;
+      sceneSoundOnRef.current = true;
+      setSceneSoundOn(true);
+    }
+
     if (safetyTimerRef.current != null) {
       window.clearTimeout(safetyTimerRef.current);
       safetyTimerRef.current = null;
@@ -724,23 +733,54 @@ const IslandScenePage: React.FC = () => {
     if (!video) return;
 
     let cancelled = false;
+    let unlockSound: (() => void) | null = null;
+
+    const detachUnlock = () => {
+      if (!unlockSound) return;
+      window.removeEventListener('click', unlockSound);
+      window.removeEventListener('keydown', unlockSound);
+      unlockSound = null;
+    };
 
     const tryPlay = async () => {
       video.playsInline = true;
-      video.muted = !sceneSoundOnRef.current;
+      // Prefer unmuted — navigation taps (Sail / story) often unlock audio.
+      video.muted = false;
+      sceneSoundOnRef.current = true;
+      setSceneSoundOn(true);
       try {
         await video.play();
         if (cancelled) return;
+        pendingAutoUnmuteRef.current = false;
       } catch {
         if (cancelled) return;
-        // Autoplay with sound often blocked — fall back muted, keep toggle available
+        // Autoplay with sound blocked — play muted, unmute on next gesture
         video.muted = true;
+        sceneSoundOnRef.current = false;
         setSceneSoundOn(false);
+        pendingAutoUnmuteRef.current = true;
         try {
           await video.play();
         } catch {
           /* safety timeout / skip advances */
         }
+        if (cancelled) return;
+        unlockSound = () => {
+          if (cancelled || !pendingAutoUnmuteRef.current) return;
+          pendingAutoUnmuteRef.current = false;
+          detachUnlock();
+          video.muted = false;
+          sceneSoundOnRef.current = true;
+          setSceneSoundOn(true);
+          if (video.paused) {
+            void video.play().catch(() => {
+              /* ignore */
+            });
+          }
+        };
+        // `click` (not pointerdown): mute button stopPropagation avoids toggle race
+        window.addEventListener('click', unlockSound);
+        window.addEventListener('keydown', unlockSound);
       }
     };
 
@@ -752,6 +792,7 @@ const IslandScenePage: React.FC = () => {
 
     return () => {
       cancelled = true;
+      detachUnlock();
       if (safetyTimerRef.current != null) {
         window.clearTimeout(safetyTimerRef.current);
         safetyTimerRef.current = null;
@@ -791,6 +832,8 @@ const IslandScenePage: React.FC = () => {
 
   const toggleSceneSound = useCallback((e?: React.MouseEvent) => {
     e?.stopPropagation();
+    // Manual toggle wins over pending auto-unmute from autoplay policy
+    pendingAutoUnmuteRef.current = false;
     setSceneSoundOn((on) => {
       const next = !on;
       for (const ref of [videoRef, bgVideoRef, triggerVideoRef]) {
@@ -1050,6 +1093,12 @@ const IslandScenePage: React.FC = () => {
     if (finishingTriggerRef.current) return;
     finishingTriggerRef.current = true;
 
+    if (pendingAutoUnmuteRef.current) {
+      pendingAutoUnmuteRef.current = false;
+      sceneSoundOnRef.current = true;
+      setSceneSoundOn(true);
+    }
+
     const video = triggerVideoRef.current;
     if (video) {
       try {
@@ -1099,18 +1148,51 @@ const IslandScenePage: React.FC = () => {
     const video = triggerVideoRef.current;
     if (!video) return;
     let cancelled = false;
+    let unlockSound: (() => void) | null = null;
+
+    const detachUnlock = () => {
+      if (!unlockSound) return;
+      window.removeEventListener('click', unlockSound);
+      window.removeEventListener('keydown', unlockSound);
+      unlockSound = null;
+    };
+
     const play = async () => {
       video.playsInline = true;
-      video.muted = !sceneSoundOnRef.current;
+      const wantSound = sceneSoundOnRef.current;
+      video.muted = !wantSound;
       try {
         await video.play();
       } catch {
         if (cancelled) return;
-        video.muted = true;
-        setSceneSoundOn(false);
-        try {
-          await video.play();
-        } catch {
+        if (wantSound) {
+          video.muted = true;
+          sceneSoundOnRef.current = false;
+          setSceneSoundOn(false);
+          pendingAutoUnmuteRef.current = true;
+          try {
+            await video.play();
+          } catch {
+            if (!cancelled) finishTriggerVideo();
+            return;
+          }
+          if (cancelled) return;
+          unlockSound = () => {
+            if (cancelled || !pendingAutoUnmuteRef.current) return;
+            pendingAutoUnmuteRef.current = false;
+            detachUnlock();
+            video.muted = false;
+            sceneSoundOnRef.current = true;
+            setSceneSoundOn(true);
+            if (video.paused) {
+              void video.play().catch(() => {
+                /* ignore */
+              });
+            }
+          };
+          window.addEventListener('click', unlockSound);
+          window.addEventListener('keydown', unlockSound);
+        } else {
           if (!cancelled) finishTriggerVideo();
         }
       }
@@ -1118,6 +1200,7 @@ const IslandScenePage: React.FC = () => {
     void play();
     return () => {
       cancelled = true;
+      detachUnlock();
     };
   }, [triggerVideoUrl, finishTriggerVideo]);
 

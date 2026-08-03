@@ -34,10 +34,18 @@ const LEVEL_META: Record<QuizLevel, { label: string; hint: string }> = {
 
 type ChatMsg = { role: 'user' | 'assistant'; content: string };
 
+const SCRIPT_BAND: Record<QuizLevel, string> = {
+    easy: 'Ages 3–5',
+    medium: 'Ages 6–7',
+    hard: 'Ages 8+',
+};
+
 interface BibleMapQuizPanelProps {
     quizMode: 'book_quiz' | 'custom' | 'none';
     onQuizModeChange: (mode: 'book_quiz' | 'custom' | 'none') => void;
     hasBook: boolean;
+    storyId?: string | null;
+    bookId?: string | null;
     levels: QuizLevelsState;
     defaultLevel: QuizLevel;
     onLevelsChange: (levels: QuizLevelsState) => void;
@@ -51,6 +59,8 @@ const BibleMapQuizPanel: React.FC<BibleMapQuizPanelProps> = ({
     quizMode,
     onQuizModeChange,
     hasBook,
+    storyId,
+    bookId,
     levels,
     defaultLevel,
     onLevelsChange,
@@ -129,14 +139,14 @@ const BibleMapQuizPanel: React.FC<BibleMapQuizPanelProps> = ({
         setProposed([]);
     };
 
-    const sendChat = async () => {
-        const text = chatInput.trim();
-        if (!text || sending) return;
+    const sendPrompt = async (text: string) => {
+        const trimmed = text.trim();
+        if (!trimmed || sending) return;
 
         if (aiConfigured === false) {
             setChat((prev) => [
                 ...prev,
-                { role: 'user', content: text },
+                { role: 'user', content: trimmed },
                 {
                     role: 'assistant',
                     content: `AI chat needs configuration: ${aiStatusMsg || 'configure ANTHROPIC_API_KEY in backend/.env'}. You can still add and edit questions manually.`,
@@ -146,7 +156,7 @@ const BibleMapQuizPanel: React.FC<BibleMapQuizPanelProps> = ({
             return;
         }
 
-        const nextChat: ChatMsg[] = [...chat, { role: 'user', content: text }];
+        const nextChat: ChatMsg[] = [...chat, { role: 'user', content: trimmed }];
         setChat(nextChat);
         setChatInput('');
         setSending(true);
@@ -160,13 +170,21 @@ const BibleMapQuizPanel: React.FC<BibleMapQuizPanelProps> = ({
                 title: packTitle,
                 scriptureRef,
                 verse,
-                topic: text,
+                topic: trimmed,
+                storyId: storyId || undefined,
+                bookId: bookId || undefined,
             });
-            const reply =
+            let reply =
                 res.data?.reply ||
                 (res.data?.proposedQuestions?.length
                     ? `Proposed ${res.data.proposedQuestions.length} questions.`
                     : 'Done.');
+            if (res.data?.usedScripts === false) {
+                reply +=
+                    ' (Tip: generate age scripts in the Book tab first so questions can pull from them.)';
+            } else if (res.data?.usedScripts) {
+                reply += ` Grounded in ${SCRIPT_BAND[activeLevel]} book scripts.`;
+            }
             setChat((prev) => [...prev, { role: 'assistant', content: reply }]);
             const qs = (res.data?.proposedQuestions || []) as QuizQuestion[];
             setProposed(
@@ -200,6 +218,27 @@ const BibleMapQuizPanel: React.FC<BibleMapQuizPanelProps> = ({
         } finally {
             setSending(false);
         }
+    };
+
+    const sendChat = () => {
+        void sendPrompt(chatInput);
+    };
+
+    const generateFromScripts = () => {
+        if (!hasBook && !bookId) {
+            setChat((prev) => [
+                ...prev,
+                {
+                    role: 'assistant',
+                    content:
+                        'Link or create a book in the Book tab and generate age scripts first, then try again.',
+                },
+            ]);
+            return;
+        }
+        void sendPrompt(
+            `Generate exactly 7 ${LEVEL_META[activeLevel].label.toLowerCase()} multiple-choice questions based on this story’s ${SCRIPT_BAND[activeLevel]} age-leveled reading scripts. Cover key moments across the pages. Answers must be findable in those scripts.`,
+        );
     };
 
     return (
@@ -345,8 +384,8 @@ const BibleMapQuizPanel: React.FC<BibleMapQuizPanelProps> = ({
                                     AI quiz assist · {LEVEL_META[activeLevel].label}
                                 </h3>
                                 <p className="text-xs text-indigo-800/80 mt-0.5">
-                                    Chat about the topic, then accept proposed questions into this
-                                    level.
+                                    Uses the Book tab’s {SCRIPT_BAND[activeLevel]} script (and the
+                                    other age scripts for context) to propose 7 questions.
                                 </p>
                             </div>
                         </div>
@@ -358,11 +397,24 @@ const BibleMapQuizPanel: React.FC<BibleMapQuizPanelProps> = ({
                             </div>
                         )}
 
+                        <div className="mb-3">
+                            <button
+                                type="button"
+                                onClick={generateFromScripts}
+                                disabled={sending || aiConfigured === false}
+                                className="inline-flex items-center gap-1.5 text-xs font-medium text-white bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 px-3 py-1.5 rounded-md"
+                            >
+                                <Sparkles className="w-3.5 h-3.5" />
+                                Generate 7 from age scripts
+                            </button>
+                        </div>
+
                         <div className="flex-1 overflow-y-auto space-y-2 mb-3 max-h-[280px] pr-1">
                             {chat.length === 0 && (
                                 <p className="text-xs text-gray-500 flex items-start gap-2">
                                     <MessageSquare className="w-3.5 h-3.5 mt-0.5 shrink-0" />
-                                    Try: “Generate 7 easy questions about Creation from Genesis 1.”
+                                    Generate from the age scripts, or chat to refine (e.g. “more
+                                    about the storm”).
                                 </p>
                             )}
                             {chat.map((m, i) => (

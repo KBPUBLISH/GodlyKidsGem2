@@ -1,17 +1,27 @@
 const sharp = require('sharp');
 
-/** Kid-friendly default palette for tap-to-fill MVP */
+/** Kid-friendly default palette for tap-to-fill (incl. metallics) */
 const DEFAULT_PALETTE = [
-    '#E74C3C',
-    '#E67E22',
-    '#F1C40F',
-    '#2ECC71',
-    '#3498DB',
-    '#9B59B6',
-    '#E91E63',
-    '#1ABC9C',
-    '#FFFFFF',
-    '#8D6E63',
+    '#E74C3C', // red
+    '#E67E22', // orange
+    '#F1C40F', // yellow
+    '#2ECC71', // green
+    '#3498DB', // blue
+    '#9B59B6', // purple
+    '#E91E63', // magenta
+    '#1ABC9C', // teal
+    '#87CEEB', // light blue
+    '#FFB6C1', // pink
+    '#8BC34A', // lime
+    '#1B4F72', // navy
+    '#FFAB91', // peach
+    '#95A5A6', // gray
+    '#2C3E50', // black
+    '#FFFFFF', // white
+    '#8D6E63', // brown
+    '#D4AF37', // gold
+    '#C0C0C0', // silver
+    '#CD7F32', // bronze
 ];
 
 const MAX_DIM = 900;

@@ -1,42 +1,22 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeft, Lock, Star } from 'lucide-react';
+import { useLocation, useNavigate, useParams } from 'react-router-dom';
+import { Lock } from 'lucide-react';
+import {
+  getBibleMapApiRoot,
+  resolveBibleMapMediaUrl,
+} from '../utils/bibleMapApi';
 
 /** Looping ocean background video (portrait; shown full-bleed cover). */
 const SAIL_SCENE_BG = '/assets/videos/sail-ocean-bg.mp4';
+/** Static ocean poster / fallback if the video fails to load. */
+const SAIL_SCENE_BG_STILL = '/assets/images/sail-scene-bg.png';
 /** First-person boat bow interior (1024×829) — black keyed to alpha. */
 const SAIL_SHIP_DECK = '/assets/images/sail-ship-deck.png';
 const SAIL_STEERING_WHEEL = '/assets/images/sail-steering-wheel.png';
-/** Light wood plank for the sail-scene top banner. */
-const SAIL_WOOD_HEADER = '/assets/images/sail-wood-header.png';
-/** Shared wood texture for circular header controls. */
-const WOOD_TEX = '/assets/images/wheel-background-wood.png';
 /** Sail-scene bottom overlay — crew roster (three characters on wood plaque). */
 const SAIL_BTN_CREW = '/assets/images/sail-btn-crew.png';
 /** Sail-scene bottom overlay — explore / world (open book on wood plaque). */
 const SAIL_BTN_EXPLORE = '/assets/images/sail-btn-explore.png';
-/**
- * Fraction of wood-header height pulled above the viewport so the wavy plank
- * top is straight-cropped at screen y=0 (intentional edge flush).
- * Lower = taller visible plank (was 0.2).
- */
-const WOOD_HEADER_CROP = 0.08;
-/** Extra scale so the plank reads taller while top stays flush-cropped. */
-const WOOD_HEADER_SCALE = 1.14;
-/**
- * Vertical center of the remaining visible plank band (for Back / title).
- * Accounts for top-origin scale + crop translate.
- */
-const WOOD_HEADER_BTN_TOP = `${((WOOD_HEADER_SCALE - WOOD_HEADER_CROP) / 2) * 100}%`;
-
-const woodBtnStyle: React.CSSProperties = {
-  backgroundImage: `url(${WOOD_TEX})`,
-  backgroundSize: 'cover',
-  backgroundPosition: 'center',
-  boxShadow:
-    '0 3px 0 #5c3a1a, 0 4px 10px rgba(0,0,0,0.35), inset 0 1px 0 rgba(255,230,180,0.35)',
-  border: '2px solid #6B4423',
-};
 
 /** Sky cloud A — wide bank (970×453; alpha already keyed). */
 const SAIL_BG_CLOUD_A = '/assets/images/sail-bg-cloud-a.png';
@@ -126,7 +106,7 @@ const SAIL_BG_ISLANDS = [
 ] as const;
 
 /**
- * Wheel-driven island carousel overlays (ocean keyed out; island + sign remain).
+ * Wheel-driven island carousel overlays (ocean keyed out; island art remains).
  * Order = look stops left → right (clockwise wheel advances index).
  */
 const CAROUSEL_ISLANDS = [
@@ -196,57 +176,6 @@ const isIslandComplete = (islandId: string): boolean => {
 const isIslandUnlocked = (islandId: string): boolean => {
   if (islandId === FIRST_ISLAND_ID) return true;
   return isIslandComplete(FIRST_ISLAND_ID);
-};
-
-/** Stars + N/M Adventures — wood header. */
-const AdventureProgress: React.FC<{
-  completed: number;
-  total: number;
-  starSize?: number;
-  compact?: boolean;
-}> = ({ completed, total, starSize = 16, compact = false }) => {
-  const filled = Math.max(0, Math.min(total, completed));
-  return (
-    <div
-      className={`flex items-center ${compact ? 'gap-1' : 'gap-1.5'}`}
-      aria-label={`${filled} of ${total} adventures complete`}
-    >
-      <div className="flex items-center gap-0.5" aria-hidden>
-        {Array.from({ length: total }, (_, i) => {
-          const on = i < filled;
-          return (
-            <Star
-              key={i}
-              size={starSize}
-              strokeWidth={on ? 0 : 1.75}
-              className={
-                on
-                  ? 'text-[#FFD700] drop-shadow-[0_1px_1px_rgba(0,0,0,0.35)]'
-                  : 'text-[#8B6914]/55'
-              }
-              fill={on ? '#FFD700' : 'rgba(139,105,20,0.18)'}
-            />
-          );
-        })}
-      </div>
-      <div className="flex flex-col leading-none text-[#5C3D1E]">
-        <span
-          className={`font-display font-black tabular-nums ${
-            compact ? 'text-[0.65rem]' : 'text-[0.95rem]'
-          }`}
-        >
-          {filled}/{total}
-        </span>
-        <span
-          className={`font-display font-bold text-[#6B4423]/90 ${
-            compact ? 'text-[0.5rem]' : 'text-[0.7rem]'
-          }`}
-        >
-          Adventures
-        </span>
-      </div>
-    </div>
-  );
 };
 
 const LOOK_COUNT = CAROUSEL_ISLANDS.length;
@@ -320,17 +249,56 @@ const resolveStartIndex = (islandId?: string): number => {
   return 0; // Genesis default
 };
 
+type SailNavState = {
+  title?: string;
+  hasMainMap?: boolean;
+  mainMapUrl?: string;
+  mainMapVideoUrl?: string;
+} | null;
+
+const mediaIndicatesMainMap = (
+  mainMapUrl?: string | null,
+  mainMapVideoUrl?: string | null,
+): boolean =>
+  Boolean(
+    (mainMapUrl && mainMapUrl.trim()) ||
+      (mainMapVideoUrl && mainMapVideoUrl.trim()),
+  );
+
+/** Fetch whether a CMS island has a main-map PNG/video (legacy if unknown/fail). */
+const fetchIslandHasMainMap = async (id: string): Promise<boolean> => {
+  try {
+    const res = await fetch(
+      `${getBibleMapApiRoot()}/bible-map/islands/${encodeURIComponent(id)}`,
+    );
+    if (!res.ok) return false;
+    const data = (await res.json()) as {
+      island?: { mainMapUrl?: string; mainMapVideoUrl?: string };
+    };
+    return mediaIndicatesMainMap(
+      resolveBibleMapMediaUrl(data.island?.mainMapUrl),
+      resolveBibleMapMediaUrl(data.island?.mainMapVideoUrl),
+    );
+  } catch {
+    return false;
+  }
+};
+
 /**
  * First-person sail scene — opened when tapping an island on the Map.
  * Turn the wheel like the app nav: release and it snaps to the next island.
  */
 const SailScenePage: React.FC = () => {
   const navigate = useNavigate();
+  const location = useLocation();
   const { islandId } = useParams<{ islandId?: string }>();
   const startIndex = resolveStartIndex(islandId);
+  const navState = location.state as SailNavState;
 
   const wheelRef = useRef<HTMLDivElement>(null);
   const oceanVideoRef = useRef<HTMLVideoElement>(null);
+  /** When true, show static ocean still instead of (failed) video. */
+  const [oceanStill, setOceanStill] = useState(false);
   const draggingRef = useRef(false);
   const startAngleRef = useRef(0);
   const startRotationRef = useRef(0);
@@ -340,6 +308,10 @@ const SailScenePage: React.FC = () => {
   const lookIndexRef = useRef(startIndex);
   const isSailingRef = useRef(false);
   const sailTimerRef = useRef<number | null>(null);
+  /** Cache: island id → has CMS main map (PNG/video). */
+  const mainMapCacheRef = useRef<Record<string, boolean>>({});
+  const navStateRef = useRef(navState);
+  const routeIslandIdRef = useRef(islandId);
 
   const [lookIndex, setLookIndex] = useState(startIndex);
   const [dragRotation, setDragRotation] = useState<number | null>(null);
@@ -353,6 +325,37 @@ const SailScenePage: React.FC = () => {
   lookIndexRef.current = lookIndex;
   dragRotationRef.current = dragRotation;
   isSailingRef.current = isSailing;
+  navStateRef.current = navState;
+  routeIslandIdRef.current = islandId;
+
+  // Seed main-map cache from Map → Sail navigation state.
+  useEffect(() => {
+    if (!islandId) return;
+    const key = normalizeIslandId(islandId);
+    if (typeof navState?.hasMainMap === 'boolean') {
+      mainMapCacheRef.current[key] = navState.hasMainMap;
+      return;
+    }
+    if (
+      mediaIndicatesMainMap(navState?.mainMapUrl, navState?.mainMapVideoUrl)
+    ) {
+      mainMapCacheRef.current[key] = true;
+    }
+  }, [islandId, navState?.hasMainMap, navState?.mainMapUrl, navState?.mainMapVideoUrl]);
+
+  // Prefetch main-map flag for the route island (and common carousel ids).
+  useEffect(() => {
+    if (!islandId) return;
+    const key = normalizeIslandId(islandId);
+    if (typeof mainMapCacheRef.current[key] === 'boolean') return;
+    let cancelled = false;
+    void fetchIslandHasMainMap(key).then((has) => {
+      if (!cancelled) mainMapCacheRef.current[key] = has;
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [islandId]);
 
   // Sync start when route island changes (e.g. map → sail).
   useEffect(() => {
@@ -386,10 +389,59 @@ const SailScenePage: React.FC = () => {
     ? `transform ${sailDurationMs}ms ${SAIL_EASING}, opacity ${sailDurationMs}ms ${SAIL_EASING}`
     : undefined;
 
-  const goToIslandLesson = useCallback(
-    (id: string) => {
-      navigate(`/sail/${id}/lesson`, {
-        state: { fromSail: true, title: CAROUSEL_ISLANDS.find((i) => i.id === id)?.title },
+  /**
+   * After ship sail animation: MainMap if island has mainMapUrl/video, else legacy lesson.
+   * When sailing the island we arrived for from Map, prefer the route slug (CMS id).
+   */
+  const continueAfterSail = useCallback(
+    (carouselIsland: (typeof CAROUSEL_ISLANDS)[number]) => {
+      const routeId = routeIslandIdRef.current;
+      const arrivedForThis =
+        !!routeId &&
+        resolveStartIndex(routeId) ===
+          CAROUSEL_ISLANDS.findIndex((i) => i.id === carouselIsland.id);
+      const destId = arrivedForThis
+        ? normalizeIslandId(routeId!)
+        : carouselIsland.id;
+      const state = navStateRef.current;
+      const title =
+        (arrivedForThis && state?.title) ||
+        carouselIsland.title;
+
+      const go = (hasMainMap: boolean) => {
+        if (hasMainMap) {
+          navigate(`/map/${encodeURIComponent(destId)}/main`, {
+            state: { title, fromSail: true },
+          });
+          return;
+        }
+        navigate(`/sail/${encodeURIComponent(destId)}/lesson`, {
+          state: { fromSail: true, title },
+        });
+      };
+
+      const cached = mainMapCacheRef.current[destId];
+      if (typeof cached === 'boolean') {
+        go(cached);
+        return;
+      }
+      if (
+        arrivedForThis &&
+        (typeof state?.hasMainMap === 'boolean' ||
+          mediaIndicatesMainMap(state?.mainMapUrl, state?.mainMapVideoUrl))
+      ) {
+        const has =
+          typeof state?.hasMainMap === 'boolean'
+            ? state.hasMainMap
+            : mediaIndicatesMainMap(state?.mainMapUrl, state?.mainMapVideoUrl);
+        mainMapCacheRef.current[destId] = has;
+        go(has);
+        return;
+      }
+
+      void fetchIslandHasMainMap(destId).then((has) => {
+        mainMapCacheRef.current[destId] = has;
+        go(has);
       });
     },
     [navigate],
@@ -423,7 +475,7 @@ const SailScenePage: React.FC = () => {
       setDragRotation(null);
 
       if (prefersReducedMotion()) {
-        goToIslandLesson(island.id);
+        continueAfterSail(island);
         return;
       }
 
@@ -435,10 +487,10 @@ const SailScenePage: React.FC = () => {
       }
       sailTimerRef.current = window.setTimeout(() => {
         sailTimerRef.current = null;
-        goToIslandLesson(island.id);
+        continueAfterSail(island);
       }, SAIL_DURATION_MS);
     },
-    [goToIslandLesson, pulseLockedFeedback],
+    [continueAfterSail, pulseLockedFeedback],
   );
 
   // Ocean visual width as % of viewport (height-fit × cover zoom).
@@ -586,7 +638,6 @@ const SailScenePage: React.FC = () => {
   }, []);
 
   const lookLabel = `Island: ${activeIsland.title}`;
-  const activeProgress = getIslandProgress(activeIsland.id);
 
   return (
     <div
@@ -606,24 +657,37 @@ const SailScenePage: React.FC = () => {
             transformOrigin: '50% 42%',
           }}
         >
-          <video
-            ref={oceanVideoRef}
-            src={SAIL_SCENE_BG}
-            autoPlay
-            loop
-            muted
-            playsInline
-            preload="auto"
-            className="absolute inset-0 w-full h-full object-cover select-none pointer-events-none"
+          {/* Static still always under video — avoids empty sky if mp4 404s / fails */}
+          <img
+            src={SAIL_SCENE_BG_STILL}
+            alt=""
             aria-hidden
+            draggable={false}
+            className="absolute inset-0 w-full h-full object-cover select-none pointer-events-none"
           />
+          {!oceanStill && (
+            <video
+              ref={oceanVideoRef}
+              src={SAIL_SCENE_BG}
+              poster={SAIL_SCENE_BG_STILL}
+              autoPlay
+              loop
+              muted
+              playsInline
+              preload="auto"
+              className="absolute inset-0 w-full h-full object-cover select-none pointer-events-none"
+              aria-hidden
+              onError={() => setOceanStill(true)}
+            />
+          )}
         </div>
 
         {/* Viewport-fixed sky clouds — above video sky, behind carousel islands.
-            Not inside sail zoom so they don’t drift with the approach. */}
+            Not inside sail zoom so they don’t drift with the approach.
+            Taller band now that the wood plank header is gone. */}
         <div
           className="absolute left-0 right-0 top-0 z-[1] pointer-events-none overflow-hidden"
-          style={{ height: '34%' }}
+          style={{ height: '40%' }}
           aria-hidden
         >
           <div
@@ -847,62 +911,6 @@ const SailScenePage: React.FC = () => {
         }
       `}</style>
 
-      {/* Wood header — plank top cropped flush with screen top; Back + island title on visible band */}
-      <div className="absolute top-0 left-0 right-0 z-30 overflow-hidden">
-        <div className="relative w-full max-w-[min(100%,480px)] mx-auto">
-          <img
-            src={SAIL_WOOD_HEADER}
-            alt=""
-            aria-hidden
-            draggable={false}
-            className="block w-full h-auto select-none pointer-events-none drop-shadow-[0_4px_10px_rgba(0,0,0,0.35)]"
-            style={{
-              transform: `translateY(-${WOOD_HEADER_CROP * 100}%) scale(${WOOD_HEADER_SCALE})`,
-              transformOrigin: 'top center',
-            }}
-          />
-
-          <button
-            type="button"
-            onClick={() => navigate('/map')}
-            disabled={isSailing}
-            className="absolute left-[3%] z-10 flex items-center justify-center w-11 h-11 -translate-y-1/2 rounded-full text-white active:scale-95 transition-transform disabled:opacity-60"
-            style={{
-              ...woodBtnStyle,
-              // Center on visible plank; floor at safe-area so taps clear the notch
-              top: `max(${WOOD_HEADER_BTN_TOP}, calc(var(--safe-area-top, 0px) + 10px))`,
-            }}
-            aria-label="Back to Map"
-          >
-            <ArrowLeft size={22} className="drop-shadow" strokeWidth={2.6} />
-          </button>
-
-          {/* Island name (left) + progress (right, larger) on the visible plank band */}
-          <div
-            className="absolute left-[14%] right-[4%] z-10 flex items-center justify-between gap-2 pointer-events-none -translate-y-1/2"
-            style={{
-              top: `max(${WOOD_HEADER_BTN_TOP}, calc(var(--safe-area-top, 0px) + 10px))`,
-            }}
-          >
-            <h1
-              className="font-display font-black uppercase tracking-wide leading-none text-[1.15rem] sm:text-[1.35rem] text-left min-w-0 truncate"
-              style={{
-                color: '#F5E6C8',
-                textShadow:
-                  '0 1px 0 #5C2E0B, 0 2px 0 #3E1F07, 1px 0 0 #5C2E0B, -1px 0 0 #5C2E0B, 0 2px 4px rgba(0,0,0,0.35)',
-              }}
-            >
-              {activeIsland.title}
-            </h1>
-            <AdventureProgress
-              completed={activeProgress.completed}
-              total={activeProgress.total}
-              starSize={18}
-            />
-          </div>
-        </div>
-      </div>
-
       {/* Ship bow / deck — sunk below viewport so bow crops and wheel sits lower */}
       <div
         className="absolute left-0 right-0 z-10 pointer-events-none overflow-visible will-change-transform"
@@ -921,6 +929,7 @@ const SailScenePage: React.FC = () => {
           src={SAIL_SHIP_DECK}
           alt=""
           draggable={false}
+          decoding="async"
           className="block h-auto select-none"
           style={{
             width: `${DECK_SCALE * 100}%`,
@@ -931,6 +940,10 @@ const SailScenePage: React.FC = () => {
             objectFit: 'contain',
             objectPosition: 'bottom center',
             filter: 'drop-shadow(0 -4px 16px rgba(0,0,0,0.35))',
+          }}
+          onError={(e) => {
+            /* Last-resort: keep layout, hide broken-icon wireframe */
+            (e.currentTarget as HTMLImageElement).style.visibility = 'hidden';
           }}
         />
       </div>

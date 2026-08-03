@@ -1,38 +1,58 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useNavigate, useParams, useLocation } from 'react-router-dom';
-import { ArrowLeft, Lock, Volume2, VolumeX } from 'lucide-react';
-import { getApiBaseUrl } from '../services/apiService';
+import { useNavigate, useParams, useLocation, useSearchParams } from 'react-router-dom';
+import { Lock, Volume2, VolumeX, List } from 'lucide-react';
+import { ApiService, getApiBaseUrl } from '../services/apiService';
+import {
+  islandStoryProgressService,
+  type IslandStoryProgress,
+} from '../services/islandStoryProgressService';
+import { bookCompletionService } from '../services/bookCompletionService';
 import { attachReliableLoop } from '../utils/audioLoop';
+import { appendIslandSceneReturnParams } from '../utils/islandSceneReturn';
 
-const INTRO_VIDEO = '/assets/videos/island-lesson-intro.mp4';
-const SCENE_BG_VIDEO = '/assets/videos/island-scene-bg.mp4';
-const WOOD_TEX = '/assets/images/wheel-background-wood.png';
-const ACTIVITIES_SIGN = '/assets/images/island-activities-sign.png?v=2';
-const ICON_READ = '/assets/images/island-activity-read-story.png';
-const ICON_QUIZ = '/assets/images/island-activity-quiz.png';
-const ICON_PUZZLE = '/assets/images/island-activity-puzzle.png';
-const ICON_COLORING = '/assets/images/island-activity-coloring.png';
-const ICON_GAME = '/assets/images/island-activity-game.png';
-const ICON_MENU = '/assets/images/island-activity-menu.png';
+/** Public assets under Vite `public/` (respects base path). */
+const publicAsset = (path: string): string => {
+  const base = (import.meta.env.BASE_URL || '/').replace(/\/?$/, '/');
+  return `${base}${path.replace(/^\//, '')}`;
+};
+
+const INTRO_VIDEO = publicAsset('assets/videos/island-lesson-intro.mp4');
+const SCENE_BG_VIDEO = publicAsset('assets/videos/island-scene-bg.mp4');
+const WOOD_TEX = publicAsset('assets/images/wheel-background-wood.png');
+const ACTIVITIES_SIGN = `${publicAsset('assets/images/island-activities-sign.png')}?v=4`;
+/** Built-in ACTIVITIES tray art (?v=4 = new Game Assets board + NoText icons). */
+const ICON_READ = `${publicAsset('assets/images/island-activity-read-story.png')}?v=4`;
+const ICON_QUIZ = `${publicAsset('assets/images/island-activity-quiz.png')}?v=4`;
+const ICON_PUZZLE = `${publicAsset('assets/images/island-activity-puzzle.png')}?v=4`;
+const ICON_COLORING = `${publicAsset('assets/images/island-activity-coloring.png')}?v=4`;
+const ICON_GAME = `${publicAsset('assets/images/island-activity-game.png')}?v=4`;
+const ICON_MENU = `${publicAsset('assets/images/island-activity-menu.png')}?v=3`;
+const ICON_DIALOGUE = publicAsset('assets/images/dialogue-tap-to-talk.png');
 
 const WHITE_FADE_MS = 800;
 const INTRO_SAFETY_TIMEOUT_MS = 45_000;
 const CMS_FETCH_TIMEOUT_MS = 2_000;
 /**
- * Fraction of ACTIVITIES sign height sunk below the viewport so the post
- * feet crop off (mirrors sail wood-header top crop). Posts ≈ bottom 27% of
- * the asset; buttons sit above that (bottom: 34%). Keep crop ≲ 0.22 so
- * labels stay above the home indicator.
+ * New ACTIVITIES board has no post feet — keep flush to the bottom edge.
+ * Safe-area padding is applied on the pinned tray container instead.
  */
-const ACTIVITIES_BOARD_CROP = 0.2;
+const ACTIVITIES_BOARD_CROP = 0;
 
 type IntroPhase = 'video' | 'whiteIn' | 'whiteOut' | 'done';
 
 type SceneNavState = {
   title?: string;
   fromSail?: boolean;
+  /** Came from island main map (CMS flow) — back goes to main map. */
+  fromMainMap?: boolean;
   skipIntro?: boolean;
 } | null;
+
+/** Nav state when returning to main map (keeps sail in the back stack). */
+type MainMapReturnState = {
+  title?: string;
+  fromSail?: boolean;
+};
 
 type ActivityId = 'read' | 'quiz' | 'puzzle' | 'coloring' | 'game';
 
@@ -96,22 +116,130 @@ const isActivityId = (id: string): id is ActivityId =>
   id === 'coloring' ||
   id === 'game';
 
+/** Reject empty / placeholder CMS media strings. */
+const isUsableMediaUrl = (url: string | undefined | null): boolean => {
+  const t = (url || '').trim();
+  if (!t) return false;
+  const lower = t.toLowerCase();
+  return lower !== 'null' && lower !== 'undefined';
+};
+
+/**
+ * External game URLs must be absolute http(s) before passing as `/game?url=…`
+ * so a relative path is never mistaken for an in-app route.
+ */
+const toAbsoluteHttpUrl = (url: string | undefined | null): string | null => {
+  const trimmed = (url || '').trim();
+  if (!trimmed || !isUsableMediaUrl(trimmed)) return null;
+  if (/^https?:\/\//i.test(trimmed)) return trimmed;
+  if (trimmed.startsWith('//')) return `https:${trimmed}`;
+  return null;
+};
+
+/**
+ * Prefer CMS absolute layout only when editors uploaded at least one button icon.
+ * Position-only defaults from Scene Studio (no iconUrl) → built-in ACTIVITIES tray.
+ */
+const cmsLayoutHasCustomIcons = (buttons: SceneButtonLayout[] | undefined): boolean =>
+  Array.isArray(buttons) &&
+  buttons.length > 0 &&
+  buttons.some((b) => isUsableMediaUrl(b.iconUrl));
+
+type ActivityIconProps = {
+  /** Optional CMS override (may 404). Built-in tray omits this. */
+  primarySrc?: string;
+  /** Bundled local PNG for this activity — always preferred when CMS fails. */
+  localSrc: string;
+  locked?: boolean;
+  imgClassName?: string;
+};
+
+/**
+ * Show real activity PNG art (never Lucide substitutes).
+ * Order: CMS URL (if any) → local `/assets/images/island-activity-*.png`.
+ * Locked: grayscale filter; gold padlock is rendered by the parent overlay.
+ */
+const ActivityIcon: React.FC<ActivityIconProps> = ({
+  primarySrc,
+  localSrc,
+  locked = false,
+  imgClassName = '',
+}) => {
+  // Local first when no CMS icon; when CMS is present try it then fall back to local art.
+  const candidates = (
+    isUsableMediaUrl(primarySrc) ? [primarySrc!, localSrc] : [localSrc]
+  ).filter(
+    (src, i, arr): src is string =>
+      isUsableMediaUrl(src) && arr.indexOf(src) === i,
+  );
+  const [srcIndex, setSrcIndex] = useState(0);
+  const src = candidates[Math.min(srcIndex, Math.max(candidates.length - 1, 0))];
+
+  if (!src) return null;
+
+  return (
+    <img
+      key={src}
+      src={src}
+      alt=""
+      className={`${imgClassName} ${locked ? 'grayscale' : ''}`}
+      draggable={false}
+      onError={() => {
+        if (srcIndex + 1 < candidates.length) {
+          setSrcIndex((i) => i + 1);
+        }
+      }}
+    />
+  );
+};
+
+/** Gold padlock badge over locked activity art (matches reference board). */
+const ActivityLockBadge: React.FC<{ size?: number }> = ({ size = 32 }) => (
+  <span
+    className="absolute inset-0 flex items-center justify-center pointer-events-none"
+    aria-hidden
+  >
+    <span
+      className="flex items-center justify-center rounded-full"
+      style={{
+        width: size,
+        height: size,
+        background: 'linear-gradient(180deg, #F0D78C 0%, #D4A017 45%, #8B6914 100%)',
+        boxShadow:
+          '0 2px 0 #5c3a1a, 0 3px 8px rgba(0,0,0,0.45), inset 0 1px 0 rgba(255,240,200,0.55)',
+        border: '1.5px solid #F5E6A3',
+      }}
+    >
+      <Lock
+        size={Math.round(size * 0.45)}
+        className="text-[#5c3a1a]"
+        strokeWidth={2.8}
+        fill="rgba(92,58,26,0.2)"
+      />
+    </span>
+  </span>
+);
+
 const TABLET_MIN_WIDTH = 768;
 
-type PuzzleUnlock = {
-  unlocked: boolean;
+/** Content present in CMS (independent of kid progress). */
+type ActivityContent = {
+  available: boolean;
   storyId?: string;
 };
 
-type ColoringUnlock = {
-  unlocked: boolean;
+/** MapStory.game — webview URL or catalog gameId. */
+type GameContent = {
+  available: boolean;
   storyId?: string;
+  /** Direct URL from game.webview.url when kind === 'webview'. */
+  url?: string;
+  title?: string;
+  /** Game.gameId when kind === 'catalog' (resolved on tap). */
+  catalogGameId?: string;
 };
 
-type QuizUnlock = {
-  unlocked: boolean;
-  storyId?: string;
-};
+type SceneProgress = IslandStoryProgress;
 
 const storyHasQuizContent = (s: {
   quizMode?: string;
@@ -186,11 +314,13 @@ const IslandScenePage: React.FC = () => {
   const navigate = useNavigate();
   const { islandId = 'genesis' } = useParams<{ islandId: string }>();
   const location = useLocation();
+  const [searchParams] = useSearchParams();
   const navState = location.state as SceneNavState;
+  const storyIdParam = searchParams.get('storyId')?.trim() || '';
 
   const fallbackTitle =
     SCENE_TITLE_BY_ISLAND[islandId] ?? `1. ${titleCase(islandId).toUpperCase()}`;
-  const sailBackPath = `/sail/${islandId}`;
+  const mainMapPath = `/map/${encodeURIComponent(islandId)}/main`;
   const hubPath = `/sail/${islandId}/lesson/hub`;
   const puzzlePath = `/sail/${islandId}/lesson/puzzle`;
   const coloringPath = `/sail/${islandId}/lesson/coloring`;
@@ -199,11 +329,19 @@ const IslandScenePage: React.FC = () => {
   const [introSrc, setIntroSrc] = useState(INTRO_VIDEO);
   const [bgSrc, setBgSrc] = useState(SCENE_BG_VIDEO);
   const [cmsTitle, setCmsTitle] = useState<string | null>(null);
-  const [puzzleUnlock, setPuzzleUnlock] = useState<PuzzleUnlock>({ unlocked: false });
-  const [coloringUnlock, setColoringUnlock] = useState<ColoringUnlock>({
-    unlocked: false,
+  const [quizContent, setQuizContent] = useState<ActivityContent>({ available: false });
+  const [puzzleContent, setPuzzleContent] = useState<ActivityContent>({ available: false });
+  const [coloringContent, setColoringContent] = useState<ActivityContent>({
+    available: false,
   });
-  const [quizUnlock, setQuizUnlock] = useState<QuizUnlock>({ unlocked: false });
+  const [gameContent, setGameContent] = useState<GameContent>({ available: false });
+  /** Kid progress for the active story (localStorage). */
+  const [sceneProgress, setSceneProgress] = useState<SceneProgress>({
+    read: false,
+    quiz: false,
+  });
+  /** Resolved story for this scene (URL storyId or first CMS story). */
+  const [activeStoryId, setActiveStoryId] = useState('');
   const [sourcesReady, setSourcesReady] = useState(false);
   const [sceneLayoutPhone, setSceneLayoutPhone] = useState<SceneDeviceLayout | null>(
     null,
@@ -214,6 +352,10 @@ const IslandScenePage: React.FC = () => {
   const [sceneAnimations, setSceneAnimations] = useState<SceneAnimation[]>([]);
   const [sceneTriggers, setSceneTriggers] = useState<SceneTrigger[]>([]);
   const [triggerVideoUrl, setTriggerVideoUrl] = useState<string | null>(null);
+  /** White fade after a wired button animation (same timing as intro). */
+  const [triggerFade, setTriggerFade] = useState<'idle' | 'whiteIn' | 'whiteOut'>(
+    'idle',
+  );
   const [sceneMusicSrc, setSceneMusicSrc] = useState<string | null>(null);
   const sceneMusicRef = useRef<HTMLAudioElement | null>(null);
   const sceneMusicLoopDetachRef = useRef<(() => void) | null>(null);
@@ -221,6 +363,8 @@ const IslandScenePage: React.FC = () => {
     () => typeof window !== 'undefined' && window.innerWidth >= TABLET_MIN_WIDTH,
   );
   const pendingNavigateRef = useRef<ActivityId | null>(null);
+  const finishingTriggerRef = useRef(false);
+  const triggerFadeTimersRef = useRef<number[]>([]);
 
   const skipIntroOnMount =
     prefersReducedMotion() || Boolean(navState?.skipIntro);
@@ -235,6 +379,8 @@ const IslandScenePage: React.FC = () => {
   const triggerVideoRef = useRef<HTMLVideoElement>(null);
   /** Uploaded scene videos: start muted for autoplay; kid can unmute. */
   const [sceneSoundOn, setSceneSoundOn] = useState(false);
+  const [menuIconFailed, setMenuIconFailed] = useState(false);
+  const [boardImgFailed, setBoardImgFailed] = useState(false);
   const sceneSoundOnRef = useRef(false);
   useEffect(() => {
     sceneSoundOnRef.current = sceneSoundOn;
@@ -261,9 +407,12 @@ const IslandScenePage: React.FC = () => {
     setIntroSrc(INTRO_VIDEO);
     setBgSrc(SCENE_BG_VIDEO);
     setCmsTitle(null);
-    setPuzzleUnlock({ unlocked: false });
-    setColoringUnlock({ unlocked: false });
-    setQuizUnlock({ unlocked: false });
+    setQuizContent({ available: false });
+    setPuzzleContent({ available: false });
+    setColoringContent({ available: false });
+    setGameContent({ available: false });
+    setSceneProgress({ read: false, quiz: false });
+    setActiveStoryId('');
     setSceneLayoutPhone(null);
     setSceneLayoutTablet(null);
     setSceneAnimations([]);
@@ -323,15 +472,32 @@ const IslandScenePage: React.FC = () => {
                   files?: { background?: { url?: string } };
                 }
             >;
+            game?: {
+              enabled?: boolean;
+              kind?: 'catalog' | 'webview' | 'none';
+              gameId?: string;
+              webview?: {
+                title?: string;
+                url?: string;
+                coverImage?: string;
+                description?: string;
+              };
+            };
           }>;
         };
         const island = data.island;
         if (cancelled || !island) return;
 
         const stories = Array.isArray(data.stories) ? data.stories : [];
-        const primaryStory = [...stories].sort(
+        const sorted = [...stories].sort(
           (a, b) => (a.order ?? 0) - (b.order ?? 0),
-        )[0];
+        );
+        const primaryStory =
+          (storyIdParam
+            ? sorted.find((s) => s._id === storyIdParam)
+            : undefined) || sorted[0];
+        const resolvedStoryId = primaryStory?._id || '';
+        if (resolvedStoryId) setActiveStoryId(resolvedStoryId);
 
         const cmsIntro = resolveMediaUrl(
           primaryStory?.introVideoUrl || island.introVideoUrl,
@@ -371,37 +537,104 @@ const IslandScenePage: React.FC = () => {
           '';
         if (label) setCmsTitle(label.toUpperCase());
 
-        const puzzleStory = stories.find(
-          (s) =>
-            s.puzzle?.enabled &&
+        const storyHasPuzzle = (s: (typeof stories)[number] | undefined) =>
+          !!(
+            s?.puzzle?.enabled &&
             s.puzzle?.type === 'sliding_image' &&
             s.puzzle?.imageUrl &&
-            String(s.puzzle.imageUrl).trim(),
+            String(s.puzzle.imageUrl).trim()
+          );
+        const puzzleStory = storyHasPuzzle(primaryStory)
+          ? primaryStory
+          : stories.find(storyHasPuzzle);
+        setPuzzleContent(
+          puzzleStory
+            ? { available: true, storyId: puzzleStory._id }
+            : { available: false },
         );
-        if (puzzleStory) {
-          setPuzzleUnlock({
-            unlocked: true,
-            storyId: puzzleStory._id,
-          });
-        }
 
-        const coloringStory = stories.find((s) => {
-          const ids = s.coloringPageIds;
+        const storyHasColoring = (s: (typeof stories)[number] | undefined) => {
+          const ids = s?.coloringPageIds;
           return Array.isArray(ids) && ids.length > 0;
-        });
-        if (coloringStory) {
-          setColoringUnlock({
-            unlocked: true,
-            storyId: coloringStory._id,
+        };
+        const coloringStory = storyHasColoring(primaryStory)
+          ? primaryStory
+          : stories.find(storyHasColoring);
+        setColoringContent(
+          coloringStory
+            ? { available: true, storyId: coloringStory._id }
+            : { available: false },
+        );
+
+        const quizStory =
+          primaryStory && storyHasQuizContent(primaryStory)
+            ? primaryStory
+            : stories.find((s) => storyHasQuizContent(s));
+        setQuizContent(
+          quizStory
+            ? { available: true, storyId: quizStory._id }
+            : { available: false },
+        );
+
+        const storyHasGame = (s: (typeof stories)[number] | undefined) => {
+          const g = s?.game;
+          if (!g?.enabled || g.kind === 'none') return false;
+          if (g.kind === 'webview') {
+            return Boolean(toAbsoluteHttpUrl(g.webview?.url));
+          }
+          if (g.kind === 'catalog') {
+            return Boolean(g.gameId && String(g.gameId).trim());
+          }
+          return false;
+        };
+        const gameStory = storyHasGame(primaryStory)
+          ? primaryStory
+          : stories.find(storyHasGame);
+        if (gameStory?.game) {
+          const g = gameStory.game;
+          const webviewUrl =
+            g.kind === 'webview'
+              ? toAbsoluteHttpUrl(g.webview?.url) || undefined
+              : undefined;
+          setGameContent({
+            available: true,
+            storyId: gameStory._id,
+            url: webviewUrl,
+            title:
+              (g.webview?.title && g.webview.title.trim()) ||
+              gameStory.displayTitle ||
+              undefined,
+            catalogGameId:
+              g.kind === 'catalog' && g.gameId
+                ? String(g.gameId).trim()
+                : undefined,
           });
+        } else {
+          setGameContent({ available: false });
         }
 
-        const quizStory = stories.find((s) => storyHasQuizContent(s));
-        if (quizStory) {
-          setQuizUnlock({
-            unlocked: true,
-            storyId: quizStory._id,
-          });
+        // Sync read progress from book completion if kid finished this pack's book before
+        if (resolvedStoryId && primaryStory) {
+          const bookRaw = primaryStory.bookId;
+          const bookId =
+            typeof bookRaw === 'object' &&
+            bookRaw &&
+            '_id' in (bookRaw as object) &&
+            (bookRaw as { _id?: string })._id
+              ? String((bookRaw as { _id?: string })._id)
+              : bookRaw
+                ? String(bookRaw)
+                : '';
+          if (bookId && bookCompletionService.isBookCompleted(bookId)) {
+            islandStoryProgressService.markComplete(
+              islandId,
+              resolvedStoryId,
+              'read',
+            );
+          }
+          setSceneProgress(
+            islandStoryProgressService.get(islandId, resolvedStoryId),
+          );
         }
       } catch {
         /* keep bundled fallbacks (incl. abort on timeout) */
@@ -418,7 +651,14 @@ const IslandScenePage: React.FC = () => {
       controller.abort();
       window.clearTimeout(failSafe);
     };
-  }, [islandId]);
+  }, [islandId, storyIdParam]);
+
+  // Re-read progress whenever we land on the scene (e.g. return from reader/quiz)
+  useEffect(() => {
+    const sid = storyIdParam || activeStoryId;
+    if (!sid) return;
+    setSceneProgress(islandStoryProgressService.get(islandId, sid));
+  }, [islandId, storyIdParam, activeStoryId, location.key]);
 
   useEffect(() => {
     phaseRef.current = introPhase;
@@ -615,6 +855,7 @@ const IslandScenePage: React.FC = () => {
       sourcesReady &&
       introPhase === 'done' &&
       !triggerVideoUrl &&
+      triggerFade === 'idle' &&
       sceneSoundOn;
     if (shouldPlay) {
       void music.play().catch(() => {
@@ -623,60 +864,171 @@ const IslandScenePage: React.FC = () => {
     } else {
       music.pause();
     }
-  }, [sourcesReady, introPhase, triggerVideoUrl, sceneSoundOn, sceneMusicSrc]);
+  }, [sourcesReady, introPhase, triggerVideoUrl, triggerFade, sceneSoundOn, sceneMusicSrc]);
 
   const showVideo =
     sourcesReady && (introPhase === 'video' || introPhase === 'whiteIn');
-  const showWhite = introPhase === 'whiteIn' || introPhase === 'whiteOut';
+  const showWhite =
+    introPhase === 'whiteIn' ||
+    introPhase === 'whiteOut' ||
+    triggerFade === 'whiteIn' ||
+    triggerFade === 'whiteOut';
   const showScene =
     sourcesReady &&
     (introPhase === 'whiteOut' || introPhase === 'done' || introPhase === 'whiteIn');
   const sceneInteractive = introPhase === 'done';
 
   const goHub = useCallback(() => {
-    navigate(hubPath, {
+    const storyId = storyIdParam || activeStoryId;
+    const qs = storyId ? `?storyId=${encodeURIComponent(storyId)}` : '';
+    navigate(`${hubPath}${qs}`, {
       state: {
         title: navState?.title || cmsTitle || undefined,
         fromScene: true,
+        fromMainMap: Boolean(navState?.fromMainMap),
+        fromSail: Boolean(navState?.fromSail),
       },
     });
-  }, [navigate, hubPath, navState?.title, cmsTitle]);
+  }, [
+    navigate,
+    hubPath,
+    storyIdParam,
+    activeStoryId,
+    navState?.title,
+    navState?.fromMainMap,
+    navState?.fromSail,
+    cmsTitle,
+  ]);
+
+  /** Menu (left) exits scene → island main map explore. */
+  const goMainMap = useCallback(() => {
+    const state: MainMapReturnState = {
+      title: navState?.title || cmsTitle || undefined,
+      // Keep sail in the back stack when arriving via sail, or when main map already had fromSail.
+      fromSail: navState?.fromMainMap
+        ? Boolean(navState?.fromSail)
+        : true,
+    };
+    navigate(mainMapPath, { state });
+  }, [
+    navigate,
+    mainMapPath,
+    navState?.title,
+    navState?.fromSail,
+    navState?.fromMainMap,
+    cmsTitle,
+  ]);
+
+  const activityReturnState = useCallback(
+    () => ({
+      title: navState?.title || cmsTitle || undefined,
+      fromScene: true,
+      fromMainMap: Boolean(navState?.fromMainMap),
+      fromSail: Boolean(navState?.fromSail),
+    }),
+    [navState?.title, navState?.fromMainMap, navState?.fromSail, cmsTitle],
+  );
 
   const goQuiz = useCallback(() => {
-    const qs = quizUnlock.storyId
-      ? `?storyId=${encodeURIComponent(quizUnlock.storyId)}`
+    const qs = quizContent.storyId
+      ? `?storyId=${encodeURIComponent(quizContent.storyId)}`
       : '';
-    navigate(`${quizPath}${qs}`, {
-      state: {
-        title: navState?.title || cmsTitle || undefined,
-        fromScene: true,
-      },
-    });
-  }, [navigate, quizPath, quizUnlock.storyId, navState?.title, cmsTitle]);
+    navigate(`${quizPath}${qs}`, { state: activityReturnState() });
+  }, [navigate, quizPath, quizContent.storyId, activityReturnState]);
 
   const goPuzzle = useCallback(() => {
-    const qs = puzzleUnlock.storyId
-      ? `?storyId=${encodeURIComponent(puzzleUnlock.storyId)}`
+    const qs = puzzleContent.storyId
+      ? `?storyId=${encodeURIComponent(puzzleContent.storyId)}`
       : '';
-    navigate(`${puzzlePath}${qs}`, {
-      state: {
-        title: navState?.title || cmsTitle || undefined,
-        fromScene: true,
-      },
-    });
-  }, [navigate, puzzlePath, puzzleUnlock.storyId, navState?.title, cmsTitle]);
+    navigate(`${puzzlePath}${qs}`, { state: activityReturnState() });
+  }, [navigate, puzzlePath, puzzleContent.storyId, activityReturnState]);
 
   const goColoring = useCallback(() => {
-    const qs = coloringUnlock.storyId
-      ? `?storyId=${encodeURIComponent(coloringUnlock.storyId)}`
+    const qs = coloringContent.storyId
+      ? `?storyId=${encodeURIComponent(coloringContent.storyId)}`
       : '';
-    navigate(`${coloringPath}${qs}`, {
-      state: {
-        title: navState?.title || cmsTitle || undefined,
-        fromScene: true,
-      },
-    });
-  }, [navigate, coloringPath, coloringUnlock.storyId, navState?.title, cmsTitle]);
+    navigate(`${coloringPath}${qs}`, { state: activityReturnState() });
+  }, [navigate, coloringPath, coloringContent.storyId, activityReturnState]);
+
+  /**
+   * Open CMS game in the in-app `/game` WebView (outside ProtectedRoute) so a
+   * floating back overlay can return to this Island Scene.
+   */
+  const openGameInApp = useCallback(
+    (url: string, gameTitle?: string) => {
+      const absolute = toAbsoluteHttpUrl(url);
+      if (!absolute) {
+        alert('Game coming soon');
+        return;
+      }
+      const storyId =
+        gameContent.storyId || storyIdParam || activeStoryId || undefined;
+      const title =
+        gameTitle ||
+        gameContent.title ||
+        navState?.title ||
+        cmsTitle ||
+        'Game';
+      const params = new URLSearchParams();
+      params.set('url', absolute);
+      params.set('name', title);
+      appendIslandSceneReturnParams(params, {
+        islandId,
+        storyId,
+        fromMainMap: Boolean(navState?.fromMainMap),
+        fromSail: Boolean(navState?.fromSail),
+        title: navState?.title || cmsTitle || title,
+      });
+      navigate(`/game?${params.toString()}`, {
+        state: {
+          islandId,
+          storyId,
+          fromMainMap: Boolean(navState?.fromMainMap),
+          fromSail: Boolean(navState?.fromSail),
+          title: navState?.title || cmsTitle || title,
+        },
+      });
+    },
+    [
+      navigate,
+      islandId,
+      gameContent.storyId,
+      gameContent.title,
+      storyIdParam,
+      activeStoryId,
+      navState?.fromMainMap,
+      navState?.fromSail,
+      navState?.title,
+      cmsTitle,
+    ],
+  );
+
+  const goGame = useCallback(async () => {
+    if (gameContent.url) {
+      openGameInApp(gameContent.url, gameContent.title);
+      return;
+    }
+    if (gameContent.catalogGameId) {
+      try {
+        const games = await ApiService.getEnabledGames({ forceRefresh: true });
+        const match = (Array.isArray(games) ? games : []).find(
+          (g: { gameId?: string; url?: string; name?: string }) =>
+            g?.gameId === gameContent.catalogGameId &&
+            Boolean(toAbsoluteHttpUrl(g?.url)),
+        );
+        if (match?.url) {
+          openGameInApp(
+            String(match.url),
+            (match.name && String(match.name).trim()) || gameContent.title,
+          );
+          return;
+        }
+      } catch (err) {
+        console.warn('Island game catalog lookup failed:', err);
+      }
+    }
+    alert('Game coming soon');
+  }, [gameContent.url, gameContent.catalogGameId, gameContent.title, openGameInApp]);
 
   const navigateToActivity = useCallback(
     (id: ActivityId) => {
@@ -684,20 +1036,66 @@ const IslandScenePage: React.FC = () => {
       else if (id === 'quiz') goQuiz();
       else if (id === 'puzzle') goPuzzle();
       else if (id === 'coloring') goColoring();
-      // game: reserved — no dedicated route yet
+      else if (id === 'game') void goGame();
     },
-    [goHub, goQuiz, goPuzzle, goColoring],
+    [goHub, goQuiz, goPuzzle, goColoring, goGame],
   );
 
+  const clearTriggerFadeTimers = useCallback(() => {
+    for (const id of triggerFadeTimersRef.current) window.clearTimeout(id);
+    triggerFadeTimersRef.current = [];
+  }, []);
+
   const finishTriggerVideo = useCallback(() => {
+    if (finishingTriggerRef.current) return;
+    finishingTriggerRef.current = true;
+
+    const video = triggerVideoRef.current;
+    if (video) {
+      try {
+        video.pause();
+      } catch {
+        /* ignore */
+      }
+    }
+
     const next = pendingNavigateRef.current;
-    pendingNavigateRef.current = null;
-    setTriggerVideoUrl(null);
-    if (next) navigateToActivity(next);
-  }, [navigateToActivity]);
+
+    if (prefersReducedMotion()) {
+      pendingNavigateRef.current = null;
+      setTriggerVideoUrl(null);
+      setTriggerFade('idle');
+      setWhiteOpacity(0);
+      finishingTriggerRef.current = false;
+      if (next) navigateToActivity(next);
+      return;
+    }
+
+    clearTriggerFadeTimers();
+    setTriggerFade('whiteIn');
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => setWhiteOpacity(1));
+    });
+
+    const peakId = window.setTimeout(() => {
+      // Reveal scene under full white, then fade white out
+      setTriggerVideoUrl(null);
+      setTriggerFade('whiteOut');
+      setWhiteOpacity(0);
+      const doneId = window.setTimeout(() => {
+        setTriggerFade('idle');
+        pendingNavigateRef.current = null;
+        finishingTriggerRef.current = false;
+        if (next) navigateToActivity(next);
+      }, WHITE_FADE_MS);
+      triggerFadeTimersRef.current.push(doneId);
+    }, WHITE_FADE_MS);
+    triggerFadeTimersRef.current.push(peakId);
+  }, [clearTriggerFadeTimers, navigateToActivity]);
 
   useEffect(() => {
     if (!triggerVideoUrl) return;
+    finishingTriggerRef.current = false;
     const video = triggerVideoRef.current;
     if (!video) return;
     let cancelled = false;
@@ -723,9 +1121,19 @@ const IslandScenePage: React.FC = () => {
     };
   }, [triggerVideoUrl, finishTriggerVideo]);
 
-  const onActivity = useCallback(
-    (id: ActivityId, locked: boolean) => {
-      if (locked || !sceneInteractive || triggerVideoUrl) return;
+  useEffect(() => () => clearTriggerFadeTimers(), [clearTriggerFadeTimers]);
+
+  /** Activity tray or CMS-placed button (incl. dialogue / tap-to-talk). */
+  const onSceneButton = useCallback(
+    (id: string, locked: boolean) => {
+      if (
+        locked ||
+        !sceneInteractive ||
+        triggerVideoUrl ||
+        triggerFade !== 'idle'
+      ) {
+        return;
+      }
 
       const trigger = sceneTriggers.find((t) => t.fromButtonId === id);
       const anim = trigger?.animationId
@@ -739,40 +1147,86 @@ const IslandScenePage: React.FC = () => {
             ? null
             : trigger.navigateTo && isActivityId(trigger.navigateTo)
               ? trigger.navigateTo
-              : id;
+              : isActivityId(id)
+                ? id
+                : null;
         pendingNavigateRef.current = navTarget;
+        finishingTriggerRef.current = false;
         setTriggerVideoUrl(animUrl);
         return;
       }
 
-      navigateToActivity(id);
+      if (isActivityId(id)) navigateToActivity(id);
     },
     [
       sceneInteractive,
       triggerVideoUrl,
+      triggerFade,
       sceneTriggers,
       sceneAnimations,
       navigateToActivity,
     ],
   );
 
-  const activities = useMemo(
-    () =>
-      ACTIVITIES.map((a) => {
-        if (a.id === 'quiz') return { ...a, locked: !quizUnlock.unlocked };
-        if (a.id === 'puzzle') return { ...a, locked: !puzzleUnlock.unlocked };
-        if (a.id === 'coloring') return { ...a, locked: !coloringUnlock.unlocked };
-        return a;
-      }),
-    [quizUnlock.unlocked, puzzleUnlock.unlocked, coloringUnlock.unlocked],
+  const onActivity = useCallback(
+    (id: ActivityId, locked: boolean) => onSceneButton(id, locked),
+    [onSceneButton],
   );
+
+  /**
+   * Product unlock rules (prefer over sequential CMS unlockOrder):
+   * - read: always open
+   * - quiz: after read (and CMS has quiz content)
+   * - puzzle / coloring / game: after BOTH read + quiz (and CMS has that content)
+   * If the story has no quiz content, quiz is skipped so read alone unlocks the rest.
+   */
+  const activities = useMemo(() => {
+    const readDone = sceneProgress.read;
+    const quizDone = sceneProgress.quiz || !quizContent.available;
+    const gatesOpen = readDone && quizDone;
+
+    return ACTIVITIES.map((a) => {
+      if (a.id === 'read') return { ...a, locked: false };
+      if (a.id === 'quiz') {
+        return {
+          ...a,
+          locked: !(quizContent.available && readDone),
+        };
+      }
+      if (a.id === 'puzzle') {
+        return {
+          ...a,
+          locked: !(puzzleContent.available && gatesOpen),
+        };
+      }
+      if (a.id === 'coloring') {
+        return {
+          ...a,
+          locked: !(coloringContent.available && gatesOpen),
+        };
+      }
+      if (a.id === 'game') {
+        // Unlock after read+quiz; tap opens CMS game URL or "coming soon"
+        return {
+          ...a,
+          locked: !gatesOpen,
+        };
+      }
+      return a;
+    });
+  }, [
+    sceneProgress.read,
+    sceneProgress.quiz,
+    quizContent.available,
+    puzzleContent.available,
+    coloringContent.available,
+  ]);
 
   const cmsDeviceLayout = isTablet
     ? sceneLayoutTablet || sceneLayoutPhone
     : sceneLayoutPhone || sceneLayoutTablet;
-  const useCmsButtons = !!(
-    cmsDeviceLayout?.buttons && cmsDeviceLayout.buttons.length > 0
-  );
+  // Icon-less Scene Studio defaults must not replace the built-in tray
+  const useCmsButtons = cmsLayoutHasCustomIcons(cmsDeviceLayout?.buttons);
   const showActivitiesBoard = cmsDeviceLayout?.showActivitiesBoard !== false;
 
   return (
@@ -796,7 +1250,7 @@ const IslandScenePage: React.FC = () => {
               autoPlay
               preload="auto"
             />
-            <div className="absolute inset-0 bg-gradient-to-b from-black/25 via-transparent to-black/35" />
+            <div className="absolute inset-0 bg-gradient-to-b from-black/20 via-transparent to-black/15 pointer-events-none" />
           </div>
 
           <div
@@ -822,20 +1276,23 @@ const IslandScenePage: React.FC = () => {
             >
               <button
                 type="button"
-                onClick={() =>
-                  navigate(sailBackPath, {
-                    state:
-                      navState?.title || cmsTitle
-                        ? { title: navState?.title || cmsTitle || undefined }
-                        : undefined,
-                  })
-                }
-                className="flex-shrink-0 flex items-center justify-center w-11 h-11 rounded-full active:scale-95 transition-transform"
+                onClick={goMainMap}
+                className="flex-shrink-0 flex items-center justify-center w-11 h-11 rounded-full active:scale-95 transition-transform overflow-hidden"
                 style={woodBtnStyle}
-                aria-label="Back to sail scene"
+                aria-label="Open island map"
                 tabIndex={sceneInteractive ? 0 : -1}
               >
-                <ArrowLeft size={22} className="text-white drop-shadow" strokeWidth={2.6} />
+                {menuIconFailed ? (
+                  <List size={20} className="text-white drop-shadow" strokeWidth={2.6} />
+                ) : (
+                  <img
+                    src={ICON_MENU}
+                    alt=""
+                    className="w-9 h-9 object-contain"
+                    draggable={false}
+                    onError={() => setMenuIconFailed(true)}
+                  />
+                )}
               </button>
 
               <h1
@@ -859,22 +1316,6 @@ const IslandScenePage: React.FC = () => {
                   <VolumeX size={20} className="text-white/80 drop-shadow" strokeWidth={2.6} />
                 )}
               </button>
-
-              <button
-                type="button"
-                onClick={goHub}
-                className="flex-shrink-0 flex items-center justify-center w-11 h-11 rounded-full active:scale-95 transition-transform overflow-hidden"
-                style={woodBtnStyle}
-                aria-label="Open lesson hub"
-                tabIndex={sceneInteractive ? 0 : -1}
-              >
-                <img
-                  src={ICON_MENU}
-                  alt=""
-                  className="w-9 h-9 object-contain"
-                  draggable={false}
-                />
-              </button>
             </header>
 
             {/* Garden mid band — spacer between header and activities board */}
@@ -887,23 +1328,27 @@ const IslandScenePage: React.FC = () => {
                 const activity = activityId
                   ? activities.find((a) => a.id === activityId)
                   : undefined;
-                const locked = activity ? activity.locked : true;
+                // Dialogue / custom hotspot buttons stay tappable (not activity-gated).
+                const locked = activity ? activity.locked : false;
                 const label =
                   btn.label ||
                   activity?.label ||
                   (activityId ? activityId.toUpperCase() : btn.id);
-                const iconSrc =
-                  resolveMediaUrl(btn.iconUrl) ||
+                const isDialogue =
+                  btn.id === 'dialogue' || btn.id.startsWith('dialogue_');
+                const localSrc =
                   activity?.iconSrc ||
-                  (activityId ? ACTIVITY_ICON[activityId] : ICON_READ);
+                  (activityId ? ACTIVITY_ICON[activityId] : undefined) ||
+                  (isDialogue ? ICON_DIALOGUE : ICON_READ);
+                const cmsIcon = isUsableMediaUrl(btn.iconUrl)
+                  ? resolveMediaUrl(btn.iconUrl)
+                  : '';
                 return (
                   <button
                     key={btn.id}
                     type="button"
-                    disabled={locked || !sceneInteractive}
-                    onClick={() => {
-                      if (activityId) onActivity(activityId, locked);
-                    }}
+                    disabled={locked || !sceneInteractive || triggerFade !== 'idle'}
+                    onClick={() => onSceneButton(btn.id, locked)}
                     className={`absolute z-20 flex flex-col items-center justify-end active:scale-95 transition-transform ${
                       locked ? 'cursor-not-allowed' : ''
                     }`}
@@ -914,43 +1359,28 @@ const IslandScenePage: React.FC = () => {
                       height: `${btn.h}%`,
                     }}
                     aria-label={locked ? `${label} (locked)` : label}
-                    tabIndex={sceneInteractive && !locked ? 0 : -1}
+                    tabIndex={
+                      sceneInteractive && !locked && triggerFade === 'idle' ? 0 : -1
+                    }
                   >
-                    <span className="relative flex items-center justify-center w-full flex-1 min-h-0 mb-0.5">
-                      <img
-                        src={iconSrc}
-                        alt=""
-                        className={`max-w-full max-h-full object-contain drop-shadow-md ${
-                          activityId === 'coloring' ? 'scale-[0.84]' : ''
-                        } ${locked ? 'opacity-55' : ''}`}
-                        draggable={false}
+                    <span className="relative flex items-center justify-center w-full flex-1 min-h-[2.5rem] mb-0.5">
+                      <ActivityIcon
+                        key={`${cmsIcon}|${localSrc}`}
+                        primarySrc={cmsIcon || undefined}
+                        localSrc={localSrc}
+                        locked={locked}
+                        imgClassName="max-w-full max-h-full object-contain drop-shadow-md"
                       />
-                      {locked && (
-                        <span
-                          className="absolute inset-0 flex items-center justify-center pointer-events-none"
-                          aria-hidden
-                        >
-                          <span
-                            className="flex items-center justify-center w-8 h-8 rounded-full"
-                            style={{
-                              background:
-                                'linear-gradient(180deg, #D4A574 0%, #8B6914 100%)',
-                              boxShadow:
-                                '0 2px 0 #5c3a1a, 0 3px 8px rgba(0,0,0,0.4)',
-                              border: '1.5px solid #E8C060',
-                            }}
-                          >
-                            <Lock size={14} className="text-white" strokeWidth={2.8} />
-                          </span>
-                        </span>
-                      )}
+                      {locked && <ActivityLockBadge size={32} />}
                     </span>
-                    <span
-                      className="font-display font-black text-white text-[0.55rem] sm:text-[0.65rem] leading-tight tracking-wide text-center px-0.5 w-full truncate"
-                      style={{ textShadow: '0 1px 3px rgba(0,0,0,0.7)' }}
-                    >
-                      {label}
-                    </span>
+                    {!isDialogue && (
+                      <span
+                        className="font-display font-black text-white text-[0.55rem] sm:text-[0.65rem] leading-tight tracking-wide text-center px-0.5 w-full truncate"
+                        style={{ textShadow: '0 1px 3px rgba(0,0,0,0.7)' }}
+                      >
+                        {label}
+                      </span>
+                    )}
                   </button>
                 );
               })}
@@ -962,32 +1392,40 @@ const IslandScenePage: React.FC = () => {
                 style={{
                   maxWidth: 560,
                   bottom: 0,
-                  transform: `translateY(${ACTIVITIES_BOARD_CROP * 100}%)`,
+                  paddingBottom: 'var(--safe-area-bottom, 0px)',
+                  transform:
+                    ACTIVITIES_BOARD_CROP > 0
+                      ? `translateY(${ACTIVITIES_BOARD_CROP * 100}%)`
+                      : undefined,
                 }}
               >
                 <div className="relative w-full">
-                  <img
-                    src={ACTIVITIES_SIGN}
-                    alt=""
-                    className="block w-full h-auto select-none pointer-events-none"
-                    draggable={false}
-                  />
+                  {boardImgFailed ? (
+                    <div
+                      className="block w-full select-none pointer-events-none rounded-t-md"
+                      style={{
+                        aspectRatio: '1024 / 401',
+                        background:
+                          'linear-gradient(180deg, rgba(107,68,35,0.92) 0%, rgba(92,58,26,0.96) 45%, rgba(60,30,8,0.98) 100%)',
+                        border: '2px solid #6B4423',
+                        boxShadow: '0 -4px 16px rgba(0,0,0,0.25)',
+                      }}
+                      aria-hidden
+                    />
+                  ) : (
+                    <img
+                      src={ACTIVITIES_SIGN}
+                      alt=""
+                      className="block w-full h-auto select-none pointer-events-none"
+                      draggable={false}
+                      onError={() => setBoardImgFailed(true)}
+                    />
+                  )}
 
-                  <p
-                    className="absolute left-[18%] right-[18%] text-center font-display font-black text-[#FFF6E8] text-[clamp(0.95rem,4.2vw,1.45rem)] tracking-[0.14em] pointer-events-none select-none leading-none"
-                    style={{
-                      top: '12%',
-                      textShadow:
-                        '0 2px 0 #5c3a1a, 0 3px 6px rgba(0,0,0,0.45), 0 1px 2px rgba(0,0,0,0.5)',
-                    }}
-                    aria-hidden
-                  >
-                    ACTIVITIES
-                  </p>
-
+                  {/* Header plank already has baked-in "ACTIVITIES" text */}
                   <div
-                    className="absolute left-[8%] right-[8%] flex items-stretch justify-between gap-1 z-10"
-                    style={{ top: '33%', bottom: '34%' }}
+                    className="absolute left-[6%] right-[6%] flex items-stretch justify-between gap-1 z-10"
+                    style={{ top: '38%', bottom: '8%' }}
                   >
                     {activities.map((activity) => {
                       const locked = activity.locked;
@@ -997,7 +1435,7 @@ const IslandScenePage: React.FC = () => {
                           type="button"
                           disabled={locked || !sceneInteractive}
                           onClick={() => onActivity(activity.id, locked)}
-                          className={`relative flex flex-col items-center justify-end flex-1 min-w-0 h-full pb-1 active:scale-95 transition-transform ${
+                          className={`relative flex flex-col items-center justify-end flex-1 min-w-0 h-full pb-0.5 active:scale-95 transition-transform ${
                             locked ? 'cursor-not-allowed' : ''
                           }`}
                           aria-label={
@@ -1005,38 +1443,14 @@ const IslandScenePage: React.FC = () => {
                           }
                           tabIndex={sceneInteractive && !locked ? 0 : -1}
                         >
-                          <span className="relative flex items-center justify-center w-full aspect-square max-h-[72%] mb-0.5">
-                            <img
-                              src={activity.iconSrc}
-                              alt=""
-                              className={`w-full h-full object-contain drop-shadow-md ${
-                                activity.id === 'coloring' ? 'scale-[0.84]' : ''
-                              } ${locked ? 'opacity-55' : ''}`}
-                              draggable={false}
+                          <span className="relative flex items-center justify-center w-full aspect-square max-h-[70%] min-h-[2.75rem] mb-0.5">
+                            <ActivityIcon
+                              key={activity.iconSrc}
+                              localSrc={activity.iconSrc}
+                              locked={locked}
+                              imgClassName="w-full h-full object-contain drop-shadow-md"
                             />
-                            {locked && (
-                              <span
-                                className="absolute inset-0 flex items-center justify-center pointer-events-none"
-                                aria-hidden
-                              >
-                                <span
-                                  className="flex items-center justify-center w-8 h-8 rounded-full"
-                                  style={{
-                                    background:
-                                      'linear-gradient(180deg, #D4A574 0%, #8B6914 100%)',
-                                    boxShadow:
-                                      '0 2px 0 #5c3a1a, 0 3px 8px rgba(0,0,0,0.4)',
-                                    border: '1.5px solid #E8C060',
-                                  }}
-                                >
-                                  <Lock
-                                    size={14}
-                                    className="text-white"
-                                    strokeWidth={2.8}
-                                  />
-                                </span>
-                              </span>
-                            )}
+                            {locked && <ActivityLockBadge size={34} />}
                           </span>
                           <span
                             className="font-display font-black text-white text-[0.55rem] sm:text-[0.65rem] leading-tight tracking-wide text-center px-0.5"
@@ -1059,16 +1473,23 @@ const IslandScenePage: React.FC = () => {
                 style={{
                   maxWidth: 560,
                   bottom: 0,
-                  transform: `translateY(${ACTIVITIES_BOARD_CROP * 100}%)`,
+                  paddingBottom: 'var(--safe-area-bottom, 0px)',
+                  transform:
+                    ACTIVITIES_BOARD_CROP > 0
+                      ? `translateY(${ACTIVITIES_BOARD_CROP * 100}%)`
+                      : undefined,
                 }}
                 aria-hidden
               >
-                <img
-                  src={ACTIVITIES_SIGN}
-                  alt=""
-                  className="block w-full h-auto select-none opacity-95"
-                  draggable={false}
-                />
+                {boardImgFailed ? null : (
+                  <img
+                    src={ACTIVITIES_SIGN}
+                    alt=""
+                    className="block w-full h-auto select-none opacity-95"
+                    draggable={false}
+                    onError={() => setBoardImgFailed(true)}
+                  />
+                )}
               </div>
             )}
           </div>
@@ -1183,7 +1604,7 @@ const IslandScenePage: React.FC = () => {
 
       {showWhite && (
         <div
-          className="absolute inset-0 z-50 pointer-events-none"
+          className="absolute inset-0 z-[70] pointer-events-none"
           style={{
             background: '#ffffff',
             opacity: whiteOpacity,

@@ -2,6 +2,15 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import { Lock, Star, Check, Ship, X, BookOpen } from 'lucide-react';
+import { prefersReducedMotion } from '../utils/bibleMapApi';
+import {
+  CMS_ISLANDS_TIMEOUT_MS,
+  FALLBACK_OCEAN_ISLANDS,
+  fetchOceanMapIslands,
+  getOceanIslandArtSrc,
+  isGenesisIsland,
+  type OceanMapIsland,
+} from '../utils/oceanMapIslands';
 
 /** Full-width light wooden plank header (irregular edges; black keyed to alpha). */
 const MAP_HEADER_FRAME = '/assets/images/map-header-frame.png';
@@ -25,8 +34,6 @@ const MAP_FOOTER_MAX_VH = 10;
 const MAP_FOOTER_MAX_PX = 78;
 const MAP_FOOTER_MAX_VH_TABLET = 8.5;
 const MAP_FOOTER_MAX_PX_TABLET = 88;
-/** Genesis island art (includes parchment banner — no CSS label needed). */
-const MAP_ISLAND_GENESIS = '/assets/images/map-island-genesis.png';
 /** Tall painted ocean strip (scrolls with voyage content). Native 2816×11392. */
 const MAP_OCEAN_SCROLL = '/assets/images/map-ocean-scroll.png';
 /** Native aspect of map-ocean-scroll.png — sizes the scroll trail to the strip. */
@@ -146,26 +153,15 @@ const OCEAN_HORIZON_HAZE = `url("data:image/svg+xml,${encodeURIComponent(
   </svg>`,
 )}")`;
 
-type IslandStatus = 'complete' | 'current' | 'locked';
+type Island = OceanMapIsland;
 
-interface Island {
-  id: string;
-  book: string;
-  title: string;
-  status: IslandStatus;
-  storiesComplete: number;
-  storiesTotal: number;
-  x: number;
-  y: number;
-}
+const FALLBACK_ISLANDS = FALLBACK_OCEAN_ISLANDS;
 
-const ISLANDS: Island[] = [
-  { id: 'genesis', book: 'Genesis', title: 'Creation', status: 'complete', storiesComplete: 10, storiesTotal: 10, x: 50, y: 3.5 },
-  { id: 'exodus', book: 'Exodus', title: 'God Rescues', status: 'current', storiesComplete: 1, storiesTotal: 10, x: 47, y: 30 },
-  { id: 'psalms', book: 'Psalms', title: 'Songs of Faith', status: 'locked', storiesComplete: 0, storiesTotal: 10, x: 27, y: 49 },
-  { id: 'gospels', book: 'Gospels', title: 'The Good News', status: 'locked', storiesComplete: 0, storiesTotal: 10, x: 65, y: 67 },
-  { id: 'acts', book: 'Acts', title: 'The Church Begins', status: 'locked', storiesComplete: 0, storiesTotal: 10, x: 36, y: 86 },
-];
+const islandHasMainMap = (island: Island): boolean =>
+  Boolean(
+    (island.mainMapUrl && island.mainMapUrl.trim()) ||
+      (island.mainMapVideoUrl && island.mainMapVideoUrl.trim()),
+  );
 
 const TRAIL_PATH =
   'M50,3.5 C 50,12 48,21 47,30 C 53,37 29,41 27,49 C 25,58 62,58 65,67 C 68,76 44,79 36,86';
@@ -274,11 +270,19 @@ const IslandDetailPopup: React.FC<{
   );
 };
 
-const IslandNode: React.FC<{ island: Island; onSelect: (island: Island) => void }> = ({ island, onSelect }) => {
+const IslandNode: React.FC<{
+  island: Island;
+  index: number;
+  bubbleReady: boolean;
+  onSelect: (island: Island) => void;
+}> = ({ island, index, bubbleReady, onSelect }) => {
   const isLocked = island.status === 'locked';
   const isComplete = island.status === 'complete';
   const isCurrent = island.status === 'current';
-  const hasArt = island.id === 'genesis';
+  const artSrc = getOceanIslandArtSrc(island);
+  const hasArt = Boolean(artSrc);
+  const artSize = island.mapArtUrl ? Math.min(GENESIS_ISLAND_SIZE, 200) : GENESIS_ISLAND_SIZE;
+  const reduceMotion = prefersReducedMotion();
 
   const discStyle: React.CSSProperties = isLocked
     ? { background: 'radial-gradient(circle at 35% 30%, #8fa3ad, #5b6f78)' }
@@ -298,7 +302,7 @@ const IslandNode: React.FC<{ island: Island; onSelect: (island: Island) => void 
       style={{
         left: `${island.x}%`,
         top: `${island.y}%`,
-        width: hasArt ? GENESIS_ISLAND_SIZE + 12 : 112,
+        width: hasArt ? artSize + 12 : 112,
         // Inline — must beat parent overlay pointer-events:none (Tailwind class alone is easy to miss).
         pointerEvents: 'auto',
       }}
@@ -310,6 +314,19 @@ const IslandNode: React.FC<{ island: Island; onSelect: (island: Island) => void 
         data-globe-inner
         className="flex flex-col items-center w-full"
         style={{ transformOrigin: 'center center', backfaceVisibility: 'hidden' }}
+      >
+      {/* Bubble pop-in lives inside globe transform so scroll-globe can still apply. */}
+      <div
+        className={
+          bubbleReady && !reduceMotion ? 'map-island-bubble-in' : undefined
+        }
+        style={
+          bubbleReady && !reduceMotion
+            ? { animationDelay: `${0.06 + index * 0.09}s` }
+            : reduceMotion
+              ? undefined
+              : { opacity: 0 }
+        }
       >
       {/* Status flag / ribbon — keep Complete lightly; skip Current pill on art islands */}
       {isComplete && (
@@ -326,10 +343,10 @@ const IslandNode: React.FC<{ island: Island; onSelect: (island: Island) => void 
       {/* Island art or placeholder disc.
           Art islands: dedicated relative wrapper around ONLY the img + shore
           rings (Complete badge stays outside) so rings center on the image. */}
-      {hasArt ? (
+      {hasArt && artSrc ? (
         <div
           className="relative"
-          style={{ width: GENESIS_ISLAND_SIZE }}
+          style={{ width: artSize }}
         >
           {/* Shore ripples — absolute inset-0 over the img box; each ellipse
               centers with left 50% / top 58% + translate(-50%, -50%) so rings
@@ -340,7 +357,7 @@ const IslandNode: React.FC<{ island: Island; onSelect: (island: Island) => void 
             <div className="map-island-shore map-island-shore-3" />
           </div>
           <img
-            src={MAP_ISLAND_GENESIS}
+            src={artSrc}
             alt=""
             draggable={false}
             className="relative z-[1] block h-auto w-full pointer-events-none select-none drop-shadow-[0_6px_14px_rgba(0,0,0,0.35)]"
@@ -379,8 +396,8 @@ const IslandNode: React.FC<{ island: Island; onSelect: (island: Island) => void 
         </div>
       )}
 
-      {/* Label pill — skip when art already includes the parchment banner */}
-      {!hasArt && (
+      {/* Label pill — never for Genesis (sign/banner lives in art or is intentionally omitted) */}
+      {!isGenesisIsland(island) && (
         <span
           className="mt-2 max-w-[124px] text-center leading-tight px-2.5 py-1 rounded-lg bg-[#f3e3c4] text-[#5c3d1e] text-[11px] font-display font-black border border-[#c9a76b] shadow"
           style={{ textShadow: '0 1px 0 rgba(255,255,255,0.4)' }}
@@ -388,6 +405,7 @@ const IslandNode: React.FC<{ island: Island; onSelect: (island: Island) => void 
           {island.book}: <span className="italic">&ldquo;{island.title}&rdquo;</span>
         </span>
       )}
+      </div>
       </div>
     </button>
   );
@@ -426,6 +444,10 @@ const MapPage: React.FC = () => {
   const rafRef = useRef<number | null>(null);
   const reducedMotionRef = useRef(false);
   const [selectedIsland, setSelectedIsland] = useState<Island | null>(null);
+  const [islands, setIslands] = useState<Island[]>(FALLBACK_ISLANDS);
+  const [usingApiIslands, setUsingApiIslands] = useState(false);
+  /** Gate bubble pop until first paint / after API settle so stagger plays on launch. */
+  const [bubbleReady, setBubbleReady] = useState(false);
 
   const syncIslandsScroll = useCallback(() => {
     const scroller = scrollRef.current;
@@ -442,16 +464,64 @@ const MapPage: React.FC = () => {
     setSelectedIsland(null);
   }, []);
 
-  /** Skip sail-transition video — go straight to the steer-ship scene. */
+  /**
+   * Ocean island → always Sail (ship scene) first.
+   * After sail, SailScene routes to MainMap (if CMS main map) or legacy lesson.
+   */
   const handleSailThere = useCallback(
     (island: Island) => {
       setSelectedIsland(null);
-      navigate(`/sail/${island.id}`, {
-        state: { title: `${island.book}: ${island.title}` },
+      const title = `${island.book}: ${island.title}`;
+      navigate(`/sail/${encodeURIComponent(island.id)}`, {
+        state: {
+          title,
+          hasMainMap: islandHasMainMap(island),
+          mainMapUrl: island.mainMapUrl,
+          mainMapVideoUrl: island.mainMapVideoUrl,
+        },
       });
     },
     [navigate],
   );
+
+  // Fetch published islands; keep fallback art if API fails or returns empty.
+  useEffect(() => {
+    let cancelled = false;
+    const controller = new AbortController();
+    const failSafe = window.setTimeout(() => controller.abort(), CMS_ISLANDS_TIMEOUT_MS);
+
+    const load = async () => {
+      try {
+        const mapped = await fetchOceanMapIslands(controller.signal);
+        if (cancelled || !mapped) return;
+        setIslands(mapped);
+        setUsingApiIslands(true);
+      } catch {
+        /* keep FALLBACK_ISLANDS */
+      } finally {
+        window.clearTimeout(failSafe);
+        if (!cancelled) {
+          // Restart bubble stagger after islands settle (API or fallback).
+          setBubbleReady(false);
+          requestAnimationFrame(() => {
+            if (!cancelled) setBubbleReady(true);
+          });
+        }
+      }
+    };
+
+    void load();
+    // Fallback path: still pop bubbles if fetch is slow/hangs until abort.
+    requestAnimationFrame(() => {
+      if (!cancelled) setBubbleReady(true);
+    });
+
+    return () => {
+      cancelled = true;
+      controller.abort();
+      window.clearTimeout(failSafe);
+    };
+  }, []);
 
   // Hide map bottom nav while island popup is open
   useEffect(() => {
@@ -583,6 +653,12 @@ const MapPage: React.FC = () => {
       if (rafRef.current != null) cancelAnimationFrame(rafRef.current);
     };
   }, [scheduleGlobe, clampScroll, syncIslandsScroll]);
+
+  // Re-apply globe once API islands replace fallback nodes.
+  useEffect(() => {
+    syncIslandsScroll();
+    scheduleGlobe();
+  }, [islands, syncIslandsScroll, scheduleGlobe]);
 
   return (
     <div className="relative w-full h-full overflow-hidden">
@@ -794,26 +870,34 @@ const MapPage: React.FC = () => {
               {/* Small inset so the top island isn't flush against the locked curve */}
               <div style={{ height: 28 }} aria-hidden />
               <div className="relative w-full" style={{ height: 'calc(100% - 28px)' }}>
-                <svg
-                  className="absolute inset-0 w-full h-full pointer-events-none"
-                  viewBox="0 0 100 100"
-                  preserveAspectRatio="none"
-                  aria-hidden
-                >
-                  <path
-                    d={TRAIL_PATH}
-                    fill="none"
-                    stroke="rgba(255,255,255,0.72)"
-                    strokeWidth="0.9"
-                    strokeLinecap="round"
-                    strokeDasharray="0.2 3.2"
-                    vectorEffect="non-scaling-stroke"
-                    className="map-trail"
-                  />
-                </svg>
+                {!usingApiIslands && (
+                  <svg
+                    className="absolute inset-0 w-full h-full pointer-events-none"
+                    viewBox="0 0 100 100"
+                    preserveAspectRatio="none"
+                    aria-hidden
+                  >
+                    <path
+                      d={TRAIL_PATH}
+                      fill="none"
+                      stroke="rgba(255,255,255,0.72)"
+                      strokeWidth="0.9"
+                      strokeLinecap="round"
+                      strokeDasharray="0.2 3.2"
+                      vectorEffect="non-scaling-stroke"
+                      className="map-trail"
+                    />
+                  </svg>
+                )}
 
-                {ISLANDS.map((island) => (
-                  <IslandNode key={island.id} island={island} onSelect={handleSelect} />
+                {islands.map((island, index) => (
+                  <IslandNode
+                    key={island.id}
+                    island={island}
+                    index={index}
+                    bubbleReady={bubbleReady}
+                    onSelect={handleSelect}
+                  />
                 ))}
               </div>
             </div>
@@ -941,6 +1025,17 @@ const MapPage: React.FC = () => {
           0%, 100% { transform: translateY(0) rotate(-4deg); }
           50% { transform: translateY(-4px) rotate(4deg); }
         }
+        /* Island bubble pop-in on map launch (staggered via animation-delay). */
+        .map-island-bubble-in {
+          transform-origin: center center;
+          animation: map-island-bubble-in 0.58s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+        }
+        @keyframes map-island-bubble-in {
+          0% { transform: scale(0); opacity: 0; }
+          55% { transform: scale(1.16); opacity: 1; }
+          78% { transform: scale(0.94); }
+          100% { transform: scale(1); opacity: 1; }
+        }
         @media (prefers-reduced-motion: reduce) {
           .map-sky-cloud-track {
             --cloud-loop-duration: 220s;
@@ -950,7 +1045,8 @@ const MapPage: React.FC = () => {
           .map-island-shore-3,
           .map-trail,
           .map-node-pulse,
-          .map-ship-bob {
+          .map-ship-bob,
+          .map-island-bubble-in {
             animation: none;
           }
         }

@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import { useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { ArrowLeft, PartyPopper, RefreshCw, Star } from 'lucide-react';
 import { useAudio } from '../context/AudioContext';
 import { getApiBaseUrl } from '../services/apiService';
@@ -21,6 +21,10 @@ import {
   swapTiles,
   tileBackgroundPosition,
 } from '../utils/slidingPuzzle';
+import {
+  buildIslandSceneNavState,
+  buildIslandScenePath,
+} from '../utils/islandSceneReturn';
 
 const WOOD_TEX = '/assets/images/wheel-background-wood.png';
 const TILE_GAP_PX = 2;
@@ -144,10 +148,15 @@ type Phase = 'loading' | 'pick' | 'playing' | 'won' | 'missing';
  */
 const IslandSlidingPuzzlePage: React.FC = () => {
   const navigate = useNavigate();
+  const location = useLocation();
   const { islandId = 'genesis' } = useParams<{ islandId: string }>();
   const [searchParams, setSearchParams] = useSearchParams();
   const { playClick } = useAudio();
-  const scenePath = `/sail/${islandId}/lesson`;
+  const navState = location.state as {
+    title?: string;
+    fromMainMap?: boolean;
+    fromSail?: boolean;
+  } | null;
 
   const [phase, setPhase] = useState<Phase>('loading');
   const [imageUrl, setImageUrl] = useState('');
@@ -373,8 +382,24 @@ const IslandSlidingPuzzlePage: React.FC = () => {
     ? `left ${Math.max(24, Math.floor(SCRAMBLE_TOTAL_MS / 30))}ms linear, top ${Math.max(24, Math.floor(SCRAMBLE_TOTAL_MS / 30))}ms linear`
     : 'left 160ms ease-out, top 160ms ease-out';
 
-  const goBack = () =>
-    navigate(scenePath, { state: { skipIntro: true, title } });
+  const goBack = useCallback(() => {
+    const returnStoryId =
+      storyId || searchParams.get('storyId')?.trim() || '';
+    const path =
+      buildIslandScenePath({
+        islandId,
+        storyId: returnStoryId || undefined,
+      }) || `/sail/${islandId}/lesson`;
+    navigate(path, {
+      state: buildIslandSceneNavState({
+        islandId,
+        storyId: returnStoryId || undefined,
+        fromMainMap: Boolean(navState?.fromMainMap),
+        fromSail: Boolean(navState?.fromSail),
+        title: navState?.title || title,
+      }),
+    });
+  }, [navigate, islandId, storyId, searchParams, navState, title]);
 
   return (
     <div

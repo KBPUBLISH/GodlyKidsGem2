@@ -247,6 +247,17 @@ const BookReader: React.FC = () => {
 
     const currentPage = pages[currentPageIndex];
 
+    /** Bible Map: keep parchment in the lower third so art above is never covered. */
+    const bibleMapScrollHeight = useMemo(() => {
+        if (!currentPage || bookType !== 'bible_map') return null;
+        const clamp = (n: number, fallback: number, max: number) =>
+            Number.isFinite(n) && n > 0 ? Math.min(n, max) : fallback;
+        const mid = clamp(Number(currentPage.scrollMidHeight), 36, 36);
+        const max = clamp(Number(currentPage.scrollMaxHeight), 40, 40);
+        const offset = Number(currentPage.scrollOffsetY) || 0;
+        return { mid, max, offset };
+    }, [currentPage, bookType]);
+
     const currentPageTextBoxes = useMemo(() => {
         if (!currentPage) return [] as TextBox[];
         const contentBoxes = currentPage.content?.textBoxes;
@@ -766,12 +777,26 @@ const BookReader: React.FC = () => {
                         </button>
                     )}
 
-                    {/* Background Layer — bible_map: crop art to upper region above scroll */}
+                    {/* Background Layer — bible_map: fit art fully in band above scroll */}
                     <div
                         className={
                             bookType === 'bible_map'
-                                ? 'absolute top-0 left-0 right-0 h-[54%] overflow-hidden bg-[#2d5a3d]'
+                                ? 'absolute top-0 left-0 right-0 overflow-hidden bg-[#2d5a3d]'
                                 : 'absolute inset-0 flex items-center justify-center'
+                        }
+                        style={
+                            bookType === 'bible_map' && bibleMapScrollHeight
+                                ? {
+                                      height: `${Math.max(
+                                          58,
+                                          100 -
+                                              (scrollState === 'max'
+                                                  ? bibleMapScrollHeight.max
+                                                  : bibleMapScrollHeight.mid) -
+                                              bibleMapScrollHeight.offset,
+                                      )}%`,
+                                  }
+                                : undefined
                         }
                     >
                         {(() => {
@@ -806,7 +831,9 @@ const BookReader: React.FC = () => {
                                             key={currentImage.url}
                                             src={resolveUrl(currentImage.url)}
                                             alt={`Page ${currentPage.pageNumber} - Image ${currentImageIndex + 1}`}
-                                            className={`w-full h-full object-cover transition-all duration-500 ${getTransitionClass()}`}
+                                            className={`w-full h-full transition-all duration-500 ${
+                                                bookType === 'bible_map' ? 'object-contain object-center' : 'object-cover'
+                                            } ${getTransitionClass()}`}
                                             onError={(e) => {
                                                 e.currentTarget.style.display = 'none';
                                             }}
@@ -870,7 +897,7 @@ const BookReader: React.FC = () => {
                                     <TrimmedPlaybackVideo
                                         ref={videoRef}
                                         src={resolveUrl(bgUrl)}
-                                        className={bookType === 'bible_map' ? 'w-full h-full object-cover object-top' : 'w-full h-full object-cover'}
+                                        className={bookType === 'bible_map' ? 'w-full h-full object-contain object-center' : 'w-full h-full object-cover'}
                                         autoPlay
                                         loop
                                         muted={!pageVideoSoundOn}
@@ -886,7 +913,7 @@ const BookReader: React.FC = () => {
                                 <img
                                     src={resolveUrl(bgUrl)}
                                     alt={`Page ${currentPage.pageNumber}`}
-                                    className={bookType === 'bible_map' ? 'w-full h-full object-cover object-top' : 'w-full h-full object-cover'}
+                                    className={bookType === 'bible_map' ? 'w-full h-full object-contain object-center' : 'w-full h-full object-cover'}
                                     onError={(e) => {
                                         // Hide broken image and show placeholder
                                         e.currentTarget.style.display = 'none';
@@ -901,11 +928,16 @@ const BookReader: React.FC = () => {
                         const scrollUrl = currentPage.scrollUrl || currentPage.files?.scroll?.url;
                         const scrollOffset = currentPage.scrollOffsetY || 0;
                         // Calculate scroll height based on state (like app)
-                        const defaultMid = bookType === 'bible_map' ? 48 : 30;
-                        const defaultMax = bookType === 'bible_map' ? 58 : 60;
-                        const currentScrollHeight = scrollState === 'max' 
-                            ? (currentPage.scrollMaxHeight || defaultMax)
-                            : (currentPage.scrollMidHeight || defaultMid);
+                        const defaultMid = bookType === 'bible_map' ? 36 : 30;
+                        const defaultMax = bookType === 'bible_map' ? 40 : 60;
+                        const currentScrollHeight =
+                            bookType === 'bible_map' && bibleMapScrollHeight
+                                ? scrollState === 'max'
+                                    ? bibleMapScrollHeight.max
+                                    : bibleMapScrollHeight.mid
+                                : scrollState === 'max'
+                                  ? currentPage.scrollMaxHeight || defaultMax
+                                  : currentPage.scrollMidHeight || defaultMid;
                         
                         // Calculate clip-path to hide text outside scroll area (top AND bottom)
                         const clipInsetTop = scrollUrl 
@@ -1092,12 +1124,17 @@ const BookReader: React.FC = () => {
                         if (!scrollUrl) return null;
                         
                         // Calculate height based on scroll state
-                        // bible_map defaults leave upper ~half for 3:4 art
-                        const defaultMid = bookType === 'bible_map' ? 48 : 30;
-                        const defaultMax = bookType === 'bible_map' ? 58 : 60;
-                        const currentScrollHeight = scrollState === 'max'
-                            ? (currentPage.scrollMaxHeight || defaultMax)
-                            : (currentPage.scrollMidHeight || defaultMid);
+                        // bible_map defaults leave upper ~2/3 for full art above parchment
+                        const defaultMid = bookType === 'bible_map' ? 36 : 30;
+                        const defaultMax = bookType === 'bible_map' ? 40 : 60;
+                        const currentScrollHeight =
+                            bookType === 'bible_map' && bibleMapScrollHeight
+                                ? scrollState === 'max'
+                                    ? bibleMapScrollHeight.max
+                                    : bibleMapScrollHeight.mid
+                                : scrollState === 'max'
+                                  ? currentPage.scrollMaxHeight || defaultMax
+                                  : currentPage.scrollMidHeight || defaultMid;
                         
                         return (
                             <div

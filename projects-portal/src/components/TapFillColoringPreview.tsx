@@ -6,6 +6,51 @@ const PHONE_W = 390;
 const PHONE_H = 844;
 const SCALE = 0.58;
 
+const DEFAULT_PREVIEW_PALETTE = [
+  '#E74C3C',
+  '#E67E22',
+  '#F1C40F',
+  '#2ECC71',
+  '#3498DB',
+  '#9B59B6',
+  '#E91E63',
+  '#1ABC9C',
+  '#87CEEB',
+  '#FFB6C1',
+  '#8BC34A',
+  '#1B4F72',
+  '#FFAB91',
+  '#95A5A6',
+  '#2C3E50',
+  '#FFFFFF',
+  '#8D6E63',
+  '#D4AF37',
+  '#C0C0C0',
+  '#CD7F32',
+];
+
+const METALLIC_SWATCH_GRADIENTS: Record<string, string> = {
+  '#D4AF37':
+    'linear-gradient(145deg, #8B6914 0%, #D4AF37 28%, #FFF3B0 48%, #E8C547 62%, #A67C00 100%)',
+  '#C0C0C0':
+    'linear-gradient(145deg, #6E6E6E 0%, #C0C0C0 28%, #FFFFFF 48%, #D8D8D8 62%, #8A8A8A 100%)',
+  '#CD7F32':
+    'linear-gradient(145deg, #6B3E1A 0%, #CD7F32 28%, #F0C080 48%, #B87333 62%, #7A4A1E 100%)',
+};
+
+const getColorSwatchStyle = (hex: string): React.CSSProperties => {
+  const key = hex.trim().toUpperCase();
+  const gradient = METALLIC_SWATCH_GRADIENTS[key];
+  if (gradient) {
+    return {
+      backgroundImage: gradient,
+      backgroundColor: key,
+      boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.55), inset 0 -1px 2px rgba(0,0,0,0.25)',
+    };
+  }
+  return { backgroundColor: hex };
+};
+
 const woodBtnStyle: React.CSSProperties = {
   backgroundImage: `url(${WOOD_TEX})`,
   backgroundSize: 'cover',
@@ -90,7 +135,7 @@ const TapFillColoringPreview: React.FC<TapFillColoringPreviewProps> = ({
   const palette =
     paletteProp && paletteProp.length > 0
       ? paletteProp
-      : ['#E74C3C', '#E67E22', '#F1C40F', '#2ECC71', '#3498DB', '#9B59B6'];
+      : DEFAULT_PREVIEW_PALETTE;
   const hasAssets = !!(lineArtUrl.trim() && regionMapUrl.trim());
 
   const colorCanvasRef = useRef<HTMLCanvasElement>(null);
@@ -375,18 +420,18 @@ const TapFillColoringPreview: React.FC<TapFillColoringPreviewProps> = ({
 
                 {hasAssets && (
                   <>
-                    <div className="w-full max-w-[368px] flex flex-wrap gap-2 justify-center">
+                    <div className="w-full max-w-[368px] max-h-[84px] overflow-y-auto flex flex-wrap gap-2 justify-center content-start">
                       {palette.map((c) => (
                         <button
                           key={c}
                           type="button"
                           onClick={() => setColor(c)}
-                          className={`w-9 h-9 rounded-full border-2 active:scale-95 ${
+                          className={`w-9 h-9 rounded-full border-2 active:scale-95 flex-shrink-0 ${
                             color === c
                               ? 'ring-2 ring-amber-300 border-white'
                               : 'border-[#6B4423]/60'
                           }`}
-                          style={{ backgroundColor: c }}
+                          style={getColorSwatchStyle(c)}
                           aria-label={`Color ${c}`}
                           aria-pressed={color === c}
                         />

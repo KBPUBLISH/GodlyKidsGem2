@@ -27,8 +27,9 @@ const BIBLE_MAP_DEFAULT_SCROLL_LOCAL = path.join(
 );
 const BIBLE_MAP_DEFAULT_SCROLL_GCS = 'shared/bible-map/default-scroll.png';
 /** Scroll band heights tuned so 3:4 art stays visible in the upper page region. */
-const BIBLE_MAP_DEFAULT_SCROLL_MID = 48;
-const BIBLE_MAP_DEFAULT_SCROLL_MAX = 58;
+/** Lower band so 3:4 art fits fully above parchment without being covered. */
+const BIBLE_MAP_DEFAULT_SCROLL_MID = 36;
+const BIBLE_MAP_DEFAULT_SCROLL_MAX = 40;
 
 let _cachedBibleMapScrollUrl =
     (process.env.BIBLE_MAP_DEFAULT_SCROLL_URL || '').trim() || null;
@@ -85,13 +86,16 @@ async function ensureBibleMapScrollOnPage(page) {
     page.scrollUrl = scrollUrl;
     if (!page.files) page.files = {};
     page.files.scroll = { ...(page.files.scroll || {}), url: scrollUrl };
-    if (page.scrollMidHeight == null || !Number.isFinite(Number(page.scrollMidHeight))) {
+    // Keep scroll in the lower third so art above is never covered (bump old high values down)
+    const mid = Number(page.scrollMidHeight);
+    const max = Number(page.scrollMaxHeight);
+    if (!Number.isFinite(mid) || mid > 40) {
         page.scrollMidHeight = BIBLE_MAP_DEFAULT_SCROLL_MID;
     }
-    if (page.scrollMaxHeight == null || !Number.isFinite(Number(page.scrollMaxHeight))) {
+    if (!Number.isFinite(max) || max > 45) {
         page.scrollMaxHeight = BIBLE_MAP_DEFAULT_SCROLL_MAX;
     }
-    if (page.scrollHeight == null || !Number.isFinite(Number(page.scrollHeight))) {
+    if (page.scrollHeight == null || !Number.isFinite(Number(page.scrollHeight)) || Number(page.scrollHeight) > 40) {
         page.scrollHeight = BIBLE_MAP_DEFAULT_SCROLL_MID;
     }
     if (page.scrollWidth == null) page.scrollWidth = 100;
@@ -1337,12 +1341,82 @@ router.get('/quiz-assist/status', (req, res) => {
 });
 
 /**
+ * Load age-leveled reading scripts from a Bible Map story's linked book pages.
+ * Returns { ages_3_5, ages_6_7, ages_8_plus } page texts joined in order.
+ */
+async function loadReadingScriptsForQuiz(storyId, bookId) {
+    const READING_KEYS = ['ages_3_5', 'ages_6_7', 'ages_8_plus'];
+    let resolvedBookId = bookId ? String(bookId) : null;
+    if (!resolvedBookId && storyId) {
+        const story = await MapStory.findById(storyId).select('bookId').lean();
+        if (story?.bookId) resolvedBookId = String(story.bookId);
+    }
+    if (!resolvedBookId) return null;
+
+    const pages = await Page.find({
+        bookId: resolvedBookId,
+        isColoringPage: { $ne: true },
+    })
+        .sort({ pageNumber: 1 })
+        .select('pageNumber readingLevels content.textBoxes textBoxes')
+        .lean();
+
+    if (!pages.length) return null;
+
+    const buckets = { ages_3_5: [], ages_6_7: [], ages_8_plus: [] };
+    for (const page of pages) {
+        const levels = page.readingLevels || {};
+        for (const key of READING_KEYS) {
+            const text = String(levels[key]?.text || '').trim();
+            if (text) {
+                buckets[key].push(`Page ${page.pageNumber}: ${text}`);
+                continue;
+            }
+            // Fallback: plain text boxes if readingLevels missing
+            if (key === 'ages_8_plus') {
+                const boxes = page.content?.textBoxes || page.textBoxes || [];
+                const joined = boxes
+                    .map((b) => String(b?.text || '').trim())
+                    .filter(Boolean)
+                    .join(' ');
+                if (joined) buckets[key].push(`Page ${page.pageNumber}: ${joined}`);
+            }
+        }
+    }
+
+    const hasAny = READING_KEYS.some((k) => buckets[k].length > 0);
+    if (!hasAny) return null;
+    return buckets;
+}
+
+function formatScriptsForPrompt(scripts, focusKey) {
+    if (!scripts) return '';
+    const READING_KEYS = ['ages_3_5', 'ages_6_7', 'ages_8_plus'];
+    const labels = {
+        ages_3_5: 'Ages 3–5 script (easy quiz)',
+        ages_6_7: 'Ages 6–7 script (medium quiz)',
+        ages_8_plus: 'Ages 8+ script (hard quiz)',
+    };
+    const parts = [];
+    for (const key of READING_KEYS) {
+        const body = (scripts[key] || []).join('\n');
+        if (!body) continue;
+        const focus = key === focusKey ? ' ← USE THIS BAND AS THE PRIMARY SOURCE' : '';
+        parts.push(`### ${labels[key]}${focus}\n${body.slice(0, 8000)}`);
+    }
+    return parts.join('\n\n');
+}
+
+/**
  * POST /api/bible-map/quiz-assist
- * Chat about a story-pack topic and propose ~7 leveled quiz questions.
+ * Chat about a story-pack topic and propose exactly 7 leveled quiz questions
+ * grounded in the book's age-leveled reading scripts when available.
  * Body: {
  *   messages: [{ role: 'user'|'assistant', content }],
  *   level: 'easy'|'medium'|'hard',
  *   count?: number (default 7),
+ *   storyId?: string,
+ *   bookId?: string,
  *   topic?: string,
  *   title?: string,
  *   scriptureRef?: string,
@@ -1368,16 +1442,27 @@ router.post('/quiz-assist', async (req, res) => {
             title = '',
             scriptureRef = '',
             verse = '',
+            storyId = '',
+            bookId = '',
         } = req.body || {};
 
         const quizLevel = QUIZ_LEVELS.includes(level) ? level : 'easy';
         const targetCount = Math.min(12, Math.max(3, Number(count) || 7));
 
+        const readingKeyForQuiz = {
+            easy: 'ages_3_5',
+            medium: 'ages_6_7',
+            hard: 'ages_8_plus',
+        }[quizLevel];
+
+        const scripts = await loadReadingScriptsForQuiz(storyId, bookId);
+        const scriptsBlock = formatScriptsForPrompt(scripts, readingKeyForQuiz);
+
         const levelGuide = {
-            easy: 'Ages ~3–5. Very simple words, short options (2–4 words), who/what questions only.',
+            easy: 'Ages ~3–5. Very simple words, short options (2–4 words), who/what questions only. Base wording on the Ages 3–5 script.',
             medium:
-                'Ages ~6–8. Simple vocabulary, short sentences, basic comprehension and sequence.',
-            hard: 'Ages ~9–12. Deeper comprehension, themes, gentle inference; still kid-friendly faith language.',
+                'Ages ~6–8. Simple vocabulary, short sentences, basic comprehension and sequence. Base wording on the Ages 6–7 script.',
+            hard: 'Ages ~9–12. Deeper comprehension, themes, gentle inference; still kid-friendly faith language. Base wording on the Ages 8+ script.',
         }[quizLevel];
 
         const contextBits = [
@@ -1389,19 +1474,31 @@ router.post('/quiz-assist', async (req, res) => {
             .filter(Boolean)
             .join('\n');
 
+        const scriptRules = scriptsBlock
+            ? `CRITICAL — Age-leveled scripts (source of truth):
+You MUST ground every question in the reading scripts below (facts, names, events, and wording kids actually hear in the book).
+Do NOT invent plot points that are not in these scripts. Prefer the band marked PRIMARY for this quiz tier; use other bands only for consistency/context.
+
+${scriptsBlock}
+
+When proposing questions, return EXACTLY ${targetCount} questions (not fewer) unless the user explicitly asks for a different count.`
+            : `No age-leveled book scripts were found yet. Ask the editor to generate Book tab age scripts first, or work from title/scripture if they insist.
+When proposing questions, aim for EXACTLY ${targetCount} questions.`;
+
         const systemPrompt = `You are a helpful editor for Godly Kids Bible Map story-pack quizzes.
-You chat with a content creator about the Bible story topic, then propose multiple-choice quiz questions.
+You chat with a content creator, then propose multiple-choice quiz questions based on the story's age-leveled book scripts.
 
 Difficulty tier: ${quizLevel}
 ${levelGuide}
-Target about ${targetCount} questions (okay to propose slightly fewer/more if the chat asks).
+Target EXACTLY ${targetCount} questions when generating a full set.
 
 Rules:
-- Faith-based, warm, accurate to the Bible story discussed
+- Faith-based, warm, accurate to the age-leveled scripts (not generic Bible trivia)
 - Exactly 4 answer options per question
 - One clearly correct answer
 - Include a short kid-friendly explanation (1 sentence) for the correct answer
 - Never invent harmful or scary content
+- Questions should be answerable from the scripts alone
 
 When you propose questions, respond with ONLY valid JSON (no markdown) matching:
 {
@@ -1419,7 +1516,8 @@ When you propose questions, respond with ONLY valid JSON (no markdown) matching:
 If the user is only chatting and not ready for questions yet, return:
 { "reply": "...", "proposedQuestions": [] }
 
-${contextBits ? `Pack context:\n${contextBits}` : ''}`;
+${contextBits ? `Pack context:\n${contextBits}\n` : ''}
+${scriptRules}`;
 
         const chatMessages = Array.isArray(messages)
             ? messages
@@ -1464,6 +1562,7 @@ ${contextBits ? `Pack context:\n${contextBits}` : ''}`;
                 reply: rawText || 'I could not format questions. Try asking again.',
                 proposedQuestions: [],
                 level: quizLevel,
+                usedScripts: !!scriptsBlock,
             });
         }
 
@@ -1483,6 +1582,7 @@ ${contextBits ? `Pack context:\n${contextBits}` : ''}`;
                       : 'What would you like to cover in the quiz?',
             proposedQuestions,
             level: quizLevel,
+            usedScripts: !!scriptsBlock,
             configured: true,
         });
     } catch (error) {

@@ -297,14 +297,14 @@ const BookPhonePreview: React.FC<BookPhonePreviewProps> = ({
                     style={{ width: 80, height: 16 }}
                     aria-hidden
                 />
-                {/* Upper art region (3:4) — cropped above parchment so characters stay visible */}
-                <div className="absolute top-0 left-0 right-0 h-[54%] overflow-hidden bg-[#2d5a3d]">
+                {/* Upper art — full scene fitted above parchment (no overlap / cut-off) */}
+                <div className="absolute top-0 left-0 right-0 h-[64%] overflow-hidden bg-[#2d5a3d]">
                     {bgUrl ? (
                         page.backgroundType === 'video' ? (
                             <video
                                 ref={videoRef}
                                 src={bgUrl}
-                                className="absolute inset-0 w-full h-full object-cover object-top"
+                                className="absolute inset-0 w-full h-full object-contain object-center"
                                 muted={!videoSoundOn}
                                 loop
                                 playsInline
@@ -314,23 +314,23 @@ const BookPhonePreview: React.FC<BookPhonePreviewProps> = ({
                             <img
                                 src={bgUrl}
                                 alt=""
-                                className="absolute inset-0 w-full h-full object-cover object-top"
+                                className="absolute inset-0 w-full h-full object-contain object-center"
                             />
                         )
                     ) : (
                         <div className="absolute inset-0 bg-[#2d5a3d]" />
                     )}
                 </div>
-                {/* Lower parchment / scroll + text */}
-                <div className="absolute left-0 right-0 bottom-0 h-[50%] bg-gradient-to-b from-[#e8d5b7]/90 to-[#f5ead4]" />
+                {/* Lower parchment / scroll + text — kept short so art stays fully visible */}
+                <div className="absolute left-0 right-0 bottom-0 h-[36%] bg-[#f0e4cc]" />
                 <img
                     src={scrollUrl || '/assets/bible-map-default-scroll.png'}
                     alt=""
-                    className="absolute left-1/2 -translate-x-1/2 bottom-[2%] w-[96%] h-[48%] object-fill pointer-events-none z-[5]"
+                    className="absolute left-1/2 -translate-x-1/2 bottom-0 w-[98%] h-[36%] object-fill pointer-events-none z-[5]"
                     style={{ opacity: (page.scrollOpacity ?? 100) / 100 }}
                 />
-                <div className="absolute left-[8%] right-[8%] bottom-[6%] z-10 max-h-[40%] overflow-y-auto px-2 py-2">
-                    <p className="text-center text-[13px] leading-snug text-[#4a3b2a] font-medium whitespace-pre-wrap">
+                <div className="absolute left-[8%] right-[8%] bottom-[3%] z-10 h-[30%] overflow-y-auto px-2 py-1.5 flex items-center justify-center">
+                    <p className="text-center text-[13px] leading-snug text-[#4a3b2a] font-medium whitespace-pre-wrap w-full">
                         {words.length === 0 ? (
                             <span className="text-gray-400 italic text-xs">No text for this age</span>
                         ) : (

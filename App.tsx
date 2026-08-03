@@ -604,6 +604,7 @@ import ShareBookPage from './pages/ShareBookPage';
 import ParentQuizPage from './pages/ParentQuizPage';
 import GamesPage from './pages/GamesPage';
 import MapPage from './pages/MapPage';
+import MainMapPage from './pages/MainMapPage';
 import SailScenePage from './pages/SailScenePage';
 import IslandScenePage from './pages/IslandScenePage';
 import IslandLessonPage from './pages/IslandLessonPage';
@@ -1319,13 +1320,15 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const isSharePage = location.pathname.startsWith('/share/') || location.pathname.startsWith('/s/') || (location.pathname.startsWith('/playlist/') && !location.pathname.startsWith('/playlist-detail'));
   const isDailySession = location.pathname === '/daily-session';
   const isSailScene = location.pathname === '/sail' || location.pathname.startsWith('/sail/');
+  /** Island main map (CMS) — fullscreen like sail / lesson. */
+  const isMainMapScene = /^\/map\/[^/]+\/main\/?$/.test(location.pathname);
   const isPremiumOnboarding = location.pathname === '/premium-onboarding';
   const isTrialStats = location.pathname === '/trial-stats';
   const isBookCreating = location.pathname.startsWith('/library/creating/');
   const isKaraokePage = location.pathname === '/karaoke' || location.pathname.startsWith('/karaoke/');
 
   // Standalone pages that don't need the app chrome (background, navigation, etc.)
-  const isStandalonePage = isParentQuiz || isSharePage || isReadyToJumpIn || isDailySession || isSailScene || isPremiumOnboarding || isTrialStats;
+  const isStandalonePage = isParentQuiz || isSharePage || isReadyToJumpIn || isDailySession || isSailScene || isMainMapScene || isPremiumOnboarding || isTrialStats;
 
   // For standalone pages, render just the children without app styling
   if (isStandalonePage) {
@@ -1588,6 +1591,7 @@ const App: React.FC = () => {
                   <Route path="/lessons" element={<ProtectedRoute><LessonsPage /></ProtectedRoute>} />
                   <Route path="/lesson/:lessonId" element={<ProtectedRoute><LessonPlayerPage /></ProtectedRoute>} />
                   <Route path="/games" element={<GamesPage />} />
+                  <Route path="/map/:islandId/main" element={<MainMapPage />} />
                   <Route path="/map" element={<MapPage />} />
                   <Route path="/music-videos" element={<MusicVideosPage />} />
                   <Route path="/karaoke" element={<KaraokePage />} />
@@ -1603,7 +1607,9 @@ const App: React.FC = () => {
                   <Route path="/trial-stats" element={<TrialStatsPage />} />
                   <Route path="/settings" element={<ProtectedRoute><SettingsPage /></ProtectedRoute>} />
                   <Route path="/demo/video-lesson" element={<VideoLessonDemo />} />
-                  <Route path="/game" element={<ProtectedRoute><GameWebViewPage /></ProtectedRoute>} />
+                  {/* Games are playable without an account — do not wrap in ProtectedRoute
+                      (that showed Create Account when Island Scene / Games opened a URL). */}
+                  <Route path="/game" element={<GameWebViewPage />} />
                   {/* Catch-all route - redirect to landing if not authenticated, world (explore) if authenticated */}
                   <Route path="*" element={isUserAuthenticated() ? <Navigate to="/world" replace /> : <Navigate to="/" replace />} />
                 </Routes>

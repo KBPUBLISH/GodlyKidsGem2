@@ -66,11 +66,13 @@ interface AudioContextType {
     currentPlaylist: Playlist | null;
     currentTrackIndex: number;
     isPlaying: boolean;
+    isShuffle: boolean;
     progress: number;
     currentTime: number;
     duration: number;
     playPlaylist: (playlist: Playlist, startIndex?: number, isSubscribed?: boolean) => void;
     togglePlayPause: () => void;
+    toggleShuffle: () => void;
     nextTrack: () => void;
     prevTrack: () => void;
     seek: (time: number) => void;
@@ -101,11 +103,13 @@ const AudioContext = createContext<AudioContextType>({
     currentPlaylist: null,
     currentTrackIndex: 0,
     isPlaying: false,
+    isShuffle: false,
     progress: 0,
     currentTime: 0,
     duration: 0,
     playPlaylist: () => { },
     togglePlayPause: () => { },
+    toggleShuffle: () => { },
     nextTrack: () => { },
     prevTrack: () => { },
     seek: () => { },
@@ -116,6 +120,23 @@ const AudioContext = createContext<AudioContextType>({
     previewTimeRemaining: AUDIO_PREVIEW_SECONDS,
     dismissPreviewLimit: () => { },
 });
+
+/** Fisher-Yates shuffle; keeps `startIndex` first so current track continues. */
+function buildShuffleOrder(length: number, startIndex: number): number[] {
+    const order = Array.from({ length }, (_, i) => i);
+    for (let i = order.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        const tmp = order[i];
+        order[i] = order[j];
+        order[j] = tmp;
+    }
+    const startPos = order.indexOf(startIndex);
+    if (startPos > 0) {
+        order.splice(startPos, 1);
+        order.unshift(startIndex);
+    }
+    return order;
+}
 
 export const useAudio = () => useContext(AudioContext);
 
@@ -153,6 +174,7 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     const [currentPlaylist, setCurrentPlaylist] = useState<Playlist | null>(null);
     const [currentTrackIndex, setCurrentTrackIndex] = useState(0);
     const [isPlaying, setIsPlaying] = useState(false);
+    const [isShuffle, setIsShuffle] = useState(false);
     const [progress, setProgress] = useState(0);
     const [currentTime, setCurrentTime] = useState(0);
     const [duration, setDuration] = useState(0);
@@ -163,6 +185,10 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     const [isPreviewMode, setIsPreviewMode] = useState(false); // True if playing premium content without subscription
     const previewTimeAccumulator = useRef(0);
     const isPreviewModeRef = useRef(false); // Ref for use in event listeners
+    const isShuffleRef = useRef(false);
+    /** Shuffled permutation of playlist item indices; position tracked separately. */
+    const shuffleOrderRef = useRef<number[]>([]);
+    const shufflePosRef = useRef(0);
 
     // --- Refs ---
     const audioRef = useRef<HTMLAudioElement | null>(null);
@@ -229,6 +255,10 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     useEffect(() => {
         isPreviewModeRef.current = isPreviewMode;
     }, [isPreviewMode]);
+
+    useEffect(() => {
+        isShuffleRef.current = isShuffle;
+    }, [isShuffle]);
 
     // Create audio element once on mount
     useEffect(() => {
@@ -320,31 +350,39 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
                                 );
                             }).catch(() => {});
                         }
-                        
-                        const nextIndex = prev + 1;
-                        if (nextIndex < playlist.items.length) {
-                            // There's a next track - keep playing
+
+                        let nextIndex: number | null = null;
+                        if (isShuffleRef.current && shuffleOrderRef.current.length > 0) {
+                            const nextPos = shufflePosRef.current + 1;
+                            if (nextPos < shuffleOrderRef.current.length) {
+                                shufflePosRef.current = nextPos;
+                                nextIndex = shuffleOrderRef.current[nextPos];
+                            }
+                        } else {
+                            const sequential = prev + 1;
+                            if (sequential < playlist.items.length) {
+                                nextIndex = sequential;
+                            }
+                        }
+
+                        if (nextIndex != null) {
                             console.log('🎵 Track ended, auto-playing next track:', nextIndex + 1, '/', playlist.items.length);
-                            setIsPlaying(true); // Keep playing state true for next track
-                            
-                            // Reset engagement tracking for new track
+                            setIsPlaying(true);
                             lastEngagementUpdateRef.current = 0;
-                            
-                            // Record play event for the next track (real-time trending)
+
                             const track = playlist.items[nextIndex];
                             const trackId = (track as any)?._id;
                             const trackDuration = track?.duration || 0;
                             import('../services/playEventService').then(({ playEventService }) => {
-                                playEventService.recordEpisodePlay(playlist._id, nextIndex, trackId, undefined, trackDuration);
+                                playEventService.recordEpisodePlay(playlist._id, nextIndex!, trackId, undefined, trackDuration);
                             }).catch(() => {});
-                            
+
                             return nextIndex;
-                        } else {
-                            // No more tracks - stop playing
-                            console.log('🎵 Playlist ended');
-                            setIsPlaying(false);
-                            return prev; // Stay at last track
                         }
+
+                        console.log('🎵 Playlist ended');
+                        setIsPlaying(false);
+                        return prev;
                     });
                 }
                 return playlist;
@@ -620,12 +658,29 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
             });
 
             safeMediaSessionAction('nexttrack', () => {
-                if (currentPlaylist && currentTrackIndex < currentPlaylist.items.length - 1) {
+                if (!currentPlaylist) return;
+                if (isShuffleRef.current && shuffleOrderRef.current.length > 0) {
+                    const nextPos = shufflePosRef.current + 1;
+                    if (nextPos < shuffleOrderRef.current.length) {
+                        shufflePosRef.current = nextPos;
+                        setCurrentTrackIndex(shuffleOrderRef.current[nextPos]);
+                    }
+                    return;
+                }
+                if (currentTrackIndex < currentPlaylist.items.length - 1) {
                     setCurrentTrackIndex(prev => prev + 1);
                 }
             });
 
             safeMediaSessionAction('previoustrack', () => {
+                if (isShuffleRef.current && shuffleOrderRef.current.length > 0) {
+                    const prevPos = shufflePosRef.current - 1;
+                    if (prevPos >= 0) {
+                        shufflePosRef.current = prevPos;
+                        setCurrentTrackIndex(shuffleOrderRef.current[prevPos]);
+                    }
+                    return;
+                }
                 if (currentTrackIndex > 0) {
                     setCurrentTrackIndex(prev => prev - 1);
                 }
@@ -703,10 +758,20 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
             isSubscribed: isSubscribed,
             willBePreviewMode: !isSubscribed
         });
+
+        const safeStart = Math.max(0, Math.min(startIndex, Math.max(0, playlist.items.length - 1)));
         
         setCurrentPlaylist(playlist);
-        setCurrentTrackIndex(startIndex);
+        setCurrentTrackIndex(safeStart);
         setIsPlaying(true);
+
+        if (isShuffleRef.current && playlist.items.length > 0) {
+            shuffleOrderRef.current = buildShuffleOrder(playlist.items.length, safeStart);
+            shufflePosRef.current = 0;
+        } else {
+            shuffleOrderRef.current = [];
+            shufflePosRef.current = 0;
+        }
         
         // Enable preview mode for ALL non-subscribed users (2 min limit on all audio)
         const isPremiumPreview = !isSubscribed;
@@ -729,7 +794,7 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
         // Track analytics
         const playlistId = playlist._id;
-        const track = playlist.items[startIndex];
+        const track = playlist.items[safeStart];
         const trackId = (track as any)?._id;
         const trackDuration = track?.duration || 0; // Get track duration in seconds
 
@@ -737,7 +802,7 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
             playHistoryService.recordPlay(playlistId, trackId);
             analyticsService.playlistPlay(playlistId, playlist.title);
             if (track) {
-                activityTrackingService.trackSongPlayed(trackId || `${playlistId}_${startIndex}`, track.title);
+                activityTrackingService.trackSongPlayed(trackId || `${playlistId}_${safeStart}`, track.title);
                 incrementActivityCounter('song');
             }
             if (trackId) {
@@ -748,7 +813,7 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
             
             // Record play event for real-time trending (with total duration for engagement tracking)
             import('../services/playEventService').then(({ playEventService }) => {
-                playEventService.recordEpisodePlay(playlistId, startIndex, trackId, undefined, trackDuration);
+                playEventService.recordEpisodePlay(playlistId, safeStart, trackId, undefined, trackDuration);
             }).catch(() => {});
         }
     }, []);
@@ -757,19 +822,59 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         setIsPlaying(prev => !prev);
     }, []);
 
+    const toggleShuffle = useCallback(() => {
+        const next = !isShuffleRef.current;
+        isShuffleRef.current = next;
+        setIsShuffle(next);
+        if (next) {
+            setCurrentPlaylist(playlist => {
+                if (playlist && playlist.items.length > 0) {
+                    setCurrentTrackIndex(idx => {
+                        shuffleOrderRef.current = buildShuffleOrder(playlist.items.length, idx);
+                        shufflePosRef.current = 0;
+                        return idx;
+                    });
+                }
+                return playlist;
+            });
+        } else {
+            shuffleOrderRef.current = [];
+            shufflePosRef.current = 0;
+        }
+    }, []);
+
     const nextTrack = useCallback(() => {
-        if (currentPlaylist && currentTrackIndex < currentPlaylist.items.length - 1) {
+        if (!currentPlaylist) return;
+        if (isShuffle && shuffleOrderRef.current.length > 0) {
+            const nextPos = shufflePosRef.current + 1;
+            if (nextPos < shuffleOrderRef.current.length) {
+                shufflePosRef.current = nextPos;
+                setCurrentTrackIndex(shuffleOrderRef.current[nextPos]);
+                setIsPlaying(true);
+            }
+            return;
+        }
+        if (currentTrackIndex < currentPlaylist.items.length - 1) {
             setCurrentTrackIndex(prev => prev + 1);
             setIsPlaying(true);
         }
-    }, [currentPlaylist, currentTrackIndex]);
+    }, [currentPlaylist, currentTrackIndex, isShuffle]);
 
     const prevTrack = useCallback(() => {
+        if (isShuffle && shuffleOrderRef.current.length > 0) {
+            const prevPos = shufflePosRef.current - 1;
+            if (prevPos >= 0) {
+                shufflePosRef.current = prevPos;
+                setCurrentTrackIndex(shuffleOrderRef.current[prevPos]);
+                setIsPlaying(true);
+            }
+            return;
+        }
         if (currentTrackIndex > 0) {
             setCurrentTrackIndex(prev => prev - 1);
             setIsPlaying(true);
         }
-    }, [currentTrackIndex]);
+    }, [currentTrackIndex, isShuffle]);
 
     const seek = useCallback((time: number) => {
         if (audioRef.current) {
@@ -785,6 +890,8 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         setProgress(0);
         setCurrentTime(0);
         setDuration(0);
+        shuffleOrderRef.current = [];
+        shufflePosRef.current = 0;
 
         if (audioRef.current) {
             audioRef.current.pause();
@@ -837,8 +944,8 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         <AudioContext.Provider value={{
             musicEnabled, sfxEnabled, musicVolume, toggleMusic, toggleSfx, setMusicVolume,
             playClick, playBack, playSuccess, playTab, setGameMode, setMusicPaused, acquireAppAmbient,
-            currentPlaylist, currentTrackIndex, isPlaying, progress, currentTime, duration,
-            playPlaylist, togglePlayPause, nextTrack, prevTrack, seek, closePlayer,
+            currentPlaylist, currentTrackIndex, isPlaying, isShuffle, progress, currentTime, duration,
+            playPlaylist, togglePlayPause, toggleShuffle, nextTrack, prevTrack, seek, closePlayer,
             isPreviewMode, previewLimitReached, previewTimeRemaining, dismissPreviewLimit
         }}>
             {children}

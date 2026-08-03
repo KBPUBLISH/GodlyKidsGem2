@@ -1,7 +1,12 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import { useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { ArrowLeft, Check, PartyPopper, X } from 'lucide-react';
 import { getApiBaseUrl } from '../services/apiService';
+import { islandStoryProgressService } from '../services/islandStoryProgressService';
+import {
+  buildIslandSceneNavState,
+  buildIslandScenePath,
+} from '../utils/islandSceneReturn';
 
 const WOOD_TEX = '/assets/images/wheel-background-wood.png';
 
@@ -82,9 +87,14 @@ const levelsFromStory = (
 
 const IslandQuizPage: React.FC = () => {
   const navigate = useNavigate();
+  const location = useLocation();
   const { islandId = 'genesis' } = useParams();
   const [searchParams, setSearchParams] = useSearchParams();
-  const backPath = `/sail/${islandId}/lesson`;
+  const navState = location.state as {
+    title?: string;
+    fromMainMap?: boolean;
+    fromSail?: boolean;
+  } | null;
 
   const [phase, setPhase] = useState<Phase>('loading');
   const [title, setTitle] = useState('QUIZZ');
@@ -99,6 +109,35 @@ const IslandQuizPage: React.FC = () => {
   const [score, setScore] = useState(0);
 
   const current = questions[index];
+
+  const returnStoryId =
+    storyId || searchParams.get('storyId')?.trim() || undefined;
+
+  const sceneBackPath =
+    buildIslandScenePath({
+      islandId,
+      storyId: returnStoryId,
+    }) || `/sail/${islandId}/lesson`;
+
+  const goBackToScene = useCallback(() => {
+    navigate(sceneBackPath, {
+      state: buildIslandSceneNavState({
+        islandId,
+        storyId: returnStoryId,
+        fromMainMap: Boolean(navState?.fromMainMap),
+        fromSail: Boolean(navState?.fromSail),
+        title: navState?.title || title,
+      }),
+    });
+  }, [navigate, sceneBackPath, islandId, returnStoryId, navState, title]);
+
+  // Persist quiz completion as soon as the results screen is shown
+  useEffect(() => {
+    if (phase !== 'done') return;
+    const sid = storyId || searchParams.get('storyId') || '';
+    if (!sid) return;
+    islandStoryProgressService.markComplete(islandId, sid, 'quiz');
+  }, [phase, islandId, storyId, searchParams]);
 
   const loadStoryQuiz = useCallback(
     async (controller: AbortController) => {
@@ -248,20 +287,22 @@ const IslandQuizPage: React.FC = () => {
   }, [index, questions.length, revealed]);
 
   return (
-    <div className="relative w-full h-[100dvh] overflow-hidden bg-[#1a4a28]">
-      <div
-        className="absolute inset-0 opacity-40 pointer-events-none"
-        style={{
-          backgroundImage: `url(${WOOD_TEX})`,
-          backgroundSize: 'cover',
-        }}
-      />
+    <div
+      className="relative w-full h-[100dvh] overflow-hidden"
+      style={{
+        backgroundImage: `url(${WOOD_TEX})`,
+        backgroundSize: 'cover',
+        backgroundPosition: 'center',
+      }}
+    >
+      {/* Warm brown darken — same as puzzle/coloring; avoid green under translucent wood */}
+      <div className="absolute inset-0 bg-[#2a1810]/70 pointer-events-none" aria-hidden />
 
       <div className="relative z-10 flex flex-col h-full px-4 pt-[max(12px,var(--safe-area-top))] pb-[max(12px,var(--safe-area-bottom))]">
         <div className="flex items-center gap-3 mb-3">
           <button
             type="button"
-            onClick={() => navigate(backPath)}
+            onClick={goBackToScene}
             className="flex items-center justify-center w-11 h-11 rounded-full text-white active:scale-95"
             style={woodBtnStyle}
             aria-label="Back"
@@ -291,7 +332,7 @@ const IslandQuizPage: React.FC = () => {
             </p>
             <button
               type="button"
-              onClick={() => navigate(backPath)}
+              onClick={goBackToScene}
               className="px-5 py-2.5 rounded-xl text-white font-bold"
               style={woodBtnStyle}
             >
@@ -450,7 +491,7 @@ const IslandQuizPage: React.FC = () => {
               </button>
               <button
                 type="button"
-                onClick={() => navigate(backPath)}
+                onClick={goBackToScene}
                 className="py-3 rounded-xl text-white/95 font-bold border-2 border-white/40"
               >
                 Back to activities

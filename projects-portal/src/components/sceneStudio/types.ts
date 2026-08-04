@@ -53,10 +53,12 @@ export const SCENE_ACTIVITY_DEFS: Array<{
 /** Default % positions roughly matching the in-app ACTIVITIES tray (phone). */
 export function defaultPhoneButtons(): SceneButton[] {
     const ids = SCENE_ACTIVITY_DEFS;
-    const startX = 10;
+    const startX = 8;
     const gap = 1.5;
-    const w = 15;
-    const y = 72;
+    const w = 16;
+    // Lower on the frame so buttons sit in the main plank (not under the header).
+    // Kid app also pins activity icons into the board tray when board chrome is on.
+    const y = 84;
     const h = 14;
     return ids.map((d, i) => ({
         id: d.id,
@@ -71,11 +73,11 @@ export function defaultPhoneButtons(): SceneButton[] {
 
 export function defaultTabletButtons(): SceneButton[] {
     const ids = SCENE_ACTIVITY_DEFS;
-    const startX = 18;
+    const startX = 16;
     const gap = 2;
-    const w = 12;
-    const y = 74;
-    const h = 12;
+    const w = 13;
+    const y = 85;
+    const h = 13;
     return ids.map((d, i) => ({
         id: d.id,
         x: startX + i * (w + gap),

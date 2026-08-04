@@ -1,14 +1,18 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams, useLocation, useSearchParams } from 'react-router-dom';
 import { Lock, Volume2, VolumeX, List } from 'lucide-react';
-import { ApiService, getApiBaseUrl } from '../services/apiService';
+import { getApiBaseUrl } from '../services/apiService';
 import {
   islandStoryProgressService,
   type IslandStoryProgress,
 } from '../services/islandStoryProgressService';
 import { bookCompletionService } from '../services/bookCompletionService';
 import { attachReliableLoop } from '../utils/audioLoop';
-import { appendIslandSceneReturnParams } from '../utils/islandSceneReturn';
+import RewardsLootModal from '../components/rewards/RewardsLootModal';
+import {
+  resolveRewardPool,
+  type RewardDefinition,
+} from '../services/rewardsService';
 
 /** Public assets under Vite `public/` (respects base path). */
 const publicAsset = (path: string): string => {
@@ -25,11 +29,14 @@ const ICON_READ = `${publicAsset('assets/images/island-activity-read-story.png')
 const ICON_QUIZ = `${publicAsset('assets/images/island-activity-quiz.png')}?v=4`;
 const ICON_PUZZLE = `${publicAsset('assets/images/island-activity-puzzle.png')}?v=4`;
 const ICON_COLORING = `${publicAsset('assets/images/island-activity-coloring.png')}?v=4`;
+const ICON_REWARDS = `${publicAsset('assets/images/rewards-gamepad-icon.png')}?v=1`;
 const ICON_GAME = `${publicAsset('assets/images/island-activity-game.png')}?v=4`;
 const ICON_MENU = `${publicAsset('assets/images/island-activity-menu.png')}?v=3`;
 const ICON_DIALOGUE = publicAsset('assets/images/dialogue-tap-to-talk.png');
 
 const WHITE_FADE_MS = 800;
+/** Scene → white before a tap-to-talk / trigger animation starts. */
+const TRIGGER_PRE_FADE_MS = 450;
 const INTRO_SAFETY_TIMEOUT_MS = 45_000;
 const CMS_FETCH_TIMEOUT_MS = 2_000;
 /**
@@ -54,7 +61,8 @@ type MainMapReturnState = {
   fromSail?: boolean;
 };
 
-type ActivityId = 'read' | 'quiz' | 'puzzle' | 'coloring' | 'game';
+type ActivityId = 'read' | 'quiz' | 'puzzle' | 'coloring' | 'rewards';
+type CmsActivityId = ActivityId | 'game';
 
 type ActivityDef = {
   id: ActivityId;
@@ -90,7 +98,7 @@ type SceneTrigger = {
   fromButtonId: string;
   animationId?: string;
   after?: 'navigate' | 'stay';
-  navigateTo?: ActivityId | '';
+  navigateTo?: CmsActivityId | '';
 };
 
 const ACTIVITIES: ActivityDef[] = [
@@ -98,7 +106,7 @@ const ACTIVITIES: ActivityDef[] = [
   { id: 'quiz', label: 'QUIZZ', iconSrc: ICON_QUIZ, locked: true },
   { id: 'puzzle', label: 'PUZZLE', iconSrc: ICON_PUZZLE, locked: true },
   { id: 'coloring', label: 'COLORING', iconSrc: ICON_COLORING, locked: true },
-  { id: 'game', label: 'GAME', iconSrc: ICON_GAME, locked: true },
+  { id: 'rewards', label: 'REWARDS', iconSrc: ICON_REWARDS, locked: true },
 ];
 
 const ACTIVITY_ICON: Record<ActivityId, string> = {
@@ -106,15 +114,27 @@ const ACTIVITY_ICON: Record<ActivityId, string> = {
   quiz: ICON_QUIZ,
   puzzle: ICON_PUZZLE,
   coloring: ICON_COLORING,
-  game: ICON_GAME,
+  rewards: ICON_REWARDS,
 };
 
-const isActivityId = (id: string): id is ActivityId =>
+const isActivityId = (id: string): boolean =>
   id === 'read' ||
   id === 'quiz' ||
   id === 'puzzle' ||
   id === 'coloring' ||
+  id === 'rewards' ||
   id === 'game';
+
+const normalizeActivityId = (id: string): ActivityId | null => {
+  if (id === 'game' || id === 'rewards') return 'rewards';
+  if (id === 'read' || id === 'quiz' || id === 'puzzle' || id === 'coloring') return id;
+  return null;
+};
+
+const activityIconFor = (id: string): string => {
+  const n = normalizeActivityId(id);
+  return (n && ACTIVITY_ICON[n]) || ICON_REWARDS;
+};
 
 /** Reject empty / placeholder CMS media strings. */
 const isUsableMediaUrl = (url: string | undefined | null): boolean => {
@@ -122,18 +142,6 @@ const isUsableMediaUrl = (url: string | undefined | null): boolean => {
   if (!t) return false;
   const lower = t.toLowerCase();
   return lower !== 'null' && lower !== 'undefined';
-};
-
-/**
- * External game URLs must be absolute http(s) before passing as `/game?url=…`
- * so a relative path is never mistaken for an in-app route.
- */
-const toAbsoluteHttpUrl = (url: string | undefined | null): string | null => {
-  const trimmed = (url || '').trim();
-  if (!trimmed || !isUsableMediaUrl(trimmed)) return null;
-  if (/^https?:\/\//i.test(trimmed)) return trimmed;
-  if (trimmed.startsWith('//')) return `https:${trimmed}`;
-  return null;
 };
 
 /**
@@ -228,15 +236,12 @@ type ActivityContent = {
   storyId?: string;
 };
 
-/** MapStory.game — webview URL or catalog gameId. */
-type GameContent = {
+/** MapStory.rewards pool (plus sensible defaults). */
+type RewardsContent = {
   available: boolean;
   storyId?: string;
-  /** Direct URL from game.webview.url when kind === 'webview'. */
-  url?: string;
   title?: string;
-  /** Game.gameId when kind === 'catalog' (resolved on tap). */
-  catalogGameId?: string;
+  pool: RewardDefinition[];
 };
 
 type SceneProgress = IslandStoryProgress;
@@ -334,7 +339,11 @@ const IslandScenePage: React.FC = () => {
   const [coloringContent, setColoringContent] = useState<ActivityContent>({
     available: false,
   });
-  const [gameContent, setGameContent] = useState<GameContent>({ available: false });
+  const [rewardsContent, setRewardsContent] = useState<RewardsContent>({
+    available: false,
+    pool: [],
+  });
+  const [rewardsOpen, setRewardsOpen] = useState(false);
   /** Kid progress for the active story (localStorage). */
   const [sceneProgress, setSceneProgress] = useState<SceneProgress>({
     read: false,
@@ -352,10 +361,14 @@ const IslandScenePage: React.FC = () => {
   const [sceneAnimations, setSceneAnimations] = useState<SceneAnimation[]>([]);
   const [sceneTriggers, setSceneTriggers] = useState<SceneTrigger[]>([]);
   const [triggerVideoUrl, setTriggerVideoUrl] = useState<string | null>(null);
-  /** White fade after a wired button animation (same timing as intro). */
-  const [triggerFade, setTriggerFade] = useState<'idle' | 'whiteIn' | 'whiteOut'>(
-    'idle',
-  );
+  /**
+   * White fade around a wired button animation:
+   * preWhiteIn / preWhiteOut = scene → white → reveal video;
+   * whiteIn / whiteOut = end of clip → white → scene (same timing as intro).
+   */
+  const [triggerFade, setTriggerFade] = useState<
+    'idle' | 'preWhiteIn' | 'preWhiteOut' | 'whiteIn' | 'whiteOut'
+  >('idle');
   const [sceneMusicSrc, setSceneMusicSrc] = useState<string | null>(null);
   const sceneMusicRef = useRef<HTMLAudioElement | null>(null);
   const sceneMusicLoopDetachRef = useRef<(() => void) | null>(null);
@@ -363,6 +376,7 @@ const IslandScenePage: React.FC = () => {
     () => typeof window !== 'undefined' && window.innerWidth >= TABLET_MIN_WIDTH,
   );
   const pendingNavigateRef = useRef<ActivityId | null>(null);
+  const pendingTriggerUrlRef = useRef<string | null>(null);
   const finishingTriggerRef = useRef(false);
   const triggerFadeTimersRef = useRef<number[]>([]);
 
@@ -412,7 +426,8 @@ const IslandScenePage: React.FC = () => {
     setQuizContent({ available: false });
     setPuzzleContent({ available: false });
     setColoringContent({ available: false });
-    setGameContent({ available: false });
+    setRewardsContent({ available: false, pool: [] });
+    setRewardsOpen(false);
     setSceneProgress({ read: false, quiz: false });
     setActiveStoryId('');
     setSceneLayoutPhone(null);
@@ -578,41 +593,28 @@ const IslandScenePage: React.FC = () => {
             : { available: false },
         );
 
-        const storyHasGame = (s: (typeof stories)[number] | undefined) => {
-          const g = s?.game;
-          if (!g?.enabled || g.kind === 'none') return false;
-          if (g.kind === 'webview') {
-            return Boolean(toAbsoluteHttpUrl(g.webview?.url));
-          }
-          if (g.kind === 'catalog') {
-            return Boolean(g.gameId && String(g.gameId).trim());
-          }
-          return false;
-        };
-        const gameStory = storyHasGame(primaryStory)
-          ? primaryStory
-          : stories.find(storyHasGame);
-        if (gameStory?.game) {
-          const g = gameStory.game;
-          const webviewUrl =
-            g.kind === 'webview'
-              ? toAbsoluteHttpUrl(g.webview?.url) || undefined
-              : undefined;
-          setGameContent({
+        // Rewards: available after read+quiz (defaults if CMS pool empty).
+        const rewardsStory = primaryStory || stories[0];
+        if (rewardsStory) {
+          const pool = resolveRewardPool(
+            rewardsStory as Parameters<typeof resolveRewardPool>[0],
+          );
+          setRewardsContent({
             available: true,
-            storyId: gameStory._id,
-            url: webviewUrl,
+            storyId: String(rewardsStory._id),
             title:
-              (g.webview?.title && g.webview.title.trim()) ||
-              gameStory.displayTitle ||
+              (rewardsStory.displayTitle &&
+                String(rewardsStory.displayTitle).trim()) ||
+              (rewardsStory.title && String(rewardsStory.title).trim()) ||
               undefined,
-            catalogGameId:
-              g.kind === 'catalog' && g.gameId
-                ? String(g.gameId).trim()
-                : undefined,
+            pool,
           });
         } else {
-          setGameContent({ available: false });
+          setRewardsContent({
+            available: true,
+            storyId: storyIdParam || '',
+            pool: resolveRewardPool(null),
+          });
         }
 
         // Sync read progress from book completion if kid finished this pack's book before
@@ -914,6 +916,8 @@ const IslandScenePage: React.FC = () => {
   const showWhite =
     introPhase === 'whiteIn' ||
     introPhase === 'whiteOut' ||
+    triggerFade === 'preWhiteIn' ||
+    triggerFade === 'preWhiteOut' ||
     triggerFade === 'whiteIn' ||
     triggerFade === 'whiteOut';
   const showScene =
@@ -993,101 +997,81 @@ const IslandScenePage: React.FC = () => {
     navigate(`${coloringPath}${qs}`, { state: activityReturnState() });
   }, [navigate, coloringPath, coloringContent.storyId, activityReturnState]);
 
-  /**
-   * Open CMS game in the in-app `/game` WebView (outside ProtectedRoute) so a
-   * floating back overlay can return to this Island Scene.
-   */
-  const openGameInApp = useCallback(
-    (url: string, gameTitle?: string) => {
-      const absolute = toAbsoluteHttpUrl(url);
-      if (!absolute) {
-        alert('Game coming soon');
-        return;
-      }
-      const storyId =
-        gameContent.storyId || storyIdParam || activeStoryId || undefined;
-      const title =
-        gameTitle ||
-        gameContent.title ||
-        navState?.title ||
-        cmsTitle ||
-        'Game';
-      const params = new URLSearchParams();
-      params.set('url', absolute);
-      params.set('name', title);
-      appendIslandSceneReturnParams(params, {
-        islandId,
-        storyId,
-        fromMainMap: Boolean(navState?.fromMainMap),
-        fromSail: Boolean(navState?.fromSail),
-        title: navState?.title || cmsTitle || title,
-      });
-      navigate(`/game?${params.toString()}`, {
-        state: {
-          islandId,
-          storyId,
-          fromMainMap: Boolean(navState?.fromMainMap),
-          fromSail: Boolean(navState?.fromSail),
-          title: navState?.title || cmsTitle || title,
-        },
-      });
-    },
-    [
-      navigate,
-      islandId,
-      gameContent.storyId,
-      gameContent.title,
-      storyIdParam,
-      activeStoryId,
-      navState?.fromMainMap,
-      navState?.fromSail,
-      navState?.title,
-      cmsTitle,
-    ],
-  );
-
-  const goGame = useCallback(async () => {
-    if (gameContent.url) {
-      openGameInApp(gameContent.url, gameContent.title);
-      return;
+  const goRewards = useCallback(() => {
+    const sid =
+      rewardsContent.storyId || storyIdParam || activeStoryId || '';
+    if (sid) {
+      islandStoryProgressService.markComplete(islandId, sid, 'rewards');
+      setSceneProgress(islandStoryProgressService.get(islandId, sid));
     }
-    if (gameContent.catalogGameId) {
-      try {
-        const games = await ApiService.getEnabledGames({ forceRefresh: true });
-        const match = (Array.isArray(games) ? games : []).find(
-          (g: { gameId?: string; url?: string; name?: string }) =>
-            g?.gameId === gameContent.catalogGameId &&
-            Boolean(toAbsoluteHttpUrl(g?.url)),
-        );
-        if (match?.url) {
-          openGameInApp(
-            String(match.url),
-            (match.name && String(match.name).trim()) || gameContent.title,
-          );
-          return;
-        }
-      } catch (err) {
-        console.warn('Island game catalog lookup failed:', err);
-      }
-    }
-    alert('Game coming soon');
-  }, [gameContent.url, gameContent.catalogGameId, gameContent.title, openGameInApp]);
+    setRewardsOpen(true);
+  }, [
+    rewardsContent.storyId,
+    storyIdParam,
+    activeStoryId,
+    islandId,
+  ]);
 
   const navigateToActivity = useCallback(
     (id: ActivityId) => {
-      if (id === 'read') goHub();
-      else if (id === 'quiz') goQuiz();
-      else if (id === 'puzzle') goPuzzle();
-      else if (id === 'coloring') goColoring();
-      else if (id === 'game') void goGame();
+      const normalized = normalizeActivityId(id) || id;
+      if (normalized === 'read') goHub();
+      else if (normalized === 'quiz') goQuiz();
+      else if (normalized === 'puzzle') goPuzzle();
+      else if (normalized === 'coloring') goColoring();
+      else if (normalized === 'rewards') goRewards();
     },
-    [goHub, goQuiz, goPuzzle, goColoring, goGame],
+    [goHub, goQuiz, goPuzzle, goColoring, goRewards],
   );
 
   const clearTriggerFadeTimers = useCallback(() => {
     for (const id of triggerFadeTimersRef.current) window.clearTimeout(id);
     triggerFadeTimersRef.current = [];
   }, []);
+
+  /** Fade scene to white, then mount/play the trigger video under a white fade-out. */
+  const beginTriggerVideo = useCallback(
+    (animUrl: string) => {
+      pendingTriggerUrlRef.current = animUrl;
+      finishingTriggerRef.current = false;
+
+      if (prefersReducedMotion()) {
+        pendingTriggerUrlRef.current = null;
+        setTriggerFade('idle');
+        setWhiteOpacity(0);
+        setTriggerVideoUrl(animUrl);
+        return;
+      }
+
+      clearTriggerFadeTimers();
+      setTriggerVideoUrl(null);
+      setTriggerFade('preWhiteIn');
+      setWhiteOpacity(0);
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => setWhiteOpacity(1));
+      });
+
+      const peakId = window.setTimeout(() => {
+        const url = pendingTriggerUrlRef.current;
+        pendingTriggerUrlRef.current = null;
+        if (!url) {
+          setTriggerFade('idle');
+          setWhiteOpacity(0);
+          return;
+        }
+        // Video mounts under full white, then white fades out to reveal playback
+        setTriggerVideoUrl(url);
+        setTriggerFade('preWhiteOut');
+        setWhiteOpacity(0);
+        const doneId = window.setTimeout(() => {
+          setTriggerFade('idle');
+        }, TRIGGER_PRE_FADE_MS);
+        triggerFadeTimersRef.current.push(doneId);
+      }, TRIGGER_PRE_FADE_MS);
+      triggerFadeTimersRef.current.push(peakId);
+    },
+    [clearTriggerFadeTimers],
+  );
 
   const finishTriggerVideo = useCallback(() => {
     if (finishingTriggerRef.current) return;
@@ -1228,18 +1212,18 @@ const IslandScenePage: React.FC = () => {
         const navTarget =
           trigger.after === 'stay'
             ? null
-            : trigger.navigateTo && isActivityId(trigger.navigateTo)
-              ? trigger.navigateTo
-              : isActivityId(id)
-                ? id
-                : null;
+            : trigger.navigateTo && normalizeActivityId(trigger.navigateTo)
+              ? normalizeActivityId(trigger.navigateTo)
+              : normalizeActivityId(id);
         pendingNavigateRef.current = navTarget;
-        finishingTriggerRef.current = false;
-        setTriggerVideoUrl(animUrl);
+        beginTriggerVideo(animUrl);
         return;
       }
 
-      if (isActivityId(id)) navigateToActivity(id);
+      if (isActivityId(id)) {
+        const next = normalizeActivityId(id);
+        if (next) navigateToActivity(next);
+      }
     },
     [
       sceneInteractive,
@@ -1248,6 +1232,7 @@ const IslandScenePage: React.FC = () => {
       sceneTriggers,
       sceneAnimations,
       navigateToActivity,
+      beginTriggerVideo,
     ],
   );
 
@@ -1260,7 +1245,7 @@ const IslandScenePage: React.FC = () => {
    * Product unlock rules (prefer over sequential CMS unlockOrder):
    * - read: always open
    * - quiz: after read (and CMS has quiz content)
-   * - puzzle / coloring / game: after BOTH read + quiz (and CMS has that content)
+   * - puzzle / coloring / rewards: after BOTH read + quiz (and CMS has that content)
    * If the story has no quiz content, quiz is skipped so read alone unlocks the rest.
    */
   const activities = useMemo(() => {
@@ -1288,8 +1273,8 @@ const IslandScenePage: React.FC = () => {
           locked: !(coloringContent.available && gatesOpen),
         };
       }
-      if (a.id === 'game') {
-        // Unlock after read+quiz; tap opens CMS game URL or "coming soon"
+      if (a.id === 'rewards') {
+        // Same gate as former Game: unlock after read+quiz
         return {
           ...a,
           locked: !gatesOpen,
@@ -1311,6 +1296,13 @@ const IslandScenePage: React.FC = () => {
   // Icon-less Scene Studio defaults must not replace the built-in tray
   const useCmsButtons = cmsLayoutHasCustomIcons(cmsDeviceLayout?.buttons);
   const showActivitiesBoard = cmsDeviceLayout?.showActivitiesBoard !== false;
+  /**
+   * When Scene Studio uploaded activity icons + board chrome, stale absolute %
+   * (often y≈72) float above the flush-bottom plank. Pin those activities into
+   * the board tray; keep dialogue / custom hotspots on free CMS coords.
+   */
+  const pinCmsActivitiesToBoard = useCmsButtons && showActivitiesBoard;
+  const cmsButtons = cmsDeviceLayout?.buttons ?? [];
 
   return (
     <div className="relative w-full h-[100dvh] overflow-hidden bg-[#1a4a28]">
@@ -1404,10 +1396,13 @@ const IslandScenePage: React.FC = () => {
             {/* Garden mid band — spacer between header and activities board */}
             <div className="relative flex-1 min-h-0" aria-hidden />
 
-            {/* CMS-authored absolute buttons (% of full scene frame) */}
+            {/* CMS hotspots / free-placed buttons (% of full scene frame).
+                Activity icons with board chrome are pinned into the tray below. */}
             {useCmsButtons &&
-              cmsDeviceLayout!.buttons!.map((btn) => {
-                const activityId = isActivityId(btn.id) ? btn.id : null;
+              cmsButtons
+                .filter((btn) => !(pinCmsActivitiesToBoard && isActivityId(btn.id)))
+                .map((btn) => {
+                const activityId = normalizeActivityId(btn.id);
                 const activity = activityId
                   ? activities.find((a) => a.id === activityId)
                   : undefined;
@@ -1421,23 +1416,26 @@ const IslandScenePage: React.FC = () => {
                   btn.id === 'dialogue' || btn.id.startsWith('dialogue_');
                 const localSrc =
                   activity?.iconSrc ||
-                  (activityId ? ACTIVITY_ICON[activityId] : undefined) ||
+                  (activityId ? activityIconFor(activityId) : undefined) ||
                   (isDialogue ? ICON_DIALOGUE : ICON_READ);
                 const cmsIcon = isUsableMediaUrl(btn.iconUrl)
                   ? resolveMediaUrl(btn.iconUrl)
                   : '';
+                // Without board chrome, pull legacy Scene Studio activity Y into the lower band.
+                const topPct =
+                  activityId && btn.y < 80 ? Math.min(88, btn.y + 14) : btn.y;
                 return (
                   <button
                     key={btn.id}
                     type="button"
                     disabled={locked || !sceneInteractive || triggerFade !== 'idle'}
                     onClick={() => onSceneButton(btn.id, locked)}
-                    className={`absolute z-20 flex flex-col items-center justify-end active:scale-95 transition-transform ${
+                    className={`absolute z-20 flex items-center justify-center active:scale-95 transition-transform ${
                       locked ? 'cursor-not-allowed' : ''
                     }`}
                     style={{
                       left: `${btn.x}%`,
-                      top: `${btn.y}%`,
+                      top: `${topPct}%`,
                       width: `${btn.w}%`,
                       height: `${btn.h}%`,
                     }}
@@ -1446,7 +1444,7 @@ const IslandScenePage: React.FC = () => {
                       sceneInteractive && !locked && triggerFade === 'idle' ? 0 : -1
                     }
                   >
-                    <span className="relative flex items-center justify-center w-full flex-1 min-h-[2.5rem] mb-0.5">
+                    <span className="relative flex items-center justify-center w-full h-full min-h-0">
                       <ActivityIcon
                         key={`${cmsIcon}|${localSrc}`}
                         primarySrc={cmsIcon || undefined}
@@ -1455,21 +1453,24 @@ const IslandScenePage: React.FC = () => {
                         imgClassName="max-w-full max-h-full object-contain drop-shadow-md"
                       />
                       {locked && <ActivityLockBadge size={32} />}
+                      {!isDialogue && (
+                        <span
+                          className="absolute left-0 right-0 z-[1] font-display font-black text-white text-[0.55rem] sm:text-[0.65rem] leading-tight tracking-wide text-center px-0.5 truncate pointer-events-none"
+                          style={{
+                            bottom: '16%',
+                            textShadow: '0 1px 3px rgba(0,0,0,0.7)',
+                          }}
+                        >
+                          {label}
+                        </span>
+                      )}
                     </span>
-                    {!isDialogue && (
-                      <span
-                        className="font-display font-black text-white text-[0.55rem] sm:text-[0.65rem] leading-tight tracking-wide text-center px-0.5 w-full truncate"
-                        style={{ textShadow: '0 1px 3px rgba(0,0,0,0.7)' }}
-                      >
-                        {label}
-                      </span>
-                    )}
                   </button>
                 );
               })}
 
-            {/* Default ACTIVITIES wood sign + buttons (when no CMS layout) */}
-            {!useCmsButtons && (
+            {/* ACTIVITIES wood sign + buttons (built-in tray, or CMS icons pinned to board) */}
+            {(!useCmsButtons || pinCmsActivitiesToBoard) && (
               <div
                 className="absolute left-0 right-0 z-10 mx-auto w-full px-1"
                 style={{
@@ -1505,74 +1506,66 @@ const IslandScenePage: React.FC = () => {
                     />
                   )}
 
-                  {/* Header plank already has baked-in "ACTIVITIES" text */}
+                  {/*
+                    Board art: small ACTIVITIES header (~0–28%) + main plank (~30–100%).
+                    Activity PNGs are the vertical button posts — labels overlay the
+                    lower face of each post (not a flex sibling under the base beam).
+                  */}
                   <div
-                    className="absolute left-[6%] right-[6%] flex items-stretch justify-between gap-1 z-10"
-                    style={{ top: '38%', bottom: '8%' }}
+                    className="absolute left-[5%] right-[5%] flex items-stretch justify-between gap-0.5 z-10"
+                    style={{ top: '30%', bottom: '6%' }}
                   >
                     {activities.map((activity) => {
                       const locked = activity.locked;
+                      const cmsBtn = pinCmsActivitiesToBoard
+                        ? cmsButtons.find((b) => b.id === activity.id)
+                        : undefined;
+                      const label = cmsBtn?.label || activity.label;
+                      const cmsIcon = isUsableMediaUrl(cmsBtn?.iconUrl)
+                        ? resolveMediaUrl(cmsBtn!.iconUrl)
+                        : '';
                       return (
                         <button
                           key={activity.id}
                           type="button"
-                          disabled={locked || !sceneInteractive}
+                          disabled={locked || !sceneInteractive || triggerFade !== 'idle'}
                           onClick={() => onActivity(activity.id, locked)}
-                          className={`relative flex flex-col items-center justify-end flex-1 min-w-0 h-full pb-0.5 active:scale-95 transition-transform ${
+                          className={`relative flex items-center justify-center flex-1 min-w-0 h-full active:scale-95 transition-transform ${
                             locked ? 'cursor-not-allowed' : ''
                           }`}
                           aria-label={
-                            locked ? `${activity.label} (locked)` : activity.label
+                            locked ? `${label} (locked)` : label
                           }
-                          tabIndex={sceneInteractive && !locked ? 0 : -1}
+                          tabIndex={
+                            sceneInteractive && !locked && triggerFade === 'idle'
+                              ? 0
+                              : -1
+                          }
                         >
-                          <span className="relative flex items-center justify-center w-full aspect-square max-h-[70%] min-h-[2.75rem] mb-0.5">
+                          <span className="relative flex items-center justify-center w-full h-full min-h-0">
                             <ActivityIcon
-                              key={activity.iconSrc}
+                              key={`${cmsIcon}|${activity.iconSrc}`}
+                              primarySrc={cmsIcon || undefined}
                               localSrc={activity.iconSrc}
                               locked={locked}
                               imgClassName="w-full h-full object-contain drop-shadow-md"
                             />
                             {locked && <ActivityLockBadge size={34} />}
-                          </span>
-                          <span
-                            className="font-display font-black text-white text-[0.55rem] sm:text-[0.65rem] leading-tight tracking-wide text-center px-0.5"
-                            style={{ textShadow: '0 1px 3px rgba(0,0,0,0.7)' }}
-                          >
-                            {activity.label}
+                            <span
+                              className="absolute left-0 right-0 z-[1] font-display font-black text-white text-[0.55rem] sm:text-[0.65rem] leading-tight tracking-wide text-center px-0.5 pointer-events-none"
+                              style={{
+                                bottom: '16%',
+                                textShadow: '0 1px 3px rgba(0,0,0,0.7)',
+                              }}
+                            >
+                              {label}
+                            </span>
                           </span>
                         </button>
                       );
                     })}
                   </div>
                 </div>
-              </div>
-            )}
-
-            {/* Optional board chrome under CMS buttons */}
-            {useCmsButtons && showActivitiesBoard && (
-              <div
-                className="absolute left-0 right-0 z-10 mx-auto w-full px-1 pointer-events-none"
-                style={{
-                  maxWidth: 560,
-                  bottom: 0,
-                  paddingBottom: 'var(--safe-area-bottom, 0px)',
-                  transform:
-                    ACTIVITIES_BOARD_CROP > 0
-                      ? `translateY(${ACTIVITIES_BOARD_CROP * 100}%)`
-                      : undefined,
-                }}
-                aria-hidden
-              >
-                {boardImgFailed ? null : (
-                  <img
-                    src={ACTIVITIES_SIGN}
-                    alt=""
-                    className="block w-full h-auto select-none opacity-95"
-                    draggable={false}
-                    onError={() => setBoardImgFailed(true)}
-                  />
-                )}
               </div>
             )}
           </div>
@@ -1691,11 +1684,32 @@ const IslandScenePage: React.FC = () => {
           style={{
             background: '#ffffff',
             opacity: whiteOpacity,
-            transition: `opacity ${WHITE_FADE_MS}ms ease-in-out`,
+            transition: `opacity ${
+              triggerFade === 'preWhiteIn' || triggerFade === 'preWhiteOut'
+                ? TRIGGER_PRE_FADE_MS
+                : WHITE_FADE_MS
+            }ms ease-in-out`,
           }}
           aria-hidden
         />
       )}
+
+      <RewardsLootModal
+        open={rewardsOpen}
+        onClose={() => setRewardsOpen(false)}
+        storyId={
+          rewardsContent.storyId ||
+          storyIdParam ||
+          activeStoryId ||
+          `island-${islandId}`
+        }
+        storyTitle={rewardsContent.title || sceneTitle}
+        pool={
+          rewardsContent.pool.length
+            ? rewardsContent.pool
+            : resolveRewardPool(null)
+        }
+      />
     </div>
   );
 };

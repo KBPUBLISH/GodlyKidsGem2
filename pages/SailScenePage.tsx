@@ -5,6 +5,7 @@ import {
   getBibleMapApiRoot,
   resolveBibleMapMediaUrl,
 } from '../utils/bibleMapApi';
+import CrewPickerDropdown from '../components/rewards/CrewPickerDropdown';
 
 /** Looping ocean background video (portrait; shown full-bleed cover). */
 const SAIL_SCENE_BG = '/assets/videos/sail-ocean-bg.mp4';
@@ -17,6 +18,19 @@ const SAIL_STEERING_WHEEL = '/assets/images/sail-steering-wheel.png';
 const SAIL_BTN_CREW = '/assets/images/sail-btn-crew.png';
 /** Sail-scene bottom overlay — explore / world (open book on wood plaque). */
 const SAIL_BTN_EXPLORE = '/assets/images/sail-btn-explore.png';
+/** Shared wood texture for Travel Here CTA (matches IslandScene chrome). */
+const WOOD_TEX = '/assets/images/wheel-background-wood.png';
+/** One-time steering-wheel turn hint — hide after first drag. */
+const WHEEL_HINT_STORAGE_KEY = 'godlykids_sail_wheel_hint_seen';
+
+const travelHereBtnStyle: React.CSSProperties = {
+  backgroundImage: `url(${WOOD_TEX})`,
+  backgroundSize: 'cover',
+  backgroundPosition: 'center',
+  boxShadow:
+    '0 3px 0 #5c3a1a, 0 4px 10px rgba(0,0,0,0.35), inset 0 1px 0 rgba(255,230,180,0.35)',
+  border: '2px solid #6B4423',
+};
 
 /** Sky cloud A — wide bank (970×453; alpha already keyed). */
 const SAIL_BG_CLOUD_A = '/assets/images/sail-bg-cloud-a.png';
@@ -290,6 +304,7 @@ const fetchIslandHasMainMap = async (id: string): Promise<boolean> => {
  */
 const SailScenePage: React.FC = () => {
   const navigate = useNavigate();
+  const [crewPickerOpen, setCrewPickerOpen] = useState(false);
   const location = useLocation();
   const { islandId } = useParams<{ islandId?: string }>();
   const startIndex = resolveStartIndex(islandId);
@@ -321,6 +336,15 @@ const SailScenePage: React.FC = () => {
   /** Brief shake when tapping a locked island (no sail / navigate). */
   const [lockShakeId, setLockShakeId] = useState<string | null>(null);
   const lockShakeTimerRef = useRef<number | null>(null);
+  /** First-time (or until first turn) animated arrow around the wheel. */
+  const [showWheelHint, setShowWheelHint] = useState(() => {
+    if (typeof window === 'undefined') return false;
+    try {
+      return localStorage.getItem(WHEEL_HINT_STORAGE_KEY) !== 'true';
+    } catch {
+      return true;
+    }
+  });
 
   lookIndexRef.current = lookIndex;
   dragRotationRef.current = dragRotation;
@@ -459,6 +483,18 @@ const SailScenePage: React.FC = () => {
     }, 420);
   }, []);
 
+  const dismissWheelHint = useCallback(() => {
+    setShowWheelHint((prev) => {
+      if (!prev) return prev;
+      try {
+        localStorage.setItem(WHEEL_HINT_STORAGE_KEY, 'true');
+      } catch {
+        /* ignore quota / private mode */
+      }
+      return false;
+    });
+  }, []);
+
   const startSailToIsland = useCallback(
     (island: (typeof CAROUSEL_ISLANDS)[number]) => {
       if (isSailingRef.current) return;
@@ -541,6 +577,7 @@ const SailScenePage: React.FC = () => {
   const onStart = useCallback(
     (clientX: number, clientY: number) => {
       if (isSailingRef.current) return;
+      dismissWheelHint();
       draggingRef.current = true;
       startAngleRef.current = getAngle(clientX, clientY);
       // Rest angle for current island (center index at 0°, like nav index * STEP)
@@ -550,7 +587,7 @@ const SailScenePage: React.FC = () => {
       setDragRotation(startRotationRef.current);
       setIsDragging(true);
     },
-    [getAngle],
+    [dismissWheelHint, getAngle],
   );
 
   const onMove = useCallback(
@@ -858,6 +895,36 @@ const SailScenePage: React.FC = () => {
               </button>
             );
           })}
+
+          {/* Travel Here — kid CTA over the focused island; same sail path as tapping it */}
+          {!isSailing && (
+            <button
+              type="button"
+              onClick={() => startSailToIsland(activeIsland)}
+              aria-label={
+                isIslandUnlocked(activeIsland.id)
+                  ? `Travel here to ${activeIsland.title}`
+                  : `${activeIsland.title} locked — complete Genesis to unlock`
+              }
+              className="absolute z-[3] px-3 py-1.5 sm:px-4 sm:py-2 rounded-xl appearance-none whitespace-nowrap font-display font-black uppercase tracking-[0.08em] text-[0.7rem] sm:text-[0.8rem] leading-none text-[#F5E6C8] active:scale-95 transition-transform focus:outline-none focus-visible:ring-2 focus-visible:ring-white/70 focus-visible:ring-offset-2 focus-visible:ring-offset-transparent"
+              style={{
+                ...travelHereBtnStyle,
+                left: '50%',
+                /* Sit over the canopy of the focused island (same anchor as carousel). */
+                top: '2%',
+                transform: 'translate(-50%, -50%)',
+                textShadow:
+                  '0 1px 0 #5C2E0B, 0 2px 0 #3E1F07, 0 2px 4px rgba(0,0,0,0.45)',
+                pointerEvents: 'auto',
+                cursor: isIslandUnlocked(activeIsland.id)
+                  ? 'pointer'
+                  : 'not-allowed',
+                opacity: isIslandUnlocked(activeIsland.id) ? 1 : 0.85,
+              }}
+            >
+              Travel Here
+            </button>
+          )}
         </div>
       </div>
 
@@ -907,6 +974,28 @@ const SailScenePage: React.FC = () => {
         @media (prefers-reduced-motion: reduce) {
           .sail-island-lock-shake {
             animation: none;
+          }
+        }
+        /* First-time wheel hint — curved arrow rocks to suggest turn/drag. */
+        @keyframes sail-wheel-hint-rock {
+          0%, 100% { transform: rotate(-18deg); }
+          50% { transform: rotate(18deg); }
+        }
+        @keyframes sail-wheel-hint-fade {
+          0%, 100% { opacity: 0.55; }
+          50% { opacity: 1; }
+        }
+        .sail-wheel-hint {
+          animation:
+            sail-wheel-hint-rock 1.6s ease-in-out infinite,
+            sail-wheel-hint-fade 1.6s ease-in-out infinite;
+          transform-origin: 50% 50%;
+        }
+        @media (prefers-reduced-motion: reduce) {
+          .sail-wheel-hint {
+            animation: none;
+            opacity: 0.9;
+            transform: rotate(0deg);
           }
         }
       `}</style>
@@ -999,6 +1088,43 @@ const SailScenePage: React.FC = () => {
               transition: isDragging || isSailing ? 'none' : SNAP_EASING,
             }}
           />
+          {/* One-time turn hint — hide on first wheel interaction (localStorage). */}
+          {showWheelHint && !isSailing && (
+            <div
+              className="absolute inset-0 pointer-events-none sail-wheel-hint"
+              aria-hidden
+            >
+              <svg
+                viewBox="0 0 100 100"
+                className="absolute inset-0 w-full h-full drop-shadow-[0_2px_4px_rgba(0,0,0,0.45)]"
+              >
+                {/* Curved arrow along the upper-right rim */}
+                <path
+                  d="M 72 22 A 36 36 0 0 1 88 55"
+                  fill="none"
+                  stroke="#F5E6C8"
+                  strokeWidth="4.5"
+                  strokeLinecap="round"
+                />
+                <path
+                  d="M 82 50 L 90 56 L 80 62"
+                  fill="none"
+                  stroke="#F5E6C8"
+                  strokeWidth="4.5"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+                <path
+                  d="M 72 22 A 36 36 0 0 1 88 55"
+                  fill="none"
+                  stroke="#8B5A2B"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  opacity="0.55"
+                />
+              </svg>
+            </div>
+          )}
         </div>
       </div>
 
@@ -1023,14 +1149,16 @@ const SailScenePage: React.FC = () => {
               src: SAIL_BTN_CREW,
               label: 'CREW',
               ariaLabel: 'Crew',
-              to: '/crew',
+              to: '/crew' as string | null,
+              openCrew: true,
             },
             {
               id: 'explore',
               src: SAIL_BTN_EXPLORE,
               label: 'EXPLORE',
               ariaLabel: 'Explore',
-              to: '/world',
+              to: '/world' as string | null,
+              openCrew: false,
             },
           ] as const
         ).map((btn) => (
@@ -1038,7 +1166,10 @@ const SailScenePage: React.FC = () => {
             key={btn.id}
             type="button"
             disabled={isSailing}
-            onClick={() => navigate(btn.to)}
+            onClick={() => {
+              if (btn.openCrew) setCrewPickerOpen(true);
+              else if (btn.to) navigate(btn.to);
+            }}
             className="pointer-events-auto flex flex-col items-center gap-0 p-0 m-0 border-0 bg-transparent appearance-none active:scale-95 transition-transform disabled:opacity-60 focus:outline-none focus-visible:ring-2 focus-visible:ring-white/70 focus-visible:ring-offset-2 focus-visible:ring-offset-transparent rounded-xl"
             style={{
               width: 'min(20vw, 84px)',
@@ -1065,6 +1196,11 @@ const SailScenePage: React.FC = () => {
         ))}
       </div>
 
+      <CrewPickerDropdown
+        open={crewPickerOpen}
+        onClose={() => setCrewPickerOpen(false)}
+        anchor="sail"
+      />
     </div>
   );
 };

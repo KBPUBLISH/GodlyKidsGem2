@@ -27,14 +27,29 @@ const DEAL_DURATION_MS = 30 * 60 * 1000; // 30 minutes
 const LIFETIME_OFFER_STAGE_KEY = 'godlykids_lifetime_offer_stage';
 
 const EXPLORE_TOP_HEADER_WOOD = '/assets/images/explore-top-header-wood.png';
-/** Pull full PNG up so wood sits nearer flush with screen top (keeps side/bottom live edges). */
-const PLANK_TOP_LIFT = '-1.5rem';
 /**
- * Extra top inset below safe-area so controls sit lower / centered in the wood band.
+ * Pull plank PNG up so wood sits nearer flush with screen top (keeps side/bottom live edges).
+ * Phone: full-bleed width, modest lift.
+ * Tablet/iPad (md / ≥768px): plank height capped (see PLANK_HEIGHT_TABLET) with width auto,
+ * so a stronger lift tucks the top without leaving a huge wood band.
+ * Applied via `-mt-[1.5rem] md:-mt-[4.5rem]`. WorldPage featured/clearance padding must match.
+ */
+export const PLANK_TOP_LIFT_PHONE = '-1.5rem';
+export const PLANK_TOP_LIFT_TABLET = '-4.5rem';
+/**
+ * Tablet/iPad plank size — `w-full` + natural aspect makes the 1021×284 PNG enormous on
+ * md+ widths. Cap height at 9rem (144px) with `w-auto` + `object-contain` centered so
+ * live edges stay visible (~50–70% of full-bleed height on typical iPad widths).
+ */
+export const PLANK_HEIGHT_TABLET = '9rem';
+/**
+ * Extra top inset below safe-area so controls sit in the visible wood band.
  * Compensates for PLANK_TOP_LIFT (items-center uses the full PNG box, including the
  * portion pulled above the viewport).
+ * Applied via `pt-[…+1.75rem] md:pt-[…+2.5rem]` (static Tailwind classes).
  */
-const PLANK_CONTROLS_TOP_EXTRA = '1.75rem';
+export const PLANK_CONTROLS_TOP_EXTRA_PHONE = '1.75rem';
+export const PLANK_CONTROLS_TOP_EXTRA_TABLET = '2.5rem';
 
 interface HeaderProps {
   isVisible: boolean;
@@ -223,20 +238,22 @@ const Header: React.FC<HeaderProps> = ({ isVisible, title = "GODLY KIDS", varian
         )}
 
         {isPlank ? (
-          /* Full plank PNG at natural aspect — live edges on sides + bottom visible */
-          <div className="relative w-full" style={{ marginTop: PLANK_TOP_LIFT }}>
+          /* Plank PNG — phone full-bleed; tablet/iPad height-capped + width auto (centered).
+             Phone −1.5rem / tablet −4.5rem (md ≥768px). WorldPage clearance must match. */
+          <div className="relative w-full -mt-[1.5rem] md:-mt-[4.5rem] flex justify-center">
+            <div className="relative w-full md:w-auto">
             <img
               src={EXPLORE_TOP_HEADER_WOOD}
               alt=""
               aria-hidden
-              className="pointer-events-none select-none relative block w-full h-auto"
+              className="pointer-events-none select-none relative block w-full h-auto md:w-auto md:h-[9rem] md:max-w-full md:object-contain"
               draggable={false}
             />
             <div
-              className="absolute inset-0 flex items-center justify-between gap-2 sm:gap-2.5 px-3 sm:px-4"
-              style={{
-                paddingTop: `calc(var(--safe-area-top, 0px) + ${PLANK_CONTROLS_TOP_EXTRA})`,
-              }}
+              className={
+                'absolute inset-0 flex items-center justify-between gap-2 sm:gap-2.5 px-3 sm:px-4 ' +
+                'pt-[calc(var(--safe-area-top,0px)+1.75rem)] md:pt-[calc(var(--safe-area-top,0px)+2.5rem)]'
+              }
             >
                 <div className="flex items-center gap-2 sm:gap-2.5 flex-shrink-0">
                   {/* Porthole avatar */}
@@ -401,6 +418,7 @@ const Header: React.FC<HeaderProps> = ({ isVisible, title = "GODLY KIDS", varian
                     <Settings size={18} strokeWidth={2.25} className={PLANK_ICON} />
                   </button>
                 </div>
+            </div>
             </div>
           </div>
         ) : (

@@ -541,14 +541,16 @@ const WorldPage: React.FC = () => {
           {/* ── 1–2. Cabin featured band (carousel of portal featured items) ── */}
           {featuredItems.length > 0 && (
             <section
-              className="relative w-full explore-chrome"
+              className={
+                // Match plank header: phone full-bleed aspect − lift; tablet max-h 9rem − 4.5rem lift
+                // Phone −1.5rem / tablet−iPad −4.5rem (md ≥768px) — keep in sync with Header.tsx
+                'relative w-full explore-chrome pb-5 ' +
+                'pt-[calc(100vw*284/1021+0.35rem-1.5rem)] md:pt-[calc(9rem+0.35rem-4.5rem)]'
+              }
               aria-label="Featured new releases"
               style={{
                 // Featured band — compact upper strip; bookshelves/portholes visible
                 minHeight: 'min(30dvh, 260px)',
-                // Match plank header: full wood PNG aspect (1021×284) − PLANK_TOP_LIFT (−1.5rem) + breath
-                paddingTop: 'calc(100vw * 284 / 1021 + 0.35rem - 1.5rem)',
-                paddingBottom: '1.25rem',
                 opacity: showChrome ? 1 : 0,
                 transition: `opacity ${SAIL_CLEAR_MS}ms ease`,
                 pointerEvents: showChrome ? undefined : 'none',
@@ -567,9 +569,12 @@ const WorldPage: React.FC = () => {
             </section>
           )}
 
-          {/* Header clearance when featured cabin is absent */}
+          {/* Header clearance when featured cabin is absent — phone −1.5rem / tablet −4.5rem lift */}
           {featuredItems.length === 0 && (
-            <div className="pt-[calc(100vw*284/1021+0.35rem-1.5rem)]" aria-hidden />
+            <div
+              className="pt-[calc(100vw*284/1021+0.35rem-1.5rem)] md:pt-[calc(9rem+0.35rem-4.5rem)]"
+              aria-hidden
+            />
           )}
 
           {/* ── 3. Mid rope — edge-to-edge on cabin / ocean seam (overlays both) ── */}

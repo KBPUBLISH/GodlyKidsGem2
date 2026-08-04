@@ -2,11 +2,11 @@
  * Bible Map island scene activity progress (per island + story).
  * Stored locally — matches bookCompletionService pattern until a user-progress API exists.
  *
- * Product rule: puzzle / coloring / game unlock after both read + quiz are complete.
+ * Product rule: puzzle / coloring / rewards (legacy: game) unlock after both read + quiz are complete.
  * Quiz unlocks after read (when the story has quiz content).
  */
 
-export type IslandActivityId = 'read' | 'quiz' | 'puzzle' | 'coloring' | 'game';
+export type IslandActivityId = 'read' | 'quiz' | 'puzzle' | 'coloring' | 'game' | 'rewards';
 
 export type IslandStoryProgress = {
   read: boolean;
@@ -14,6 +14,8 @@ export type IslandStoryProgress = {
   puzzle?: boolean;
   coloring?: boolean;
   game?: boolean;
+  /** Alias for former game activity completion */
+  rewards?: boolean;
   /** Best Bible Map hunt star rating (1–3) for this island:story. */
   readStars?: number;
   /** Wrong taps from the session that earned readStars (debug / display). */
@@ -60,7 +62,8 @@ class IslandStoryProgressService {
       quiz: Boolean(entry.quiz),
       puzzle: Boolean(entry.puzzle),
       coloring: Boolean(entry.coloring),
-      game: Boolean(entry.game),
+      game: Boolean(entry.game) || Boolean(entry.rewards),
+      rewards: Boolean(entry.rewards) || Boolean(entry.game),
       readStars:
         typeof entry.readStars === 'number' && entry.readStars >= 1
           ? Math.min(3, Math.floor(entry.readStars))
@@ -104,6 +107,9 @@ class IslandStoryProgressService {
     const next: IslandStoryProgress = {
       ...prev,
       [activity]: true,
+      ...(activity === 'rewards' || activity === 'game'
+        ? { rewards: true, game: true }
+        : {}),
       updatedAt: Date.now(),
     };
     map[key] = next;
@@ -154,7 +160,7 @@ class IslandStoryProgressService {
    * Whether an activity button should be unlocked for the kid.
    * - read: always (entry point)
    * - quiz: after read (if story has no quiz, treated as not applicable by caller)
-   * - puzzle / coloring / game: after both read and quiz
+   * - puzzle / coloring / rewards: after both read and quiz
    */
   isActivityUnlocked(
     islandId: string,

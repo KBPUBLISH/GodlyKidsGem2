@@ -20,6 +20,8 @@ services:
         sync: false  # Set this in Render dashboard
       - key: GOOGLE_APPLICATION_CREDENTIALS
         sync: false  # Set this in Render dashboard or use service account JSON
+      - key: ANTHROPIC_API_KEY
+        sync: false  # Set this in Render dashboard
 
 
 

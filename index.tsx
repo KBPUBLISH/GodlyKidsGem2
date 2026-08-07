@@ -91,6 +91,7 @@ import App from './App';
       /^\/paywall\/reminder$/,
       /^\/library$/,
       /^\/games$/,
+      /^\/games\/library$/,
       /^\/settings$/,
       /^\/profile$/,
     ];

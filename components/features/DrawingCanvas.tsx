@@ -18,7 +18,7 @@ export interface DrawingCanvasRef {
     captureScreenshot: () => Promise<string | null>;
 }
 
-// Crayon colors - arranged like a real crayon box
+// Crayon colors - arranged like a real crayon box (incl. metallics)
 const CRAYON_COLORS = [
     { name: 'Red', color: '#E74C3C' },
     { name: 'Orange', color: '#F39C12' },
@@ -32,9 +32,13 @@ const CRAYON_COLORS = [
     { name: 'Lime', color: '#8BC34A' },
     { name: 'Sky Blue', color: '#87CEEB' },
     { name: 'Peach', color: '#FFAB91' },
+    { name: 'Navy', color: '#1B4F72' },
     { name: 'Black', color: '#2C3E50' },
     { name: 'Gray', color: '#95A5A6' },
     { name: 'White', color: '#ECF0F1' },
+    { name: 'Gold', color: '#D4AF37' },
+    { name: 'Silver', color: '#C0C0C0' },
+    { name: 'Bronze', color: '#CD7F32' },
 ];
 
 // Crayon SVG component

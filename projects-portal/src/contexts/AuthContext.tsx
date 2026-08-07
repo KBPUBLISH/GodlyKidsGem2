@@ -10,7 +10,11 @@ const AUTH_KEY = 'gk_portal_auth';
 const TOKEN_KEY = 'portal_admin_token';
 const ROLE_KEY = 'portal_user_role';
 const USER_KEY = 'portal_user_data';
-const API_URL = import.meta.env.VITE_API_URL || 'https://backendgk2-0.onrender.com';
+// Prefer VITE_API_BASE_URL (used by apiClient); fall back to VITE_API_URL for compatibility.
+const API_URL =
+  import.meta.env.VITE_API_BASE_URL ||
+  import.meta.env.VITE_API_URL ||
+  'https://backendgk2-0.onrender.com';
 
 export type UserRole = 'admin' | 'creator';
 

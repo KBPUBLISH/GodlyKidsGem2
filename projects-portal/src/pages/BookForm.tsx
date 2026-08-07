@@ -14,7 +14,7 @@ interface BookFormData {
     orientation: 'portrait' | 'landscape';
     isMembersOnly: boolean;
     introVideoUrl: string;
-    bookType: 'standard' | 'kids_monthly';
+    bookType: 'standard' | 'kids_monthly' | 'bible_map';
     featuredCharacterId: string;
     readerLayout: 'side_swipe' | 'swipe_up';
 }
@@ -487,12 +487,18 @@ const BookForm: React.FC = () => {
                         id="bookType"
                         name="bookType"
                         value={formData.bookType}
-                        onChange={(e) => setFormData((prev) => ({ ...prev, bookType: e.target.value as 'standard' | 'kids_monthly', featuredCharacterId: e.target.value === 'kids_monthly' ? prev.featuredCharacterId : '' }))}
+                        onChange={(e) => setFormData((prev) => ({ ...prev, bookType: e.target.value as 'standard' | 'kids_monthly' | 'bible_map', featuredCharacterId: e.target.value === 'kids_monthly' ? prev.featuredCharacterId : '' }))}
                         className="w-full max-w-xs px-4 py-3 text-base border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent bg-white cursor-pointer min-h-[44px]"
                     >
                         <option value="standard">Standard Book</option>
                         <option value="kids_monthly">Kids Monthly Book</option>
+                        <option value="bible_map">Bible Map Book</option>
                     </select>
+                    {formData.bookType === 'bible_map' && (
+                        <p className="text-xs text-emerald-700 mt-2">
+                            Bible Map books support tappable highlight words in the page editor. Readers must tap them before turning the page.
+                        </p>
+                    )}
                     {formData.bookType === 'kids_monthly' && (
                         <div className="mt-4">
                             <label htmlFor="featuredCharacterId" className="block text-sm font-medium text-gray-700 mb-2">

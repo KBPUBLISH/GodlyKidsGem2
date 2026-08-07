@@ -6,7 +6,7 @@ import WoodButton from '../components/ui/WoodButton';
 import ShopModal from '../components/features/ShopModal';
 import { useUser } from '../context/UserContext';
 import { useLanguage } from '../context/LanguageContext';
-import { AVATAR_ASSETS } from '../components/avatar/AvatarAssets';
+import PortholeAvatar from '../components/common/PortholeAvatar';
 
 // Helper for random color backgrounds for kid profiles
 const PROFILE_BG_COLORS = ['bg-[#F8BBD0]', 'bg-[#4FC3F7]', 'bg-[#C5E1A5]', 'bg-[#FFF59D]', 'bg-[#E1BEE7]'];
@@ -102,17 +102,12 @@ const ProfileSelectionPage: React.FC = () => {
                   className="flex flex-col items-center gap-3 cursor-pointer group"
                 >
                   <div className="relative">
-                      <div className={`w-28 h-28 rounded-full ${getKidColor(index)} p-1 shadow-[0_8px_15px_rgba(0,0,0,0.3)] transition-transform duration-200 group-active:scale-95 group-hover:scale-105 border-4 border-white flex items-center justify-center overflow-hidden`}>
-                          <div className="w-[90%] h-[90%]">
-                               {AVATAR_ASSETS[kidAvatar] ? (
-                                   <svg viewBox="0 0 100 100" className="w-full h-full overflow-visible">
-                                       {AVATAR_ASSETS[kidAvatar]}
-                                   </svg>
-                               ) : (
-                                   <img src={kidAvatar} alt={profile.name} className="w-full h-full object-cover rounded-full" />
-                               )}
-                          </div>
-                      </div>
+                      <PortholeAvatar
+                        avatarSrc={kidAvatar}
+                        fallbackInitial={profile.name?.charAt(0)}
+                        glassClassName={getKidColor(index)}
+                        className="w-28 h-28 shadow-[0_8px_15px_rgba(0,0,0,0.3)] transition-transform duration-200 group-active:scale-95 group-hover:scale-105"
+                      />
                   </div>
 
                   <span className="font-display font-bold text-white text-lg tracking-wide drop-shadow-md text-center leading-tight break-words w-32">

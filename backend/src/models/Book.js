@@ -32,11 +32,20 @@ const bookSchema = new mongoose.Schema({
         default: 'draft',
     },
     
-    // Book type: standard (regular book) or kids_monthly (shown in Create Your Story / Kids Monthly Book picker)
+    // Book type:
+    // - standard: regular catalog books
+    // - kids_monthly: Create Your Story / Kids Monthly Book picker templates
+    // - bible_map: Bible Map voyage stories (interactive tap-words in reader)
     bookType: {
         type: String,
-        enum: ['standard', 'kids_monthly'],
+        enum: ['standard', 'kids_monthly', 'bible_map'],
         default: 'standard',
+    },
+
+    /** Bible Map: pages use readingLevels (ages 3–5 / 6–7 / 8+) */
+    hasReadingLevels: {
+        type: Boolean,
+        default: false,
     },
     
     // When bookType is kids_monthly, optional link to SavedCharacter (e.g. "Journey with Noah")

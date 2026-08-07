@@ -77,8 +77,8 @@ router.get('/', async (req, res) => {
         if (req.query.bookType) {
             filter.bookType = req.query.bookType;
         } else if (req.query.status !== 'all') {
-            // App list (published): exclude kids_monthly so they only appear as Create Your Story templates
-            filter.bookType = { $ne: 'kids_monthly' };
+            // App list (published): exclude kids_monthly + bible_map (specialty flows)
+            filter.bookType = { $nin: ['kids_monthly', 'bible_map'] };
         }
 
         // Kid-created monthly books (CustomMonthlyBook.bookId) are per-user and must NEVER appear in the

@@ -15,7 +15,7 @@ import {
 } from 'lucide-react';
 import axios from 'axios';
 
-const API_URL = import.meta.env.VITE_API_URL || 'https://godlykids-backend.onrender.com';
+const API_URL = import.meta.env.VITE_API_BASE_URL || import.meta.env.VITE_API_URL || 'https://backendgk2-0.onrender.com';
 
 interface EmailSubscriber {
   _id: string;

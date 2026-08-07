@@ -162,7 +162,7 @@ const DailySessionPage: React.FC = () => {
   const [usePersonalizedSession, setUsePersonalizedSession] = useState(false);
 
   // API URL for backend requests
-  const API_URL = import.meta.env.VITE_API_URL || 'https://godlykids-backend.onrender.com';
+  const API_URL = import.meta.env.VITE_API_URL || 'https://backendgk2-0.onrender.com';
 
   // Track screen size for responsive background
   useEffect(() => {

@@ -1,104 +1,506 @@
 import React, { useState, useCallback, useEffect, useRef, lazy, Suspense } from 'react';
-import { useNavigate, useLocation } from 'react-router-dom';
+import { createPortal } from 'react-dom';
+import { useNavigate } from 'react-router-dom';
+import { Check, Flame, Play, Ship, Video } from 'lucide-react';
 import Header from '../components/layout/Header';
-import ChallengeGameModal from '../components/features/ChallengeGameModal';
-import { activityTrackingService } from '../services/activityTrackingService';
+import ExploreMapBackdrop from '../components/world/ExploreMapBackdrop';
+import { useAppAmbientMusic } from '../context/AudioContext';
+import { useBooks } from '../context/BooksContext';
+import { useUser } from '../context/UserContext';
+import {
+  getSessionStreak,
+  getSessionHistory,
+  isSessionCompletedToday,
+  hasSessionToday,
+  getCurrentSession,
+} from '../services/dailySessionService';
+import { ApiService } from '../services/apiService';
+import { isCompleted, isLocked } from '../services/lessonService';
+import { FEATURE_CREATE_YOUR_STORY } from '../constants';
+import { DespiaService } from '../services/despiaService';
+import CoverImage from '../components/ui/CoverImage';
+import { prefersReducedMotion } from '../utils/bibleMapApi';
 
 const DailyVerseModal = lazy(() => import('../components/modals/DailyVerseModal'));
 
-const DAILY_ADVENTURE_ISLAND = '/assets/images/daily-adventure-island.webp';
-const ISLAND_BUTTON = '/assets/images/island-button.webp';
-
-const ISLAND_WIDTH = 240;   /* ~10% larger than before */
-const ISLAND_MAX_WIDTH = 273;
-
-const FIREFLIES = [
-  { x: 20, y: 70, drift: -20, dur: 3.8, delay: 0, size: 8 },
-  { x: 75, y: 65, drift: 15, dur: 4.2, delay: 0.6, size: 10 },
-  { x: 35, y: 80, drift: -12, dur: 3.5, delay: 1.2, size: 7 },
-  { x: 60, y: 75, drift: 18, dur: 4.6, delay: 0.3, size: 9 },
-  { x: 10, y: 55, drift: 10, dur: 3.2, delay: 2.0, size: 6 },
-  { x: 85, y: 60, drift: -16, dur: 4.0, delay: 1.5, size: 8 },
-  { x: 50, y: 85, drift: -8, dur: 3.6, delay: 0.9, size: 11 },
-  { x: 30, y: 50, drift: 14, dur: 4.4, delay: 2.5, size: 7 },
-  { x: 68, y: 78, drift: -22, dur: 3.9, delay: 1.8, size: 9 },
-  { x: 45, y: 60, drift: 10, dur: 4.1, delay: 0.4, size: 6 },
-  { x: 15, y: 72, drift: 20, dur: 3.4, delay: 3.0, size: 8 },
-  { x: 80, y: 50, drift: -14, dur: 4.8, delay: 2.2, size: 7 },
-  { x: 55, y: 68, drift: 12, dur: 3.7, delay: 1.0, size: 10 },
-  { x: 40, y: 45, drift: -18, dur: 4.3, delay: 3.5, size: 6 },
-];
-
-/**
- * Persistent island layer rendered in Layout — never unmounts.
- * Visibility toggled by route so the island stays locked in place.
- */
+const MAP_OCEAN = '/assets/images/map-ocean-bg.png';
+const MAP_ISLAND = '/assets/images/map-island-genesis.png';
+const MAP_CLOUD_A = '/assets/images/map-sky-cloud-a.png';
+const MAP_CLOUD_B = '/assets/images/map-sky-cloud-b.png';
+const DIVE_BUTTON = '/assets/images/dive-into-bible-button.webp';
+const LIBRARY_NEW_RELEASES_BG = '/assets/images/library-new-releases-bg.png';
+const DAILY_STREAK_BG = '/assets/images/daily-streak-bg.png';
+const DIVIDER_SHIP_ROPES = '/assets/images/divider-ship-ropes.png';
 const WELCOME_VIDEO_KEY = 'godlykids_welcome_shown';
 
-export const PersistentWorldIsland: React.FC = () => {
-  const location = useLocation();
-  const navigate = useNavigate();
-  const isVisible = location.pathname === '/world' || location.pathname === '/home';
-  const [showVerseModal, setShowVerseModal] = useState(false);
-  const [showChallengeGame, setShowChallengeGame] = useState(false);
-  const [isZoomingIn, setIsZoomingIn] = useState(false);
+/**
+ * Sail-the-Map cinematic — in-place on Explore (no /map load mid-anim).
+ *
+ * Timing (~3.1s):
+ *   0ms         clear chrome; living map BG (ocean + clouds + Genesis) stays
+ *   280–350ms   hold
+ *   350–1100ms  lower Genesis on the ocean
+ *   1100–2500ms zoom into Genesis
+ *   2300–3000ms white fade
+ *   3100ms      navigate /sail/genesis
+ */
+const SAIL_CLEAR_MS = 280;
+const SAIL_HOLD_MS = 350;
+const SAIL_LOWER_MS = 750;
+const SAIL_LOWER_START_MS = SAIL_HOLD_MS;
+const SAIL_ZOOM_START_MS = SAIL_LOWER_START_MS + SAIL_LOWER_MS;
+const SAIL_FADE_MS = 700;
+const SAIL_FADE_START_MS = 2300;
+const SAIL_NAVIGATE_MS = 3100;
+const SAIL_REDUCED_NAVIGATE_MS = 220;
 
-  // Welcome video - plays once per app session when first visiting Explore; hide header until done
+const WOOD_PANEL: React.CSSProperties = {
+  background: 'linear-gradient(165deg, #e8c892 0%, #d4a574 28%, #c4925a 55%, #b8834a 78%, #a8723c 100%)',
+  boxShadow:
+    'inset 0 2px 0 rgba(255,240,200,0.45), inset 0 -3px 6px rgba(80,40,10,0.28), 0 6px 16px rgba(0,0,0,0.28)',
+  border: '2px solid rgba(92, 50, 18, 0.55)',
+};
+
+const WOOD_INNER: React.CSSProperties = {
+  background: 'linear-gradient(180deg, rgba(255,245,220,0.22) 0%, rgba(120,60,20,0.08) 100%)',
+};
+
+/** Gold-bracket ship rope image (`divider-ship-ropes.png`) — parent supplies full-bleed width. */
+const ExploreShipRope: React.FC = () => (
+  <img
+    src={DIVIDER_SHIP_ROPES}
+    alt=""
+    aria-hidden
+    className="block w-full h-auto object-cover object-center drop-shadow-md pointer-events-none select-none"
+    draggable={false}
+  />
+);
+
+const getWeekDays = () => {
+  const today = new Date();
+  const dayOfWeek = today.getDay();
+  const weekDays: Date[] = [];
+  for (let i = 0; i < 7; i++) {
+    const date = new Date(today);
+    date.setDate(today.getDate() - dayOfWeek + i);
+    date.setHours(0, 0, 0, 0);
+    weekDays.push(date);
+  }
+  return weekDays;
+};
+
+const isDateCompleted = (date: Date, history: any[]): boolean => {
+  const dateKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+  return history.some((session) => session.date === dateKey && session.completed);
+};
+
+/**
+ * Legacy island overlay — Explore is now the card/Map layout in WorldPage.
+ * Kept as a no-op export so App imports stay stable.
+ */
+export const PersistentWorldIsland: React.FC = () => null;
+
+type FeaturedCabinItem = {
+  id: string;
+  title: string;
+  coverUrl: string;
+  _itemType: 'book' | 'playlist' | 'episode' | 'amazonBook';
+  _amazonUrl?: string;
+  _playlistId?: string;
+  _itemIndex?: number;
+  badgeText?: string;
+  isAudio?: boolean;
+};
+
+const normalizeFeaturedItem = (raw: any): FeaturedCabinItem => ({
+  ...raw,
+  id: String(raw._id || raw.id || ''),
+  coverUrl: raw.coverUrl || raw.coverImage || raw.files?.coverImage || '',
+  title: raw.title || 'New Story',
+  _itemType: raw._itemType || (raw.isAudio ? 'playlist' : 'book'),
+  _amazonUrl: raw._amazonUrl || raw.amazonUrl,
+  _playlistId: raw._playlistId,
+  _itemIndex: raw._itemIndex,
+  badgeText: raw.badgeText,
+});
+
+const GOLD_CARD_STYLE: React.CSSProperties = {
+  background: 'rgba(62, 31, 7, 0.45)',
+  border: '2.5px solid #E8C76A',
+  boxShadow:
+    '0 0 0 1px rgba(92,46,18,0.35), 0 6px 16px rgba(0,0,0,0.28), inset 0 1px 0 rgba(255,245,220,0.25)',
+};
+
+/**
+ * Cabin featured carousel — portal featured list, gold card style, swipe + dots.
+ * Slides are ~76% wide so the next card peeks; snap + touch pan for mobile.
+ */
+const FeaturedCabinCarousel: React.FC<{
+  items: FeaturedCabinItem[];
+  onOpen: (item: FeaturedCabinItem) => void;
+}> = ({ items, onOpen }) => {
+  const [activeIndex, setActiveIndex] = useState(0);
+  const trackRef = useRef<HTMLDivElement>(null);
+
+  const handleTrackScroll = useCallback(() => {
+    const el = trackRef.current;
+    if (!el || !items.length) return;
+    const first = el.children[0] as HTMLElement | undefined;
+    const slideW = first?.offsetWidth || el.clientWidth;
+    if (slideW <= 0) return;
+    const index = Math.round(el.scrollLeft / slideW);
+    if (index !== activeIndex && index >= 0 && index < items.length) {
+      setActiveIndex(index);
+    }
+  }, [activeIndex, items.length]);
+
+  if (!items.length) return null;
+
+  const multi = items.length > 1;
+
+  return (
+    <div className="relative z-10 w-full py-3 min-h-[min(18dvh,160px)]">
+      <div
+        ref={trackRef}
+        onScroll={multi ? handleTrackScroll : undefined}
+        className={`flex w-full ${
+          multi
+            ? 'overflow-x-auto snap-x snap-mandatory no-scrollbar'
+            : 'justify-center'
+        }`}
+        style={
+          multi
+            ? {
+                WebkitOverflowScrolling: 'touch',
+                touchAction: 'pan-x pan-y',
+                overscrollBehaviorX: 'contain',
+                paddingLeft: '12%',
+                paddingRight: '12%',
+                scrollPaddingInline: '12%',
+              }
+            : undefined
+        }
+      >
+        {items.map((item) => {
+          const badge =
+            item._itemType === 'amazonBook' && item.badgeText
+              ? item.badgeText
+              : 'NEW RELEASE!';
+          return (
+            <div
+              key={item.id}
+              className={`flex items-center justify-center ${
+                multi
+                  ? 'flex-shrink-0 snap-center w-[76%] pr-3 last:pr-0'
+                  : 'w-full px-[15%]'
+              }`}
+            >
+              <button
+                type="button"
+                onClick={() => onOpen(item)}
+                className="relative flex w-full max-w-[260px] flex-row items-center gap-2.5 rounded-xl px-2.5 py-2 active:scale-[0.99] transition-transform focus:outline-none"
+                style={GOLD_CARD_STYLE}
+                aria-label={`Explore ${item.title}`}
+              >
+                <span
+                  className="absolute -top-2.5 right-2 z-20 px-2 py-0.5 rounded-sm text-[9px] font-black tracking-wide text-white"
+                  style={{
+                    background: 'linear-gradient(180deg, #5cb85c, #2e7d32)',
+                    boxShadow: '0 2px 0 #1b5e20',
+                  }}
+                >
+                  {badge}
+                </span>
+                <div className="relative shrink-0 aspect-[3/4] h-[96px] rounded-md overflow-hidden shadow-xl border border-[#c9a76b]/80">
+                  {item.coverUrl ? (
+                    <CoverImage
+                      src={item.coverUrl}
+                      alt={item.title}
+                      className="w-full h-full object-cover"
+                    />
+                  ) : (
+                    <div className="w-full h-full bg-[#8B5A2B] flex items-center justify-center text-white font-bold text-xs px-1.5 text-center">
+                      {item.title}
+                    </div>
+                  )}
+                </div>
+                <div className="flex flex-col items-start justify-center gap-2 min-w-0 flex-1 pr-0.5">
+                  <p
+                    className="font-display font-black text-[13px] text-left leading-tight line-clamp-2"
+                    style={{ color: '#3E1F07', textShadow: '0 1px 0 rgba(255,245,220,0.65)' }}
+                  >
+                    {item.title}
+                  </p>
+                  <span
+                    className="px-3.5 py-1.5 rounded-full font-display font-black text-[11px] text-white"
+                    style={{
+                      background: 'linear-gradient(180deg, #FF9A3C 0%, #F07020 55%, #D45A12 100%)',
+                      boxShadow: '0 2px 0 #8B3A0A, inset 0 1px 0 rgba(255,255,255,0.35)',
+                    }}
+                  >
+                    EXPLORE NOW
+                  </span>
+                </div>
+              </button>
+            </div>
+          );
+        })}
+      </div>
+
+      {multi && (
+        <div
+          className="flex justify-center gap-1.5 pt-2.5 pointer-events-none"
+          aria-hidden
+        >
+          {items.map((item, index) => (
+            <div
+              key={item.id}
+              className="rounded-full transition-all duration-300"
+              style={{
+                width: index === activeIndex ? 7 : 5,
+                height: index === activeIndex ? 7 : 5,
+                background:
+                  index === activeIndex
+                    ? 'rgba(232, 199, 106, 0.95)'
+                    : 'rgba(255, 245, 220, 0.4)',
+                boxShadow:
+                  index === activeIndex ? '0 0 0 1px rgba(92,46,18,0.35)' : undefined,
+              }}
+            />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+};
+
+/**
+ * Explore (`/world`) — plank header → cabin featured band → mid rope →
+ * ocean (map + streak) → wood tab bar (footer frame already includes its rope).
+ */
+const WorldPage: React.FC = () => {
+  useAppAmbientMusic(true);
+  const navigate = useNavigate();
+  const { books } = useBooks();
+  const { isSubscribed } = useUser();
+
+  const [isHeaderVisible, setIsHeaderVisible] = useState(true);
+  const [streak, setStreak] = useState(0);
+  const [sessionHistory, setSessionHistory] = useState<any[]>([]);
+  const [lessonDone, setLessonDone] = useState(false);
+  const [hasInProgress, setHasInProgress] = useState(false);
+  const [featuredItems, setFeaturedItems] = useState<FeaturedCabinItem[]>([]);
+  const [videoDevotionals, setVideoDevotionals] = useState<any[]>([]);
+  const [showVerseModal, setShowVerseModal] = useState(false);
   const [showWelcomeVideo, setShowWelcomeVideo] = useState(false);
+  /** Explore sail cinematic — in-place on living map BG (no mid-anim route). */
+  const [sailCinematic, setSailCinematic] = useState(false);
+  const [sailGenesisLowered, setSailGenesisLowered] = useState(false);
+  const [sailZoom, setSailZoom] = useState(false);
+  const [sailFade, setSailFade] = useState(false);
   const welcomeVideoRef = useRef<HTMLVideoElement>(null);
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const lastScrollY = useRef(0);
+  const sailTimersRef = useRef<number[]>([]);
+  /** Sync lock — prevents double-start. */
+  const sailCinematicLockRef = useRef(false);
 
   const handleWelcomeVideoEnd = useCallback(() => {
     sessionStorage.setItem(WELCOME_VIDEO_KEY, 'true');
     setShowWelcomeVideo(false);
   }, []);
 
+  const clearSailTimers = useCallback(() => {
+    sailTimersRef.current.forEach((id) => window.clearTimeout(id));
+    sailTimersRef.current = [];
+  }, []);
+
+  const goToSailScene = useCallback(() => {
+    navigate('/sail/genesis', {
+      state: { title: 'Genesis: Creation' },
+    });
+  }, [navigate]);
+
+  const startSailCinematic = useCallback(
+    (e?: React.MouseEvent | React.PointerEvent) => {
+      e?.preventDefault?.();
+      e?.stopPropagation?.();
+      if (sailCinematicLockRef.current) return;
+      sailCinematicLockRef.current = true;
+
+      clearSailTimers();
+      document.body.setAttribute('data-modal-open', 'true');
+      setSailCinematic(true);
+      setSailGenesisLowered(false);
+      setSailZoom(false);
+      setSailFade(false);
+
+      if (prefersReducedMotion()) {
+        setSailGenesisLowered(true);
+        setSailFade(true);
+        const id = window.setTimeout(goToSailScene, SAIL_REDUCED_NAVIGATE_MS);
+        sailTimersRef.current = [id];
+        return;
+      }
+
+      const lowerId = window.setTimeout(() => setSailGenesisLowered(true), SAIL_LOWER_START_MS);
+      const zoomId = window.setTimeout(() => setSailZoom(true), SAIL_ZOOM_START_MS);
+      const fadeId = window.setTimeout(() => setSailFade(true), SAIL_FADE_START_MS);
+      const navId = window.setTimeout(goToSailScene, SAIL_NAVIGATE_MS);
+      sailTimersRef.current = [lowerId, zoomId, fadeId, navId];
+    },
+    [clearSailTimers, goToSailScene],
+  );
+
+  useEffect(
+    () => () => {
+      clearSailTimers();
+      sailCinematicLockRef.current = false;
+      document.body.removeAttribute('data-modal-open');
+    },
+    [clearSailTimers],
+  );
+
   useEffect(() => {
-    if (!isVisible) return;
     const ua = navigator.userAgent.toLowerCase();
     if (ua.includes('android')) return;
     if (sessionStorage.getItem(WELCOME_VIDEO_KEY)) return;
     setShowWelcomeVideo(true);
-  }, [isVisible]);
+  }, []);
 
   useEffect(() => {
-    if (!isVisible || !showWelcomeVideo) return;
+    if (!showWelcomeVideo) return;
     const video = welcomeVideoRef.current;
     if (!video) return;
     video.play().catch(() => handleWelcomeVideoEnd());
-  }, [isVisible, showWelcomeVideo, handleWelcomeVideoEnd]);
+  }, [showWelcomeVideo, handleWelcomeVideoEnd]);
 
   useEffect(() => {
-    if (showVerseModal || showChallengeGame) {
-      document.body.setAttribute('data-modal-open', 'true');
+    setLessonDone(isSessionCompletedToday());
+    setStreak(getSessionStreak());
+    setSessionHistory(getSessionHistory());
+    if (!isSessionCompletedToday() && hasSessionToday()) {
+      const session = getCurrentSession();
+      setHasInProgress(!!session);
     } else {
-      document.body.removeAttribute('data-modal-open');
+      setHasInProgress(false);
     }
-    return () => document.body.removeAttribute('data-modal-open');
-  }, [showVerseModal, showChallengeGame]);
+  }, []);
 
-  const handleIslandClick = useCallback(() => {
-    if (isZoomingIn) return;
-    setIsZoomingIn(true);
-    setTimeout(() => {
-      navigate('/daily-session');
-      setTimeout(() => setIsZoomingIn(false), 300);
-    }, 950);
-  }, [isZoomingIn, navigate]);
+  useEffect(() => {
+    let cancelled = false;
+    ApiService.getFeaturedContent()
+      .then((data) => {
+        if (cancelled || !data?.length) return;
+        setFeaturedItems(data.map(normalizeFeaturedItem).filter((item) => item.id));
+      })
+      .catch(() => {
+        if (!cancelled && books[0]) {
+          setFeaturedItems([
+            normalizeFeaturedItem({
+              id: books[0].id || (books[0] as any)._id,
+              title: books[0].title,
+              coverUrl: books[0].coverUrl || (books[0] as any).coverImage,
+              _itemType: 'book',
+            }),
+          ]);
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [books]);
+
+  useEffect(() => {
+    let cancelled = false;
+    ApiService.getLessons()
+      .then((lessons) => {
+        if (cancelled || !Array.isArray(lessons)) return;
+        const devotionals = lessons
+          .filter(
+            (l: any) =>
+              l.type === 'Daily Verse' ||
+              l.type?.toLowerCase() === 'daily verse' ||
+              l.title?.toLowerCase().includes('daily verse') ||
+              l.seriesName?.toLowerCase().includes('daily verse'),
+          )
+          .sort((a: any, b: any) => {
+            const aDone = isCompleted(a._id);
+            const bDone = isCompleted(b._id);
+            if (aDone && !bDone) return 1;
+            if (!aDone && bDone) return -1;
+            return 0;
+          })
+          .slice(0, 8);
+        setVideoDevotionals(devotionals);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const handleScroll = useCallback(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    const y = el.scrollTop;
+    if (y > lastScrollY.current + 8) setIsHeaderVisible(false);
+    else if (y < lastScrollY.current - 4) setIsHeaderVisible(true);
+    lastScrollY.current = y;
+  }, []);
+
+  const openFeatured = useCallback(
+    (item: FeaturedCabinItem) => {
+      if (item._itemType === 'amazonBook' && item._amazonUrl) {
+        ApiService.trackAmazonBookClick(item.id);
+        DespiaService.openExternalUrl(item._amazonUrl);
+        return;
+      }
+      if (item._itemType === 'episode' && item._playlistId != null) {
+        navigate(
+          `/audio/playlist/${item._playlistId}/play/${item._itemIndex ?? 0}`,
+        );
+        return;
+      }
+      if (item._itemType === 'playlist' || item.isAudio) {
+        navigate(`/audio/playlist/${item.id}`);
+        return;
+      }
+      navigate(`/book/${item.id}`);
+    },
+    [navigate],
+  );
+
+  const startLesson = () => {
+    if (hasInProgress) navigate('/daily-session');
+    else navigate('/daily-session', { state: { freshStart: true } });
+  };
+
+  const weekDays = getWeekDays();
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const dayLabels = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
+
+  const showChrome = !sailCinematic;
 
   return (
     <div
-      className="absolute inset-0 flex flex-col overflow-hidden"
-      style={{
-        zIndex: 5,
-        opacity: isVisible ? 1 : 0,
-        pointerEvents: isVisible ? 'auto' : 'none',
-        transition: 'opacity 0.15s ease-out',
-      }}
+      className={`relative w-full h-full overflow-hidden${sailCinematic ? ' sail-cinematic-active' : ''}`}
     >
-      <Header isVisible={isVisible && !showWelcomeVideo} title="EXPLORE" />
+      {/* Living Map backdrop — ocean + clouds + all MapPage islands */}
+      <ExploreMapBackdrop
+        cinematic={sailCinematic}
+        genesisLowered={sailGenesisLowered}
+        zoom={sailZoom}
+      />
 
-      {/* Welcome video - full-screen, plays once per session; header hidden until done */}
-      {showWelcomeVideo && isVisible && (
+      <Header
+        isVisible={showChrome && isHeaderVisible && !showWelcomeVideo}
+        title="EXPLORE"
+        variant="plank"
+      />
+
+      {showWelcomeVideo && (
         <div
           className="fixed inset-0 flex flex-col items-center justify-start pt-[6%] z-[100]"
           style={{ backgroundColor: 'rgba(0, 0, 0, 0.2)' }}
@@ -118,383 +520,413 @@ export const PersistentWorldIsland: React.FC = () => {
           <p className="mt-4 text-white font-display font-bold text-lg text-center px-4">
             Hi Explorer! Let&apos;s Dive in. 🌊
           </p>
-          <button
-            type="button"
-            onClick={handleWelcomeVideoEnd}
-            className="mt-2 text-white/70 text-sm underline"
-          >
+          <button type="button" onClick={handleWelcomeVideoEnd} className="mt-2 text-white/70 text-sm underline">
             Skip
           </button>
         </div>
       )}
 
-      {/* Drifting sky clouds */}
-      <div className="absolute inset-0 pointer-events-none overflow-hidden" style={{ zIndex: 0 }} aria-hidden>
-        <div className="world-cloud world-cloud-1" style={{ position: 'absolute', top: '3%', left: '-12%' }}>
-          <svg width="140" viewBox="0 0 200 90" fill="none" style={{ opacity: 0.18 }}>
-            <ellipse cx="70" cy="55" rx="50" ry="28" fill="white" />
-            <ellipse cx="110" cy="45" rx="60" ry="36" fill="white" />
-            <ellipse cx="155" cy="58" rx="40" ry="24" fill="white" />
-            <rect x="50" y="48" width="105" height="30" rx="14" fill="white" />
-          </svg>
-        </div>
-        <div className="world-cloud world-cloud-2" style={{ position: 'absolute', top: '8%', right: '-8%' }}>
-          <svg width="110" viewBox="0 0 200 90" fill="none" style={{ opacity: 0.13 }}>
-            <ellipse cx="60" cy="52" rx="45" ry="26" fill="white" />
-            <ellipse cx="105" cy="42" rx="55" ry="34" fill="white" />
-            <ellipse cx="150" cy="55" rx="38" ry="22" fill="white" />
-            <rect x="45" y="46" width="110" height="28" rx="12" fill="white" />
-          </svg>
-        </div>
-        <div className="world-cloud world-cloud-3" style={{ position: 'absolute', top: '1%', left: '25%' }}>
-          <svg width="90" viewBox="0 0 200 90" fill="none" style={{ opacity: 0.1 }}>
-            <ellipse cx="65" cy="50" rx="42" ry="24" fill="white" />
-            <ellipse cx="110" cy="40" rx="52" ry="30" fill="white" />
-            <ellipse cx="150" cy="52" rx="36" ry="20" fill="white" />
-            <rect x="48" y="44" width="100" height="26" rx="12" fill="white" />
-          </svg>
-        </div>
-        <div className="world-cloud world-cloud-4" style={{ position: 'absolute', top: '12%', left: '55%' }}>
-          <svg width="120" viewBox="0 0 200 90" fill="none" style={{ opacity: 0.14 }}>
-            <ellipse cx="75" cy="54" rx="48" ry="27" fill="white" />
-            <ellipse cx="115" cy="44" rx="58" ry="35" fill="white" />
-            <ellipse cx="160" cy="56" rx="35" ry="22" fill="white" />
-            <rect x="52" y="47" width="108" height="28" rx="13" fill="white" />
-          </svg>
-        </div>
-      </div>
-
-      {/* Drifting sky clouds */}
-      <div className="absolute inset-0 pointer-events-none overflow-hidden" style={{ zIndex: 0 }} aria-hidden>
-        <div className="sky-cloud sky-cloud-1" style={{ position: 'absolute', top: '3%' }}>
-          <svg width="160" viewBox="0 0 240 70" fill="none" style={{ opacity: 0.18 }}>
-            <ellipse cx="40" cy="42" rx="36" ry="20" fill="white" /><ellipse cx="95" cy="32" rx="50" ry="28" fill="white" /><ellipse cx="155" cy="36" rx="44" ry="24" fill="white" /><ellipse cx="205" cy="44" rx="30" ry="18" fill="white" /><rect x="38" y="38" width="168" height="22" rx="11" fill="white" />
-          </svg>
-        </div>
-        <div className="sky-cloud sky-cloud-2" style={{ position: 'absolute', top: '7%' }}>
-          <svg width="110" viewBox="0 0 150 120" fill="none" style={{ opacity: 0.14 }}>
-            <ellipse cx="75" cy="36" rx="34" ry="30" fill="white" /><ellipse cx="48" cy="62" rx="38" ry="26" fill="white" /><ellipse cx="105" cy="58" rx="36" ry="24" fill="white" /><ellipse cx="75" cy="78" rx="52" ry="22" fill="white" />
-          </svg>
-        </div>
-        <div className="sky-cloud sky-cloud-3" style={{ position: 'absolute', top: '1%' }}>
-          <svg width="80" viewBox="0 0 130 40" fill="none" style={{ opacity: 0.10 }}>
-            <ellipse cx="30" cy="22" rx="26" ry="14" fill="white" /><ellipse cx="70" cy="18" rx="34" ry="16" fill="white" /><ellipse cx="105" cy="22" rx="22" ry="12" fill="white" />
-          </svg>
-        </div>
-        <div className="sky-cloud sky-cloud-4" style={{ position: 'absolute', top: '11%' }}>
-          <svg width="130" viewBox="0 0 190 80" fill="none" style={{ opacity: 0.15 }}>
-            <ellipse cx="50" cy="50" rx="42" ry="22" fill="white" /><ellipse cx="110" cy="35" rx="55" ry="30" fill="white" /><ellipse cx="160" cy="48" rx="28" ry="20" fill="white" /><rect x="42" y="44" width="118" height="20" rx="10" fill="white" />
-          </svg>
-        </div>
-        <div className="sky-cloud sky-cloud-5" style={{ position: 'absolute', top: '5%' }}>
-          <svg width="55" viewBox="0 0 80 50" fill="none" style={{ opacity: 0.12 }}>
-            <ellipse cx="40" cy="26" rx="30" ry="20" fill="white" /><ellipse cx="24" cy="32" rx="18" ry="12" fill="white" /><ellipse cx="56" cy="34" rx="16" ry="11" fill="white" />
-          </svg>
-        </div>
-      </div>
-
-      {/* Full-screen continuous ocean waves — all flow in one direction */}
-      <div className="absolute inset-0 pointer-events-none overflow-hidden" style={{ zIndex: 1 }} aria-hidden>
-        {/* Wave 1 — top area, very subtle distant swell */}
-        <svg className="absolute ocean-flow-1" viewBox="0 0 2880 320" preserveAspectRatio="none" style={{ top: '18%', height: '14%', width: '200%' }}>
-          <path fill="rgba(255,255,255,0.04)" d="M0,280L60,274C120,268,240,256,360,250C480,244,600,244,720,250C840,256,960,268,1080,274C1200,280,1320,280,1440,274C1440,274,1560,268,1680,256C1800,244,1920,244,2040,250C2160,256,2280,268,2400,274C2520,280,2640,280,2760,274L2880,268L2880,320L0,320Z" />
-        </svg>
-        {/* Wave 2 — upper-mid, light teal tint */}
-        <svg className="absolute ocean-flow-2" viewBox="0 0 2880 320" preserveAspectRatio="none" style={{ top: '28%', height: '16%', width: '200%' }}>
-          <path fill="rgba(0,180,220,0.04)" d="M0,290L48,284C96,278,192,266,288,260C384,254,480,254,576,260C672,266,768,278,864,284C960,290,1056,290,1152,284C1248,278,1344,266,1440,260C1440,260,1536,254,1632,260C1728,266,1824,278,1920,284C2016,290,2112,290,2208,284C2304,278,2400,266,2496,260C2592,254,2688,254,2784,260L2880,266L2880,320L0,320Z" />
-        </svg>
-        {/* Wave 3 — mid area, white shimmer */}
-        <svg className="absolute ocean-flow-3" viewBox="0 0 2880 320" preserveAspectRatio="none" style={{ top: '40%', height: '18%', width: '200%' }}>
-          <path fill="rgba(255,255,255,0.06)" d="M0,288L80,278C160,268,320,248,480,242C640,236,800,244,960,254C1120,264,1280,276,1440,278C1440,278,1600,268,1760,254C1920,240,2080,242,2240,252C2400,262,2560,278,2720,282L2880,286L2880,320L0,320Z" />
-        </svg>
-        {/* Wave 4 — lower-mid, stronger teal */}
-        <svg className="absolute ocean-flow-4" viewBox="0 0 2880 320" preserveAspectRatio="none" style={{ top: '55%', height: '20%', width: '200%' }}>
-          <path fill="rgba(0,180,220,0.06)" d="M0,282L60,272C120,262,240,242,360,236C480,230,600,238,720,250C840,262,960,278,1080,282C1200,286,1320,278,1440,268C1440,268,1560,258,1680,248C1800,238,1920,238,2040,248C2160,258,2280,278,2400,284C2520,290,2640,282,2760,272L2880,262L2880,320L0,320Z" />
-        </svg>
-        {/* Wave 5 — lower, white crest highlights */}
-        <svg className="absolute ocean-flow-5" viewBox="0 0 2880 320" preserveAspectRatio="none" style={{ top: '68%', height: '22%', width: '200%' }}>
-          <path fill="rgba(255,255,255,0.08)" d="M0,276L48,266C96,256,192,236,288,228C384,220,480,224,576,238C672,252,768,276,864,282C960,288,1056,276,1152,264C1248,252,1344,240,1440,238C1440,238,1536,246,1632,258C1728,270,1824,286,1920,290C2016,294,2112,286,2208,272C2304,258,2400,238,2496,232C2592,226,2688,234,2784,248L2880,262L2880,320L0,320Z" />
-        </svg>
-        {/* Wave 6 — near bottom, subtle fast ripple */}
-        <svg className="absolute ocean-flow-6" viewBox="0 0 2880 320" preserveAspectRatio="none" style={{ top: '80%', height: '20%', width: '200%' }}>
-          <path fill="rgba(255,255,255,0.05)" d="M0,290L40,284C80,278,160,266,240,258C320,250,400,246,480,250C560,254,640,266,720,274C800,282,880,286,960,284C1040,282,1120,274,1200,266C1280,258,1360,250,1440,250C1440,250,1520,258,1600,266C1680,274,1760,282,1840,286C1920,290,2000,290,2080,284C2160,278,2240,266,2320,258C2400,250,2480,246,2560,250C2640,254,2720,266,2800,274L2880,282L2880,320L0,320Z" />
-        </svg>
-        {/* Ambient depth gradient at bottom */}
-        <div className="absolute bottom-0 left-0 right-0 h-[25%]" style={{ background: 'linear-gradient(to top, rgba(0,40,80,0.10), transparent)' }} />
-      </div>
-
-      {/* Daily Chest raft — clickable, drifting, with angled wake */}
-      <div className="absolute raft-drift transition-opacity duration-300" style={{ zIndex: 12, left: '3%', top: '26%', width: '26vw', maxWidth: 150, opacity: isZoomingIn ? 0 : 1 }}>
-        {/* Label button above the raft */}
-        <button
-          type="button"
-          onClick={() => {
-            activityTrackingService.trackGamePlayed('memory_challenge', 'Memory Bible Challenge');
-            setShowChallengeGame(true);
-          }}
-          className="absolute left-1/2 -translate-x-1/2 cursor-pointer select-none focus:outline-none"
-          style={{ top: '-24px', width: '75%', zIndex: 2 }}
-          aria-label="Open Memory Bible Challenge"
-        >
-          <div className="relative w-full">
-            <img src={ISLAND_BUTTON} alt="" className="w-full h-auto rounded-xl" />
-            <span
-              className="absolute inset-0 flex items-center justify-center font-extrabold text-white whitespace-nowrap"
+      <div
+        ref={scrollRef}
+        onScroll={handleScroll}
+        className="relative z-10 flex flex-col h-full overflow-y-auto no-scrollbar"
+        style={{
+          WebkitOverflowScrolling: 'touch',
+          overscrollBehavior: 'contain',
+          overflow: sailCinematic ? 'hidden' : undefined,
+          pointerEvents: sailCinematic ? 'none' : undefined,
+        }}
+      >
+        <div className="pb-48 w-full">
+          {/* ── 1–2. Cabin featured band (carousel of portal featured items) ── */}
+          {featuredItems.length > 0 && (
+            <section
+              className={
+                // Match plank header: phone full-bleed aspect − lift; tablet max-h 9rem − 4.5rem lift
+                // Phone −1.5rem / tablet−iPad −4.5rem (md ≥768px) — keep in sync with Header.tsx
+                'relative w-full explore-chrome pb-5 ' +
+                'pt-[calc(100vw*284/1021+0.35rem-1.5rem)] md:pt-[calc(9rem+0.35rem-4.5rem)]'
+              }
+              aria-label="Featured new releases"
               style={{
-                fontSize: 'clamp(8px, 2.6vw, 13px)',
-                textShadow: '0 1px 3px rgba(0,0,0,0.5)',
-                letterSpacing: '0.5px',
+                // Featured band — compact upper strip; bookshelves/portholes visible
+                minHeight: 'min(30dvh, 260px)',
+                opacity: showChrome ? 1 : 0,
+                transition: `opacity ${SAIL_CLEAR_MS}ms ease`,
+                pointerEvents: showChrome ? undefined : 'none',
               }}
             >
-              Daily Chest
-            </span>
-          </div>
-        </button>
+              <img
+                src={LIBRARY_NEW_RELEASES_BG}
+                alt=""
+                aria-hidden
+                className="absolute inset-0 w-full h-full object-cover pointer-events-none select-none"
+                style={{ objectPosition: 'center 42%' }}
+                draggable={false}
+              />
 
-        <button
-          type="button"
-          onClick={() => {
-            activityTrackingService.trackGamePlayed('memory_challenge', 'Memory Bible Challenge');
-            setShowChallengeGame(true);
-          }}
-          className="relative w-full cursor-pointer select-none transition-transform active:scale-95 hover:scale-[1.03] focus:outline-none"
-          style={{ zIndex: 2 }}
-          aria-label="Open Memory Bible Challenge"
-        >
-          <img
-            src="/assets/images/wooden-raft.webp"
-            alt="Daily Chest"
-            className="w-full h-auto relative"
-          />
-        </button>
+              <FeaturedCabinCarousel items={featuredItems} onOpen={openFeatured} />
+            </section>
+          )}
 
-        {/* Waves underneath the raft — overlaps bottom half, behind the raft image */}
-        <div className="absolute pointer-events-none" style={{ zIndex: 1, bottom: '5%', left: '-30%', width: '160%', height: '60%' }}>
-          {/* Wave lines fanning out from under the raft */}
-          <svg className="raft-wave" style={{ position: 'absolute', top: '10%', left: '5%', width: '90%', height: '30%' }} viewBox="0 0 140 20" preserveAspectRatio="none">
-            <path d="M0,16 Q12,6 24,14 Q36,4 48,14 Q60,4 72,14 Q84,4 96,14 Q108,4 120,14 Q132,6 140,12" fill="none" stroke="rgba(255,255,255,0.45)" strokeWidth="2.5" strokeLinecap="round" />
-          </svg>
-          <svg className="raft-wave" style={{ position: 'absolute', top: '30%', left: '0%', width: '100%', height: '30%', animationDelay: '0.6s' }} viewBox="0 0 140 20" preserveAspectRatio="none">
-            <path d="M0,14 Q10,4 22,12 Q34,2 46,12 Q58,2 70,12 Q82,2 94,12 Q106,2 118,12 Q130,4 140,10" fill="none" stroke="rgba(255,255,255,0.35)" strokeWidth="2" strokeLinecap="round" />
-          </svg>
-          <svg className="raft-wave" style={{ position: 'absolute', top: '48%', left: '3%', width: '94%', height: '28%', animationDelay: '1.2s' }} viewBox="0 0 140 20" preserveAspectRatio="none">
-            <path d="M0,12 Q14,4 28,12 Q42,4 56,12 Q70,4 84,12 Q98,4 112,12 Q126,4 140,10" fill="none" stroke="rgba(255,255,255,0.25)" strokeWidth="1.8" strokeLinecap="round" />
-          </svg>
-          <svg className="raft-wave" style={{ position: 'absolute', top: '64%', left: '6%', width: '88%', height: '26%', animationDelay: '1.8s' }} viewBox="0 0 140 20" preserveAspectRatio="none">
-            <path d="M0,10 Q16,2 32,10 Q48,2 64,10 Q80,2 96,10 Q112,2 128,10 L140,8" fill="none" stroke="rgba(255,255,255,0.18)" strokeWidth="1.5" strokeLinecap="round" />
-          </svg>
-          <svg className="raft-wave" style={{ position: 'absolute', top: '78%', left: '10%', width: '80%', height: '22%', animationDelay: '2.4s' }} viewBox="0 0 140 20" preserveAspectRatio="none">
-            <path d="M0,10 Q18,3 36,10 Q54,3 72,10 Q90,3 108,10 Q126,3 140,8" fill="none" stroke="rgba(255,255,255,0.12)" strokeWidth="1.2" strokeLinecap="round" />
-          </svg>
-          {/* Splash droplets scattered around */}
-          <div className="raft-splash" style={{ position: 'absolute', left: '8%', top: '20%', width: 6, height: 6, borderRadius: '50%', background: 'rgba(255,255,255,0.55)' }} />
-          <div className="raft-splash" style={{ position: 'absolute', left: '25%', top: '45%', width: 5, height: 5, borderRadius: '50%', background: 'rgba(255,255,255,0.4)', animationDelay: '0.4s' }} />
-          <div className="raft-splash" style={{ position: 'absolute', left: '50%', top: '15%', width: 4, height: 4, borderRadius: '50%', background: 'rgba(255,255,255,0.45)', animationDelay: '0.8s' }} />
-          <div className="raft-splash" style={{ position: 'absolute', right: '12%', top: '35%', width: 5, height: 5, borderRadius: '50%', background: 'rgba(255,255,255,0.5)', animationDelay: '1.1s' }} />
-          <div className="raft-splash" style={{ position: 'absolute', right: '30%', top: '60%', width: 4, height: 4, borderRadius: '50%', background: 'rgba(255,255,255,0.35)', animationDelay: '1.5s' }} />
-          <div className="raft-splash" style={{ position: 'absolute', left: '15%', top: '70%', width: 4, height: 4, borderRadius: '50%', background: 'rgba(255,255,255,0.3)', animationDelay: '1.9s' }} />
-          <div className="raft-splash" style={{ position: 'absolute', right: '20%', top: '75%', width: 3, height: 3, borderRadius: '50%', background: 'rgba(255,255,255,0.25)', animationDelay: '2.2s' }} />
-        </div>
-      </div>
-
-      {/* Build-a-Parrot island — right side */}
-      <button
-        type="button"
-        onClick={() => window.dispatchEvent(new CustomEvent('open_avatar_shop', { detail: { builderMode: true } }))}
-        className="absolute overflow-visible transition-opacity duration-300 cursor-pointer select-none focus:outline-none active:scale-95 parrot-island-drift"
-        style={{ zIndex: 12, right: '2%', top: '22%', width: '28vw', maxWidth: 155, opacity: isZoomingIn ? 0 : 1 }}
-        aria-label="Build a Parrot - Open Builder"
-      >
-        <img
-          src="/assets/images/build-a-parrot-sign.webp"
-          alt="Build a Parrot"
-          className="absolute left-1/2 -translate-x-1/2 w-[85%] h-auto object-contain drop-shadow-md"
-          style={{ top: '-28%', zIndex: 2 }}
-          draggable={false}
-        />
-        <img
-          src="/assets/images/parrot-island.webp"
-          alt="Parrot Island"
-          className="relative w-full h-auto object-contain drop-shadow-lg"
-          style={{ zIndex: 1 }}
-          draggable={false}
-        />
-      </button>
-
-      {/* Island centered on screen */}
-      <div className="relative flex-1 min-h-0 overflow-auto flex items-center justify-center" style={{ zIndex: 10, paddingTop: '18%' }}>
-        <div
-          className={`relative flex-shrink-0 ${isZoomingIn ? 'island-zoom-in' : ''}`}
-          style={{ width: `min(${ISLAND_WIDTH}px, 85vw)`, maxWidth: ISLAND_MAX_WIDTH, transformOrigin: 'center 40%', willChange: 'transform, opacity' }}
-        >
-          {FIREFLIES.map((f, i) => (
+          {/* Header clearance when featured cabin is absent — phone −1.5rem / tablet −4.5rem lift */}
+          {featuredItems.length === 0 && (
             <div
-              key={i}
-              className="world-firefly"
+              className="pt-[calc(100vw*284/1021+0.35rem-1.5rem)] md:pt-[calc(9rem+0.35rem-4.5rem)]"
+              aria-hidden
+            />
+          )}
+
+          {/* ── 3. Mid rope — edge-to-edge on cabin / ocean seam (overlays both) ── */}
+          {featuredItems.length > 0 && (
+            <div
+              className="relative z-20 w-screen max-w-none pointer-events-none explore-chrome"
               style={{
-                position: 'absolute',
-                left: `${f.x}%`,
-                top: `${f.y}%`,
-                width: f.size,
-                height: f.size,
-                zIndex: 1,
-                borderRadius: '50%',
-                background: 'radial-gradient(circle, rgba(255,215,0,0.95) 0%, rgba(255,200,50,0.5) 60%, transparent 100%)',
-                boxShadow: '0 0 10px 3px rgba(255,215,0,0.7), 0 0 20px 6px rgba(255,215,0,0.3)',
-                animationDuration: `${f.dur}s`,
-                animationDelay: `${f.delay}s`,
-                ['--drift' as string]: `${f.drift}px`,
+                marginLeft: 'calc(50% - 50vw)',
+                marginTop: '-0.85rem',
+                marginBottom: '-0.85rem',
+                opacity: showChrome ? 1 : 0,
+                transition: `opacity ${SAIL_CLEAR_MS}ms ease`,
               }}
-            />
-          ))}
+              aria-hidden
+            >
+              <ExploreShipRope />
+            </div>
+          )}
 
-          <button
-            type="button"
-            onClick={handleIslandClick}
-            className="relative w-full cursor-pointer select-none focus:outline-none rounded-2xl"
-            style={{ zIndex: 5 }}
-            aria-label="Go to Daily Adventure"
+          {/* ── 4. Ocean section — map + daily streak ── */}
+          <section className="relative w-full" aria-label="Explore map and daily streak">
+            <div className="relative z-10 px-3.5 pt-5 pb-4 max-w-lg mx-auto w-full flex gap-2.5 items-stretch">
+              {/* Map hero — primary centerpiece (Sail the Map CTA) */}
+              <button
+                type="button"
+                onClick={startSailCinematic}
+                disabled={sailCinematic}
+                className="relative flex-[1.65] min-w-0 rounded-2xl overflow-hidden active:scale-[0.99] transition-transform focus:outline-none text-left"
+                style={{
+                  ...WOOD_PANEL,
+                  padding: 7,
+                  /* Clear path to ocean — hide Sail card with all other chrome. */
+                  opacity: showChrome ? 1 : 0,
+                  transition: `opacity ${SAIL_CLEAR_MS}ms ease`,
+                  visibility: showChrome ? 'visible' : 'hidden',
+                  pointerEvents: showChrome ? undefined : 'none',
+                }}
+                aria-label="Open God's Word Adventure Map"
+              >
+                <div className="relative rounded-xl overflow-hidden" style={{ minHeight: 220, ...WOOD_INNER }}>
+                  <div
+                    className="absolute inset-0"
+                    style={{
+                      background:
+                        'linear-gradient(180deg, #3aa0ef 0%, #2aa8e0 35%, #1a8fd1 70%, #1578b5 100%)',
+                    }}
+                  />
+                  <img
+                    src={MAP_CLOUD_A}
+                    alt=""
+                    aria-hidden
+                    className="absolute top-0 left-[-8%] w-[70%] opacity-90 pointer-events-none select-none"
+                    draggable={false}
+                  />
+                  <img
+                    src={MAP_CLOUD_B}
+                    alt=""
+                    aria-hidden
+                    className="absolute top-1 right-[-6%] w-[48%] opacity-85 pointer-events-none select-none"
+                    draggable={false}
+                  />
+                  <img
+                    src={MAP_OCEAN}
+                    alt=""
+                    aria-hidden
+                    className="absolute inset-0 w-full h-full object-cover opacity-80 pointer-events-none select-none"
+                    style={{ objectPosition: 'center 30%' }}
+                    draggable={false}
+                  />
+                  <img
+                    src={MAP_ISLAND}
+                    alt=""
+                    className="absolute left-1/2 -translate-x-1/2 w-[78%] max-w-[200px] drop-shadow-lg pointer-events-none select-none"
+                    style={{ top: '18%' }}
+                    draggable={false}
+                  />
+                  <span className="absolute explore-map-ship" style={{ right: '14%', bottom: '28%' }}>
+                    <Ship size={22} className="text-[#7a4a20] drop-shadow" fill="#C4884A" strokeWidth={1.5} />
+                  </span>
+
+                  <div className="absolute inset-x-0 top-0 pt-2.5 px-2 text-center z-10">
+                    <h2
+                      className="font-display font-black text-[clamp(0.95rem,3.8vw,1.2rem)] leading-none"
+                      style={{
+                        color: '#ffe9b0',
+                        textShadow: '0 2px 0 #5c2e12, 0 3px 6px rgba(0,0,0,0.4)',
+                      }}
+                    >
+                      God&apos;s Word Adventure
+                    </h2>
+                    <p
+                      className="mt-0.5 font-display font-bold text-[10px] tracking-wide"
+                      style={{ color: 'rgba(255,245,220,0.92)', textShadow: '0 1px 2px rgba(0,0,0,0.5)' }}
+                    >
+                      Sail. Learn. Grow.
+                    </p>
+                  </div>
+
+                  <div className="absolute inset-x-0 bottom-0 p-2.5 z-10 flex flex-col items-center gap-1.5">
+                    <span
+                      className="px-4 py-2 rounded-full font-display font-black text-sm text-[#3E1F07] flex items-center gap-1.5"
+                      style={{
+                        background: 'linear-gradient(180deg, #FFE55C 0%, #FFD700 45%, #DAA520 100%)',
+                        boxShadow: '0 3px 0 #8B6914, inset 0 1px 0 rgba(255,255,255,0.45)',
+                      }}
+                    >
+                      <Ship size={16} strokeWidth={2.5} />
+                      Sail the Map
+                    </span>
+                  </div>
+                </div>
+              </button>
+
+              {/* Daily Streak plaque — right over ocean */}
+              <div
+                className="relative flex-1 min-w-[112px] max-w-[142px] self-center explore-chrome"
+                style={{
+                  opacity: showChrome ? 1 : 0,
+                  transition: `opacity ${SAIL_CLEAR_MS}ms ease`,
+                  pointerEvents: showChrome ? undefined : 'none',
+                }}
+              >
+                <img
+                  src={DAILY_STREAK_BG}
+                  alt=""
+                  aria-hidden
+                  className="block w-full h-auto pointer-events-none select-none"
+                  draggable={false}
+                />
+                <div className="absolute inset-0 flex flex-col">
+                  <div className="h-[15%] flex items-center justify-center px-[12%] pt-[1%]">
+                    <p
+                      className="font-display font-black text-[10px] tracking-wide text-center leading-none"
+                      style={{
+                        color: '#3E1F07',
+                        textShadow: '0 1px 0 rgba(255,245,220,0.55)',
+                      }}
+                    >
+                      DAILY STREAK
+                    </p>
+                  </div>
+                  <div className="flex-1 flex flex-col items-center px-[14%] pt-[5%] pb-[9%] min-h-0">
+                    <div className="flex items-center gap-0.5 mb-1.5">
+                      <Flame className="w-3.5 h-3.5 text-orange-500" fill="#f97316" />
+                      <span
+                        className="font-display font-black text-[15px] leading-none"
+                        style={{
+                          color: '#7CFC98',
+                          textShadow: '0 1px 0 #1b5e20, 0 2px 3px rgba(0,0,0,0.35)',
+                        }}
+                      >
+                        {streak > 0 ? `${streak} DAYS!` : 'START!'}
+                      </span>
+                    </div>
+                    <div className="flex flex-col gap-0.5 w-full mb-auto overflow-hidden">
+                      {weekDays.map((date, index) => {
+                        const isToday = date.getTime() === today.getTime();
+                        const completed = isToday ? lessonDone : isDateCompleted(date, sessionHistory);
+                        return (
+                          <div key={index} className="flex items-center gap-1">
+                            <span className="w-3 text-[8px] font-bold text-[#ffe9b0]/75 text-center">
+                              {dayLabels[index]}
+                            </span>
+                            <div
+                              className={`w-4 h-4 rounded-full flex items-center justify-center flex-shrink-0 ${
+                                completed
+                                  ? 'bg-gradient-to-br from-green-400 to-green-600 text-white shadow'
+                                  : isToday
+                                    ? 'border-2 border-[#ffe9b0] bg-white/25'
+                                    : 'bg-[#5c2e12]/35 text-[#ffe9b0]/50'
+                              }`}
+                            >
+                              {completed ? (
+                                <Check className="w-2 h-2" strokeWidth={3} />
+                              ) : (
+                                <span className="text-[7px] font-bold text-[#ffe9b0]/85">{date.getDate()}</span>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                    <button
+                      type="button"
+                      onClick={startLesson}
+                      className="mt-1.5 w-full py-1.5 rounded-lg font-display font-black text-[10px] text-white active:scale-[0.98] transition-transform"
+                      style={{
+                        background: 'linear-gradient(180deg, #3db8e8, #1B8BB8)',
+                        boxShadow: '0 2px 0 #0e5f7a',
+                      }}
+                    >
+                      {lessonDone ? 'Review' : hasInProgress ? 'Continue' : 'Start'}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          <div
+            className="px-3.5 max-w-lg mx-auto w-full space-y-1 explore-chrome"
+            style={{
+              opacity: showChrome ? 1 : 0,
+              transition: `opacity ${SAIL_CLEAR_MS}ms ease`,
+              pointerEvents: showChrome ? undefined : 'none',
+            }}
           >
-            <img
-              src={DAILY_ADVENTURE_ISLAND}
-              alt="Daily Adventure"
-              className="w-full h-auto object-contain"
-            />
-          </button>
+            {/* ── Supporting cards: Dive + Video Devotional ── */}
+            <div className="flex gap-2.5">
+              {FEATURE_CREATE_YOUR_STORY && (
+                <button
+                  type="button"
+                  onClick={() => navigate('/create-your-story')}
+                  className="flex-1 rounded-2xl overflow-hidden active:scale-[0.98] transition-transform focus:outline-none p-0 border-0 bg-transparent"
+                  style={WOOD_PANEL}
+                  aria-label="Dive into the Bible - Start Story Adventure"
+                >
+                  <div className="p-1.5">
+                    <img
+                      src={DIVE_BUTTON}
+                      alt="Dive into The Bible"
+                      className="w-full h-auto block rounded-xl"
+                    />
+                  </div>
+                </button>
+              )}
 
-          {/* Water pulse ring — follows the island curvature, breathes in and out */}
-          <div className="absolute inset-0 pointer-events-none" style={{ zIndex: 3 }}>
-            <div className="shore-pulse-1" style={{
-              position: 'absolute', left: '-8%', right: '-8%', bottom: '2%', height: '55%',
-              borderRadius: '50%',
-              border: '3px solid rgba(255,255,255,0.25)',
-              boxShadow: '0 0 12px 4px rgba(180,230,255,0.15), inset 0 0 10px 2px rgba(180,230,255,0.08)',
-            }} />
-            <div className="shore-pulse-2" style={{
-              position: 'absolute', left: '-14%', right: '-14%', bottom: '-2%', height: '58%',
-              borderRadius: '50%',
-              border: '2px solid rgba(255,255,255,0.15)',
-              boxShadow: '0 0 18px 6px rgba(180,230,255,0.1), inset 0 0 14px 3px rgba(180,230,255,0.05)',
-            }} />
-            <div className="shore-pulse-3" style={{
-              position: 'absolute', left: '-20%', right: '-20%', bottom: '-6%', height: '61%',
-              borderRadius: '50%',
-              border: '1.5px solid rgba(255,255,255,0.08)',
-              boxShadow: '0 0 24px 8px rgba(180,230,255,0.06)',
-            }} />
+              <button
+                type="button"
+                onClick={() => {
+                  const first = videoDevotionals.find((l) => !isLocked(l)) || videoDevotionals[0];
+                  if (first) navigate(`/lesson/${first._id}`);
+                  else setShowVerseModal(true);
+                }}
+                className={`rounded-2xl overflow-hidden active:scale-[0.98] transition-transform focus:outline-none ${
+                  FEATURE_CREATE_YOUR_STORY ? 'flex-1' : 'w-full'
+                }`}
+                style={{ ...WOOD_PANEL, padding: 7 }}
+                aria-label="Video Devotional Activities"
+              >
+                <div
+                  className="rounded-xl px-2.5 py-3 flex flex-col items-center justify-center gap-2 min-h-[108px]"
+                  style={WOOD_INNER}
+                >
+                  <div className="relative w-14 h-14 rounded-xl overflow-hidden border-2 border-[#c9a76b] shadow-md bg-[#5a3820] flex items-center justify-center">
+                    {videoDevotionals[0]?.video?.thumbnail || videoDevotionals[0]?.thumbnailUrl ? (
+                      <img
+                        src={videoDevotionals[0].video?.thumbnail || videoDevotionals[0].thumbnailUrl}
+                        alt=""
+                        className="w-full h-full object-cover"
+                      />
+                    ) : (
+                      <Video className="w-7 h-7 text-[#ffe9b0]" />
+                    )}
+                    <span className="absolute inset-0 flex items-center justify-center bg-black/25">
+                      <Play className="w-5 h-5 text-white fill-white" />
+                    </span>
+                  </div>
+                  <p
+                    className="font-display font-black text-[11px] text-center leading-tight"
+                    style={{ color: '#5c2e12' }}
+                  >
+                    Video Devotional Activities
+                  </p>
+                  {videoDevotionals.length > 0 && (
+                    <p className="text-[10px] font-bold text-[#5c2e12]/65">
+                      {videoDevotionals.length} video{videoDevotionals.length === 1 ? '' : 's'}
+                      {!isSubscribed && videoDevotionals.some((l) => isLocked(l)) ? ' · Premium' : ''}
+                    </p>
+                  )}
+                </div>
+              </button>
+            </div>
+
+            {/* Horizontal video strip when we have multiple devotionals */}
+            {videoDevotionals.length > 1 && (
+              <div className="pt-2 -mx-1">
+                <div className="overflow-x-auto no-scrollbar snap-x snap-mandatory">
+                  <div className="flex gap-2.5 px-1 pb-1">
+                    {videoDevotionals.map((lesson: any) => {
+                      const done = isCompleted(lesson._id);
+                      const locked = isLocked(lesson);
+                      const thumb = lesson.video?.thumbnail || lesson.thumbnailUrl;
+                      return (
+                        <button
+                          key={lesson._id}
+                          type="button"
+                          onClick={() => {
+                            if (locked) return;
+                            navigate(`/lesson/${lesson._id}`);
+                          }}
+                          className="relative flex-shrink-0 w-28 snap-center rounded-xl overflow-hidden border-2 border-[#c9a76b]/70 shadow-md active:scale-95 transition-transform"
+                          style={{ background: '#5a3820' }}
+                        >
+                          <div className="aspect-[3/4] relative">
+                            {thumb ? (
+                              <img src={thumb} alt={lesson.title} className="w-full h-full object-cover" />
+                            ) : (
+                              <div className="w-full h-full flex items-center justify-center">
+                                <Video className="w-8 h-8 text-white/40" />
+                              </div>
+                            )}
+                            {done && (
+                              <span className="absolute top-1.5 right-1.5 w-5 h-5 rounded-full bg-green-500 flex items-center justify-center">
+                                <Check className="w-3 h-3 text-white" />
+                              </span>
+                            )}
+                          </div>
+                          <p className="px-1.5 py-1 text-[10px] font-bold text-[#ffe9b0] truncate bg-[#3d2314]">
+                            {lesson.title}
+                          </p>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       </div>
 
-      {/* Zoom-in white flash overlay */}
-      {isZoomingIn && (
-        <div className="fixed inset-0 island-flash pointer-events-none" style={{ zIndex: 999 }} />
-      )}
+      {/* White fade → SailScene (after in-place Genesis zoom) */}
+      {sailCinematic &&
+        createPortal(
+          <div
+            className="fixed inset-0 pointer-events-none"
+            style={{
+              zIndex: 99980,
+              background: '#fff',
+              opacity: sailFade ? 1 : 0,
+              transition: `opacity ${SAIL_FADE_MS}ms ease-in`,
+            }}
+            aria-hidden
+          />,
+          document.body,
+        )}
 
       <style>{`
-        .parrot-island-drift {
-          animation: parrot-drift 8s ease-in-out infinite;
+        .explore-map-ship {
+          animation: explore-ship-bob 2.4s ease-in-out infinite;
         }
-        @keyframes parrot-drift {
-          0%   { transform: translate(0, 0) rotate(0deg); }
-          25%  { transform: translate(-4px, -3px) rotate(0.5deg); }
-          50%  { transform: translate(2px, 3px) rotate(-0.3deg); }
-          75%  { transform: translate(5px, -2px) rotate(0.4deg); }
-          100% { transform: translate(0, 0) rotate(0deg); }
+        .sail-cinematic-active .explore-map-ship {
+          animation: none;
         }
-        /* Drifting clouds */
-        .sky-cloud { left: -200px; }
-        .sky-cloud-1 { animation: sky-cloud-flow 80s linear infinite; }
-        .sky-cloud-2 { animation: sky-cloud-flow 65s linear infinite; animation-delay: -20s; }
-        .sky-cloud-3 { animation: sky-cloud-flow 100s linear infinite; animation-delay: -55s; }
-        .sky-cloud-4 { animation: sky-cloud-flow 70s linear infinite; animation-delay: -38s; }
-        .sky-cloud-5 { animation: sky-cloud-flow 90s linear infinite; animation-delay: -65s; }
-        @keyframes sky-cloud-flow {
-          from { transform: translateX(0); }
-          to   { transform: translateX(calc(100vw + 400px)); }
+        @keyframes explore-ship-bob {
+          0%, 100% { transform: translateY(0) rotate(-4deg); }
+          50% { transform: translateY(-4px) rotate(4deg); }
         }
-        /* Continuous one-direction wave flow — each layer at different speed */
-        .ocean-flow-1 { animation: ocean-scroll 28s linear infinite; }
-        .ocean-flow-2 { animation: ocean-scroll 22s linear infinite; animation-delay: -8s; }
-        .ocean-flow-3 { animation: ocean-scroll 18s linear infinite; animation-delay: -4s; }
-        .ocean-flow-4 { animation: ocean-scroll 15s linear infinite; animation-delay: -10s; }
-        .ocean-flow-5 { animation: ocean-scroll 12s linear infinite; animation-delay: -3s; }
-        .ocean-flow-6 { animation: ocean-scroll 9s linear infinite; animation-delay: -6s; }
-        @keyframes ocean-scroll { 0% { transform: translateX(0); } 100% { transform: translateX(-50%); } }
-        .raft-drift {
-          animation: raft-drifting 10s ease-in-out infinite;
-        }
-        @keyframes raft-drifting {
-          0%   { transform: translate(0, 0) rotate(0deg); }
-          20%  { transform: translate(6px, -5px) rotate(1.2deg); }
-          40%  { transform: translate(12px, 2px) rotate(-0.8deg); }
-          60%  { transform: translate(5px, -3px) rotate(1deg); }
-          80%  { transform: translate(-2px, 1px) rotate(-0.5deg); }
-          100% { transform: translate(0, 0) rotate(0deg); }
-        }
-        .raft-wave {
-          animation: raft-wave-flow 3s ease-in-out infinite;
-        }
-        @keyframes raft-wave-flow {
-          0%, 100% { transform: translateX(0); opacity: 0.15; }
-          50% { transform: translateX(6px); opacity: 0.7; }
-        }
-        .raft-splash {
-          animation: raft-drop 2.2s ease-out infinite;
-        }
-        @keyframes raft-drop {
-          0% { transform: scale(0.2); opacity: 0; }
-          20% { transform: scale(1.1); opacity: 0.6; }
-          50% { transform: scale(0.85); opacity: 0.3; }
-          100% { transform: scale(0.2); opacity: 0; }
-        }
-        .shore-pulse-1 {
-          animation: shore-breathe 3.5s ease-in-out infinite;
-          transform-origin: center 70%;
-        }
-        .shore-pulse-2 {
-          animation: shore-breathe 4.5s ease-in-out infinite;
-          animation-delay: -1.2s;
-          transform-origin: center 70%;
-        }
-        .shore-pulse-3 {
-          animation: shore-breathe 5.5s ease-in-out infinite;
-          animation-delay: -2.8s;
-          transform-origin: center 70%;
-        }
-        @keyframes shore-breathe {
-          0%   { transform: scale(1.15); opacity: 0; }
-          20%  { opacity: 0.7; }
-          60%  { opacity: 0.4; }
-          100% { transform: scale(0.95); opacity: 0; }
-        }
-        /* Island zoom-in portal effect */
-        .island-zoom-in {
-          animation: island-zoom 1s ease-in forwards;
-          will-change: transform, opacity;
-        }
-        @keyframes island-zoom {
-          0%   { transform: scale(1); opacity: 1; }
-          100% { transform: scale(7); opacity: 0; }
-        }
-        .island-flash {
-          animation: flash-white 1s ease-in forwards;
-          will-change: background;
-        }
-        @keyframes flash-white {
-          0%   { background: rgba(255,255,255,0); }
-          60%  { background: rgba(255,255,255,0); }
-          85%  { background: rgba(255,255,255,0.5); }
-          100% { background: rgba(255,255,255,1); }
-        }
-        .world-firefly { animation: firefly-rise ease-out infinite; pointer-events: none; opacity: 0; }
-        @keyframes firefly-rise {
-          0% { transform: translate(0, 0) scale(0.4); opacity: 0; }
-          10% { opacity: 0.9; transform: translate(calc(var(--drift) * 0.1), -15px) scale(1); }
-          30% { opacity: 1; transform: translate(calc(var(--drift) * 0.4), -60px) scale(1.1); }
-          60% { opacity: 0.7; transform: translate(calc(var(--drift) * 0.8), -140px) scale(0.9); }
-          85% { opacity: 0.25; transform: translate(var(--drift), -210px) scale(0.5); }
-          100% { opacity: 0; transform: translate(var(--drift), -260px) scale(0.2); }
+        body[data-modal-open="true"] .bottom-nav-bar {
+          display: none !important;
+          pointer-events: none !important;
         }
       `}</style>
 
@@ -509,22 +941,8 @@ export const PersistentWorldIsland: React.FC = () => {
           </Suspense>
         </div>
       )}
-
-      <ChallengeGameModal
-        isOpen={showChallengeGame}
-        onClose={() => setShowChallengeGame(false)}
-      />
     </div>
   );
-};
-
-/**
- * Route-level WorldPage — now a thin shell. The island visuals live in
- * PersistentWorldIsland (rendered in Layout). This component is kept for
- * the WorldPageWithWelcomeCheck wrapper to render modals on top.
- */
-const WorldPage: React.FC = () => {
-  return <div className="relative w-full h-full" />;
 };
 
 export default WorldPage;

@@ -7,9 +7,17 @@ import {
     appSideSwipeTextShadow,
     appStoryParagraphExtras,
 } from '../utils/appBookTypography';
-import { ChevronLeft, ChevronRight, X, Play, Square, Volume2, VolumeX, ChevronDown } from 'lucide-react';
+import { ChevronLeft, ChevronRight, X, Play, Square, Volume2, VolumeX, ChevronDown, Check } from 'lucide-react';
 import TrimmedPlaybackVideo from '../components/TrimmedPlaybackVideo';
 import { removeEmotionalCues } from '../utils/readAlongText';
+import {
+    blankSlotUnits,
+    collectPageInteractiveTargets,
+    playInteractiveWordDing,
+    sanitizeInteractiveWordIndices,
+    splitInteractiveWords,
+    wordForSpeech,
+} from '../utils/interactiveWords';
 
 interface Voice {
     voice_id: string;
@@ -28,6 +36,7 @@ interface TextBox {
     showBackground?: boolean;
     backgroundColor?: string;
     shadowColor?: string;
+    interactiveWordIndices?: number[];
 }
 
 interface VideoSequenceItem {
@@ -128,6 +137,11 @@ const BookReader: React.FC = () => {
     const [pages, setPages] = useState<Page[]>([]);
     const [currentPageIndex, setCurrentPageIndex] = useState(0);
     const [loading, setLoading] = useState(true);
+    const [bookType, setBookType] = useState<'standard' | 'kids_monthly' | 'bible_map'>('standard');
+    const [bookTitle, setBookTitle] = useState('');
+    /** Keys: `${boxIndex}:${wordIndex}` — words tapped on the current page */
+    const [tappedInteractiveKeys, setTappedInteractiveKeys] = useState<Set<string>>(new Set());
+    const [showTapHint, setShowTapHint] = useState(false);
     // Scroll state: 'hidden' | 'mid' | 'max' - matches app behavior
     const [scrollState, setScrollState] = useState<'hidden' | 'mid' | 'max'>('mid');
     const [viewMode, setViewMode] = useState<'fullscreen' | 'tablet-p' | 'tablet-l' | 'phone-p' | 'phone-l'>('fullscreen');
@@ -188,8 +202,13 @@ const BookReader: React.FC = () => {
         const fetchPages = async () => {
             if (!bookId) return;
             try {
-                const res = await apiClient.get(`/api/pages/book/${bookId}`);
-                setPages(res.data);
+                const [pagesRes, bookRes] = await Promise.all([
+                    apiClient.get(`/api/pages/book/${bookId}`),
+                    apiClient.get(`/api/books/${bookId}`),
+                ]);
+                setPages(pagesRes.data);
+                setBookType(bookRes.data?.bookType || 'standard');
+                setBookTitle(bookRes.data?.title || '');
             } catch (err) {
                 console.error('Failed to fetch pages:', err);
             } finally {
@@ -228,6 +247,39 @@ const BookReader: React.FC = () => {
 
     const currentPage = pages[currentPageIndex];
 
+    /** Bible Map: keep parchment in the lower third so art above is never covered. */
+    const bibleMapScrollHeight = useMemo(() => {
+        if (!currentPage || bookType !== 'bible_map') return null;
+        const clamp = (n: number, fallback: number, max: number) =>
+            Number.isFinite(n) && n > 0 ? Math.min(n, max) : fallback;
+        const mid = clamp(Number(currentPage.scrollMidHeight), 36, 36);
+        const max = clamp(Number(currentPage.scrollMaxHeight), 40, 40);
+        const offset = Number(currentPage.scrollOffsetY) || 0;
+        return { mid, max, offset };
+    }, [currentPage, bookType]);
+
+    const currentPageTextBoxes = useMemo(() => {
+        if (!currentPage) return [] as TextBox[];
+        const contentBoxes = currentPage.content?.textBoxes;
+        return (contentBoxes && contentBoxes.length > 0)
+            ? contentBoxes
+            : (currentPage.textBoxes || []);
+    }, [currentPage]);
+
+    const interactiveTargets = useMemo(
+        () => collectPageInteractiveTargets(currentPageTextBoxes),
+        [currentPageTextBoxes],
+    );
+
+    const isInteractivePreview = bookType === 'bible_map' || interactiveTargets.length > 0;
+
+    const allInteractiveTapped = useMemo(() => {
+        if (interactiveTargets.length === 0) return true;
+        return interactiveTargets.every(
+            (t) => tappedInteractiveKeys.has(`${t.boxIndex}:${t.wordIndex}`),
+        );
+    }, [interactiveTargets, tappedInteractiveKeys]);
+
     const pageHasRenderableVideo = useMemo(() => {
         if (!currentPage) return false;
         if (currentPage.useVideoSequence && (currentPage.videoSequence?.length ?? 0) > 0) return true;
@@ -247,6 +299,8 @@ const BookReader: React.FC = () => {
         setReadAlongTimingReady(false);
         alignWordsRef.current = [];
         displayWordCountRef.current = 0;
+        setTappedInteractiveKeys(new Set());
+        setShowTapHint(false);
         if (highlightIntervalRef.current != null) {
             window.clearInterval(highlightIntervalRef.current);
             highlightIntervalRef.current = null;
@@ -400,7 +454,7 @@ const BookReader: React.FC = () => {
 
     generateAndPlayTTSRef.current = generateAndPlayTTS;
 
-    // Play all text boxes on current page
+    // Play all text boxes on current page (gated until interactive blanks are done)
     const handlePlay = useCallback(() => {
         if (isPlaying) {
             tearDownPlayback();
@@ -410,6 +464,11 @@ const BookReader: React.FC = () => {
             }
             setIsPlaying(false);
             setSequentialReadActive(false);
+            return;
+        }
+
+        if (isInteractivePreview && interactiveTargets.length > 0 && !allInteractiveTapped) {
+            setShowTapHint(true);
             return;
         }
 
@@ -425,7 +484,15 @@ const BookReader: React.FC = () => {
         allTextBoxesRef.current = textBoxes;
         setSequentialReadActive(textBoxes.length > 1);
         void generateAndPlayTTSRef.current(textBoxes[0].text, 0);
-    }, [isPlaying, pages, currentPageIndex, tearDownPlayback]);
+    }, [
+        isPlaying,
+        pages,
+        currentPageIndex,
+        tearDownPlayback,
+        isInteractivePreview,
+        interactiveTargets.length,
+        allInteractiveTapped,
+    ]);
 
     // Unmount cleanup
     useEffect(() => () => {
@@ -489,8 +556,71 @@ const BookReader: React.FC = () => {
         setCurrentVideoIndex(prev => (prev + 1) % sortedVideos.length);
     };
 
+    const speakWordOnly = useCallback(
+        async (rawWord: string) => {
+            const spoken = wordForSpeech(rawWord);
+            if (!spoken || !selectedVoice) return;
+            // Stop full-page playback if running — interactive mode is word-at-a-time
+            if (isPlaying) {
+                tearDownPlayback();
+                if (audioRef.current) {
+                    audioRef.current.pause();
+                    audioRef.current = null;
+                }
+                setIsPlaying(false);
+                setSequentialReadActive(false);
+            }
+            try {
+                const res = await apiClient.post('/api/tts/generate', {
+                    text: spoken,
+                    voiceId: selectedVoice,
+                    bookId,
+                    pageNumber: currentPageIndex + 1,
+                    textBoxIndex: 0,
+                });
+                if (!res.data?.audioUrl) return;
+                if (audioRef.current) {
+                    audioRef.current.pause();
+                    audioRef.current = null;
+                }
+                const audio = new Audio(getMediaUrl(res.data.audioUrl));
+                audioRef.current = audio;
+                audio.onended = () => {
+                    if (audioRef.current === audio) audioRef.current = null;
+                };
+                await audio.play();
+            } catch (err) {
+                console.error('Word TTS failed:', err);
+            }
+        },
+        [
+            selectedVoice,
+            bookId,
+            currentPageIndex,
+            isPlaying,
+            tearDownPlayback,
+        ],
+    );
+
+    const handleTapInteractiveWord = (boxIndex: number, wordIndex: number, word: string) => {
+        const key = `${boxIndex}:${wordIndex}`;
+        setTappedInteractiveKeys((prev) => {
+            if (prev.has(key)) return prev;
+            const next = new Set(prev);
+            next.add(key);
+            return next;
+        });
+        playInteractiveWordDing();
+        setShowTapHint(false);
+        void speakWordOnly(word);
+    };
+
     const handleNext = (e: React.MouseEvent) => {
         e.stopPropagation();
+        if (isInteractivePreview && !allInteractiveTapped) {
+            setShowTapHint(true);
+            return;
+        }
         if (currentPageIndex < pages.length - 1) {
             setCurrentPageIndex(prev => prev + 1);
             // NOTE: Scroll state is preserved across pages
@@ -545,6 +675,14 @@ const BookReader: React.FC = () => {
                         Back
                     </button>
                     <div className="h-6 w-px bg-gray-700 mx-2" />
+                    {bookTitle && (
+                        <span className="text-sm font-medium text-white truncate max-w-[200px]">{bookTitle}</span>
+                    )}
+                    {bookType === 'bible_map' && (
+                        <span className="text-xs px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/40">
+                            Bible Map
+                        </span>
+                    )}
                     <span className="text-sm font-medium text-gray-400">Preview Mode:</span>
                     <div className="flex bg-gray-900 rounded-lg p-1">
                         <button
@@ -639,8 +777,28 @@ const BookReader: React.FC = () => {
                         </button>
                     )}
 
-                    {/* Background Layer */}
-                    <div className="absolute inset-0 flex items-center justify-center">
+                    {/* Background Layer — bible_map: fit art fully in band above scroll */}
+                    <div
+                        className={
+                            bookType === 'bible_map'
+                                ? 'absolute top-0 left-0 right-0 overflow-hidden bg-[#2d5a3d]'
+                                : 'absolute inset-0 flex items-center justify-center'
+                        }
+                        style={
+                            bookType === 'bible_map' && bibleMapScrollHeight
+                                ? {
+                                      height: `${Math.max(
+                                          58,
+                                          100 -
+                                              (scrollState === 'max'
+                                                  ? bibleMapScrollHeight.max
+                                                  : bibleMapScrollHeight.mid) -
+                                              bibleMapScrollHeight.offset,
+                                      )}%`,
+                                  }
+                                : undefined
+                        }
+                    >
                         {(() => {
                             // Check for image sequence first
                             if (currentPage.useImageSequence && currentPage.imageSequence && currentPage.imageSequence.length > 0) {
@@ -673,7 +831,9 @@ const BookReader: React.FC = () => {
                                             key={currentImage.url}
                                             src={resolveUrl(currentImage.url)}
                                             alt={`Page ${currentPage.pageNumber} - Image ${currentImageIndex + 1}`}
-                                            className={`w-full h-full object-cover transition-all duration-500 ${getTransitionClass()}`}
+                                            className={`w-full h-full transition-all duration-500 ${
+                                                bookType === 'bible_map' ? 'object-contain object-center' : 'object-cover'
+                                            } ${getTransitionClass()}`}
                                             onError={(e) => {
                                                 e.currentTarget.style.display = 'none';
                                             }}
@@ -737,7 +897,7 @@ const BookReader: React.FC = () => {
                                     <TrimmedPlaybackVideo
                                         ref={videoRef}
                                         src={resolveUrl(bgUrl)}
-                                        className="w-full h-full object-cover"
+                                        className={bookType === 'bible_map' ? 'w-full h-full object-contain object-center' : 'w-full h-full object-cover'}
                                         autoPlay
                                         loop
                                         muted={!pageVideoSoundOn}
@@ -753,7 +913,7 @@ const BookReader: React.FC = () => {
                                 <img
                                     src={resolveUrl(bgUrl)}
                                     alt={`Page ${currentPage.pageNumber}`}
-                                    className="w-full h-full object-cover"
+                                    className={bookType === 'bible_map' ? 'w-full h-full object-contain object-center' : 'w-full h-full object-cover'}
                                     onError={(e) => {
                                         // Hide broken image and show placeholder
                                         e.currentTarget.style.display = 'none';
@@ -768,9 +928,16 @@ const BookReader: React.FC = () => {
                         const scrollUrl = currentPage.scrollUrl || currentPage.files?.scroll?.url;
                         const scrollOffset = currentPage.scrollOffsetY || 0;
                         // Calculate scroll height based on state (like app)
-                        const currentScrollHeight = scrollState === 'max' 
-                            ? (currentPage.scrollMaxHeight || 60)
-                            : (currentPage.scrollMidHeight || 30);
+                        const defaultMid = bookType === 'bible_map' ? 36 : 30;
+                        const defaultMax = bookType === 'bible_map' ? 40 : 60;
+                        const currentScrollHeight =
+                            bookType === 'bible_map' && bibleMapScrollHeight
+                                ? scrollState === 'max'
+                                    ? bibleMapScrollHeight.max
+                                    : bibleMapScrollHeight.mid
+                                : scrollState === 'max'
+                                  ? currentPage.scrollMaxHeight || defaultMax
+                                  : currentPage.scrollMidHeight || defaultMid;
                         
                         // Calculate clip-path to hide text outside scroll area (top AND bottom)
                         const clipInsetTop = scrollUrl 
@@ -789,11 +956,7 @@ const BookReader: React.FC = () => {
                                 } : {}}
                             >
                                 {/* Use content.textBoxes first (if has items), fall back to root textBoxes (legacy) */}
-                                {(() => {
-                                    const contentBoxes = currentPage.content?.textBoxes;
-                                    const textBoxes = (contentBoxes && contentBoxes.length > 0) ? contentBoxes : currentPage.textBoxes;
-                                    return textBoxes;
-                                })()?.map((box, idx) => {
+                                {currentPageTextBoxes.map((box, idx) => {
                                     // Calculate where scroll starts (from top)
                                     const scrollStartPercent = 100 - currentScrollHeight - scrollOffset + 3;
                                     const boxY = typeof box.y === 'number' ? box.y : 0;
@@ -806,13 +969,20 @@ const BookReader: React.FC = () => {
                                         ? `calc(${100 - scrollBottomBuffer}% - ${effectiveTop}%)`
                                         : `calc(100% - ${effectiveTop}% - 40px)`;
 
-                                    if (sequentialReadActive && idx !== currentTextBoxIndex) {
+                                    if (sequentialReadActive && idx !== currentTextBoxIndex && !(isInteractivePreview && interactiveTargets.length > 0)) {
                                         return null;
                                     }
 
                                     const cleanedText = removeEmotionalCues(box.text);
                                     const splitWords = cleanedText.split(/\s+/).filter((w) => w.length > 0);
+                                    const interactiveIndices = new Set(
+                                        sanitizeInteractiveWordIndices(box.text || '', box.interactiveWordIndices),
+                                    );
+                                    // Prefer raw-text indices for bible_map taps; fall back to cleaned split when texts match length
+                                    const tapWords = splitInteractiveWords(box.text || '');
+                                    const useInteractiveWords = isInteractivePreview && interactiveIndices.size > 0;
                                     const showReadAlong =
+                                        !useInteractiveWords &&
                                         idx === currentTextBoxIndex &&
                                         readAlongTimingReady &&
                                         highlightedWordIndex >= 0 &&
@@ -858,7 +1028,56 @@ const BookReader: React.FC = () => {
                                                 className="gk-readalong-p leading-relaxed relative drop-shadow-[0_1px_2px_rgba(255,255,255,0.9)]"
                                                 style={{ whiteSpace: 'pre-wrap', margin: 0, ...appStoryParagraphExtras() }}
                                             >
-                                                {showReadAlong ? (
+                                                {useInteractiveWords ? (
+                                                    tapWords.map((word, wIdx) => {
+                                                        const isTarget = interactiveIndices.has(wIdx);
+                                                        const tapped = tappedInteractiveKeys.has(`${idx}:${wIdx}`);
+                                                        if (!isTarget) {
+                                                            return <span key={wIdx}>{word}{' '}</span>;
+                                                        }
+                                                        if (!tapped) {
+                                                            const units = blankSlotUnits(word);
+                                                            return (
+                                                                <button
+                                                                    key={wIdx}
+                                                                    type="button"
+                                                                    onClick={(e) => {
+                                                                        e.stopPropagation();
+                                                                        handleTapInteractiveWord(idx, wIdx, word);
+                                                                    }}
+                                                                    className="inline-flex items-center justify-center mx-0.5 px-2 py-0.5 rounded-md border-2 border-dashed border-emerald-600/80 bg-white/90 align-baseline hover:bg-emerald-50 cursor-pointer transition"
+                                                                    style={{
+                                                                        font: 'inherit',
+                                                                        color: 'transparent',
+                                                                        minWidth: `${Math.max(units * 0.55, 1.8)}em`,
+                                                                    }}
+                                                                    aria-label="Tap to reveal word"
+                                                                >
+                                                                    <span className="block w-full border-b-2 border-emerald-700/80 leading-none">
+                                                                        {'\u00A0'.repeat(units)}
+                                                                    </span>
+                                                                </button>
+                                                            );
+                                                        }
+                                                        return (
+                                                            <button
+                                                                key={wIdx}
+                                                                type="button"
+                                                                onClick={(e) => {
+                                                                    e.stopPropagation();
+                                                                    void speakWordOnly(word);
+                                                                }}
+                                                                className="inline-flex items-center gap-1 mx-0.5 px-2 py-0.5 rounded-md border-2 border-emerald-500 bg-white text-inherit shadow-sm align-baseline transition"
+                                                                style={{ font: 'inherit', color: 'inherit' }}
+                                                            >
+                                                                {word}
+                                                                <span className="inline-flex items-center justify-center w-4 h-4 rounded-full bg-emerald-500 text-white shrink-0">
+                                                                    <Check className="w-2.5 h-2.5" strokeWidth={3} />
+                                                                </span>
+                                                            </button>
+                                                        );
+                                                    })
+                                                ) : showReadAlong ? (
                                                     splitWords.map((word, wIdx) => {
                                                         const isHighlighted = wIdx === highlightedWordIndex;
                                                         const isUpcoming =
@@ -905,9 +1124,17 @@ const BookReader: React.FC = () => {
                         if (!scrollUrl) return null;
                         
                         // Calculate height based on scroll state
-                        const currentScrollHeight = scrollState === 'max'
-                            ? (currentPage.scrollMaxHeight || 60)
-                            : (currentPage.scrollMidHeight || 30);
+                        // bible_map defaults leave upper ~2/3 for full art above parchment
+                        const defaultMid = bookType === 'bible_map' ? 36 : 30;
+                        const defaultMax = bookType === 'bible_map' ? 40 : 60;
+                        const currentScrollHeight =
+                            bookType === 'bible_map' && bibleMapScrollHeight
+                                ? scrollState === 'max'
+                                    ? bibleMapScrollHeight.max
+                                    : bibleMapScrollHeight.mid
+                                : scrollState === 'max'
+                                  ? currentPage.scrollMaxHeight || defaultMax
+                                  : currentPage.scrollMidHeight || defaultMid;
                         
                         return (
                             <div
@@ -946,12 +1173,43 @@ const BookReader: React.FC = () => {
                         <button
                             onClick={handleNext}
                             disabled={currentPageIndex === pages.length - 1}
-                            className={`pointer-events-auto p-3 rounded-full bg-black/30 text-white backdrop-blur-sm hover:bg-black/50 transition ${currentPageIndex === pages.length - 1 ? 'opacity-0 cursor-default' : 'opacity-100'
-                                }`}
+                            className={`pointer-events-auto p-3 rounded-full backdrop-blur-sm transition ${
+                                currentPageIndex === pages.length - 1
+                                    ? 'opacity-0 cursor-default bg-black/30 text-white'
+                                    : isInteractivePreview && !allInteractiveTapped
+                                        ? 'opacity-50 cursor-not-allowed bg-black/30 text-white'
+                                        : 'opacity-100 bg-emerald-600/90 text-white hover:bg-emerald-500'
+                            }`}
+                            title={
+                                isInteractivePreview && !allInteractiveTapped
+                                    ? 'Tap all blanks to continue'
+                                    : 'Next page'
+                            }
                         >
                             <ChevronRight className="w-8 h-8" />
                         </button>
                     </div>
+
+                    {/* Interactive word progress / hint */}
+                    {isInteractivePreview && interactiveTargets.length > 0 && (
+                        <div className="absolute bottom-16 left-1/2 -translate-x-1/2 z-40 pointer-events-none">
+                            <div
+                                className={`px-3 py-1.5 rounded-full text-xs font-medium backdrop-blur-sm shadow ${
+                                    showTapHint
+                                        ? 'bg-amber-500 text-white'
+                                        : allInteractiveTapped
+                                            ? 'bg-emerald-600 text-white'
+                                            : 'bg-black/50 text-white'
+                                }`}
+                            >
+                                {allInteractiveTapped
+                                    ? 'All words found — next page unlocked'
+                                    : showTapHint
+                                        ? 'Tap the blanks first — then Read page unlocks'
+                                        : `Tap words ${interactiveTargets.filter((t) => tappedInteractiveKeys.has(`${t.boxIndex}:${t.wordIndex}`)).length}/${interactiveTargets.length}`}
+                            </div>
+                        </div>
+                    )}
 
                     {/* Page Indicator */}
                     <div className="absolute bottom-4 left-1/2 -translate-x-1/2 bg-black/40 text-white px-3 py-1 rounded-full text-sm backdrop-blur-sm pointer-events-none">

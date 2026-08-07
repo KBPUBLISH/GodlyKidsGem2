@@ -5,8 +5,6 @@ import {
   getBibleMapApiRoot,
   resolveBibleMapMediaUrl,
 } from '../utils/bibleMapApi';
-import CrewPickerDropdown from '../components/rewards/CrewPickerDropdown';
-
 /** Looping ocean background video (portrait; shown full-bleed cover). */
 const SAIL_SCENE_BG = '/assets/videos/sail-ocean-bg.mp4';
 /** Static ocean poster / fallback if the video fails to load. */
@@ -16,6 +14,8 @@ const SAIL_SHIP_DECK = '/assets/images/sail-ship-deck.png';
 const SAIL_STEERING_WHEEL = '/assets/images/sail-steering-wheel.png';
 /** Sail-scene bottom overlay — crew roster (three characters on wood plaque). */
 const SAIL_BTN_CREW = '/assets/images/sail-btn-crew.png';
+/** Sail-scene bottom overlay — games (gamepad on wood plaque). */
+const SAIL_BTN_GAMES = '/assets/images/rewards-gamepad-icon.png';
 /** Sail-scene bottom overlay — explore / world (open book on wood plaque). */
 const SAIL_BTN_EXPLORE = '/assets/images/sail-btn-explore.png';
 /** Shared wood texture for Travel Here CTA (matches IslandScene chrome). */
@@ -304,7 +304,6 @@ const fetchIslandHasMainMap = async (id: string): Promise<boolean> => {
  */
 const SailScenePage: React.FC = () => {
   const navigate = useNavigate();
-  const [crewPickerOpen, setCrewPickerOpen] = useState(false);
   const location = useLocation();
   const { islandId } = useParams<{ islandId?: string }>();
   const startIndex = resolveStartIndex(islandId);
@@ -1128,18 +1127,14 @@ const SailScenePage: React.FC = () => {
         </div>
       </div>
 
-      {/* Bottom overlay — Crew (left) + Explore (right) on the ship deck,
-          flanking the wheel so taps stay clear of the hub. */}
+      {/* Bottom overlay — Crew | Games | Explore on the ship deck. */}
       <div
         className="absolute left-0 right-0 z-[25] flex items-end justify-between pointer-events-none"
         style={{
-          // Low on the visible deck planks beside the wheel (above safe-area;
-          // may partially overlap the wheel rim — still tappable)
-          bottom: `max(calc(var(--safe-area-bottom, 0px) + 8px), calc(${DECK_HEIGHT_EXPR} * 0.04))`,
-          paddingLeft: 'min(5vw, 16px)',
-          paddingRight: 'min(5vw, 16px)',
-          // Keep a clear center channel for the steering wheel
-          gap: 'min(42vw, 200px)',
+          // Raised a bit above the home indicator / deck edge
+          bottom: `max(calc(var(--safe-area-bottom, 0px) + 20px), calc(${DECK_HEIGHT_EXPR} * 0.07))`,
+          paddingLeft: 'min(4vw, 14px)',
+          paddingRight: 'min(4vw, 14px)',
         }}
       >
         {(
@@ -1150,7 +1145,13 @@ const SailScenePage: React.FC = () => {
               label: 'CREW',
               ariaLabel: 'Crew',
               to: '/crew' as string | null,
-              openCrew: true,
+            },
+            {
+              id: 'games',
+              src: SAIL_BTN_GAMES,
+              label: 'GAMES',
+              ariaLabel: 'Games',
+              to: '/games/library' as string | null,
             },
             {
               id: 'explore',
@@ -1158,7 +1159,6 @@ const SailScenePage: React.FC = () => {
               label: 'EXPLORE',
               ariaLabel: 'Explore',
               to: '/world' as string | null,
-              openCrew: false,
             },
           ] as const
         ).map((btn) => (
@@ -1167,12 +1167,11 @@ const SailScenePage: React.FC = () => {
             type="button"
             disabled={isSailing}
             onClick={() => {
-              if (btn.openCrew) setCrewPickerOpen(true);
-              else if (btn.to) navigate(btn.to);
+              if (btn.to) navigate(btn.to);
             }}
             className="pointer-events-auto flex flex-col items-center gap-0 p-0 m-0 border-0 bg-transparent appearance-none active:scale-95 transition-transform disabled:opacity-60 focus:outline-none focus-visible:ring-2 focus-visible:ring-white/70 focus-visible:ring-offset-2 focus-visible:ring-offset-transparent rounded-xl"
             style={{
-              width: 'min(20vw, 84px)',
+              width: 'min(18vw, 80px)',
               filter: 'drop-shadow(0 5px 10px rgba(0,0,0,0.4))',
             }}
             aria-label={btn.ariaLabel}
@@ -1195,12 +1194,6 @@ const SailScenePage: React.FC = () => {
           </button>
         ))}
       </div>
-
-      <CrewPickerDropdown
-        open={crewPickerOpen}
-        onClose={() => setCrewPickerOpen(false)}
-        anchor="sail"
-      />
     </div>
   );
 };

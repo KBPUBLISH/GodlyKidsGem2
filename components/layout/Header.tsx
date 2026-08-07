@@ -8,7 +8,7 @@ import ReportCardModal from '../features/ReportCardModal';
 import { useUser } from '../../context/UserContext';
 import { useTutorial } from '../../context/TutorialContext';
 import { useSubscription } from '../../context/SubscriptionContext';
-import { AVATAR_ASSETS } from '../avatar/AvatarAssets';
+import PortholeAvatar from '../common/PortholeAvatar';
 
 /** Recessed circular well carved into the wood plank */
 const PLANK_RECESS_CIRCLE =
@@ -18,8 +18,6 @@ const PLANK_RECESS_CIRCLE =
 
 /** Embossed cream/brass icon tone on recessed controls */
 const PLANK_ICON = 'text-[#E8D5A8] drop-shadow-[0_1px_1px_rgba(60,30,10,0.55)]';
-
-const PORTHOLE_RIVETS = [0, 45, 90, 135, 180, 225, 270, 315] as const;
 
 // Lifetime deal timer constants - shared with PaywallPage
 const LIFETIME_DEAL_KEY = 'godlykids_lifetime_deal_start';
@@ -61,7 +59,7 @@ interface HeaderProps {
 const Header: React.FC<HeaderProps> = ({ isVisible, title = "GODLY KIDS", variant = 'default' }) => {
   const navigate = useNavigate();
   const location = useLocation();
-  const { coins, equippedAvatar, equippedFrame, equippedHat, equippedBody, equippedLeftArm, equippedRightArm, equippedLegs, isSubscribed, headOffset } = useUser();
+  const { coins, equippedAvatar, equippedHat, equippedBody, equippedLeftArm, equippedRightArm, equippedLegs, isSubscribed, headOffset, kids, currentProfileId } = useUser();
   const { isStepActive, nextStep, isTutorialActive, currentStep } = useTutorial();
   const { isPremium } = useSubscription();
   const [isShopOpen, setIsShopOpen] = useState(false);
@@ -214,6 +212,10 @@ const Header: React.FC<HeaderProps> = ({ isVisible, title = "GODLY KIDS", varian
 
   const isPlank = variant === 'plank';
 
+  // Initial letter shown in the porthole when the profile has no avatar image
+  const activeKid = kids.find((k: any) => k.id === currentProfileId);
+  const avatarFallbackInitial: string | undefined = activeKid?.name?.charAt(0);
+
   return (
     <>
       <header
@@ -263,62 +265,12 @@ const Header: React.FC<HeaderProps> = ({ isVisible, title = "GODLY KIDS", varian
                     className="relative flex-shrink-0 active:scale-95 transition-transform"
                     aria-label="Profile"
                   >
-                    <div
-                      className="relative w-11 h-11 sm:w-12 sm:h-12 rounded-full p-[2.5px]"
-                      style={{
-                        background:
-                          'linear-gradient(145deg, #F0D78A 0%, #C9A227 35%, #8B6914 70%, #E8C65A 100%)',
-                        boxShadow:
-                          '0 2px 4px rgba(60,30,10,0.4), inset 0 1px 1px rgba(255,245,200,0.55), inset 0 -1px 2px rgba(90,50,10,0.35)',
-                      }}
-                    >
-                      {/* Rivets on brass rim */}
-                      {PORTHOLE_RIVETS.map((deg) => {
-                        const rad = (deg * Math.PI) / 180;
-                        const r = 46; // % from center toward rim
-                        return (
-                          <span
-                            key={deg}
-                            aria-hidden
-                            className="absolute w-[5px] h-[5px] rounded-full pointer-events-none z-10"
-                            style={{
-                              top: `${50 - r * Math.cos(rad)}%`,
-                              left: `${50 + r * Math.sin(rad)}%`,
-                              background:
-                                'radial-gradient(circle at 35% 30%, #F5E6B0, #B8860B 60%, #6B4E12)',
-                              boxShadow: '0 0.5px 1px rgba(0,0,0,0.35)',
-                              transform: 'translate(-50%, -50%)',
-                            }}
-                          />
-                        );
-                      })}
-                      <div
-                        className="w-full h-full rounded-full overflow-hidden bg-[#f3e5ab] relative flex items-center justify-center"
-                        style={{
-                          boxShadow: 'inset 0 2px 5px rgba(40,20,5,0.35)',
-                          border: '1.5px solid rgba(90,55,15,0.35)',
-                        }}
-                      >
-                        <div
-                          className="w-full h-full flex items-center justify-center relative"
-                          style={{ transform: `translate(${headOffset.x}%, ${headOffset.y}%)` }}
-                        >
-                          {(() => {
-                            const isInternalHead = equippedAvatar && equippedAvatar.startsWith('head-');
-                            const headAsset = isInternalHead ? AVATAR_ASSETS[equippedAvatar] : null;
-                            return headAsset ? (
-                              <div className="w-[90%] h-[90%] flex items-center justify-center">
-                                <svg viewBox="0 0 100 100" className="w-full h-full overflow-visible">
-                                  {headAsset}
-                                </svg>
-                              </div>
-                            ) : (
-                              <img src={equippedAvatar || ''} alt="Head" className="w-full h-full object-cover" />
-                            );
-                          })()}
-                        </div>
-                      </div>
-                    </div>
+                    <PortholeAvatar
+                      avatarSrc={equippedAvatar}
+                      headOffset={headOffset}
+                      fallbackInitial={avatarFallbackInitial}
+                      className="w-11 h-11 sm:w-12 sm:h-12 shadow-[0_2px_4px_rgba(60,30,10,0.4)]"
+                    />
                     <div
                       className={`absolute -top-0.5 -right-0.5 bg-white rounded-full p-0.5 shadow-sm border z-20 ${
                         isSubscribed ? 'border-[#FFD700]' : 'border-gray-200'
@@ -368,29 +320,13 @@ const Header: React.FC<HeaderProps> = ({ isVisible, title = "GODLY KIDS", varian
                         : undefined
                     }
                   >
-                    <div
-                      className="relative w-7 h-7 sm:w-8 sm:h-8 flex-shrink-0 rounded-full flex items-center justify-center"
-                      style={{
-                        background:
-                          'radial-gradient(circle at 32% 28%, #FFE55C 0%, #F0C040 40%, #C9A227 75%, #8B6914 100%)',
-                        boxShadow:
-                          '0 1px 2px rgba(60,30,10,0.4), inset 0 1px 1px rgba(255,255,255,0.45), inset 0 -1px 2px rgba(90,50,10,0.35)',
-                        border: '1.5px solid #A67C1A',
-                      }}
-                    >
-                      {/* Money-bag mark */}
-                      <svg
-                        viewBox="0 0 24 24"
-                        className="w-[13px] h-[13px] text-[#6B4423]"
-                        fill="currentColor"
-                        aria-hidden
-                      >
-                        <path d="M12 3c1.2 0 2.1.7 2.5 1.6L15 6h1.2c.4 0 .8.3.8.8v1.1c2.2.9 3.5 2.7 3.5 5.1 0 3.3-3.1 6-8.5 6S3 16.3 3 13c0-2.4 1.3-4.2 3.5-5.1V6.8c0-.5.4-.8.8-.8H8.5l.5-1.4C9.4 3.7 10.3 3 12 3zm0 2c-.5 0-.8.2-1 .5L10.6 7h2.8L13 5.5c-.2-.3-.5-.5-1-.5zM8.5 9.2C6.9 9.9 6 11.2 6 13c0 2.3 2.3 4.5 6 4.5s6-2.2 6-4.5c0-1.8-.9-3.1-2.5-3.8H8.5z" />
-                      </svg>
-                      {!isAndroid && (
-                        <div className="absolute top-1 left-1.5 w-1.5 h-1.5 bg-white/45 rounded-full" />
-                      )}
-                    </div>
+                    <img
+                      src="/assets/ui/coin.png"
+                      alt=""
+                      aria-hidden
+                      draggable={false}
+                      className="w-7 h-7 sm:w-8 sm:h-8 flex-shrink-0 select-none pointer-events-none drop-shadow-[0_1px_2px_rgba(60,30,10,0.4)]"
+                    />
                     <span className="text-[#F5E6C8] font-display font-black text-sm sm:text-base tracking-wide drop-shadow-[0_1px_1px_rgba(60,30,10,0.55)]">
                       {coins.toLocaleString()}
                     </span>
@@ -457,33 +393,12 @@ const Header: React.FC<HeaderProps> = ({ isVisible, title = "GODLY KIDS", varian
                   onClick={() => setIsDetailOpen(true)}
                   className="relative group cursor-pointer active:scale-95 transition-transform"
                 >
-                  <div className={`w-11 h-11 bg-[#f3e5ab] rounded-full border-[3px] ${equippedFrame} overflow-hidden shadow-[0_2px_4px_rgba(0,0,0,0.3)] relative z-0 flex items-center justify-center`}>
-                    <div
-                      className="w-full h-full flex items-center justify-center relative"
-                      style={{
-                        transform: `translate(${headOffset.x}%, ${headOffset.y}%)`
-                      }}
-                    >
-                      {(() => {
-                        const isInternalHead = equippedAvatar && equippedAvatar.startsWith('head-');
-                        const headAsset = isInternalHead ? AVATAR_ASSETS[equippedAvatar] : null;
-
-                        return (
-                          <>
-                            {headAsset ? (
-                              <div className="w-[90%] h-[90%] flex items-center justify-center">
-                                <svg viewBox="0 0 100 100" className="w-full h-full overflow-visible">
-                                  {headAsset}
-                                </svg>
-                              </div>
-                            ) : (
-                              <img src={equippedAvatar || ''} alt="Head" className="w-full h-full object-cover" />
-                            )}
-                          </>
-                        );
-                      })()}
-                    </div>
-                  </div>
+                  <PortholeAvatar
+                    avatarSrc={equippedAvatar}
+                    headOffset={headOffset}
+                    fallbackInitial={avatarFallbackInitial}
+                    className="w-11 h-11 shadow-[0_2px_4px_rgba(0,0,0,0.3)] relative z-0"
+                  />
 
                   <div className={`absolute -top-1.5 -right-1.5 bg-white rounded-full p-0.5 shadow-sm border z-20 ${isSubscribed ? 'border-[#FFD700]' : 'border-gray-200'}`}>
                     <Crown
@@ -535,17 +450,13 @@ const Header: React.FC<HeaderProps> = ({ isVisible, title = "GODLY KIDS", varian
                       minHeight: 40
                     } : undefined}
                   >
-                    <div className="relative">
-                      <div className={isAndroid ?
-                        "w-5 h-5 bg-[#FFE55C] rounded-full border border-[#B8860B] flex items-center justify-center" :
-                        "w-5 h-5 bg-gradient-to-br from-[#FFE55C] to-[#DAA520] rounded-full border border-[#B8860B] shadow-inner flex items-center justify-center"
-                      }>
-                        <span className="text-[#8B6914] font-black text-[10px]">G</span>
-                      </div>
-                      {!isAndroid && (
-                        <div className="absolute top-0.5 left-0.5 w-1.5 h-1.5 bg-white/50 rounded-full"></div>
-                      )}
-                    </div>
+                    <img
+                      src="/assets/ui/coin.png"
+                      alt=""
+                      aria-hidden
+                      draggable={false}
+                      className="w-5 h-5 flex-shrink-0 select-none pointer-events-none"
+                    />
                     <span className={isAndroid ?
                       "text-[#5c2e0b] font-display font-black text-sm tracking-wide" :
                       "text-[#5c2e0b] font-display font-black text-sm tracking-wide drop-shadow-[0_1px_0_rgba(255,255,255,0.3)] group-hover:text-[#3e1f07] transition-colors"

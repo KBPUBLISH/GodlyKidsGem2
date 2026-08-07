@@ -1,5 +1,6 @@
-import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { hashInteractiveSeed, puzzleChipPosition } from '../../utils/interactiveWords';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { hashInteractiveSeed } from '../../utils/interactiveWords';
+import PuzzlePieceWord from './PuzzlePieceWord';
 
 export type MissingWordHuntChip = {
     /** Stable id used for found / next matching */
@@ -18,100 +19,26 @@ export type MissingWordHuntOverlayProps = {
     /** Wrong chip / out-of-order tap (for star scoring). */
     onWrong?: (id: string) => void;
     /**
-     * `image` — scatter chips over the art container (percentage positions).
-     * `scroll-top` — row of chips along the top of the scroll when there is no art.
+     * `image` — row of pieces along the bottom of the art, just above the scroll.
+     * `scroll-top` — row of pieces along the top of the scroll when there is no art.
      */
     placement?: 'image' | 'scroll-top';
-    /** Bounds for image placement (% of overlay container) — used as spawn area */
-    areaTopMin?: number;
-    areaTopMax?: number;
-    areaLeftMin?: number;
-    areaLeftMax?: number;
     className?: string;
     compact?: boolean;
 };
 
-type ChipMotion = {
-    id: string;
-    x: number;
-    y: number;
-    vx: number;
-    vy: number;
-    rot: number;
-    halfW: number;
-    halfH: number;
-};
+/** Piece pop + snap-toward-blank flight time (ms) — keep in sync with the snap keyframes. */
+const SNAP_MS = 480;
 
-type SpawnArea = {
-    pageSeed: string | number;
-    topMin: number;
-    topMax: number;
-    leftMin: number;
-    leftMax: number;
-};
-
-const POP_MS = 340;
-
-/** Soft kid-friendly drift: ~12–26 px/s with varied headings. */
-function seedChipVelocity(pageSeed: string | number, chipId: string, index: number): { vx: number; vy: number } {
-    const h = hashInteractiveSeed(`${pageSeed}::drift::${chipId}`);
-    const speed = 12 + (h % 15); // 12–26 px/s
-    const angle = ((((h >> 8) % 360) + index * 47) % 360) * (Math.PI / 180);
-    let vx = Math.cos(angle) * speed;
-    let vy = Math.sin(angle) * speed;
-    if (Math.abs(vx) < 4) vx = (vx < 0 ? -1 : 1) * (4 + (h % 3));
-    if (Math.abs(vy) < 4) vy = (vy < 0 ? -1 : 1) * (4 + ((h >> 4) % 3));
-    return { vx, vy };
-}
-
-function spawnChipMotion(
-    chip: MissingWordHuntChip,
-    remIndex: number,
-    chipCount: number,
-    w: number,
-    h: number,
-    area: SpawnArea,
-): ChipMotion {
-    const pos = puzzleChipPosition(area.pageSeed, chip.id, {
-        topMin: area.topMin,
-        topMax: area.topMax,
-        leftMin: area.leftMin,
-        leftMax: area.leftMax,
-        chipIndex: remIndex,
-        chipCount,
-    });
-    const { vx, vy } = seedChipVelocity(area.pageSeed, chip.id, remIndex);
-    return {
-        id: chip.id,
-        x: (pos.leftPct / 100) * Math.max(w, 1),
-        y: (pos.topPct / 100) * Math.max(h, 1),
-        vx,
-        vy,
-        rot: ((hashInteractiveSeed(`${area.pageSeed}::rot::${chip.id}`) % 9) - 4) * 0.4,
-        halfW: 28,
-        halfH: 28,
-    };
-}
-
-/** GPU compositing path only — never touch left/top in the animation loop. */
-function writeChipTransform(node: HTMLElement, x: number, y: number, rot: number) {
-    node.style.transform = `translate3d(${x}px, ${y}px, 0) translate(-50%, -50%) rotate(${rot}deg)`;
-}
-
-/** Tiny splash droplets rendered during the pop burst. */
-const BubbleSplash: React.FC = () => (
-    <span className="missing-word-hunt-splash" aria-hidden>
-        {[0, 1, 2, 3, 4, 5].map((i) => (
-            <span key={i} className={`missing-word-hunt-droplet missing-word-hunt-droplet-${i}`} />
-        ))}
-    </span>
-);
+type SnapState = { id: string; dx: number; dy: number };
 
 /**
- * Playful word-hunt bubbles for Bible Map missing words.
- * Kids find and tap answers in blank order; wrong taps get a light shake.
- * Image placement: chips slowly drift and bounce off overlay edges (screensaver-style).
- * Correct tap: bubble pops, then the blank fills as usual.
+ * Word-hunt puzzle pieces for Bible Map missing words.
+ * Pieces sit still in a row just above the scroll, deterministically shuffled
+ * per page so the row never gives away the sentence order, each with a slight
+ * seeded tilt. Kids tap answers in blank order ("Tap words in order"); a
+ * correct tap pops the piece and snaps it toward the blank it fills, a wrong
+ * tap shakes (and is counted by the parent for star scoring).
  */
 const MissingWordHuntOverlay: React.FC<MissingWordHuntOverlayProps> = ({
     pageSeed,
@@ -121,60 +48,60 @@ const MissingWordHuntOverlay: React.FC<MissingWordHuntOverlayProps> = ({
     onCorrect,
     onWrong,
     placement = 'image',
-    areaTopMin = 10,
-    areaTopMax = 52,
-    areaLeftMin = 6,
-    areaLeftMax = 86,
     className = '',
     compact = false,
 }) => {
     const [shakingId, setShakingId] = useState<string | null>(null);
-    const [poppingId, setPoppingId] = useState<string | null>(null);
-    const popTimerRef = useRef<number | null>(null);
-    const containerRef = useRef<HTMLDivElement | null>(null);
-    const chipNodeRefs = useRef<Map<string, HTMLDivElement>>(new Map());
-    const motionsRef = useRef<Map<string, ChipMotion>>(new Map());
-    const sizeRef = useRef({ w: 0, h: 0 });
-    const remainingRef = useRef<MissingWordHuntChip[]>([]);
-    const areaRef = useRef<SpawnArea>({
-        pageSeed,
-        topMin: areaTopMin,
-        topMax: areaTopMax,
-        leftMin: areaLeftMin,
-        leftMax: areaLeftMax,
-    });
+    const [snapping, setSnapping] = useState<SnapState | null>(null);
+    const snapTimerRef = useRef<number | null>(null);
+    const pieceNodeRefs = useRef<Map<string, HTMLElement>>(new Map());
 
-    const remaining = chips.filter((c) => !foundIds.has(c.id));
-    const remainingIds = remaining.map((c) => c.id).join('|');
-    const hasImageChips = placement === 'image' && remaining.length > 0 && nextId != null;
-    remainingRef.current = remaining;
-    areaRef.current = {
-        pageSeed,
-        topMin: areaTopMin,
-        topMax: areaTopMax,
-        leftMin: areaLeftMin,
-        leftMax: areaLeftMax,
-    };
+    // Deterministic per-page shuffle: pieces line up in seeded random order (not
+    // sentence order, so the row doesn't give away the answer sequence) and the
+    // order is stable across re-renders. Each piece keeps a seeded ±15° tilt.
+    const orderedChips = useMemo(() => {
+        return chips
+            .map((chip) => {
+                const hash = hashInteractiveSeed(`${pageSeed}::piece::${chip.id}`);
+                return {
+                    chip,
+                    sortKey: hashInteractiveSeed(`${pageSeed}::shuffle::${chip.id}`),
+                    rotDeg: (hash % 31) - 15,
+                };
+            })
+            .sort((a, b) => a.sortKey - b.sortKey || a.chip.id.localeCompare(b.chip.id));
+    }, [chips, pageSeed]);
 
     useEffect(() => {
         return () => {
-            if (popTimerRef.current != null) {
-                window.clearTimeout(popTimerRef.current);
-                popTimerRef.current = null;
+            if (snapTimerRef.current != null) {
+                window.clearTimeout(snapTimerRef.current);
+                snapTimerRef.current = null;
             }
         };
     }, []);
 
     const handleSelect = (id: string) => {
-        if (foundIds.has(id) || poppingId != null) return;
+        if (foundIds.has(id) || snapping != null) return;
         if (id === nextId) {
-            setPoppingId(id);
-            if (popTimerRef.current != null) window.clearTimeout(popTimerRef.current);
-            popTimerRef.current = window.setTimeout(() => {
-                popTimerRef.current = null;
-                setPoppingId(null);
+            // Aim the flight at the blank this piece fills (rendered in the scroll).
+            let dx = 0;
+            let dy = 160; // fallback: glide down toward the parchment
+            const pieceNode = pieceNodeRefs.current.get(id);
+            const blankNode = document.querySelector(`[data-hunt-blank="${CSS.escape(id)}"]`);
+            if (pieceNode && blankNode) {
+                const a = pieceNode.getBoundingClientRect();
+                const b = blankNode.getBoundingClientRect();
+                dx = b.left + b.width / 2 - (a.left + a.width / 2);
+                dy = b.top + b.height / 2 - (a.top + a.height / 2);
+            }
+            setSnapping({ id, dx, dy });
+            if (snapTimerRef.current != null) window.clearTimeout(snapTimerRef.current);
+            snapTimerRef.current = window.setTimeout(() => {
+                snapTimerRef.current = null;
+                setSnapping(null);
                 onCorrect(id);
-            }, POP_MS);
+            }, SNAP_MS);
             return;
         }
         onWrong?.(id);
@@ -184,377 +111,146 @@ const MissingWordHuntOverlay: React.FC<MissingWordHuntOverlayProps> = ({
         }, 420);
     };
 
-    /** Water-bubble chip: glossy translucent orb with readable letter. */
-    const chipClass = (id: string) => {
-        const isNext = id === nextId;
-        const shaking = shakingId === id;
-        const popping = poppingId === id;
-        return [
-            'missing-word-hunt-bubble pointer-events-auto select-none relative isolate overflow-visible',
-            'font-bold tracking-wide text-[#1e3a5f]',
-            'rounded-full border border-white/70',
-            'backdrop-blur-[2px]',
-            'focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-300 focus-visible:ring-offset-1',
-            compact
-                ? 'min-w-[1.65rem] min-h-[1.65rem] px-1.5 py-0.5 text-[10px] leading-none'
-                : 'min-w-[2.15rem] min-h-[2.15rem] px-2.5 py-1.5 text-xs sm:text-sm leading-none',
-            isNext ? 'missing-word-hunt-bubble-next' : 'missing-word-hunt-bubble-idle',
-            shaking ? 'missing-word-hunt-shake-row' : '',
-            popping ? 'missing-word-hunt-popping' : 'missing-word-hunt-bob',
-            !shaking && !popping ? 'active:scale-95' : '',
-        ]
-            .filter(Boolean)
-            .join(' ');
-    };
+    // Compact pieces when the row is crowded so everything stays tappable
+    const rowCompact = compact || placement === 'scroll-top' || chips.length >= 5;
 
-    const renderBubbleButton = (chip: MissingWordHuntChip) => {
-        const bobDelayMs = hashInteractiveSeed(`${pageSeed}::bob::${chip.id}`) % 900;
-        const bobDurationS = 2.1 + (hashInteractiveSeed(`${pageSeed}::bobdur::${chip.id}`) % 8) / 10;
+    const renderPieceButton = (chip: MissingWordHuntChip, rotDeg: number) => {
+        const isShaking = shakingId === chip.id;
+        const isSnapping = snapping?.id === chip.id;
         return (
             <button
                 type="button"
-                className={chipClass(chip.id)}
-                aria-label={`Puzzle word ${chip.label}`}
-                disabled={poppingId === chip.id}
+                ref={(el) => {
+                    if (el) pieceNodeRefs.current.set(chip.id, el);
+                    else pieceNodeRefs.current.delete(chip.id);
+                }}
+                className={[
+                    'missing-word-hunt-piece pointer-events-auto select-none relative block',
+                    'focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-300 focus-visible:ring-offset-1 rounded-lg',
+                    isSnapping ? 'missing-word-hunt-piece-snapping' : '',
+                    !isSnapping && isShaking ? 'missing-word-hunt-piece-shake' : '',
+                    !isSnapping && !isShaking ? 'active:scale-95' : '',
+                ]
+                    .filter(Boolean)
+                    .join(' ')}
                 style={
-                    poppingId === chip.id || shakingId === chip.id
-                        ? undefined
-                        : { animationDelay: `${bobDelayMs}ms`, animationDuration: `${bobDurationS}s` }
+                    {
+                        '--piece-rot': `${rotDeg}deg`,
+                        '--snap-dx': isSnapping ? `${snapping!.dx}px` : '0px',
+                        '--snap-dy': isSnapping ? `${snapping!.dy}px` : '0px',
+                    } as React.CSSProperties
                 }
+                disabled={isSnapping}
+                aria-label={`Puzzle piece word ${chip.label}`}
                 onClick={(e) => {
                     e.stopPropagation();
                     handleSelect(chip.id);
                 }}
             >
-                <span className="missing-word-hunt-gloss" aria-hidden />
-                <span className="relative z-[1] block truncate px-0.5">{chip.label}</span>
-                {poppingId === chip.id ? <BubbleSplash /> : null}
+                <PuzzlePieceWord
+                    label={chip.label}
+                    seed={`${pageSeed}::${chip.id}`}
+                    compact={rowCompact}
+                />
             </button>
         );
     };
 
-    const measureChip = (id: string) => {
-        const node = chipNodeRefs.current.get(id);
-        const motion = motionsRef.current.get(id);
-        if (!node || !motion) return;
-        const w = node.offsetWidth;
-        const h = node.offsetHeight;
-        if (w > 0) motion.halfW = w / 2;
-        if (h > 0) motion.halfH = h / 2;
-    };
+    /**
+     * Shuffled row of pieces. Found pieces become invisible placeholders that
+     * keep their slot, so the remaining pieces never shift under a kid's finger.
+     */
+    const renderPieceRow = () => (
+        <div className="flex flex-wrap-reverse items-center justify-center gap-x-2.5 gap-y-1.5 max-w-full">
+            {orderedChips.map(({ chip, rotDeg }) =>
+                foundIds.has(chip.id) ? (
+                    <span
+                        key={chip.id}
+                        className="invisible pointer-events-none"
+                        aria-hidden
+                    >
+                        <PuzzlePieceWord
+                            label={chip.label}
+                            seed={`${pageSeed}::${chip.id}`}
+                            compact={rowCompact}
+                        />
+                    </span>
+                ) : (
+                    <React.Fragment key={chip.id}>
+                        {renderPieceButton(chip, rotDeg)}
+                    </React.Fragment>
+                ),
+            )}
+        </div>
+    );
 
-    const paintChip = (m: ChipMotion) => {
-        const node = chipNodeRefs.current.get(m.id);
-        if (node) writeChipTransform(node, m.x, m.y, m.rot);
-    };
-
-    // Sync motion bodies when remaining chips change; spawn at seeded % positions.
-    useLayoutEffect(() => {
-        if (placement !== 'image') return;
-        const container = containerRef.current;
-        const w = container?.clientWidth || sizeRef.current.w;
-        const h = container?.clientHeight || sizeRef.current.h;
-        if (w > 0 && h > 0) sizeRef.current = { w, h };
-
-        const motions = motionsRef.current;
-        const liveList = remainingRef.current;
-        const live = new Set(liveList.map((c) => c.id));
-        for (const id of [...motions.keys()]) {
-            if (!live.has(id)) {
-                motions.delete(id);
-                chipNodeRefs.current.delete(id);
-            }
-        }
-
-        const area = areaRef.current;
-        liveList.forEach((chip, remIndex) => {
-            if (motions.has(chip.id)) {
-                measureChip(chip.id);
-                paintChip(motions.get(chip.id)!);
-                return;
-            }
-            const m = spawnChipMotion(chip, remIndex, liveList.length, w, h, area);
-            motions.set(chip.id, m);
-            measureChip(chip.id);
-            paintChip(m);
-        });
-    }, [placement, remainingIds, pageSeed, areaTopMin, areaTopMax, areaLeftMin, areaLeftMax]);
-
-    // rAF drift + bounce; pause when tab hidden. Restart only when hunt starts/ends.
-    useEffect(() => {
-        if (!hasImageChips) return;
-        const container = containerRef.current;
-        if (!container) return;
-
-        let raf = 0;
-        let last = performance.now();
-        let paused = document.hidden;
-
-        const applyContainerSize = (nw: number, nh: number) => {
-            const { w, h } = sizeRef.current;
-            if ((w < 8 || h < 8) && nw >= 8 && nh >= 8) {
-                const liveList = remainingRef.current;
-                const area = areaRef.current;
-                liveList.forEach((chip, remIndex) => {
-                    const m = spawnChipMotion(chip, remIndex, liveList.length, nw, nh, area);
-                    motionsRef.current.set(chip.id, m);
-                    measureChip(chip.id);
-                    paintChip(m);
-                });
-                sizeRef.current = { w: nw, h: nh };
-                return;
-            }
-            if (w > 0 && h > 0 && nw > 0 && nh > 0 && (w !== nw || h !== nh)) {
-                const sx = nw / w;
-                const sy = nh / h;
-                for (const m of motionsRef.current.values()) {
-                    m.x *= sx;
-                    m.y *= sy;
-                    measureChip(m.id);
-                    paintChip(m);
-                }
-            }
-            sizeRef.current = { w: nw, h: nh };
-        };
-
-        applyContainerSize(container.clientWidth, container.clientHeight);
-
-        // Re-measure chip sizes once after layout settles (labels/fonts).
-        const measureAll = () => {
-            for (const id of motionsRef.current.keys()) measureChip(id);
-        };
-        measureAll();
-        const measureRaf = requestAnimationFrame(measureAll);
-
-        const ro = new ResizeObserver((entries) => {
-            const rect = entries[0]?.contentRect;
-            if (!rect) return;
-            applyContainerSize(rect.width, rect.height);
-        });
-        ro.observe(container);
-
-        const onVisibility = () => {
-            paused = document.hidden;
-            if (!paused) last = performance.now();
-        };
-        document.addEventListener('visibilitychange', onVisibility);
-
-        const tick = (now: number) => {
-            raf = requestAnimationFrame(tick);
-            const { w, h } = sizeRef.current;
-            if (paused || w < 8 || h < 8) {
-                last = now;
-                return;
-            }
-            const motions = motionsRef.current;
-            if (motions.size === 0) {
-                last = now;
-                return;
-            }
-
-            // Frame-rate independent; clamp large gaps (tab resume / hitch).
-            const dt = Math.min((now - last) / 1000, 0.048);
-            last = now;
-            if (dt <= 0) return;
-
-            for (const m of motions.values()) {
-                m.x += m.vx * dt;
-                m.y += m.vy * dt;
-
-                const pad = 2;
-                const minX = m.halfW + pad;
-                const maxX = Math.max(minX, w - m.halfW - pad);
-                const minY = m.halfH + pad;
-                const maxY = Math.max(minY, h - m.halfH - pad);
-
-                if (m.x <= minX) {
-                    m.x = minX;
-                    m.vx = Math.abs(m.vx);
-                } else if (m.x >= maxX) {
-                    m.x = maxX;
-                    m.vx = -Math.abs(m.vx);
-                }
-                if (m.y <= minY) {
-                    m.y = minY;
-                    m.vy = Math.abs(m.vy);
-                } else if (m.y >= maxY) {
-                    m.y = maxY;
-                    m.vy = -Math.abs(m.vy);
-                }
-
-                // Subtle lean toward travel — cheap, no layout.
-                const targetRot = Math.max(-5, Math.min(5, m.vx * 0.12));
-                m.rot += (targetRot - m.rot) * Math.min(1, dt * 4);
-
-                const node = chipNodeRefs.current.get(m.id);
-                if (node) writeChipTransform(node, m.x, m.y, m.rot);
-            }
-        };
-        raf = requestAnimationFrame(tick);
-
-        return () => {
-            cancelAnimationFrame(raf);
-            cancelAnimationFrame(measureRaf);
-            ro.disconnect();
-            document.removeEventListener('visibilitychange', onVisibility);
-        };
-    }, [hasImageChips]);
-
+    const remaining = chips.filter((c) => !foundIds.has(c.id));
     if (!remaining.length || nextId == null) return null;
 
     if (placement === 'scroll-top') {
         return (
             <div
-                className={`pointer-events-none absolute left-0 right-0 z-[25] flex flex-wrap justify-center gap-2 px-2 pt-1 ${className}`}
+                className={`pointer-events-none absolute left-0 right-0 z-[25] flex flex-col items-center gap-1 px-2 pt-1 ${className}`}
                 style={{ top: 0 }}
                 role="group"
-                aria-label="Find the missing words in order"
+                aria-label="Tap the missing words in order"
             >
-                {remaining.map((chip) => (
-                    <React.Fragment key={chip.id}>{renderBubbleButton(chip)}</React.Fragment>
-                ))}
-                <style>{BUBBLE_STYLE}</style>
+                <p className="missing-word-hunt-instruction">Tap words in order</p>
+                {renderPieceRow()}
+                <style>{PIECE_STYLE}</style>
             </div>
         );
     }
 
     return (
         <div
-            ref={containerRef}
-            className={`pointer-events-none absolute inset-0 z-[25] overflow-hidden ${className}`}
+            className={`pointer-events-none absolute inset-0 z-[25] flex flex-col items-center justify-end gap-1 pb-1.5 px-16 sm:px-20 ${className}`}
             role="group"
-            aria-label="Find the missing words on the picture"
+            aria-label="Tap the missing words in order"
         >
-            {remaining.map((chip) => (
-                <div
-                    key={chip.id}
-                    ref={(el) => {
-                        if (el) {
-                            chipNodeRefs.current.set(chip.id, el);
-                            // Pin to origin; motion writes translate3d only.
-                            el.style.left = '0';
-                            el.style.top = '0';
-                            const m = motionsRef.current.get(chip.id);
-                            if (m) {
-                                if (el.offsetWidth > 0) m.halfW = el.offsetWidth / 2;
-                                if (el.offsetHeight > 0) m.halfH = el.offsetHeight / 2;
-                                writeChipTransform(el, m.x, m.y, m.rot);
-                            }
-                        } else {
-                            chipNodeRefs.current.delete(chip.id);
-                        }
-                    }}
-                    className="absolute left-0 top-0 max-w-[42%]"
-                    style={{
-                        // Promote once; rAF updates transform only.
-                        willChange: 'transform',
-                        transform: 'translate3d(0,0,0) translate(-50%, -50%)',
-                        backfaceVisibility: 'hidden',
-                    }}
-                >
-                    {renderBubbleButton(chip)}
-                </div>
-            ))}
-            <style>{BUBBLE_STYLE}</style>
+            <p className="missing-word-hunt-instruction">Tap words in order</p>
+            {renderPieceRow()}
+            <style>{PIECE_STYLE}</style>
         </div>
     );
 };
 
-const BUBBLE_STYLE = `
-.missing-word-hunt-bubble {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  background:
-    radial-gradient(circle at 30% 28%, rgba(255,255,255,0.92) 0%, rgba(255,255,255,0.35) 22%, transparent 48%),
-    linear-gradient(165deg, rgba(224,244,255,0.88) 0%, rgba(147,210,243,0.72) 45%, rgba(96,178,224,0.78) 100%);
-  box-shadow:
-    0 4px 10px rgba(56, 120, 168, 0.28),
-    0 1px 2px rgba(255,255,255,0.65) inset,
-    0 -2px 6px rgba(40, 110, 160, 0.18) inset;
-  transition: transform 75ms ease-out, box-shadow 75ms ease-out;
-}
-.missing-word-hunt-bubble-next {
-  background:
-    radial-gradient(circle at 30% 28%, rgba(255,255,255,0.95) 0%, rgba(255,255,255,0.4) 22%, transparent 48%),
-    linear-gradient(165deg, rgba(210,240,255,0.95) 0%, rgba(125,205,245,0.82) 45%, rgba(70,170,220,0.88) 100%);
-  box-shadow:
-    0 5px 14px rgba(40, 130, 190, 0.34),
-    0 0 0 2px rgba(255,255,255,0.55),
-    0 1px 2px rgba(255,255,255,0.75) inset,
-    0 -2px 6px rgba(30, 100, 150, 0.2) inset;
-}
-.missing-word-hunt-gloss {
-  position: absolute;
-  top: 10%;
-  left: 16%;
-  width: 42%;
-  height: 26%;
-  border-radius: 9999px;
-  background: linear-gradient(180deg, rgba(255,255,255,0.9) 0%, rgba(255,255,255,0.15) 100%);
+const PIECE_STYLE = `
+/* Kid-friendly instruction above the row of pieces */
+.missing-word-hunt-instruction {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: #fdf6e3;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.75), 0 0 6px rgba(0, 0, 0, 0.35);
   pointer-events: none;
-  z-index: 0;
+  user-select: none;
 }
-@keyframes missing-word-hunt-bob-kf {
-  0%, 100% { transform: translateY(0) scale(1); }
-  50% { transform: translateY(-5px) scale(1.04); }
+/* Still, fully opaque pieces (no idle animation) */
+.missing-word-hunt-piece {
+  transform: rotate(var(--piece-rot, 0deg));
+  transition: transform 90ms ease-out;
 }
-.missing-word-hunt-bob {
-  animation: missing-word-hunt-bob-kf 2.4s ease-in-out infinite;
+/* Correct tap: quick joyful pop, then the piece flies to the blank it fills */
+@keyframes missing-word-hunt-piece-snap-kf {
+  0% { transform: translate(0, 0) rotate(var(--piece-rot, 0deg)) scale(1); opacity: 1; }
+  28% { transform: translate(0, 0) rotate(0deg) scale(1.22); opacity: 1; }
+  100% { transform: translate(var(--snap-dx, 0px), var(--snap-dy, 160px)) rotate(0deg) scale(0.2); opacity: 0; }
 }
-@keyframes missing-word-hunt-pop-kf {
-  0% { transform: scale(1); opacity: 1; filter: blur(0); }
-  28% { transform: scale(1.38); opacity: 1; filter: blur(0); }
-  55% { transform: scale(1.12); opacity: 0.85; }
-  100% { transform: scale(0); opacity: 0; filter: blur(1px); }
-}
-.missing-word-hunt-popping {
-  animation: missing-word-hunt-pop-kf 0.34s cubic-bezier(0.22, 1.2, 0.36, 1) forwards;
+.missing-word-hunt-piece-snapping {
+  animation: missing-word-hunt-piece-snap-kf ${SNAP_MS}ms cubic-bezier(0.3, 0.9, 0.35, 1) forwards;
   pointer-events: none;
+  z-index: 5;
 }
-.missing-word-hunt-splash {
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-  z-index: 2;
+@keyframes missing-word-hunt-piece-shake-kf {
+  0%, 100% { transform: translateX(0) rotate(var(--piece-rot, 0deg)); }
+  20% { transform: translateX(-5px) rotate(calc(var(--piece-rot, 0deg) - 3deg)); }
+  40% { transform: translateX(5px) rotate(calc(var(--piece-rot, 0deg) + 3deg)); }
+  60% { transform: translateX(-4px) rotate(calc(var(--piece-rot, 0deg) - 2deg)); }
+  80% { transform: translateX(4px) rotate(calc(var(--piece-rot, 0deg) + 2deg)); }
 }
-.missing-word-hunt-droplet {
-  position: absolute;
-  left: 50%;
-  top: 50%;
-  width: 7px;
-  height: 7px;
-  margin: -3.5px 0 0 -3.5px;
-  border-radius: 9999px;
-  background: radial-gradient(circle at 35% 30%, #fff 0%, rgba(180,230,255,0.95) 40%, rgba(100,190,230,0.7) 100%);
-  box-shadow: 0 0 4px rgba(255,255,255,0.7);
-  animation: missing-word-hunt-droplet-kf 0.34s ease-out forwards;
-}
-.missing-word-hunt-droplet-0 { --dx: 18px; --dy: -16px; animation-delay: 0ms; }
-.missing-word-hunt-droplet-1 { --dx: -16px; --dy: -14px; width: 5px; height: 5px; }
-.missing-word-hunt-droplet-2 { --dx: 20px; --dy: 8px; width: 6px; height: 6px; }
-.missing-word-hunt-droplet-3 { --dx: -18px; --dy: 10px; width: 5px; height: 5px; }
-.missing-word-hunt-droplet-4 { --dx: 4px; --dy: 20px; width: 4px; height: 4px; }
-.missing-word-hunt-droplet-5 { --dx: -6px; --dy: -22px; width: 4px; height: 4px; }
-@keyframes missing-word-hunt-droplet-kf {
-  0% { transform: translate(0, 0) scale(0.6); opacity: 1; }
-  70% { opacity: 0.85; }
-  100% { transform: translate(var(--dx), var(--dy)) scale(0.15); opacity: 0; }
-}
-@keyframes missing-word-hunt-shake-row-kf {
-  0%, 100% { transform: translateX(0); }
-  20% { transform: translateX(-4px) rotate(-2deg); }
-  40% { transform: translateX(4px) rotate(2deg); }
-  60% { transform: translateX(-3px) rotate(-1deg); }
-  80% { transform: translateX(3px) rotate(1deg); }
-}
-.missing-word-hunt-shake-row {
-  animation: missing-word-hunt-shake-row-kf 0.4s ease-in-out !important;
-  background:
-    radial-gradient(circle at 30% 28%, rgba(255,255,255,0.85) 0%, transparent 45%),
-    linear-gradient(165deg, rgba(255,236,200,0.95) 0%, rgba(251,191,120,0.85) 100%) !important;
-  border-color: rgba(245, 158, 11, 0.75) !important;
-  box-shadow: 0 3px 8px rgba(180, 100, 20, 0.25) !important;
+.missing-word-hunt-piece-shake {
+  animation: missing-word-hunt-piece-shake-kf 0.4s ease-in-out;
 }
 `;
 

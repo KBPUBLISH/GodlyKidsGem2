@@ -70,7 +70,7 @@ interface AudioContextType {
     progress: number;
     currentTime: number;
     duration: number;
-    playPlaylist: (playlist: Playlist, startIndex?: number, isSubscribed?: boolean) => void;
+    playPlaylist: (playlist: Playlist, startIndex?: number, isSubscribed?: boolean, resumeFromSeconds?: number) => void;
     togglePlayPause: () => void;
     toggleShuffle: () => void;
     nextTrack: () => void;
@@ -260,10 +260,41 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         isShuffleRef.current = isShuffle;
     }, [isShuffle]);
 
+    // --- Playback position persistence (for "Continue Listening" resume) ---
+    // The track currently loaded in the audio element. Updated only by the
+    // load-track effect, so saved positions are always attributed to the track
+    // the element is actually playing (never to an in-flight track change).
+    const activeTrackRef = useRef<{ playlistId: string; itemId?: string } | null>(null);
+    // Throttle marker for timeupdate saves (seconds of currentTime)
+    const lastPositionSaveRef = useRef(0);
+    // Seek to apply once the next loaded track has metadata (set by playPlaylist)
+    const pendingSeekRef = useRef<number | null>(null);
+
+    // Save (or clear) the active track's position in play history. Positions in
+    // the last 15s of a track are treated as finished and cleared, so completed
+    // episodes restart from the beginning next time.
+    const persistPlaybackPosition = useCallback(() => {
+        const audio = audioRef.current;
+        const active = activeTrackRef.current;
+        if (!audio || !active) return;
+        const pos = audio.currentTime;
+        const dur = audio.duration;
+        if (isNaN(pos) || pos <= 0) return;
+        if (!isNaN(dur) && dur > 0 && pos >= dur - 15) {
+            playHistoryService.clearPosition(active.playlistId);
+            return;
+        }
+        playHistoryService.savePosition(active.playlistId, active.itemId, pos, !isNaN(dur) ? dur : 0);
+    }, []);
+
     // Create audio element once on mount
     useEffect(() => {
         const audio = document.createElement('audio');
         audio.preload = 'auto';
+        audio.setAttribute('data-gk-role', 'playlist');
+        // Attached (invisible) so other features (e.g. dance-music ducking)
+        // can discover playing audio via the DOM
+        document.body.appendChild(audio);
         audioRef.current = audio;
 
         // Basic event listeners
@@ -304,6 +335,13 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
             }
             lastListeningTimeRef.current = now;
             
+            // Persist playback position for resume, throttled to every ~5s
+            // (abs() so seeking backwards also refreshes the save)
+            if (Math.abs(audio.currentTime - lastPositionSaveRef.current) >= 5) {
+                lastPositionSaveRef.current = audio.currentTime;
+                persistPlaybackPosition();
+            }
+
             // Update engagement for trending algorithm (every 30 seconds)
             if (!isNaN(audio.currentTime) && !isNaN(audio.duration) && audio.duration > 0) {
                 const shouldUpdate = audio.currentTime - lastEngagementUpdateRef.current >= ENGAGEMENT_UPDATE_INTERVAL;
@@ -335,6 +373,12 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         });
 
         audio.addEventListener('ended', () => {
+            // Track completed — drop the saved position so it restarts from 0
+            if (activeTrackRef.current) {
+                playHistoryService.clearPosition(activeTrackRef.current.playlistId);
+            }
+            lastPositionSaveRef.current = 0;
+
             // Send final engagement update for completed track (100%)
             setCurrentPlaylist(playlist => {
                 if (playlist) {
@@ -396,6 +440,9 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
         audio.addEventListener('pause', () => {
             setIsPlaying(false);
+            // Save playback position on pause (the near-end guard inside turns
+            // a pause-at-completion into a clear instead of a save)
+            persistPlaybackPosition();
             // Save any accumulated listening time when paused
             if (listeningTimeAccumulatorRef.current > 0) {
                 activityTrackingService.trackAudioListeningTime(Math.floor(listeningTimeAccumulatorRef.current));
@@ -404,13 +451,25 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
             lastListeningTimeRef.current = 0;
         });
 
+        // Save position when the app is backgrounded or the page is unloading —
+        // on mobile webviews this is often the only shutdown signal we get
+        const handleVisibilityChange = () => {
+            if (document.visibilityState === 'hidden') persistPlaybackPosition();
+        };
+        document.addEventListener('visibilitychange', handleVisibilityChange);
+        window.addEventListener('pagehide', persistPlaybackPosition);
+
         return () => {
+            persistPlaybackPosition();
+            document.removeEventListener('visibilitychange', handleVisibilityChange);
+            window.removeEventListener('pagehide', persistPlaybackPosition);
             // Save remaining listening time on unmount
             if (listeningTimeAccumulatorRef.current > 0) {
                 activityTrackingService.trackAudioListeningTime(Math.floor(listeningTimeAccumulatorRef.current));
             }
             audio.pause();
             audio.src = '';
+            audio.remove();
         };
     }, []);
 
@@ -435,6 +494,8 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         const el = document.createElement('audio');
         el.setAttribute('data-gk-role', 'app-background');
         el.preload = 'auto';
+        // Attached (invisible) so dance-music ducking can discover it
+        document.body.appendChild(el);
         appBgAudioRef.current = el;
         const detachReliableLoop = attachReliableLoop(el, () => appBgLoopEnabledRef.current);
 
@@ -458,6 +519,7 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
             detachReliableLoop();
             el.pause();
             el.removeAttribute('src');
+            el.remove();
             appBgAudioRef.current = null;
         };
     }, []);
@@ -521,9 +583,40 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         const track = currentPlaylist.items[currentTrackIndex];
         if (!track?.audioUrl) return;
 
+        // Save the outgoing track's position before switching away from it.
+        // Skipped when the "new" track is the same one (a resume re-trigger),
+        // so a stale currentTime can't overwrite the saved resume point.
+        const nextActive = { playlistId: currentPlaylist._id, itemId: (track as any)?._id as string | undefined };
+        const prevActive = activeTrackRef.current;
+        if (prevActive && (prevActive.playlistId !== nextActive.playlistId || prevActive.itemId !== nextActive.itemId)) {
+            persistPlaybackPosition();
+        }
+        activeTrackRef.current = nextActive;
+        lastPositionSaveRef.current = 0;
+
         // Set source and load
         audio.src = track.audioUrl;
         audio.load();
+
+        // Apply a pending resume seek once the media has metadata — seeking
+        // before loadedmetadata is ignored/throws on some browsers (iOS Safari)
+        const resumeAt = pendingSeekRef.current;
+        pendingSeekRef.current = null;
+        if (resumeAt != null && resumeAt > 0) {
+            const applySeek = () => {
+                audio.removeEventListener('loadedmetadata', applySeek);
+                try {
+                    // Guard against a saved position past the real duration
+                    const dur = audio.duration;
+                    audio.currentTime = !isNaN(dur) && dur > 0 ? Math.min(resumeAt, Math.max(0, dur - 1)) : resumeAt;
+                } catch { /* start from 0 if the seek fails */ }
+            };
+            if (audio.readyState >= 1) {
+                applySeek();
+            } else {
+                audio.addEventListener('loadedmetadata', applySeek);
+            }
+        }
 
         // Auto-play if isPlaying is true
         if (isPlaying) {
@@ -751,7 +844,10 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     }, [playTone]);
 
     // --- Playlist Player Methods ---
-    const playPlaylist = useCallback((playlist: Playlist, startIndex: number = 0, isSubscribed: boolean = true) => {
+    // resumeFromSeconds: optional position to seek to once the track loads —
+    // used by the Continue Listening affordances; other entry points omit it
+    // and start from the beginning as before.
+    const playPlaylist = useCallback((playlist: Playlist, startIndex: number = 0, isSubscribed: boolean = true, resumeFromSeconds?: number) => {
         console.log('🎵 playPlaylist called:', {
             title: playlist.title,
             isMembersOnly: playlist.isMembersOnly,
@@ -760,7 +856,10 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         });
 
         const safeStart = Math.max(0, Math.min(startIndex, Math.max(0, playlist.items.length - 1)));
-        
+
+        // Stash (or clear) the resume seek for the load-track effect to apply
+        pendingSeekRef.current = resumeFromSeconds && resumeFromSeconds > 0 ? resumeFromSeconds : null;
+
         setCurrentPlaylist(playlist);
         setCurrentTrackIndex(safeStart);
         setIsPlaying(true);
@@ -884,6 +983,11 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     }, []);
 
     const closePlayer = useCallback(() => {
+        // Keep the resume point when the kid dismisses the player mid-episode
+        persistPlaybackPosition();
+        activeTrackRef.current = null;
+        pendingSeekRef.current = null;
+
         setIsPlaying(false);
         setCurrentPlaylist(null);
         setCurrentTrackIndex(0);

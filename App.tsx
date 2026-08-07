@@ -603,6 +603,7 @@ import SharePlaylistPage from './pages/SharePlaylistPage';
 import ShareBookPage from './pages/ShareBookPage';
 import ParentQuizPage from './pages/ParentQuizPage';
 import GamesPage from './pages/GamesPage';
+import GamesLibraryPage from './pages/GamesLibraryPage';
 import MapPage from './pages/MapPage';
 import MainMapPage from './pages/MainMapPage';
 import SailScenePage from './pages/SailScenePage';
@@ -612,6 +613,10 @@ import IslandSlidingPuzzlePage from './pages/IslandSlidingPuzzlePage';
 import IslandColoringPage from './pages/IslandColoringPage';
 import IslandQuizPage from './pages/IslandQuizPage';
 import CrewPage from './pages/CrewPage';
+import SailBoatBasementPage from './pages/SailBoatBasementPage';
+import SailBoatBasementGamePage from './pages/SailBoatBasementGamePage';
+import SailBoatBasementDartsPage from './pages/SailBoatBasementDartsPage';
+import BuriedTreasurePage from './pages/BuriedTreasurePage';
 import KaraokePage from './pages/KaraokePage';
 import KaraokePlayerPage from './pages/KaraokePlayerPage';
 import KaraokeSharePage from './pages/KaraokeSharePage';
@@ -952,6 +957,7 @@ import { activityTrackingService } from './services/activityTrackingService';
 import { DespiaService } from './services/despiaService';
 import { authService } from './services/authService';
 import { metaAttributionService } from './services/metaAttributionService';
+import { rewardsService } from './services/rewardsService';
 import DemoTimer from './components/features/DemoTimer';
 import ReadyToJumpInPage from './pages/ReadyToJumpInPage';
 import OnboardingTutorial from './components/features/OnboardingTutorial';
@@ -1320,6 +1326,8 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const isSharePage = location.pathname.startsWith('/share/') || location.pathname.startsWith('/s/') || (location.pathname.startsWith('/playlist/') && !location.pathname.startsWith('/playlist-detail'));
   const isDailySession = location.pathname === '/daily-session';
   const isSailScene = location.pathname === '/sail' || location.pathname.startsWith('/sail/');
+  /** Crew ship deck — fullscreen scenic (no app chrome), like sail. */
+  const isCrewDeck = location.pathname === '/crew';
   /** Island main map (CMS) — fullscreen like sail / lesson. */
   const isMainMapScene = /^\/map\/[^/]+\/main\/?$/.test(location.pathname);
   const isPremiumOnboarding = location.pathname === '/premium-onboarding';
@@ -1328,7 +1336,7 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const isKaraokePage = location.pathname === '/karaoke' || location.pathname.startsWith('/karaoke/');
 
   // Standalone pages that don't need the app chrome (background, navigation, etc.)
-  const isStandalonePage = isParentQuiz || isSharePage || isReadyToJumpIn || isDailySession || isSailScene || isMainMapScene || isPremiumOnboarding || isTrialStats;
+  const isStandalonePage = isParentQuiz || isSharePage || isReadyToJumpIn || isDailySession || isSailScene || isCrewDeck || isMainMapScene || isPremiumOnboarding || isTrialStats;
 
   // For standalone pages, render just the children without app styling
   if (isStandalonePage) {
@@ -1358,7 +1366,7 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
       <MiniPlayer />
 
       {/* Only show BottomNavigation on main tab pages */}
-      {(location.pathname === '/world' || location.pathname === '/home' || location.pathname === '/listen' || location.pathname === '/read' || location.pathname === '/games' || location.pathname === '/map') && <BottomNavigation />}
+      {(location.pathname === '/world' || location.pathname === '/home' || location.pathname === '/listen' || location.pathname === '/read' || location.pathname === '/games' || location.pathname === '/map' || location.pathname === '/library' || location.pathname === '/games/library') && <BottomNavigation />}
 
       {/* Onboarding Tutorial Overlay */}
       <OnboardingTutorial />
@@ -1516,6 +1524,13 @@ const App: React.FC = () => {
     metaAttributionService.initialize();
   }, []);
 
+  // Rewards added to a story pack in the CMS after the kid already dug its
+  // treasure are auto-granted here at app start (throttled to once per hour;
+  // offline failures are silent) so new crew members just appear.
+  useEffect(() => {
+    void rewardsService.syncClaimedRewardsAtStartup();
+  }, []);
+
   // iOS Audio Session Unlock - REMOVED
   // After investigation, iOS silent mode cannot be overridden from web code.
   // Audio playing when ringer is off requires native iOS configuration:
@@ -1558,6 +1573,12 @@ const App: React.FC = () => {
                   <Route path="/interests" element={<InterestSelectionPage />} />
                   <Route path="/daily-session" element={<DailySessionPage />} />
                   <Route path="/sail" element={<SailScenePage />} />
+                  {/* Before /sail/:islandId so "basement" is not treated as an island slug. */}
+                  <Route path="/sail/basement/game" element={<SailBoatBasementGamePage />} />
+                  <Route path="/sail/basement/darts" element={<SailBoatBasementDartsPage />} />
+                  <Route path="/sail/basement" element={<SailBoatBasementPage />} />
+                  {/* Buried treasure reward reveal — static segment wins over :islandId. */}
+                  <Route path="/sail/treasure" element={<BuriedTreasurePage />} />
                   <Route path="/sail/:islandId" element={<SailScenePage />} />
                   <Route path="/sail/:islandId/lesson" element={<IslandScenePage />} />
                   <Route path="/sail/:islandId/lesson/hub" element={<IslandLessonPage />} />
@@ -1590,6 +1611,7 @@ const App: React.FC = () => {
                   <Route path="/create-playlist" element={<ProtectedRoute><CreatePlaylistPage /></ProtectedRoute>} />
                   <Route path="/lessons" element={<ProtectedRoute><LessonsPage /></ProtectedRoute>} />
                   <Route path="/lesson/:lessonId" element={<ProtectedRoute><LessonPlayerPage /></ProtectedRoute>} />
+                  <Route path="/games/library" element={<GamesLibraryPage />} />
                   <Route path="/games" element={<GamesPage />} />
                   <Route path="/map/:islandId/main" element={<MainMapPage />} />
                   <Route path="/map" element={<MapPage />} />

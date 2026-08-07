@@ -72,3 +72,11 @@ coverage/
 # Scratch files
 .tmp-*
 .cursor/*.png
+tmp-*
+.netlify/
+
+# Local verification screenshots
+/verify-*.png
+/listen-bottom-*.png
+/read-bottom-*.png
+/world-bottom-*.png

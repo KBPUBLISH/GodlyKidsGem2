@@ -320,6 +320,7 @@ export const BookPageRenderer: React.FC<BookPageRendererProps> = ({
         const audio = backgroundAudioRef.current;
         if (!audio) return;
 
+        let cancelled = false;
         let detachTrim: (() => void) | undefined;
 
         let audioUrl: string | undefined;
@@ -363,11 +364,13 @@ export const BookPageRenderer: React.FC<BookPageRendererProps> = ({
             detachTrim = attachPlaybackTrim(audio, {
                 trimStartSec,
                 trimEndSec,
-                segmentLoop: () => !!shouldSegmentLoopNative,
+                segmentLoop: () => !cancelled && !!shouldSegmentLoopNative,
             });
 
             const playAudio = () => {
+                if (cancelled) return;
                 audio.play().catch(err => {
+                    if (cancelled) return;
                     console.warn('🔊 Background audio autoplay prevented:', err);
                 });
             };
@@ -384,6 +387,7 @@ export const BookPageRenderer: React.FC<BookPageRendererProps> = ({
         }
 
         return () => {
+            cancelled = true;
             detachTrim?.();
             audio.pause();
             audio.currentTime = 0;
@@ -1041,8 +1045,6 @@ export const BookPageRenderer: React.FC<BookPageRendererProps> = ({
                         }}
                         onWrong={() => onWrongHuntTap?.()}
                         placement="image"
-                        areaTopMin={12}
-                        areaTopMax={78}
                     />
                 </div>
             )}
@@ -1148,20 +1150,10 @@ export const BookPageRenderer: React.FC<BookPageRendererProps> = ({
                 </div>
             )}
             
-            {/* Page nav + word-hunt progress — just above parchment top edge */}
+            {/* Page nav — just above parchment top edge */}
             {bibleMapLayout &&
-                (pageNav || pageInteractiveTargets.length > 0) &&
+                pageNav &&
                 (() => {
-                    const showProgress =
-                        pageInteractiveTargets.length > 0 && scrollState !== 'hidden';
-                    const total = pageInteractiveTargets.length;
-                    const found = showProgress
-                        ? pageInteractiveTargets.filter((t) =>
-                              tappedInteractiveKeys?.has(pageInteractiveTapKey(t.boxIndex, t.wordIndex)),
-                          ).length
-                        : 0;
-                    const pct = total > 0 ? Math.round((found / total) * 100) : 0;
-                    const allDone = total > 0 && found >= total;
                     const navDisabled = !!pageNav?.disabled;
                     const prevDisabled = navDisabled || !pageNav?.canGoPrev;
                     const nextDisabled =
@@ -1206,25 +1198,7 @@ export const BookPageRenderer: React.FC<BookPageRendererProps> = ({
                                 <div className="shrink-0 min-w-[52px] sm:min-w-[56px]" aria-hidden />
                             )}
 
-                            <div className="flex-1 min-w-0 flex justify-center">
-                                {showProgress ? (
-                                    <div className="w-full max-w-[200px] sm:max-w-[240px]">
-                                        <div className="h-2.5 rounded-full bg-black/45 overflow-hidden shadow-sm ring-1 ring-white/25">
-                                            <div
-                                                className={`h-full rounded-full transition-[width] duration-300 ease-out ${
-                                                    allDone
-                                                        ? 'bg-gradient-to-r from-emerald-400 to-green-500'
-                                                        : 'bg-gradient-to-r from-amber-300 via-yellow-300 to-emerald-400'
-                                                }`}
-                                                style={{ width: `${pct}%` }}
-                                            />
-                                        </div>
-                                        <p className="mt-0.5 text-center text-[10px] font-semibold text-white drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)]">
-                                            {allDone ? 'All words found!' : `Find words ${found}/${total}`}
-                                        </p>
-                                    </div>
-                                ) : null}
-                            </div>
+                            <div className="flex-1 min-w-0" />
 
                             {pageNav ? (
                                 <button
@@ -1502,6 +1476,7 @@ export const BookPageRenderer: React.FC<BookPageRendererProps> = ({
                                                     <span
                                                         key={wIdx}
                                                         data-interactive-word="1"
+                                                        data-hunt-blank={key}
                                                         className={`inline-flex items-center justify-center mx-0.5 px-2 py-0.5 rounded-md border-2 border-dashed align-baseline transition ${
                                                             isNext
                                                                 ? 'border-amber-500 bg-amber-50/95 ring-1 ring-amber-300/70'

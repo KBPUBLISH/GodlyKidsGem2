@@ -1,8 +1,13 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
-import { ArrowLeft, Check, PartyPopper, X } from 'lucide-react';
+import { Check, Gift, PartyPopper, X } from 'lucide-react';
+import WoodBackButton from '../components/WoodBackButton';
 import { getApiBaseUrl } from '../services/apiService';
 import { islandStoryProgressService } from '../services/islandStoryProgressService';
+import {
+  resolveRewardPool,
+  type RewardDefinition,
+} from '../services/rewardsService';
 import {
   buildIslandSceneNavState,
   buildIslandScenePath,
@@ -30,6 +35,15 @@ type StoryCms = {
     levels?: Partial<Record<QuizLevel, QuizQuestion[]>>;
   };
   bookId?: string | { _id?: string };
+  heroImageUrl?: string;
+  /** Story pack rewards config (used for the Claim Treasure reveal). */
+  rewards?: { enabled?: boolean; pool?: RewardDefinition[] };
+  game?: {
+    enabled?: boolean;
+    kind?: string;
+    gameId?: string;
+    webview?: { title?: string; url?: string; coverImage?: string };
+  };
 };
 
 type Phase = 'loading' | 'pick' | 'playing' | 'done' | 'missing';
@@ -107,6 +121,8 @@ const IslandQuizPage: React.FC = () => {
   const [revealed, setRevealed] = useState(false);
   const [wasCorrect, setWasCorrect] = useState(false);
   const [score, setScore] = useState(0);
+  /** Full CMS story — needed for its reward pool when claiming treasure. */
+  const [rewardStory, setRewardStory] = useState<StoryCms | null>(null);
 
   const current = questions[index];
 
@@ -196,6 +212,7 @@ const IslandQuizPage: React.FC = () => {
 
       setTitle((story.displayTitle || story.title || 'QUIZZ').toUpperCase());
       setStoryId(story._id || wantedId || '');
+      setRewardStory(story);
       setAvailable(diffs);
       setDifficulty(resolved);
 
@@ -246,6 +263,7 @@ const IslandQuizPage: React.FC = () => {
           (storyId && stories.find((s) => s._id === storyId)) ||
           stories.find((s) => levelsFromStory(s).levels[level]?.length);
         const qs = levelsFromStory(story).levels[level] || [];
+        if (story) setRewardStory(story);
         setDifficulty(level);
         setQuestions(qs);
         setIndex(0);
@@ -286,6 +304,34 @@ const IslandQuizPage: React.FC = () => {
     return ((index + (revealed ? 1 : 0)) / questions.length) * 100;
   }, [index, questions.length, revealed]);
 
+  /** Treasure is earned at half right or better. */
+  const earnedTreasure = questions.length > 0 && score / questions.length >= 0.5;
+
+  const claimTreasure = useCallback(() => {
+    const sid = storyId || searchParams.get('storyId')?.trim() || '';
+    if (sid) {
+      // Same bookkeeping as the scene's REWARDS activity (goRewards).
+      islandStoryProgressService.markComplete(islandId, sid, 'rewards');
+    }
+    navigate('/sail/treasure', {
+      state: {
+        storyId: sid,
+        storyTitle:
+          rewardStory?.displayTitle || rewardStory?.title || navState?.title,
+        pool: resolveRewardPool(rewardStory),
+        returnTo: sceneBackPath,
+      },
+    });
+  }, [
+    navigate,
+    storyId,
+    searchParams,
+    islandId,
+    rewardStory,
+    navState?.title,
+    sceneBackPath,
+  ]);
+
   return (
     <div
       className="relative w-full h-[100dvh] overflow-hidden"
@@ -300,15 +346,11 @@ const IslandQuizPage: React.FC = () => {
 
       <div className="relative z-10 flex flex-col h-full px-4 pt-[max(12px,var(--safe-area-top))] pb-[max(12px,var(--safe-area-bottom))]">
         <div className="flex items-center gap-3 mb-3">
-          <button
-            type="button"
+          <WoodBackButton
             onClick={goBackToScene}
-            className="flex items-center justify-center w-11 h-11 rounded-full text-white active:scale-95"
-            style={woodBtnStyle}
+            className="w-11 h-11 flex-shrink-0"
             aria-label="Back"
-          >
-            <ArrowLeft size={22} strokeWidth={2.6} />
-          </button>
+          />
           <h1
             className="flex-1 text-center text-white text-xl font-black tracking-wide drop-shadow"
             style={{ fontFamily: '"Nunito", "Segoe UI", system-ui, sans-serif' }}
@@ -474,6 +516,23 @@ const IslandQuizPage: React.FC = () => {
               You got {score} of {questions.length} right
             </p>
             <div className="flex flex-col gap-3 w-full max-w-xs">
+              {earnedTreasure && (
+                <button
+                  type="button"
+                  onClick={claimTreasure}
+                  className="py-3.5 rounded-xl font-black text-lg text-[#3d2314] flex items-center justify-center gap-2 active:scale-95 transition-transform"
+                  style={{
+                    background:
+                      'linear-gradient(180deg, #F0D78C 0%, #D4A017 50%, #B8860B 100%)',
+                    boxShadow:
+                      '0 3px 0 #5c3a1a, 0 4px 10px rgba(0,0,0,0.35), inset 0 1px 0 rgba(255,240,200,0.5)',
+                    border: '2px solid #F5E6A3',
+                  }}
+                >
+                  <Gift size={22} strokeWidth={2.4} />
+                  Claim Treasure
+                </button>
+              )}
               <button
                 type="button"
                 onClick={() => {

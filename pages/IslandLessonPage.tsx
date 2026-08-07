@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams, useLocation, useSearchParams } from 'react-router-dom';
-import { ArrowLeft, BookOpen, Check, Gamepad2, Lock, MessageCircleQuestionMark, Star, X } from 'lucide-react';
+import { BookOpen, Check, Gamepad2, Lock, MessageCircleQuestionMark, Star, X } from 'lucide-react';
+import WoodBackButton from '../components/WoodBackButton';
 import { getApiBaseUrl } from '../services/apiService';
 import { islandStoryProgressService } from '../services/islandStoryProgressService';
 import { readingProgressService } from '../services/readingProgressService';
@@ -57,6 +58,25 @@ const getBibleMapApiRoot = (): string => {
   return base.endsWith('/api') ? base : `${base}/api`;
 };
 
+/** Resolve CMS media URLs (GCS absolute or /uploads relative) for <img src>. */
+const resolveMediaUrl = (url: string | undefined | null): string => {
+  if (!url || !url.trim()) return '';
+  const trimmed = url.trim();
+  if (
+    trimmed.startsWith('http://') ||
+    trimmed.startsWith('https://') ||
+    trimmed.startsWith('blob:') ||
+    trimmed.startsWith('/assets/')
+  ) {
+    return trimmed;
+  }
+  const base = getApiBaseUrl().replace(/\/$/, '');
+  // If base already ends with /api and url is /uploads/..., strip /api for static files
+  const origin = base.replace(/\/api$/, '');
+  const path = trimmed.startsWith('/') ? trimmed : `/${trimmed}`;
+  return `${origin}${path}`;
+};
+
 /**
  * Island lesson Read hub — opened from the garden scene via READ STORY.
  * Kid-friendly: big Start/Continue → age pick → reader.
@@ -77,6 +97,7 @@ const IslandLessonPage: React.FC = () => {
   };
 
   const [lesson, setLesson] = useState<LessonContent>(fallbackLesson);
+  const [heroSrc, setHeroSrc] = useState(LESSON_HERO);
   const [cmsBookId, setCmsBookId] = useState<string | null>(null);
   const [cmsStoryId, setCmsStoryId] = useState('');
   const [showAgePicker, setShowAgePicker] = useState(false);
@@ -125,6 +146,7 @@ const IslandLessonPage: React.FC = () => {
     setCmsBookId(null);
     setCmsStoryId('');
     setHasQuizContent(true);
+    setHeroSrc(LESSON_HERO);
     const load = async () => {
       try {
         const res = await fetch(
@@ -152,6 +174,7 @@ const IslandLessonPage: React.FC = () => {
               scriptureRef?: string;
               verse?: string;
               verseRef?: string;
+              heroImageUrl?: string;
               quizMode?: string;
               customQuestions?: unknown[];
               quiz?: {
@@ -181,6 +204,9 @@ const IslandLessonPage: React.FC = () => {
                 primary.customQuestions.length > 0) ||
               (primary.quizMode === 'book_quiz' && Boolean(bookId)));
           setHasQuizContent(hasQuiz);
+
+          const cmsHero = resolveMediaUrl(primary.heroImageUrl);
+          if (cmsHero) setHeroSrc(cmsHero);
 
           setLesson({
             title:
@@ -289,7 +315,21 @@ const IslandLessonPage: React.FC = () => {
     ],
   );
 
+  const openQuiz = useCallback(() => {
+    const qs = returnStoryId
+      ? `?storyId=${encodeURIComponent(returnStoryId)}`
+      : '';
+    navigate(`/sail/${islandId}/lesson/quiz${qs}`);
+  }, [islandId, navigate, returnStoryId]);
+
   const handlePrimaryCta = useCallback(() => {
+    // Continue targets the next incomplete activity (story → quiz → game).
+    // The game has no route yet, so once everything is done we fall back to
+    // replaying the story.
+    if (readDone && hasQuizContent && !quizDone) {
+      openQuiz();
+      return;
+    }
     if (cmsBookId) {
       setShowAgePicker(true);
       return;
@@ -301,14 +341,16 @@ const IslandLessonPage: React.FC = () => {
         ...sceneReturnCtx,
       },
     });
-  }, [cmsBookId, islandId, navigate, sceneReturnCtx]);
-
-  const openQuiz = useCallback(() => {
-    const qs = returnStoryId
-      ? `?storyId=${encodeURIComponent(returnStoryId)}`
-      : '';
-    navigate(`/sail/${islandId}/lesson/quiz${qs}`);
-  }, [islandId, navigate, returnStoryId]);
+  }, [
+    readDone,
+    hasQuizContent,
+    quizDone,
+    openQuiz,
+    cmsBookId,
+    islandId,
+    navigate,
+    sceneReturnCtx,
+  ]);
 
   const quizLocked = !readDone;
   const gameLocked = !(readDone && (quizDone || !hasQuizContent));
@@ -418,18 +460,15 @@ const IslandLessonPage: React.FC = () => {
         }}
       >
         <div className="flex items-center px-4 mb-1">
-          <button
-            type="button"
+          <WoodBackButton
             onClick={() =>
               navigate(sceneBackPath, {
                 state: buildIslandSceneNavState(sceneReturnCtx),
               })
             }
-            className="flex items-center justify-center w-12 h-12 rounded-full bg-[#3D2914]/90 border-2 border-[#6B4423] text-white shadow-md active:scale-95 transition-transform"
+            className="w-12 h-12"
             aria-label="Back to island scene"
-          >
-            <ArrowLeft size={24} strokeWidth={2.5} />
-          </button>
+          />
         </div>
 
         <div className="relative flex justify-center px-6 mt-1 mb-2">
@@ -473,8 +512,9 @@ const IslandLessonPage: React.FC = () => {
             style={{ boxShadow: '0 10px 28px rgba(0,0,0,0.3)' }}
           >
             <img
-              src={LESSON_HERO}
+              src={heroSrc}
               alt=""
+              onError={() => setHeroSrc(LESSON_HERO)}
               className="block w-full h-auto object-cover aspect-[4/3]"
               draggable={false}
             />

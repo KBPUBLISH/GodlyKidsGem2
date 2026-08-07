@@ -24,6 +24,7 @@ import { useTutorial } from '../context/TutorialContext';
 import { isValidBookId } from '../utils/bookUtils';
 import { attachReliableLoop } from '../utils/audioLoop';
 import {
+    augmentInteractiveWordIndices,
     bibleMapScrollBandPct,
     collectPageInteractiveTargets,
     pageInteractiveTapKey,
@@ -94,6 +95,17 @@ function saveHuntProgressByPage(bookId: string | undefined, map: Map<string, Set
 /** Stable hunt progress key for a page (page id, else index). */
 function huntPageKey(page: { _id?: string } | undefined, pageIndex: number): string {
     return page?._id || `idx:${pageIndex}`;
+}
+
+/** True while the kid is still on `/read/:bookId` (BrowserRouter pathname or HashRouter hash). */
+function isBookReaderLocation(): boolean {
+    try {
+        const path = window.location.pathname || '';
+        const hash = window.location.hash || '';
+        return /\/read\/[^/?#]+/.test(path) || /\/read\/[^/?#]+/.test(hash);
+    } catch {
+        return false;
+    }
 }
 
 interface TextBox {
@@ -194,7 +206,14 @@ function applyReadingLevelToPage(page: Page, level: ReadingLevelKey | null): Pag
     const entry = page.readingLevels[level];
     const text = typeof entry?.text === 'string' ? entry.text.trim() : '';
     if (!text) return page;
-    const indices = sanitizeInteractiveWordIndices(text, entry?.interactiveWordIndices);
+    let indices = sanitizeInteractiveWordIndices(text, entry?.interactiveWordIndices);
+    // Ages 6–7: CMS often marks only 1–2 hunt words even on long pages — densify
+    // deterministically (same text → same extra blanks) so full pages get a real
+    // hunt. Star totals / progress keys derive from these same indices, so the
+    // augmented set stays consistent across renders, navigation, and restores.
+    if (level === 'ages_6_7') {
+        indices = augmentInteractiveWordIndices(text, indices);
+    }
     const textBox: TextBox = {
         text,
         x: 10,
@@ -1381,6 +1400,9 @@ const BookReaderPage: React.FC = () => {
     // Effect 1: Initialization, Book Data Fetching, and Cleanup
     useEffect(() => {
         console.log('📖 BookReaderPage MOUNTED - KILLING ALL APP MUSIC');
+        let cancelled = false;
+        /** Local handle so late async work cannot orphan a playing element after leave. */
+        let activeBookMusic: HTMLAudioElement | null = null;
 
         // Pause app background music immediately (if any)
         setGameMode(false);
@@ -1389,6 +1411,7 @@ const BookReaderPage: React.FC = () => {
         // 4. Nuclear Option: Kill all other audio elements (more aggressive)
         // BUT preserve book background music
         const killAllAudio = () => {
+            if (cancelled || !bookMusicAliveRef.current) return;
             const allAudio = document.querySelectorAll('audio');
             allAudio.forEach(audio => {
                 // Don't kill our own book music - it should play!
@@ -1411,7 +1434,7 @@ const BookReaderPage: React.FC = () => {
         bookMusicAliveRef.current = true;
         let killCount = 0;
         let killInterval: NodeJS.Timeout | null = setInterval(() => {
-            if (!bookMusicAliveRef.current) {
+            if (cancelled || !bookMusicAliveRef.current) {
                 if (killInterval) {
                     clearInterval(killInterval);
                     killInterval = null;
@@ -1421,6 +1444,7 @@ const BookReaderPage: React.FC = () => {
             killAllAudio();
             // Ensure book music continues playing if it should be
             if (
+                !cancelled &&
                 bookMusicAliveRef.current &&
                 bookBackgroundMusicRef.current &&
                 bookMusicEnabledRef.current &&
@@ -1435,7 +1459,7 @@ const BookReaderPage: React.FC = () => {
             if (killCount === 20 && killInterval) {
                 clearInterval(killInterval);
                 killInterval = setInterval(() => {
-                    if (!bookMusicAliveRef.current) {
+                    if (cancelled || !bookMusicAliveRef.current) {
                         if (killInterval) {
                             clearInterval(killInterval);
                             killInterval = null;
@@ -1445,6 +1469,7 @@ const BookReaderPage: React.FC = () => {
                     killAllAudio();
                     // Keep book music playing
                     if (
+                        !cancelled &&
                         bookMusicAliveRef.current &&
                         bookBackgroundMusicRef.current &&
                         bookMusicEnabledRef.current &&
@@ -1463,6 +1488,8 @@ const BookReaderPage: React.FC = () => {
                 const userId = authService.getUserIdForBackend();
                 const shareToken = searchParams.get('share') || undefined;
                 const book = await ApiService.getBookById(bookId, userId, shareToken || null);
+                // Leave / bookId change: do not start sticky BGM after unmount
+                if (cancelled) return;
                 
                 // Shared link: recipient can read full book without subscription
                 const allowSharedRead = (book as any)?.allowSharedRead === true;
@@ -1586,10 +1613,12 @@ const BookReaderPage: React.FC = () => {
                 const rawData = (book as any)?.rawData;
                 const files = rawData?.files || (book as any)?.files;
 
+                if (cancelled) return;
+
                 if (files?.audio && Array.isArray(files.audio) && files.audio.length > 0) {
                     const defaultIdx = Math.max(0, Math.min(files.defaultAudioIndex ?? 0, files.audio.length - 1));
                     const musicUrl = files.audio[defaultIdx]?.url;
-                    if (musicUrl) {
+                    if (musicUrl && !cancelled) {
                         console.log('🎵 Found book music:', musicUrl);
                         setHasBookMusic(true);
 
@@ -1604,49 +1633,59 @@ const BookReaderPage: React.FC = () => {
                         audio.loop = true;
                         audio.preload = 'auto';
                         audio.setAttribute('data-gk-role', 'book-background');
+                        if (cancelled) {
+                            try {
+                                audio.pause();
+                                audio.removeAttribute('src');
+                                audio.src = '';
+                                audio.load?.();
+                            } catch { }
+                            return;
+                        }
+                        activeBookMusic = audio;
                         bookMusicAliveRef.current = true;
                         bookBackgroundMusicRef.current = audio;
                         bookMusicLoopDetachRef.current = attachReliableLoop(
                             audio,
-                            () => bookMusicAliveRef.current && bookMusicEnabledRef.current,
+                            () =>
+                                !cancelled &&
+                                bookMusicAliveRef.current &&
+                                bookMusicEnabledRef.current,
                         );
                         ensureBookMusicGraph(audio);
 
-                        // Start playing book music automatically when loaded
-                        audio.addEventListener('canplaythrough', async () => {
+                        const startBookMusicIfAlive = async () => {
+                            if (cancelled || !bookMusicAliveRef.current) return;
                             await resumeBookMusicContext();
-                            if (bookMusicEnabledRef.current) {
-                                console.log('🎵 Book music ready - starting playback');
-                                // Set volume directly for cross-origin audio (CORS-safe)
-                                audio.volume = musicVolume;
-                                audio.muted = false;
-                                audio.play().catch(err => {
-                                    console.warn('⚠️ Book music auto-play prevented:', err);
-                                    // Update UI to reflect that music isn't actually playing
-                                    setBookMusicEnabled(false);
-                                });
+                            if (cancelled || !bookMusicAliveRef.current || !bookMusicEnabledRef.current) {
+                                try {
+                                    audio.pause();
+                                } catch { }
+                                return;
                             }
+                            console.log('🎵 Book music ready - starting playback');
+                            audio.volume = musicVolume;
+                            audio.muted = false;
+                            audio.play().catch(err => {
+                                if (cancelled || !bookMusicAliveRef.current) return;
+                                console.warn('⚠️ Book music auto-play prevented:', err);
+                                setBookMusicEnabled(false);
+                            });
+                        };
+
+                        // Start playing book music automatically when loaded
+                        audio.addEventListener('canplaythrough', () => {
+                            void startBookMusicIfAlive();
                         }, { once: true });
 
                         // Try to play immediately if already loaded
                         if (audio.readyState >= 3 && bookMusicEnabledRef.current) {
-                            await resumeBookMusicContext();
-                            audio.volume = musicVolume;
-                            audio.muted = false;
-                            audio.play().catch(err => {
-                                console.warn('⚠️ Book music immediate play prevented:', err);
-                                // Update UI to reflect that music isn't actually playing
-                                setBookMusicEnabled(false);
-                            });
+                            await startBookMusicIfAlive();
                         }
-
-                        // Trigger a state update to notify the second effect that music is ready
-                        // We can use setHasBookMusic(true) which we already did, 
-                        // but we might need to force a re-check if it was already true.
-                        // For now, the dependency on hasBookMusic in the second effect should handle it.
                     }
                 }
             } catch (err) {
+                if (cancelled) return;
                 console.error('Failed to fetch book data:', err);
                 // Still mark intro video as checked on error
                 setIntroVideoChecked(true);
@@ -1658,31 +1697,33 @@ const BookReaderPage: React.FC = () => {
         // Cleanup function
         return () => {
             console.log('📖 BookReaderPage UNMOUNTING - Cleanup');
+            cancelled = true;
             bookMusicAliveRef.current = false;
             if (killInterval) {
                 clearInterval(killInterval);
                 killInterval = null;
             }
 
-            // Stop and destroy book background music
+            // Stop book-owned BGM (local + ref) without touching Listen/MiniPlayer playlist
             bookMusicLoopDetachRef.current?.();
             bookMusicLoopDetachRef.current = null;
-            if (bookBackgroundMusicRef.current) {
+            const stopEl = (el: HTMLAudioElement | null) => {
+                if (!el) return;
                 try {
-                    bookBackgroundMusicRef.current.pause();
-                    bookBackgroundMusicRef.current.removeAttribute('src');
-                    bookBackgroundMusicRef.current.src = '';
-                    bookBackgroundMusicRef.current.load?.();
+                    el.pause();
+                    el.removeAttribute('src');
+                    el.src = '';
+                    el.load?.();
                 } catch { }
-                bookBackgroundMusicRef.current = null;
-            }
-            // Disconnect WebAudio graph for book music source
-            if (bookMusicSourceRef.current) {
-                try { bookMusicSourceRef.current.disconnect(); } catch { }
-                bookMusicSourceRef.current = null;
-            }
+            };
+            stopEl(activeBookMusic);
+            activeBookMusic = null;
+            stopEl(bookBackgroundMusicRef.current);
+            bookBackgroundMusicRef.current = null;
+            // Full book TTS / WebAudio teardown (idempotent)
+            stopBookAudioRef.current();
 
-            // Resume app music
+            // Resume app ambient only (not MiniPlayer playlist)
             setMusicPaused(false);
         };
     }, [bookId, searchParams, setGameMode, setMusicPaused, ensureBookMusicGraph, resumeBookMusicContext]); // searchParams for ?share= token
@@ -1826,9 +1867,9 @@ const BookReaderPage: React.FC = () => {
         };
         window.addEventListener('beforeunload', handleBeforeUnload);
 
-        // Listen for hash changes (React Router navigation with HashRouter)
+        // HashRouter hash changes and BrowserRouter history updates
         const handleHashChange = () => {
-            if (!window.location.hash.includes('/read/')) {
+            if (!isBookReaderLocation()) {
                 console.log('📖 Navigated away from book reader - stopping audio');
                 stopAllBookAudio();
             }
@@ -1837,7 +1878,7 @@ const BookReaderPage: React.FC = () => {
 
         // Listen for popstate (back/forward) - may fire before unmount
         const handlePopState = () => {
-            if (!window.location.hash.includes('/read/')) {
+            if (!isBookReaderLocation()) {
                 console.log('📖 PopState - left book reader, stopping audio');
                 stopAllBookAudio();
             }
@@ -2413,18 +2454,36 @@ const BookReaderPage: React.FC = () => {
         if (!bibleMapFlow || bibleMapEndHandledRef.current) return;
         bibleMapEndHandledRef.current = true;
 
-        const huntPageCount = pages.filter((page) => {
+        // Score against the WHOLE story: every missing word on every page,
+        // counting only the ones the kid actually revealed (tappedByPageRef).
+        let huntPageCount = 0;
+        let totalHuntWords = 0;
+        let correctHuntWords = 0;
+        pages.forEach((page, pageIdx) => {
             if (!page || page._id === 'the-end-page' || (page as any).id === 'the-end-page') {
-                return false;
+                return;
             }
             const contentBoxes = page.content?.textBoxes;
             const boxes =
                 contentBoxes && contentBoxes.length > 0 ? contentBoxes : page.textBoxes || [];
-            return collectPageInteractiveTargets(boxes).length > 0;
-        }).length;
+            const targets = collectPageInteractiveTargets(boxes);
+            if (targets.length === 0) return;
+            huntPageCount += 1;
+            totalHuntWords += targets.length;
+            const tapped =
+                tappedByPageRef.current.get(huntPageKey(page, pageIdx)) || new Set<string>();
+            correctHuntWords += targets.filter((t) =>
+                tapped.has(pageInteractiveTapKey(t.boxIndex, t.wordIndex)),
+            ).length;
+        });
 
         const wrongTaps = huntWrongTapsRef.current;
-        const stars = computeHuntStars(wrongTaps, huntPageCount);
+        const stars = computeHuntStars({
+            totalWords: totalHuntWords,
+            correctWords: correctHuntWords,
+            wrongTaps,
+            huntPageCount,
+        });
 
         if (islandSceneReturn?.islandId && islandSceneReturn.storyId) {
             islandStoryProgressService.setReadStars(
@@ -2449,7 +2508,7 @@ const BookReaderPage: React.FC = () => {
         }
 
         console.log(
-            `🏝️ Bible Map complete → hub (${stars}★, wrongs=${wrongTaps}, huntPages=${huntPageCount})`,
+            `🏝️ Bible Map complete → hub (${stars}★, words=${correctHuntWords}/${totalHuntWords}, wrongs=${wrongTaps}, huntPages=${huntPageCount})`,
         );
         navigate(hubPath, {
             replace: true,
@@ -4728,6 +4787,7 @@ const BookReaderPage: React.FC = () => {
                             navigateBackFromReader();
                             return;
                         }
+                        stopBookAudioRef.current();
                         navigate(fromDailySession ? '/daily-session' : '/');
                     }}
                     className="px-6 py-3 bg-amber-500 hover:bg-amber-600 text-gray-900 font-semibold rounded-xl flex items-center gap-2"
@@ -5276,6 +5336,7 @@ const BookReaderPage: React.FC = () => {
                                                         e.stopPropagation();
                                                         // Navigate to profile page with shop modal open to voices tab
                                                         setShowVoiceDropdown(false);
+                                                        stopBookAudioRef.current();
                                                         navigate('/profile', { state: { openShop: true, shopTab: 'voices' } });
                                                     }}
                                                     className="w-full text-left px-4 py-2 text-sm text-white/50 hover:bg-white/5 transition-colors flex items-center gap-2"
@@ -5311,6 +5372,7 @@ const BookReaderPage: React.FC = () => {
                                             onClick={(e) => {
                                                 e.stopPropagation();
                                                 setShowVoiceDropdown(false);
+                                                stopBookAudioRef.current();
                                                 navigate('/profile', { state: { openShop: true, shopTab: 'voices' } });
                                             }}
                                             className="w-full px-4 py-3 text-sm font-bold text-[#FFD700] hover:bg-[#FFD700]/10 transition-colors flex items-center justify-center gap-2"
@@ -6206,6 +6268,7 @@ const BookReaderPage: React.FC = () => {
                                                 console.log('📖 Book content length:', bookContent.length);
                                                 console.log('📖 Book content preview:', bookContent.substring(0, 200));
                                                 
+                                                stopBookAudioRef.current();
                                                 navigate('/daily-session', { 
                                                     state: { 
                                                         stepCompleted: 'book',
@@ -6224,6 +6287,7 @@ const BookReaderPage: React.FC = () => {
                                         <button
                                             onClick={(e) => {
                                                 e.stopPropagation();
+                                                stopBookAudioRef.current();
                                                 navigate('/home');
                                             }}
                                             className="bg-white/10 hover:bg-white/20 text-white/80 p-3 rounded-xl font-medium transition-all flex items-center justify-center gap-2 col-span-2"
@@ -6250,6 +6314,7 @@ const BookReaderPage: React.FC = () => {
                                         <button
                                             onClick={(e) => {
                                                 e.stopPropagation();
+                                                stopBookAudioRef.current();
                                                 navigate(bookDetailUrl || `/book/${bookId}`);
                                             }}
                                             className="bg-[#8B4513] hover:bg-[#A0522D] text-white p-4 rounded-xl font-bold shadow-lg border-b-4 border-[#5D4037] active:border-b-0 active:translate-y-1 transition-all flex items-center justify-center gap-2 group"
@@ -6262,8 +6327,7 @@ const BookReaderPage: React.FC = () => {
                                         <button
                                             onClick={(e) => {
                                                 e.stopPropagation();
-                                                // Restore music before navigating
-                                                // Background music toggle has been removed from Header. Nothing to restore here.
+                                                stopBookAudioRef.current();
                                                 navigate('/home');
                                             }}
                                             className="bg-[#2196F3] hover:bg-[#1E88E5] text-white p-4 rounded-xl font-bold shadow-lg border-b-4 border-[#5D4037] active:border-b-0 active:translate-y-1 transition-all flex items-center justify-center gap-2 group"
@@ -6428,6 +6492,7 @@ const BookReaderPage: React.FC = () => {
                     if (isTutorialActive && isStepActive('quiz_in_progress')) {
                         // Navigate to home and show coins tutorial
                         setTimeout(() => {
+                            stopBookAudioRef.current();
                             onBookQuizComplete();
                             navigate('/home');
                         }, 1500); // Allow time for quiz results animation
@@ -6536,6 +6601,7 @@ const BookReaderPage: React.FC = () => {
                                 <button
                                     onClick={() => {
                                         setShowPreviewLimitModal(false);
+                                        stopBookAudioRef.current();
                                         navigate('/paywall', { state: { from: `/book/${bookId}` } });
                                     }}
                                     className="w-full bg-gradient-to-r from-[#FFD700] to-[#FFA500] text-[#5c2e0b] font-bold px-8 py-4 rounded-xl shadow-lg hover:opacity-90 transition-opacity text-lg"

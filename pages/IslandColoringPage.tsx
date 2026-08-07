@@ -1,7 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import {
-  ArrowLeft,
   ChevronDown,
   Music,
   Pause,
@@ -12,6 +11,7 @@ import {
   X,
 } from 'lucide-react';
 import { getApiBaseUrl } from '../services/apiService';
+import WoodBackButton from '../components/WoodBackButton';
 import TapFillCanvas, { TapFillCanvasHandle } from '../components/features/TapFillCanvas';
 import DrawingCanvas from '../components/features/DrawingCanvas';
 import CoverImage from '../components/ui/CoverImage';
@@ -509,15 +509,11 @@ const IslandColoringPage: React.FC = () => {
           boxShadow: '0 2px 8px rgba(0,0,0,0.35)',
         }}
       >
-        <button
-          type="button"
+        <WoodBackButton
           onClick={goBack}
-          className="flex-shrink-0 flex items-center justify-center w-11 h-11 rounded-full active:scale-95 transition-transform"
-          style={woodBtnStyle}
+          className="flex-shrink-0 w-11 h-11"
           aria-label="Back to island"
-        >
-          <ArrowLeft size={22} className="text-white drop-shadow" strokeWidth={2.6} />
-        </button>
+        />
         <h1
           className="flex-1 text-center font-display font-black text-white text-[1.05rem] sm:text-lg tracking-wide truncate px-1"
           style={{ textShadow: '0 2px 4px rgba(0,0,0,0.55)' }}

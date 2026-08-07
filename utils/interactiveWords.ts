@@ -47,6 +47,95 @@ export function wordForSpeech(word: string): string {
     return cleaned || word;
 }
 
+/** Lowercase letters/digits only — for stopword checks and duplicate-label detection. */
+function normalizeHuntWord(word: string): string {
+    return word.replace(/[^\p{L}\p{N}]/gu, '').toLowerCase();
+}
+
+/** Function words that make poor hunt blanks (content nouns/verbs are better). */
+const HUNT_AUGMENT_STOPWORDS = new Set([
+    'the', 'and', 'was', 'were', 'his', 'her', 'him', 'she', 'had', 'has', 'have',
+    'with', 'that', 'this', 'they', 'them', 'then', 'than', 'when', 'from', 'into',
+    'onto', 'said', 'very', 'some', 'are', 'for', 'but', 'not', 'all', 'out', 'who',
+    'what', 'its', 'their', 'there', 'here', 'will', 'would', 'could', 'should',
+    'because', 'about', 'after', 'before', 'while', 'where', 'been', 'being', 'did',
+    'does', 'each', 'every', 'also', 'just', 'more', 'most', 'much', 'many', 'other',
+]);
+
+/**
+ * Densify hunt blanks on pages whose CMS data marks too few interactive words
+ * (used for the ages 6–7 reading level, where long pages deserve a fuller hunt).
+ *
+ * - Only augments pages that already have at least one CMS-marked blank, so
+ *   non-hunt pages stay non-hunt.
+ * - Target density: ~1 blank per `wordsPerBlank` words (min 2, at least
+ *   `fullPageMin` on pages of 30+ words, capped at `maxBlanks` and at 1/4 of
+ *   the page's words).
+ * - Extra blanks are picked deterministically from the page text itself: the
+ *   text is split into even segments and the best candidate in each segment is
+ *   promoted (content words of 3+ letters, no stopwords, no duplicate visible
+ *   labels, never adjacent to another blank) — so the same page always yields
+ *   the same blanks across re-renders and session restores, and the hunt
+ *   totals feeding star scoring stay consistent.
+ */
+export function augmentInteractiveWordIndices(
+    text: string,
+    baseIndices: number[],
+    options?: { wordsPerBlank?: number; fullPageMin?: number; maxBlanks?: number },
+): number[] {
+    if (!baseIndices.length) return baseIndices;
+    const words = splitInteractiveWords(text);
+    if (!words.length) return baseIndices;
+
+    const wordsPerBlank = options?.wordsPerBlank ?? 11;
+    const fullPageMin = options?.fullPageMin ?? 4;
+    const maxBlanks = options?.maxBlanks ?? 6;
+
+    let desired = Math.max(2, Math.round(words.length / wordsPerBlank));
+    if (words.length >= 30) desired = Math.max(desired, fullPageMin);
+    desired = Math.min(desired, maxBlanks, Math.floor(words.length / 4));
+
+    const chosen = new Set(baseIndices);
+    if (chosen.size >= desired) return baseIndices;
+
+    const usedLabels = new Set(baseIndices.map((i) => normalizeHuntWord(words[i] || '')));
+    const isCandidate = (i: number): boolean => {
+        if (chosen.has(i) || chosen.has(i - 1) || chosen.has(i + 1)) return false;
+        const w = normalizeHuntWord(words[i]);
+        if (w.length < 3) return false;
+        if (HUNT_AUGMENT_STOPWORDS.has(w)) return false;
+        if (usedLabels.has(w)) return false;
+        return true;
+    };
+
+    const needed = desired - chosen.size;
+    const pageHash = hashInteractiveSeed(`hunt-augment::${text}`);
+    // One pick per even segment of the text → blanks spread through the page
+    for (let s = 0; s < needed; s++) {
+        const start = Math.floor((s * words.length) / needed);
+        const end = Math.floor(((s + 1) * words.length) / needed);
+        let best = -1;
+        let bestScore = -1;
+        for (let i = start; i < end; i++) {
+            if (!isCandidate(i)) continue;
+            const w = normalizeHuntWord(words[i]);
+            // Prefer meatier words; seeded tie-break keeps picks stable but varied
+            const score =
+                Math.min(w.length, 8) * 16 +
+                ((pageHash ^ hashInteractiveSeed(`${i}::${w}`)) % 16);
+            if (score > bestScore) {
+                bestScore = score;
+                best = i;
+            }
+        }
+        if (best >= 0) {
+            chosen.add(best);
+            usedLabels.add(normalizeHuntWord(words[best]));
+        }
+    }
+    return Array.from(chosen).sort((a, b) => a - b);
+}
+
 /** FNV-1a style hash for stable puzzle layout seeds. */
 export function hashInteractiveSeed(seed: string): number {
     let h = 2166136261;

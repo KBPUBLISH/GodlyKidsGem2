@@ -348,9 +348,10 @@ const ReadPagePanorama: React.FC = () => {
       onScroll={handleScroll}
       className="flex flex-col h-full min-h-0 overflow-y-auto no-scrollbar relative"
     >
-      <Header isVisible={isHeaderVisible} title="READING" />
+      <Header isVisible={isHeaderVisible} title="READING" variant="plank" />
 
-      <div className="px-4 pt-28 pb-52">
+      {/* Plank header clearance — phone −1.5rem / tablet −4.5rem lift; keep in sync with Header.tsx (mirrors WorldPage) */}
+      <div className="px-4 pt-[calc(100vw*284/1021+0.35rem-1.5rem)] md:pt-[calc(9rem+0.35rem-4.5rem)] pb-52">
         
         {/* Search Bar with Age Filter */}
         <div className="flex gap-2 mb-2">

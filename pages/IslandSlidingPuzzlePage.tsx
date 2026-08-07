@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
-import { ArrowLeft, PartyPopper, RefreshCw, Star } from 'lucide-react';
+import { PartyPopper, RefreshCw, Star } from 'lucide-react';
+import WoodBackButton from '../components/WoodBackButton';
 import { useAudio } from '../context/AudioContext';
 import { getApiBaseUrl } from '../services/apiService';
 import {
@@ -424,15 +425,11 @@ const IslandSlidingPuzzlePage: React.FC = () => {
           borderBottom: '3px solid #5c3a1a',
         }}
       >
-        <button
-          type="button"
+        <WoodBackButton
           onClick={goBack}
-          className="flex-shrink-0 flex items-center justify-center w-11 h-11 rounded-full active:scale-95 transition-transform"
-          style={woodBtnStyle}
+          className="flex-shrink-0 w-11 h-11"
           aria-label="Back to island"
-        >
-          <ArrowLeft size={22} className="text-white drop-shadow" strokeWidth={2.6} />
-        </button>
+        />
         <h1
           className="flex-1 text-center font-display font-black text-white text-[1.05rem] sm:text-lg tracking-wide truncate px-1"
           style={{ textShadow: '0 2px 4px rgba(0,0,0,0.55)' }}

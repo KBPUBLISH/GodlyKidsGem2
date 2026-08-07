@@ -38,24 +38,31 @@ export type ApiIslandRow = {
   storyCounts?: { total?: number; published?: number };
 };
 
-/** Offline / API-empty layout — same positions as MapPage ship navigation. */
+/**
+ * Minimum y for Genesis — keeps the island comfortably below the locked
+ * horizon band instead of hugging the wood header.
+ */
+export const GENESIS_MIN_Y = 14;
+
+/** Offline / API-empty layout — same positions as MapPage ship navigation.
+ *  Only Genesis is unlocked; every later island is locked (greyed out). */
 export const FALLBACK_OCEAN_ISLANDS: OceanMapIsland[] = [
   {
     id: 'genesis',
     book: 'Genesis',
     title: 'Creation',
-    status: 'complete',
-    storiesComplete: 10,
+    status: 'current',
+    storiesComplete: 0,
     storiesTotal: 10,
     x: 50,
-    y: 3.5,
+    y: GENESIS_MIN_Y,
   },
   {
     id: 'exodus',
     book: 'Exodus',
     title: 'God Rescues',
-    status: 'current',
-    storiesComplete: 1,
+    status: 'locked',
+    storiesComplete: 0,
     storiesTotal: 10,
     x: 47,
     y: 30,
@@ -114,19 +121,22 @@ export const mapApiIslandToOceanIsland = (
     0,
     Number(row.storyCounts?.published ?? row.storyCounts?.total ?? 0) || 0,
   );
+  const book = (row.bookLabel || row.title || id).trim();
   const x =
     typeof row.mapPosition?.x === 'number' && Number.isFinite(row.mapPosition.x)
       ? row.mapPosition.x
       : 50;
-  const y =
+  let y =
     typeof row.mapPosition?.y === 'number' && Number.isFinite(row.mapPosition.y)
       ? row.mapPosition.y
       : Math.min(90, 8 + index * 18);
+  // Genesis never rides up against the horizon, even with a CMS position.
+  if (isGenesisIsland({ id, book }) && y < GENESIS_MIN_Y) y = GENESIS_MIN_Y;
   // Published islands are tappable for CMS testing (progress wiring later).
   const status: OceanMapIslandStatus = 'current';
   return {
     id,
-    book: (row.bookLabel || row.title || id).trim(),
+    book,
     title: (row.description || row.title || 'Adventure').trim(),
     status,
     storiesComplete: 0,
@@ -140,8 +150,25 @@ export const mapApiIslandToOceanIsland = (
   };
 };
 
+const isSameOceanIsland = (
+  a: Pick<OceanMapIsland, 'id' | 'book'>,
+  b: Pick<OceanMapIsland, 'id' | 'book'>,
+): boolean =>
+  a.id.toLowerCase() === b.id.toLowerCase() ||
+  a.book.toLowerCase() === b.book.toLowerCase();
+
 /**
- * Fetch published ocean-map islands (CMS icons + positions).
+ * Voyage islands the CMS hasn't published yet — shown greyed out (locked)
+ * after the published ones so kids can see what's coming on the journey.
+ */
+const lockedUpcomingIslands = (published: OceanMapIsland[]): OceanMapIsland[] =>
+  FALLBACK_OCEAN_ISLANDS.filter(
+    (fallback) => !published.some((island) => isSameOceanIsland(island, fallback)),
+  ).map((fallback) => ({ ...fallback, status: 'locked' as const, storiesComplete: 0 }));
+
+/**
+ * Fetch published ocean-map islands (CMS icons + positions), padded with the
+ * not-yet-unlocked voyage islands rendered as locked.
  * Returns null on failure / empty so callers keep FALLBACK_OCEAN_ISLANDS.
  */
 export const fetchOceanMapIslands = async (
@@ -154,5 +181,6 @@ export const fetchOceanMapIslands = async (
   const mapped = data
     .map((row, i) => mapApiIslandToOceanIsland(row, i))
     .filter((row): row is OceanMapIsland => row != null);
-  return mapped.length > 0 ? mapped : null;
+  if (mapped.length === 0) return null;
+  return [...mapped, ...lockedUpcomingIslands(mapped)];
 };

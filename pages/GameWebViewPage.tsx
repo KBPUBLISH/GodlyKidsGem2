@@ -9,6 +9,16 @@ import {
   resolveIslandSceneReturn,
   type IslandSceneReaderState,
 } from '../utils/islandSceneReturn';
+import {
+  ensureFamobiCdnSrc,
+  installParentWindowOpenGuard,
+  isFamobiCdnUrl,
+  isFamobiGameUrl,
+  isFamobiSplashUrl,
+  kidSafeIframeProps,
+  resolveFamobiEmbedUrl,
+  toKidSafeGameUrl,
+} from '../utils/kidSafeGameIframe';
 
 const WOOD_TEX = '/assets/images/wheel-background-wood.png';
 
@@ -27,6 +37,7 @@ const GameWebViewPage: React.FC = () => {
   const [searchParams] = useSearchParams();
   const rawGameUrl = searchParams.get('url') || '';
   const gameName = searchParams.get('name') || 'Game';
+  const isFamobi = isFamobiGameUrl(rawGameUrl);
 
   const islandReturn = useMemo(
     () =>
@@ -38,21 +49,27 @@ const GameWebViewPage: React.FC = () => {
   );
   const fromIslandScene = Boolean(islandReturn);
 
-  // Cache-bust once per URL so remounts don't reload the iframe on every render.
-  const gameUrl = useMemo(() => {
-    if (!rawGameUrl) return '';
-    const sep = rawGameUrl.includes('?') ? '&' : '?';
-    return `${rawGameUrl}${sep}_cb=${Date.now()}`;
-  }, [rawGameUrl]);
+  const [resolvedUrl, setResolvedUrl] = useState(() =>
+    rawGameUrl ? toKidSafeGameUrl(rawGameUrl) : '',
+  );
+  const [iframeKey, setIframeKey] = useState(0);
 
-  // Detect if running in Despia WebView
+  // Cache-bust once per resolved URL so remounts don't reload on every render.
+  const gameUrl = useMemo(() => {
+    if (!resolvedUrl) return '';
+    const sep = resolvedUrl.includes('?') ? '&' : '?';
+    return `${resolvedUrl}${sep}_cb=${Date.now()}`;
+  }, [resolvedUrl, iframeKey]);
+
   const isDespia = !!(window as any).__GK_IS_DESPIA__;
 
   console.log('🎮 GameWebViewPage loaded');
   console.log('🎮 Raw URL:', rawGameUrl);
+  console.log('🎮 Resolved URL:', resolvedUrl);
   console.log('🎮 Cache-busted URL:', gameUrl);
   console.log('🎮 Name param:', gameName);
   console.log('🎮 Is Despia:', isDespia);
+  console.log('🎮 Famobi kid-safe:', isFamobi);
   console.log('🎮 From island scene:', fromIslandScene);
 
   const [loading, setLoading] = useState(true);
@@ -61,12 +78,44 @@ const GameWebViewPage: React.FC = () => {
 
   usePreventPullToRefresh(!!rawGameUrl);
 
-  // Some hosts refuse iframe embedding. For Games-tab opens, bounce to external
-  // browser. For Island Scene return trips, stay here so the wood back overlay
-  // always works (offer manual "Open in Browser" instead).
-  const cannotIframe = rawGameUrl ? DespiaService.cannotBeIframed(rawGameUrl) : false;
+  // Resolve Famobi CDN embed (skip play.famobi "Play" splash).
   useEffect(() => {
-    if (!rawGameUrl || !cannotIframe || fromIslandScene) return;
+    if (!rawGameUrl || !isFamobi) {
+      setResolvedUrl(rawGameUrl ? toKidSafeGameUrl(rawGameUrl) : '');
+      return;
+    }
+    const ac = new AbortController();
+    const initial = ensureFamobiCdnSrc(toKidSafeGameUrl(rawGameUrl));
+    setResolvedUrl(initial);
+    resolveFamobiEmbedUrl(rawGameUrl, ac.signal).then((url) => {
+      if (ac.signal.aborted || !url) return;
+      const safe = ensureFamobiCdnSrc(url);
+      if (!isFamobiSplashUrl(safe)) setResolvedUrl(safe);
+    });
+    return () => ac.abort();
+  }, [rawGameUrl, isFamobi, iframeKey]);
+
+  // Never leave Famobi iframes on the splash host.
+  useEffect(() => {
+    if (!isFamobi || !resolvedUrl) return;
+    if (isFamobiSplashUrl(resolvedUrl) || !isFamobiCdnUrl(resolvedUrl)) {
+      const safe = ensureFamobiCdnSrc(resolvedUrl || rawGameUrl);
+      if (safe && safe !== resolvedUrl) setResolvedUrl(safe);
+    }
+  }, [isFamobi, resolvedUrl, rawGameUrl]);
+
+  useEffect(() => {
+    if (!gameUrl || !isFamobi) return;
+    return installParentWindowOpenGuard();
+  }, [gameUrl, isFamobi]);
+
+  // Some hosts refuse iframe embedding. For Games-tab opens, bounce to external
+  // browser. Famobi stays in-app (kid-safe). Island Scene keeps overlay.
+  const cannotIframe = rawGameUrl
+    ? !isFamobi && DespiaService.cannotBeIframed(rawGameUrl)
+    : false;
+  useEffect(() => {
+    if (!rawGameUrl || !cannotIframe || fromIslandScene || isFamobi) return;
     console.log('🎮 URL is not iframeable, opening externally:', rawGameUrl);
     DespiaService.openExternalUrl(rawGameUrl);
     const t = setTimeout(() => {
@@ -74,7 +123,7 @@ const GameWebViewPage: React.FC = () => {
       else navigate('/home', { replace: true });
     }, 250);
     return () => clearTimeout(t);
-  }, [rawGameUrl, cannotIframe, fromIslandScene, navigate]);
+  }, [rawGameUrl, cannotIframe, fromIslandScene, isFamobi, navigate]);
 
   const handleBack = useCallback(() => {
     localStorage.removeItem('gk_last_route');
@@ -95,6 +144,13 @@ const GameWebViewPage: React.FC = () => {
   const toggleFullscreen = () => {
     setIsFullscreen(!isFullscreen);
   };
+
+  const retryLoad = useCallback(() => {
+    setIframeError(false);
+    setLoading(true);
+    setResolvedUrl(rawGameUrl ? toKidSafeGameUrl(rawGameUrl) : '');
+    setIframeKey((k) => k + 1);
+  }, [rawGameUrl]);
 
   // If no game URL provided, redirect to home immediately
   useEffect(() => {
@@ -118,7 +174,7 @@ const GameWebViewPage: React.FC = () => {
     }, 10000);
 
     return () => clearTimeout(timeout);
-  }, [gameUrl, loading, cannotIframe]);
+  }, [gameUrl, loading, cannotIframe, iframeKey]);
 
   const woodBackOverlay = (
     <button
@@ -178,6 +234,10 @@ const GameWebViewPage: React.FC = () => {
     );
   }
 
+  const iframeProps = kidSafeIframeProps(gameName, {
+    famobiCdn: isFamobi && isFamobiCdnUrl(resolvedUrl),
+  });
+
   return (
     <div
       className="h-[100dvh] min-h-0 bg-black flex flex-col overflow-hidden overscroll-none"
@@ -227,11 +287,10 @@ const GameWebViewPage: React.FC = () => {
         style={{ overscrollBehavior: 'none' }}
       >
         <iframe
+          key={iframeKey}
           src={gameUrl}
           className="w-full h-full border-0 overscroll-none"
-          title={gameName}
-          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; fullscreen"
-          allowFullScreen
+          {...iframeProps}
           onLoad={() => {
             console.log('🎮 iframe loaded successfully for:', gameUrl);
             setLoading(false);
@@ -265,24 +324,36 @@ const GameWebViewPage: React.FC = () => {
           </>
         )}
 
-        {/* Iframe Error Fallback - Option to open in external browser */}
+        {/* Iframe Error Fallback — Famobi stays in-app (no external browser). */}
         {iframeError && (
           <div className="absolute inset-0 flex items-center justify-center bg-gradient-to-br from-[#1a1a2e] to-[#16213e] z-20">
             <div className="text-center p-6">
               <p className="text-white text-lg mb-4">
-                This game couldn't load in the app.
+                This game couldn&apos;t load in the app.
               </p>
-              <button
-                onClick={() => {
-                  DespiaService.openExternalUrl(rawGameUrl || gameUrl);
-                }}
-                className="bg-[#4CAF50] hover:bg-[#45a049] text-white font-bold py-3 px-6 rounded-xl flex items-center gap-2 mx-auto"
-              >
-                <ExternalLink size={20} />
-                Open in Browser
-              </button>
+              {isFamobi ? (
+                <button
+                  type="button"
+                  onClick={retryLoad}
+                  className="bg-[#4CAF50] hover:bg-[#45a049] text-white font-bold py-3 px-6 rounded-xl mx-auto"
+                >
+                  Try again
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => {
+                    DespiaService.openExternalUrl(rawGameUrl || gameUrl);
+                  }}
+                  className="bg-[#4CAF50] hover:bg-[#45a049] text-white font-bold py-3 px-6 rounded-xl flex items-center gap-2 mx-auto"
+                >
+                  <ExternalLink size={20} />
+                  Open in Browser
+                </button>
+              )}
               {!fromIslandScene && (
                 <button
+                  type="button"
                   onClick={handleBack}
                   className="mt-4 text-white/70 hover:text-white underline"
                 >

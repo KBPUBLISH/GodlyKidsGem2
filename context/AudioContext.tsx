@@ -6,6 +6,16 @@ import { analyticsService } from '../services/analyticsService';
 import { activityTrackingService } from '../services/activityTrackingService';
 import { incrementActivityCounter } from '../components/features/ReviewPromptModal';
 import { attachReliableLoop } from '../utils/audioLoop';
+import {
+    despiaAudioPlayer,
+    isNativeAudioAvailable,
+    isUnknownNativeAudioCommand,
+    subscribeNativeAudio,
+    toNativeTracks,
+    type NativeAudioEvent,
+} from '../services/despiaAudioPlayer';
+
+const NATIVE_PLAYLIST_SNAPSHOT_KEY = 'gk_native_audio_snapshot';
 
 // --- Interfaces ---
 export interface AudioItem {
@@ -194,6 +204,18 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     const audioRef = useRef<HTMLAudioElement | null>(null);
     /** Separate from playlist `audioRef` so book/playlist never clobber the ambience loop */
     const appBgAudioRef = useRef<HTMLAudioElement | null>(null);
+    /** Android Despia native player (lock screen + background). Disabled on unknown_command. */
+    const [nativeAudioEnabled, setNativeAudioEnabled] = useState(() => isNativeAudioAvailable());
+    const nativeAudioEnabledRef = useRef(nativeAudioEnabled);
+    const nativeOwnsPlaybackRef = useRef(false);
+    const nativeConfirmedRef = useRef(false);
+    const nativeFallbackTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const pendingNativeSeekRef = useRef<number | null>(null);
+    const nativePositionRef = useRef(0);
+    const nativeDurationRef = useRef(0);
+    const currentPlaylistRef = useRef<Playlist | null>(null);
+    const currentTrackIndexRef = useRef(0);
+    const isPlayingRef = useRef(false);
     const appBgLoopEnabledRef = useRef(true);
     const sfxContextRef = useRef<AudioContext | null>(null);
 
@@ -260,6 +282,22 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         isShuffleRef.current = isShuffle;
     }, [isShuffle]);
 
+    useEffect(() => {
+        nativeAudioEnabledRef.current = nativeAudioEnabled;
+    }, [nativeAudioEnabled]);
+
+    useEffect(() => {
+        currentPlaylistRef.current = currentPlaylist;
+    }, [currentPlaylist]);
+
+    useEffect(() => {
+        currentTrackIndexRef.current = currentTrackIndex;
+    }, [currentTrackIndex]);
+
+    useEffect(() => {
+        isPlayingRef.current = isPlaying;
+    }, [isPlaying]);
+
     // --- Playback position persistence (for "Continue Listening" resume) ---
     // The track currently loaded in the audio element. Updated only by the
     // load-track effect, so saved positions are always attributed to the track
@@ -274,17 +312,79 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     // the last 15s of a track are treated as finished and cleared, so completed
     // episodes restart from the beginning next time.
     const persistPlaybackPosition = useCallback(() => {
-        const audio = audioRef.current;
         const active = activeTrackRef.current;
-        if (!audio || !active) return;
-        const pos = audio.currentTime;
-        const dur = audio.duration;
+        if (!active) return;
+        const audio = audioRef.current;
+        const usingNative = nativeOwnsPlaybackRef.current;
+        const pos = usingNative ? nativePositionRef.current : (audio?.currentTime ?? 0);
+        const dur = usingNative ? nativeDurationRef.current : (audio?.duration ?? 0);
         if (isNaN(pos) || pos <= 0) return;
         if (!isNaN(dur) && dur > 0 && pos >= dur - 15) {
             playHistoryService.clearPosition(active.playlistId);
             return;
         }
         playHistoryService.savePosition(active.playlistId, active.itemId, pos, !isNaN(dur) ? dur : 0);
+    }, []);
+
+    const nativeControlsFor = (playlist: Playlist) =>
+        playlist.type === 'Audiobook'
+            ? { controls: 'skipforward,skipback,seek', skipInterval: 15 }
+            : { controls: 'next,prev,skipforward,skipback,seek', skipInterval: 10 };
+
+    const startNativeQueue = useCallback((
+        playlist: Playlist,
+        startIndex: number,
+        resumeFromSeconds?: number | null,
+        order?: number[]
+    ) => {
+        const tracks = toNativeTracks(playlist, order);
+        if (tracks.length === 0) {
+            console.warn('🎵 Native audio: no HTTPS tracks, using HTML audio for this playlist');
+            nativeOwnsPlaybackRef.current = false;
+            return false;
+        }
+
+        nativeOwnsPlaybackRef.current = true;
+        nativeConfirmedRef.current = false;
+        pendingNativeSeekRef.current = resumeFromSeconds && resumeFromSeconds > 0 ? resumeFromSeconds : null;
+
+        try {
+            localStorage.setItem(NATIVE_PLAYLIST_SNAPSHOT_KEY, JSON.stringify({
+                playlist,
+                isPreviewMode: isPreviewModeRef.current,
+                isShuffle: isShuffleRef.current,
+                shuffleOrder: shuffleOrderRef.current,
+                shufflePos: shufflePosRef.current,
+            }));
+        } catch {
+            /* ignore quota */
+        }
+
+        const html = audioRef.current;
+        if (html) {
+            html.pause();
+            html.removeAttribute('src');
+            try { html.load(); } catch { /* ignore */ }
+        }
+
+        const startInQueue = order && order.length > 0 ? Math.max(0, order.indexOf(startIndex)) : startIndex;
+        despiaAudioPlayer.setQueue(tracks, {
+            startIndex: Math.max(0, startInQueue),
+            ...nativeControlsFor(playlist),
+        });
+        despiaAudioPlayer.play();
+
+        if (nativeFallbackTimerRef.current) clearTimeout(nativeFallbackTimerRef.current);
+        nativeFallbackTimerRef.current = setTimeout(() => {
+            if (nativeOwnsPlaybackRef.current && !nativeConfirmedRef.current) {
+                console.warn('🎵 Native audio did not start (enable Native Audio in Despia and rebuild Android). Falling back to HTML audio.');
+                nativeOwnsPlaybackRef.current = false;
+                try { despiaAudioPlayer.terminate(); } catch { /* ignore */ }
+                setNativeAudioEnabled(false);
+            }
+        }, 4000);
+
+        return true;
     }, []);
 
     // Create audio element once on mount
@@ -577,6 +677,8 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
     // Load track when playlist or index changes
     useEffect(() => {
+        if (nativeAudioEnabled && nativeOwnsPlaybackRef.current) return;
+
         const audio = audioRef.current;
         if (!audio || !currentPlaylist) return;
 
@@ -625,10 +727,12 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
         // Update media session
         updateMediaSession();
-    }, [currentPlaylist, currentTrackIndex]);
+    }, [currentPlaylist, currentTrackIndex, nativeAudioEnabled]);
 
     // Play/pause sync - with recovery for frozen audio (Android WebView kills the element in background)
     useEffect(() => {
+        if (nativeAudioEnabled && nativeOwnsPlaybackRef.current) return;
+
         const audio = audioRef.current;
         if (!audio || !audio.src) return;
 
@@ -675,10 +779,12 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         if ('mediaSession' in navigator) {
             navigator.mediaSession.playbackState = isPlaying ? 'playing' : 'paused';
         }
-    }, [isPlaying]);
+    }, [isPlaying, nativeAudioEnabled]);
 
     // Media Session setup with cover image
     const updateMediaSession = useCallback(() => {
+        // Native Android player owns lock-screen metadata; don't fight it with HTML Media Session
+        if (nativeAudioEnabledRef.current && nativeOwnsPlaybackRef.current) return;
         if (!('mediaSession' in navigator) || !currentPlaylist) return;
 
         const track = currentPlaylist.items[currentTrackIndex];
@@ -735,6 +841,7 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     
     // Set up Media Session action handlers once
     useEffect(() => {
+        if (nativeAudioEnabled) return;
         if (!('mediaSession' in navigator)) return;
 
         // In Despia, delay media session setup slightly to avoid race conditions during WebView creation
@@ -812,7 +919,258 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
             safeMediaSessionAction('seekbackward', null);
             safeMediaSessionAction('seekforward', null);
         };
-    }, [currentPlaylist, currentTrackIndex, safeMediaSessionAction]);
+    }, [currentPlaylist, currentTrackIndex, safeMediaSessionAction, nativeAudioEnabled]);
+
+    // Despia native player events (Android lock screen / background audio)
+    useEffect(() => {
+        if (!isNativeAudioAvailable()) return;
+
+        const applyNativeIndex = (evt: NativeAudioEvent) => {
+            const nativeIndex = evt.state?.current_index;
+            if (typeof nativeIndex !== 'number' || nativeIndex < 0) return;
+
+            const queued = evt.state?.queue?.[nativeIndex];
+            const originalFromMeta = queued?.metadata?.originalIndex;
+            const originalIndex =
+                typeof originalFromMeta === 'number'
+                    ? originalFromMeta
+                    : (shuffleOrderRef.current.length > 0
+                        ? shuffleOrderRef.current[nativeIndex]
+                        : nativeIndex);
+
+            if (typeof originalIndex === 'number' && originalIndex !== currentTrackIndexRef.current) {
+                currentTrackIndexRef.current = originalIndex;
+                setCurrentTrackIndex(originalIndex);
+            }
+            if (shuffleOrderRef.current.length > 0) {
+                shufflePosRef.current = nativeIndex;
+            }
+
+            const playlist = currentPlaylistRef.current;
+            const track = playlist?.items[originalIndex];
+            if (playlist && track) {
+                activeTrackRef.current = {
+                    playlistId: playlist._id,
+                    itemId: (track as { _id?: string })?._id,
+                };
+            }
+            return typeof originalIndex === 'number' ? originalIndex : undefined;
+        };
+
+        const applyPendingSeek = () => {
+            const seekTo = pendingNativeSeekRef.current;
+            if (seekTo != null && seekTo > 0) {
+                pendingNativeSeekRef.current = null;
+                despiaAudioPlayer.seek(seekTo);
+            }
+        };
+
+        const recordNativeTrackPlay = (originalIndex: number) => {
+            const playlist = currentPlaylistRef.current;
+            if (!playlist) return;
+            const track = playlist.items[originalIndex];
+            const trackId = (track as { _id?: string })?._id;
+            const trackDuration = track?.duration || 0;
+            import('../services/playEventService').then(({ playEventService }) => {
+                playEventService.recordEpisodePlay(playlist._id, originalIndex, trackId, undefined, trackDuration);
+            }).catch(() => {});
+        };
+
+        const onNativeEvent = (evt: NativeAudioEvent) => {
+            if (isUnknownNativeAudioCommand(evt.error)) {
+                console.warn('🎵 Native audio unavailable in this build, falling back to HTML audio');
+                nativeOwnsPlaybackRef.current = false;
+                nativeConfirmedRef.current = false;
+                if (nativeFallbackTimerRef.current) clearTimeout(nativeFallbackTimerRef.current);
+                setNativeAudioEnabled(false);
+                return;
+            }
+
+            if (evt.type === 'play' || evt.type === 'playing' || evt.type === 'feed_updated' || evt.type === 'state' || evt.type === 'position') {
+                nativeConfirmedRef.current = true;
+                if (nativeFallbackTimerRef.current) {
+                    clearTimeout(nativeFallbackTimerRef.current);
+                    nativeFallbackTimerRef.current = null;
+                }
+            }
+
+            if (evt.type === 'position') {
+                const pos = evt.positionSeconds ?? 0;
+                const dur = evt.durationSeconds ?? 0;
+                nativePositionRef.current = pos;
+                if (typeof dur === 'number' && dur > 0) nativeDurationRef.current = dur;
+                setCurrentTime(pos);
+                if (typeof dur === 'number' && dur > 0) {
+                    setDuration(dur);
+                    setProgress((pos / dur) * 100);
+                }
+
+                const now = Date.now();
+                if (lastListeningTimeRef.current > 0 && evt.status === 'playing') {
+                    const deltaSeconds = (now - lastListeningTimeRef.current) / 1000;
+                    if (deltaSeconds > 0 && deltaSeconds < 5) {
+                        listeningTimeAccumulatorRef.current += deltaSeconds;
+                        if (listeningTimeAccumulatorRef.current >= 10) {
+                            activityTrackingService.trackAudioListeningTime(Math.floor(listeningTimeAccumulatorRef.current));
+                            listeningTimeAccumulatorRef.current = 0;
+                        }
+                        if (isPreviewModeRef.current) {
+                            previewTimeAccumulator.current += deltaSeconds;
+                            const remaining = Math.max(0, AUDIO_PREVIEW_SECONDS - previewTimeAccumulator.current);
+                            setPreviewTimeRemaining(Math.floor(remaining));
+                            if (previewTimeAccumulator.current >= AUDIO_PREVIEW_SECONDS) {
+                                console.log('🎵 Preview limit reached - pausing native playback');
+                                despiaAudioPlayer.pause();
+                                setIsPlaying(false);
+                                setPreviewLimitReached(true);
+                            }
+                        }
+                    }
+                }
+                lastListeningTimeRef.current = now;
+
+                if (Math.abs(pos - lastPositionSaveRef.current) >= 5) {
+                    lastPositionSaveRef.current = pos;
+                    persistPlaybackPosition();
+                }
+
+                if (typeof dur === 'number' && dur > 0 && pos - lastEngagementUpdateRef.current >= ENGAGEMENT_UPDATE_INTERVAL) {
+                    lastEngagementUpdateRef.current = pos;
+                    const playlist = currentPlaylistRef.current;
+                    const idx = currentTrackIndexRef.current;
+                    if (playlist) {
+                        import('../services/playEventService').then(({ playEventService }) => {
+                            playEventService.updateEpisodeEngagement(playlist._id, idx, pos, dur);
+                        }).catch(() => {});
+                    }
+                }
+                return;
+            }
+
+            const status = evt.state?.status;
+            if (nativeOwnsPlaybackRef.current) {
+                if (status === 'playing' || status === 'buffering') {
+                    setIsPlaying(true);
+                } else if (status === 'paused' || evt.type === 'pause') {
+                    setIsPlaying(false);
+                }
+            }
+
+            if (typeof evt.state?.position_seconds === 'number') {
+                nativePositionRef.current = evt.state.position_seconds;
+                setCurrentTime(evt.state.position_seconds);
+            }
+            if (typeof evt.state?.duration_seconds === 'number' && evt.state.duration_seconds > 0) {
+                nativeDurationRef.current = evt.state.duration_seconds;
+                setDuration(evt.state.duration_seconds);
+            }
+
+            switch (evt.type) {
+                case 'play':
+                case 'playing':
+                    applyNativeIndex(evt);
+                    applyPendingSeek();
+                    break;
+                case 'pause':
+                    persistPlaybackPosition();
+                    if (listeningTimeAccumulatorRef.current > 0) {
+                        activityTrackingService.trackAudioListeningTime(Math.floor(listeningTimeAccumulatorRef.current));
+                        listeningTimeAccumulatorRef.current = 0;
+                    }
+                    lastListeningTimeRef.current = 0;
+                    break;
+                case 'next':
+                case 'prev': {
+                    const prevIdx = currentTrackIndexRef.current;
+                    const nextIdx = applyNativeIndex(evt);
+                    lastEngagementUpdateRef.current = 0;
+                    lastPositionSaveRef.current = 0;
+                    if (typeof nextIdx === 'number' && nextIdx !== prevIdx) {
+                        recordNativeTrackPlay(nextIdx);
+                    }
+                    break;
+                }
+                case 'ended': {
+                    persistPlaybackPosition();
+                    if (activeTrackRef.current) {
+                        playHistoryService.clearPosition(activeTrackRef.current.playlistId);
+                    }
+                    setIsPlaying(false);
+                    break;
+                }
+                case 'terminated': {
+                    persistPlaybackPosition();
+                    const owned = nativeOwnsPlaybackRef.current;
+                    nativeOwnsPlaybackRef.current = false;
+                    try { localStorage.removeItem(NATIVE_PLAYLIST_SNAPSHOT_KEY); } catch { /* ignore */ }
+                    // closePlayer / HTML fallback already released native — don't wipe in-app player
+                    if (!owned || !currentPlaylistRef.current) break;
+                    currentPlaylistRef.current = null;
+                    setCurrentPlaylist(null);
+                    setCurrentTrackIndex(0);
+                    setIsPlaying(false);
+                    setProgress(0);
+                    setCurrentTime(0);
+                    setDuration(0);
+                    break;
+                }
+                case 'state': {
+                    // Rehydrate UI after WebView reload — native playback may still be running
+                    if (currentPlaylistRef.current) {
+                        applyNativeIndex(evt);
+                        break;
+                    }
+                    const queue = evt.state?.queue;
+                    if (!queue?.length || (status !== 'playing' && status !== 'paused' && status !== 'buffering')) {
+                        break;
+                    }
+                    try {
+                        const raw = localStorage.getItem(NATIVE_PLAYLIST_SNAPSHOT_KEY);
+                        if (!raw) break;
+                        const snap = JSON.parse(raw) as {
+                            playlist: Playlist;
+                            isPreviewMode?: boolean;
+                            isShuffle?: boolean;
+                            shuffleOrder?: number[];
+                            shufflePos?: number;
+                        };
+                        if (!snap?.playlist?._id) break;
+                        nativeOwnsPlaybackRef.current = true;
+                        setNativeAudioEnabled(true);
+                        setCurrentPlaylist(snap.playlist);
+                        currentPlaylistRef.current = snap.playlist;
+                        if (snap.isShuffle && Array.isArray(snap.shuffleOrder)) {
+                            isShuffleRef.current = true;
+                            setIsShuffle(true);
+                            shuffleOrderRef.current = snap.shuffleOrder;
+                            shufflePosRef.current = snap.shufflePos || 0;
+                        }
+                        if (snap.isPreviewMode) {
+                            setIsPreviewMode(true);
+                            isPreviewModeRef.current = true;
+                        }
+                        applyNativeIndex(evt);
+                        setIsPlaying(status === 'playing' || status === 'buffering');
+                        console.log('🎵 Restored native audio session after reload:', snap.playlist.title);
+                    } catch {
+                        /* ignore corrupt snapshot */
+                    }
+                    break;
+                }
+                case 'track_error': {
+                    console.warn('🎵 Native track error:', evt.error);
+                    despiaAudioPlayer.next();
+                    break;
+                }
+                default:
+                    break;
+            }
+        };
+
+        const unsubscribe = subscribeNativeAudio(onNativeEvent);
+        despiaAudioPlayer.sync();
+        return unsubscribe;
+    }, [persistPlaybackPosition]);
 
     // --- Simple SFX using Web Audio API ---
     const playTone = useCallback((freq: number, dur: number, vol: number = 0.15) => {
@@ -915,9 +1273,29 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
                 playEventService.recordEpisodePlay(playlistId, safeStart, trackId, undefined, trackDuration);
             }).catch(() => {});
         }
-    }, []);
+
+        currentPlaylistRef.current = playlist;
+        currentTrackIndexRef.current = safeStart;
+        isPlayingRef.current = true;
+        isPreviewModeRef.current = isPremiumPreview;
+        activeTrackRef.current = { playlistId: playlist._id, itemId: trackId };
+
+        if (nativeAudioEnabledRef.current) {
+            const order = isShuffleRef.current && shuffleOrderRef.current.length > 0
+                ? shuffleOrderRef.current
+                : undefined;
+            startNativeQueue(playlist, safeStart, resumeFromSeconds, order);
+        }
+    }, [startNativeQueue]);
 
     const togglePlayPause = useCallback(() => {
+        if (nativeAudioEnabledRef.current && nativeOwnsPlaybackRef.current) {
+            if (isPlayingRef.current) {
+                despiaAudioPlayer.pause();
+            } else {
+                despiaAudioPlayer.play();
+            }
+        }
         setIsPlaying(prev => !prev);
     }, []);
 
@@ -925,24 +1303,29 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         const next = !isShuffleRef.current;
         isShuffleRef.current = next;
         setIsShuffle(next);
+        const playlist = currentPlaylistRef.current;
+        const idx = currentTrackIndexRef.current;
         if (next) {
-            setCurrentPlaylist(playlist => {
-                if (playlist && playlist.items.length > 0) {
-                    setCurrentTrackIndex(idx => {
-                        shuffleOrderRef.current = buildShuffleOrder(playlist.items.length, idx);
-                        shufflePosRef.current = 0;
-                        return idx;
-                    });
-                }
-                return playlist;
-            });
+            if (playlist && playlist.items.length > 0) {
+                shuffleOrderRef.current = buildShuffleOrder(playlist.items.length, idx);
+                shufflePosRef.current = 0;
+            }
         } else {
             shuffleOrderRef.current = [];
             shufflePosRef.current = 0;
         }
-    }, []);
+        if (nativeAudioEnabledRef.current && nativeOwnsPlaybackRef.current && playlist) {
+            const resumeAt = nativePositionRef.current;
+            const order = next && shuffleOrderRef.current.length > 0 ? shuffleOrderRef.current : undefined;
+            startNativeQueue(playlist, idx, resumeAt, order);
+        }
+    }, [startNativeQueue]);
 
     const nextTrack = useCallback(() => {
+        if (nativeAudioEnabledRef.current && nativeOwnsPlaybackRef.current) {
+            despiaAudioPlayer.next();
+            return;
+        }
         if (!currentPlaylist) return;
         if (isShuffle && shuffleOrderRef.current.length > 0) {
             const nextPos = shufflePosRef.current + 1;
@@ -960,6 +1343,10 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     }, [currentPlaylist, currentTrackIndex, isShuffle]);
 
     const prevTrack = useCallback(() => {
+        if (nativeAudioEnabledRef.current && nativeOwnsPlaybackRef.current) {
+            despiaAudioPlayer.prev();
+            return;
+        }
         if (isShuffle && shuffleOrderRef.current.length > 0) {
             const prevPos = shufflePosRef.current - 1;
             if (prevPos >= 0) {
@@ -976,6 +1363,12 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     }, [currentTrackIndex, isShuffle]);
 
     const seek = useCallback((time: number) => {
+        if (nativeAudioEnabledRef.current && nativeOwnsPlaybackRef.current) {
+            nativePositionRef.current = time;
+            despiaAudioPlayer.seek(time);
+            setCurrentTime(time);
+            return;
+        }
         if (audioRef.current) {
             audioRef.current.currentTime = time;
             setCurrentTime(time);
@@ -996,6 +1389,18 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         setDuration(0);
         shuffleOrderRef.current = [];
         shufflePosRef.current = 0;
+        currentPlaylistRef.current = null;
+        isPlayingRef.current = false;
+
+        if (nativeAudioEnabledRef.current && nativeOwnsPlaybackRef.current) {
+            nativeOwnsPlaybackRef.current = false;
+            if (nativeFallbackTimerRef.current) {
+                clearTimeout(nativeFallbackTimerRef.current);
+                nativeFallbackTimerRef.current = null;
+            }
+            try { localStorage.removeItem(NATIVE_PLAYLIST_SNAPSHOT_KEY); } catch { /* ignore */ }
+            despiaAudioPlayer.terminate();
+        }
 
         if (audioRef.current) {
             audioRef.current.pause();

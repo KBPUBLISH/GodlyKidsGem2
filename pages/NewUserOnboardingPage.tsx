@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ArrowRight, Clock, Sparkles } from 'lucide-react';
 import { activityTrackingService } from '../services/activityTrackingService';
+import { shouldSeeNewOnboardingFlow } from '../services/userTypeService';
 
 /**
  * New User Onboarding - Simplified flow for new installs
@@ -14,6 +15,14 @@ const NewUserOnboardingPage: React.FC = () => {
   const [step, setStep] = useState<1 | 2>(1);
   const [selectedAge, setSelectedAge] = useState<string | null>(null);
   const [selectedTime, setSelectedTime] = useState<string | null>(null);
+
+  // Guard: redirect existing users away from new flow
+  useEffect(() => {
+    if (!shouldSeeNewOnboardingFlow()) {
+      console.log('⚠️ Existing user tried to access new onboarding - redirecting to old flow');
+      navigate('/onboarding', { replace: true });
+    }
+  }, [navigate]);
 
   const AGE_OPTIONS = [
     { value: '2-4', label: '2-4 years', emoji: '👶' },

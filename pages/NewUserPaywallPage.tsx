@@ -5,6 +5,7 @@ import { useSubscription } from '../context/SubscriptionContext';
 import { activityTrackingService } from '../services/activityTrackingService';
 import { facebookPixelService } from '../services/facebookPixelService';
 import { metaAttributionService } from '../services/metaAttributionService';
+import { shouldSeeNewOnboardingFlow } from '../services/userTypeService';
 import { getApiBaseUrl } from '../services/apiService';
 import { authService } from '../services/authService';
 import ParentGateModal from '../components/features/ParentGateModal';
@@ -13,6 +14,8 @@ import ParentGateModal from '../components/features/ParentGateModal';
  * Hard Paywall for New Users - No easy dismiss
  * Shows AFTER trial explanation
  * User must either start trial or restore purchases
+ * 
+ * CRITICAL: Existing free users must NEVER reach this page
  */
 const NewUserPaywallPage: React.FC = () => {
   const navigate = useNavigate();
@@ -27,6 +30,14 @@ const NewUserPaywallPage: React.FC = () => {
 
   const annualPrice = 39.99;
   const monthlyPrice = 5.99;
+
+  // CRITICAL GUARD: Redirect existing users away from hard paywall
+  useEffect(() => {
+    if (!shouldSeeNewOnboardingFlow()) {
+      console.log('⚠️ CRITICAL: Existing user tried to access hard paywall - redirecting to soft paywall');
+      navigate('/paywall', { replace: true });
+    }
+  }, [navigate]);
 
   useEffect(() => {
     // Track paywall shown

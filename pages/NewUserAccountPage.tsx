@@ -31,6 +31,11 @@ const NewUserAccountPage: React.FC = () => {
   const [termsModalUrl, setTermsModalUrl] = useState('');
   const [termsModalTitle, setTermsModalTitle] = useState('');
 
+  // Note: We don't guard this page with shouldSeeNewOnboardingFlow() because:
+  // - User might have restored purchases (existing premium user)
+  // - User might have completed purchase anonymously
+  // - Either way, they need to create account to access content
+  
   useEffect(() => {
     activityTrackingService.trackOnboardingEvent('new_user_account_shown', {
       fromPaywall,

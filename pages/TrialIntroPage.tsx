@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Bell, CheckCircle, ArrowRight } from 'lucide-react';
 import { activityTrackingService } from '../services/activityTrackingService';
+import { shouldSeeNewOnboardingFlow } from '../services/userTypeService';
 import { Capacitor } from '@capacitor/core';
 
 /**
@@ -15,6 +16,14 @@ const TrialIntroPage: React.FC = () => {
   
   // Check if we're on mobile (Capacitor) for notification flow
   const isMobile = Capacitor.isNativePlatform();
+
+  // Guard: redirect existing users away from new flow
+  useEffect(() => {
+    if (!shouldSeeNewOnboardingFlow()) {
+      console.log('⚠️ Existing user tried to access trial intro - redirecting to old paywall');
+      navigate('/paywall', { replace: true });
+    }
+  }, [navigate]);
 
   useEffect(() => {
     activityTrackingService.trackOnboardingEvent('trial_intro_shown');

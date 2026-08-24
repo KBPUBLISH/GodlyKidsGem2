@@ -2248,6 +2248,31 @@ export const ApiService = {
       return { success: false };
     }
   },
+
+  // Link device ID to email address (for new user flow)
+  linkDeviceToEmail: async (deviceId: string, email: string): Promise<{ success: boolean; error?: string }> => {
+    try {
+      const baseUrl = getApiBaseUrl();
+      const response = await fetchWithTimeout(`${baseUrl}api/app-user/link-email`, {
+        method: 'POST',
+        body: JSON.stringify({ deviceId, email }),
+        timeout: 5000,
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        console.log('✅ Device linked to email:', email);
+        return { success: true };
+      } else {
+        const errorData = await response.json().catch(() => ({ message: 'Failed to link device' }));
+        console.warn('⚠️ Failed to link device to email:', errorData.message);
+        return { success: false, error: errorData.message };
+      }
+    } catch (error) {
+      console.error('❌ Error linking device to email:', error);
+      return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
+    }
+  },
 };
 
 // Log API configuration on startup

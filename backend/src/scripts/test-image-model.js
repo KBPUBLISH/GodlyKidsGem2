@@ -15,10 +15,16 @@ const axios = require('axios');
  */
 
 const VERTEX_IMAGE_MODEL = (process.env.VERTEX_AI_IMAGE_MODEL || 'gemini-3.1-flash-image').trim() || 'gemini-3.1-flash-image';
+const VERTEX_IMAGE_GLOBAL_ONLY_MODELS = new Set([
+    'gemini-3.1-flash-image',
+    'gemini-3.1-flash-lite-image',
+    'gemini-3-pro-image',
+    'gemini-3-pro-image-preview',
+]);
 
-function getEndpoint() {
+function getEndpoint(model) {
     const loc = (process.env.VERTEX_AI_IMAGE_LOCATION || '').trim().toLowerCase();
-    if (loc === 'global') {
+    if (loc === 'global' || VERTEX_IMAGE_GLOBAL_ONLY_MODELS.has(model)) {
         return { baseUrl: 'https://aiplatform.googleapis.com/v1', location: 'global' };
     }
     const regionsStr = (process.env.VERTEX_AI_IMAGE_REGIONS || '').trim();
@@ -41,7 +47,7 @@ async function getAccessToken() {
     try {
         console.log('Testing Vertex image model:', VERTEX_IMAGE_MODEL);
         const { token, projectId } = await getAccessToken();
-        const { baseUrl, location } = getEndpoint();
+        const { baseUrl, location } = getEndpoint(VERTEX_IMAGE_MODEL);
         const url = `${baseUrl}/projects/${projectId}/locations/${location}/publishers/google/models/${VERTEX_IMAGE_MODEL}:generateContent`;
         console.log('Project:', projectId, '| Location:', location);
         console.log('POST', url);

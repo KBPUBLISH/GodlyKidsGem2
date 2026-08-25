@@ -18,12 +18,13 @@ Gemini 2.5 Flash Image uses **Standard PayGo** (shared capacity). There is no pr
 
 ## Image models
 
-| Model | Cost (image output) | Notes |
-|-------|----------------------|--------|
-| **gemini-2.5-flash-image** (default) | ~**$30** / image | GA, regional endpoints. Use for production. |
-| **gemini-3-pro-image-preview** | ~**$120** / image | Preview, higher quality / 4096px. Set `VERTEX_AI_IMAGE_LOCATION=global`. |
+| Model | Notes |
+|-------|--------|
+| **gemini-3.1-flash-image** (default) | GA, **global endpoint only**. Regional URLs return 404. |
+| **gemini-2.5-flash-image** | GA, regional + global. Automatic fallback if 3.1 returns 404. |
+| **gemini-3-pro-image** | Higher quality; **global endpoint only**. |
 
-We default to 2.5 Flash for cost. Set `VERTEX_AI_IMAGE_MODEL=gemini-3-pro-image-preview` only if you need 3 Pro and accept the ~4× higher cost.
+`gemini-3.1-flash-image` and `gemini-3-pro-image` are not available on regional Vertex endpoints. The generator always uses `https://aiplatform.googleapis.com/v1/.../locations/global/...` for those models. If the project cannot access 3.1 (404), it falls back to `gemini-2.5-flash-image` and regional round-robin.
 
 ## Supported regions (gemini-2.5-flash-image)
 
@@ -39,11 +40,11 @@ Asia, Australia, Middle East, etc. are not supported for this model.
 
 | Variable | Default | Purpose |
 |----------|---------|--------|
-| `VERTEX_AI_IMAGE_MODEL` | gemini-2.5-flash-image | Use `gemini-3-pro-image-preview` for Gemini 3 Pro Image (preview, higher quality). |
+| `VERTEX_AI_IMAGE_MODEL` | gemini-3.1-flash-image | Override image model. Global-only models auto-use the global endpoint. |
 | `MONTHLY_BOOK_GEMINI_MAX_ATTEMPTS` | 20 | Max retries per page before failing. |
 | `MONTHLY_BOOK_DELAY_BETWEEN_PAGES_MS` | 5000 | Ms to wait between generating each page (smooth rate). |
-| `VERTEX_AI_IMAGE_REGIONS` | (13 regions above) | Comma-separated list to round-robin, e.g. `us-central1,us-east1,europe-west1`. |
-| `VERTEX_AI_IMAGE_LOCATION` | (unset) | Set to `global` to use the global endpoint (required for Gemini 3 Pro Image per docs). |
+| `VERTEX_AI_IMAGE_REGIONS` | (13 regions above) | Comma-separated list to round-robin for regional models (e.g. 2.5). |
+| `VERTEX_AI_IMAGE_LOCATION` | (unset) | Set to `global` to force the global endpoint for any model. |
 
 If 429s persist, try:
 
@@ -60,7 +61,8 @@ If you need a guaranteed request rate and can’t rely on retries:
 
 ## References
 
-- [Gemini 2.5 Flash Image](https://docs.cloud.google.com/vertex-ai/generative-ai/docs/models/gemini/2-5-flash-image)
+- [Gemini 3.1 Flash Image](https://docs.cloud.google.com/gemini-enterprise-agent-platform/models/gemini/3-1-flash-image) (global only)
+- [Gemini 2.5 Flash Image](https://docs.cloud.google.com/gemini-enterprise-agent-platform/models/gemini/2-5-flash-image)
 - [Standard PayGo](https://docs.cloud.google.com/vertex-ai/generative-ai/docs/standard-paygo)
 - [Error code 429 and retries](https://cloud.google.com/vertex-ai/generative-ai/docs/provisioned-throughput/error-code-429)
 - [Retry strategy (exponential backoff)](https://cloud.google.com/storage/docs/retry-strategy)

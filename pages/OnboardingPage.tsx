@@ -872,10 +872,9 @@ const OnboardingPage: React.FC = () => {
 
   const handleStep2Continue = () => {
     playClick();
-    // Track step 2 completion with kids count
     activityTrackingService.trackOnboardingEvent('step_2_complete', { step: 2, kidsCount: kids.length });
-    // Go to discipleship priorities step
-    setStep(3);
+    // Skip goals/features — go straight to voice, then trial + paywall, then account
+    setStep(5);
   };
   
   const togglePriority = (id: string) => {
@@ -1035,24 +1034,10 @@ const OnboardingPage: React.FC = () => {
     // Track step 5 completion
     activityTrackingService.trackOnboardingEvent('step_5_complete', { step: 5, voiceSelected: selectedVoiceId });
     
-    // Check if user already has an account (auth token or email in localStorage)
-    const hasExistingAccount = !!(
-      localStorage.getItem('godlykids_auth_token') || 
-      localStorage.getItem('godlykids_user_email')
-    );
-    
-    // Skip account creation ONLY if user already has an account
-    // Note: fromTutorial alone should NOT skip account creation - they still need to create an account
-    if (skipAccountStep || hasExistingAccount) {
-      // Track onboarding complete and go to paywall
-      activityTrackingService.trackOnboardingEvent('onboarding_complete');
-      activityTrackingService.resetOnboardingSession();
-      navigate('/paywall/intro', { state: { fromOnboarding: true } });
-      return;
-    }
-    
-    // Go to account creation step (only if no account exists)
-    setStep(6);
+    // Account is created AFTER paywall/purchase — always go to trial intro next
+    activityTrackingService.trackOnboardingEvent('onboarding_complete');
+    activityTrackingService.resetOnboardingSession();
+    navigate('/paywall/intro', { state: { fromOnboarding: true, hideCloseButton: true } });
   };
   
   // Account creation state for step 5
@@ -1089,8 +1074,8 @@ const OnboardingPage: React.FC = () => {
         activityTrackingService.trackOnboardingEvent('account_created', { email: accountEmail });
         activityTrackingService.trackOnboardingEvent('onboarding_complete');
         activityTrackingService.resetOnboardingSession();
-        // Paywall sequence starts on intro, then full paywall
-        navigate('/paywall/intro', { state: { fromOnboarding: true } });
+        // Account is created after paywall — land in a story, not home grid
+        navigate('/first-story', { replace: true });
       } else {
         setAccountStep5Error(result.error || 'Failed to create account');
       }
@@ -1573,27 +1558,24 @@ const OnboardingPage: React.FC = () => {
   // --- RENDERERS ---
 
   const renderProgress = () => {
-    const totalSteps = 6; // Parent, Family, Goals, Features, Voice, Account
+    const visualStep = step === 5 ? 3 : step === 6 ? 4 : step;
+    const totalSteps = 4; // Parent, Child, Voice, Account (after paywall)
     return (
     <div className="w-full max-w-md px-1">
-       {/* Wood plank container for progress - compact */}
        <div className="bg-[#CD853F] rounded-xl p-2.5 border-2 border-[#8B4513] shadow-lg relative overflow-hidden">
-         {/* Wood grain */}
          <div className="absolute inset-0 opacity-10" style={{backgroundImage: 'repeating-linear-gradient(90deg, transparent, transparent 25px, #3E1F07 25px, #3E1F07 27px)'}}></div>
          
          <div className="relative">
            <div className="flex justify-between mb-1.5 text-[#5c2e0b] font-display font-bold text-[8px] uppercase tracking-wide">
-              <span className={step >= 1 ? "text-[#3E1F07]" : "opacity-40"}>Parent</span>
-              <span className={step >= 2 ? "text-[#3E1F07]" : "opacity-40"}>Family</span>
-              <span className={step >= 3 ? "text-[#3E1F07]" : "opacity-40"}>Goals</span>
-              <span className={step >= 4 ? "text-[#3E1F07]" : "opacity-40"}>Features</span>
-              <span className={step >= 5 ? "text-[#3E1F07]" : "opacity-40"}>Voice</span>
-              <span className={step >= 6 ? "text-[#3E1F07]" : "opacity-40"}>Account</span>
+              <span className={visualStep >= 1 ? "text-[#3E1F07]" : "opacity-40"}>Parent</span>
+              <span className={visualStep >= 2 ? "text-[#3E1F07]" : "opacity-40"}>Child</span>
+              <span className={visualStep >= 3 ? "text-[#3E1F07]" : "opacity-40"}>Voice</span>
+              <span className={visualStep >= 4 ? "text-[#3E1F07]" : "opacity-40"}>Account</span>
            </div>
            <div className="h-3 bg-[#5c2e0b] rounded-full overflow-hidden border-2 border-[#3E1F07] shadow-inner">
               <div 
                 className="h-full bg-gradient-to-r from-[#FFD700] to-[#ffb300] transition-all duration-500 ease-out rounded-full"
-                style={{ width: `${(step / totalSteps) * 100}%` }}
+                style={{ width: `${(visualStep / totalSteps) * 100}%` }}
               ></div>
            </div>
          </div>
@@ -1639,9 +1621,9 @@ const OnboardingPage: React.FC = () => {
       {/* Slim top row: back button (when step > 1) + progress bar - no thick SETUP toolbar */}
       <div className="flex-shrink-0 pt-4 pb-2 px-4 mb-2 w-full" style={{ paddingTop: 'calc(var(--safe-area-top, 0px) + 12px)' }}>
         <div className="flex items-center gap-2 w-full max-w-md mx-auto">
-           {step > 1 && (
+           {step > 1 && step !== 6 && (
              <button 
-               onClick={() => setStep(prev => (prev - 1) as any)} 
+               onClick={() => setStep(step === 5 ? 2 : ((step - 1) as any))} 
                className="flex-shrink-0 w-9 h-9 bg-[#8B4513] hover:bg-[#A0522D] rounded-full flex items-center justify-center text-[#f3e5ab] border-2 border-[#eecaa0] active:scale-95 transition-transform shadow-md"
              >
                 <ChevronLeft size={22} strokeWidth={3} />
@@ -2124,10 +2106,10 @@ const OnboardingPage: React.FC = () => {
             {/* Header */}
             <div className="text-center mb-6">
               <h2 className="font-display font-extrabold text-3xl text-[#f3e5ab] leading-tight mb-3 drop-shadow-lg">
-                Don't miss the start of their faith journey
+                Create your account
               </h2>
               <p className="text-[#eecaa0]/80 text-base">
-                Create a free account to save {kids.length > 0 ? `${kids[0]?.name || 'your child'}'s` : 'their'} personalized path
+                Save {kids.length > 0 ? `${kids[0]?.name || 'your child'}'s` : 'their'} trial and progress to this email
               </p>
             </div>
             

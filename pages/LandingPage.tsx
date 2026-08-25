@@ -2,7 +2,6 @@ import React, { useEffect, useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { activityTrackingService } from '../services/activityTrackingService';
 import { ApiService } from '../services/apiService';
-import { shouldSeeNewOnboardingFlow } from '../services/userTypeService';
 
 const STORAGE_KEY = 'godly_kids_data_v6';
 
@@ -173,15 +172,7 @@ const LandingPage: React.FC = () => {
 
   const handleStartExplore = () => {
     activityTrackingService.trackOnboardingEvent('splash_explore_clicked');
-
-    // Check if this is a new user who should see the new paywall-first flow
-    if (shouldSeeNewOnboardingFlow()) {
-      console.log('📱 New user detected - starting new onboarding flow');
-      navigate('/new-user-onboarding');
-    } else {
-      console.log('📱 Existing user or repeat install - using original onboarding');
-      navigate('/onboarding');
-    }
+    navigate('/onboarding');
   };
 
   const handleSignIn = () => {

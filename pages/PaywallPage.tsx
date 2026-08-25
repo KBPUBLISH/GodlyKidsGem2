@@ -105,10 +105,9 @@ const PaywallPage: React.FC = () => {
   /** Dedupe Strict Mode / re-renders when opening parent gate from `/paywall/reminder` return. */
   const resumeSubscribeHandledKey = useRef<string | null>(null);
 
-  const hideCloseButton = (location.state as any)?.hideCloseButton === true;
-  
   const fromState = (location.state as any)?.from as string | undefined;
   const fromOnboarding = (location.state as any)?.fromOnboarding === true;
+  const hideCloseButton = (location.state as any)?.hideCloseButton === true || fromOnboarding;
   
   const { 
     isLoading, 
@@ -182,10 +181,14 @@ const PaywallPage: React.FC = () => {
   // If user already has premium, redirect to home
   useEffect(() => {
     if (isPremium) {
-      subscribe(); // Update local state
+      subscribe();
+      if (fromOnboarding && !hasAccount()) {
+        navigate('/onboarding', { replace: true, state: { returnToAccountStep: true } });
+        return;
+      }
       navigate('/home');
     }
-  }, [isPremium, navigate, subscribe]);
+  }, [isPremium, navigate, subscribe, fromOnboarding]);
   
   // Listen for premium status changes (from webhook confirmation after purchase)
   // IMPORTANT: Do NOT call subscribe() here - the event was already dispatched by subscribe().
@@ -262,54 +265,38 @@ const PaywallPage: React.FC = () => {
         ? st.selectedPlan
         : selectedPlan;
 
-    if (!hasAccount()) {
-      navigate('/paywall', { replace: true, state: { ...st, resumeSubscribe: false } });
-      return;
-    }
-
-    console.log('🔐 Resuming from trial reminder — showing parent gate');
-    activityTrackingService.trackOnboardingEvent('paywall_parent_gate_shown', {
-      planType: plan,
-      ...paywallSourceMeta,
-    });
-    setShowParentGate(true);
-
+    // Parent gate is off (app already App Store approved). Start purchase.
     const { resumeSubscribe: _ignored, ...rest } = st;
     navigate('/paywall', { replace: true, state: { ...rest, resumeSubscribe: false } });
+    void startPurchase(plan);
   }, [location.key, location.state, navigate, selectedPlan, paywallAnalyticsSource]);
 
   const handleSubscribeClick = () => {
     setError(null);
     
-    // Track trial button clicked
     console.log('🔘 Start Trial button clicked, plan:', selectedPlan);
     activityTrackingService.trackOnboardingEvent('paywall_trial_clicked', { planType: selectedPlan, ...paywallSourceMeta });
-    
-    // Require sign-in before ANY in-app purchase so RevenueCat webhook receives email as app_user_id.
-    // Otherwise purchase is tied to device ID and user won't get premium after signing in on another device.
-    if (!hasAccount()) {
-      console.log('⚠️ No account found, showing account required modal');
-      activityTrackingService.trackOnboardingEvent('paywall_account_required', { planType: selectedPlan, ...paywallSourceMeta });
-      setShowAccountRequired(true);
+
+    // Onboarding: reminder already shown. Start store purchase on anonymous id, then require account.
+    if (fromOnboarding) {
+      void startPurchase(selectedPlan);
       return;
     }
-
-    // Trial billing reminder + optional notifications, then return here with resumeSubscribe
-    console.log('🔔 Navigating to trial reminder step');
-    navigate('/paywall/reminder', {
-      state: {
-        ...(location.state as object || {}),
-        selectedPlan,
-        from: fromState,
-        hideCloseButton,
-        showReverseTrialToast: (location.state as any)?.showReverseTrialToast,
-      },
-    });
+    
+    // Other entry points: still start purchase without parent gate / without forcing account first
+    if (!hasAccount()) {
+      activityTrackingService.trackOnboardingEvent('paywall_purchase_before_account', { planType: selectedPlan, ...paywallSourceMeta });
+    }
+    void startPurchase(selectedPlan);
   };
 
   const handleGateSuccess = async () => {
-    console.log('✅ Parent gate passed, starting purchase flow');
-    activityTrackingService.trackOnboardingEvent('paywall_parent_gate_passed', { planType: selectedPlan, ...paywallSourceMeta });
+    await startPurchase(selectedPlan);
+  };
+
+  const startPurchase = async (plan: 'annual' | 'monthly' | 'lifetime' = selectedPlan) => {
+    console.log('💳 Starting purchase flow (parent gate off)');
+    activityTrackingService.trackOnboardingEvent('paywall_purchase_started', { planType: plan, ...paywallSourceMeta });
     
     // Keep parent gate open with "Processing..." state until purchase dialog appears
     // This prevents user from seeing the paywall and thinking they already got access
@@ -317,7 +304,7 @@ const PaywallPage: React.FC = () => {
     setError(null);
 
     // Create Your Story paywall has no lifetime unless from deal page; otherwise use annual
-    const effectivePlan = (isCreateYourStoryPaywall && !showLifetimeOption && selectedPlan === 'lifetime') ? 'annual' : selectedPlan;
+    const effectivePlan = (isCreateYourStoryPaywall && !showLifetimeOption && plan === 'lifetime') ? 'annual' : plan;
     
     // Facebook Pixel - Track checkout initiation
     const price = effectivePlan === 'lifetime' ? lifetimeSalePrice : effectivePlan === 'annual' ? annualPrice : 5.99;
@@ -364,7 +351,11 @@ const PaywallPage: React.FC = () => {
         }
         
         subscribe();
-        navigate('/home');
+        if (fromOnboarding && !hasAccount()) {
+          navigate('/onboarding', { replace: true, state: { returnToAccountStep: true } });
+        } else {
+          navigate('/home');
+        }
 
         // Non-blocking background recheck: if the webhook hasn't arrived yet, keep
         // polling the backend so the premium status is eventually persisted server-side.
@@ -1166,6 +1157,18 @@ const PaywallPage: React.FC = () => {
                 {isRestoring ? 'Restoring...' : 'Restore'}
               </button>
             </div>
+            {fromOnboarding && (
+              <button
+                type="button"
+                onClick={() => {
+                  activityTrackingService.trackOnboardingEvent('paywall_continue_without_starting', paywallSourceMeta).catch(() => {});
+                  navigate('/onboarding', { replace: true, state: { returnToAccountStep: true } });
+                }}
+                className="w-full text-center text-[11px] text-gray-400 hover:text-gray-500 mt-2 mb-2 underline underline-offset-2"
+              >
+                Continue without starting
+              </button>
+            )}
         </div>
 
         <ParentGateModal 

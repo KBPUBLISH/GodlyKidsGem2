@@ -28,9 +28,13 @@ interface SubscriptionContextType {
   getPremiumStatusStrict: () => Promise<boolean>;
   purchase: (plan: 'annual' | 'monthly' | 'lifetime') => Promise<{ success: boolean; error?: string }>;
   /** Native RevenueCat dashboard paywall (Despia). Web returns WEB_FALLBACK. */
-  presentPaywall: () => Promise<{ success: boolean; error?: string }>;
+  presentPaywall: (options?: {
+    offering?: string;
+    preservePremium?: boolean;
+    waitForPurchase?: boolean;
+  }) => Promise<{ success: boolean; error?: string }>;
   restorePurchases: () => Promise<{ success: boolean; error?: string }>;
-  startReverseTrial: (options?: { trialDurationHours?: number }) => Promise<{ success: boolean; error?: string }>;
+  startReverseTrial: (options?: { trialDurationHours?: number; trialDurationMinutes?: number }) => Promise<{ success: boolean; error?: string }>;
   checkReverseTrialStatus: () => Promise<ReverseTrialStatus>;
   markReverseTrialConverted: () => Promise<void>;
   
@@ -395,10 +399,14 @@ export const SubscriptionProvider: React.FC<SubscriptionProviderProps> = ({ chil
     }
   }, []);
 
-  const presentPaywall = useCallback(async (): Promise<{ success: boolean; error?: string }> => {
+  const presentPaywall = useCallback(async (options?: {
+    offering?: string;
+    preservePremium?: boolean;
+    waitForPurchase?: boolean;
+  }): Promise<{ success: boolean; error?: string }> => {
     setIsLoading(true);
     try {
-      const result = await RevenueCatService.presentDashboardPaywall();
+      const result = await RevenueCatService.presentDashboardPaywall(options);
       if (result.success) {
         const hasPremium = await RevenueCatService.checkPremiumAccess();
         setIsPremium(hasPremium);
@@ -483,7 +491,26 @@ export const SubscriptionProvider: React.FC<SubscriptionProviderProps> = ({ chil
   }, []);
 
   // Start a reverse trial
-  const startReverseTrial = useCallback(async (options?: { trialDurationHours?: number }): Promise<{ success: boolean; error?: string }> => {
+  const startReverseTrial = useCallback(async (options?: { trialDurationHours?: number; trialDurationMinutes?: number }): Promise<{ success: boolean; error?: string }> => {
+    const isSkipWindow = options?.trialDurationMinutes != null || (options?.trialDurationHours != null && options.trialDurationHours <= 24);
+    const trialDurationMinutes = options?.trialDurationMinutes
+      ?? (options?.trialDurationHours != null ? Math.round(options.trialDurationHours * 60) : 7 * 24 * 60);
+    const localEnd = new Date(Date.now() + trialDurationMinutes * 60 * 1000);
+
+    const applyLocalTrial = (trialEndDate: Date) => {
+      localStorage.setItem('godlykids_reverse_trial', 'true');
+      localStorage.setItem('godlykids_premium', 'true');
+      localStorage.setItem('godlykids_reverse_trial_end', trialEndDate.toISOString());
+      setIsPremium(true);
+      setReverseTrial({
+        hasReverseTrial: true,
+        isActive: true,
+        daysRemaining: Math.max(0, Math.ceil(trialDurationMinutes / (60 * 24))),
+        trialEndDate,
+        eligible: false,
+      });
+    };
+
     try {
       const userIds = getAllUserIds();
       const apiBaseUrl = getApiBaseUrl();
@@ -497,61 +524,49 @@ export const SubscriptionProvider: React.FC<SubscriptionProviderProps> = ({ chil
       }
       
       const email = userIds.find(id => id.includes('@'));
-      const trialDurationHours = options?.trialDurationHours;
       
-      console.log('🎁 Starting reverse trial with:', { deviceId, email: email || 'none', trialDurationHours: trialDurationHours || 168 });
+      console.log('🎁 Starting reverse trial with:', { deviceId, email: email || 'none', trialDurationMinutes });
       
       const response = await fetch(`${apiBaseUrl}/api/app-user/start-reverse-trial`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ deviceId, email, ...(trialDurationHours ? { trialDurationHours } : {}) }),
+        body: JSON.stringify({
+          deviceId,
+          email,
+          trialDurationMinutes,
+          trialDurationHours: trialDurationMinutes / 60,
+        }),
       });
       
       const data = await response.json();
       
       if (data.success) {
-        const effectiveDurationHours = data.trialDurationHours || trialDurationHours || 168;
-        const fallbackMs = effectiveDurationHours * 60 * 60 * 1000;
-        
-        // Safely parse trial end date first
-        let trialEndDate: Date | null = null;
+        let trialEndDate = localEnd;
         try {
           if (data.trialEndDate) {
-            trialEndDate = new Date(data.trialEndDate);
-            if (isNaN(trialEndDate.getTime())) {
-              trialEndDate = new Date(Date.now() + fallbackMs);
-            }
-          } else {
-            trialEndDate = new Date(Date.now() + fallbackMs);
+            const parsed = new Date(data.trialEndDate);
+            if (!isNaN(parsed.getTime())) trialEndDate = parsed;
           }
         } catch {
-          trialEndDate = new Date(Date.now() + fallbackMs);
+          /* keep localEnd */
         }
-        
-        // Update local state and localStorage
-        localStorage.setItem('godlykids_reverse_trial', 'true');
-        localStorage.setItem('godlykids_premium', 'true');
-        if (trialEndDate) {
-          localStorage.setItem('godlykids_reverse_trial_end', trialEndDate.toISOString());
-        }
-        setIsPremium(true);
-        
-        const daysRemaining = data.daysRemaining ?? Math.max(0, Math.ceil(effectiveDurationHours / 24));
-        setReverseTrial({
-          hasReverseTrial: true,
-          isActive: true,
-          daysRemaining,
-          trialEndDate,
-          eligible: false,
-        });
-        
+        applyLocalTrial(isSkipWindow ? localEnd : trialEndDate);
         console.log('🎁 Reverse trial started successfully');
         return { success: true };
       }
-      
+
+      // Skip / swipe-off: still grant the 30-minute window locally.
+      if (isSkipWindow) {
+        applyLocalTrial(localEnd);
+        return { success: true };
+      }
       return { success: false, error: data.error || 'Failed to start trial' };
     } catch (error: any) {
       console.error('Error starting reverse trial:', error);
+      if (isSkipWindow) {
+        applyLocalTrial(localEnd);
+        return { success: true };
+      }
       return { success: false, error: error.message || 'Failed to start trial' };
     }
   }, []);

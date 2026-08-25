@@ -11,6 +11,7 @@ import { getApiBaseUrl } from '../services/apiService';
 import { facebookPixelService } from '../services/facebookPixelService';
 import { metaAttributionService } from '../services/metaAttributionService';
 import { activityTrackingService } from '../services/activityTrackingService';
+import { RC_TIMER_PAYWALL_OFFERING_ID } from '../services/revenueCatService';
 
 // Check if user has a real account (not just device ID)
 const hasAccount = (): boolean => {
@@ -107,7 +108,8 @@ const PaywallPage: React.FC = () => {
 
   const fromState = (location.state as any)?.from as string | undefined;
   const fromOnboarding = (location.state as any)?.fromOnboarding === true;
-  const hideCloseButton = (location.state as any)?.hideCloseButton === true || fromOnboarding;
+  const fromTrialTimer = (location.state as any)?.fromTrialTimer === true;
+  const hideCloseButton = ((location.state as any)?.hideCloseButton === true || fromOnboarding) && !fromTrialTimer;
   
   const { 
     isLoading, 
@@ -181,8 +183,9 @@ const PaywallPage: React.FC = () => {
     );
   }, [paywallAnalyticsSource]);
 
-  // If user already has premium, redirect to home
+  // If user already has premium, redirect to home — unless they tapped the 30-min timer
   useEffect(() => {
+    if (fromTrialTimer) return;
     if (isPremium) {
       subscribe();
       if (fromOnboarding && !hasAccount()) {
@@ -191,7 +194,7 @@ const PaywallPage: React.FC = () => {
       }
       navigate('/home');
     }
-  }, [isPremium, navigate, subscribe, fromOnboarding]);
+  }, [isPremium, navigate, subscribe, fromOnboarding, fromTrialTimer]);
   
   // Listen for premium status changes (from webhook confirmation after purchase)
   // IMPORTANT: Do NOT call subscribe() here - the event was already dispatched by subscribe().
@@ -325,7 +328,11 @@ const PaywallPage: React.FC = () => {
 
       console.log('💳 Calling', useDashboardPaywall ? 'RevenueCat dashboard paywall' : 'purchase()', 'plan:', effectivePlan);
       const result = useDashboardPaywall
-        ? await presentPaywall()
+        ? await presentPaywall(
+            fromTrialTimer
+              ? { offering: RC_TIMER_PAYWALL_OFFERING_ID, preservePremium: true }
+              : undefined
+          )
         : await purchase(effectivePlan);
       console.log('💳 Purchase result:', result);
 
@@ -639,7 +646,7 @@ const PaywallPage: React.FC = () => {
     setIsStartingTrial(true);
     try {
       activityTrackingService.trackOnboardingEvent('paywall_exit_trial_accepted', paywallSourceMeta).catch(() => {});
-      const result = await startReverseTrial({ trialDurationHours: 24 });
+      const result = await startReverseTrial({ trialDurationMinutes: 30 });
       if (result.success) {
         setShowExitTrialOffer(false);
         navigate('/home');
@@ -1370,7 +1377,7 @@ const PaywallPage: React.FC = () => {
                     Wait! Try Premium FREE
                   </h2>
                   <p className="text-[#6366f1] font-extrabold text-2xl mb-4">
-                    for 24 Hours
+                    for 30 Minutes
                   </p>
 
                   {/* Perks */}
@@ -1400,7 +1407,7 @@ const PaywallPage: React.FC = () => {
                         Starting...
                       </span>
                     ) : (
-                      'Start My Free Day'
+                      'Start My Free 30 Minutes'
                     )}
                   </button>
 

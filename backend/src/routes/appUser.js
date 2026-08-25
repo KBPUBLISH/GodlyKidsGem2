@@ -357,8 +357,13 @@ router.post('/complete-onboarding', async (req, res) => {
  */
 router.post('/start-reverse-trial', async (req, res) => {
     try {
-        const { deviceId, email, platform, trialDurationHours: rawDuration } = req.body;
-        const trialDurationHours = Math.min(Math.max(parseInt(rawDuration, 10) || 168, 1), 168);
+        const { deviceId, email, platform, trialDurationHours: rawDuration, trialDurationMinutes: rawMinutes } = req.body;
+        const parsedMinutes = parseInt(rawMinutes, 10);
+        const parsedHours = parseFloat(rawDuration);
+        const durationMs = Number.isFinite(parsedMinutes) && parsedMinutes >= 1
+            ? Math.min(parsedMinutes, 168 * 60) * 60 * 1000
+            : Math.min(Math.max(Number.isFinite(parsedHours) ? parsedHours : 168, 0.5), 168) * 60 * 60 * 1000;
+        const trialDurationHours = durationMs / (60 * 60 * 1000);
         
         if (!deviceId && !email) {
             return res.status(400).json({ 
@@ -420,7 +425,7 @@ router.post('/start-reverse-trial', async (req, res) => {
         }
         
         const trialStartDate = new Date();
-        const trialEndDate = new Date(trialStartDate.getTime() + trialDurationHours * 60 * 60 * 1000);
+        const trialEndDate = new Date(trialStartDate.getTime() + durationMs);
         const daysRemaining = Math.max(0, Math.ceil(trialDurationHours / 24));
         
         // Start the reverse trial

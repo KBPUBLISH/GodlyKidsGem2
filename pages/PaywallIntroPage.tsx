@@ -5,6 +5,7 @@ import { activityTrackingService } from '../services/activityTrackingService';
 import { useSubscription } from '../context/SubscriptionContext';
 import { DespiaService } from '../services/despiaService';
 import { authService } from '../services/authService';
+import { SKIP_TRIAL_MINUTES } from '../services/revenueCatService';
 
 const TRIAL_STEPS = [
   { when: 'Today', what: 'stories, games, and the voices. Nothing to pay.' },
@@ -23,7 +24,7 @@ const PaywallIntroPage: React.FC = () => {
   const fromNewUserFlow = forwardedState.fromNewUserFlow === true;
   const [remindBeforeCharge, setRemindBeforeCharge] = useState(true);
   const [isOpeningPaywall, setIsOpeningPaywall] = useState(false);
-  const { presentPaywall } = useSubscription();
+  const { presentPaywall, startReverseTrial } = useSubscription();
 
   const hasAccount = (): boolean => {
     const userEmail = localStorage.getItem('godlykids_user_email');
@@ -72,6 +73,11 @@ const PaywallIntroPage: React.FC = () => {
           }
           navigate('/home', { replace: true });
           return;
+        }
+        // Swipe / dismiss: 30 minutes of premium, then account.
+        if (fromNewUserFlow) {
+          await startReverseTrial({ trialDurationMinutes: SKIP_TRIAL_MINUTES });
+          navigate('/new-user-account', { replace: true, state: { fromPaywall: true, skipTrial: true } });
         }
       } finally {
         setIsOpeningPaywall(false);

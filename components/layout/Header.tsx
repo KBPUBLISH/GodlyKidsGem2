@@ -8,6 +8,8 @@ import ReportCardModal from '../features/ReportCardModal';
 import { useUser } from '../../context/UserContext';
 import { useTutorial } from '../../context/TutorialContext';
 import { useSubscription } from '../../context/SubscriptionContext';
+import { DespiaService } from '../../services/despiaService';
+import { RC_TIMER_PAYWALL_OFFERING_ID } from '../../services/revenueCatService';
 import ErrorBoundary from '../common/ErrorBoundary';
 import { AVATAR_ASSETS } from '../avatar/AvatarAssets';
 
@@ -26,7 +28,7 @@ const Header: React.FC<HeaderProps> = ({ isVisible, title = "GODLY KIDS" }) => {
   const location = useLocation();
   const { coins, equippedAvatar, equippedFrame, equippedHat, equippedBody, equippedLeftArm, equippedRightArm, equippedLegs, isSubscribed, headOffset } = useUser();
   const { isStepActive, nextStep, isTutorialActive, currentStep } = useTutorial();
-  const { isPremium } = useSubscription();
+  const { reverseTrial, presentPaywall } = useSubscription();
   const [isShopOpen, setIsShopOpen] = useState(false);
   const [shopBuilderMode, setShopBuilderMode] = useState(false);
   const [isDetailOpen, setIsDetailOpen] = useState(false);
@@ -47,6 +49,8 @@ const Header: React.FC<HeaderProps> = ({ isVisible, title = "GODLY KIDS" }) => {
   
   // Lifetime deal countdown timer state
   const [dealTimeRemaining, setDealTimeRemaining] = useState<{ minutes: number; seconds: number } | null>(null);
+  const [trialTimeLabel, setTrialTimeLabel] = useState<string | null>(null);
+  const [isOpeningTrialPaywall, setIsOpeningTrialPaywall] = useState(false);
   
   // Force a repaint on Android after mount by toggling a CSS transform
   useEffect(() => {
@@ -91,6 +95,61 @@ const Header: React.FC<HeaderProps> = ({ isVisible, title = "GODLY KIDS" }) => {
     const interval = setInterval(updateTimer, 1000);
     return () => clearInterval(interval);
   }, [isSubscribed, location.pathname]);
+
+  // 30-minute skip-trial countdown next to the head icon
+  useEffect(() => {
+    const endFromContext = reverseTrial.trialEndDate
+      ? new Date(reverseTrial.trialEndDate).getTime()
+      : NaN;
+    const endFromStorage = Date.parse(localStorage.getItem('godlykids_reverse_trial_end') || '');
+    const trialActive =
+      reverseTrial.isActive || localStorage.getItem('godlykids_reverse_trial') === 'true';
+    const endTime = Number.isFinite(endFromContext) ? endFromContext : endFromStorage;
+
+    if (!trialActive || !Number.isFinite(endTime)) {
+      setTrialTimeLabel(null);
+      return;
+    }
+
+    const updateTrialTimer = () => {
+      const remaining = endTime - Date.now();
+      if (remaining <= 0) {
+        setTrialTimeLabel(null);
+        localStorage.removeItem('godlykids_reverse_trial');
+        localStorage.removeItem('godlykids_reverse_trial_end');
+        localStorage.removeItem('godlykids_premium');
+        return;
+      }
+      const totalSeconds = Math.ceil(remaining / 1000);
+      const minutes = Math.floor(totalSeconds / 60);
+      const seconds = totalSeconds % 60;
+      setTrialTimeLabel(
+        `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`
+      );
+    };
+
+    updateTrialTimer();
+    const interval = setInterval(updateTrialTimer, 1000);
+    return () => clearInterval(interval);
+  }, [reverseTrial.isActive, reverseTrial.trialEndDate, location.pathname]);
+
+  const handleTrialTimerClick = async () => {
+    if (isOpeningTrialPaywall) return;
+    setIsOpeningTrialPaywall(true);
+    try {
+      if (DespiaService.isNative()) {
+        await presentPaywall({
+          offering: RC_TIMER_PAYWALL_OFFERING_ID,
+          preservePremium: true,
+          waitForPurchase: false,
+        });
+      } else {
+        navigate('/paywall', { state: { fromTrialTimer: true } });
+      }
+    } finally {
+      setIsOpeningTrialPaywall(false);
+    }
+  };
 
   // Auto-close modals when tutorial step advances past the popup_open steps
   useEffect(() => {
@@ -275,8 +334,25 @@ const Header: React.FC<HeaderProps> = ({ isVisible, title = "GODLY KIDS" }) => {
               </div>
             </div>
             
+            {/* 30-minute premium timer — tap to open 50% off yearly paywall */}
+            {trialTimeLabel && (
+              <button
+                type="button"
+                onClick={handleTrialTimerClick}
+                disabled={isOpeningTrialPaywall}
+                className="ml-2 bg-gradient-to-r from-[#6366f1] to-[#4f46e5] px-2 py-1 rounded-lg border border-[#4338ca] shadow-md flex items-center gap-1.5 animate-pulse hover:animate-none active:scale-95 transition-transform disabled:opacity-70"
+                title="30 minutes of premium left — tap for 50% off yearly"
+              >
+                <Clock size={12} className="text-white" />
+                <span className="text-white font-mono font-bold text-xs">
+                  {trialTimeLabel}
+                </span>
+                <span className="text-white/80 text-[10px] font-semibold">FREE</span>
+              </button>
+            )}
+
             {/* Lifetime Deal Timer - Show next to avatar if deal is active and not subscribed */}
-            {dealTimeRemaining && !isSubscribed && (
+            {dealTimeRemaining && !isSubscribed && !trialTimeLabel && (
               <button
                 onClick={() => window.dispatchEvent(new CustomEvent('show_lifetime_offer'))}
                 className="ml-2 bg-gradient-to-r from-[#dc2626] to-[#ef4444] px-2 py-1 rounded-lg border border-[#b91c1c] shadow-md flex items-center gap-1.5 animate-pulse hover:animate-none active:scale-95 transition-transform"

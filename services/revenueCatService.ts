@@ -25,6 +25,15 @@ export const PREMIUM_ENTITLEMENT_ID = 'premium';
  */
 export const RC_DASHBOARD_OFFERING_ID = 'Godly Kids Paywall';
 
+/** Skip / swipe-off premium window shown next to the head icon. */
+export const SKIP_TRIAL_MINUTES = 30;
+
+/**
+ * Paywall launched when the user taps the 30-minute timer.
+ * Create this offering in RevenueCat with the 50% off yearly package.
+ */
+export const RC_TIMER_PAYWALL_OFFERING_ID = 'Godly Kids 50 Off Yearly';
+
 /**
  * Product identifiers sent to RevenueCat.
  * iOS (App Store) and Android (Google Play) use different product IDs — each platform must use its own.
@@ -218,8 +227,9 @@ const setupPurchaseListener = () => {
   
   // iapSuccess callback (alternative from Despia RevenueCat Custom docs)
   (window as any).iapSuccess = (data?: any) => {
-    console.log('📱✅ DeSpia iapSuccess() called with data:', data);
-    handlePurchaseSuccess();
+    console.log('📱 DeSpia iapSuccess() called with data:', data);
+    // Closing/swiping the native paywall can fire this. Do not grant premium here.
+    // Real store purchases still come through onRevenueCatPurchase / webhook polling.
   };
 
   // Listen for custom events that DeSpia might fire
@@ -740,22 +750,34 @@ export const RevenueCatService = {
    * Open the RevenueCat dashboard paywall (StoreKit prices + purchase).
    * Native / Despia only. Web callers should keep the in-app Plus screens.
    */
-  presentDashboardPaywall: async (): Promise<{ success: boolean; error?: string }> => {
+  presentDashboardPaywall: async (options?: {
+    offering?: string;
+    preservePremium?: boolean;
+    waitForPurchase?: boolean;
+  }): Promise<{ success: boolean; error?: string }> => {
     const userId = getUserId();
     if (!isNativeApp()) {
       return { success: false, error: 'WEB_FALLBACK' };
     }
 
+    const offering = options?.offering || RC_DASHBOARD_OFFERING_ID;
     console.log('🧱 Launching RevenueCat dashboard paywall');
-    console.log('   Offering:', RC_DASHBOARD_OFFERING_ID);
+    console.log('   Offering:', offering);
     console.log('   User ID:', userId);
 
-    localStorage.removeItem('godlykids_premium');
+    if (!options?.preservePremium) {
+      localStorage.removeItem('godlykids_premium');
+    }
     purchaseSoftEntitlementMiss = false;
     purchaseSuccessHandled = false;
 
-    const launchUrl = `revenuecat://launchPaywall?external_id=${encodeURIComponent(userId)}&offering=${encodeURIComponent(RC_DASHBOARD_OFFERING_ID)}`;
+    const launchUrl = `revenuecat://launchPaywall?external_id=${encodeURIComponent(userId)}&offering=${encodeURIComponent(offering)}`;
     window.despia = launchUrl;
+
+    // Timer upsell: just open the sheet; keep the 30-minute trial running.
+    if (options?.waitForPurchase === false) {
+      return { success: false, error: 'PAYWALL_LAUNCHED' };
+    }
 
     const apiBaseUrl = localStorage.getItem('godlykids_api_url') ||
       (window.location.hostname === 'localhost' ? 'http://localhost:5001' : 'https://backendgk2-0.onrender.com');
@@ -766,6 +788,25 @@ export const RevenueCatService = {
       let pollCount = 0;
       const maxWaitSeconds = 90;
       const minWaitBeforeCheck = 2;
+
+      const finish = (result: { success: boolean; error?: string }) => {
+        if (resolved) return;
+        resolved = true;
+        window.removeEventListener('focus', onPaywallMaybeDismissed);
+        cleanupPurchaseState();
+        purchaseResolve = null;
+        resolve(result);
+      };
+
+      const onPaywallMaybeDismissed = () => {
+        window.setTimeout(() => {
+          if (resolved) return;
+          if (purchaseSuccessHandled) return;
+          if (localStorage.getItem('godlykids_premium') === 'true') return;
+          finish({ success: false, error: 'Purchase cancelled' });
+        }, 1200);
+      };
+      window.setTimeout(() => window.addEventListener('focus', onPaywallMaybeDismissed), 800);
 
       const doPoll = async () => {
         pollCount++;
@@ -784,18 +825,12 @@ export const RevenueCatService = {
         }
 
         if (purchaseSuccessHandled && !resolved) {
-          resolved = true;
-          cleanupPurchaseState();
-          resolve({ success: true });
-          purchaseResolve = null;
+          finish({ success: true });
           return;
         }
 
         if (localStorage.getItem('godlykids_premium') === 'true' && !resolved) {
-          resolved = true;
-          cleanupPurchaseState();
-          resolve({ success: true });
-          purchaseResolve = null;
+          finish({ success: true });
           return;
         }
 
@@ -810,11 +845,8 @@ export const RevenueCatService = {
             const response = await fetch(`${apiBaseUrl}/api/webhooks/purchase-status/${encodeURIComponent(id)}`);
             const data = await response.json();
             if (data.isPremium && !resolved) {
-              resolved = true;
               localStorage.setItem('godlykids_premium', 'true');
-              cleanupPurchaseState();
-              resolve({ success: true });
-              purchaseResolve = null;
+              finish({ success: true });
               return;
             }
           }
@@ -823,25 +855,20 @@ export const RevenueCatService = {
         }
 
         if (elapsedSeconds >= maxWaitSeconds && !resolved) {
-          resolved = true;
-          cleanupPurchaseState();
           if (localStorage.getItem('godlykids_premium') === 'true') {
-            resolve({ success: true });
-            purchaseResolve = null;
+            finish({ success: true });
             return;
           }
           if (purchaseSoftEntitlementMiss) {
             purchaseSoftEntitlementMiss = false;
-            resolve({
+            finish({
               success: false,
               error:
                 'Your payment may have gone through, but premium did not unlock automatically. Please tap Restore Purchases. If access is still missing, email hello@kbpublish.org with your purchase receipt.',
             });
-            purchaseResolve = null;
             return;
           }
-          resolve({ success: false, error: 'Purchase cancelled' });
-          purchaseResolve = null;
+          finish({ success: false, error: 'Purchase cancelled' });
           return;
         }
 

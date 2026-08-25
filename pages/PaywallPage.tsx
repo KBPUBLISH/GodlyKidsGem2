@@ -105,15 +105,15 @@ const PaywallPage: React.FC = () => {
   /** Dedupe Strict Mode / re-renders when opening parent gate from `/paywall/reminder` return. */
   const resumeSubscribeHandledKey = useRef<string | null>(null);
 
-  const hideCloseButton = (location.state as any)?.hideCloseButton === true;
-  
   const fromState = (location.state as any)?.from as string | undefined;
   const fromOnboarding = (location.state as any)?.fromOnboarding === true;
+  const hideCloseButton = (location.state as any)?.hideCloseButton === true || fromOnboarding;
   
   const { 
     isLoading, 
     isPremium,
-    purchase, 
+    purchase,
+    presentPaywall,
     restorePurchases,
     reverseTrial,
     startReverseTrial,
@@ -142,7 +142,7 @@ const PaywallPage: React.FC = () => {
     return fromState === 'lifetime-offer' ? 'lifetime' : 'annual';
   });
   const [planSelectorExpanded, setPlanSelectorExpanded] = useState(fromState === 'lifetime-offer');
-  // Monthly plan is hidden by default; revealed via the "monthly billing" dropdown toggle.
+  // Create Your Story still collapses monthly; the Plus paywall always shows both plans.
   const [showMonthlyOption, setShowMonthlyOption] = useState(false);
   const [showParentGate, setShowParentGate] = useState(false);
   const [isPurchasing, setIsPurchasing] = useState(false);
@@ -164,8 +164,10 @@ const PaywallPage: React.FC = () => {
   const [showExitTrialOffer, setShowExitTrialOffer] = useState(false);
   const [isStartingTrial, setIsStartingTrial] = useState(false);
   
-  // Get personalized name
+  // Get personalized name (lifetime CTA only — Plus CTA must not prefix firstName)
   const firstName = getUserFirstName();
+  const monthlyPrice = 5.99;
+  const annualPrice = 39.99;
   
   // Track paywall view for analytics (include source when from Dive into the Bible)
   useEffect(() => {
@@ -182,10 +184,14 @@ const PaywallPage: React.FC = () => {
   // If user already has premium, redirect to home
   useEffect(() => {
     if (isPremium) {
-      subscribe(); // Update local state
+      subscribe();
+      if (fromOnboarding && !hasAccount()) {
+        navigate('/onboarding', { replace: true, state: { returnToAccountStep: true } });
+        return;
+      }
       navigate('/home');
     }
-  }, [isPremium, navigate, subscribe]);
+  }, [isPremium, navigate, subscribe, fromOnboarding]);
   
   // Listen for premium status changes (from webhook confirmation after purchase)
   // IMPORTANT: Do NOT call subscribe() here - the event was already dispatched by subscribe().
@@ -262,54 +268,38 @@ const PaywallPage: React.FC = () => {
         ? st.selectedPlan
         : selectedPlan;
 
-    if (!hasAccount()) {
-      navigate('/paywall', { replace: true, state: { ...st, resumeSubscribe: false } });
-      return;
-    }
-
-    console.log('🔐 Resuming from trial reminder — showing parent gate');
-    activityTrackingService.trackOnboardingEvent('paywall_parent_gate_shown', {
-      planType: plan,
-      ...paywallSourceMeta,
-    });
-    setShowParentGate(true);
-
+    // Parent gate is off (app already App Store approved). Start purchase.
     const { resumeSubscribe: _ignored, ...rest } = st;
     navigate('/paywall', { replace: true, state: { ...rest, resumeSubscribe: false } });
+    void startPurchase(plan);
   }, [location.key, location.state, navigate, selectedPlan, paywallAnalyticsSource]);
 
   const handleSubscribeClick = () => {
     setError(null);
     
-    // Track trial button clicked
     console.log('🔘 Start Trial button clicked, plan:', selectedPlan);
     activityTrackingService.trackOnboardingEvent('paywall_trial_clicked', { planType: selectedPlan, ...paywallSourceMeta });
-    
-    // Require sign-in before ANY in-app purchase so RevenueCat webhook receives email as app_user_id.
-    // Otherwise purchase is tied to device ID and user won't get premium after signing in on another device.
-    if (!hasAccount()) {
-      console.log('⚠️ No account found, showing account required modal');
-      activityTrackingService.trackOnboardingEvent('paywall_account_required', { planType: selectedPlan, ...paywallSourceMeta });
-      setShowAccountRequired(true);
+
+    // Onboarding: reminder already shown. Start store purchase on anonymous id, then require account.
+    if (fromOnboarding) {
+      void startPurchase(selectedPlan);
       return;
     }
-
-    // Trial billing reminder + optional notifications, then return here with resumeSubscribe
-    console.log('🔔 Navigating to trial reminder step');
-    navigate('/paywall/reminder', {
-      state: {
-        ...(location.state as object || {}),
-        selectedPlan,
-        from: fromState,
-        hideCloseButton,
-        showReverseTrialToast: (location.state as any)?.showReverseTrialToast,
-      },
-    });
+    
+    // Other entry points: still start purchase without parent gate / without forcing account first
+    if (!hasAccount()) {
+      activityTrackingService.trackOnboardingEvent('paywall_purchase_before_account', { planType: selectedPlan, ...paywallSourceMeta });
+    }
+    void startPurchase(selectedPlan);
   };
 
   const handleGateSuccess = async () => {
-    console.log('✅ Parent gate passed, starting purchase flow');
-    activityTrackingService.trackOnboardingEvent('paywall_parent_gate_passed', { planType: selectedPlan, ...paywallSourceMeta });
+    await startPurchase(selectedPlan);
+  };
+
+  const startPurchase = async (plan: 'annual' | 'monthly' | 'lifetime' = selectedPlan) => {
+    console.log('💳 Starting purchase flow (parent gate off)');
+    activityTrackingService.trackOnboardingEvent('paywall_purchase_started', { planType: plan, ...paywallSourceMeta });
     
     // Keep parent gate open with "Processing..." state until purchase dialog appears
     // This prevents user from seeing the paywall and thinking they already got access
@@ -317,18 +307,26 @@ const PaywallPage: React.FC = () => {
     setError(null);
 
     // Create Your Story paywall has no lifetime unless from deal page; otherwise use annual
-    const effectivePlan = (isCreateYourStoryPaywall && !showLifetimeOption && selectedPlan === 'lifetime') ? 'annual' : selectedPlan;
+    const effectivePlan = (isCreateYourStoryPaywall && !showLifetimeOption && plan === 'lifetime') ? 'annual' : plan;
     
     // Facebook Pixel - Track checkout initiation
-    const price = effectivePlan === 'lifetime' ? lifetimeSalePrice : effectivePlan === 'annual' ? annualPrice : 5.99;
+    const price = effectivePlan === 'lifetime' ? lifetimeSalePrice : effectivePlan === 'annual' ? annualPrice : monthlyPrice;
     facebookPixelService.trackInitiateCheckout(effectivePlan, price);
     
     // Track purchase attempt
     activityTrackingService.trackOnboardingEvent('paywall_purchase_started', { planType: effectivePlan, ...paywallSourceMeta });
 
     try {
-      console.log('💳 Calling purchase() with plan:', effectivePlan);
-      const result = await purchase(effectivePlan);
+      const useDashboardPaywall =
+        effectivePlan !== 'lifetime' &&
+        !isCreateYourStoryPaywall &&
+        typeof navigator !== 'undefined' &&
+        navigator.userAgent.toLowerCase().includes('despia');
+
+      console.log('💳 Calling', useDashboardPaywall ? 'RevenueCat dashboard paywall' : 'purchase()', 'plan:', effectivePlan);
+      const result = useDashboardPaywall
+        ? await presentPaywall()
+        : await purchase(effectivePlan);
       console.log('💳 Purchase result:', result);
 
       // Close parent gate now that purchase dialog appeared and completed
@@ -364,7 +362,11 @@ const PaywallPage: React.FC = () => {
         }
         
         subscribe();
-        navigate('/home');
+        if (fromOnboarding && !hasAccount()) {
+          navigate('/onboarding', { replace: true, state: { returnToAccountStep: true } });
+        } else {
+          navigate('/home');
+        }
 
         // Non-blocking background recheck: if the webhook hasn't arrived yet, keep
         // polling the backend so the premium status is eventually persisted server-side.
@@ -495,9 +497,7 @@ const PaywallPage: React.FC = () => {
     }
   };
 
-  // Calculate prices and savings
-  const monthlyPrice = 5.99;
-  const annualPrice = 39.99;  // Main paywall: annual subscription
+  // Lifetime is an exit-deal SKU (not the yearly subscription store price)
   const lifetimeOriginalPrice = 69.99;  // Lifetime (exit deal only) - was $69.99, sale $19.99
   const lifetimeSalePrice = 19.99;      // Only shown in LifetimeOfferModal (exit paywall deal)
   const lifetimeDiscount = Math.round(((lifetimeOriginalPrice - lifetimeSalePrice) / lifetimeOriginalPrice) * 100);
@@ -744,11 +744,11 @@ const PaywallPage: React.FC = () => {
             {!isCreateYourStoryPaywall && (
             <div className="text-center mb-6">
               <h1 className="text-[#1e1b4b] font-display font-extrabold text-2xl leading-tight mb-2">
-                Free full access to
+                Bedtime stories kids actually open
               </h1>
-              <h2 className="text-[#6366f1] font-display font-extrabold text-3xl">
-                Godly Kids Plus
-              </h2>
+              <p className="text-gray-500 text-sm">
+                14 days free. Then pick a plan.
+              </p>
             </div>
             )}
 
@@ -926,8 +926,8 @@ const PaywallPage: React.FC = () => {
                 </div>
               </div>
 
-              {/* Monthly Option - hidden by default; revealed via the dropdown toggle below. */}
-              {(showMonthlyOption || selectedPlan === 'monthly') ? (
+              {/* Plus: both plans always visible. Create Your Story keeps monthly collapsed. */}
+              {(isCreateYourStoryPaywall ? (showMonthlyOption || selectedPlan === 'monthly') : true) ? (
               <div 
                 onClick={() => { setSelectedPlan('monthly'); if (isCreateYourStoryPaywall) setPlanSelectorExpanded(false); }}
                 className={`relative w-full rounded-2xl border-2 overflow-hidden cursor-pointer transition-all ${
@@ -944,13 +944,15 @@ const PaywallPage: React.FC = () => {
                   </div>
                   
                   <div className="flex-1 min-w-0">
-                    <p className="font-bold text-[#1e1b4b]">Family Monthly Plan</p>
-                    <p className="text-xs text-gray-500">Over 1,000 members • Cancel anytime</p>
+                    <p className="font-bold text-[#1e1b4b]">{isCreateYourStoryPaywall ? 'Family Monthly Plan' : 'Monthly'}</p>
+                    <p className="text-xs text-gray-500">
+                      {isCreateYourStoryPaywall ? 'Over 1,000 members • Cancel anytime' : `$${monthlyPrice}/month`}
+                    </p>
                   </div>
                   
                   <div className="text-right shrink-0">
-                    <p className="font-extrabold text-xl text-[#1e1b4b]">${monthlyPrice} <span className="text-sm font-medium">USD</span></p>
-                    <p className="text-xs text-gray-400">/month</p>
+                    <p className="font-extrabold text-xl text-[#1e1b4b]">${monthlyPrice}<span className="text-sm font-medium">/mo</span></p>
+                    {isCreateYourStoryPaywall && <p className="text-xs text-gray-400">/month</p>}
                   </div>
                 </div>
               </div>
@@ -1092,7 +1094,7 @@ const PaywallPage: React.FC = () => {
                       <span className="text-xs font-normal opacity-90">Save ${(lifetimeOriginalPrice - lifetimeSalePrice).toFixed(2)} USD today!</span>
                     </>
                   ) : (
-                    <span>{firstName ? `${firstName}, ` : ''}Start your free trial</span>
+                    <span>Start your free trial</span>
                   )}
                 </span>
               )}
@@ -1101,15 +1103,12 @@ const PaywallPage: React.FC = () => {
 
             {/* No payment + trial summary - only for subscription plans, not on Create Your Story (moved above) */}
             {!isCreateYourStoryPaywall && selectedPlan !== 'lifetime' && (
-              <div className="mb-6">
-                <div className="flex items-center gap-2 text-green-600 mb-1">
-                  <Check size={18} strokeWidth={3} />
-                  <span className="font-semibold text-sm">No payment now!</span>
-                </div>
-                <p className="text-gray-500 text-xs text-center">
+              <div className="mb-6 text-center">
+                <p className="font-semibold text-sm text-green-600 mb-1">No payment today.</p>
+                <p className="text-gray-500 text-xs">
                   {selectedPlan === 'annual'
-                    ? `14-day free trial, then $${annualPrice}/year. Cancel anytime.`
-                    : `14-day free trial, then $${monthlyPrice}/month. Cancel anytime.`}
+                    ? `14 days free, then $${annualPrice}/year. Cancel anytime.`
+                    : `14 days free, then $${monthlyPrice}/month. Cancel anytime.`}
                 </p>
               </div>
             )}
@@ -1130,19 +1129,32 @@ const PaywallPage: React.FC = () => {
               </p>
             </div>
 
-            {/* Perks */}
+            {/* Perks — Plus copy is outcome-only; Create Your Story keeps its existing list */}
             <div className="w-full space-y-3 mb-6">
-              {[
-                { icon: "📚", text: "12 Free Custom Books for personalized learning fun" },
-                { icon: "📖", text: "Unlimited Access to 150+ books with word highlighting" },
-                { icon: "🎮", text: "15+ Bible Games and Learning Exercises to enhance memorization" },
-              ].map((feature, i) => (
+              {(isCreateYourStoryPaywall
+                ? [
+                    { icon: "📚", text: "12 Free Custom Books for personalized learning fun" },
+                    { icon: "📖", text: "Unlimited Access to 150+ books with word highlighting" },
+                    { icon: "🎮", text: "15+ Bible Games and Learning Exercises to enhance memorization" },
+                  ]
+                : [
+                    { icon: "🎙️", text: "Stories in real voices, finished together" },
+                    { icon: "🎮", text: "Games that teach Scripture" },
+                    { icon: "📚", text: "Custom books for your kid" },
+                  ]
+              ).map((feature, i) => (
                 <div key={i} className="flex items-center gap-3 bg-white rounded-xl px-4 py-3 border border-gray-100">
                   <span className="text-xl shrink-0">{feature.icon}</span>
                   <span className="text-sm font-medium text-[#1e1b4b]">{feature.text}</span>
                 </div>
               ))}
             </div>
+
+            {!isCreateYourStoryPaywall && (
+              <p className="text-center text-sm font-semibold text-[#1e1b4b] mb-6">
+                4.7 on the App Store
+              </p>
+            )}
 
             {/* Fine Print */}
             <p className="text-gray-400 text-[10px] text-center px-4 w-full leading-relaxed">
@@ -1166,6 +1178,18 @@ const PaywallPage: React.FC = () => {
                 {isRestoring ? 'Restoring...' : 'Restore'}
               </button>
             </div>
+            {fromOnboarding && (
+              <button
+                type="button"
+                onClick={() => {
+                  activityTrackingService.trackOnboardingEvent('paywall_continue_without_starting', paywallSourceMeta).catch(() => {});
+                  navigate('/onboarding', { replace: true, state: { returnToAccountStep: true } });
+                }}
+                className="w-full text-center text-[11px] text-gray-400 hover:text-gray-500 mt-2 mb-2 underline underline-offset-2"
+              >
+                Continue without starting
+              </button>
+            )}
         </div>
 
         <ParentGateModal 

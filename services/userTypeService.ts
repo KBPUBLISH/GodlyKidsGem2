@@ -1,25 +1,18 @@
 /**
  * Service to determine if a user is a truly new install vs an existing user
  * For the new paywall-first onboarding flow
- * 
+ *
  * CRITICAL:
- * - New install with NO existing signals → new paywall-first flow (persists through relaunches)
- * - Anyone with existing app data (v6/v7/token/tutorial/premium) → OLD path, NEVER hard-wall
+ * - New install with NO completed-user signals → new paywall-first flow (persists through relaunches)
+ * - Anyone who actually used the app (completed onboarding, account, tutorial, premium) → OLD path
+ *
+ * Do NOT treat a default UserContext write of godly_kids_data_v6 (parentName: "Parent", no kids)
+ * as an existing user. That key is written on first app load for everyone.
  */
 
-const NEW_USER_COHORT_KEY = 'godlykids_new_user_cohort'; // Once set, user stays in new flow until complete
+const NEW_USER_COHORT_KEY = 'godlykids_new_user_cohort';
 const NEW_ONBOARDING_COMPLETE_KEY = 'godlykids_new_onboarding_complete';
-
-// All possible existing-user signals (must check ALL to avoid hard-walling existing free users)
-const EXISTING_USER_SIGNALS = {
-  v7Data: 'godly_kids_data_v7',           // Old onboarding v7
-  v6Data: 'godly_kids_data_v6',           // Old onboarding v6
-  authToken: 'godlykids_auth_token',      // Has authenticated account
-  userEmail: 'godlykids_user_email',      // Account email
-  premium: 'godlykids_premium',           // Premium/subscribed user
-  tutorialComplete: 'godlykids_tutorial_complete', // Completed tutorial
-  welcomeSeen: 'godlykids_welcome_seen',  // Seen welcome screen (existing users)
-};
+const FORCE_NEW_ONBOARDING_KEY = 'godlykids_force_new_onboarding';
 
 export interface UserType {
   isNewInstall: boolean;
@@ -29,38 +22,76 @@ export interface UserType {
   hasCompletedNewOnboarding: boolean;
 }
 
+function parseUserDataBlob(raw: string | null): any | null {
+  if (!raw) return null;
+  try {
+    return JSON.parse(raw);
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * True only when saved user data shows they already completed (or started) the old product.
+ * Default first-load state is { parentName: "Parent", kids: [] } — that is NOT existing.
+ */
+function hasCompletedLegacyOnboarding(): boolean {
+  const data =
+    parseUserDataBlob(localStorage.getItem('godly_kids_data_v7')) ||
+    parseUserDataBlob(localStorage.getItem('godly_kids_data_v6'));
+  if (!data) return false;
+
+  const parentName = typeof data.parentName === 'string' ? data.parentName.trim() : '';
+  const hasRealParent = parentName !== '' && parentName !== 'Parent';
+  const hasKids = Array.isArray(data.kids) && data.kids.length > 0;
+  const isSubscribed = data.isSubscribed === true;
+
+  return hasRealParent || hasKids || isSubscribed;
+}
+
+/**
+ * Reviewer / QA override: #/?newOnboarding=1 or localStorage godlykids_force_new_onboarding=true
+ */
+export function isForcedNewOnboarding(): boolean {
+  try {
+    if (localStorage.getItem(FORCE_NEW_ONBOARDING_KEY) === 'true') return true;
+    const hash = window.location.hash || '';
+    const query = hash.includes('?') ? hash.slice(hash.indexOf('?')) : window.location.search;
+    return /(?:\?|&)newOnboarding=1(?:&|$)/.test(query);
+  } catch {
+    return false;
+  }
+}
+
 /**
  * Check if user has ANY signal that indicates they're an existing user
- * This prevents hard-walling existing free users who might only have v6 data or a token
+ * who must keep the old path (never hard-wall).
  */
 function hasAnyExistingUserSignal(): boolean {
-  // Check all possible existing-user signals
-  return Object.values(EXISTING_USER_SIGNALS).some(key => {
-    const value = localStorage.getItem(key);
-    // For premium and tutorial_complete, check if they're explicitly 'true'
-    if (key === EXISTING_USER_SIGNALS.premium || key === EXISTING_USER_SIGNALS.tutorialComplete) {
-      return value === 'true';
-    }
-    // For data keys (v6, v7) and others, any truthy value means they're existing
-    return !!value;
-  });
+  if (localStorage.getItem('godlykids_auth_token')) return true;
+  if (localStorage.getItem('godlykids_user_email')) return true;
+  if (localStorage.getItem('godlykids_premium') === 'true') return true;
+  if (localStorage.getItem('godlykids_tutorial_complete') === 'true') return true;
+  if (hasCompletedLegacyOnboarding()) return true;
+  return false;
 }
 
 /**
  * Determine if this is a truly new install
- * 
+ *
  * Logic:
- * 1. If they have ANY existing-user signal → existing user (never hard-wall)
- * 2. If they're marked as new user cohort → new user (persists through relaunches)
- * 3. If completed new onboarding → existing user now
- * 4. Otherwise → new install, mark them as new cohort
+ * 1. QA force flag → new flow
+ * 2. If they have ANY real existing-user signal → existing user (never hard-wall)
+ * 3. If they're marked as new user cohort → new user (persists through relaunches)
+ * 4. If completed new onboarding → existing user now
+ * 5. Otherwise → new install, mark them as new cohort
  */
 export function getUserType(): UserType {
-  const hasExistingSignal = hasAnyExistingUserSignal();
+  const forced = isForcedNewOnboarding();
+  const hasExistingSignal = !forced && hasAnyExistingUserSignal();
   const inNewUserCohort = localStorage.getItem(NEW_USER_COHORT_KEY) === 'true';
   const completedNewOnboarding = localStorage.getItem(NEW_ONBOARDING_COMPLETE_KEY) === 'true';
-  
-  // If they have any existing-user signal, they're existing (NEVER hard-wall)
+
   if (hasExistingSignal) {
     return {
       isNewInstall: false,
@@ -70,9 +101,8 @@ export function getUserType(): UserType {
       hasCompletedNewOnboarding: completedNewOnboarding,
     };
   }
-  
-  // If they completed new onboarding, treat as existing now
-  if (completedNewOnboarding) {
+
+  if (!forced && completedNewOnboarding) {
     return {
       isNewInstall: false,
       isExistingUser: true,
@@ -81,9 +111,11 @@ export function getUserType(): UserType {
       hasCompletedNewOnboarding: true,
     };
   }
-  
-  // If already marked as new user cohort, keep them in new flow
-  if (inNewUserCohort) {
+
+  if (inNewUserCohort || forced) {
+    if (!inNewUserCohort) {
+      localStorage.setItem(NEW_USER_COHORT_KEY, 'true');
+    }
     return {
       isNewInstall: true,
       isExistingUser: false,
@@ -92,12 +124,10 @@ export function getUserType(): UserType {
       hasCompletedNewOnboarding: false,
     };
   }
-  
-  // This is a true new install - mark them as new cohort
-  // They'll stay in new flow even if they background/relaunch mid-onboarding
+
   localStorage.setItem(NEW_USER_COHORT_KEY, 'true');
   console.log('🆕 New user detected - marked as new cohort for paywall-first flow');
-  
+
   return {
     isNewInstall: true,
     isExistingUser: false,
@@ -109,40 +139,22 @@ export function getUserType(): UserType {
 
 /**
  * Check if user should see the new paywall-first flow
- * 
- * Show new flow if:
- * - They're a new install (no existing-user signals)
- * - OR they're in new user cohort but haven't completed it yet
- * 
- * Never show new flow if:
- * - They have ANY existing-user signal (v6/v7 data, token, premium, tutorial, etc.)
- * - They've completed new onboarding
  */
 export function shouldSeeNewOnboardingFlow(): boolean {
+  if (isForcedNewOnboarding()) return true;
   const userType = getUserType();
-  
-  // If they have any existing-user signal, use old flow
-  if (userType.hasAnyExistingUserSignal) {
-    return false;
-  }
-  
-  // If they completed new onboarding, use old flow
-  if (userType.hasCompletedNewOnboarding) {
-    return false;
-  }
-  
-  // If they're a new install or in new cohort, use new flow
+  if (userType.hasAnyExistingUserSignal) return false;
+  if (userType.hasCompletedNewOnboarding) return false;
   return userType.isNewInstall || userType.inNewUserCohort;
 }
 
 /**
  * Mark that user has completed the new onboarding
- * After this, they'll be treated as existing user
  */
 export function markNewOnboardingComplete(): void {
   localStorage.setItem(NEW_ONBOARDING_COMPLETE_KEY, 'true');
-  // Clear new user cohort flag since they're done
   localStorage.removeItem(NEW_USER_COHORT_KEY);
+  localStorage.removeItem(FORCE_NEW_ONBOARDING_KEY);
   console.log('✅ New onboarding complete - user now treated as existing');
 }
 

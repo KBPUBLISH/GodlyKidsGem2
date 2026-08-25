@@ -20,6 +20,13 @@ const WEB_BILLING_ENABLED = true;
 export const PREMIUM_ENTITLEMENT_ID = 'premium';
 
 /**
+ * RevenueCat offering lookup_key for the dashboard paywall (Despia launchPaywall).
+ * The paywall must be attached to this offering and published, or testers
+ * will see the last published paywall on Subscription (or a default fallback).
+ */
+export const RC_DASHBOARD_OFFERING_ID = 'Subscription';
+
+/**
  * Product identifiers sent to RevenueCat.
  * iOS (App Store) and Android (Google Play) use different product IDs — each platform must use its own.
  */
@@ -728,6 +735,127 @@ export const RevenueCatService = {
       console.error('Web purchase error:', error);
       return { success: false, error: error.message || 'Failed to start checkout' };
     }
+  },
+
+  /**
+   * Open the RevenueCat dashboard paywall (StoreKit prices + purchase).
+   * Native / Despia only. Web callers should keep the in-app Plus screens.
+   */
+  presentDashboardPaywall: async (): Promise<{ success: boolean; error?: string }> => {
+    const userId = getUserId();
+    if (!isNativeApp()) {
+      return { success: false, error: 'WEB_FALLBACK' };
+    }
+
+    console.log('🧱 Launching RevenueCat dashboard paywall');
+    console.log('   Offering:', RC_DASHBOARD_OFFERING_ID);
+    console.log('   User ID:', userId);
+
+    localStorage.removeItem('godlykids_premium');
+    purchaseSoftEntitlementMiss = false;
+    purchaseSuccessHandled = false;
+
+    const launchUrl = `revenuecat://launchPaywall?external_id=${encodeURIComponent(userId)}&offering=${encodeURIComponent(RC_DASHBOARD_OFFERING_ID)}`;
+    window.despia = launchUrl;
+
+    const apiBaseUrl = localStorage.getItem('godlykids_api_url') ||
+      (window.location.hostname === 'localhost' ? 'http://localhost:5001' : 'https://backendgk2-0.onrender.com');
+
+    return new Promise((resolve) => {
+      purchaseResolve = resolve;
+      let resolved = false;
+      let pollCount = 0;
+      const maxWaitSeconds = 90;
+      const minWaitBeforeCheck = 2;
+
+      const doPoll = async () => {
+        pollCount++;
+        const elapsedSeconds = pollCount <= 30
+          ? pollCount * 0.5
+          : 15 + (pollCount - 30);
+
+        if (elapsedSeconds < minWaitBeforeCheck) {
+          schedulePoll();
+          return;
+        }
+
+        if (purchaseResolve !== resolve) {
+          cleanupPurchaseState();
+          return;
+        }
+
+        if (purchaseSuccessHandled && !resolved) {
+          resolved = true;
+          cleanupPurchaseState();
+          resolve({ success: true });
+          purchaseResolve = null;
+          return;
+        }
+
+        if (localStorage.getItem('godlykids_premium') === 'true' && !resolved) {
+          resolved = true;
+          cleanupPurchaseState();
+          resolve({ success: true });
+          purchaseResolve = null;
+          return;
+        }
+
+        try {
+          const idsToCheck = [userId];
+          const email = localStorage.getItem('godlykids_user_email');
+          const deviceId = localStorage.getItem('godlykids_device_id');
+          if (email && !idsToCheck.includes(email)) idsToCheck.push(email);
+          if (deviceId && !idsToCheck.includes(deviceId)) idsToCheck.push(deviceId);
+
+          for (const id of idsToCheck) {
+            const response = await fetch(`${apiBaseUrl}/api/webhooks/purchase-status/${encodeURIComponent(id)}`);
+            const data = await response.json();
+            if (data.isPremium && !resolved) {
+              resolved = true;
+              localStorage.setItem('godlykids_premium', 'true');
+              cleanupPurchaseState();
+              resolve({ success: true });
+              purchaseResolve = null;
+              return;
+            }
+          }
+        } catch {
+          // keep polling
+        }
+
+        if (elapsedSeconds >= maxWaitSeconds && !resolved) {
+          resolved = true;
+          cleanupPurchaseState();
+          if (localStorage.getItem('godlykids_premium') === 'true') {
+            resolve({ success: true });
+            purchaseResolve = null;
+            return;
+          }
+          if (purchaseSoftEntitlementMiss) {
+            purchaseSoftEntitlementMiss = false;
+            resolve({
+              success: false,
+              error:
+                'Your payment may have gone through, but premium did not unlock automatically. Please tap Restore Purchases. If access is still missing, email hello@kbpublish.org with your purchase receipt.',
+            });
+            purchaseResolve = null;
+            return;
+          }
+          resolve({ success: false, error: 'Purchase cancelled' });
+          purchaseResolve = null;
+          return;
+        }
+
+        schedulePoll();
+      };
+
+      const schedulePoll = () => {
+        const interval = pollCount < 30 ? 500 : 1000;
+        purchasePollInterval = setTimeout(doPoll, interval) as unknown as ReturnType<typeof setInterval>;
+      };
+
+      schedulePoll();
+    });
   },
 
   /**

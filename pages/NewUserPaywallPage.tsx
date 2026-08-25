@@ -16,7 +16,7 @@ import ParentGateModal from '../components/features/ParentGateModal';
  */
 const NewUserPaywallPage: React.FC = () => {
   const navigate = useNavigate();
-  const { purchase, restorePurchases, isPremium, isLoading } = useSubscription();
+  const { purchase, presentPaywall, restorePurchases, isPremium, isLoading } = useSubscription();
   
   const [selectedPlan, setSelectedPlan] = useState<'annual' | 'monthly'>('annual');
   const [isPurchasing, setIsPurchasing] = useState(false);
@@ -82,8 +82,13 @@ const NewUserPaywallPage: React.FC = () => {
         flow: 'new_user'
       });
 
-      // Start purchase (anonymous - no account yet)
-      const result = await purchase(selectedPlan);
+      const useDashboardPaywall =
+        typeof navigator !== 'undefined' &&
+        navigator.userAgent.toLowerCase().includes('despia');
+
+      const result = useDashboardPaywall
+        ? await presentPaywall()
+        : await purchase(selectedPlan);
 
       if (result.success) {
         // Track successful purchase

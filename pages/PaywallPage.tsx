@@ -112,7 +112,8 @@ const PaywallPage: React.FC = () => {
   const { 
     isLoading, 
     isPremium,
-    purchase, 
+    purchase,
+    presentPaywall,
     restorePurchases,
     reverseTrial,
     startReverseTrial,
@@ -316,8 +317,16 @@ const PaywallPage: React.FC = () => {
     activityTrackingService.trackOnboardingEvent('paywall_purchase_started', { planType: effectivePlan, ...paywallSourceMeta });
 
     try {
-      console.log('💳 Calling purchase() with plan:', effectivePlan);
-      const result = await purchase(effectivePlan);
+      const useDashboardPaywall =
+        effectivePlan !== 'lifetime' &&
+        !isCreateYourStoryPaywall &&
+        typeof navigator !== 'undefined' &&
+        navigator.userAgent.toLowerCase().includes('despia');
+
+      console.log('💳 Calling', useDashboardPaywall ? 'RevenueCat dashboard paywall' : 'purchase()', 'plan:', effectivePlan);
+      const result = useDashboardPaywall
+        ? await presentPaywall()
+        : await purchase(effectivePlan);
       console.log('💳 Purchase result:', result);
 
       // Close parent gate now that purchase dialog appeared and completed

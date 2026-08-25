@@ -1,7 +1,10 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { ArrowRight, Bell, Check, Sparkles } from 'lucide-react';
+import { ArrowRight, Bell, Check, Loader2, Sparkles } from 'lucide-react';
 import { activityTrackingService } from '../services/activityTrackingService';
+import { useSubscription } from '../context/SubscriptionContext';
+import { DespiaService } from '../services/despiaService';
+import { authService } from '../services/authService';
 
 const TRIAL_STEPS = [
   { when: 'Today', what: 'stories, games, and the voices. Nothing to pay.' },
@@ -19,6 +22,14 @@ const PaywallIntroPage: React.FC = () => {
   const forwardedState = (location.state || {}) as Record<string, unknown>;
   const fromNewUserFlow = forwardedState.fromNewUserFlow === true;
   const [remindBeforeCharge, setRemindBeforeCharge] = useState(true);
+  const [isOpeningPaywall, setIsOpeningPaywall] = useState(false);
+  const { presentPaywall } = useSubscription();
+
+  const hasAccount = (): boolean => {
+    const userEmail = localStorage.getItem('godlykids_user_email');
+    const user = authService.getUser();
+    return !!(userEmail || user?.email);
+  };
 
   useEffect(() => {
     activityTrackingService.trackOnboardingEvent('paywall_intro_shown', {
@@ -43,6 +54,29 @@ const PaywallIntroPage: React.FC = () => {
       } catch {
         /* ignore */
       }
+    }
+
+    // Native app: Micheal's RevenueCat dashboard paywall (localized store prices).
+    if (DespiaService.isNative()) {
+      setIsOpeningPaywall(true);
+      try {
+        const result = await presentPaywall();
+        if (result.success) {
+          if (fromNewUserFlow) {
+            navigate('/new-user-account', { replace: true, state: { fromPaywall: true } });
+            return;
+          }
+          if (!hasAccount()) {
+            navigate('/onboarding', { replace: true, state: { returnToAccountStep: true } });
+            return;
+          }
+          navigate('/home', { replace: true });
+          return;
+        }
+      } finally {
+        setIsOpeningPaywall(false);
+      }
+      return;
     }
 
     if (fromNewUserFlow) {
@@ -142,10 +176,20 @@ const PaywallIntroPage: React.FC = () => {
         <button
           type="button"
           onClick={handleContinue}
-          className="w-full max-w-md flex items-center justify-center gap-2 font-bold text-lg py-4 rounded-2xl shadow-lg active:scale-[0.98] transition-all bg-gradient-to-r from-[#6366f1] to-[#4f46e5] text-white shadow-indigo-200/50"
+          disabled={isOpeningPaywall}
+          className="w-full max-w-md flex items-center justify-center gap-2 font-bold text-lg py-4 rounded-2xl shadow-lg active:scale-[0.98] transition-all bg-gradient-to-r from-[#6366f1] to-[#4f46e5] text-white shadow-indigo-200/50 disabled:opacity-70"
         >
-          Continue
-          <ArrowRight className="w-5 h-5" strokeWidth={2.5} />
+          {isOpeningPaywall ? (
+            <>
+              <Loader2 className="w-5 h-5 animate-spin" />
+              Opening…
+            </>
+          ) : (
+            <>
+              Continue
+              <ArrowRight className="w-5 h-5" strokeWidth={2.5} />
+            </>
+          )}
         </button>
 
         <p className="mt-4 flex items-center gap-1.5 text-green-600 text-sm font-semibold">

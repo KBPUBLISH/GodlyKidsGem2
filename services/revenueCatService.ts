@@ -21,10 +21,9 @@ export const PREMIUM_ENTITLEMENT_ID = 'premium';
 
 /**
  * RevenueCat offering lookup_key for the dashboard paywall (Despia launchPaywall).
- * The paywall must be attached to this offering and published, or testers
- * will see the last published paywall on Subscription (or a default fallback).
+ * Matches the published offering "Godly Kids Paywall" (paywall pwb95029e68fbf4028).
  */
-export const RC_DASHBOARD_OFFERING_ID = 'Subscription';
+export const RC_DASHBOARD_OFFERING_ID = 'Godly Kids Paywall';
 
 /**
  * Product identifiers sent to RevenueCat.

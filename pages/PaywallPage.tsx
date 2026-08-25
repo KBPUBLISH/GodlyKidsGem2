@@ -141,7 +141,7 @@ const PaywallPage: React.FC = () => {
     return fromState === 'lifetime-offer' ? 'lifetime' : 'annual';
   });
   const [planSelectorExpanded, setPlanSelectorExpanded] = useState(fromState === 'lifetime-offer');
-  // Monthly plan is hidden by default; revealed via the "monthly billing" dropdown toggle.
+  // Create Your Story still collapses monthly; the Plus paywall always shows both plans.
   const [showMonthlyOption, setShowMonthlyOption] = useState(false);
   const [showParentGate, setShowParentGate] = useState(false);
   const [isPurchasing, setIsPurchasing] = useState(false);
@@ -163,8 +163,10 @@ const PaywallPage: React.FC = () => {
   const [showExitTrialOffer, setShowExitTrialOffer] = useState(false);
   const [isStartingTrial, setIsStartingTrial] = useState(false);
   
-  // Get personalized name
+  // Get personalized name (lifetime CTA only — Plus CTA must not prefix firstName)
   const firstName = getUserFirstName();
+  const monthlyPrice = 5.99;
+  const annualPrice = 39.99;
   
   // Track paywall view for analytics (include source when from Dive into the Bible)
   useEffect(() => {
@@ -307,7 +309,7 @@ const PaywallPage: React.FC = () => {
     const effectivePlan = (isCreateYourStoryPaywall && !showLifetimeOption && plan === 'lifetime') ? 'annual' : plan;
     
     // Facebook Pixel - Track checkout initiation
-    const price = effectivePlan === 'lifetime' ? lifetimeSalePrice : effectivePlan === 'annual' ? annualPrice : 5.99;
+    const price = effectivePlan === 'lifetime' ? lifetimeSalePrice : effectivePlan === 'annual' ? annualPrice : monthlyPrice;
     facebookPixelService.trackInitiateCheckout(effectivePlan, price);
     
     // Track purchase attempt
@@ -486,9 +488,7 @@ const PaywallPage: React.FC = () => {
     }
   };
 
-  // Calculate prices and savings
-  const monthlyPrice = 5.99;
-  const annualPrice = 39.99;  // Main paywall: annual subscription
+  // Lifetime is an exit-deal SKU (not the yearly subscription store price)
   const lifetimeOriginalPrice = 69.99;  // Lifetime (exit deal only) - was $69.99, sale $19.99
   const lifetimeSalePrice = 19.99;      // Only shown in LifetimeOfferModal (exit paywall deal)
   const lifetimeDiscount = Math.round(((lifetimeOriginalPrice - lifetimeSalePrice) / lifetimeOriginalPrice) * 100);
@@ -735,11 +735,11 @@ const PaywallPage: React.FC = () => {
             {!isCreateYourStoryPaywall && (
             <div className="text-center mb-6">
               <h1 className="text-[#1e1b4b] font-display font-extrabold text-2xl leading-tight mb-2">
-                Free full access to
+                Bedtime stories kids actually open
               </h1>
-              <h2 className="text-[#6366f1] font-display font-extrabold text-3xl">
-                Godly Kids Plus
-              </h2>
+              <p className="text-gray-500 text-sm">
+                14 days free. Then pick a plan.
+              </p>
             </div>
             )}
 
@@ -917,8 +917,8 @@ const PaywallPage: React.FC = () => {
                 </div>
               </div>
 
-              {/* Monthly Option - hidden by default; revealed via the dropdown toggle below. */}
-              {(showMonthlyOption || selectedPlan === 'monthly') ? (
+              {/* Plus: both plans always visible. Create Your Story keeps monthly collapsed. */}
+              {(isCreateYourStoryPaywall ? (showMonthlyOption || selectedPlan === 'monthly') : true) ? (
               <div 
                 onClick={() => { setSelectedPlan('monthly'); if (isCreateYourStoryPaywall) setPlanSelectorExpanded(false); }}
                 className={`relative w-full rounded-2xl border-2 overflow-hidden cursor-pointer transition-all ${
@@ -935,13 +935,15 @@ const PaywallPage: React.FC = () => {
                   </div>
                   
                   <div className="flex-1 min-w-0">
-                    <p className="font-bold text-[#1e1b4b]">Family Monthly Plan</p>
-                    <p className="text-xs text-gray-500">Over 1,000 members • Cancel anytime</p>
+                    <p className="font-bold text-[#1e1b4b]">{isCreateYourStoryPaywall ? 'Family Monthly Plan' : 'Monthly'}</p>
+                    <p className="text-xs text-gray-500">
+                      {isCreateYourStoryPaywall ? 'Over 1,000 members • Cancel anytime' : `$${monthlyPrice}/month`}
+                    </p>
                   </div>
                   
                   <div className="text-right shrink-0">
-                    <p className="font-extrabold text-xl text-[#1e1b4b]">${monthlyPrice} <span className="text-sm font-medium">USD</span></p>
-                    <p className="text-xs text-gray-400">/month</p>
+                    <p className="font-extrabold text-xl text-[#1e1b4b]">${monthlyPrice}<span className="text-sm font-medium">/mo</span></p>
+                    {isCreateYourStoryPaywall && <p className="text-xs text-gray-400">/month</p>}
                   </div>
                 </div>
               </div>
@@ -1083,7 +1085,7 @@ const PaywallPage: React.FC = () => {
                       <span className="text-xs font-normal opacity-90">Save ${(lifetimeOriginalPrice - lifetimeSalePrice).toFixed(2)} USD today!</span>
                     </>
                   ) : (
-                    <span>{firstName ? `${firstName}, ` : ''}Start your free trial</span>
+                    <span>Start your free trial</span>
                   )}
                 </span>
               )}
@@ -1092,15 +1094,12 @@ const PaywallPage: React.FC = () => {
 
             {/* No payment + trial summary - only for subscription plans, not on Create Your Story (moved above) */}
             {!isCreateYourStoryPaywall && selectedPlan !== 'lifetime' && (
-              <div className="mb-6">
-                <div className="flex items-center gap-2 text-green-600 mb-1">
-                  <Check size={18} strokeWidth={3} />
-                  <span className="font-semibold text-sm">No payment now!</span>
-                </div>
-                <p className="text-gray-500 text-xs text-center">
+              <div className="mb-6 text-center">
+                <p className="font-semibold text-sm text-green-600 mb-1">No payment today.</p>
+                <p className="text-gray-500 text-xs">
                   {selectedPlan === 'annual'
-                    ? `14-day free trial, then $${annualPrice}/year. Cancel anytime.`
-                    : `14-day free trial, then $${monthlyPrice}/month. Cancel anytime.`}
+                    ? `14 days free, then $${annualPrice}/year. Cancel anytime.`
+                    : `14 days free, then $${monthlyPrice}/month. Cancel anytime.`}
                 </p>
               </div>
             )}
@@ -1121,19 +1120,32 @@ const PaywallPage: React.FC = () => {
               </p>
             </div>
 
-            {/* Perks */}
+            {/* Perks — Plus copy is outcome-only; Create Your Story keeps its existing list */}
             <div className="w-full space-y-3 mb-6">
-              {[
-                { icon: "📚", text: "12 Free Custom Books for personalized learning fun" },
-                { icon: "📖", text: "Unlimited Access to 150+ books with word highlighting" },
-                { icon: "🎮", text: "15+ Bible Games and Learning Exercises to enhance memorization" },
-              ].map((feature, i) => (
+              {(isCreateYourStoryPaywall
+                ? [
+                    { icon: "📚", text: "12 Free Custom Books for personalized learning fun" },
+                    { icon: "📖", text: "Unlimited Access to 150+ books with word highlighting" },
+                    { icon: "🎮", text: "15+ Bible Games and Learning Exercises to enhance memorization" },
+                  ]
+                : [
+                    { icon: "🎙️", text: "Stories in real voices, finished together" },
+                    { icon: "🎮", text: "Games that teach Scripture" },
+                    { icon: "📚", text: "Custom books for your kid" },
+                  ]
+              ).map((feature, i) => (
                 <div key={i} className="flex items-center gap-3 bg-white rounded-xl px-4 py-3 border border-gray-100">
                   <span className="text-xl shrink-0">{feature.icon}</span>
                   <span className="text-sm font-medium text-[#1e1b4b]">{feature.text}</span>
                 </div>
               ))}
             </div>
+
+            {!isCreateYourStoryPaywall && (
+              <p className="text-center text-sm font-semibold text-[#1e1b4b] mb-6">
+                4.7 on the App Store
+              </p>
+            )}
 
             {/* Fine Print */}
             <p className="text-gray-400 text-[10px] text-center px-4 w-full leading-relaxed">

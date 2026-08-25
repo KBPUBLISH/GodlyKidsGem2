@@ -4,10 +4,7 @@ import { Check, Loader2, RefreshCw, AlertCircle } from 'lucide-react';
 import { useSubscription } from '../context/SubscriptionContext';
 import { activityTrackingService } from '../services/activityTrackingService';
 import { facebookPixelService } from '../services/facebookPixelService';
-import { metaAttributionService } from '../services/metaAttributionService';
 import { shouldSeeNewOnboardingFlow } from '../services/userTypeService';
-import { getApiBaseUrl } from '../services/apiService';
-import { authService } from '../services/authService';
 import ParentGateModal from '../components/features/ParentGateModal';
 
 /**
@@ -26,7 +23,6 @@ const NewUserPaywallPage: React.FC = () => {
   const [isRestoring, setIsRestoring] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showParentGate, setShowParentGate] = useState(false);
-  const [isAndroid, setIsAndroid] = useState(false);
 
   const annualPrice = 39.99;
   const monthlyPrice = 5.99;
@@ -49,10 +45,6 @@ const NewUserPaywallPage: React.FC = () => {
     // Facebook Pixel
     facebookPixelService.init();
     facebookPixelService.trackPaywallView();
-
-    // Detect platform
-    const ua = navigator.userAgent.toLowerCase();
-    setIsAndroid(/android/i.test(ua));
   }, []);
 
   // If user becomes premium, navigate away
@@ -156,8 +148,6 @@ const NewUserPaywallPage: React.FC = () => {
     }
   };
 
-  const ctaText = isAndroid ? 'Start Free Trial' : 'Continue';
-
   return (
     <div 
       className="relative min-h-full w-full bg-gradient-to-b from-[#f8faff] via-[#eef2ff] to-[#e0e7ff] flex flex-col overflow-hidden"
@@ -176,14 +166,13 @@ const NewUserPaywallPage: React.FC = () => {
       <div className="relative z-10 flex-1 flex flex-col items-center px-6 pb-8 pt-6 overflow-y-auto">
         <div className="w-full max-w-md">
           
-          {/* Title */}
           <div className="text-center mb-6">
             <h1 className="text-[#1e1b4b] font-display font-extrabold text-2xl leading-tight mb-2">
-              Start Your Free Trial
+              Bedtime stories kids actually open
             </h1>
-            <h2 className="text-[#6366f1] font-display font-extrabold text-3xl">
-              Godly Kids Plus
-            </h2>
+            <p className="text-gray-500 text-sm">
+              14 days free. Then pick a plan.
+            </p>
           </div>
 
           {/* Plan Selection */}
@@ -217,6 +206,7 @@ const NewUserPaywallPage: React.FC = () => {
                 
                 <div className="text-right">
                   <p className="font-extrabold text-xl text-[#1e1b4b]">${annualPrice}<span className="text-sm font-medium">/yr</span></p>
+                  <p className="text-[10px] text-green-600 font-semibold">12 free custom books</p>
                 </div>
               </div>
             </button>
@@ -239,7 +229,7 @@ const NewUserPaywallPage: React.FC = () => {
                 
                 <div className="flex-1 min-w-0">
                   <p className="font-bold text-[#1e1b4b]">Monthly</p>
-                  <p className="text-xs text-gray-500">Flexible billing</p>
+                  <p className="text-xs text-gray-500">${monthlyPrice}/month</p>
                 </div>
                 
                 <div className="text-right shrink-0">
@@ -269,29 +259,31 @@ const NewUserPaywallPage: React.FC = () => {
                 Processing...
               </span>
             ) : (
-              <span className="flex flex-col items-center">
-                <span>{ctaText}</span>
-              </span>
+              <span>Start your free trial</span>
             )}
           </button>
 
-          {/* Trial Info */}
-          <div className="mb-6">
-            <div className="flex items-center gap-2 text-green-600 mb-1 justify-center">
-              <Check size={18} strokeWidth={3} />
-              <span className="font-semibold text-sm">No payment today!</span>
-            </div>
-            <p className="text-gray-500 text-xs text-center">
-              14-day free trial, then ${selectedPlan === 'annual' ? annualPrice : monthlyPrice}/{selectedPlan === 'annual' ? 'year' : 'month'}. Cancel anytime.
+          <div className="mb-6 text-center">
+            <p className="font-semibold text-sm text-green-600 mb-1">No payment today.</p>
+            <p className="text-gray-500 text-xs">
+              {selectedPlan === 'annual'
+                ? `14 days free, then $${annualPrice}/year. Cancel anytime.`
+                : `14 days free, then $${monthlyPrice}/month. Cancel anytime.`}
             </p>
           </div>
 
-          {/* Perks */}
+          <div className="w-full bg-white rounded-2xl p-4 border border-gray-100 shadow-sm mb-6">
+            <h3 className="font-bold text-[#1e1b4b] mb-2">How can I cancel?</h3>
+            <p className="text-gray-600 text-sm leading-relaxed">
+              It's easy! Open your phone Settings, tap your name, then tap Subscriptions and choose Godly Kids. Tap Cancel Subscription. Done!
+            </p>
+          </div>
+
           <div className="w-full space-y-3 mb-6">
             {[
-              { icon: "📚", text: "150+ Bible stories & lessons" },
-              { icon: "🎮", text: "15+ games to learn through play" },
-              { icon: "🎧", text: "Audiobooks & devotionals" },
+              { icon: "🎙️", text: "Stories in real voices, finished together" },
+              { icon: "🎮", text: "Games that teach Scripture" },
+              { icon: "📚", text: "Custom books for your kid" },
             ].map((feature, i) => (
               <div key={i} className="flex items-center gap-3 bg-white rounded-xl px-4 py-3 border border-gray-100">
                 <span className="text-xl shrink-0">{feature.icon}</span>
@@ -299,6 +291,10 @@ const NewUserPaywallPage: React.FC = () => {
               </div>
             ))}
           </div>
+
+          <p className="text-center text-sm font-semibold text-[#1e1b4b] mb-6">
+            4.7 on the App Store
+          </p>
 
           {/* Fine Print */}
           <p className="text-gray-400 text-[10px] text-center px-4 w-full leading-relaxed mb-4">

@@ -72,8 +72,7 @@ const NewUserOnboardingPage: React.FC = () => {
       time: selectedTime,
     });
 
-    // Navigate to trial explanation screen
-    navigate('/trial-intro', { replace: true });
+    navigate('/paywall/intro', { replace: true, state: { fromNewUserFlow: true } });
   };
 
   return (

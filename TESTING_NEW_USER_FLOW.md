@@ -127,14 +127,8 @@ useEffect(() => {
 }, [navigate]);
 ```
 
-### TrialIntroPage
-```typescript
-useEffect(() => {
-  if (!shouldSeeNewOnboardingFlow()) {
-    navigate('/paywall', { replace: true });
-  }
-}, [navigate]);
-```
+### PaywallIntroPage
+Shared trial-explain screen. New-user Continue → `/paywall-new-user`. Existing Continue → `/paywall`.
 
 ### NewUserPaywallPage (CRITICAL)
 ```typescript

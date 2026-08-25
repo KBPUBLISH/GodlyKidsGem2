@@ -212,7 +212,7 @@ const NewUserPaywallPage: React.FC = () => {
                 
                 <div className="flex-1">
                   <p className="font-bold text-[#1e1b4b]">Annual</p>
-                  <p className="text-xs text-gray-500">7-day free trial, then ${annualPrice}/year</p>
+                  <p className="text-xs text-gray-500">14-day free trial, then ${annualPrice}/year</p>
                 </div>
                 
                 <div className="text-right">
@@ -282,7 +282,7 @@ const NewUserPaywallPage: React.FC = () => {
               <span className="font-semibold text-sm">No payment today!</span>
             </div>
             <p className="text-gray-500 text-xs text-center">
-              7-day free trial, then ${selectedPlan === 'annual' ? annualPrice : monthlyPrice}/{selectedPlan === 'annual' ? 'year' : 'month'}. Cancel anytime.
+              14-day free trial, then ${selectedPlan === 'annual' ? annualPrice : monthlyPrice}/{selectedPlan === 'annual' ? 'year' : 'month'}. Cancel anytime.
             </p>
           </div>
 
@@ -302,7 +302,7 @@ const NewUserPaywallPage: React.FC = () => {
 
           {/* Fine Print */}
           <p className="text-gray-400 text-[10px] text-center px-4 w-full leading-relaxed mb-4">
-            Free trial for 7 days, then subscription automatically renews unless cancelled at least 24-hours before the trial ends. Cancel anytime in App Store or Google Play.
+            Free trial for 14 days, then subscription automatically renews unless cancelled at least 24-hours before the trial ends. Cancel anytime in App Store or Google Play.
           </p>
 
           {/* Restore Purchases */}

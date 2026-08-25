@@ -3,32 +3,33 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { ArrowRight, Bell, Check, Sparkles } from 'lucide-react';
 import { activityTrackingService } from '../services/activityTrackingService';
 
-const SOCIAL_PROOF = [
-  { icon: '📚', text: '150+ Bible stories families finish together' },
-  { icon: '🎮', text: '15+ games that teach Scripture, not just screen time' },
-  { icon: '🙏', text: 'Loved by 10,000+ Christian families' },
-  { icon: '⭐', text: '8/10 members refer Godly Kids to a friend' },
+const TRIAL_STEPS = [
+  { when: 'Today', what: 'stories, games, and the voices. Nothing to pay.' },
+  { when: 'Day 12', what: 'we ping you.' },
+  { when: 'Day 14', what: 'the plan starts. Cancel anytime.' },
 ];
 
 /**
  * Trial + reminder screen before the paywall.
- * 14-day free trial, 2-day notification toggle, social proof.
+ * Shared by new-user (hard paywall next) and existing/old path (/paywall next).
  */
 const PaywallIntroPage: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const forwardedState = (location.state || {}) as Record<string, unknown>;
+  const fromNewUserFlow = forwardedState.fromNewUserFlow === true;
   const [remindBeforeCharge, setRemindBeforeCharge] = useState(true);
 
   useEffect(() => {
     activityTrackingService.trackOnboardingEvent('paywall_intro_shown', {
-      source: forwardedState.fromOnboarding ? 'onboarding' : 'other',
+      source: fromNewUserFlow ? 'new_user_flow' : forwardedState.fromOnboarding ? 'onboarding' : 'other',
     });
-  }, [forwardedState.fromOnboarding]);
+  }, [fromNewUserFlow, forwardedState.fromOnboarding]);
 
   const handleContinue = async () => {
     activityTrackingService.trackOnboardingEvent('trial_intro_continue', {
       reminderToggle: remindBeforeCharge,
+      flow: fromNewUserFlow ? 'new_user' : 'existing',
     });
 
     if (remindBeforeCharge && typeof window !== 'undefined' && 'Notification' in window) {
@@ -42,6 +43,17 @@ const PaywallIntroPage: React.FC = () => {
       } catch {
         /* ignore */
       }
+    }
+
+    if (fromNewUserFlow) {
+      navigate('/paywall-new-user', {
+        replace: true,
+        state: {
+          ...forwardedState,
+          reminderToggle: remindBeforeCharge,
+        },
+      });
+      return;
     }
 
     navigate('/paywall', {
@@ -68,29 +80,39 @@ const PaywallIntroPage: React.FC = () => {
       >
         <div className="flex items-center justify-center gap-1.5 mb-6 text-[#6366f1]">
           <Sparkles className="w-6 h-6 shrink-0" strokeWidth={2} />
-          <span className="text-sm font-semibold tracking-wide uppercase">14-day free trial</span>
+          <span className="text-sm font-semibold tracking-wide uppercase">14 DAYS FREE</span>
         </div>
 
         <div className="text-center max-w-md mx-auto space-y-3 mb-6">
           <h1 className="font-display font-extrabold text-3xl sm:text-4xl leading-tight text-[#1e1b4b]">
-            Try Godly Kids free
+            Bedtime stories kids actually open
           </h1>
           <p className="text-[#475569] text-lg leading-relaxed">
-            Full access for 14 days. We&apos;ll remind you 2 days before anything charges.
+            Full access. We&apos;ll remind you 2 days before anything charges.
           </p>
         </div>
 
-        <div className="w-full max-w-md space-y-2.5 mb-6">
-          {SOCIAL_PROOF.map((item) => (
-            <div
-              key={item.text}
-              className="flex items-center gap-3 bg-white/90 border border-indigo-100 rounded-xl px-4 py-3 shadow-sm"
+        <ol className="w-full max-w-md space-y-2.5 mb-4">
+          {TRIAL_STEPS.map((item, index) => (
+            <li
+              key={item.when}
+              className="flex items-start gap-3 bg-white/90 border border-indigo-100 rounded-xl px-4 py-3 shadow-sm"
             >
-              <span className="text-xl shrink-0">{item.icon}</span>
-              <span className="text-sm font-medium text-[#1e1b4b]">{item.text}</span>
-            </div>
+              <span className="w-6 h-6 rounded-full bg-[#eef2ff] text-[#6366f1] text-xs font-bold flex items-center justify-center shrink-0 mt-0.5">
+                {index + 1}
+              </span>
+              <p className="text-sm font-medium text-[#1e1b4b] leading-snug">
+                <span className="font-extrabold">{item.when}</span>
+                {' — '}
+                {item.what}
+              </p>
+            </li>
           ))}
-        </div>
+        </ol>
+
+        <p className="w-full max-w-md text-center text-sm font-semibold text-[#6366f1] mb-6">
+          4.7 on the App Store (74 ratings)
+        </p>
 
         <button
           type="button"

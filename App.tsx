@@ -951,7 +951,6 @@ import OnboardingTutorial from './components/features/OnboardingTutorial';
 import { TutorialProvider, useTutorial } from './context/TutorialContext';
 import { ThemeProvider, useTheme } from './context/ThemeContext';
 import NewUserOnboardingPage from './pages/NewUserOnboardingPage';
-import TrialIntroPage from './pages/TrialIntroPage';
 import NewUserPaywallPage from './pages/NewUserPaywallPage';
 import NewUserAccountPage from './pages/NewUserAccountPage';
 import NewUserVoiceSelectionPage from './pages/NewUserVoiceSelectionPage';
@@ -1560,7 +1559,6 @@ const App: React.FC = () => {
                   <Route path="/ready" element={<ReadyToJumpInPage />} />
                   {/* New user paywall-first onboarding flow */}
                   <Route path="/new-user-onboarding" element={<NewUserOnboardingPage />} />
-                  <Route path="/trial-intro" element={<TrialIntroPage />} />
                   <Route path="/paywall-new-user" element={<NewUserPaywallPage />} />
                   <Route path="/new-user-account" element={<NewUserAccountPage />} />
                   <Route path="/new-user-voice-selection" element={<NewUserVoiceSelectionPage />} />

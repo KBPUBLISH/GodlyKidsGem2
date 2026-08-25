@@ -96,7 +96,7 @@ const Header: React.FC<HeaderProps> = ({ isVisible, title = "GODLY KIDS" }) => {
     return () => clearInterval(interval);
   }, [isSubscribed, location.pathname]);
 
-  // 30-minute skip-trial countdown next to the head icon
+  // 1-hour welcome-chest countdown next to the head icon
   useEffect(() => {
     const endFromContext = reverseTrial.trialEndDate
       ? new Date(reverseTrial.trialEndDate).getTime()
@@ -341,13 +341,13 @@ const Header: React.FC<HeaderProps> = ({ isVisible, title = "GODLY KIDS" }) => {
                 onClick={handleTrialTimerClick}
                 disabled={isOpeningTrialPaywall}
                 className="ml-2 bg-gradient-to-r from-[#6366f1] to-[#4f46e5] px-2 py-1 rounded-lg border border-[#4338ca] shadow-md flex items-center gap-1.5 animate-pulse hover:animate-none active:scale-95 transition-transform disabled:opacity-70"
-                title="30 minutes of premium left — tap for 50% off yearly"
+                title="1 hour of unlimited left — tap for 50% off yearly"
               >
                 <Clock size={12} className="text-white" />
                 <span className="text-white font-mono font-bold text-xs">
                   {trialTimeLabel}
                 </span>
-                <span className="text-white/80 text-[10px] font-semibold">FREE</span>
+                <span className="text-white/80 text-[10px] font-semibold">1 HR</span>
               </button>
             )}
 

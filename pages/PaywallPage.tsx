@@ -646,7 +646,7 @@ const PaywallPage: React.FC = () => {
     setIsStartingTrial(true);
     try {
       activityTrackingService.trackOnboardingEvent('paywall_exit_trial_accepted', paywallSourceMeta).catch(() => {});
-      const result = await startReverseTrial({ trialDurationMinutes: 30 });
+      const result = await startReverseTrial({ trialDurationMinutes: 60 });
       if (result.success) {
         setShowExitTrialOffer(false);
         navigate('/home');
@@ -1377,7 +1377,7 @@ const PaywallPage: React.FC = () => {
                     Wait! Try Premium FREE
                   </h2>
                   <p className="text-[#6366f1] font-extrabold text-2xl mb-4">
-                    for 30 Minutes
+                    for 1 Hour
                   </p>
 
                   {/* Perks */}
@@ -1407,7 +1407,7 @@ const PaywallPage: React.FC = () => {
                         Starting...
                       </span>
                     ) : (
-                      'Start My Free 30 Minutes'
+                      'Start My Free Hour'
                     )}
                   </button>
 

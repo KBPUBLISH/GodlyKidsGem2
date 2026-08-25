@@ -2,7 +2,9 @@ import React, { useState, useCallback, useEffect, useRef, lazy, Suspense } from 
 import { useNavigate, useLocation } from 'react-router-dom';
 import Header from '../components/layout/Header';
 import ChallengeGameModal from '../components/features/ChallengeGameModal';
+import WelcomeChestModal from '../components/modals/WelcomeChestModal';
 import { activityTrackingService } from '../services/activityTrackingService';
+import { shouldShowWelcomeChest } from '../services/userTypeService';
 
 const DailyVerseModal = lazy(() => import('../components/modals/DailyVerseModal'));
 
@@ -44,6 +46,7 @@ export const PersistentWorldIsland: React.FC = () => {
   const [isZoomingIn, setIsZoomingIn] = useState(false);
 
   // Welcome video - plays once per app session when first visiting Explore; hide header until done
+  const [showWelcomeChest, setShowWelcomeChest] = useState(false);
   const [showWelcomeVideo, setShowWelcomeVideo] = useState(false);
   const welcomeVideoRef = useRef<HTMLVideoElement>(null);
 
@@ -54,6 +57,10 @@ export const PersistentWorldIsland: React.FC = () => {
 
   useEffect(() => {
     if (!isVisible) return;
+    if (shouldShowWelcomeChest()) {
+      setShowWelcomeChest(true);
+      return;
+    }
     const ua = navigator.userAgent.toLowerCase();
     if (ua.includes('android')) return;
     if (sessionStorage.getItem(WELCOME_VIDEO_KEY)) return;
@@ -68,13 +75,13 @@ export const PersistentWorldIsland: React.FC = () => {
   }, [isVisible, showWelcomeVideo, handleWelcomeVideoEnd]);
 
   useEffect(() => {
-    if (showVerseModal || showChallengeGame) {
+    if (showVerseModal || showChallengeGame || showWelcomeChest) {
       document.body.setAttribute('data-modal-open', 'true');
     } else {
       document.body.removeAttribute('data-modal-open');
     }
     return () => document.body.removeAttribute('data-modal-open');
-  }, [showVerseModal, showChallengeGame]);
+  }, [showVerseModal, showChallengeGame, showWelcomeChest]);
 
   const handleIslandClick = useCallback(() => {
     if (isZoomingIn) return;
@@ -95,7 +102,7 @@ export const PersistentWorldIsland: React.FC = () => {
         transition: 'opacity 0.15s ease-out',
       }}
     >
-      <Header isVisible={isVisible && !showWelcomeVideo} title="EXPLORE" />
+      <Header isVisible={isVisible && !showWelcomeVideo && !showWelcomeChest} title="EXPLORE" />
 
       {/* Welcome video - full-screen, plays once per session; header hidden until done */}
       {showWelcomeVideo && isVisible && (
@@ -513,6 +520,11 @@ export const PersistentWorldIsland: React.FC = () => {
       <ChallengeGameModal
         isOpen={showChallengeGame}
         onClose={() => setShowChallengeGame(false)}
+      />
+
+      <WelcomeChestModal
+        isOpen={showWelcomeChest}
+        onClose={() => setShowWelcomeChest(false)}
       />
     </div>
   );

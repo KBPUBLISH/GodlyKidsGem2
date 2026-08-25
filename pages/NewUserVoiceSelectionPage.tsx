@@ -117,8 +117,7 @@ const NewUserVoiceSelectionPage: React.FC = () => {
       previewAudio.pause();
     }
 
-    // Navigate to first story
-    navigate('/first-story', { replace: true });
+    navigate('/world', { replace: true });
   };
 
   const handleSkip = () => {
@@ -129,8 +128,7 @@ const NewUserVoiceSelectionPage: React.FC = () => {
       previewAudio.pause();
     }
 
-    // Navigate to first story with default voice
-    navigate('/first-story', { replace: true });
+    navigate('/world', { replace: true });
   };
 
   return (

@@ -25,11 +25,11 @@ export const PREMIUM_ENTITLEMENT_ID = 'premium';
  */
 export const RC_DASHBOARD_OFFERING_ID = 'Godly Kids Paywall';
 
-/** Skip / swipe-off premium window shown next to the head icon. */
-export const SKIP_TRIAL_MINUTES = 30;
+/** Welcome-chest premium window shown next to the head icon. */
+export const SKIP_TRIAL_MINUTES = 60;
 
 /**
- * Paywall launched when the user taps the 30-minute timer.
+ * Paywall launched when the user taps the 1-hour timer.
  * Create this offering in RevenueCat with the 50% off yearly package.
  */
 export const RC_TIMER_PAYWALL_OFFERING_ID = 'Godly Kids 50 Off Yearly';

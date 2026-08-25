@@ -155,7 +155,30 @@ export function markNewOnboardingComplete(): void {
   localStorage.setItem(NEW_ONBOARDING_COMPLETE_KEY, 'true');
   localStorage.removeItem(NEW_USER_COHORT_KEY);
   localStorage.removeItem(FORCE_NEW_ONBOARDING_KEY);
+  queueWelcomeChest();
   console.log('✅ New onboarding complete - user now treated as existing');
+}
+
+const WELCOME_CHEST_PENDING_KEY = 'godlykids_welcome_chest_pending';
+const WELCOME_CHEST_CLAIMED_KEY = 'godlykids_welcome_chest_claimed';
+
+export function queueWelcomeChest(): void {
+  if (localStorage.getItem(WELCOME_CHEST_CLAIMED_KEY) === 'true') return;
+  localStorage.setItem(WELCOME_CHEST_PENDING_KEY, 'true');
+}
+
+export function markWelcomeChestClaimed(): void {
+  localStorage.setItem(WELCOME_CHEST_CLAIMED_KEY, 'true');
+  localStorage.removeItem(WELCOME_CHEST_PENDING_KEY);
+}
+
+export function shouldShowWelcomeChest(): boolean {
+  if (localStorage.getItem(WELCOME_CHEST_CLAIMED_KEY) === 'true') return false;
+  if (localStorage.getItem(WELCOME_CHEST_PENDING_KEY) !== 'true') return false;
+  const paid = localStorage.getItem('godlykids_premium') === 'true';
+  const trial = localStorage.getItem('godlykids_reverse_trial') === 'true';
+  if (paid && !trial) return false;
+  return true;
 }
 
 /**

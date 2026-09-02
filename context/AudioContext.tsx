@@ -17,6 +17,12 @@ import {
 
 const NATIVE_PLAYLIST_SNAPSHOT_KEY = 'gk_native_audio_snapshot';
 
+/** HTML/native duration is often Infinity, NaN, or 0 until metadata arrives. */
+function finiteDuration(value: unknown): number {
+    const n = typeof value === 'number' ? value : Number(value);
+    return Number.isFinite(n) && n > 0 ? n : 0;
+}
+
 // --- Interfaces ---
 export interface AudioItem {
     _id?: string;
@@ -213,6 +219,10 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     const pendingNativeSeekRef = useRef<number | null>(null);
     const nativePositionRef = useRef(0);
     const nativeDurationRef = useRef(0);
+    /** Ignore stale timeupdate/position ticks after the user scrubs (Android snaps back). */
+    const lastUserSeekAtRef = useRef(0);
+    const lastUserSeekToRef = useRef<number | null>(null);
+    const seekRetryUsedRef = useRef(false);
     const currentPlaylistRef = useRef<Playlist | null>(null);
     const currentTrackIndexRef = useRef(0);
     const isPlayingRef = useRef(false);
@@ -347,6 +357,11 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         nativeOwnsPlaybackRef.current = true;
         nativeConfirmedRef.current = false;
         pendingNativeSeekRef.current = resumeFromSeconds && resumeFromSeconds > 0 ? resumeFromSeconds : null;
+        const seedDur = finiteDuration(playlist.items[startIndex]?.duration);
+        if (seedDur > 0) {
+            nativeDurationRef.current = seedDur;
+            setDuration(seedDur);
+        }
 
         try {
             localStorage.setItem(NATIVE_PLAYLIST_SNAPSHOT_KEY, JSON.stringify({
@@ -397,11 +412,32 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         document.body.appendChild(audio);
         audioRef.current = audio;
 
+        const trackFallbackDuration = () =>
+            finiteDuration(currentPlaylistRef.current?.items[currentTrackIndexRef.current]?.duration);
+
+        const applyKnownDuration = (reported: unknown) => {
+            const d = finiteDuration(reported) || trackFallbackDuration();
+            if (d > 0) setDuration(d);
+            return d;
+        };
+
         // Basic event listeners
         audio.addEventListener('timeupdate', () => {
+            const target = lastUserSeekToRef.current;
+            if (target != null && Date.now() - lastUserSeekAtRef.current < 1500 && Math.abs(audio.currentTime - target) > 1.25) {
+                if (!seekRetryUsedRef.current && audio.readyState >= 1) {
+                    seekRetryUsedRef.current = true;
+                    try { audio.currentTime = target; } catch { /* ignore */ }
+                }
+                return;
+            }
+            if (target != null && Math.abs(audio.currentTime - target) <= 1.25) {
+                lastUserSeekToRef.current = null;
+            }
             setCurrentTime(audio.currentTime);
-            if (!isNaN(audio.duration) && audio.duration > 0) {
-                setProgress((audio.currentTime / audio.duration) * 100);
+            const dur = applyKnownDuration(audio.duration);
+            if (dur > 0) {
+                setProgress((audio.currentTime / dur) * 100);
             }
 
             // Track listening time - accumulate seconds listened
@@ -469,7 +505,10 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         });
 
         audio.addEventListener('loadedmetadata', () => {
-            setDuration(audio.duration);
+            applyKnownDuration(audio.duration);
+        });
+        audio.addEventListener('durationchange', () => {
+            applyKnownDuration(audio.duration);
         });
 
         audio.addEventListener('ended', () => {
@@ -699,6 +738,8 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         // Set source and load
         audio.src = track.audioUrl;
         audio.load();
+        const seedDur = finiteDuration(track.duration);
+        if (seedDur > 0) setDuration(seedDur);
 
         // Apply a pending resume seek once the media has metadata — seeking
         // before loadedmetadata is ignored/throws on some browsers (iOS Safari)
@@ -996,11 +1037,24 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
             if (evt.type === 'position') {
                 const pos = evt.positionSeconds ?? 0;
-                const dur = evt.durationSeconds ?? 0;
+                const reportedDur = finiteDuration(evt.durationSeconds);
+                const fallbackDur = finiteDuration(currentPlaylistRef.current?.items[currentTrackIndexRef.current]?.duration);
+                const dur = reportedDur || nativeDurationRef.current || fallbackDur;
+                const seekTarget = lastUserSeekToRef.current;
+                if (seekTarget != null && Date.now() - lastUserSeekAtRef.current < 1500 && Math.abs(pos - seekTarget) > 1.25) {
+                    if (!seekRetryUsedRef.current && Date.now() - lastUserSeekAtRef.current > 350) {
+                        seekRetryUsedRef.current = true;
+                        despiaAudioPlayer.seek(seekTarget);
+                    }
+                    return;
+                }
+                if (seekTarget != null && Math.abs(pos - seekTarget) <= 1.25) {
+                    lastUserSeekToRef.current = null;
+                }
                 nativePositionRef.current = pos;
-                if (typeof dur === 'number' && dur > 0) nativeDurationRef.current = dur;
+                if (dur > 0) nativeDurationRef.current = dur;
                 setCurrentTime(pos);
-                if (typeof dur === 'number' && dur > 0) {
+                if (dur > 0) {
                     setDuration(dur);
                     setProgress((pos / dur) * 100);
                 }
@@ -1066,6 +1120,17 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
             }
 
             switch (evt.type) {
+                case 'seek': {
+                    lastUserSeekToRef.current = null;
+                    const pos = evt.state?.position_seconds;
+                    if (typeof pos === 'number' && Number.isFinite(pos)) {
+                        nativePositionRef.current = pos;
+                        setCurrentTime(pos);
+                        const dur = finiteDuration(evt.state?.duration_seconds) || nativeDurationRef.current;
+                        if (dur > 0) setProgress((pos / dur) * 100);
+                    }
+                    break;
+                }
                 case 'play':
                 case 'playing':
                     applyNativeIndex(evt);
@@ -1362,18 +1427,45 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         }
     }, [currentTrackIndex, isShuffle]);
 
+    const resolveSeekDuration = useCallback(() => {
+        if (nativeOwnsPlaybackRef.current) {
+            return finiteDuration(nativeDurationRef.current)
+                || finiteDuration(currentPlaylistRef.current?.items[currentTrackIndexRef.current]?.duration);
+        }
+        return finiteDuration(audioRef.current?.duration)
+            || finiteDuration(currentPlaylistRef.current?.items[currentTrackIndexRef.current]?.duration);
+    }, []);
+
     const seek = useCallback((time: number) => {
+        if (!Number.isFinite(time)) return;
+        const dur = resolveSeekDuration();
+        const clamped = dur > 0 ? Math.max(0, Math.min(time, Math.max(0, dur - 0.05))) : Math.max(0, time);
+        lastUserSeekAtRef.current = Date.now();
+        lastUserSeekToRef.current = clamped;
+        seekRetryUsedRef.current = false;
+        if (dur > 0) setProgress((clamped / dur) * 100);
+        setCurrentTime(clamped);
+
         if (nativeAudioEnabledRef.current && nativeOwnsPlaybackRef.current) {
-            nativePositionRef.current = time;
-            despiaAudioPlayer.seek(time);
-            setCurrentTime(time);
+            nativePositionRef.current = clamped;
+            despiaAudioPlayer.seek(clamped);
             return;
         }
-        if (audioRef.current) {
-            audioRef.current.currentTime = time;
-            setCurrentTime(time);
+        const audio = audioRef.current;
+        if (!audio) return;
+        try {
+            audio.currentTime = clamped;
+        } catch {
+            /* some WebViews throw if the resource is not yet seekable */
         }
-    }, []);
+        if (Math.abs(audio.currentTime - clamped) > 0.5 && audio.readyState < 2) {
+            const retry = () => {
+                try { audio.currentTime = clamped; } catch { /* ignore */ }
+                audio.removeEventListener('canplay', retry);
+            };
+            audio.addEventListener('canplay', retry);
+        }
+    }, [resolveSeekDuration]);
 
     const closePlayer = useCallback(() => {
         // Keep the resume point when the kid dismisses the player mid-episode

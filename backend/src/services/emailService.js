@@ -579,9 +579,113 @@ const generatePersonalizedContent = (quizData) => {
     return { title, description, affirmation, reflection, hope: hopeMsg };
 };
 
+/**
+ * Invite a creator to the Godly Hub creator portal.
+ * The invite link is where they set a password and activate their account.
+ */
+const sendCreatorInviteEmail = async (email, name, inviteUrl) => {
+    const transport = getTransporter();
+
+    if (!transport) {
+        console.log('📧 Creator invite email skipped (Gmail not configured). Invite URL:', inviteUrl);
+        return { success: false, error: 'Email service not configured' };
+    }
+
+    try {
+        const fromEmail = process.env.EMAIL_USER || 'hello@kbpublish.org';
+        const supportEmail = process.env.SUPPORT_EMAIL || 'hello@kbpublish.org';
+
+        const mailOptions = {
+            from: `GodlyKids <${fromEmail}>`,
+            to: email,
+            subject: '🎙️ You\'re invited to publish on Godly Hub',
+            html: `
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+</head>
+<body style="margin: 0; padding: 0; background-color: #f5f0e8; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
+    <table width="100%" cellpadding="0" cellspacing="0" style="background-color: #f5f0e8; padding: 40px 20px;">
+        <tr>
+            <td align="center">
+                <table width="100%" cellpadding="0" cellspacing="0" style="max-width: 500px; background: linear-gradient(135deg, #5c3d2e 0%, #3e2a1e 100%); border-radius: 20px; overflow: hidden; box-shadow: 0 10px 40px rgba(0,0,0,0.2);">
+
+                    <tr>
+                        <td style="padding: 30px 30px 20px; text-align: center;">
+                            <h1 style="margin: 0; color: #FFD700; font-size: 28px; font-weight: bold;">Godly Hub</h1>
+                            <p style="margin: 5px 0 0; color: #eecaa0; font-size: 14px;">Stories and songs for kids 🌟</p>
+                        </td>
+                    </tr>
+
+                    <tr>
+                        <td style="padding: 0 30px 30px;">
+                            <p style="color: #ffffff; font-size: 16px; line-height: 1.6; margin: 0 0 16px;">
+                                Hi ${name},
+                            </p>
+                            <p style="color: #eecaa0; font-size: 15px; line-height: 1.6; margin: 0 0 24px;">
+                                You've been invited to publish your audiobooks and songs on Godly Hub.
+                                Set your password to open your creator dashboard, where you can upload
+                                content, set your price in tokens, and track your earnings.
+                            </p>
+                            <table width="100%" cellpadding="0" cellspacing="0">
+                                <tr>
+                                    <td align="center" style="padding: 8px 0 24px;">
+                                        <a href="${inviteUrl}" style="display: inline-block; background: #FFD700; color: #3e2a1e; font-size: 16px; font-weight: bold; text-decoration: none; padding: 14px 32px; border-radius: 999px;">
+                                            Accept Invite
+                                        </a>
+                                    </td>
+                                </tr>
+                            </table>
+                            <p style="color: #b99b7a; font-size: 12px; line-height: 1.6; margin: 0; word-break: break-all;">
+                                Or paste this link into your browser:<br>${inviteUrl}
+                            </p>
+                            <p style="color: #b99b7a; font-size: 12px; line-height: 1.6; margin: 16px 0 0;">
+                                Weren't expecting this? You can ignore this email. Questions? ${supportEmail}
+                            </p>
+                        </td>
+                    </tr>
+                </table>
+            </td>
+        </tr>
+    </table>
+</body>
+</html>
+            `,
+            text: `
+Godly Hub — Creator Invite
+
+Hi ${name},
+
+You've been invited to publish your audiobooks and songs on Godly Hub.
+
+Set your password and open your creator dashboard:
+${inviteUrl}
+
+Weren't expecting this? You can safely ignore this email.
+
+Questions? Contact us at ${supportEmail}
+
+© ${new Date().getFullYear()} GodlyKids
+            `.trim()
+        };
+
+        const info = await transport.sendMail(mailOptions);
+
+        console.log('✅ Creator invite email sent to:', email, 'MessageId:', info.messageId);
+        return { success: true, messageId: info.messageId };
+
+    } catch (error) {
+        console.error('❌ Creator invite email error:', error);
+        return { success: false, error: error.message };
+    }
+};
+
 module.exports = {
     sendPasswordResetEmail,
     sendWelcomeEmail,
+    sendCreatorInviteEmail,
     sendQuizResultsEmail,
     testEmailConfig
 };

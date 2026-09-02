@@ -10,9 +10,13 @@ import {
   ArrowLeft,
   Save,
   DollarSign,
-  Info
+  Info,
+  Clock,
+  Lock,
+  Hammer
 } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
+import { useCentsPerToken, tokensToDollars } from '../../hooks/useCentsPerToken';
 
 const API_URL = import.meta.env.VITE_API_URL || 'https://backendgk2-0.onrender.com';
 
@@ -24,6 +28,11 @@ interface AudioItem {
   audioUrl: string;
   duration?: number;
   order: number;
+  /** Announced but not finished — listed in the app with a release month. */
+  planned?: boolean;
+  releaseDate?: string;
+  /** Set by the backend; episodes released after publish await approval. */
+  reviewStatus?: 'approved' | 'pending' | 'rejected';
 }
 
 interface PlaylistData {
@@ -37,17 +46,28 @@ interface PlaylistData {
   categories: string[];
   minAge?: number;
   items: AudioItem[];
+  /** Cadence promise shown on the pledge card, e.g. "One a month". */
+  releasePlan?: string;
 }
+
+/** <input type="month"> works in "YYYY-MM"; the API stores a Date. */
+const toMonthInput = (value?: string) => (value ? value.slice(0, 7) : '');
+const fromMonthInput = (value: string) => (value ? `${value}-01` : '');
 
 const CreatorContentForm: React.FC = () => {
   const { id } = useParams();
   const navigate = useNavigate();
   const { getToken } = useAuth();
+  const centsPerToken = useCentsPerToken();
   const isEditing = !!id;
 
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState<string | null>(null);
+  // Published series can only be edited through the episodes endpoint, which
+  // freezes what's already live and sends new releases to review.
+  const [status, setStatus] = useState<string>('draft');
+  const isPublished = status === 'published';
   
   const [data, setData] = useState<PlaylistData>({
     title: '',
@@ -75,6 +95,7 @@ const CreatorContentForm: React.FC = () => {
         headers: { Authorization: `Bearer ${token}` }
       });
       const playlist = res.data.playlist;
+      setStatus(playlist.status || 'draft');
       setData({
         title: playlist.title,
         description: playlist.description || '',
@@ -85,7 +106,11 @@ const CreatorContentForm: React.FC = () => {
         coverImage: playlist.coverImage || '',
         categories: playlist.categories || ['Godly Hub'],
         minAge: playlist.minAge,
-        items: playlist.items || [],
+        releasePlan: playlist.releasePlan || '',
+        items: (playlist.items || []).map((item: AudioItem) => ({
+          ...item,
+          releaseDate: toMonthInput(item.releaseDate),
+        })),
       });
     } catch (error) {
       console.error('Error fetching playlist:', error);
@@ -138,7 +163,7 @@ const CreatorContentForm: React.FC = () => {
 
     try {
       const formData = new FormData();
-      formData.append('audio', file);
+      formData.append('file', file); // Backend expects 'file' field name
 
       const res = await axios.post(
         `${API_URL}/api/upload/audio?bookId=hub-content&type=episode`,
@@ -162,7 +187,7 @@ const CreatorContentForm: React.FC = () => {
     }
   };
 
-  const addItem = () => {
+  const addItem = (planned = false) => {
     setData(prev => ({
       ...prev,
       items: [
@@ -173,6 +198,8 @@ const CreatorContentForm: React.FC = () => {
           coverImage: '',
           audioUrl: '',
           order: prev.items.length,
+          planned,
+          releaseDate: '',
         },
       ],
     }));
@@ -185,7 +212,7 @@ const CreatorContentForm: React.FC = () => {
     }));
   };
 
-  const updateItem = (index: number, field: keyof AudioItem, value: string) => {
+  const updateItem = (index: number, field: keyof AudioItem, value: string | boolean) => {
     setData(prev => ({
       ...prev,
       items: prev.items.map((item, i) => 
@@ -193,6 +220,26 @@ const CreatorContentForm: React.FC = () => {
       ),
     }));
   };
+
+  /** Flipping an episode to "coming soon" clears the audio it can't have yet. */
+  const togglePlanned = (index: number, planned: boolean) => {
+    setData(prev => ({
+      ...prev,
+      items: prev.items.map((item, i) =>
+        i === index
+          ? { ...item, planned, audioUrl: planned ? '' : item.audioUrl, duration: planned ? undefined : item.duration }
+          : item
+      ),
+    }));
+  };
+
+  /** An episode is live once it's approved and no longer planned. */
+  const isLive = (item: AudioItem) =>
+    !item.planned && !!item.audioUrl && (item.reviewStatus || 'approved') === 'approved';
+
+  const releasedCount = data.items.filter(item => !item.planned).length;
+  const plannedCount = data.items.filter(item => item.planned).length;
+  const inProgress = plannedCount > 0;
 
   const handleSave = async (submit = false) => {
     if (!data.title.trim()) {
@@ -215,8 +262,18 @@ const CreatorContentForm: React.FC = () => {
       return;
     }
 
-    if (submit && data.items.some(item => !item.audioUrl)) {
-      alert('All episodes must have audio files');
+    const badItem = data.items.find(item =>
+      item.planned ? !item.releaseDate : !item.audioUrl
+    );
+    if (badItem) {
+      alert(badItem.planned
+        ? `"${badItem.title}" is marked coming soon, so it needs a release month`
+        : `"${badItem.title}" needs an audio file, or mark it coming soon`);
+      return;
+    }
+
+    if (submit && releasedCount === 0) {
+      alert('At least one episode must be ready — a series cannot be all coming soon');
       return;
     }
 
@@ -226,12 +283,35 @@ const CreatorContentForm: React.FC = () => {
       const token = getToken();
       const headers = { Authorization: `Bearer ${token}` };
 
+      // Dates go to the API as real dates, not "YYYY-MM".
+      const payload = {
+        ...data,
+        items: data.items.map(item => ({
+          ...item,
+          releaseDate: item.planned ? fromMonthInput(item.releaseDate || '') : undefined,
+        })),
+      };
+
       let playlistId = id;
 
+      if (isPublished) {
+        // Live series: only the episode list and release plan can change.
+        const res = await axios.put(
+          `${API_URL}/api/hub/my-playlists/${id}/episodes`,
+          { items: payload.items, releasePlan: data.releasePlan },
+          { headers }
+        );
+        if (res.data.newlyReleased > 0) {
+          alert(`${res.data.newlyReleased} new episode(s) sent for review. They go live once approved.`);
+        }
+        navigate('/creator/content');
+        return;
+      }
+
       if (isEditing) {
-        await axios.put(`${API_URL}/api/hub/my-playlists/${id}`, data, { headers });
+        await axios.put(`${API_URL}/api/hub/my-playlists/${id}`, payload, { headers });
       } else {
-        const res = await axios.post(`${API_URL}/api/hub/my-playlists`, data, { headers });
+        const res = await axios.post(`${API_URL}/api/hub/my-playlists`, payload, { headers });
         playlistId = res.data.playlist._id;
       }
 
@@ -253,7 +333,7 @@ const CreatorContentForm: React.FC = () => {
     }
   };
 
-  const estimatedEarnings = (data.priceTokens * 0.54).toFixed(2);
+  const estimatedEarnings = tokensToDollars(data.priceTokens, centsPerToken);
 
   if (loading) {
     return (
@@ -390,7 +470,7 @@ const CreatorContentForm: React.FC = () => {
             </div>
             <p className="text-xs text-gray-400 mt-2 flex items-center gap-1">
               <Info className="w-3 h-3" />
-              Token purchases: After fees (Apple 15% + GodlyKids 20%), you earn ~$0.54 per token.
+              Token purchases: after store and platform fees, you earn ~${(centsPerToken / 100).toFixed(2)} per token.
             </p>
           </div>
 
@@ -480,37 +560,137 @@ const CreatorContentForm: React.FC = () => {
       {/* Episodes/Songs */}
       <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
         <div className="flex items-center justify-between mb-4">
-          <h2 className="text-lg font-semibold text-gray-900">
-            {data.type === 'Audiobook' ? 'Episodes' : 'Songs'}
-          </h2>
-          <button
-            onClick={addItem}
-            className="inline-flex items-center gap-2 px-3 py-1.5 bg-indigo-50 text-indigo-600 rounded-lg hover:bg-indigo-100 transition-colors text-sm"
-          >
-            <Plus className="w-4 h-4" />
-            Add {data.type === 'Audiobook' ? 'Episode' : 'Song'}
-          </button>
+          <div>
+            <h2 className="text-lg font-semibold text-gray-900">
+              {data.type === 'Audiobook' ? 'Episodes' : 'Songs'}
+            </h2>
+            {data.items.length > 0 && (
+              <p className="text-sm text-gray-500 mt-0.5">
+                {inProgress
+                  ? `${releasedCount} of ${data.items.length} ready · ${plannedCount} coming soon`
+                  : `${data.items.length} ready · series marked complete`}
+              </p>
+            )}
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => addItem(true)}
+              className="inline-flex items-center gap-2 px-3 py-1.5 bg-amber-50 text-amber-700 rounded-lg hover:bg-amber-100 transition-colors text-sm"
+            >
+              <Clock className="w-4 h-4" />
+              Add Coming Soon
+            </button>
+            <button
+              onClick={() => addItem(false)}
+              className="inline-flex items-center gap-2 px-3 py-1.5 bg-indigo-50 text-indigo-600 rounded-lg hover:bg-indigo-100 transition-colors text-sm"
+            >
+              <Plus className="w-4 h-4" />
+              Add {data.type === 'Audiobook' ? 'Episode' : 'Song'}
+            </button>
+          </div>
         </div>
 
+        {/* An unfinished series can still be bought — as a pledge. Tell the
+            creator what that means and let them promise a cadence. */}
+        {inProgress && (
+          <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 p-4">
+            <div className="flex items-start gap-3">
+              <Hammer className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
+              <div className="flex-1">
+                <p className="text-sm font-medium text-amber-900">
+                  This series will show as In Progress
+                </p>
+                <p className="text-xs text-amber-800 mt-1">
+                  Families can buy it now as a pledge: they get the {releasedCount} ready
+                  {data.type === 'Audiobook' ? ' episode' : ' song'}{releasedCount === 1 ? '' : 's'} today
+                  and every coming-soon one free as you release it.
+                </p>
+                <label className="block text-xs font-medium text-amber-900 mt-3 mb-1">
+                  Your release promise
+                </label>
+                <input
+                  type="text"
+                  value={data.releasePlan || ''}
+                  onChange={(e) => setData(prev => ({ ...prev, releasePlan: e.target.value }))}
+                  className="w-full px-3 py-2 border border-amber-300 rounded-lg text-sm bg-white focus:ring-2 focus:ring-amber-500 focus:border-transparent"
+                  placeholder="e.g. One new episode every month"
+                />
+              </div>
+            </div>
+          </div>
+        )}
+
+        {isPublished && (
+          <div className="mb-4 rounded-lg border border-blue-200 bg-blue-50 p-3 flex items-start gap-3">
+            <Info className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" />
+            <p className="text-xs text-blue-800">
+              This series is live. Episodes families already own are locked, but you can
+              schedule new ones and release them by uploading audio — each new release goes
+              to our review team before it appears in the app.
+            </p>
+          </div>
+        )}
+
         <div className="space-y-4">
-          {data.items.map((item, index) => (
+          {data.items.map((item, index) => {
+            const locked = isPublished && isLive(item);
+            const pending = item.reviewStatus === 'pending';
+            const rejected = item.reviewStatus === 'rejected';
+            return (
             <div
-              key={index}
-              className="border border-gray-200 rounded-lg p-4 space-y-4"
+              key={item._id || index}
+              className={`rounded-lg p-4 space-y-4 border ${
+                item.planned
+                  ? 'border-dashed border-amber-300 bg-amber-50/40'
+                  : 'border-gray-200'
+              }`}
             >
               <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 flex-wrap">
                   <GripVertical className="w-4 h-4 text-gray-400" />
                   <span className="font-medium text-gray-700">
                     {data.type === 'Audiobook' ? `Episode ${index + 1}` : `Track ${index + 1}`}
                   </span>
+                  {locked && (
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-green-100 text-green-700 text-xs">
+                      <Lock className="w-3 h-3" /> Live
+                    </span>
+                  )}
+                  {pending && (
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-blue-100 text-blue-700 text-xs">
+                      In review
+                    </span>
+                  )}
+                  {rejected && (
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-red-100 text-red-700 text-xs">
+                      Not approved
+                    </span>
+                  )}
                 </div>
-                <button
-                  onClick={() => removeItem(index)}
-                  className="p-1 text-red-500 hover:bg-red-50 rounded transition-colors"
-                >
-                  <Trash2 className="w-4 h-4" />
-                </button>
+                <div className="flex items-center gap-3">
+                  <label
+                    className={`inline-flex items-center gap-2 text-xs ${
+                      locked ? 'text-gray-300 cursor-not-allowed' : 'text-gray-600 cursor-pointer'
+                    }`}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={!!item.planned}
+                      disabled={locked}
+                      onChange={(e) => togglePlanned(index, e.target.checked)}
+                      className="rounded border-gray-300 text-amber-600 focus:ring-amber-500"
+                    />
+                    Coming soon
+                  </label>
+                  <button
+                    onClick={() => removeItem(index)}
+                    disabled={locked}
+                    title={locked ? 'Live episodes cannot be removed' : 'Remove'}
+                    className="p-1 text-red-500 hover:bg-red-50 rounded transition-colors disabled:text-gray-300 disabled:hover:bg-transparent disabled:cursor-not-allowed"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                </div>
               </div>
 
               <div className="grid grid-cols-2 gap-4">
@@ -519,33 +699,59 @@ const CreatorContentForm: React.FC = () => {
                   <input
                     type="text"
                     value={item.title}
+                    disabled={locked}
                     onChange={(e) => updateItem(index, 'title', e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                    className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 focus:border-transparent disabled:bg-gray-50 disabled:text-gray-500"
                     placeholder="Episode title"
                   />
                 </div>
-                <div>
-                  <label className="block text-xs text-gray-500 mb-1">Audio File *</label>
-                  <label className="inline-flex items-center gap-2 px-3 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors cursor-pointer text-sm w-full justify-center">
-                    <Upload className="w-4 h-4" />
-                    {uploading === `audio-${index}` 
-                      ? 'Uploading...' 
-                      : item.audioUrl 
-                        ? 'Replace Audio' 
-                        : 'Upload Audio'
-                    }
+                {item.planned ? (
+                  <div>
+                    <label className="block text-xs text-gray-500 mb-1">Expected release *</label>
                     <input
-                      type="file"
-                      accept="audio/*"
-                      className="hidden"
-                      onChange={(e) => e.target.files?.[0] && handleAudioUpload(e.target.files[0], index)}
-                      disabled={uploading === `audio-${index}`}
+                      type="month"
+                      value={item.releaseDate || ''}
+                      onChange={(e) => updateItem(index, 'releaseDate', e.target.value)}
+                      className="w-full px-3 py-2 border border-amber-300 rounded-lg text-sm bg-white focus:ring-2 focus:ring-amber-500 focus:border-transparent"
                     />
-                  </label>
-                  {item.audioUrl && (
-                    <p className="text-xs text-green-600 mt-1">✓ Audio uploaded</p>
-                  )}
-                </div>
+                    <p className="text-xs text-amber-700 mt-1">
+                      Shown in the app as "Coming {item.releaseDate
+                        ? new Date(`${item.releaseDate}-01T00:00:00`).toLocaleDateString(undefined, { month: 'short', year: 'numeric' })
+                        : '…'}"
+                    </p>
+                  </div>
+                ) : (
+                  <div>
+                    <label className="block text-xs text-gray-500 mb-1">Audio File *</label>
+                    <label
+                      className={`inline-flex items-center gap-2 px-3 py-2 rounded-lg transition-colors text-sm w-full justify-center ${
+                        locked
+                          ? 'bg-gray-50 text-gray-400 cursor-not-allowed'
+                          : 'bg-gray-100 text-gray-700 hover:bg-gray-200 cursor-pointer'
+                      }`}
+                    >
+                      <Upload className="w-4 h-4" />
+                      {locked
+                        ? 'Locked'
+                        : uploading === `audio-${index}`
+                          ? 'Uploading...'
+                          : item.audioUrl
+                            ? 'Replace Audio'
+                            : 'Upload Audio'
+                      }
+                      <input
+                        type="file"
+                        accept="audio/*"
+                        className="hidden"
+                        onChange={(e) => e.target.files?.[0] && handleAudioUpload(e.target.files[0], index)}
+                        disabled={locked || uploading === `audio-${index}`}
+                      />
+                    </label>
+                    {item.audioUrl && (
+                      <p className="text-xs text-green-600 mt-1">✓ Audio uploaded</p>
+                    )}
+                  </div>
+                )}
               </div>
 
               <div>
@@ -553,20 +759,22 @@ const CreatorContentForm: React.FC = () => {
                 <input
                   type="text"
                   value={item.description}
+                  disabled={locked}
                   onChange={(e) => updateItem(index, 'description', e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                  className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 focus:border-transparent disabled:bg-gray-50 disabled:text-gray-500"
                   placeholder="Brief description"
                 />
               </div>
             </div>
-          ))}
+            );
+          })}
 
           {data.items.length === 0 && (
             <div className="text-center py-8 text-gray-500">
               <Music2 className="w-12 h-12 mx-auto mb-3 text-gray-300" />
               <p>No {data.type === 'Audiobook' ? 'episodes' : 'songs'} yet</p>
               <button
-                onClick={addItem}
+                onClick={() => addItem(false)}
                 className="text-indigo-600 hover:text-indigo-700 text-sm mt-2"
               >
                 Add your first {data.type === 'Audiobook' ? 'episode' : 'song'}
@@ -585,21 +793,35 @@ const CreatorContentForm: React.FC = () => {
           Cancel
         </button>
         <div className="flex items-center gap-3">
-          <button
-            onClick={() => handleSave(false)}
-            disabled={saving}
-            className="inline-flex items-center gap-2 px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors disabled:opacity-50"
-          >
-            <Save className="w-4 h-4" />
-            Save Draft
-          </button>
-          <button
-            onClick={() => handleSave(true)}
-            disabled={saving || data.items.length === 0}
-            className="inline-flex items-center gap-2 px-6 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors disabled:opacity-50"
-          >
-            {saving ? 'Saving...' : 'Save & Submit for Review'}
-          </button>
+          {isPublished ? (
+            // A live series has nothing to submit — saving IS the release.
+            <button
+              onClick={() => handleSave(false)}
+              disabled={saving}
+              className="inline-flex items-center gap-2 px-6 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors disabled:opacity-50"
+            >
+              <Save className="w-4 h-4" />
+              {saving ? 'Saving...' : 'Save Episodes'}
+            </button>
+          ) : (
+            <>
+              <button
+                onClick={() => handleSave(false)}
+                disabled={saving}
+                className="inline-flex items-center gap-2 px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors disabled:opacity-50"
+              >
+                <Save className="w-4 h-4" />
+                Save Draft
+              </button>
+              <button
+                onClick={() => handleSave(true)}
+                disabled={saving || data.items.length === 0}
+                className="inline-flex items-center gap-2 px-6 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors disabled:opacity-50"
+              >
+                {saving ? 'Saving...' : 'Save & Submit for Review'}
+              </button>
+            </>
+          )}
         </div>
       </div>
     </div>

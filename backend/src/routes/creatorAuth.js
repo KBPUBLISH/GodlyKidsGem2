@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const jwt = require('jsonwebtoken');
 const Creator = require('../models/Creator');
+const { centsPerToken } = require('../config/creatorEarnings');
 
 // Middleware to authenticate creator
 const authenticateCreator = async (req, res, next) => {
@@ -216,6 +217,8 @@ router.get('/me', authenticateCreator, async (req, res) => {
             totalSalesCount: creator.totalSalesCount,
             payoutMethod: creator.payoutMethod,
             payoutEmail: creator.payoutEmail,
+            // So the portal shows this creator's real rate instead of guessing
+            centsPerToken: centsPerToken(creator),
         });
     } catch (error) {
         console.error('Get creator profile error:', error);
@@ -227,11 +230,12 @@ router.get('/me', authenticateCreator, async (req, res) => {
 router.put('/me', authenticateCreator, async (req, res) => {
     try {
         const creator = req.creator;
-        const { name, bio, website, payoutMethod, payoutEmail, payoutAddress } = req.body;
+        const { name, bio, website, profileImage, payoutMethod, payoutEmail, payoutAddress } = req.body;
         
         if (name) creator.name = name;
         if (bio !== undefined) creator.bio = bio;
         if (website !== undefined) creator.website = website;
+        if (profileImage !== undefined) creator.profileImage = profileImage;
         if (payoutMethod) creator.payoutMethod = payoutMethod;
         if (payoutEmail) creator.payoutEmail = payoutEmail;
         if (payoutAddress) creator.payoutAddress = payoutAddress;

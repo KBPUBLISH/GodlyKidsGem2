@@ -6,7 +6,8 @@ import {
   Music2, 
   User, 
   Eye,
-  Clock
+  Clock,
+  Hammer
 } from 'lucide-react';
 
 const API_URL = import.meta.env.VITE_API_URL || 'https://backendgk2-0.onrender.com';
@@ -28,8 +29,16 @@ interface PendingPlaylist {
   submittedAt: string;
 }
 
+/** A published series whose creator just released another episode. */
+interface EpisodeReview extends PendingPlaylist {
+  pendingEpisodes: any[];
+  releasedEpisodeCount?: number;
+  plannedEpisodeCount?: number;
+}
+
 const HubReview: React.FC = () => {
   const [playlists, setPlaylists] = useState<PendingPlaylist[]>([]);
+  const [episodeReviews, setEpisodeReviews] = useState<EpisodeReview[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedPlaylist, setSelectedPlaylist] = useState<PendingPlaylist | null>(null);
   const [rejectNotes, setRejectNotes] = useState('');
@@ -46,10 +55,37 @@ const HubReview: React.FC = () => {
         headers: { Authorization: `Bearer ${token}` }
       });
       setPlaylists(res.data.playlists || []);
+      setEpisodeReviews(res.data.episodeReviews || []);
     } catch (error) {
       console.error('Error fetching pending:', error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleEpisodeReview = async (
+    playlistId: string,
+    itemId: string,
+    action: 'approve' | 'reject'
+  ) => {
+    const notes = action === 'reject'
+      ? window.prompt('Why is this episode not approved?') || ''
+      : '';
+    if (action === 'reject' && !notes.trim()) return;
+
+    setProcessing(true);
+    try {
+      const token = localStorage.getItem('portal_admin_token');
+      await axios.put(
+        `${API_URL}/api/hub/admin/playlists/${playlistId}/episodes/review`,
+        { action, itemId, notes },
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      fetchPending();
+    } catch (error: any) {
+      alert(error.response?.data?.error || 'Failed to process review');
+    } finally {
+      setProcessing(false);
     }
   };
 
@@ -116,6 +152,72 @@ const HubReview: React.FC = () => {
           </p>
         </div>
       </div>
+
+      {/* New episodes on series that are already live. These bypass the full
+          playlist review, so they get their own approve/reject queue. */}
+      {episodeReviews.length > 0 && (
+        <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
+          <div className="flex items-center gap-2 mb-4">
+            <Hammer className="w-5 h-5 text-amber-600" />
+            <h2 className="text-lg font-semibold text-gray-900">
+              New episodes on live series
+            </h2>
+          </div>
+          <div className="space-y-6">
+            {episodeReviews.map((series) => (
+              <div key={series._id} className="border border-gray-200 rounded-lg p-4">
+                <div className="flex items-center justify-between flex-wrap gap-2">
+                  <div>
+                    <h3 className="font-semibold text-gray-900">{series.title}</h3>
+                    <p className="text-sm text-gray-500">
+                      {series.creatorId?.name} · {series.releasedEpisodeCount ?? 0} of{' '}
+                      {series.items?.length || 0} released
+                    </p>
+                  </div>
+                  <span className="px-2 py-1 rounded-full bg-amber-100 text-amber-700 text-xs font-medium">
+                    {series.pendingEpisodes.length} awaiting review
+                  </span>
+                </div>
+
+                <div className="mt-3 space-y-3">
+                  {series.pendingEpisodes.map((episode: any) => (
+                    <div
+                      key={episode._id}
+                      className="bg-gray-50 rounded-lg p-3 flex flex-col gap-2"
+                    >
+                      <div>
+                        <p className="text-sm font-medium text-gray-900">{episode.title}</p>
+                        {episode.description && (
+                          <p className="text-xs text-gray-500">{episode.description}</p>
+                        )}
+                      </div>
+                      {episode.audioUrl && (
+                        <audio controls src={episode.audioUrl} className="w-full h-8" />
+                      )}
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => handleEpisodeReview(series._id, episode._id, 'approve')}
+                          disabled={processing}
+                          className="inline-flex items-center gap-1 px-3 py-1.5 text-sm bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50"
+                        >
+                          <CheckCircle className="w-4 h-4" /> Approve
+                        </button>
+                        <button
+                          onClick={() => handleEpisodeReview(series._id, episode._id, 'reject')}
+                          disabled={processing}
+                          className="inline-flex items-center gap-1 px-3 py-1.5 text-sm bg-red-50 text-red-600 rounded-lg hover:bg-red-100 transition-colors disabled:opacity-50"
+                        >
+                          <XCircle className="w-4 h-4" /> Reject
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Pending Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -198,7 +300,7 @@ const HubReview: React.FC = () => {
       </div>
 
       {/* Empty State */}
-      {playlists.length === 0 && (
+      {playlists.length === 0 && episodeReviews.length === 0 && (
         <div className="text-center py-12 bg-white rounded-xl border border-gray-100">
           <CheckCircle className="w-16 h-16 mx-auto text-green-300 mb-4" />
           <h3 className="text-lg font-medium text-gray-900">All caught up!</h3>

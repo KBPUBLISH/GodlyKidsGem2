@@ -5,6 +5,7 @@ const TokenPurchase = require('../models/TokenPurchase');
 const TokenTransaction = require('../models/TokenTransaction');
 const HubPlaylist = require('../models/HubPlaylist');
 const Creator = require('../models/Creator');
+const { creatorEarningsCents: calculateCreatorEarnings } = require('../config/creatorEarnings');
 
 // Helper to get/create AppUser
 const getOrCreateAppUser = async (userId, userEmail) => {
@@ -185,11 +186,9 @@ router.post('/spend', async (req, res) => {
             });
         }
         
-        // Calculate creator earnings
-        // Assuming average token cost of $0.80 (from 50-token bundle)
-        // After Apple 15% = $0.68 per token
-        // Creator gets 80% = $0.544 per token ≈ 54 cents
-        const creatorEarningsCents = Math.round(price * 54);
+        // Calculate creator earnings at this creator's rate
+        const creator = await Creator.findById(playlist.creatorId);
+        const creatorEarningsCents = calculateCreatorEarnings(price, creator);
         
         // Deduct tokens
         appUser.tokenBalance -= price;
@@ -207,7 +206,6 @@ router.post('/spend', async (req, res) => {
         await playlist.save();
         
         // Update creator earnings
-        const creator = await Creator.findById(playlist.creatorId);
         if (creator) {
             creator.totalEarningsCents = (creator.totalEarningsCents || 0) + creatorEarningsCents;
             creator.pendingPayoutCents = (creator.pendingPayoutCents || 0) + creatorEarningsCents;

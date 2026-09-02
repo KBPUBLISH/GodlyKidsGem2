@@ -7,6 +7,7 @@ import {
   Calendar
 } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
+import { useCentsPerToken } from '../../hooks/useCentsPerToken';
 
 const API_URL = import.meta.env.VITE_API_URL || 'https://backendgk2-0.onrender.com';
 
@@ -29,6 +30,7 @@ interface PlaylistSales {
 
 const CreatorEarnings: React.FC = () => {
   const { getToken } = useAuth();
+  const centsPerToken = useCentsPerToken();
   const [loading, setLoading] = useState(true);
   const [totalEarningsCents, setTotalEarningsCents] = useState(0);
   const [pendingPayoutCents, setPendingPayoutCents] = useState(0);
@@ -171,7 +173,7 @@ const CreatorEarnings: React.FC = () => {
                 </div>
                 <div className="text-right">
                   <p className="font-medium text-green-600">
-                    {formatCurrency(Math.round(playlist.totalTokensEarned * 54))}
+                    {formatCurrency(Math.round(playlist.totalTokensEarned * centsPerToken))}
                   </p>
                 </div>
               </div>

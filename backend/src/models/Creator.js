@@ -70,6 +70,14 @@ const creatorSchema = new mongoose.Schema({
         default: 0,
     },
     
+    // Negotiated rate override, in cents earned per token spent on their
+    // content. Unset means the platform rate (see config/creatorEarnings).
+    centsPerToken: {
+        type: Number,
+        min: 0,
+        default: null,
+    },
+    
     // Payout info (for future automated payouts)
     payoutMethod: {
         type: String,
@@ -124,7 +132,7 @@ creatorSchema.statics.generateInviteToken = function() {
 };
 
 // Indexes
-creatorSchema.index({ inviteToken: 1 });
+// inviteToken is already indexed by its unique+sparse field definition.
 creatorSchema.index({ status: 1, createdAt: -1 });
 
 module.exports = mongoose.model('Creator', creatorSchema);

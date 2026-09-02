@@ -447,8 +447,8 @@ router.post('/image', upload.single('file'), async (req, res) => {
         // Check if using organized structure
         if (bookId && type) {
             // Validate type
-            if (!['cover', 'pages', 'scroll', 'audio', 'game-cover', 'game-logo', 'thumbnail', 'character', 'image-sequence', 'map-art', 'sail-art', 'puzzle-image'].includes(type)) {
-                return res.status(400).json({ message: 'type must be one of: cover, pages, scroll, audio, game-cover, game-logo, thumbnail, character, image-sequence, map-art, sail-art, puzzle-image' });
+            if (!['cover', 'pages', 'scroll', 'audio', 'game-cover', 'game-logo', 'thumbnail', 'character', 'image-sequence', 'map-art', 'sail-art', 'puzzle-image', 'profile'].includes(type)) {
+                return res.status(400).json({ message: 'type must be one of: cover, pages, scroll, audio, game-cover, game-logo, thumbnail, character, image-sequence, map-art, sail-art, puzzle-image, profile' });
             }
             
             // Special handling for lessons

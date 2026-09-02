@@ -11,9 +11,11 @@ import {
   Clock,
   CheckCircle,
   XCircle,
-  AlertCircle
+  AlertCircle,
+  Hammer
 } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
+import { useCentsPerToken, tokensToDollars } from '../../hooks/useCentsPerToken';
 
 const API_URL = import.meta.env.VITE_API_URL || 'https://backendgk2-0.onrender.com';
 
@@ -29,12 +31,16 @@ interface Playlist {
   purchaseCount: number;
   totalTokensEarned: number;
   reviewNotes?: string;
+  seriesStatus?: 'complete' | 'in-progress';
+  releasedEpisodeCount?: number;
+  plannedEpisodeCount?: number;
   createdAt: string;
   updatedAt: string;
 }
 
 const CreatorContent: React.FC = () => {
   const { getToken } = useAuth();
+  const centsPerToken = useCentsPerToken();
   const navigate = useNavigate();
   const [playlists, setPlaylists] = useState<Playlist[]>([]);
   const [loading, setLoading] = useState(true);
@@ -185,13 +191,21 @@ const CreatorContent: React.FC = () => {
               <div className="absolute top-2 right-2">
                 {getStatusBadge(playlist.status)}
               </div>
+              {playlist.seriesStatus === 'in-progress' && (
+                <span className="absolute top-2 left-2 inline-flex items-center gap-1 px-2 py-1 rounded-full bg-amber-500 text-white text-xs font-medium shadow">
+                  <Hammer className="w-3 h-3" /> In Progress
+                </span>
+              )}
             </div>
 
             {/* Content Info */}
             <div className="p-4">
               <h3 className="font-semibold text-gray-900 truncate">{playlist.title}</h3>
               <p className="text-sm text-gray-500 mt-1">
-                {playlist.type} · {playlist.items?.length || 0} episodes
+                {playlist.type} ·{' '}
+                {playlist.seriesStatus === 'in-progress'
+                  ? `${playlist.releasedEpisodeCount ?? 0} of ${playlist.items?.length || 0} released`
+                  : `${playlist.items?.length || 0} episodes`}
               </p>
               
               <div className="flex items-center justify-between mt-3">
@@ -200,13 +214,14 @@ const CreatorContent: React.FC = () => {
                     {playlist.priceTokens} tokens
                   </p>
                   <p className="text-xs text-gray-400">
-                    ~${(playlist.priceTokens * 0.54).toFixed(2)} earnings
+                    ~${tokensToDollars(playlist.priceTokens, centsPerToken)} earnings
                   </p>
                 </div>
                 {playlist.status === 'published' && (
                   <div className="text-right">
                     <p className="text-sm font-medium text-gray-900">
-                      {playlist.purchaseCount || 0} sales
+                      {playlist.purchaseCount || 0}{' '}
+                      {playlist.seriesStatus === 'in-progress' ? 'backers' : 'sales'}
                     </p>
                   </div>
                 )}
@@ -254,10 +269,11 @@ const CreatorContent: React.FC = () => {
                 )}
                 {playlist.status === 'published' && (
                   <button
-                    onClick={() => navigate(`/creator/content/view/${playlist._id}`)}
+                    onClick={() => navigate(`/creator/content/edit/${playlist._id}`)}
                     className="flex-1 inline-flex items-center justify-center gap-1 px-3 py-2 text-sm bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors"
                   >
-                    <Eye className="w-4 h-4" /> View
+                    <Eye className="w-4 h-4" />
+                    {playlist.seriesStatus === 'in-progress' ? 'Manage Episodes' : 'View'}
                   </button>
                 )}
                 {playlist.status !== 'published' && (

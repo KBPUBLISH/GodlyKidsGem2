@@ -1,15 +1,18 @@
 import React, { useState } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import { useNavigate, useLocation, Link } from 'react-router-dom';
 import { Store, Mail, Lock, ArrowRight } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 
 const CreatorLogin: React.FC = () => {
   const navigate = useNavigate();
+  const location = useLocation();
   const { loginAsCreator } = useAuth();
-  
+
+  const sessionExpired = (location.state as { sessionExpired?: boolean } | null)?.sessionExpired;
+
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [error, setError] = useState('');
+  const [error, setError] = useState(sessionExpired ? 'Your session expired. Please sign in again.' : '');
   const [loading, setLoading] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {

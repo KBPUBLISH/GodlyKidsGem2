@@ -2,11 +2,13 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import axios from 'axios';
 import { Store, Lock, User, CheckCircle } from 'lucide-react';
+import { useAuth } from '../contexts/AuthContext';
 
 const API_URL = import.meta.env.VITE_API_URL || 'https://backendgk2-0.onrender.com';
 
 const CreatorAcceptInvite: React.FC = () => {
   const navigate = useNavigate();
+  const { activateCreatorSession } = useAuth();
   const [searchParams] = useSearchParams();
   const token = searchParams.get('token');
   
@@ -65,11 +67,11 @@ const CreatorAcceptInvite: React.FC = () => {
         bio,
       });
       
-      // Store the token and redirect
-      localStorage.setItem('gk_portal_auth', 'true');
-      localStorage.setItem('portal_admin_token', res.data.token);
-      localStorage.setItem('portal_user_role', 'creator');
-      localStorage.setItem('portal_user_data', JSON.stringify(res.data.creator));
+      const activated = activateCreatorSession(res.data.token, res.data.creator);
+      if (!activated.success) {
+        setError(activated.error ?? 'Failed to activate account');
+        return;
+      }
       
       navigate('/creator');
     } catch (err: any) {

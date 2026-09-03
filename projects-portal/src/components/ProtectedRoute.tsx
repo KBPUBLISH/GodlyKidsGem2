@@ -21,6 +21,12 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children }) => {
     return <Navigate to="/creator" replace />;
   }
 
+  // Anything other than a confirmed admin is sent back to the login screen
+  // rather than admitted: an unrecognised role must not open the admin portal.
+  if (role !== 'admin') {
+    return <Navigate to="/login" state={{ from: location }} replace />;
+  }
+
   return <>{children}</>;
 };
 

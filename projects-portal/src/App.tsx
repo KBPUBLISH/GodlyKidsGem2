@@ -2,6 +2,7 @@ import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import { AuthProvider } from './contexts/AuthContext';
 import ProtectedRoute from './components/ProtectedRoute';
 import RoleGuard from './components/RoleGuard';
+import SessionExpiryHandler from './components/SessionExpiryHandler';
 import Layout from './components/Layout';
 import CreatorLayout from './components/CreatorLayout';
 import Login from './pages/Login';
@@ -73,6 +74,7 @@ function App() {
   return (
     <AuthProvider>
       <Router>
+        <SessionExpiryHandler />
         <Routes>
           {/* Public Routes */}
           <Route path="/login" element={<Login />} />

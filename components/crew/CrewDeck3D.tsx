@@ -74,6 +74,11 @@ export type CrewDeckHandle = {
    * can still run music/lights on its own.
    */
   danceAll: (durationMs: number) => boolean;
+  /**
+   * Arrival greeting: every loaded character plays a wave/hello clip once
+   * (falls back to a variation clip). Returns false if nobody is ready yet.
+   */
+  waveAll: () => boolean;
   /** Cancel a running party early (chat opened / hatch descent / cleanup). */
   stopParty: () => void;
   /**
@@ -82,6 +87,8 @@ export type CrewDeckHandle = {
    * character standing in front of them draws on top.
    */
   feetPositions: () => { x: number; y: number }[];
+  /** Top-of-head screen position (CSS px in the deck container). */
+  characterAnchor: (characterId?: string) => { x: number; y: number } | null;
 };
 
 type Props = {
@@ -272,11 +279,11 @@ const DECK_ZONE: ZoneConfig = {
 };
 
 /* ------------------------------------------------------------------------ *
- * Basement lounge — traced over sail-boat-basement-bg.png (764×1024).
+ * Basement lounge — traced over sail-boat-basement-bg.jpg (686×1024).
  * ------------------------------------------------------------------------ */
 const BASEMENT_ZONE: ZoneConfig = {
-  img: { width: 764, height: 1024 },
-  bg: '/assets/images/sail-boat-basement-bg.png',
+  img: { width: 686, height: 1024 },
+  bg: '/assets/images/sail-boat-basement-bg.jpg',
   // Below deck he stands closer to the camera — render clearly larger.
   characterScale: 1.4,
   walkable: [
@@ -411,6 +418,9 @@ const pickDanceClip = (clips: THREE.AnimationClip[], idle: THREE.AnimationClip |
   clips.find((c) => c !== idle && !isLocomotion(c)) ||
   null;
 
+const pickWaveClip = (clips: THREE.AnimationClip[]) =>
+  clips.find((c) => /wav(e|ing)|hello|greet|hi\b|salut|bye/i.test(c.name)) || null;
+
 const strippedClips = new WeakSet<THREE.AnimationClip>();
 /** Authored root XZ travel per clip loop (local hips units), pre-strip. */
 const clipStrideLocal = new WeakMap<THREE.AnimationClip, number>();
@@ -493,6 +503,7 @@ type Figure = {
   idleAction: THREE.AnimationAction | null;
   walkAction: THREE.AnimationAction | null;
   danceAction: THREE.AnimationAction | null;
+  waveAction: THREE.AnimationAction | null;
   variationActions: THREE.AnimationAction[];
   currentAction: THREE.AnimationAction | null;
   /** Authored walk coverage as body-heights per second (for timeScale). */
@@ -528,6 +539,8 @@ type Figure = {
   /** Basement: when to head back up the stairs (epoch ms). */
   departAt: number;
   exit: Exit | null;
+  /** True while waiting at a stair base for another climber (single-file). */
+  stairHolding: boolean;
 };
 
 const gltfCache = new Map<string, Promise<GLTF>>();
@@ -558,8 +571,12 @@ const CrewDeck3D = forwardRef<CrewDeckHandle, Props>(function CrewDeck3D(
   );
   const hitTestFnRef = useRef<CrewDeckHandle['characterAt'] | null>(null);
   const danceAllFnRef = useRef<((durationMs: number) => boolean) | null>(null);
+  const waveAllFnRef = useRef<(() => boolean) | null>(null);
   const stopPartyFnRef = useRef<(() => void) | null>(null);
   const feetFnRef = useRef<(() => { x: number; y: number }[]) | null>(null);
+  const anchorFnRef = useRef<((id?: string) => { x: number; y: number } | null) | null>(
+    null,
+  );
 
   useImperativeHandle(
     ref,
@@ -568,8 +585,10 @@ const CrewDeck3D = forwardRef<CrewDeckHandle, Props>(function CrewDeck3D(
         descendFnRef.current?.(id, onDone) ?? false,
       characterAt: (x: number, y: number) => hitTestFnRef.current?.(x, y) ?? null,
       danceAll: (durationMs: number) => danceAllFnRef.current?.(durationMs) ?? false,
+      waveAll: () => waveAllFnRef.current?.() ?? false,
       stopParty: () => stopPartyFnRef.current?.(),
       feetPositions: () => feetFnRef.current?.() ?? [],
+      characterAnchor: (id?: string) => anchorFnRef.current?.(id) ?? null,
     }),
     [],
   );
@@ -954,12 +973,17 @@ const CrewDeck3D = forwardRef<CrewDeckHandle, Props>(function CrewDeck3D(
       f.materials.forEach((m) => {
         m.transparent = solid ? m.userData.wasTransparent === true : true;
         m.opacity = opacity;
+        // Keep depth-write ON while fading so a half-faded character still
+        // self-occludes (no limbs visible through the torso mid-descent);
+        // restore the material's own setting once solid again.
+        m.depthWrite = solid ? m.userData.wasDepthWrite !== false : true;
       });
       f.shadowMat.opacity = opacity;
     };
 
     const goIdle = (f: Figure, now: number) => {
       f.mode = 'idle';
+      f.stairHolding = false;
       f.idleUntil = now + rand(...IDLE_RANGE_MS);
       f.targetHeading = 0; // settle facing the camera
       if (f.walkAction) f.walkAction.timeScale = 1;
@@ -1001,11 +1025,36 @@ const CrewDeck3D = forwardRef<CrewDeckHandle, Props>(function CrewDeck3D(
       return sampleMainPoint(f.pos);
     };
 
+    /**
+     * True when a candidate destination is parked on top of another
+     * character (their current spot, or where their own stroll will end).
+     */
+    const destCrowded = (f: Figure, dest: Pt): boolean =>
+      solidFigures(f).some((o) => {
+        const clear = (radiusPx(f) + radiusPx(o)) * 1.4;
+        const dPos = Math.hypot(
+          (dest.x - o.pos.x) * viewW,
+          (dest.y - o.pos.y) * viewH,
+        );
+        if (dPos < clear) return true;
+        const oDest = o.legs.length > 0 ? o.legs[o.legs.length - 1].to : null;
+        return oDest
+          ? Math.hypot((dest.x - oDest.x) * viewW, (dest.y - oDest.y) * viewH) <
+              clear
+          : false;
+      });
+
     /** Route to a fresh destination; false if nothing routable was found. */
     const startStrollTo = (f: Figure): boolean => {
-      for (let attempt = 0; attempt < 3; attempt++) {
+      for (let attempt = 0; attempt < 4; attempt++) {
         const dest = pickDestination(f);
         if (!dest) continue;
+        // Don't aim at a spot someone is standing on / heading to (the
+        // debug-forced first stop skips this so verification stays exact;
+        // the last attempt also skips it rather than not strolling at all).
+        const forcedDebug =
+          f.strollCount === 1 && !!localStorage.getItem('debugCrewFirstStop');
+        if (attempt < 3 && !forcedDebug && destCrowded(f, dest)) continue;
         const legs = buildRoute(f.pos, dest);
         if (!legs || legs.length === 0) continue;
         f.legs = legs;
@@ -1086,7 +1135,20 @@ const CrewDeck3D = forwardRef<CrewDeckHandle, Props>(function CrewDeck3D(
                 : [mesh.material];
               const clones = mats.map((m) => {
                 const c = m.clone();
+                // Meshy exports (and the portal optimizer's re-encode of
+                // them) ship materials with alphaMode BLEND even though the
+                // art is fully opaque. three.js draws BLEND with depth-write
+                // OFF, so far limbs/backfaces show through the torso while
+                // walking. Unless the material genuinely wants translucency
+                // (authored opacity < 1), force it solid; real cutouts
+                // (alphaMode MASK → alphaTest) arrive with transparent=false
+                // and are untouched.
+                if (c.transparent && c.opacity >= 1) {
+                  c.transparent = false;
+                  c.depthWrite = true;
+                }
                 c.userData.wasTransparent = c.transparent;
+                c.userData.wasDepthWrite = c.depthWrite;
                 return c;
               });
               mesh.material = Array.isArray(mesh.material) ? clones : clones[0];
@@ -1113,6 +1175,7 @@ const CrewDeck3D = forwardRef<CrewDeckHandle, Props>(function CrewDeck3D(
           const idleClip = pickIdleClip(clips);
           const walkClip = pickWalkClip(clips);
           const danceClip = pickDanceClip(clips, idleClip);
+          const waveClip = pickWaveClip(clips);
           const idleAction = idleClip ? mixer.clipAction(idleClip) : null;
           const walkAction = walkClip ? mixer.clipAction(walkClip) : null;
           const danceAction = danceClip ? mixer.clipAction(danceClip) : null;
@@ -1121,6 +1184,9 @@ const CrewDeck3D = forwardRef<CrewDeckHandle, Props>(function CrewDeck3D(
               (c) => c !== idleClip && c !== danceClip && !isLocomotion(c),
             )
             .map((c) => mixer.clipAction(c));
+          const waveAction = waveClip
+            ? mixer.clipAction(waveClip)
+            : variationActions[0] || null;
 
           // Normalize to unit height, feet at y=0, centered on x/z.
           // IMPORTANT: measure the *animated* pose, not the bind pose — some
@@ -1204,6 +1270,7 @@ const CrewDeck3D = forwardRef<CrewDeckHandle, Props>(function CrewDeck3D(
             idleAction,
             walkAction,
             danceAction,
+            waveAction,
             variationActions,
             currentAction: null,
             walkStrideHeightsPerSec,
@@ -1222,6 +1289,7 @@ const CrewDeck3D = forwardRef<CrewDeckHandle, Props>(function CrewDeck3D(
             emergeT0: 0,
             departAt: Date.now() + stayMs(),
             exit: null,
+            stairHolding: false,
           };
           startAction(f, idleAction, 0);
 
@@ -1286,6 +1354,40 @@ const CrewDeck3D = forwardRef<CrewDeckHandle, Props>(function CrewDeck3D(
       partyUntil = performance.now() + durationMs;
       danceMusic.start();
       console.info(`CrewDeck3D[${zone}]: party started — ${joined} dancing`);
+      return true;
+    };
+
+    waveAllFnRef.current = () => {
+      const ready = figures.filter((f) => {
+        const action = f.waveAction || f.variationActions[0] || null;
+        if (!action) return false;
+        return (
+          f.mode === 'idle' ||
+          f.mode === 'variation' ||
+          f.mode === 'walking'
+        );
+      });
+      if (ready.length === 0) return false;
+      ready.forEach((f, i) => {
+        const action = f.waveAction || f.variationActions[0];
+        if (!action) return;
+        const start = () => {
+          if (
+            f.mode !== 'idle' &&
+            f.mode !== 'variation' &&
+            f.mode !== 'walking'
+          ) {
+            return;
+          }
+          f.legs = [];
+          f.mode = 'variation';
+          f.targetHeading = 0;
+          playOneShot(f, action);
+        };
+        if (i === 0) start();
+        else window.setTimeout(start, i * 180);
+      });
+      console.info(`CrewDeck3D[${zone}]: wave greeting — ${ready.length}`);
       return true;
     };
 
@@ -1357,10 +1459,46 @@ const CrewDeck3D = forwardRef<CrewDeckHandle, Props>(function CrewDeck3D(
       return f ? { character: f.character, anchor: anchorFor(f) } : null;
     };
 
+    anchorFnRef.current = (characterId?: string) => {
+      const f = characterId
+        ? figures.find((fig) => fig.character.id === characterId)
+        : figures[0];
+      return f ? anchorFor(f) : null;
+    };
+
     feetFnRef.current = () =>
       figures
         .filter((f) => f.mode !== 'away' && f.mode !== 'gone')
         .map((f) => ({ x: f.pos.x * viewW, y: f.pos.y * viewH }));
+
+    // DEV ONLY: expose foot positions + radii so headless tests can assert
+    // characters never overlap while wandering. Gated like debugCrewZones.
+    if (localStorage.getItem('debugCrewFeet')) {
+      (
+        window as unknown as {
+          __crewFeet?: () => {
+            x: number;
+            y: number;
+            r: number;
+            mode: string;
+            ghost: boolean;
+          }[];
+        }
+      ).__crewFeet = () =>
+        figures
+          .filter((f) => f.mode !== 'away' && f.mode !== 'gone')
+          .map((f) => ({
+            x: f.pos.x * viewW,
+            y: f.pos.y * viewH,
+            r: radiusPx(f),
+            mode: f.mode,
+            // Fading through the hatch / rising half-transparent — these
+            // legitimately share space with solid characters briefly.
+            ghost:
+              f.mode === 'emerging' ||
+              (f.mode === 'exiting' && f.exit?.phase !== 'approach'),
+          }));
+    }
 
     const onPointerDown = (ev: PointerEvent) => {
       const f = figureAtPoint(ev.clientX, ev.clientY);
@@ -1405,14 +1543,185 @@ const CrewDeck3D = forwardRef<CrewDeckHandle, Props>(function CrewDeck3D(
       );
     };
 
-    /** Advance along a leg queue; returns true when the queue is finished. */
-    const walkLegs = (f: Figure, legs: Leg[], baseSpeed: number, dt: number, s: number) => {
+    /* ---- character-vs-character avoidance --------------------------------
+     * Each character is a soft circle whose radius scales with his rendered
+     * height (perspective depth). Walkers steer around anyone inside the
+     * circle via a repulsion vector blended into the seek direction; mutual
+     * walkers break ties deterministically (higher character id yields) so
+     * two approaching characters never mirror-dance forever. Stairs are
+     * single-file: a walker holds at the base while someone else is on one.
+     * -------------------------------------------------------------------- */
+
+    /** Personal-space radius in px at the character's current depth. */
+    const radiusPx = (f: Figure) => heightAt(f.pos.y) * 0.17;
+
+    /**
+     * Figures that occupy floor space — idlers block walkers, and so do
+     * scripted walkers (hatch-bound 'exiting' before their fade starts, and
+     * 'emerging' risers), otherwise wanderers pass straight through them.
+     */
+    const solidFigures = (self: Figure) =>
+      figures.filter(
+        (o) =>
+          o !== self &&
+          (o.mode === 'idle' ||
+            o.mode === 'variation' ||
+            o.mode === 'walking' ||
+            o.mode === 'dancing' ||
+            o.mode === 'emerging' ||
+            (o.mode === 'exiting' && o.exit?.phase === 'approach')),
+      );
+
+    /** Standable check that works on both the main deck and platforms. */
+    const standableAt = (p: Pt) =>
+      levelOf(p) !== 'main' ? true : isStandableMain(p);
+
+    /**
+     * One walk-step of local avoidance toward realTarget. Works on a
+     * BOUNDED seek vector so the repulsion can actually out-muscle it at
+     * close range (adding push to the raw far-away target vector barely
+     * bends the course). Each neighbor contributes a radial push away plus
+     * a deterministic sideways bias (keyed off character ids) so two
+     * head-on walkers curve to opposite sides instead of shoving straight
+     * into each other. Returns a steered target + speed multiplier;
+     * blocked=true means nose-to-nose contact with a stationary character
+     * (caller ends the stroll short of them).
+     */
+    const avoidanceSteer = (
+      f: Figure,
+      realTarget: Pt,
+    ): { target: Pt; speedMul: number; blocked: boolean } => {
+      const px = f.pos.x * viewW;
+      const py = f.pos.y * viewH;
+      const txFull = realTarget.x * viewW - px;
+      const tyFull = realTarget.y * viewH - py;
+      const tLen = Math.hypot(txFull, tyFull) || 1;
+      const D = Math.min(tLen, 140); // bounded seek magnitude (px)
+      const sx = (txFull / tLen) * D;
+      const sy = (tyFull / tLen) * D;
+      let ax = 0;
+      let ay = 0;
+      let speedMul = 1;
+      for (const o of solidFigures(f)) {
+        const dx = px - o.pos.x * viewW;
+        const dy = py - o.pos.y * viewH;
+        const d = Math.hypot(dx, dy) || 0.001;
+        const clearance = radiusPx(f) + radiusPx(o);
+        const range = clearance * 2.2; // start bending course well early
+        if (d >= range) continue;
+        const ahead = -(dx * sx + dy * sy) / (d * D); // 1 = dead ahead
+        if (o.mode !== 'walking' && d < clearance * 0.9 && ahead > 0.4) {
+          return { target: realTarget, speedMul: 0, blocked: true };
+        }
+        const w = Math.min(1.2, (1 - d / range) * (ahead > 0 ? 1.6 : 0.5));
+        // Radial push away from the neighbor…
+        ax += (dx / d) * w * D;
+        ay += (dy / d) * w * D;
+        // …plus a sideways bias so head-on pairs (whose radial pushes are
+        // anti-parallel to their seeks) still slide past each other.
+        const side = f.character.id > o.character.id ? 1 : -1;
+        ax += (-dy / d) * w * D * 0.5 * side;
+        ay += (dx / d) * w * D * 0.5 * side;
+        // Two walkers converging: the higher id also slows and yields.
+        if (
+          o.mode === 'walking' &&
+          f.character.id > o.character.id &&
+          d < clearance * 1.6 &&
+          ahead > 0.2
+        ) {
+          speedMul = Math.min(speedMul, 0.35);
+        }
+      }
+      if (ax === 0 && ay === 0) return { target: realTarget, speedMul, blocked: false };
+      const nx = sx + ax;
+      const ny = sy + ay;
+      // Probe a short step along the steered course; if it would leave the
+      // walkable area / enter a prop, keep the original line but slow down.
+      const nLen = Math.hypot(nx, ny) || 1;
+      const probe = {
+        x: f.pos.x + ((nx / nLen) * 20) / viewW,
+        y: f.pos.y + ((ny / nLen) * 20) / viewH,
+      };
+      if (!standableAt(probe)) {
+        return { target: realTarget, speedMul: Math.min(speedMul, 0.35), blocked: false };
+      }
+      return {
+        target: { x: f.pos.x + nx / viewW, y: f.pos.y + ny / viewH },
+        speedMul,
+        blocked: false,
+      };
+    };
+
+    /**
+     * True when another character is actively climbing a stair nearby —
+     * hold at the base until they're off. `stairHolding` excludes waiting
+     * characters from counting as climbers, so two arrivals can't deadlock.
+     */
+    const stairBusy = (f: Figure) =>
+      figures.some(
+        (o) =>
+          o !== f &&
+          o.mode === 'walking' &&
+          o.legs[0]?.stair &&
+          !o.stairHolding &&
+          Math.hypot(
+            (o.pos.x - f.pos.x) * viewW,
+            (o.pos.y - f.pos.y) * viewH,
+          ) <
+            (radiusPx(f) + radiusPx(o)) * 3.2,
+      );
+
+    /**
+     * Advance along a leg queue; returns true when the queue is finished.
+     * avoid modes: 'none' (scripted straight line), 'full' (wandering —
+     * steer, yield, stop short of blockers, single-file stairs), 'steer'
+     * (scripted exits — bend around people but never stop or hold, so the
+     * timed hatch descent always completes).
+     */
+    const walkLegs = (
+      f: Figure,
+      legs: Leg[],
+      baseSpeed: number,
+      dt: number,
+      s: number,
+      avoid: 'none' | 'full' | 'steer' = 'none',
+    ) => {
       const leg = legs[0];
       if (!leg) return true;
+      if (avoid === 'full' && leg.stair) {
+        if (stairBusy(f)) {
+          f.stairHolding = true;
+          matchStride(f, 0, s); // mark time at the stair base
+          return false;
+        }
+        f.stairHolding = false;
+      }
       const speed =
         baseSpeed * depthScale(f.pos.y) * (leg.stair ? STAIR_SPEED_MULT : 1);
-      const { arrived, pxSpeed } = stepToward(f, leg.to, speed, dt);
+      let target = leg.to;
+      let speedMul = 1;
+      if (avoid !== 'none' && !leg.stair) {
+        const steer = avoidanceSteer(f, leg.to);
+        if (steer.blocked) {
+          if (avoid === 'full') {
+            // Someone is standing dead-center in the way at contact range —
+            // stop the stroll right here, short of them (no overlap).
+            legs.length = 0;
+            return true;
+          }
+          // 'steer': scripted exits keep their timing — walk the original
+          // line (a brief brush past is better than a stuck descent).
+        } else {
+          target = steer.target;
+          speedMul = steer.speedMul;
+        }
+      }
+      const { pxSpeed } = stepToward(f, target, speed * speedMul, dt);
       matchStride(f, pxSpeed, s);
+      // Arrival is judged against the REAL waypoint (steering offsets the
+      // per-frame course, not the destination).
+      const arrived =
+        Math.hypot(leg.to.x - f.pos.x, leg.to.y - f.pos.y) < 0.008;
       if (arrived) {
         legs.shift();
         return legs.length === 0;
@@ -1448,7 +1757,7 @@ const CrewDeck3D = forwardRef<CrewDeckHandle, Props>(function CrewDeck3D(
         if (f.mode === 'exiting' && f.exit) {
           const e = f.exit;
           if (e.phase === 'approach') {
-            if (walkLegs(f, e.legs, DESCEND_SPEED / depthScale(f.pos.y), dt, s)) {
+            if (walkLegs(f, e.legs, DESCEND_SPEED / depthScale(f.pos.y), dt, s, 'steer')) {
               e.phase = 'fade';
               e.fadeStart = now;
               e.fadeFrom = { ...f.pos };
@@ -1493,6 +1802,17 @@ const CrewDeck3D = forwardRef<CrewDeckHandle, Props>(function CrewDeck3D(
             setCrewLocation(f.character.id, { loc: 'deck' });
             f.tripAt = epochNow + tripDelayMs();
             goIdle(f, now);
+            // If someone happens to be standing at the hatch mouth, stroll
+            // away quickly instead of idling on top of them.
+            const crowded = solidFigures(f).some(
+              (o) =>
+                Math.hypot(
+                  (o.pos.x - f.pos.x) * viewW,
+                  (o.pos.y - f.pos.y) * viewH,
+                ) <
+                (radiusPx(f) + radiusPx(o)) * 1.2,
+            );
+            if (crowded) f.idleUntil = now + 500;
           }
         } else if (f.mode === 'walking') {
           if (isPaused) {
@@ -1500,7 +1820,7 @@ const CrewDeck3D = forwardRef<CrewDeckHandle, Props>(function CrewDeck3D(
             f.strollStopsLeft = 0;
             f.legs = [];
             goIdle(f, now);
-          } else if (walkLegs(f, f.legs, WALK_SPEED, dt, s)) {
+          } else if (walkLegs(f, f.legs, WALK_SPEED, dt, s, 'full')) {
             f.strollStopsLeft -= 1;
             if (f.strollStopsLeft <= 0 || !startStrollTo(f)) {
               goIdle(f, now);
@@ -1563,6 +1883,7 @@ const CrewDeck3D = forwardRef<CrewDeckHandle, Props>(function CrewDeck3D(
       disposed = true;
       danceMusic.stop(); // page navigation / re-mount ends any dance tune
       danceAllFnRef.current = null;
+      waveAllFnRef.current = null;
       stopPartyFnRef.current = null;
       descendFnRef.current = null;
       hitTestFnRef.current = null;

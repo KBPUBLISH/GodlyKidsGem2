@@ -48,6 +48,8 @@ export interface CloudProfile {
   defaultVoiceId: string | null;
   referralCode: string;
   subscriptionStatus: string;
+  /** Bible Map island:story completions, keyed by profile id. */
+  islandStoryProgress?: Record<string, Record<string, unknown>>;
 }
 
 class ProfileService {

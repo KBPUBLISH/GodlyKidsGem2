@@ -4,6 +4,7 @@ import { islandStoryProgressService } from '../services/islandStoryProgressServi
 export type MainMapUnlockStory = {
   _id: string;
   order?: number;
+  status?: string;
   quizMode?: string;
   bookId?: unknown;
   customQuestions?: unknown[];
@@ -11,6 +12,15 @@ export type MainMapUnlockStory = {
     levels?: Partial<Record<'easy' | 'medium' | 'hard', unknown[]>>;
   };
 };
+
+/** Kid-facing packs only — drafts must not sit in the sequential lock chain. */
+export function isPlayableMainMapStory(
+  s: Pick<MainMapUnlockStory, '_id' | 'status'> | null | undefined,
+): boolean {
+  if (!s?._id) return false;
+  if (s.status === 'draft' || s.status === 'archived') return false;
+  return true;
+}
 
 /**
  * Match Island Scene / Island Lesson quiz-content detection.

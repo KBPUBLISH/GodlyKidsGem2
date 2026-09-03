@@ -34,6 +34,8 @@ export type RewardDefinition = {
   coinMax?: number;
 };
 
+export const CREW_WAVE_ANIMATION = 'waving';
+
 export type UnlockedCharacter = {
   id: string;
   name: string;
@@ -44,6 +46,8 @@ export type UnlockedCharacter = {
   voiceId?: string;
   /** Freeform speech-style description passed to the AI chat endpoint */
   persona?: string;
+  /** Clip names this crew mate has earned (e.g. waving from a ship visit). */
+  unlockedAnimations?: string[];
   sourceStoryId?: string;
   unlockedAt: number;
 };
@@ -94,6 +98,18 @@ type RewardsStore = {
 
 const STORAGE_KEY = 'godlykids_rewards_v1';
 export const MAX_CREW = 12;
+/** Fallback first crew mate if the Creation pack pool has no Adam yet. */
+export const ONBOARDING_ADAM_ID = 'onboarding-adam';
+export const ONBOARDING_ADAM_REWARD: RewardDefinition = {
+  id: ONBOARDING_ADAM_ID,
+  type: 'character',
+  title: 'Adam',
+  characterName: 'Adam',
+  modelUrl: '/models/test-character.glb',
+  voiceId: 'pNInz6obpgDQGcFmaJgB',
+  persona:
+    'You are Adam, the first man God made in the Garden of Eden. Talk warmly and simply with kids. You are curious, kind, and thankful to God.',
+};
 
 const EMPTY: RewardsStore = {
   characters: [],
@@ -141,6 +157,7 @@ export function defaultRewardPool(storyId?: string): RewardDefinition[] {
       id: `default-coins${suffix}`,
       type: 'coins',
       title: 'Gold Coins',
+      imageUrl: '/assets/ui/coin.png',
       coinMin: 100,
       coinMax: 1000,
     },
@@ -192,8 +209,8 @@ function resolveRewardImageUrl(url: string | undefined | null): string {
 
 /**
  * Normalize MapStory.rewards (or legacy game) into a pool for the loot modal.
- * Rewards missing their own image fall back to the story pack hero image
- * (coins intentionally stay imageless — the coin icon is expected there).
+ * Rewards missing their own image fall back to the story pack hero image.
+ * Coin rewards always use the home-screen gold coin icon.
  */
 export function resolveRewardPool(story: {
   _id?: string;
@@ -216,10 +233,13 @@ export function resolveRewardPool(story: {
     .filter((r) => r && r.id && r.type)
     .map((r) => {
       const type = r.type as RewardType;
-      const ownImage = (r.imageUrl && String(r.imageUrl).trim()) || '';
+      const ownImage =
+        type === 'coins'
+          ? '/assets/ui/coin.png'
+          : (r.imageUrl && String(r.imageUrl).trim()) || '';
       const fallbackImage =
         type === 'coins'
-          ? ''
+          ? '/assets/ui/coin.png'
           : (type === 'game' ? (story?.game?.webview?.coverImage || '').trim() : '') ||
             heroImage;
       return {
@@ -451,6 +471,16 @@ class RewardsService {
    * Re-fetch each character's source story and sync name/imageUrl/modelUrl/
    * voiceId/persona from the current CMS reward pool. Offline / fetch errors
    * are silent — stored data stays as-is. Returns true when anything changed.
+   *
+   * Matching: primarily by reward id — but portal editors sometimes delete a
+   * reward row and re-add it, which mints a NEW id for the same character
+   * (this is exactly how Noah kept his old GLB + persona forever: the held
+   * record's id no longer existed in the pool, so the refresh skipped him).
+   * When the id lookup misses, fall back to same source story + same
+   * character name, adopt the new id, and stamp its claim key so the
+   * auto-grant pass doesn't collect the renamed reward as a duplicate. Any
+   * duplicate an earlier launch already granted under the new id is merged
+   * away (earliest unlock wins).
    */
   async refreshUnlockedCharactersFromCms(): Promise<boolean> {
     const storyIds = Array.from(
@@ -462,22 +492,48 @@ class RewardsService {
     );
     if (storyIds.length === 0) return false;
 
+    const normName = (s: string | undefined | null) =>
+      (s || '').trim().toLowerCase();
+
     const pools = await this.fetchRewardPoolsByStory(storyIds);
     const freshById = new Map<string, RewardDefinition>();
-    for (const pool of pools.values()) {
+    const freshByStoryAndName = new Map<string, RewardDefinition>();
+    for (const [storyId, pool] of pools) {
       for (const def of pool) {
-        if (def.type === 'character') freshById.set(def.id, def);
+        if (def.type !== 'character') continue;
+        freshById.set(def.id, def);
+        const name = normName(def.characterName || def.title);
+        if (name) freshByStoryAndName.set(`${storyId}\u0000${name}`, def);
       }
     }
     if (freshById.size === 0) return false;
 
     const store = readStore();
     let changed = false;
+    /** old held id → new CMS id, for records whose reward id was re-minted */
+    const idRemap = new Map<string, string>();
+    const migratedClaimKeys: string[] = [];
+
     store.characters = store.characters.map((c) => {
-      const def = freshById.get(c.id);
+      let def = freshById.get(c.id);
+      if (!def) {
+        const sid = (c.sourceStoryId || '').trim();
+        const fallback = sid
+          ? freshByStoryAndName.get(`${sid}\u0000${normName(c.name)}`)
+          : undefined;
+        if (fallback) {
+          def = fallback;
+          idRemap.set(c.id, def.id);
+          migratedClaimKeys.push(claimKey(sid, def.id));
+          console.log(
+            `⚓ rewards refresh: reward id changed in CMS for "${c.name}" (${c.id} → ${def.id}) — migrating`,
+          );
+        }
+      }
       if (!def) return c;
       const next: UnlockedCharacter = {
         ...c,
+        id: def.id,
         name: def.characterName || def.title || c.name,
         imageUrl: def.imageUrl || c.imageUrl,
         // CMS is the source of truth — removed fields clear the stored value
@@ -488,6 +544,27 @@ class RewardsService {
       if (JSON.stringify(next) !== JSON.stringify(c)) changed = true;
       return next;
     });
+
+    if (idRemap.size > 0) {
+      // A migrated record can collide with a duplicate the auto-grant pass
+      // already collected under the new id — keep the earliest unlock.
+      const byId = new Map<string, UnlockedCharacter>();
+      for (const c of store.characters) {
+        const held = byId.get(c.id);
+        if (!held || c.unlockedAt < held.unlockedAt) byId.set(c.id, c);
+      }
+      store.characters = Array.from(byId.values());
+
+      // Follow the rename everywhere the old id lives: crew roster picks
+      // and claim bookkeeping (so isClaimed(new id) is true from now on).
+      store.selectedCrewIds = Array.from(
+        new Set(store.selectedCrewIds.map((id) => idRemap.get(id) ?? id)),
+      ).slice(0, MAX_CREW);
+      store.claimedKeys = Array.from(
+        new Set([...store.claimedKeys, ...migratedClaimKeys]),
+      );
+    }
+
     if (changed) writeStore(store);
     return changed;
   }
@@ -536,6 +613,28 @@ class RewardsService {
     }
     writeStore(store);
     return { selectedCrewIds: store.selectedCrewIds };
+  }
+
+  /** Add a clip name to every selected crew mate (and all unlocked if none selected). */
+  unlockCrewAnimation(animationId: string): string[] {
+    const id = String(animationId || '').trim();
+    if (!id) return [];
+    const store = readStore();
+    const targetIds = new Set(
+      store.selectedCrewIds.length > 0
+        ? store.selectedCrewIds
+        : store.characters.map((c) => c.id),
+    );
+    const granted: string[] = [];
+    store.characters = store.characters.map((c) => {
+      if (!targetIds.has(c.id)) return c;
+      const have = Array.isArray(c.unlockedAnimations) ? c.unlockedAnimations : [];
+      if (have.includes(id)) return c;
+      granted.push(c.id);
+      return { ...c, unlockedAnimations: [...have, id] };
+    });
+    if (granted.length > 0) writeStore(store);
+    return granted;
   }
 
   markGameSeen(gameId: string): void {
@@ -670,6 +769,70 @@ class RewardsService {
 
     return { ok: false, error: 'Unknown reward type' };
   }
+
+  /** Fill in a missing GLB so a newly unlocked character can stand on the 3D deck. */
+  ensureModelUrl(characterId: string, modelUrl: string): void {
+    if (!characterId || !modelUrl) return;
+    const store = readStore();
+    let changed = false;
+    store.characters = store.characters.map((c) => {
+      if (c.id !== characterId || c.modelUrl) return c;
+      changed = true;
+      return { ...c, modelUrl };
+    });
+    if (changed) writeStore(store);
+  }
+
+  /** Wipe loot / crew unlocks — used when a guest restarts onboarding. */
+  resetLocal(): void {
+    writeStore({
+      ...EMPTY,
+      characters: [],
+      games: [],
+      bookTemplates: [],
+      claimedKeys: [],
+      selectedCrewIds: [],
+    });
+  }
 }
 
 export const rewardsService = new RewardsService();
+
+const isAdamCharacter = (name?: string, id?: string) =>
+  /^adam$/i.test(String(name || '').trim()) || id === ONBOARDING_ADAM_ID;
+
+/**
+ * Unlock Creation-pack characters (and Adam if the pool has none), then put
+ * Adam first on the crew roster so the onboarding ship visit shows him.
+ */
+export function ensureOnboardingAdam(
+  storyId: string,
+  pool: RewardDefinition[] = [],
+): UnlockedCharacter | null {
+  const sid = (storyId || 'onboarding-genesis').trim();
+  for (const def of pool) {
+    if (def?.type === 'character' && def.id) {
+      rewardsService.collectReward(sid, def);
+    }
+  }
+  let chars = rewardsService.getUnlockedCharacters();
+  let adam =
+    chars.find((c) => isAdamCharacter(c.name, c.id)) ||
+    chars[0] ||
+    null;
+  if (!adam) {
+    rewardsService.collectReward(sid, ONBOARDING_ADAM_REWARD);
+    chars = rewardsService.getUnlockedCharacters();
+    adam = chars.find((c) => c.id === ONBOARDING_ADAM_ID) || chars[0] || null;
+  }
+  if (adam && !adam.modelUrl) {
+    rewardsService.ensureModelUrl(adam.id, ONBOARDING_ADAM_REWARD.modelUrl || '');
+    adam =
+      rewardsService.getUnlockedCharacters().find((c) => c.id === adam!.id) || adam;
+  }
+  if (adam) {
+    const selected = rewardsService.getSelectedCrewIds().filter((id) => id !== adam!.id);
+    rewardsService.setSelectedCrewIds([adam.id, ...selected]);
+  }
+  return adam;
+}

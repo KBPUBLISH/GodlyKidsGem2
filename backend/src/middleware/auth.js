@@ -1,22 +1,24 @@
 const jwt = require('jsonwebtoken');
 const User = require('../models/User');
+const { getJwtSecret } = require('../config/jwt');
+// Allowlist lives in config/adminEmails.js so the routes that guard privileged
+// accounts share one implementation; re-exported below for existing importers.
+const { isAdminEmail } = require('../config/adminEmails');
 
 /**
- * Get admin emails from environment variable
- * Set ADMIN_EMAILS as comma-separated list: "admin@example.com,support@example.com"
+ * Roles that identify a token as belonging to another portal's session.
+ * Creator, church and admin tokens are all signed with the same secret (see
+ * config/jwt.js), so the claims are the only thing that tells them apart.
  */
-const getAdminEmails = () => {
-  const envEmails = process.env.ADMIN_EMAILS;
-  if (envEmails) {
-    return envEmails.split(',').map(e => e.trim().toLowerCase());
-  }
-  // Fallback default admin emails
-  return [
-    'admin@godlykids.com',
-    'support@godlykids.com',
-    'hello@kbpublish.org',
-  ];
-};
+const NON_PORTAL_ADMIN_ROLES = ['creator', 'church'];
+
+/**
+ * Resolves the User id an admin/app-user token points at, or null for tokens
+ * that carry no user id. Returning null must be treated as "not an admin
+ * token": Mongoose casts findById(undefined) to a filter that matches nothing,
+ * so relying on the lookup to fail is an accident rather than a check.
+ */
+const getUserIdClaim = (decoded) => decoded?.user?.id || decoded?.id || null;
 
 /**
  * Middleware to authenticate admin users
@@ -46,18 +48,30 @@ const authenticateAdmin = async (req, res, next) => {
       return res.status(401).json({ error: 'No token provided' });
     }
 
-    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'secret');
-    
+    const decoded = jwt.verify(token, getJwtSecret());
+
+    // 403 rather than 401 for these: the token is valid, it just is not an
+    // admin session, and the portal logs the user out on 401.
+    if (NON_PORTAL_ADMIN_ROLES.includes(decoded.role)) {
+      return res.status(403).json({ error: 'Admin access required' });
+    }
+
+    const userId = getUserIdClaim(decoded);
+    if (!userId) {
+      return res.status(403).json({ error: 'Admin access required' });
+    }
+
     // Get user from database
-    const user = await User.findById(decoded.user?.id || decoded.id);
+    const user = await User.findById(userId);
     
     if (!user) {
       return res.status(401).json({ error: 'User not found' });
     }
 
-    // Check if user email is in admin list
-    const adminEmails = getAdminEmails();
-    if (!adminEmails.includes(user.email.toLowerCase())) {
+    // Checked against the account rather than the token's isAdmin claim, so
+    // removing an email from the allowlist takes effect without waiting for
+    // already-issued tokens to expire.
+    if (!isAdminEmail(user.email)) {
       return res.status(403).json({ error: 'Admin access required' });
     }
 
@@ -93,9 +107,18 @@ const authenticateUser = async (req, res, next) => {
       return res.status(401).json({ error: 'No token provided' });
     }
 
-    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'secret');
-    
-    const user = await User.findById(decoded.user?.id || decoded.id);
+    const decoded = jwt.verify(token, getJwtSecret());
+
+    if (NON_PORTAL_ADMIN_ROLES.includes(decoded.role)) {
+      return res.status(403).json({ error: 'Not an app user token' });
+    }
+
+    const userId = getUserIdClaim(decoded);
+    if (!userId) {
+      return res.status(403).json({ error: 'Not an app user token' });
+    }
+
+    const user = await User.findById(userId);
     
     if (!user) {
       return res.status(401).json({ error: 'User not found' });
@@ -115,4 +138,4 @@ const authenticateUser = async (req, res, next) => {
   }
 };
 
-module.exports = { authenticateAdmin, authenticateUser };
+module.exports = { authenticateAdmin, authenticateUser, isAdminEmail };

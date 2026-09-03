@@ -19,7 +19,7 @@ import { isCompleted, isLocked } from '../services/lessonService';
 import { FEATURE_CREATE_YOUR_STORY } from '../constants';
 import { DespiaService } from '../services/despiaService';
 import CoverImage from '../components/ui/CoverImage';
-import { prefersReducedMotion } from '../utils/bibleMapApi';
+import { getContinueStoryIsland } from '../utils/lastStoryIsland';
 
 const DailyVerseModal = lazy(() => import('../components/modals/DailyVerseModal'));
 
@@ -37,12 +37,12 @@ const WELCOME_VIDEO_KEY = 'godlykids_welcome_shown';
  * Sail-the-Map cinematic — in-place on Explore (no /map load mid-anim).
  *
  * Timing (~3.1s):
- *   0ms         clear chrome; living map BG (ocean + clouds + Genesis) stays
+ *   0ms         clear chrome; living map BG (ocean + clouds + islands) stays
  *   280–350ms   hold
- *   350–1100ms  lower Genesis on the ocean
- *   1100–2500ms zoom into Genesis
+ *   350–1100ms  lower the focus island on the ocean
+ *   1100–2500ms zoom into the focus island
  *   2300–3000ms white fade
- *   3100ms      navigate /sail/genesis
+ *   3100ms      navigate to the resume target (voyage map if none yet)
  */
 const SAIL_CLEAR_MS = 280;
 const SAIL_HOLD_MS = 350;
@@ -295,7 +295,7 @@ const WorldPage: React.FC = () => {
   const [showWelcomeVideo, setShowWelcomeVideo] = useState(false);
   /** Explore sail cinematic — in-place on living map BG (no mid-anim route). */
   const [sailCinematic, setSailCinematic] = useState(false);
-  const [sailGenesisLowered, setSailGenesisLowered] = useState(false);
+  const [sailIslandLowered] = useState(false);
   const [sailZoom, setSailZoom] = useState(false);
   const [sailFade, setSailFade] = useState(false);
   const welcomeVideoRef = useRef<HTMLVideoElement>(null);
@@ -316,8 +316,9 @@ const WorldPage: React.FC = () => {
   }, []);
 
   const goToSailScene = useCallback(() => {
-    navigate('/sail/genesis', {
-      state: { title: 'Genesis: Creation' },
+    const dest = getContinueStoryIsland();
+    navigate(dest.path, {
+      state: { title: dest.title || 'Your Voyage' },
     });
   }, [navigate]);
 
@@ -327,29 +328,9 @@ const WorldPage: React.FC = () => {
       e?.stopPropagation?.();
       if (sailCinematicLockRef.current) return;
       sailCinematicLockRef.current = true;
-
-      clearSailTimers();
-      document.body.setAttribute('data-modal-open', 'true');
-      setSailCinematic(true);
-      setSailGenesisLowered(false);
-      setSailZoom(false);
-      setSailFade(false);
-
-      if (prefersReducedMotion()) {
-        setSailGenesisLowered(true);
-        setSailFade(true);
-        const id = window.setTimeout(goToSailScene, SAIL_REDUCED_NAVIGATE_MS);
-        sailTimersRef.current = [id];
-        return;
-      }
-
-      const lowerId = window.setTimeout(() => setSailGenesisLowered(true), SAIL_LOWER_START_MS);
-      const zoomId = window.setTimeout(() => setSailZoom(true), SAIL_ZOOM_START_MS);
-      const fadeId = window.setTimeout(() => setSailFade(true), SAIL_FADE_START_MS);
-      const navId = window.setTimeout(goToSailScene, SAIL_NAVIGATE_MS);
-      sailTimersRef.current = [lowerId, zoomId, fadeId, navId];
+      goToSailScene();
     },
-    [clearSailTimers, goToSailScene],
+    [goToSailScene],
   );
 
   useEffect(
@@ -490,7 +471,7 @@ const WorldPage: React.FC = () => {
       {/* Living Map backdrop — ocean + clouds + all MapPage islands */}
       <ExploreMapBackdrop
         cinematic={sailCinematic}
-        genesisLowered={sailGenesisLowered}
+        focusLowered={sailIslandLowered}
         zoom={sailZoom}
       />
 
@@ -612,7 +593,7 @@ const WorldPage: React.FC = () => {
                   visibility: showChrome ? 'visible' : 'hidden',
                   pointerEvents: showChrome ? undefined : 'none',
                 }}
-                aria-label="Open God's Word Adventure Map"
+                aria-label="Continue your story island"
               >
                 <div className="relative rounded-xl overflow-hidden" style={{ minHeight: 220, ...WOOD_INNER }}>
                   <div
@@ -682,7 +663,7 @@ const WorldPage: React.FC = () => {
                       }}
                     >
                       <Ship size={16} strokeWidth={2.5} />
-                      Sail the Map
+                      Continue
                     </span>
                   </div>
                 </div>

@@ -2,10 +2,8 @@ import React, { useEffect, useState } from 'react';
 import { Check, Lock, Star } from 'lucide-react';
 import {
   CMS_ISLANDS_TIMEOUT_MS,
-  FALLBACK_OCEAN_ISLANDS,
   fetchOceanMapIslands,
   getOceanIslandArtSrc,
-  isGenesisIsland,
   type OceanMapIsland,
 } from '../../utils/oceanMapIslands';
 
@@ -36,28 +34,34 @@ const MAP_SKY_CLOUDS: MapSkyCloudSpec[] = [
 
 const MAP_SKY_CLOUD_LOOP_SEC = 90;
 
-/** Rest framing — Genesis sits mid-upper on the ocean (slightly lower than Map top). */
-export const EXPLORE_GENESIS_REST = { x: 50, y: 36 } as const;
-/** Cinematic: ease Genesis a bit lower before punch-in. */
-export const EXPLORE_GENESIS_LOWERED = { x: 50, y: 48 } as const;
+/** Rest framing — the focus island sits mid-upper on the ocean (slightly lower than Map top). */
+const EXPLORE_FOCUS_REST = { x: 50, y: 36 } as const;
+/** Cinematic: ease the focus island a bit lower before punch-in. */
+const EXPLORE_FOCUS_LOWERED = { x: 50, y: 48 } as const;
 
 /**
  * MapPage y% lives on a tall scroll strip; Explore is one viewport.
- * Keep relative offsets from Genesis, compressed into the visible ocean.
+ * Keep relative offsets from the focus island, compressed into the visible ocean.
  */
 const EXPLORE_Y_SCALE = 0.45;
 const EXPLORE_X_SCALE = 0.9;
 
 const exploreIslandPosition = (
   island: OceanMapIsland,
-  genesis: OceanMapIsland | undefined,
-  genesisExplore: { x: number; y: number },
+  focus: OceanMapIsland | undefined,
+  focusExplore: { x: number; y: number },
+  index: number,
 ): { x: number; y: number } => {
-  if (isGenesisIsland(island)) return genesisExplore;
-  const gX = genesis?.x ?? 50;
-  const gY = genesis?.y ?? 3.5;
-  const x = genesisExplore.x + (island.x - gX) * EXPLORE_X_SCALE;
-  const y = genesisExplore.y + (island.y - gY) * EXPLORE_Y_SCALE;
+  if (focus && island.id === focus.id) return focusExplore;
+  const fX = focus?.x ?? 50;
+  const fY = focus?.y ?? 3.5;
+  // CMS islands are all authored at the same default map position, so the
+  // relative offsets below collapse to a single point. Fan the rest of the
+  // fleet out around the focus island so the backdrop reads as an archipelago.
+  const spread = index % 2 === 0 ? 1 : -1;
+  const ring = Math.ceil(index / 2);
+  const x = focusExplore.x + (island.x - fX) * EXPLORE_X_SCALE + spread * (12 + ring * 9);
+  const y = focusExplore.y + (island.y - fY) * EXPLORE_Y_SCALE + ring * 7;
   return {
     x: Math.min(88, Math.max(12, x)),
     y: Math.min(84, Math.max(42, y)),
@@ -67,9 +71,9 @@ const exploreIslandPosition = (
 export type ExploreMapBackdropProps = {
   /** Sail cinematic: chrome cleared; map stays. */
   cinematic?: boolean;
-  /** Animate Genesis downward for the punch-in. */
-  genesisLowered?: boolean;
-  /** Camera zoom into Genesis. */
+  /** Animate the focus island downward for the punch-in. */
+  focusLowered?: boolean;
+  /** Camera zoom into the focus island. */
   zoom?: boolean;
   className?: string;
 };
@@ -79,26 +83,29 @@ const ZOOM_MS = 1400;
 const LOWER_MS = 750;
 const ZOOM_EASE = 'cubic-bezier(0.72, 0.0, 0.88, 0.28)';
 const LOWER_EASE = 'cubic-bezier(0.33, 0.9, 0.4, 1)';
-/** Viewport transform-origin aimed at Genesis after lower (~50% × 48%). */
+/** Viewport transform-origin aimed at the focus island after lower (~50% × 48%). */
 const ZOOM_ORIGIN = '50% 48%';
 
-const GENESIS_ART_WIDTH = 'min(58vw, 240px)';
+const FOCUS_ART_WIDTH = 'min(58vw, 240px)';
 const OTHER_ART_WIDTH = 'min(36vw, 148px)';
 const DISC_SIZE = 52;
 
 /**
  * Living Map ocean backdrop for Explore — reuses MapPage ocean + drifting clouds
  * + all ocean islands (CMS icons when available) so Sail-the-Map can animate
- * in-place (no /map route load). Non-interactive; Genesis remains the zoom target.
+ * in-place (no /map route load). Non-interactive; the first island of the
+ * voyage is the zoom target.
  */
 const ExploreMapBackdrop: React.FC<ExploreMapBackdropProps> = ({
   cinematic = false,
-  genesisLowered = false,
+  focusLowered = false,
   zoom = false,
   className = '',
 }) => {
-  const [islands, setIslands] = useState<OceanMapIsland[]>(FALLBACK_OCEAN_ISLANDS);
-  const genesisExplore = genesisLowered ? EXPLORE_GENESIS_LOWERED : EXPLORE_GENESIS_REST;
+  // Decorative backdrop — an empty ocean until the CMS answers is fine, and
+  // is honest in a way a hardcoded stand-in island was not.
+  const [islands, setIslands] = useState<OceanMapIsland[]>([]);
+  const focusExplore = focusLowered ? EXPLORE_FOCUS_LOWERED : EXPLORE_FOCUS_REST;
 
   useEffect(() => {
     let cancelled = false;
@@ -110,7 +117,7 @@ const ExploreMapBackdrop: React.FC<ExploreMapBackdropProps> = ({
         const mapped = await fetchOceanMapIslands(controller.signal);
         if (!cancelled && mapped) setIslands(mapped);
       } catch {
-        /* keep FALLBACK_OCEAN_ISLANDS */
+        /* decorative backdrop — leave the ocean bare */
       } finally {
         window.clearTimeout(failSafe);
       }
@@ -124,12 +131,12 @@ const ExploreMapBackdrop: React.FC<ExploreMapBackdropProps> = ({
     };
   }, []);
 
-  const genesisIsland = islands.find((island) => isGenesisIsland(island));
-  /** Non-Genesis first (behind), Genesis last (foreground / cinematic target). */
-  const orderedIslands = [
-    ...islands.filter((island) => !isGenesisIsland(island)),
-    ...islands.filter((island) => isGenesisIsland(island)),
-  ];
+  /** The voyage starts at the first CMS island; it is the cinematic target. */
+  const focusIsland = islands[0];
+  /** Rest of the fleet first (behind), focus island last (foreground). */
+  const orderedIslands = focusIsland
+    ? [...islands.filter((island) => island.id !== focusIsland.id), focusIsland]
+    : islands;
 
   return (
     <div
@@ -181,16 +188,16 @@ const ExploreMapBackdrop: React.FC<ExploreMapBackdropProps> = ({
         />
 
         {/* All MapPage islands — CMS mapArtUrl when present; decorative only */}
-        {orderedIslands.map((island) => {
-          const isGenesis = isGenesisIsland(island);
-          const pos = exploreIslandPosition(island, genesisIsland, genesisExplore);
+        {orderedIslands.map((island, index) => {
+          const isFocus = Boolean(focusIsland) && island.id === focusIsland.id;
+          const pos = exploreIslandPosition(island, focusIsland, focusExplore, index);
           const artSrc = getOceanIslandArtSrc(island);
           const hasArt = Boolean(artSrc);
           const isLocked = island.status === 'locked';
           const isComplete = island.status === 'complete';
           const isCurrent = island.status === 'current';
-          /** Never label Genesis — decorative GENESIS sign / orphaned book chip removed. */
-          const showLabel = !isGenesis;
+          /** The focus island carries its own art/label in the cinematic. */
+          const showLabel = !isFocus;
           const discStyle: React.CSSProperties = isLocked
             ? { background: 'radial-gradient(circle at 35% 30%, #8fa3ad, #5b6f78)' }
             : isComplete
@@ -204,19 +211,19 @@ const ExploreMapBackdrop: React.FC<ExploreMapBackdropProps> = ({
               style={{
                 left: `${pos.x}%`,
                 top: `${pos.y}%`,
-                zIndex: isGenesis ? 5 : 4,
+                zIndex: isFocus ? 5 : 4,
                 width: hasArt
-                  ? isGenesis
-                    ? GENESIS_ART_WIDTH
+                  ? isFocus
+                    ? FOCUS_ART_WIDTH
                     : OTHER_ART_WIDTH
                   : DISC_SIZE + 48,
-                transition: isGenesis && cinematic ? `top ${LOWER_MS}ms ${LOWER_EASE}` : undefined,
-                filter: isGenesis
-                  ? cinematic && (genesisLowered || zoom)
+                transition: isFocus && cinematic ? `top ${LOWER_MS}ms ${LOWER_EASE}` : undefined,
+                filter: isFocus
+                  ? cinematic && (focusLowered || zoom)
                     ? 'drop-shadow(0 0 18px rgba(255, 236, 160, 0.55))'
                     : 'drop-shadow(0 8px 18px rgba(0,0,0,0.35))'
                   : 'drop-shadow(0 6px 12px rgba(0,0,0,0.28))',
-                opacity: isGenesis ? 1 : cinematic ? 0.92 : 0.88,
+                opacity: isFocus ? 1 : cinematic ? 0.92 : 0.88,
               }}
             >
               {hasArt && artSrc ? (

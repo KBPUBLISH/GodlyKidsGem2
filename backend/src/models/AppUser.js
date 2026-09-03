@@ -191,6 +191,12 @@ const appUserSchema = new mongoose.Schema({
             type: Number,
         },
     }],
+
+    // Creators this family follows from the kids app
+    followedCreatorIds: [{
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Creator',
+    }],
     
     // Referral system
     referralCode: {

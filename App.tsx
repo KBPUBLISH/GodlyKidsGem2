@@ -571,6 +571,9 @@ import ListenPage from './pages/ListenPage';
 import ReadPage from './pages/ReadPage';
 import ReadPagePanorama from './pages/ReadPagePanorama';
 import ListenPagePanorama from './pages/ListenPagePanorama';
+import HubPlaylistDetailPage from './pages/HubPlaylistDetailPage';
+import CreatorStoryDetailPage from './pages/CreatorStoryDetailPage';
+import CreatorPublicProfilePage from './pages/CreatorPublicProfilePage';
 import LibraryPage from './pages/LibraryPage';
 import BookCreatingPage from './pages/BookCreatingPage';
 import CreateYourStoryPage from './pages/CreateYourStoryPage';
@@ -603,7 +606,6 @@ import SharePlaylistPage from './pages/SharePlaylistPage';
 import ShareBookPage from './pages/ShareBookPage';
 import ParentQuizPage from './pages/ParentQuizPage';
 import GamesPage from './pages/GamesPage';
-import GamesLibraryPage from './pages/GamesLibraryPage';
 import MapPage from './pages/MapPage';
 import MainMapPage from './pages/MainMapPage';
 import SailScenePage from './pages/SailScenePage';
@@ -613,7 +615,9 @@ import IslandSlidingPuzzlePage from './pages/IslandSlidingPuzzlePage';
 import IslandColoringPage from './pages/IslandColoringPage';
 import IslandQuizPage from './pages/IslandQuizPage';
 import CrewPage from './pages/CrewPage';
+import CrewCanonGolfPage from './pages/CrewCanonGolfPage';
 import SailBoatBasementPage from './pages/SailBoatBasementPage';
+import SailBoatArcadePage from './pages/SailBoatArcadePage';
 import SailBoatBasementGamePage from './pages/SailBoatBasementGamePage';
 import SailBoatBasementDartsPage from './pages/SailBoatBasementDartsPage';
 import BuriedTreasurePage from './pages/BuriedTreasurePage';
@@ -946,6 +950,20 @@ const WorldPageWithWelcomeCheck: React.FC = () => {
 
 import MiniPlayer from './components/audio/MiniPlayer';
 import BottomNavigation from './components/layout/BottomNavigation';
+import { clearLibraryFromBasement, isLibraryFromBasement } from './utils/libraryFromBasement';
+import LibraryHsGuide from './components/onboarding/LibraryHsGuide';
+import {
+  isOnboardingJourneyActive,
+  subscribeOnboardingJourney,
+  hasSeenLibraryHsGuide,
+} from './utils/onboardingJourney';
+import {
+  hasSeenShipsLibraryPaywall,
+  requestShipsLibraryPaywall,
+  ShipsPaywallHost,
+} from './utils/shipsLibraryPaywall';
+import { BookOpenHost } from './components/ui/BookOpenTransition';
+import { CdSpinHost } from './components/ui/CdSpinTransition';
 import ErrorBoundary from './components/ErrorBoundary';
 import { BooksProvider } from './context/BooksContext';
 import { UserProvider } from './context/UserContext';
@@ -1177,11 +1195,46 @@ const ThemedReadPage: React.FC = () => {
 
 const ThemedListenPage: React.FC = () => {
   const { isPanorama } = useTheme();
-  return isPanorama ? <ListenPagePanorama /> : <ListenPage />;
+  const location = useLocation();
+  const { isSubscribed } = useUser();
+  const hsThisVisitRef = useRef(
+    Boolean((location.state as { libraryHsGuide?: boolean } | null)?.libraryHsGuide) &&
+      !hasSeenLibraryHsGuide(),
+  );
+  const [hsActive, setHsActive] = useState(() => hsThisVisitRef.current);
+
+  const openLibraryPaywall = useCallback(() => {
+    if (isSubscribed) return;
+    if (isOnboardingJourneyActive()) return;
+    if (hasSeenShipsLibraryPaywall()) return;
+    requestShipsLibraryPaywall('library-intro');
+  }, [isSubscribed]);
+
+  useEffect(() => {
+    if (hsThisVisitRef.current) return;
+    if (hsActive) return;
+    if (!hasSeenLibraryHsGuide()) return;
+    const id = window.setTimeout(openLibraryPaywall, 500);
+    return () => window.clearTimeout(id);
+  }, [hsActive, openLibraryPaywall]);
+
+  return (
+    <>
+      {isPanorama ? <ListenPagePanorama /> : <ListenPage />}
+      <LibraryHsGuide
+        onActiveChange={setHsActive}
+        onGuideFinished={() => {
+          window.setTimeout(openLibraryPaywall, 700);
+        }}
+      />
+    </>
+  );
 };
 
 const LIFETIME_OFFER_STAGE_KEY = 'godlykids_lifetime_offer_stage';
 const LIFETIME_OFFER_SESSION_KEY = 'godlykids_lifetime_offer_session_checked';
+/** Paused — do not auto-show the lifetime deal during first-run / home. */
+const SHOW_LIFETIME_OFFER = false;
 
 const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const location = useLocation();
@@ -1191,10 +1244,29 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [lifetimeOfferVariant, setLifetimeOfferVariant] = useState<'first' | 'final' | 'expired' | null>(null);
   const lifetimeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const prevPathForOfferRef = useRef(location.pathname);
+  const [journeyGuide, setJourneyGuide] = useState(() => isOnboardingJourneyActive());
+
+  useEffect(() => subscribeOnboardingJourney(() => setJourneyGuide(isOnboardingJourneyActive())), []);
+
+  useEffect(() => {
+    if (!isLibraryFromBasement()) return;
+    const p = location.pathname;
+    const stayInLibraryTrip =
+      p === '/listen' ||
+      p === '/read' ||
+      p === '/library' ||
+      p.startsWith('/book') ||
+      p.startsWith('/audio') ||
+      p.startsWith('/book-series') ||
+      p.startsWith('/player') ||
+      p === '/paywall';
+    if (!stayInLibraryTrip) clearLibraryFromBasement();
+  }, [location.pathname]);
 
   // --- Lifetime offer popup: first offer (1 minute after user spends time on app) ---
   const LIFETIME_FIRST_MAIN_PAGE_KEY = 'godlykids_lifetime_first_main_page_at';
   useEffect(() => {
+    if (!SHOW_LIFETIME_OFFER) return;
     prevPathForOfferRef.current = location.pathname;
 
     const isPremium = localStorage.getItem('godlykids_premium') === 'true';
@@ -1235,6 +1307,7 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
 
   // --- Lifetime offer popup: final offer or expired offer (on fresh app open) ---
   useEffect(() => {
+    if (!SHOW_LIFETIME_OFFER) return;
     const isPremium = localStorage.getItem('godlykids_premium') === 'true';
     if (isPremium) return;
     if (sessionStorage.getItem(LIFETIME_OFFER_SESSION_KEY)) return;
@@ -1259,6 +1332,7 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
 
   // Listen for Header timer tap to show the lifetime offer modal at root level
   useEffect(() => {
+    if (!SHOW_LIFETIME_OFFER) return;
     const handler = () => setLifetimeOfferVariant('first');
     window.addEventListener('show_lifetime_offer', handler);
     return () => window.removeEventListener('show_lifetime_offer', handler);
@@ -1365,14 +1439,28 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
       {/* Mini Player */}
       <MiniPlayer />
 
-      {/* Only show BottomNavigation on main tab pages */}
-      {(location.pathname === '/world' || location.pathname === '/home' || location.pathname === '/listen' || location.pathname === '/read' || location.pathname === '/games' || location.pathname === '/map' || location.pathname === '/library' || location.pathname === '/games/library') && <BottomNavigation />}
+      {/* Only show BottomNavigation on main tab pages — hidden during first-sail
+          guided map, and when Library is opened from the ship basement shelf. */}
+      {!(journeyGuide && location.pathname === '/map') &&
+        !(
+          isLibraryFromBasement() &&
+          (location.pathname === '/listen' ||
+            location.pathname === '/read' ||
+            location.pathname === '/library')
+        ) &&
+        (location.pathname === '/world' ||
+          location.pathname === '/home' ||
+          location.pathname === '/listen' ||
+          location.pathname === '/read' ||
+          location.pathname === '/games' ||
+          location.pathname === '/map' ||
+          location.pathname === '/library') && <BottomNavigation />}
 
       {/* Onboarding Tutorial Overlay */}
       <OnboardingTutorial />
 
-      {/* Lifetime offer popup (shown after paywall dismissal) */}
-      {lifetimeOfferVariant && (
+      {/* Lifetime offer popup — disabled for now */}
+      {SHOW_LIFETIME_OFFER && lifetimeOfferVariant && (
         <LifetimeOfferModal
           variant={lifetimeOfferVariant}
           onClose={() => setLifetimeOfferVariant(null)}
@@ -1547,6 +1635,9 @@ const App: React.FC = () => {
             <TutorialProvider>
             <BooksProvider>
               <HashRouter>
+              <ShipsPaywallHost />
+              <BookOpenHost />
+              <CdSpinHost />
               {/* <DemoTimer /> - Disabled for now */}
               <ReferralPromptWrapper>
               <Layout>
@@ -1576,6 +1667,7 @@ const App: React.FC = () => {
                   {/* Before /sail/:islandId so "basement" is not treated as an island slug. */}
                   <Route path="/sail/basement/game" element={<SailBoatBasementGamePage />} />
                   <Route path="/sail/basement/darts" element={<SailBoatBasementDartsPage />} />
+                  <Route path="/sail/basement/arcade" element={<SailBoatArcadePage />} />
                   <Route path="/sail/basement" element={<SailBoatBasementPage />} />
                   {/* Buried treasure reward reveal — static segment wins over :islandId. */}
                   <Route path="/sail/treasure" element={<BuriedTreasurePage />} />
@@ -1585,12 +1677,16 @@ const App: React.FC = () => {
                   <Route path="/sail/:islandId/lesson/puzzle" element={<IslandSlidingPuzzlePage />} />
                   <Route path="/sail/:islandId/lesson/coloring" element={<IslandColoringPage />} />
                   <Route path="/sail/:islandId/lesson/quiz" element={<IslandQuizPage />} />
+                  <Route path="/crew/canon" element={<CrewCanonGolfPage />} />
                   <Route path="/crew" element={<CrewPage />} />
                   {/* BROWSING PAGES - No account required, users can explore freely */}
                   <Route path="/world" element={<WorldPageWithWelcomeCheck />} />
                   {/* /home redirects to /world so island buttons are the main explore view */}
                   <Route path="/home" element={<Navigate to="/world" replace />} />
                   <Route path="/listen" element={<ThemedListenPage />} />
+                  <Route path="/hub/playlist/:playlistId" element={<HubPlaylistDetailPage />} />
+                  <Route path="/creators/story/:storyId" element={<CreatorStoryDetailPage />} />
+                  <Route path="/creators/:creatorId" element={<CreatorPublicProfilePage />} />
                   <Route path="/read" element={<ThemedReadPage />} />
                   <Route path="/library/creating/:customMonthlyBookId" element={<BookCreatingPage />} />
                   <Route path="/library" element={<LibraryPage />} />
@@ -1611,7 +1707,7 @@ const App: React.FC = () => {
                   <Route path="/create-playlist" element={<ProtectedRoute><CreatePlaylistPage /></ProtectedRoute>} />
                   <Route path="/lessons" element={<ProtectedRoute><LessonsPage /></ProtectedRoute>} />
                   <Route path="/lesson/:lessonId" element={<ProtectedRoute><LessonPlayerPage /></ProtectedRoute>} />
-                  <Route path="/games/library" element={<GamesLibraryPage />} />
+                  <Route path="/games/library" element={<Navigate to="/sail/basement/arcade" replace />} />
                   <Route path="/games" element={<GamesPage />} />
                   <Route path="/map/:islandId/main" element={<MainMapPage />} />
                   <Route path="/map" element={<MapPage />} />

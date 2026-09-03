@@ -10,8 +10,9 @@ import {
   Star,
   ShoppingBag
 } from 'lucide-react';
-import { tokenService, HubPlaylist, TokenBundle } from '../services/tokenService';
+import { tokenService, HubPlaylist } from '../services/tokenService';
 import CoverImage from '../components/ui/CoverImage';
+import CreditPackSheet from '../components/credits/CreditPackSheet';
 
 const GodlyHubPage: React.FC = () => {
   const navigate = useNavigate();
@@ -206,79 +207,11 @@ const GodlyHubPage: React.FC = () => {
 
       {/* Buy Tokens Modal */}
       {showBuyTokens && (
-        <BuyTokensModal
+        <CreditPackSheet
           currentBalance={balance}
           onClose={() => setShowBuyTokens(false)}
-          onPurchase={async (bundleId) => {
-            // TODO: Integrate with IAP
-            alert('Token purchase coming soon!');
-            setShowBuyTokens(false);
-          }}
         />
       )}
-    </div>
-  );
-};
-
-// Buy Tokens Modal Component
-const BuyTokensModal: React.FC<{
-  currentBalance: number;
-  onClose: () => void;
-  onPurchase: (bundleId: string) => void;
-}> = ({ currentBalance, onClose, onPurchase }) => {
-  const bundles = tokenService.getBundles();
-
-  return (
-    <div className="fixed inset-0 bg-black/50 flex items-end justify-center z-50">
-      <div className="bg-white rounded-t-3xl w-full max-w-lg p-6 animate-slide-up">
-        <div className="flex items-center justify-between mb-6">
-          <h2 className="text-xl font-bold text-gray-900">Buy Tokens</h2>
-          <button
-            onClick={onClose}
-            className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center"
-          >
-            ×
-          </button>
-        </div>
-
-        <div className="flex items-center gap-3 bg-indigo-50 rounded-xl p-4 mb-6">
-          <Coins className="w-8 h-8 text-yellow-500" />
-          <div>
-            <p className="text-sm text-gray-600">Current Balance</p>
-            <p className="text-2xl font-bold text-gray-900">{currentBalance} Tokens</p>
-          </div>
-        </div>
-
-        <div className="space-y-3">
-          {bundles.map((bundle) => (
-            <button
-              key={bundle.bundleId}
-              onClick={() => onPurchase(bundle.bundleId)}
-              className="w-full flex items-center justify-between p-4 border border-gray-200 rounded-xl hover:border-indigo-300 hover:bg-indigo-50 transition-colors"
-            >
-              <div className="flex items-center gap-3">
-                <div className="w-12 h-12 bg-yellow-100 rounded-xl flex items-center justify-center">
-                  <span className="text-xl font-bold text-yellow-600">{bundle.tokens}</span>
-                </div>
-                <div className="text-left">
-                  <p className="font-medium text-gray-900">{bundle.name}</p>
-                  <p className="text-xs text-gray-500">{bundle.effectiveRate}</p>
-                </div>
-              </div>
-              <div className="text-right">
-                <p className="font-bold text-indigo-600">${bundle.price.toFixed(2)}</p>
-                {bundle.bonus && (
-                  <p className="text-xs text-green-600">{bundle.bonus}</p>
-                )}
-              </div>
-            </button>
-          ))}
-        </div>
-
-        <p className="text-xs text-gray-400 text-center mt-4">
-          Tokens can be used to purchase audiobooks and music from creators
-        </p>
-      </div>
     </div>
   );
 };

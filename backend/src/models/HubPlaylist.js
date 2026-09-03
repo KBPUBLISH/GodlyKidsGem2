@@ -10,11 +10,17 @@ const hubAudioItemSchema = new mongoose.Schema({
     description: {
         type: String,
     },
+    // Per-episode art. Optional: the app falls back to the series cover, so an
+    // episode without its own art is a normal, complete episode.
     coverImage: {
-        type: String, // URL to GCS
+        type: String, // Uploaded asset, or a link the creator pasted
     },
     audioUrl: {
-        type: String, // URL to GCS
+        type: String, // Uploaded asset, or a link the creator pasted
+        // Either source fills this one field, so an episode can't hold both and
+        // "has audio" stays a single question. Addresses are checked by
+        // validateItemMedia on the way in rather than by a validator here, so
+        // re-saving an episode stored before that rule existed can't fail.
         // Planned episodes are announcements only, so they have no audio yet.
         required: function () { return !this.planned; },
     },
@@ -172,6 +178,19 @@ const hubPlaylistSchema = new mongoose.Schema({
         type: Number,
         default: 0,
     },
+
+    // Parent/family ratings of the published series (not admin Hub Review)
+    averageRating: {
+        type: Number,
+        default: 0,
+        min: 0,
+        max: 5,
+    },
+    ratingCount: {
+        type: Number,
+        default: 0,
+        min: 0,
+    },
     
     // Age recommendation
     minAge: {
@@ -243,9 +262,10 @@ function deriveSeriesProgress(items = []) {
     };
 }
 
-hubPlaylistSchema.pre('save', function (next) {
+// Mongoose 9 no longer passes `next` to pre hooks: a hook either returns a
+// promise or, like this one, simply returns.
+hubPlaylistSchema.pre('save', function () {
     Object.assign(this, deriveSeriesProgress(this.items || []));
-    next();
 });
 
 // Backers = everyone who bought the series, which for an unfinished series is

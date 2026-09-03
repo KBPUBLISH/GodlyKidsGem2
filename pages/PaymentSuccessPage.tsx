@@ -10,6 +10,7 @@ const PaymentSuccessPage: React.FC = () => {
   
   const [status, setStatus] = useState<'verifying' | 'success' | 'error'>('verifying');
   const [errorMessage, setErrorMessage] = useState('');
+  const isCreditPack = searchParams.get('credits') === '1';
 
   useEffect(() => {
     const verifyPayment = async () => {
@@ -33,6 +34,14 @@ const PaymentSuccessPage: React.FC = () => {
           
           console.log('🔍 Verification response:', data);
 
+          if (data.success && data.kind === 'token_pack') {
+            setStatus('success');
+            setTimeout(() => {
+              navigate('/listen', { replace: true, state: { libraryMode: 'creators' } });
+            }, 2000);
+            return;
+          }
+
           if (data.success && data.isPremium) {
             console.log('✅ Payment verified! Granting premium...');
             localStorage.setItem('godlykids_premium', 'true');
@@ -45,6 +54,14 @@ const PaymentSuccessPage: React.FC = () => {
             }, 2000);
             return;
           }
+        }
+
+        if (isCreditPack) {
+          setStatus('success');
+          setTimeout(() => {
+            navigate('/listen', { replace: true, state: { libraryMode: 'creators' } });
+          }, 2000);
+          return;
         }
 
         // Fallback: Check user's purchase status via webhook endpoint
@@ -110,8 +127,12 @@ const PaymentSuccessPage: React.FC = () => {
                 <CheckCircle size={80} className="text-green-500/30 mx-auto" />
               </div>
             </div>
-            <h1 className="text-3xl font-bold text-white mb-2">Welcome to Premium! 🎉</h1>
-            <p className="text-white/60 mb-4">Your subscription is now active.</p>
+            <h1 className="text-3xl font-bold text-white mb-2">
+              {isCreditPack ? 'Credits added!' : 'Welcome to Premium! 🎉'}
+            </h1>
+            <p className="text-white/60 mb-4">
+              {isCreditPack ? 'Your credit pack is ready to spend on creator stories.' : 'Your subscription is now active.'}
+            </p>
             <p className="text-[#FFD700] font-semibold">Redirecting to app...</p>
           </>
         )}

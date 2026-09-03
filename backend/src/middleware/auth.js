@@ -138,4 +138,32 @@ const authenticateUser = async (req, res, next) => {
   }
 };
 
-module.exports = { authenticateAdmin, authenticateUser, isAdminEmail };
+/**
+ * Attach req.user when a valid app JWT is present. Missing or invalid tokens
+ * continue as a guest — hub follow/reviews still work via deviceId/email.
+ */
+const optionalAuthenticateUser = async (req, res, next) => {
+  try {
+    const authHeader = req.headers['authorization'];
+    if (!authHeader) return next();
+
+    const token = authHeader.startsWith('Bearer ')
+      ? authHeader.slice(7)
+      : authHeader;
+    if (!token) return next();
+
+    const decoded = jwt.verify(token, getJwtSecret());
+    if (NON_PORTAL_ADMIN_ROLES.includes(decoded.role)) return next();
+
+    const userId = getUserIdClaim(decoded);
+    if (!userId) return next();
+
+    const user = await User.findById(userId);
+    if (user) req.user = user;
+  } catch {
+    // Guest path
+  }
+  next();
+};
+
+module.exports = { authenticateAdmin, authenticateUser, optionalAuthenticateUser, isAdminEmail };

@@ -150,7 +150,51 @@ router.post('/webhook', express.raw({ type: 'application/json' }), async (req, r
     case 'checkout.session.completed': {
       const session = event.data.object;
       console.log('✅ Checkout completed:', session.id);
-      
+
+      // Godly Hub credit packs — do not grant premium
+      if (session.metadata?.kind === 'token_pack') {
+        try {
+          const { grantTokenPack } = require('../utils/grantTokenPack');
+          const userEmail = (
+            session.metadata.userEmail ||
+            session.customer_details?.email ||
+            session.customer_email ||
+            ''
+          ).toLowerCase().trim();
+          await grantTokenPack({
+            userId: session.metadata.userId || userEmail,
+            userEmail: userEmail || undefined,
+            bundleId: session.metadata.bundleId,
+            transactionId: session.id,
+            platform: 'web',
+          });
+        } catch (dbError) {
+          console.error('❌ Credit pack grant error:', dbError);
+        }
+        break;
+      }
+
+      // Church partnership subscription checkout
+      if (session.metadata?.churchId) {
+        try {
+          const Church = require('../models/Church');
+          const { activateChurchSubscription } = require('../utils/churchAccess');
+          const church = await Church.findById(session.metadata.churchId);
+          if (church) {
+            await activateChurchSubscription(church, {
+              plan: session.metadata.churchPlan,
+              stripeCustomerId: typeof session.customer === 'string' ? session.customer : session.customer?.id,
+              stripeSubscriptionId: typeof session.subscription === 'string' ? session.subscription : session.subscription?.id,
+            });
+          } else {
+            console.warn('⚠️ Church checkout completed but church not found:', session.metadata.churchId);
+          }
+        } catch (dbError) {
+          console.error('❌ Church activation error:', dbError);
+        }
+        break;
+      }
+
       const userId = session.metadata?.userId;
       const plan = session.metadata?.plan;
       const customerEmail = (session.customer_details?.email || session.customer_email || '').toLowerCase().trim();
@@ -170,8 +214,54 @@ router.post('/webhook', express.raw({ type: 'application/json' }), async (req, r
       break;
     }
 
+    case 'customer.subscription.updated': {
+      const subscription = event.data.object;
+
+      // Track church subscription health (past_due after failed payments, recovered, etc.)
+      if (subscription.metadata?.churchId) {
+        try {
+          const Church = require('../models/Church');
+          const { activateChurchSubscription } = require('../utils/churchAccess');
+          const church = await Church.findById(subscription.metadata.churchId);
+          if (church) {
+            if (subscription.status === 'active' || subscription.status === 'trialing') {
+              if (church.subscriptionStatus !== 'active') {
+                await activateChurchSubscription(church, {
+                  stripeSubscriptionId: subscription.id,
+                  stripeCustomerId: typeof subscription.customer === 'string' ? subscription.customer : subscription.customer?.id,
+                });
+              }
+            } else if (subscription.status === 'past_due' || subscription.status === 'unpaid') {
+              church.subscriptionStatus = 'past_due';
+              await church.save();
+              console.log(`⚠️ Church subscription past due: ${church.name}`);
+            }
+          }
+        } catch (dbError) {
+          console.error('❌ Church subscription update error:', dbError);
+        }
+      }
+      break;
+    }
+
     case 'customer.subscription.deleted': {
       const subscription = event.data.object;
+
+      // Church subscription ended — revoke sponsored premium for all members
+      if (subscription.metadata?.churchId) {
+        try {
+          const Church = require('../models/Church');
+          const { cancelChurchSubscription } = require('../utils/churchAccess');
+          const church = await Church.findById(subscription.metadata.churchId);
+          if (church) {
+            await cancelChurchSubscription(church);
+          }
+        } catch (dbError) {
+          console.error('❌ Church cancellation error:', dbError);
+        }
+        break;
+      }
+
       const userId = subscription.metadata?.userId;
       
       console.log('❌ Subscription cancelled:', subscription.id);
@@ -223,7 +313,40 @@ router.get('/verify-session/:sessionId', async (req, res) => {
     
     const session = await stripe.checkout.sessions.retrieve(sessionId);
     
-    if (session.payment_status === 'paid' || session.status === 'complete') {
+    const paid = session.payment_status === 'paid' || session.status === 'complete';
+    const isCreditPack = session.metadata?.kind === 'token_pack';
+
+    if (paid && isCreditPack) {
+      try {
+        const { grantTokenPack } = require('../utils/grantTokenPack');
+        const userEmail = (
+          session.metadata.userEmail ||
+          session.customer_details?.email ||
+          session.customer_email ||
+          ''
+        ).toLowerCase().trim();
+        const grant = await grantTokenPack({
+          userId: session.metadata.userId || userEmail,
+          userEmail: userEmail || undefined,
+          bundleId: session.metadata.bundleId,
+          transactionId: session.id,
+          platform: 'web',
+        });
+        return res.json({
+          success: true,
+          kind: 'token_pack',
+          isPremium: false,
+          tokensAdded: grant.tokensAdded,
+          newBalance: grant.newBalance,
+          bundleId: session.metadata.bundleId,
+        });
+      } catch (grantError) {
+        console.error('❌ Credit pack verify grant error:', grantError);
+        return res.status(500).json({ error: 'Payment succeeded but credits could not be added yet' });
+      }
+    }
+
+    if (paid) {
       res.json({ 
         success: true, 
         isPremium: true,

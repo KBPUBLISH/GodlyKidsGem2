@@ -3,17 +3,45 @@ const router = express.Router();
 const HubPlaylist = require('../models/HubPlaylist');
 const Creator = require('../models/Creator');
 const AppUser = require('../models/AppUser');
+const HubSeriesReview = require('../models/HubSeriesReview');
 const { authenticateCreator } = require('./creatorAuth');
-const { authenticateAdmin } = require('../middleware/auth');
+const { authenticateAdmin, optionalAuthenticateUser } = require('../middleware/auth');
+const { identityFromRequest } = require('../utils/appIdentity');
+const { sanitizeKidComment } = require('../utils/kidSafeComment');
+const { getOrCreateAppUser } = require('../utils/grantTokenPack');
 
 const {
     sanitizeItems,
     validateItems,
+    validateItemMedia,
     toPublicPlaylist,
     mergeEpisodeUpdate,
 } = require('../utils/hubSeries');
 const { centsPerToken, platformCentsPerToken } = require('../config/creatorEarnings');
 const { sendCreatorInviteEmail } = require('../services/emailService');
+
+/**
+ * Answer a failed save with something the creator can act on.
+ *
+ * The portal shows the `error` string verbatim, so a fixed "Failed to save"
+ * there costs the creator the one sentence that explains the failure — and
+ * costs us the bug report. A schema complaint is the creator's to fix, so it
+ * answers 400 naming the field; anything else is ours, and answers 500 but
+ * still says what broke instead of hiding it.
+ */
+function sendSaveError(res, error, action) {
+    if (error.name === 'ValidationError') {
+        const fields = Object.values(error.errors || {}).map((e) => e.message);
+        return res.status(400).json({ error: fields.join('; ') || `Could not ${action}` });
+    }
+    if (error.name === 'CastError') {
+        return res.status(400).json({ error: `Could not ${action}: ${error.message}` });
+    }
+    return res.status(500).json({
+        error: `Could not ${action}: ${error.message}`,
+        details: error.message,
+    });
+}
 
 // ==================== PUBLIC ROUTES (for app) ====================
 
@@ -100,11 +128,127 @@ router.get('/playlists/:id', async (req, res) => {
     }
 });
 
+async function followingFlag(req, creatorId) {
+    const identity = identityFromRequest(req);
+    if (!identity.userId) return false;
+    const appUser = await AppUser.findOne({
+        $or: [
+            { deviceId: identity.userId },
+            ...(identity.userEmail ? [{ email: identity.userEmail }] : []),
+        ],
+    }).select('followedCreatorIds').lean();
+    return Boolean(appUser?.followedCreatorIds?.some((id) => String(id) === String(creatorId)));
+}
+
+async function refreshPlaylistRating(playlistId) {
+    const stats = await HubSeriesReview.aggregate([
+        { $match: { playlistId: playlistId } },
+        { $group: { _id: '$playlistId', averageRating: { $avg: '$rating' }, ratingCount: { $sum: 1 } } },
+    ]);
+    const averageRating = stats[0] ? Math.round(stats[0].averageRating * 10) / 10 : 0;
+    const ratingCount = stats[0]?.ratingCount || 0;
+    await HubPlaylist.findByIdAndUpdate(playlistId, { averageRating, ratingCount });
+    return { averageRating, ratingCount };
+}
+
+// GET /api/hub/playlists/:id/reviews - Family ratings for a series
+router.get('/playlists/:id/reviews', optionalAuthenticateUser, async (req, res) => {
+    try {
+        const playlist = await HubPlaylist.findById(req.params.id).select('status averageRating ratingCount').lean();
+        if (!playlist || playlist.status !== 'published') {
+            return res.status(404).json({ error: 'Playlist not found' });
+        }
+
+        const reviews = await HubSeriesReview.find({ playlistId: req.params.id })
+            .sort({ createdAt: -1 })
+            .limit(50)
+            .lean();
+
+        const identity = identityFromRequest(req);
+        const mine = identity.userId
+            ? reviews.find((review) => review.userId === identity.userId)
+            : null;
+
+        res.json({
+            averageRating: playlist.averageRating || 0,
+            ratingCount: playlist.ratingCount || 0,
+            reviews: reviews.map((review) => ({
+                id: review._id,
+                rating: review.rating,
+                comment: review.comment,
+                displayName: review.displayName || 'A parent',
+                createdAt: review.createdAt,
+                mine: identity.userId ? review.userId === identity.userId : false,
+            })),
+            myReview: mine ? { rating: mine.rating, comment: mine.comment } : null,
+        });
+    } catch (error) {
+        console.error('Get series reviews error:', error);
+        res.status(500).json({ error: 'Failed to get reviews' });
+    }
+});
+
+// POST /api/hub/playlists/:id/reviews - Save a family rating
+router.post('/playlists/:id/reviews', optionalAuthenticateUser, async (req, res) => {
+    try {
+        const identity = identityFromRequest(req);
+        if (!identity.userId) {
+            return res.status(400).json({ error: 'Sign in or keep this device to leave a review' });
+        }
+
+        const playlist = await HubPlaylist.findById(req.params.id);
+        if (!playlist || playlist.status !== 'published') {
+            return res.status(404).json({ error: 'Playlist not found' });
+        }
+
+        const rating = Number(req.body?.rating);
+        if (!Number.isInteger(rating) || rating < 1 || rating > 5) {
+            return res.status(400).json({ error: 'Pick a rating from 1 to 5 stars' });
+        }
+
+        const cleaned = sanitizeKidComment(req.body?.comment);
+        if (cleaned.error) {
+            return res.status(400).json({ error: cleaned.error });
+        }
+
+        const review = await HubSeriesReview.findOneAndUpdate(
+            { playlistId: playlist._id, userId: identity.userId },
+            {
+                playlistId: playlist._id,
+                userId: identity.userId,
+                userEmail: identity.userEmail,
+                displayName: 'A parent',
+                rating,
+                comment: cleaned.comment,
+            },
+            { upsert: true, new: true, setDefaultsOnInsert: true }
+        );
+
+        const summary = await refreshPlaylistRating(playlist._id);
+
+        res.json({
+            success: true,
+            review: {
+                id: review._id,
+                rating: review.rating,
+                comment: review.comment,
+                displayName: review.displayName,
+                createdAt: review.createdAt,
+                mine: true,
+            },
+            ...summary,
+        });
+    } catch (error) {
+        console.error('Save series review error:', error);
+        res.status(500).json({ error: 'Failed to save review' });
+    }
+});
+
 // GET /api/hub/creators/:id - Get creator public profile
-router.get('/creators/:id', async (req, res) => {
+router.get('/creators/:id', optionalAuthenticateUser, async (req, res) => {
     try {
         const creator = await Creator.findById(req.params.id)
-            .select('name bio profileImage website')
+            .select('name bio profileImage website status')
             .lean();
         
         if (!creator || creator.status === 'suspended') {
@@ -118,11 +262,20 @@ router.get('/creators/:id', async (req, res) => {
         })
         .sort({ publishedAt: -1 })
         .lean();
+
+        const following = await followingFlag(req, req.params.id);
         
         res.json({
-            creator,
+            creator: {
+                _id: creator._id,
+                name: creator.name,
+                bio: creator.bio,
+                profileImage: creator.profileImage,
+                website: creator.website,
+            },
             playlists: playlists.map(toPublicPlaylist),
             contentCount: playlists.length,
+            following,
         });
     } catch (error) {
         console.error('Get creator profile error:', error);
@@ -130,15 +283,74 @@ router.get('/creators/:id', async (req, res) => {
     }
 });
 
+// POST /api/hub/creators/:id/follow
+router.post('/creators/:id/follow', optionalAuthenticateUser, async (req, res) => {
+    try {
+        const identity = identityFromRequest(req);
+        if (!identity.userId) {
+            return res.status(400).json({ error: 'Sign in or keep this device to follow a creator' });
+        }
+
+        const creator = await Creator.findById(req.params.id).select('status').lean();
+        if (!creator || creator.status === 'suspended') {
+            return res.status(404).json({ error: 'Creator not found' });
+        }
+
+        const appUser = await getOrCreateAppUser(identity.userId, identity.userEmail);
+        const already = appUser.followedCreatorIds?.some((id) => String(id) === String(req.params.id));
+        if (!already) {
+            appUser.followedCreatorIds = appUser.followedCreatorIds || [];
+            appUser.followedCreatorIds.push(req.params.id);
+            await appUser.save();
+        }
+
+        res.json({ success: true, following: true });
+    } catch (error) {
+        console.error('Follow creator error:', error);
+        res.status(500).json({ error: 'Failed to follow creator' });
+    }
+});
+
+// DELETE /api/hub/creators/:id/follow
+router.delete('/creators/:id/follow', optionalAuthenticateUser, async (req, res) => {
+    try {
+        const identity = identityFromRequest(req);
+        if (!identity.userId) {
+            return res.status(400).json({ error: 'Sign in or keep this device to unfollow' });
+        }
+
+        const appUser = await AppUser.findOne({
+            $or: [
+                { deviceId: identity.userId },
+                ...(identity.userEmail ? [{ email: identity.userEmail }] : []),
+            ],
+        });
+        if (appUser) {
+            appUser.followedCreatorIds = (appUser.followedCreatorIds || []).filter(
+                (id) => String(id) !== String(req.params.id)
+            );
+            await appUser.save();
+        }
+
+        res.json({ success: true, following: false });
+    } catch (error) {
+        console.error('Unfollow creator error:', error);
+        res.status(500).json({ error: 'Failed to unfollow creator' });
+    }
+});
+
 // GET /api/hub/featured - Get featured hub content
 router.get('/featured', async (req, res) => {
     try {
+        // status is filtered here as well as on the flag: a series that was
+        // featured and later left 'published' must drop off the shelf even
+        // though its isFeatured flag is still set.
         const playlists = await HubPlaylist.find({ 
             status: 'published',
             isFeatured: true
         })
         .populate('creatorId', 'name profileImage')
-        .sort({ featuredOrder: 1 })
+        .sort({ featuredOrder: 1, publishedAt: -1 })
         .limit(10)
         .lean();
         
@@ -193,6 +405,13 @@ router.post('/my-playlists', authenticateCreator, async (req, res) => {
         // Everything in a draft is reviewed as one batch when it's submitted.
         const sanitizedItems = sanitizeItems(items, { reviewStatus: 'approved' });
         
+        // Audio and cover art may be uploaded or pasted as links, so the
+        // addresses are checked on every write — not just at submit.
+        const mediaError = validateItemMedia(sanitizedItems);
+        if (mediaError) {
+            return res.status(400).json({ error: mediaError });
+        }
+        
         const playlist = new HubPlaylist({
             creatorId: req.creator._id,
             title,
@@ -221,7 +440,7 @@ router.post('/my-playlists', authenticateCreator, async (req, res) => {
         });
     } catch (error) {
         console.error('Create playlist error:', error);
-        res.status(500).json({ error: 'Failed to create playlist' });
+        sendSaveError(res, error, 'create this content');
     }
 });
 
@@ -292,7 +511,14 @@ router.put('/my-playlists/:id', authenticateCreator, async (req, res) => {
         if (categories) playlist.categories = categories;
         if (minAge !== undefined) playlist.minAge = minAge;
         if (releasePlan !== undefined) playlist.releasePlan = releasePlan;
-        if (items) playlist.items = sanitizeItems(items, { reviewStatus: 'approved' });
+        if (items) {
+            const sanitizedItems = sanitizeItems(items, { reviewStatus: 'approved' });
+            const mediaError = validateItemMedia(sanitizedItems);
+            if (mediaError) {
+                return res.status(400).json({ error: mediaError });
+            }
+            playlist.items = sanitizedItems;
+        }
         
         // If was rejected, reset to draft
         if (playlist.status === 'rejected') {
@@ -308,7 +534,7 @@ router.put('/my-playlists/:id', authenticateCreator, async (req, res) => {
         });
     } catch (error) {
         console.error('Update playlist error:', error);
-        res.status(500).json({ error: 'Failed to update playlist' });
+        sendSaveError(res, error, 'save this content');
     }
 });
 
@@ -338,6 +564,11 @@ router.post('/my-playlists/:id/submit', authenticateCreator, async (req, res) =>
             return res.status(400).json({ error: itemError });
         }
         
+        const mediaError = validateItemMedia(playlist.items);
+        if (mediaError) {
+            return res.status(400).json({ error: mediaError });
+        }
+        
         // An unfinished series still has to ship something kids can play today.
         const released = playlist.items.filter(item => !item.planned);
         if (released.length === 0) {
@@ -360,7 +591,7 @@ router.post('/my-playlists/:id/submit', authenticateCreator, async (req, res) =>
         });
     } catch (error) {
         console.error('Submit playlist error:', error);
-        res.status(500).json({ error: 'Failed to submit playlist' });
+        sendSaveError(res, error, 'submit this content for review');
     }
 });
 
@@ -397,6 +628,11 @@ router.put('/my-playlists/:id/episodes', authenticateCreator, async (req, res) =
             return res.status(400).json({ error: itemError });
         }
         
+        const mediaError = validateItemMedia(incoming);
+        if (mediaError) {
+            return res.status(400).json({ error: mediaError });
+        }
+        
         const merged = mergeEpisodeUpdate(playlist.items, incoming);
         if (merged.error) {
             return res.status(400).json({ error: merged.error });
@@ -421,7 +657,7 @@ router.put('/my-playlists/:id/episodes', authenticateCreator, async (req, res) =
         });
     } catch (error) {
         console.error('Update episodes error:', error);
-        res.status(500).json({ error: 'Failed to update episodes' });
+        sendSaveError(res, error, 'update the episodes');
     }
 });
 
@@ -675,6 +911,75 @@ router.get('/admin/pending', authenticateAdmin, async (req, res) => {
     } catch (error) {
         console.error('Get pending error:', error);
         res.status(500).json({ error: 'Failed to get pending playlists' });
+    }
+});
+
+// GET /api/hub/admin/playlists - Browse series by status. Defaults to
+// published, the set the featured shelf is curated from; ?status=all lists
+// every series regardless of where it sits in the review pipeline.
+router.get('/admin/playlists', authenticateAdmin, async (req, res) => {
+    try {
+        const { status = 'published' } = req.query;
+        
+        const playlists = await HubPlaylist.find(status === 'all' ? {} : { status })
+            .populate('creatorId', 'name email profileImage')
+            .sort({ isFeatured: -1, featuredOrder: 1, publishedAt: -1 })
+            .lean();
+        
+        res.json({ playlists });
+    } catch (error) {
+        console.error('Get admin playlists error:', error);
+        res.status(500).json({ error: 'Failed to get playlists' });
+    }
+});
+
+// PUT /api/hub/admin/playlists/:id/featured - Put a series on the app's
+// featured shelf, or take it off.
+router.put('/admin/playlists/:id/featured', authenticateAdmin, async (req, res) => {
+    try {
+        const { isFeatured, featuredOrder } = req.body;
+        
+        if (typeof isFeatured !== 'boolean') {
+            return res.status(400).json({ error: 'isFeatured must be true or false' });
+        }
+        
+        if (featuredOrder !== undefined && featuredOrder !== null) {
+            const parsedOrder = Number(featuredOrder);
+            if (!Number.isInteger(parsedOrder) || parsedOrder < 0 || parsedOrder > 999) {
+                return res.status(400).json({ error: 'featuredOrder must be a whole number between 0 and 999' });
+            }
+        }
+        
+        const playlist = await HubPlaylist.findById(req.params.id);
+        
+        if (!playlist) {
+            return res.status(404).json({ error: 'Playlist not found' });
+        }
+        
+        // Featuring promotes a series to the app's shelf, so it can only apply
+        // to content the app would already serve.
+        if (isFeatured && playlist.status !== 'published') {
+            return res.status(400).json({
+                error: 'Only published series can be featured — approve it for the Hub first',
+            });
+        }
+        
+        playlist.isFeatured = isFeatured;
+        if (featuredOrder !== undefined && featuredOrder !== null) {
+            playlist.featuredOrder = Number(featuredOrder);
+        }
+        
+        await playlist.save();
+        
+        console.log(`${isFeatured ? '⭐' : '☆'} Hub series ${isFeatured ? 'featured' : 'unfeatured'}: "${playlist.title}"`);
+        
+        res.json({
+            message: isFeatured ? 'Series added to the featured shelf' : 'Series removed from the featured shelf',
+            playlist,
+        });
+    } catch (error) {
+        console.error('Feature playlist error:', error);
+        res.status(500).json({ error: 'Failed to update featured status' });
     }
 });
 

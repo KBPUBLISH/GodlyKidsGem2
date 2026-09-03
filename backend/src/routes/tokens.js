@@ -6,36 +6,98 @@ const TokenTransaction = require('../models/TokenTransaction');
 const HubPlaylist = require('../models/HubPlaylist');
 const Creator = require('../models/Creator');
 const { creatorEarningsCents: calculateCreatorEarnings } = require('../config/creatorEarnings');
+const { grantTokenPack } = require('../utils/grantTokenPack');
+const { identityFromRequest } = require('../utils/appIdentity');
+const { optionalAuthenticateUser } = require('../middleware/auth');
 
-// Helper to get/create AppUser
-const getOrCreateAppUser = async (userId, userEmail) => {
-    let appUser = await AppUser.findOne({
-        $or: [
-            { deviceId: userId },
-            { email: userEmail?.toLowerCase() }
-        ]
-    });
-    
-    if (!appUser) {
-        appUser = new AppUser({
-            deviceId: userId,
-            email: userEmail?.toLowerCase(),
-            tokenBalance: 0,
-        });
-        await appUser.save();
-    }
-    
-    return appUser;
+function paymentsConfigured() {
+    return Boolean(process.env.STRIPE_SECRET_KEY && !String(process.env.STRIPE_SECRET_KEY).includes('xxx'));
+}
+
+const PAYMENTS_UNAVAILABLE = {
+    error: 'payments_not_configured',
+    message: 'Credit packs are listed, but card payments are not set up on this server. Credits were not added.',
 };
 
 // GET /api/tokens/bundles - Get available token bundles
 router.get('/bundles', (req, res) => {
     try {
         const bundles = TokenPurchase.getAllBundles();
-        res.json({ bundles });
+        res.json({
+            bundles,
+            paymentsConfigured: paymentsConfigured(),
+            currency: 'usd',
+        });
     } catch (error) {
         console.error('Get bundles error:', error);
         res.status(500).json({ error: 'Failed to get bundles' });
+    }
+});
+
+// POST /api/tokens/checkout - Start Stripe Checkout for a credit pack (web)
+router.post('/checkout', optionalAuthenticateUser, async (req, res) => {
+    try {
+        if (!paymentsConfigured()) {
+            return res.status(503).json(PAYMENTS_UNAVAILABLE);
+        }
+
+        const { bundleId, successUrl, cancelUrl } = req.body || {};
+        const identity = identityFromRequest(req);
+
+        if (!identity.userId) {
+            return res.status(400).json({ error: 'userId or email is required' });
+        }
+        if (!TokenPurchase.isForSale(bundleId)) {
+            return res.status(400).json({ error: 'Invalid bundle ID' });
+        }
+
+        const bundle = TokenPurchase.getBundleInfo(bundleId);
+        const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
+        const frontend = process.env.FRONTEND_URL || 'https://app.godlykids.com';
+
+        const session = await stripe.checkout.sessions.create({
+            mode: 'payment',
+            payment_method_types: ['card'],
+            line_items: [{
+                price_data: {
+                    currency: 'usd',
+                    unit_amount: bundle.priceCents,
+                    product_data: {
+                        name: `${bundle.name} — ${bundle.tokens} credits`,
+                        description: 'Godly Hub credits for creator stories',
+                    },
+                },
+                quantity: 1,
+            }],
+            success_url: successUrl || `${frontend}/#/payment-success?session_id={CHECKOUT_SESSION_ID}&credits=1`,
+            cancel_url: cancelUrl || `${frontend}/#/listen`,
+            customer_email: identity.userEmail && identity.userEmail.includes('@')
+                ? identity.userEmail
+                : undefined,
+            metadata: {
+                kind: 'token_pack',
+                bundleId,
+                userId: identity.userId,
+                userEmail: identity.userEmail || '',
+            },
+        });
+
+        res.json({
+            sessionId: session.id,
+            url: session.url,
+            bundle: {
+                bundleId,
+                tokens: bundle.tokens,
+                priceCents: bundle.priceCents,
+                name: bundle.name,
+            },
+        });
+    } catch (error) {
+        console.error('Token checkout error:', error);
+        res.status(500).json({
+            error: 'Failed to start checkout',
+            message: error.message,
+        });
     }
 });
 
@@ -65,74 +127,57 @@ router.get('/balance', async (req, res) => {
     }
 });
 
-// POST /api/tokens/purchase - Record token purchase (after IAP verification)
-router.post('/purchase', async (req, res) => {
+// POST /api/tokens/purchase - Record token purchase after IAP or verified Stripe
+router.post('/purchase', optionalAuthenticateUser, async (req, res) => {
     try {
-        const { userId, userEmail, bundleId, transactionId, platform, receiptData } = req.body;
-        
+        const identity = identityFromRequest(req);
+        let { bundleId, transactionId, platform, receiptData } = req.body || {};
+        const userId = identity.userId;
+        const userEmail = identity.userEmail;
+
         if (!userId || !bundleId || !platform) {
             return res.status(400).json({ error: 'userId, bundleId, and platform are required' });
         }
-        
-        // Check for duplicate transaction
-        if (transactionId) {
-            const existing = await TokenPurchase.findOne({ transactionId });
-            if (existing) {
-                return res.status(409).json({ error: 'Transaction already processed' });
+
+        if (platform === 'web') {
+            if (!paymentsConfigured()) {
+                return res.status(503).json(PAYMENTS_UNAVAILABLE);
             }
+            if (!transactionId) {
+                return res.status(400).json({ error: 'Stripe session id is required for web purchases' });
+            }
+            const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
+            const session = await stripe.checkout.sessions.retrieve(transactionId);
+            const paid = session.payment_status === 'paid' || session.status === 'complete';
+            if (!paid || session.metadata?.kind !== 'token_pack') {
+                return res.status(400).json({ error: 'Payment is not complete for this credit pack' });
+            }
+            bundleId = session.metadata.bundleId || bundleId;
         }
-        
-        // Get bundle info
-        const bundleInfo = TokenPurchase.getBundleInfo(bundleId);
-        if (!bundleInfo) {
+
+        if (!TokenPurchase.isForSale(bundleId) && platform === 'web') {
             return res.status(400).json({ error: 'Invalid bundle ID' });
         }
-        
-        // Get or create app user
-        const appUser = await getOrCreateAppUser(userId, userEmail);
-        
-        // Record purchase
-        const purchase = new TokenPurchase({
+
+        const result = await grantTokenPack({
             userId,
-            userEmail: userEmail?.toLowerCase(),
+            userEmail,
             bundleId,
-            tokenAmount: bundleInfo.tokens,
-            priceCents: bundleInfo.priceCents,
-            platform,
             transactionId,
+            platform,
             receiptData,
-            status: 'completed',
         });
-        await purchase.save();
-        
-        // Update user balance
-        const previousBalance = appUser.tokenBalance || 0;
-        appUser.tokenBalance = previousBalance + bundleInfo.tokens;
-        await appUser.save();
-        
-        // Record transaction
-        const transaction = new TokenTransaction({
-            userId,
-            userEmail: userEmail?.toLowerCase(),
-            type: 'purchase',
-            amount: bundleInfo.tokens,
-            balanceAfter: appUser.tokenBalance,
-            relatedPurchaseId: purchase._id,
-            description: `Purchased ${bundleInfo.name} (${bundleInfo.tokens} tokens)`,
-        });
-        await transaction.save();
-        
-        console.log(`✅ Token purchase: ${userId} bought ${bundleInfo.tokens} tokens (${bundleId})`);
-        
+
         res.json({
             success: true,
-            tokensAdded: bundleInfo.tokens,
-            newBalance: appUser.tokenBalance,
-            purchaseId: purchase._id,
+            tokensAdded: result.tokensAdded,
+            newBalance: result.newBalance,
+            purchaseId: result.purchaseId,
+            alreadyProcessed: result.alreadyProcessed,
         });
     } catch (error) {
         console.error('Token purchase error:', error);
-        res.status(500).json({ error: 'Failed to record purchase' });
+        res.status(error.status || 500).json({ error: error.message || 'Failed to record purchase' });
     }
 });
 

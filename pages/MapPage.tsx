@@ -1,15 +1,27 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { useNavigate } from 'react-router-dom';
-import { Lock, Star, Check, Ship, X, BookOpen } from 'lucide-react';
+import { useLocation, useNavigate } from 'react-router-dom';
+import { Lock, Star, Check, Ship, Compass } from 'lucide-react';
+import CloudFlythrough from '../components/onboarding/CloudFlythrough';
+import OnboardingGuideCard from '../components/onboarding/OnboardingGuideCard';
+import StormySeaError from '../components/ui/StormySeaError';
+import {
+  ONBOARDING_GENESIS_VIDEO,
+  isOnboardingJourneyActive,
+} from '../utils/onboardingJourney';
 import { prefersReducedMotion } from '../utils/bibleMapApi';
+import { assertFreeTierIslandExists } from '../utils/freeTierAccess';
+import { islandStoryProgressService } from '../services/islandStoryProgressService';
+import { profileService } from '../services/profileService';
+import { isPlayableMainMapStory, isStoryPackComplete } from '../utils/mainMapStoryUnlock';
 import {
   CMS_ISLANDS_TIMEOUT_MS,
-  FALLBACK_OCEAN_ISLANDS,
   fetchOceanMapIslands,
+  fetchPublishedMapStories,
   getOceanIslandArtSrc,
-  isGenesisIsland,
+  storyIslandKeys,
   type OceanMapIsland,
+  type OceanMapStoryRow,
 } from '../utils/oceanMapIslands';
 
 /** Full-width light wooden plank header (irregular edges; black keyed to alpha). */
@@ -36,7 +48,7 @@ const MAP_FOOTER_MAX_VH_TABLET = 8.5;
 const MAP_FOOTER_MAX_PX_TABLET = 88;
 /** Tall painted ocean strip (scrolls with voyage content). Native 2816×11392. */
 const MAP_OCEAN_SCROLL = '/assets/images/map-ocean-scroll.png';
-/** Native aspect of map-ocean-scroll.png — sizes the scroll trail to the strip. */
+/** Native aspect of map-ocean-scroll.png — one tile of the repeating water. */
 const OCEAN_SCROLL_ASPECT = 11392 / 2816;
 /** Sky cloud A — wide 3D bank (970×453; alpha already keyed). */
 const MAP_SKY_CLOUD_A = '/assets/images/map-sky-cloud-a.png';
@@ -155,134 +167,127 @@ const OCEAN_HORIZON_HAZE = `url("data:image/svg+xml,${encodeURIComponent(
 
 type Island = OceanMapIsland;
 
-const FALLBACK_ISLANDS = FALLBACK_OCEAN_ISLANDS;
-
 const islandHasMainMap = (island: Island): boolean =>
   Boolean(
     (island.mainMapUrl && island.mainMapUrl.trim()) ||
       (island.mainMapVideoUrl && island.mainMapVideoUrl.trim()),
   );
 
-const TRAIL_PATH =
-  'M50,3.5 C 50,12 48,21 47,30 C 53,37 29,41 27,49 C 25,58 62,58 65,67 C 68,76 44,79 36,86';
+const ISLAND_ART_SIZE = 225;
 
-const GENESIS_ISLAND_SIZE = 225;
+/**
+ * Voyage layout.
+ *
+ * The CMS exposes a `mapPosition` per island but authors every one of them at
+ * the same default (x 50 / y 50), so laying islands out by those coordinates
+ * stacks the whole voyage on one spot. Percentages also can't express spacing,
+ * because a node's real height depends on how long its label planks wrap.
+ *
+ * So the path is computed here: a serpentine weave down the water where each
+ * island gets a slot as tall as the node actually measured, plus a gap. Slot
+ * tops are pixels, which makes spacing independent of viewport and island count.
+ */
+/** Horizontal swing either side of the centre line, in % of the water width. */
+const VOYAGE_X_AMPLITUDE = 19;
+/** Islands per full centre → right → centre → left weave. */
+const VOYAGE_X_PERIOD = 4;
+/** Clear water above the first island, below the locked horizon curve. */
+const VOYAGE_TOP_PAD = 28;
+/** Clear water between one island's lowest plank and the next island's badge. */
+const VOYAGE_GAP = 64;
+/** Clear water past the last island so its planks clear the footer nav. */
+const VOYAGE_BOTTOM_PAD = 96;
+/** Slot height assumed until a node reports its measured height. */
+const VOYAGE_ESTIMATED_NODE_H = 260;
+/** Keeps a node's art fully on screen where the path swings widest. */
+const VOYAGE_EDGE_PAD = 8;
 
-const IslandDetailPopup: React.FC<{
-  island: Island;
-  onClose: () => void;
-  onSail: (island: Island) => void;
-}> = ({ island, onClose, onSail }) => {
-  const isLocked = island.status === 'locked';
-  const progressPct = Math.round((island.storiesComplete / Math.max(1, island.storiesTotal)) * 100);
+/** Normalised length the sailing route's dash pattern is measured against. */
+const VOYAGE_TRAIL_PATH_LENGTH = 1000;
 
-  return (
-    <div
-      className="fixed inset-0 z-[60] flex items-end sm:items-center justify-center px-4 pb-[max(1.5rem,var(--safe-area-bottom))] pt-8"
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="island-popup-title"
-    >
-      <button
-        type="button"
-        className="absolute inset-0 bg-black/45 backdrop-blur-[2px]"
-        aria-label="Close"
-        onClick={onClose}
-      />
-      <div
-        className="relative w-full max-w-sm rounded-3xl overflow-hidden shadow-2xl border-2"
-        style={{
-          background: 'linear-gradient(180deg, #C4884A 0%, #A56B3A 55%, #8B5A2B 100%)',
-          borderColor: '#5C3D1E',
-        }}
-      >
-        <button
-          type="button"
-          onClick={onClose}
-          className="absolute top-3 right-3 z-10 w-9 h-9 rounded-full bg-black/25 border border-white/20 text-white flex items-center justify-center active:scale-95"
-          aria-label="Close"
-        >
-          <X size={18} strokeWidth={2.5} />
-        </button>
+/** Serpentine centre-line offset for the island at `index`. */
+const voyageX = (index: number): number =>
+  50 + VOYAGE_X_AMPLITUDE * Math.sin((index * 2 * Math.PI) / VOYAGE_X_PERIOD);
 
-        <div className="px-5 pt-6 pb-5">
-          <p className="text-center text-[#FFE9B0] font-display font-black text-xs uppercase tracking-widest mb-1">
-            {island.book}
-          </p>
-          <h2
-            id="island-popup-title"
-            className="text-center font-display font-black text-2xl text-white leading-tight"
-            style={{ textShadow: '0 2px 0 #5C3D1E' }}
-          >
-            {island.title}
-          </h2>
-
-          {/* Progress */}
-          <div
-            className="mt-4 rounded-2xl px-3.5 py-3 border"
-            style={{ background: 'rgba(61,41,20,0.45)', borderColor: 'rgba(92,61,30,0.8)' }}
-          >
-            <div className="flex items-center justify-between gap-2 mb-2">
-              <span className="flex items-center gap-1.5 text-[#FFE9B0] font-display font-bold text-sm">
-                <BookOpen size={15} className="text-[#FFD700]" />
-                Stories
-              </span>
-              <span className="text-white font-display font-black text-sm tabular-nums">
-                {island.storiesComplete}/{island.storiesTotal} complete
-              </span>
-            </div>
-            <div className="h-3 rounded-full bg-[#2a1a0c] border border-[#5C3D1E] overflow-hidden shadow-inner">
-              <div
-                className="h-full rounded-full"
-                style={{
-                  width: `${progressPct}%`,
-                  background: 'linear-gradient(90deg, #FFE55C, #FFD700 60%, #DAA520)',
-                }}
-              />
-            </div>
-          </div>
-
-          {isLocked ? (
-            <div className="mt-4 flex flex-col items-center gap-2 py-2">
-              <span className="w-12 h-12 rounded-full bg-black/30 border-2 border-white/20 flex items-center justify-center">
-                <Lock size={22} className="text-white" />
-              </span>
-              <p className="text-white/85 font-display font-bold text-sm text-center">
-                Keep sailing to unlock this island!
-              </p>
-            </div>
-          ) : (
-            <button
-              type="button"
-              onClick={() => onSail(island)}
-              className="mt-4 w-full py-3.5 rounded-2xl font-display font-black text-lg text-[#3E1F07] border-2 border-[#B8860B] active:translate-y-[2px] transition-transform"
-              style={{
-                background: 'linear-gradient(180deg, #FFE55C 0%, #FFD700 45%, #DAA520 100%)',
-                boxShadow: '0 4px 0 #8B6914, inset 0 1px 0 rgba(255,255,255,0.45)',
-              }}
-            >
-              Sail There
-            </button>
-          )}
-        </div>
-      </div>
-    </div>
-  );
-};
+/**
+ * Sail-the-island cinematic — same punch-in + white fade as Explore / WorldPage.
+ * The lower-island wait is skipped (islands already sit on the water).
+ *
+ * Timing (~2.35s):
+ *   0ms         clear chrome
+ *   350ms       zoom into the tapped island
+ *   1550ms      white fade
+ *   2350ms      navigate /sail/:id
+ */
+const MAP_SAIL_CLEAR_MS = 280;
+const MAP_SAIL_HOLD_MS = 350;
+const MAP_SAIL_ZOOM_MS = 1400;
+const MAP_SAIL_FADE_MS = 700;
+const MAP_SAIL_FADE_START_MS = 1550;
+const MAP_SAIL_NAVIGATE_MS = 2350;
+const MAP_SAIL_REDUCED_NAVIGATE_MS = 220;
+const MAP_SAIL_ZOOM_SCALE = 2.35;
+const MAP_SAIL_ZOOM_EASE = 'cubic-bezier(0.72, 0.0, 0.88, 0.28)';
 
 const IslandNode: React.FC<{
   island: Island;
   index: number;
+  /** Slot top on the voyage, in px from the top of the islands layer. */
+  top: number;
+  /** Serpentine centre offset, in % of the water width. */
+  x: number;
   bubbleReady: boolean;
-  onSelect: (island: Island) => void;
-}> = ({ island, index, bubbleReady, onSelect }) => {
+  storiesComplete: number;
+  storiesTotal: number;
+  isZoomTarget: boolean;
+  cinematic: boolean;
+  interactive?: boolean;
+  showTapCue?: boolean;
+  onMeasure: (id: string, height: number) => void;
+  onSelect: (island: Island, node: HTMLElement) => void;
+}> = ({
+  island,
+  index,
+  top,
+  x,
+  bubbleReady,
+  storiesComplete,
+  storiesTotal,
+  isZoomTarget,
+  cinematic,
+  interactive = true,
+  showTapCue = false,
+  onMeasure,
+  onSelect,
+}) => {
+  const nodeRef = useRef<HTMLButtonElement>(null);
   const isLocked = island.status === 'locked';
   const isComplete = island.status === 'complete';
   const isCurrent = island.status === 'current';
   const artSrc = getOceanIslandArtSrc(island);
   const hasArt = Boolean(artSrc);
-  const artSize = island.mapArtUrl ? Math.min(GENESIS_ISLAND_SIZE, 200) : GENESIS_ISLAND_SIZE;
+  const artSize = island.mapArtUrl ? Math.min(ISLAND_ART_SIZE, 200) : ISLAND_ART_SIZE;
   const reduceMotion = prefersReducedMotion();
+  /** CMS islands often repeat the book label as the description — show it once. */
+  const blurb =
+    island.title.trim() === island.book.trim() ? '' : island.title.trim();
+  const showProgress = storiesTotal > 0;
+  const allStoriesDone = showProgress && storiesComplete >= storiesTotal;
+  const nodeWidth = hasArt ? artSize + 12 : 112;
+  /** Half the node plus a margin — the closest its centre may sit to an edge. */
+  const edgeInset = nodeWidth / 2 + VOYAGE_EDGE_PAD;
+
+  // Report the height this node actually rendered (label planks wrap to any
+  // number of lines) so the parent can size its slot and space the next island.
+  useEffect(() => {
+    const el = nodeRef.current;
+    if (!el) return;
+    const report = () => onMeasure(island.id, el.offsetHeight);
+    report();
+    const observer = new ResizeObserver(report);
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [island.id, onMeasure]);
 
   const discStyle: React.CSSProperties = isLocked
     ? { background: 'radial-gradient(circle at 35% 30%, #8fa3ad, #5b6f78)' }
@@ -292,21 +297,27 @@ const IslandNode: React.FC<{
 
   return (
     <button
+      ref={nodeRef}
       type="button"
       onClick={(e) => {
         e.stopPropagation();
-        onSelect(island);
+        if (cinematic || !interactive) return;
+        onSelect(island, e.currentTarget);
       }}
       data-globe-node
-      className="absolute -translate-x-1/2 -translate-y-1/2 z-10 flex flex-col items-center focus:outline-none active:scale-95 transition-transform touch-manipulation"
+      className="absolute -translate-x-1/2 z-10 flex flex-col items-center focus:outline-none active:scale-95 transition-transform touch-manipulation"
       style={{
-        left: `${island.x}%`,
-        top: `${island.y}%`,
-        width: hasArt ? artSize + 12 : 112,
+        // clamp() keeps the widest art on screen when the path swings out.
+        left: `clamp(${edgeInset}px, ${x}%, calc(100% - ${edgeInset}px))`,
+        top: `${top}px`,
+        width: nodeWidth,
         // Inline — must beat parent overlay pointer-events:none (Tailwind class alone is easy to miss).
-        pointerEvents: 'auto',
+        pointerEvents: cinematic || !interactive ? 'none' : 'auto',
+        filter: !interactive ? 'grayscale(1) brightness(0.72)' : undefined,
       }}
-      aria-label={`${island.book}: ${island.title}${isLocked ? ' (locked)' : ''}`}
+      aria-label={`${island.book}: ${island.title}${
+        showProgress ? `, ${storiesComplete} of ${storiesTotal} stories complete` : ''
+      }${isLocked ? ' (locked)' : ''}`}
     >
       {/* Inner wrapper carries the per-node "globe" 3D transform so the outer
           button keeps its stable x/y positioning + measurable rect. */}
@@ -315,11 +326,13 @@ const IslandNode: React.FC<{
         className="flex flex-col items-center w-full"
         style={{ transformOrigin: 'center center', backfaceVisibility: 'hidden' }}
       >
-      {/* Bubble pop-in lives inside globe transform so scroll-globe can still apply. */}
+      {/* Bubble pop-in lives inside globe transform so scroll-globe can still apply.
+          Flex column: badge / art / label must be block-level flex items so their
+          own margins and padding create real vertical space. */}
       <div
-        className={
-          bubbleReady && !reduceMotion ? 'map-island-bubble-in' : undefined
-        }
+        className={`flex w-full flex-col items-center ${
+          bubbleReady && !reduceMotion ? 'map-island-bubble-in' : ''
+        }`}
         style={
           bubbleReady && !reduceMotion
             ? { animationDelay: `${0.06 + index * 0.09}s` }
@@ -329,14 +342,42 @@ const IslandNode: React.FC<{
         }
       >
       {/* Status flag / ribbon — keep Complete lightly; skip Current pill on art islands */}
-      {isComplete && (
-        <span className="mb-1 px-2 py-0.5 rounded-full bg-[#2E7D32] text-white text-[10px] font-black uppercase tracking-wide shadow border border-[#1B5E20]">
-          Complete
+      {showTapCue && (
+        <span className="ob-tap-island mb-2 pointer-events-none" aria-hidden>
+          Tap Island
         </span>
       )}
-      {isCurrent && !hasArt && (
-        <span className="mb-1 px-2 py-0.5 rounded-full bg-[#2a9df4] text-white text-[10px] font-black uppercase tracking-wide shadow border border-[#1668b3]">
-          Current
+      {showProgress && (
+        <span
+          className={`mb-1 flex flex-col items-center pointer-events-none ${
+            cinematic && !isZoomTarget ? 'opacity-0' : ''
+          }`}
+          style={{ transition: 'opacity 180ms ease' }}
+        >
+          <span
+            className="min-w-[46px] px-2 py-0.5 rounded-full text-[11px] font-display font-black tabular-nums tracking-wide shadow border"
+            style={{
+              background: allStoriesDone
+                ? 'linear-gradient(180deg, #7bd66a 0%, #3f9e3a 100%)'
+                : 'linear-gradient(180deg, #ffe9b0 0%, #e8c76a 100%)',
+              color: allStoriesDone ? '#fff' : '#5c3d1e',
+              borderColor: allStoriesDone ? '#1B5E20' : '#c9a76b',
+              textShadow: allStoriesDone
+                ? '0 1px 1px rgba(0,0,0,0.35)'
+                : '0 1px 0 rgba(255,255,255,0.45)',
+            }}
+          >
+            {storiesComplete}/{storiesTotal}
+          </span>
+          <span
+            aria-hidden
+            className="w-0 h-0 -mt-px"
+            style={{
+              borderLeft: '5px solid transparent',
+              borderRight: '5px solid transparent',
+              borderTop: allStoriesDone ? '6px solid #3f9e3a' : '6px solid #e8c76a',
+            }}
+          />
         </span>
       )}
 
@@ -345,8 +386,14 @@ const IslandNode: React.FC<{
           rings (Complete badge stays outside) so rings center on the image. */}
       {hasArt && artSrc ? (
         <div
+          data-island-focus
           className="relative"
-          style={{ width: artSize }}
+          style={{
+            width: artSize,
+            filter: isZoomTarget
+              ? 'drop-shadow(0 0 18px rgba(255, 236, 160, 0.65))'
+              : undefined,
+          }}
         >
           {/* Shore ripples — absolute inset-0 over the img box; each ellipse
               centers with left 50% / top 58% + translate(-50%, -50%) so rings
@@ -360,8 +407,15 @@ const IslandNode: React.FC<{
             src={artSrc}
             alt=""
             draggable={false}
-            className="relative z-[1] block h-auto w-full pointer-events-none select-none drop-shadow-[0_6px_14px_rgba(0,0,0,0.35)]"
+            className={`relative z-[1] block h-auto w-full pointer-events-none select-none drop-shadow-[0_6px_14px_rgba(0,0,0,0.35)] ${
+              isLocked ? 'grayscale opacity-75' : ''
+            }`}
           />
+          {isLocked && (
+            <span className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 z-[2] w-10 h-10 rounded-full bg-black/40 border-2 border-white/30 flex items-center justify-center">
+              <Lock size={18} className="text-white" strokeWidth={2.5} />
+            </span>
+          )}
           {isCurrent && (
             <span className="absolute map-ship-bob -right-2 bottom-4 z-[2]">
               <Ship size={30} className="text-[#7a4a20] drop-shadow" fill="#C4884A" strokeWidth={1.5} />
@@ -369,7 +423,7 @@ const IslandNode: React.FC<{
           )}
         </div>
       ) : (
-        <div className="relative" style={{ opacity: 0.8 }}>
+        <div className="relative" data-island-focus style={{ opacity: 0.8 }}>
           <div
             className={`w-[64px] h-[64px] rounded-full border-4 shadow-[0_6px_14px_rgba(0,0,0,0.35)] flex items-center justify-center ${
               isLocked ? 'border-white/40 grayscale-[35%]' : 'border-white/70'
@@ -396,15 +450,24 @@ const IslandNode: React.FC<{
         </div>
       )}
 
-      {/* Label pill — never for Genesis (sign/banner lives in art or is intentionally omitted) */}
-      {!isGenesisIsland(island) && (
+      {/* Label planks — book and blurb are separate block planks so each grows
+          to its own text height. */}
+      <span className="mt-2 flex w-full max-w-[136px] flex-col items-center gap-1 pointer-events-none">
         <span
-          className="mt-2 max-w-[124px] text-center leading-tight px-2.5 py-1 rounded-lg bg-[#f3e3c4] text-[#5c3d1e] text-[11px] font-display font-black border border-[#c9a76b] shadow"
+          className="block w-full text-center leading-tight break-words px-2.5 py-1 rounded-lg bg-[#f3e3c4] text-[#5c3d1e] text-[11px] font-display font-black border border-[#c9a76b] shadow"
           style={{ textShadow: '0 1px 0 rgba(255,255,255,0.4)' }}
         >
-          {island.book}: <span className="italic">&ldquo;{island.title}&rdquo;</span>
+          {island.book}
         </span>
-      )}
+        {Boolean(blurb) && (
+          <span
+            className="block w-full text-center leading-tight break-words italic px-2 py-1 rounded-md bg-[#f7eeda] text-[#6b4a26] text-[10px] font-display font-bold border border-[#c9a76b]/80 shadow"
+            style={{ textShadow: '0 1px 0 rgba(255,255,255,0.4)' }}
+          >
+            &ldquo;{blurb}&rdquo;
+          </span>
+        )}
+      </span>
       </div>
       </div>
     </button>
@@ -443,11 +506,59 @@ const MapPage: React.FC = () => {
   const islandsLayerRef = useRef<HTMLDivElement>(null);
   const rafRef = useRef<number | null>(null);
   const reducedMotionRef = useRef(false);
-  const [selectedIsland, setSelectedIsland] = useState<Island | null>(null);
-  const [islands, setIslands] = useState<Island[]>(FALLBACK_ISLANDS);
-  const [usingApiIslands, setUsingApiIslands] = useState(false);
+  const sailTimersRef = useRef<number[]>([]);
+  const sailCinematicLockRef = useRef(false);
+  /** Islands come only from the CMS — no hardcoded stand-in. Until the fetch
+   *  settles the ocean is empty behind the loading card; on failure the stormy
+   *  sea takes over. A fake island would be tappable and lead nowhere. */
+  const [islands, setIslands] = useState<Island[]>([]);
+  const [mapStories, setMapStories] = useState<OceanMapStoryRow[]>([]);
+  /** Measured node heights by island id — drives voyage slot spacing. */
+  const [nodeHeights, setNodeHeights] = useState<Record<string, number>>({});
+  /** First island fetch still in flight — covers the empty ocean. */
+  const [islandsLoading, setIslandsLoading] = useState(true);
+  /** CMS unreachable or holding no islands — surfaced instead of empty ocean. */
+  const [islandsError, setIslandsError] = useState(false);
+  const [islandsRetrying, setIslandsRetrying] = useState(false);
+  const [islandsReloadTick, setIslandsReloadTick] = useState(0);
   /** Gate bubble pop until first paint / after API settle so stagger plays on launch. */
   const [bubbleReady, setBubbleReady] = useState(false);
+  const [progressTick, setProgressTick] = useState(0);
+  const [sailCinematic, setSailCinematic] = useState(false);
+  const [sailZoom, setSailZoom] = useState(false);
+  const [sailFade, setSailFade] = useState(false);
+  const [zoomIslandId, setZoomIslandId] = useState<string | null>(null);
+  const [zoomOrigin, setZoomOrigin] = useState('50% 42%');
+  const location = useLocation();
+  const guidedRef = useRef(false);
+  /** First island of the voyage — the only tappable one during guided first
+   *  run. Held in a ref so the cinematic callbacks keep stable identities. */
+  const firstIslandIdRef = useRef<string | null>(null);
+  const pendingIslandRef = useRef<Island | null>(null);
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const [guided] = useState(
+    () =>
+      isOnboardingJourneyActive() ||
+      Boolean((location.state as { onboardingJourney?: boolean } | null)?.onboardingJourney),
+  );
+  const [cloudLanding, setCloudLanding] = useState(
+    () =>
+      isOnboardingJourneyActive() ||
+      Boolean((location.state as { onboardingJourney?: boolean } | null)?.onboardingJourney),
+  );
+  const [showTapIsland, setShowTapIsland] = useState(false);
+  const [introVideo, setIntroVideo] = useState(false);
+  const [videoFadeOut, setVideoFadeOut] = useState(false);
+  const videoLeaveRef = useRef(false);
+  guidedRef.current = guided;
+
+  useEffect(() => {
+    if (!guided) return;
+    document.body.setAttribute('data-modal-open', 'true');
+    return () => {
+      if (!introVideo) document.body.removeAttribute('data-modal-open');
+    };
+  }, [guided, introVideo]);
 
   const syncIslandsScroll = useCallback(() => {
     const scroller = scrollRef.current;
@@ -456,35 +567,216 @@ const MapPage: React.FC = () => {
     sync.style.transform = `translate3d(0, ${-scroller.scrollTop}px, 0)`;
   }, []);
 
-  const handleSelect = useCallback((island: Island) => {
-    setSelectedIsland(island);
+  const clearSailTimers = useCallback(() => {
+    sailTimersRef.current.forEach((id) => window.clearTimeout(id));
+    sailTimersRef.current = [];
   }, []);
 
-  const handleClosePopup = useCallback(() => {
-    setSelectedIsland(null);
+  const islandProgress = useMemo(() => {
+    const byId: Record<string, { complete: number; total: number }> = {};
+    for (const island of islands) {
+      const aliases = [island.id, island.cmsId].filter(Boolean) as string[];
+      const aliasSet = new Set(aliases);
+      const playable = mapStories.filter((row) => {
+        if (!isPlayableMainMapStory(row)) return false;
+        return storyIslandKeys(row).some((key) => aliasSet.has(key));
+      });
+      const completeFromStories = playable.filter((row) =>
+        isStoryPackComplete(island.id, row),
+      ).length;
+      const complete =
+        playable.length > 0
+          ? completeFromStories
+          : islandStoryProgressService.countReadCompleteStories(aliases);
+      const total = Math.max(island.storiesTotal, playable.length, complete, 0);
+      byId[island.id] = { complete, total };
+    }
+    return byId;
+  }, [islands, mapStories, progressTick]);
+
+  const handleNodeMeasure = useCallback((id: string, height: number) => {
+    setNodeHeights((prev) => (prev[id] === height ? prev : { ...prev, [id]: height }));
   }, []);
 
   /**
-   * Ocean island → always Sail (ship scene) first.
-   * After sail, SailScene routes to MainMap (if CMS main map) or legacy lesson.
+   * Stack islands down the water: every slot is as tall as the node measured,
+   * so a three-line label pushes the next island further down instead of
+   * bleeding into it. Voyage height then falls out of the last slot.
    */
-  const handleSailThere = useCallback(
-    (island: Island) => {
-      setSelectedIsland(null);
-      const title = `${island.book}: ${island.title}`;
-      navigate(`/sail/${encodeURIComponent(island.id)}`, {
-        state: {
-          title,
-          hasMainMap: islandHasMainMap(island),
-          mainMapUrl: island.mainMapUrl,
-          mainMapVideoUrl: island.mainMapVideoUrl,
-        },
-      });
+  const voyage = useMemo(() => {
+    let cursor = VOYAGE_TOP_PAD;
+    const slots = islands.map((island, index) => {
+      const height = nodeHeights[island.id] ?? VOYAGE_ESTIMATED_NODE_H;
+      const slot = { top: cursor, x: voyageX(index), height };
+      cursor += height + VOYAGE_GAP;
+      return slot;
+    });
+    const height = Math.round(Math.max(VOYAGE_TOP_PAD, cursor - VOYAGE_GAP) + VOYAGE_BOTTOM_PAD);
+    return { slots, height };
+  }, [islands, nodeHeights]);
+
+  /**
+   * Dotted sailing route through the slot centres. Percentage coordinates in a
+   * `preserveAspectRatio="none"` box, so no pixel width is needed; the dashes
+   * keep their shape via non-scaling-stroke.
+   */
+  const voyageTrail = useMemo(() => {
+    if (voyage.slots.length < 2) return '';
+    const points = voyage.slots.map((slot) => {
+      const centerY = ((slot.top + slot.height / 2) / voyage.height) * 100;
+      return `${slot.x.toFixed(2)},${centerY.toFixed(3)}`;
+    });
+    return `M${points.join(' L')}`;
+  }, [voyage]);
+
+  /**
+   * Tap an unlocked island → zoom in, white fade, then open the island's story
+   * packs (or the onboarding video). The ship deck used to sit in the middle of
+   * this path; it is now reached from the Journey plank on the crew deck, so a
+   * tap lands a kid on the content rather than on a wheel they must steer first.
+   * Timing (~2.35s): 350ms hold → zoom → 1550ms fade → 2350ms next beat.
+   */
+  const handleSelect = useCallback(
+    (island: Island, node: HTMLElement) => {
+      if (island.status === 'locked' && !guidedRef.current) return;
+      if (sailCinematicLockRef.current) return;
+      if (guidedRef.current && island.id !== firstIslandIdRef.current) return;
+
+      sailCinematicLockRef.current = true;
+      pendingIslandRef.current = island;
+      setShowTapIsland(false);
+
+      const afterCinematic = () => {
+        if (guidedRef.current) {
+          setIntroVideo(true);
+          return;
+        }
+        const title = `${island.book}: ${island.title}`;
+        // Story packs live on the island's main map; islands with no main-map
+        // art fall back to the legacy island scene (same rule the sail deck used).
+        if (islandHasMainMap(island)) {
+          navigate(`/map/${encodeURIComponent(island.id)}/main`, {
+            state: { title },
+          });
+          return;
+        }
+        navigate(`/sail/${encodeURIComponent(island.id)}/lesson`, {
+          state: { title },
+        });
+      };
+
+      const layer = islandsLayerRef.current;
+      if (layer) {
+        layer.querySelectorAll<HTMLElement>('[data-globe-inner]').forEach((el) => {
+          el.style.transform = '';
+          el.style.opacity = '1';
+        });
+        const focus =
+          node.querySelector<HTMLElement>('[data-island-focus]') || node;
+        const layerRect = layer.getBoundingClientRect();
+        const focusRect = focus.getBoundingClientRect();
+        const cx = focusRect.left + focusRect.width / 2;
+        const cy = focusRect.top + focusRect.height / 2;
+        if (layerRect.width > 0 && layerRect.height > 0) {
+          const ox = ((cx - layerRect.left) / layerRect.width) * 100;
+          const oy = ((cy - layerRect.top) / layerRect.height) * 100;
+          setZoomOrigin(`${ox}% ${oy}%`);
+        }
+      }
+
+      clearSailTimers();
+      document.body.setAttribute('data-modal-open', 'true');
+      setZoomIslandId(island.id);
+      setSailCinematic(true);
+      setSailZoom(false);
+      setSailFade(false);
+
+      if (prefersReducedMotion()) {
+        setSailFade(true);
+        const id = window.setTimeout(afterCinematic, MAP_SAIL_REDUCED_NAVIGATE_MS);
+        sailTimersRef.current = [id];
+        return;
+      }
+
+      const zoomId = window.setTimeout(() => setSailZoom(true), MAP_SAIL_HOLD_MS);
+      const fadeId = window.setTimeout(() => setSailFade(true), MAP_SAIL_FADE_START_MS);
+      const nextId = window.setTimeout(afterCinematic, MAP_SAIL_NAVIGATE_MS);
+      sailTimersRef.current = [zoomId, fadeId, nextId];
     },
-    [navigate],
+    [navigate, clearSailTimers],
   );
 
-  // Fetch published islands; keep fallback art if API fails or returns empty.
+  const finishCloudLanding = useCallback(() => {
+    setCloudLanding(false);
+    setShowTapIsland(true);
+  }, []);
+
+  const goToFirstIsland = useCallback(() => {
+    const island = pendingIslandRef.current;
+    const dest = island || islands[0];
+    if (!dest) return;
+    const title = `${dest.book}: ${dest.title}`;
+    navigate(`/sail/${encodeURIComponent(dest.id)}`, {
+      state: {
+        onboardingJourney: true,
+        title,
+        hasMainMap: islandHasMainMap(dest),
+        mainMapUrl: dest.mainMapUrl,
+        mainMapVideoUrl: dest.mainMapVideoUrl,
+      },
+    });
+  }, [islands, navigate]);
+
+  /** Video ends → white fade, then sail deck. */
+  const finishIntroVideo = useCallback(() => {
+    if (videoLeaveRef.current) return;
+    videoLeaveRef.current = true;
+    setVideoFadeOut(true);
+    const delay = prefersReducedMotion() ? 0 : MAP_SAIL_FADE_MS;
+    const id = window.setTimeout(goToFirstIsland, delay);
+    sailTimersRef.current.push(id);
+  }, [goToFirstIsland]);
+
+  useEffect(() => {
+    if (!guided) return;
+    const preload = document.createElement('link');
+    preload.rel = 'preload';
+    preload.as = 'video';
+    preload.href = ONBOARDING_GENESIS_VIDEO;
+    document.head.appendChild(preload);
+    return () => {
+      preload.remove();
+    };
+  }, [guided]);
+
+  useEffect(() => {
+    if (!introVideo) return;
+    const el = videoRef.current;
+    if (!el) return;
+    let cancelled = false;
+    el.muted = true;
+    const attempt = el.play();
+    if (attempt && typeof attempt.then === 'function') {
+      void attempt
+        .then(() => {
+          if (cancelled) return;
+          el.muted = false;
+        })
+        .catch(() => {
+          if (cancelled) return;
+          el.muted = true;
+          void el.play().catch(() => {
+            /* keep overlay; ended/error handlers advance */
+          });
+        });
+    }
+    return () => {
+      cancelled = true;
+    };
+  }, [introVideo]);
+
+  // Fetch published islands; the CMS is the only source, so a failure or an
+  // empty list raises the stormy-sea retry rather than inventing an island.
   useEffect(() => {
     let cancelled = false;
     const controller = new AbortController();
@@ -493,20 +785,35 @@ const MapPage: React.FC = () => {
     const load = async () => {
       try {
         const mapped = await fetchOceanMapIslands(controller.signal);
-        if (cancelled || !mapped) return;
-        setIslands(mapped);
-        setUsingApiIslands(true);
+        if (cancelled) return;
+        if (mapped) {
+          setIslands(mapped);
+          setIslandsError(false);
+          // Tripwire: shout in dev if the hardcoded free island is gone.
+          assertFreeTierIslandExists(mapped);
+        } else {
+          // A reachable CMS with no islands is still a voyage kids can't sail.
+          setIslandsError(true);
+        }
       } catch {
-        /* keep FALLBACK_ISLANDS */
+        if (!cancelled) setIslandsError(true);
       } finally {
         window.clearTimeout(failSafe);
         if (!cancelled) {
-          // Restart bubble stagger after islands settle (API or fallback).
+          setIslandsLoading(false);
+          setIslandsRetrying(false);
           setBubbleReady(false);
           requestAnimationFrame(() => {
             if (!cancelled) setBubbleReady(true);
           });
         }
+      }
+
+      try {
+        const stories = await fetchPublishedMapStories();
+        if (!cancelled && stories) setMapStories(stories);
+      } catch {
+        /* markers fall back to local progress */
       }
     };
 
@@ -521,17 +828,41 @@ const MapPage: React.FC = () => {
       controller.abort();
       window.clearTimeout(failSafe);
     };
+  }, [islandsReloadTick]);
+
+  const retryIslands = useCallback(() => {
+    setIslandsRetrying(true);
+    setIslandsReloadTick((tick) => tick + 1);
   }, []);
 
-  // Hide map bottom nav while island popup is open
+  // Guided first run only lets the kid tap the island the voyage starts on.
   useEffect(() => {
-    if (selectedIsland) {
-      document.body.setAttribute('data-modal-open', 'true');
-    } else {
+    firstIslandIdRef.current = islands[0]?.id ?? null;
+  }, [islands]);
+
+  useEffect(() => {
+    const onProgress = () => setProgressTick((t) => t + 1);
+    window.addEventListener('islandStoryProgressUpdated', onProgress);
+    const unsub = profileService.onProfileChange(onProgress);
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') onProgress();
+    };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => {
+      window.removeEventListener('islandStoryProgressUpdated', onProgress);
+      unsub();
+      document.removeEventListener('visibilitychange', onVisible);
+    };
+  }, []);
+
+  useEffect(
+    () => () => {
+      clearSailTimers();
+      sailCinematicLockRef.current = false;
       document.body.removeAttribute('data-modal-open');
-    }
-    return () => document.body.removeAttribute('data-modal-open');
-  }, [selectedIsland]);
+    },
+    [clearSailTimers],
+  );
 
   // Map each node's distance from the viewport's vertical center onto a curved
   // (spherical) transform: nodes at center sit flat & upright; nodes toward the
@@ -539,6 +870,7 @@ const MapPage: React.FC = () => {
   // horizon of a globe rolling past as you scroll.
   const applyGlobe = useCallback(() => {
     rafRef.current = null;
+    if (sailCinematicLockRef.current) return;
     const scroller = scrollRef.current;
     const islandsRoot = islandsLayerRef.current;
     if (!scroller || !islandsRoot) return;
@@ -575,7 +907,7 @@ const MapPage: React.FC = () => {
       const scaleFalloff = norm < 0 ? GLOBE_MAX_SCALE_FALLOFF * 1.15 : GLOBE_MAX_SCALE_FALLOFF;
       const scale = 1 - mag * scaleFalloff;
       // Soft wrap: keep full opacity through the main ocean; only fade in the
-      // outer limb band so Genesis (near top but still on water) stays solid.
+      // outer limb band so islands near the top but still on water stay solid.
       const fadeT =
         mag <= GLOBE_OPACITY_FADE_START
           ? 0
@@ -590,7 +922,7 @@ const MapPage: React.FC = () => {
   }, []);
 
   const scheduleGlobe = useCallback(() => {
-    if (reducedMotionRef.current) return;
+    if (reducedMotionRef.current || sailCinematicLockRef.current) return;
     if (rafRef.current == null) {
       rafRef.current = requestAnimationFrame(applyGlobe);
     }
@@ -654,14 +986,42 @@ const MapPage: React.FC = () => {
     };
   }, [scheduleGlobe, clampScroll, syncIslandsScroll]);
 
-  // Re-apply globe once API islands replace fallback nodes.
+  // Re-apply globe once API islands replace fallback nodes, or slots re-measure.
   useEffect(() => {
     syncIslandsScroll();
     scheduleGlobe();
-  }, [islands, syncIslandsScroll, scheduleGlobe]);
+  }, [islands, voyage, syncIslandsScroll, scheduleGlobe]);
+
+  useEffect(() => {
+    if (!sailCinematic) return;
+    const islandsRoot = islandsLayerRef.current;
+    if (!islandsRoot) return;
+    islandsRoot.querySelectorAll<HTMLElement>('[data-globe-inner]').forEach((el) => {
+      el.style.transform = '';
+      el.style.opacity = '1';
+    });
+    const scroller = scrollRef.current;
+    if (scroller) scroller.style.overflowY = 'hidden';
+    return () => {
+      if (scroller) scroller.style.overflowY = '';
+    };
+  }, [sailCinematic]);
+
+  const cameraStyle: React.CSSProperties | undefined = sailCinematic
+    ? {
+        transform: sailZoom ? `scale(${MAP_SAIL_ZOOM_SCALE})` : 'scale(1)',
+        transformOrigin: zoomOrigin,
+        transition: `transform ${MAP_SAIL_ZOOM_MS}ms ${MAP_SAIL_ZOOM_EASE}`,
+        willChange: 'transform',
+        filter: 'saturate(1.08) brightness(1.05)',
+      }
+    : undefined;
+
+  const chromeOpacity = sailCinematic || guided ? 0 : 1;
+  const chromeTransition = `opacity ${MAP_SAIL_CLEAR_MS}ms ease`;
 
   return (
-    <div className="relative w-full h-full overflow-hidden">
+    <div className={`relative w-full h-full overflow-hidden${sailCinematic ? ' sail-cinematic-active' : ''}`}>
       {/* Default app Header omitted on Map — wood frame is the page chrome. */}
 
       {/* ── TOP wood plank (portaled) — above clouds so the limb stays in front.
@@ -670,6 +1030,7 @@ const MapPage: React.FC = () => {
         <div
           className="fixed top-0 left-0 right-0 z-[50] pointer-events-none"
           aria-hidden
+          style={{ opacity: chromeOpacity, transition: chromeTransition }}
         >
           <div
             style={{
@@ -699,6 +1060,8 @@ const MapPage: React.FC = () => {
           className="fixed left-0 right-0 z-[51] pointer-events-none px-4 text-center"
           style={{
             top: `calc(var(--safe-area-top, 0px) + ${MAP_HEADER_H} * 0.28)`,
+            opacity: chromeOpacity,
+            transition: chromeTransition,
           }}
         >
           <h1
@@ -750,6 +1113,8 @@ const MapPage: React.FC = () => {
             /* Raised toward wood limb / horizon; still visible under plank (z < wood). */
             top: `calc(var(--safe-area-top, 0px) + ${MAP_HEADER_H} * 0.78)`,
             height: `calc(${OCEAN_VIEWPORT_TOP} - (var(--safe-area-top, 0px) + ${MAP_HEADER_H} * 0.78) + 88px)`,
+            opacity: sailCinematic ? 0.35 : 1,
+            transition: chromeTransition,
           }}
           aria-hidden
         >
@@ -796,6 +1161,8 @@ const MapPage: React.FC = () => {
           backgroundImage: OCEAN_HORIZON_HAZE,
           backgroundSize: '100% 100%',
           backgroundRepeat: 'no-repeat',
+          opacity: sailCinematic ? 0 : 1,
+          transition: chromeTransition,
         }}
         aria-hidden
       />
@@ -811,6 +1178,7 @@ const MapPage: React.FC = () => {
           top: OCEAN_VIEWPORT_TOP,
           background: '#1a8fd1',
           ...OCEAN_FRAME_MASK_STYLE,
+          ...cameraStyle,
         }}
       >
         <div
@@ -818,22 +1186,24 @@ const MapPage: React.FC = () => {
           className="h-full w-full overflow-y-auto no-scrollbar"
           style={{
             overscrollBehavior: 'none',
-            WebkitOverflowScrolling: 'touch',
+            WebkitOverflowScrolling: guided ? 'auto' : 'touch',
+            overflowY: guided ? 'hidden' : undefined,
           }}
         >
+          {/* Water tiles down the voyage — the strip is sized by width, so a
+              long island list needs more of it than one strip provides. */}
           <div
-            className="relative w-full"
-            style={{ minHeight: `calc(100vw * ${OCEAN_SCROLL_ASPECT})` }}
-          >
-            <img
-              src={MAP_OCEAN_SCROLL}
-              alt=""
-              aria-hidden
-              draggable={false}
-              className="pointer-events-none select-none block w-full h-auto"
-              style={{ imageRendering: 'auto' }}
-            />
-          </div>
+            className="relative w-full pointer-events-none select-none"
+            aria-hidden
+            style={{
+              height: voyage.height,
+              minHeight: `calc(100vw * ${OCEAN_SCROLL_ASPECT})`,
+              backgroundImage: `url("${MAP_OCEAN_SCROLL}")`,
+              backgroundSize: '100% auto',
+              backgroundRepeat: 'repeat-y',
+              backgroundPosition: 'top center',
+            }}
+          />
 
           {/* Extra clearance for footer frame + wood tab lift + nav */}
           <div
@@ -856,55 +1226,178 @@ const MapPage: React.FC = () => {
       {createPortal(
         <div
           ref={islandsLayerRef}
-          className="fixed left-0 right-0 bottom-0 z-[32] overflow-hidden pointer-events-none"
+          className={`fixed left-0 right-0 bottom-0 z-[32] overflow-hidden pointer-events-none${
+            sailCinematic ? ' sail-cinematic-active' : ''
+          }`}
           style={{
             top: OCEAN_VIEWPORT_TOP,
+            ...cameraStyle,
           }}
         >
           <div
             ref={islandsSyncRef}
             className="relative w-full will-change-transform"
-            style={{ minHeight: `calc(100vw * ${OCEAN_SCROLL_ASPECT})` }}
+            style={{ height: voyage.height, minHeight: `calc(100vw * ${OCEAN_SCROLL_ASPECT})` }}
           >
             <div className="absolute inset-0">
-              {/* Small inset so the top island isn't flush against the locked curve */}
-              <div style={{ height: 28 }} aria-hidden />
-              <div className="relative w-full" style={{ height: 'calc(100% - 28px)' }}>
-                {!usingApiIslands && (
-                  <svg
-                    className="absolute inset-0 w-full h-full pointer-events-none"
-                    viewBox="0 0 100 100"
-                    preserveAspectRatio="none"
-                    aria-hidden
-                  >
-                    <path
-                      d={TRAIL_PATH}
-                      fill="none"
-                      stroke="rgba(255,255,255,0.72)"
-                      strokeWidth="0.9"
-                      strokeLinecap="round"
-                      strokeDasharray="0.2 3.2"
-                      vectorEffect="non-scaling-stroke"
-                      className="map-trail"
-                    />
-                  </svg>
-                )}
+              {Boolean(voyageTrail) && (
+                <svg
+                  className="absolute inset-0 w-full h-full pointer-events-none"
+                  viewBox="0 0 100 100"
+                  preserveAspectRatio="none"
+                  aria-hidden
+                >
+                  <path
+                    d={voyageTrail}
+                    fill="none"
+                    stroke="rgba(255,255,255,0.72)"
+                    strokeWidth="3"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    // pathLength normalises the dashes: without it the 100×100
+                    // viewBox stretches them into long streaks and huge gaps.
+                    pathLength={VOYAGE_TRAIL_PATH_LENGTH}
+                    strokeDasharray="2 6"
+                    vectorEffect="non-scaling-stroke"
+                    className="map-trail"
+                  />
+                </svg>
+              )}
 
-                {islands.map((island, index) => (
+              {islands.map((island, index) => {
+                const progress = islandProgress[island.id] || {
+                  complete: island.storiesComplete,
+                  total: island.storiesTotal,
+                };
+                const slot = voyage.slots[index];
+                return (
                   <IslandNode
                     key={island.id}
                     island={island}
                     index={index}
+                    top={slot.top}
+                    x={slot.x}
                     bubbleReady={bubbleReady}
+                    storiesComplete={guided ? 0 : progress.complete}
+                    storiesTotal={guided ? 0 : progress.total}
+                    isZoomTarget={zoomIslandId === island.id}
+                    cinematic={sailCinematic}
+                    interactive={!guided || index === 0}
+                    showTapCue={guided && showTapIsland && !introVideo && !sailCinematic && index === 0}
+                    onMeasure={handleNodeMeasure}
                     onSelect={handleSelect}
                   />
-                ))}
-              </div>
+                );
+              })}
             </div>
           </div>
         </div>,
         document.body,
       )}
+
+      {/* ── First island fetch in flight. Without a hardcoded stand-in island
+          the ocean is genuinely empty until the CMS answers (up to the abort
+          timeout on a cold dyno), so say what's happening instead. */}
+      {islandsLoading &&
+        !islandsError &&
+        !guided &&
+        !sailCinematic &&
+        createPortal(
+          <div
+            className="fixed left-0 right-0 bottom-0 z-[34] flex items-center justify-center px-4"
+            style={{
+              top: OCEAN_VIEWPORT_TOP,
+              background: 'rgba(9, 58, 92, 0.45)',
+            }}
+          >
+            <div className="flex flex-col items-center gap-3 text-center">
+              <Compass
+                size={44}
+                className="text-[#f3e3c4] drop-shadow-lg map-compass-spin"
+                strokeWidth={1.75}
+              />
+              <p className="text-white text-lg font-display font-black drop-shadow">
+                Charting your islands&hellip;
+              </p>
+            </div>
+          </div>,
+          document.body,
+        )}
+
+      {/* ── CMS islands unreachable / empty — say so rather than leaving bare ocean.
+          z-[34]: over the islands overlay (32), under nav (40) / wood (50). */}
+      {islandsError &&
+        !guided &&
+        !sailCinematic &&
+        createPortal(
+          <div
+            className="fixed left-0 right-0 bottom-0 z-[34] flex items-center justify-center overflow-y-auto no-scrollbar px-4"
+            style={{
+              top: OCEAN_VIEWPORT_TOP,
+              // Deep-water scrim so the message reads over the island art.
+              background: 'rgba(9, 58, 92, 0.62)',
+            }}
+          >
+            <StormySeaError
+              onRetry={retryIslands}
+              isLoading={islandsRetrying}
+              message="We couldn't reach the island map!"
+            />
+          </div>,
+          document.body,
+        )}
+
+      {sailCinematic &&
+        createPortal(
+          <div
+            className="fixed inset-0 pointer-events-none"
+            style={{
+              zIndex: 99980,
+              background: '#fff',
+              opacity: sailFade ? 1 : 0,
+              transition: `opacity ${MAP_SAIL_FADE_MS}ms ease-in`,
+            }}
+            aria-hidden
+          />,
+          document.body,
+        )}
+
+      {cloudLanding &&
+        createPortal(<CloudFlythrough onComplete={finishCloudLanding} />, document.body)}
+
+      <OnboardingGuideCard
+        active={guided && showTapIsland && !cloudLanding && !introVideo && !sailCinematic}
+      />
+
+      {introVideo &&
+        createPortal(
+          <div className="fixed inset-0 z-[99995] bg-white flex items-center justify-center">
+            <video
+              ref={videoRef}
+              src={ONBOARDING_GENESIS_VIDEO}
+              className="w-full h-full object-cover"
+              playsInline
+              autoPlay
+              muted
+              preload="auto"
+              controls={false}
+              onEnded={finishIntroVideo}
+              onError={finishIntroVideo}
+            />
+            <div
+              className="absolute inset-0 pointer-events-none"
+              style={{
+                background: '#fff',
+                opacity: videoFadeOut ? 1 : 0,
+                transition: prefersReducedMotion()
+                  ? 'none'
+                  : `opacity ${MAP_SAIL_FADE_MS}ms ease-in`,
+              }}
+              aria-hidden
+            />
+          </div>,
+          document.body,
+        )}
 
       <style>{`
         /* Banner heights on :root so portaled islands overlay inherits the same inset.
@@ -964,7 +1457,7 @@ const MapPage: React.FC = () => {
           from { transform: translate3d(-50%, 0, 0); }
           to { transform: translate3d(0, 0, 0); }
         }
-        /* Genesis shore ripples — wide × short ellipses over the img box.
+        /* Island shore ripples — wide × short ellipses over the img box.
            Center sits below geometric mid so rings track the circular water
            pad / shore (not the tree tops in the upper half of the art). */
         .map-island-shore {
@@ -1025,6 +1518,26 @@ const MapPage: React.FC = () => {
           0%, 100% { transform: translateY(0) rotate(-4deg); }
           50% { transform: translateY(-4px) rotate(4deg); }
         }
+        .ob-tap-island {
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          padding: 6px 14px;
+          border-radius: 999px;
+          font-weight: 900;
+          font-size: 13px;
+          letter-spacing: 0.04em;
+          color: #3E1F07;
+          background: linear-gradient(180deg, #FFE55C 0%, #FFD700 45%, #DAA520 100%);
+          border: 2px solid #B8860B;
+          box-shadow: 0 3px 0 #8B6914, 0 8px 16px rgba(0,0,0,0.35);
+          animation: ob-tap-island-bounce 1.15s ease-in-out infinite;
+          text-shadow: 0 1px 0 rgba(255,255,255,0.45);
+        }
+        @keyframes ob-tap-island-bounce {
+          0%, 100% { transform: translateY(0); }
+          50% { transform: translateY(-8px); }
+        }
         /* Island bubble pop-in on map launch (staggered via animation-delay). */
         .map-island-bubble-in {
           transform-origin: center center;
@@ -1035,6 +1548,26 @@ const MapPage: React.FC = () => {
           55% { transform: scale(1.16); opacity: 1; }
           78% { transform: scale(0.94); }
           100% { transform: scale(1); opacity: 1; }
+        }
+        /* Compass on the "charting your islands" loading card. */
+        .map-compass-spin {
+          animation: map-compass-spin 2.4s linear infinite;
+        }
+        @keyframes map-compass-spin {
+          from { transform: rotate(0deg); }
+          to { transform: rotate(360deg); }
+        }
+        .sail-cinematic-active .map-island-shore-1,
+        .sail-cinematic-active .map-island-shore-2,
+        .sail-cinematic-active .map-island-shore-3,
+        .sail-cinematic-active .map-trail,
+        .sail-cinematic-active .map-node-pulse,
+        .sail-cinematic-active .map-ship-bob {
+          animation: none;
+        }
+        body[data-modal-open="true"] .bottom-nav-bar {
+          display: none !important;
+          pointer-events: none !important;
         }
         @media (prefers-reduced-motion: reduce) {
           .map-sky-cloud-track {
@@ -1049,18 +1582,11 @@ const MapPage: React.FC = () => {
           .map-island-bubble-in {
             animation: none;
           }
+          .map-compass-spin {
+            animation-duration: 6s;
+          }
         }
       `}</style>
-
-      {selectedIsland &&
-        createPortal(
-          <IslandDetailPopup
-            island={selectedIsland}
-            onClose={handleClosePopup}
-            onSail={handleSailThere}
-          />,
-          document.body,
-        )}
     </div>
   );
 };

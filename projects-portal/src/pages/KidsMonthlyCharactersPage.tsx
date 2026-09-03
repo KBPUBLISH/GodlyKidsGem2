@@ -1,14 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { ArrowLeft, User, Image as ImageIcon } from 'lucide-react';
-import { getMediaUrl } from '../services/apiClient';
-
-const API_BASE = import.meta.env.VITE_API_BASE_URL || 'https://backendgk2-0.onrender.com';
-const getApiBase = () => {
-  let base = (API_BASE || '').replace(/\/$/, '');
-  if (!base.endsWith('/api')) base = base.endsWith('/') ? `${base}api` : `${base}/api`;
-  return base;
-};
+import apiClient, { getMediaUrl } from '../services/apiClient';
 
 interface Character {
   name: string;
@@ -35,8 +28,9 @@ const KidsMonthlyCharactersPage: React.FC = () => {
       setLoading(true);
       setError(null);
       try {
-        const res = await fetch(`${getApiBase()}/analytics/onboarding/kids-characters?days=${days}`);
-        const data = await res.json();
+        // Admin-only endpoint; apiClient attaches the admin token.
+        const res = await apiClient.get(`/api/analytics/onboarding/kids-characters?days=${days}`);
+        const data = res.data;
         if (data.success) {
           setCharacters(data.characters || []);
           setTotal(data.total || 0);

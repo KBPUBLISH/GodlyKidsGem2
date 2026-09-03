@@ -418,6 +418,10 @@ const generateFilePath = (bookId, type, filename, pageNumber = null) => {
         return `karaoke/${songId}/${type}/${finalFilename}`;
     }
 
+    if (type === 'creator-post' || bookId === 'creator-posts') {
+        return `creators/posts/${finalFilename}`;
+    }
+
     return `books/${bookId}/${type}/${finalFilename}`;
 };
 
@@ -447,8 +451,8 @@ router.post('/image', upload.single('file'), async (req, res) => {
         // Check if using organized structure
         if (bookId && type) {
             // Validate type
-            if (!['cover', 'pages', 'scroll', 'audio', 'game-cover', 'game-logo', 'thumbnail', 'character', 'image-sequence', 'map-art', 'sail-art', 'puzzle-image', 'profile'].includes(type)) {
-                return res.status(400).json({ message: 'type must be one of: cover, pages, scroll, audio, game-cover, game-logo, thumbnail, character, image-sequence, map-art, sail-art, puzzle-image, profile' });
+            if (!['cover', 'episode-cover', 'pages', 'scroll', 'audio', 'game-cover', 'game-logo', 'thumbnail', 'character', 'image-sequence', 'map-art', 'sail-art', 'puzzle-image', 'profile', 'creator-post'].includes(type)) {
+                return res.status(400).json({ message: 'type must be one of: cover, episode-cover, pages, scroll, audio, game-cover, game-logo, thumbnail, character, image-sequence, map-art, sail-art, puzzle-image, profile, creator-post' });
             }
             
             // Special handling for lessons
@@ -481,8 +485,10 @@ router.post('/image', upload.single('file'), async (req, res) => {
         }
 
         // Optimize cover art: convert to WebP and generate a small thumbnail
-        // variant. Both book covers and playlist/audiobook covers use type=cover.
-        if (type === 'cover' && req.file.mimetype?.startsWith('image/')) {
+        // variant. Both book covers and playlist/audiobook covers use type=cover;
+        // per-episode art in a Godly Hub series uses type=episode-cover, and is
+        // cover art by every other measure.
+        if ((type === 'cover' || type === 'episode-cover' || type === 'creator-post') && req.file.mimetype?.startsWith('image/')) {
             try {
                 const variants = await processCoverImage(req.file.buffer, filePath);
                 const fullVariant = variants.find((v) => v.variant === 'full');

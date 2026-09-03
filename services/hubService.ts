@@ -122,6 +122,25 @@ export interface SeriesReviewsResult {
   message?: string;
 }
 
+export interface CreatorFeedPost {
+  id: string;
+  creatorId: string;
+  body: string;
+  imageUrl?: string;
+  likeCount: number;
+  likedByMe: boolean;
+  commentCount: number;
+  createdAt: string;
+}
+
+export interface CreatorSocialNote {
+  id: string;
+  body: string;
+  displayName: string;
+  createdAt: string;
+  mine?: boolean;
+}
+
 /** Carries the status code so callers can tell "no such series" from "no network". */
 export class HubRequestError extends Error {
   status?: number;
@@ -421,6 +440,54 @@ export const hubService = {
       body: {},
     });
     return Boolean(data.following);
+  },
+
+  getCreatorPosts: async (creatorId: string): Promise<CreatorFeedPost[]> => {
+    const data = await fetchHub<{ posts?: CreatorFeedPost[] }>(`hub/creators/${creatorId}/posts`);
+    return data.posts || [];
+  },
+
+  togglePostLike: async (postId: string): Promise<{ likedByMe: boolean; likeCount: number }> => {
+    const data = await fetchHub<{ likedByMe?: boolean; likeCount?: number }>(`hub/posts/${postId}/like`, {
+      method: 'POST',
+      body: {},
+    });
+    return {
+      likedByMe: Boolean(data.likedByMe),
+      likeCount: data.likeCount || 0,
+    };
+  },
+
+  getPostComments: async (postId: string): Promise<CreatorSocialNote[]> => {
+    const data = await fetchHub<{ comments?: CreatorSocialNote[] }>(`hub/posts/${postId}/comments`);
+    return data.comments || [];
+  },
+
+  addPostComment: async (postId: string, body: string): Promise<{
+    comment?: CreatorSocialNote;
+    status?: string;
+    message?: string;
+  }> => {
+    return fetchHub(`hub/posts/${postId}/comments`, {
+      method: 'POST',
+      body: { body },
+    }, 20000);
+  },
+
+  getCreatorWall: async (creatorId: string): Promise<CreatorSocialNote[]> => {
+    const data = await fetchHub<{ notes?: CreatorSocialNote[] }>(`hub/creators/${creatorId}/wall`);
+    return data.notes || [];
+  },
+
+  addWallNote: async (creatorId: string, body: string): Promise<{
+    note?: CreatorSocialNote;
+    status?: string;
+    message?: string;
+  }> => {
+    return fetchHub(`hub/creators/${creatorId}/wall`, {
+      method: 'POST',
+      body: { body },
+    }, 20000);
   },
 };
 

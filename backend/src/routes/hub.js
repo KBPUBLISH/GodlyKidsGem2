@@ -1272,4 +1272,7 @@ router.post('/admin/payouts/:creatorId', authenticateAdmin, async (req, res) => 
     }
 });
 
+// Creator posts / likes / comments / wall — see creatorSocial.js
+router.use(require('./creatorSocial'));
+
 module.exports = router;

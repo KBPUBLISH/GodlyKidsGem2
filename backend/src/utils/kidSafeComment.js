@@ -10,6 +10,7 @@
  */
 
 const MAX_LEN = 280;
+const SOCIAL_MAX_LEN = 800;
 const MIN_INFORMATIVE_CHARS = 12;
 const MIN_INFORMATIVE_WORDS = 3;
 const LLM_TIMEOUT_MS = 5000;
@@ -21,6 +22,17 @@ const MESSAGES = {
     uninformative: 'Please add a short, specific note (what your child liked or learned), or leave the box empty for stars only.',
     notKidFriendly: 'Please keep the note kind and appropriate for families with kids.',
     checkFailed: 'We could not finish checking this review. Please try again in a moment.',
+};
+
+/** Same Layer-1 reasons as reviews, wording that is not review/stars-specific. */
+const SOCIAL_MESSAGES = {
+    empty: 'Please write a short, real note.',
+    links: 'Please leave a note without links or email addresses.',
+    vulgar: 'Please keep your note kid-friendly — no swearing, slang, or adult topics.',
+    nonsense: 'That note looks like typing practice. Please write a short, real sentence.',
+    uninformative: 'Please add a short, specific note (what you liked or learned).',
+    notKidFriendly: 'Please keep the note kind and appropriate for families with kids.',
+    checkFailed: 'We could not finish checking this note. Please try again in a moment.',
 };
 
 const FILLER_WORDS = new Set([
@@ -68,8 +80,8 @@ const KEY_NEIGHBORS = (() => {
     return map;
 })();
 
-function tidy(raw) {
-    return String(raw || '').replace(/\s+/g, ' ').trim().slice(0, MAX_LEN);
+function tidy(raw, maxLen = MAX_LEN) {
+    return String(raw || '').replace(/\s+/g, ' ').trim().slice(0, maxLen);
 }
 
 function wordsOf(text) {
@@ -142,26 +154,42 @@ function isUninformative(text) {
 }
 
 /**
+ * Sync Layer-1 check.
+ * @param {string} raw
+ * @param {{ maxLen?: number, emptyOk?: boolean, messages?: Record<string, string> }} [options]
+ * @returns {{ ok: true, comment: string, starOnly?: boolean } | { ok: false, error: string, reason: string }}
+ */
+function checkTextDeterministic(raw, options = {}) {
+    const maxLen = options.maxLen || MAX_LEN;
+    const emptyOk = options.emptyOk !== false;
+    const messages = options.messages || MESSAGES;
+    const comment = tidy(raw, maxLen);
+    if (!comment) {
+        if (emptyOk) return { ok: true, comment: '', starOnly: true };
+        return { ok: false, error: messages.empty || messages.uninformative, reason: 'empty' };
+    }
+
+    if (hasUrlOrEmail(comment)) {
+        return { ok: false, error: messages.links, reason: 'links' };
+    }
+    if (hasBlockedLanguage(comment)) {
+        return { ok: false, error: messages.vulgar, reason: 'vulgar' };
+    }
+    if (looksLikeNonsense(comment)) {
+        return { ok: false, error: messages.nonsense, reason: 'nonsense' };
+    }
+    if (isUninformative(comment)) {
+        return { ok: false, error: messages.uninformative, reason: 'uninformative' };
+    }
+    return { ok: true, comment };
+}
+
+/**
  * Sync Layer-1 check. Star-only (empty comment) always passes.
  * @returns {{ ok: true, comment: string, starOnly?: boolean } | { ok: false, error: string, reason: string }}
  */
 function checkReviewCommentDeterministic(raw) {
-    const comment = tidy(raw);
-    if (!comment) return { ok: true, comment: '', starOnly: true };
-
-    if (hasUrlOrEmail(comment)) {
-        return { ok: false, error: MESSAGES.links, reason: 'links' };
-    }
-    if (hasBlockedLanguage(comment)) {
-        return { ok: false, error: MESSAGES.vulgar, reason: 'vulgar' };
-    }
-    if (looksLikeNonsense(comment)) {
-        return { ok: false, error: MESSAGES.nonsense, reason: 'nonsense' };
-    }
-    if (isUninformative(comment)) {
-        return { ok: false, error: MESSAGES.uninformative, reason: 'uninformative' };
-    }
-    return { ok: true, comment };
+    return checkTextDeterministic(raw, { maxLen: MAX_LEN, emptyOk: true, messages: MESSAGES });
 }
 
 function mapLlmReason(reason) {
@@ -229,13 +257,19 @@ async function moderateWithLlm(comment) {
 }
 
 /**
- * Full check used by POST /hub/playlists/:id/reviews.
+ * Full Layer-1 + optional LLM check. Used by reviews and creator social writes.
+ * @param {string} raw
+ * @param {{ maxLen?: number, emptyOk?: boolean, messages?: Record<string, string> }} [options]
  * @returns {Promise<{
  *   ok: true, comment: string, status: 'published'|'pending', pendingReason?: string
  * } | { ok: false, error: string, reason: string }>}
  */
-async function checkReviewComment(raw) {
-    const det = checkReviewCommentDeterministic(raw);
+async function checkKidSafeText(raw, options = {}) {
+    const det = checkTextDeterministic(raw, {
+        maxLen: options.maxLen || MAX_LEN,
+        emptyOk: options.emptyOk !== false,
+        messages: options.messages || MESSAGES,
+    });
     if (!det.ok) return det;
     if (det.starOnly) return { ok: true, comment: '', status: 'published' };
 
@@ -252,9 +286,35 @@ async function checkReviewComment(raw) {
         };
     }
     if (!llm.ok) {
-        return { ok: false, error: mapLlmReason(llm.reason), reason: llm.reason || 'not_kid_friendly' };
+        const messages = options.messages || MESSAGES;
+        const mapped = mapLlmReason(llm.reason);
+        const error = mapped === MESSAGES.notKidFriendly
+            ? (messages.notKidFriendly || mapped)
+            : (messages[llm.reason] || mapped);
+        return { ok: false, error, reason: llm.reason || 'not_kid_friendly' };
     }
     return { ok: true, comment: det.comment, status: 'published' };
+}
+
+/**
+ * Full check used by POST /hub/playlists/:id/reviews.
+ * @returns {Promise<{
+ *   ok: true, comment: string, status: 'published'|'pending', pendingReason?: string
+ * } | { ok: false, error: string, reason: string }>}
+ */
+async function checkReviewComment(raw) {
+    return checkKidSafeText(raw, { maxLen: MAX_LEN, emptyOk: true, messages: MESSAGES });
+}
+
+/**
+ * Posts, comments, and wall notes — same filters as reviews, empty text rejected.
+ */
+async function checkSocialText(raw, options = {}) {
+    return checkKidSafeText(raw, {
+        maxLen: options.maxLen || SOCIAL_MAX_LEN,
+        emptyOk: options.emptyOk === true,
+        messages: options.messages || SOCIAL_MESSAGES,
+    });
 }
 
 /** Sync wrapper kept for any caller that only needs Layer 1. */
@@ -324,10 +384,16 @@ module.exports = {
     sanitizeKidComment,
     checkReviewComment,
     checkReviewCommentDeterministic,
+    checkKidSafeText,
+    checkSocialText,
+    checkTextDeterministic,
     checkReviewDisplayName,
     reviewIsAnonymous,
     publicReviewDisplayName,
     resolveReviewAttribution,
     ANONYMOUS_DISPLAY_NAME,
     MESSAGES,
+    SOCIAL_MESSAGES,
+    MAX_LEN,
+    SOCIAL_MAX_LEN,
 };

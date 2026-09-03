@@ -31,11 +31,23 @@ const hubSeriesReviewSchema = new mongoose.Schema({
         default: '',
         maxlength: 280,
     },
+    // Only published reviews are listed and rolled into playlist averages.
+    status: {
+        type: String,
+        enum: ['published', 'pending'],
+        default: 'published',
+        index: true,
+    },
+    holdReason: {
+        type: String,
+        default: '',
+    },
 }, {
     timestamps: true,
 });
 
 hubSeriesReviewSchema.index({ playlistId: 1, userId: 1 }, { unique: true });
 hubSeriesReviewSchema.index({ playlistId: 1, createdAt: -1 });
+hubSeriesReviewSchema.index({ status: 1, createdAt: 1 });
 
 module.exports = mongoose.model('HubSeriesReview', hubSeriesReviewSchema);

@@ -7,7 +7,7 @@ const HubSeriesReview = require('../models/HubSeriesReview');
 const { authenticateCreator } = require('./creatorAuth');
 const { authenticateAdmin, optionalAuthenticateUser } = require('../middleware/auth');
 const { identityFromRequest } = require('../utils/appIdentity');
-const { sanitizeKidComment } = require('../utils/kidSafeComment');
+const { checkReviewComment } = require('../utils/kidSafeComment');
 const { getOrCreateAppUser } = require('../utils/grantTokenPack');
 
 const {
@@ -142,7 +142,7 @@ async function followingFlag(req, creatorId) {
 
 async function refreshPlaylistRating(playlistId) {
     const stats = await HubSeriesReview.aggregate([
-        { $match: { playlistId: playlistId } },
+        { $match: { playlistId: playlistId, status: { $ne: 'pending' } } },
         { $group: { _id: '$playlistId', averageRating: { $avg: '$rating' }, ratingCount: { $sum: 1 } } },
     ]);
     const averageRating = stats[0] ? Math.round(stats[0].averageRating * 10) / 10 : 0;
@@ -159,14 +159,17 @@ router.get('/playlists/:id/reviews', optionalAuthenticateUser, async (req, res) 
             return res.status(404).json({ error: 'Playlist not found' });
         }
 
-        const reviews = await HubSeriesReview.find({ playlistId: req.params.id })
+        const reviews = await HubSeriesReview.find({
+            playlistId: req.params.id,
+            status: { $ne: 'pending' },
+        })
             .sort({ createdAt: -1 })
             .limit(50)
             .lean();
 
         const identity = identityFromRequest(req);
         const mine = identity.userId
-            ? reviews.find((review) => review.userId === identity.userId)
+            ? await HubSeriesReview.findOne({ playlistId: req.params.id, userId: identity.userId }).lean()
             : null;
 
         res.json({
@@ -180,7 +183,9 @@ router.get('/playlists/:id/reviews', optionalAuthenticateUser, async (req, res) 
                 createdAt: review.createdAt,
                 mine: identity.userId ? review.userId === identity.userId : false,
             })),
-            myReview: mine ? { rating: mine.rating, comment: mine.comment } : null,
+            myReview: mine
+                ? { rating: mine.rating, comment: mine.comment, status: mine.status || 'published' }
+                : null,
         });
     } catch (error) {
         console.error('Get series reviews error:', error);
@@ -206,9 +211,9 @@ router.post('/playlists/:id/reviews', optionalAuthenticateUser, async (req, res)
             return res.status(400).json({ error: 'Pick a rating from 1 to 5 stars' });
         }
 
-        const cleaned = sanitizeKidComment(req.body?.comment);
-        if (cleaned.error) {
-            return res.status(400).json({ error: cleaned.error });
+        const cleaned = await checkReviewComment(req.body?.comment);
+        if (!cleaned.ok) {
+            return res.status(400).json({ error: cleaned.error, reason: cleaned.reason });
         }
 
         const review = await HubSeriesReview.findOneAndUpdate(
@@ -220,14 +225,21 @@ router.post('/playlists/:id/reviews', optionalAuthenticateUser, async (req, res)
                 displayName: 'A parent',
                 rating,
                 comment: cleaned.comment,
+                status: cleaned.status,
+                holdReason: cleaned.pendingReason || '',
             },
             { upsert: true, new: true, setDefaultsOnInsert: true }
         );
 
         const summary = await refreshPlaylistRating(playlist._id);
+        const pending = review.status === 'pending';
 
         res.json({
             success: true,
+            status: review.status,
+            message: pending
+                ? 'Saved — our team will take a quick look before it shows.'
+                : undefined,
             review: {
                 id: review._id,
                 rating: review.rating,
@@ -235,6 +247,7 @@ router.post('/playlists/:id/reviews', optionalAuthenticateUser, async (req, res)
                 displayName: review.displayName,
                 createdAt: review.createdAt,
                 mine: true,
+                status: review.status,
             },
             ...summary,
         });
@@ -899,6 +912,12 @@ router.get('/admin/pending', authenticateAdmin, async (req, res) => {
             .sort({ updatedAt: 1 })
             .lean();
         
+        const familyReviews = await HubSeriesReview.find({ status: 'pending' })
+            .populate('playlistId', 'title')
+            .sort({ createdAt: 1 })
+            .limit(50)
+            .lean();
+
         res.json({
             playlists,
             episodeReviews: withPendingEpisodes.map(playlist => ({
@@ -906,6 +925,16 @@ router.get('/admin/pending', authenticateAdmin, async (req, res) => {
                 pendingEpisodes: (playlist.items || []).filter(
                     item => item.reviewStatus === 'pending'
                 ),
+            })),
+            familyReviews: familyReviews.map((review) => ({
+                id: review._id,
+                rating: review.rating,
+                comment: review.comment,
+                displayName: review.displayName || 'A parent',
+                holdReason: review.holdReason || '',
+                createdAt: review.createdAt,
+                playlistId: review.playlistId?._id || review.playlistId,
+                playlistTitle: review.playlistId?.title || 'Series',
             })),
         });
     } catch (error) {
@@ -1032,6 +1061,42 @@ router.put('/admin/playlists/:id/episodes/review', authenticateAdmin, async (req
     } catch (error) {
         console.error('Review episodes error:', error);
         res.status(500).json({ error: 'Failed to review episodes' });
+    }
+});
+
+// PUT /api/hub/admin/reviews/:id - Publish or drop a held family review
+router.put('/admin/reviews/:id', authenticateAdmin, async (req, res) => {
+    try {
+        const { action } = req.body;
+        if (!['approve', 'reject'].includes(action)) {
+            return res.status(400).json({ error: 'Action must be approve or reject' });
+        }
+
+        const review = await HubSeriesReview.findById(req.params.id);
+        if (!review) {
+            return res.status(404).json({ error: 'Review not found' });
+        }
+        if (review.status !== 'pending') {
+            return res.status(400).json({ error: 'Review is not pending' });
+        }
+
+        const playlistId = review.playlistId;
+        if (action === 'approve') {
+            review.status = 'published';
+            review.holdReason = '';
+            await review.save();
+        } else {
+            await review.deleteOne();
+        }
+
+        const summary = await refreshPlaylistRating(playlistId);
+        res.json({
+            message: action === 'approve' ? 'Family review published' : 'Family review removed',
+            ...summary,
+        });
+    } catch (error) {
+        console.error('Review family comment error:', error);
+        res.status(500).json({ error: 'Failed to review family comment' });
     }
 });
 

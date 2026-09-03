@@ -96,13 +96,16 @@ export interface SeriesReview {
   displayName: string;
   createdAt: string;
   mine?: boolean;
+  status?: 'published' | 'pending';
 }
 
 export interface SeriesReviewsResult {
   averageRating: number;
   ratingCount: number;
   reviews: SeriesReview[];
-  myReview: { rating: number; comment?: string } | null;
+  myReview: { rating: number; comment?: string; status?: 'published' | 'pending' } | null;
+  status?: 'published' | 'pending';
+  message?: string;
 }
 
 /** Carries the status code so callers can tell "no such series" from "no network". */
@@ -372,16 +375,20 @@ export const hubService = {
       averageRating?: number;
       ratingCount?: number;
       review?: SeriesReview;
+      status?: 'published' | 'pending';
+      message?: string;
     }>(`hub/playlists/${playlistId}/reviews`, {
       method: 'POST',
       body: { rating, comment },
-    });
+    }, 20000);
     const refreshed = await hubService.getReviews(playlistId).catch(() => null);
-    return refreshed || {
-      averageRating: data.averageRating || rating,
-      ratingCount: data.ratingCount || 1,
-      reviews: data.review ? [data.review] : [],
-      myReview: { rating, comment },
+    return {
+      averageRating: refreshed?.averageRating ?? data.averageRating ?? rating,
+      ratingCount: refreshed?.ratingCount ?? data.ratingCount ?? 1,
+      reviews: refreshed?.reviews ?? (data.review ? [data.review] : []),
+      myReview: refreshed?.myReview ?? { rating, comment, status: data.status },
+      status: data.status,
+      message: data.message,
     };
   },
 

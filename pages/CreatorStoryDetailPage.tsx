@@ -133,6 +133,8 @@ const CreatorStoryDetailPage: React.FC = () => {
   const [myComment, setMyComment] = useState('');
   const [reviewBusy, setReviewBusy] = useState(false);
   const [reviewMessage, setReviewMessage] = useState<string | null>(null);
+  const [reviewTone, setReviewTone] = useState<'ok' | 'err' | null>(null);
+  const [myReviewPending, setMyReviewPending] = useState(false);
 
   const load = useCallback(async () => {
     if (!storyId) {
@@ -168,6 +170,7 @@ const CreatorStoryDetailPage: React.FC = () => {
         if (reviewData.myReview) {
           setMyRating(reviewData.myReview.rating);
           setMyComment(reviewData.myReview.comment || '');
+          setMyReviewPending(reviewData.myReview.status === 'pending');
         }
       }
     } catch (error) {
@@ -606,7 +609,8 @@ const CreatorStoryDetailPage: React.FC = () => {
             Family reviews
           </h2>
           <p className="mt-1 font-display text-[12px]" style={{ color: MUTED }}>
-            Parents can leave a kind star rating for this series.
+            Parents can leave a kind star rating. A note is optional — if you add one, make it
+            specific, kid-friendly, and free of slang or swearing.
           </p>
           {reviewSummary.count > 0 && (
             <div className="mt-2">
@@ -631,7 +635,7 @@ const CreatorStoryDetailPage: React.FC = () => {
           <textarea
             value={myComment}
             onChange={(event) => setMyComment(event.target.value.slice(0, 280))}
-            placeholder="A short, kind note (optional)"
+            placeholder="What did your child like or learn? (optional)"
             className="mt-3 w-full rounded-[1rem] px-3 py-2 font-display text-[13px] outline-none"
             style={{ background: '#F8EBDA', color: NAVY, minHeight: '4.5rem' }}
           />
@@ -642,14 +646,21 @@ const CreatorStoryDetailPage: React.FC = () => {
               if (myRating < 1) return;
               setReviewBusy(true);
               setReviewMessage(null);
+              setReviewTone(null);
               void hubService
                 .saveReview(story.id, myRating, myComment)
                 .then((data) => {
                   setReviews(data.reviews);
                   setReviewSummary({ average: data.averageRating, count: data.ratingCount });
-                  setReviewMessage('Saved — thank you!');
+                  const pending = data.status === 'pending' || data.myReview?.status === 'pending';
+                  setMyReviewPending(pending);
+                  setReviewTone('ok');
+                  setReviewMessage(data.message || 'Saved — thank you!');
                 })
-                .catch((error: Error) => setReviewMessage(error.message))
+                .catch((error: Error) => {
+                  setReviewTone('err');
+                  setReviewMessage(error.message);
+                })
                 .finally(() => setReviewBusy(false));
             }}
             className="mt-3 w-full rounded-full py-2.5 font-display font-black text-sm text-white disabled:opacity-50"
@@ -658,8 +669,16 @@ const CreatorStoryDetailPage: React.FC = () => {
             {reviewBusy ? 'Saving…' : 'Save my review'}
           </button>
           {reviewMessage && (
-            <p className="mt-2 font-display text-[12px]" style={{ color: MUTED }}>
+            <p
+              className="mt-2 font-display text-[12px] leading-snug"
+              style={{ color: reviewTone === 'err' ? '#b45309' : MUTED }}
+            >
               {reviewMessage}
+            </p>
+          )}
+          {myReviewPending && !reviewMessage && (
+            <p className="mt-1 font-display text-[12px] leading-snug" style={{ color: MUTED }}>
+              Your note is waiting for a quick look before families can see it.
             </p>
           )}
           {reviews.length > 0 && (

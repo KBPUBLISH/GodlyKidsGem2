@@ -1,8 +1,10 @@
 import React, { Suspense, useCallback, useEffect, useRef, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { Users } from 'lucide-react';
+import { useLocation, useNavigate } from 'react-router-dom';
+import { Compass, Lock, Users } from 'lucide-react';
 import {
+  CREW_WAVE_ANIMATION,
   MAX_CREW,
+  ONBOARDING_ADAM_ID,
   rewardsService,
   type UnlockedCharacter,
 } from '../services/rewardsService';
@@ -11,6 +13,15 @@ import CrewChatPopup from '../components/crew/CrewChatPopup';
 import type { CrewDeckHandle } from '../components/crew/CrewDeck3D';
 import { BASEMENT_CHARACTER_KEY } from '../components/crew/basementCharacter';
 import { danceMusic } from '../services/danceMusicService';
+import {
+  getBasementGameLockStates,
+  refreshBasementGameLockStates,
+} from '../utils/basementGameLocks';
+import {
+  completeOnboardingJourney,
+  isOnboardingJourneyActive,
+} from '../utils/onboardingJourney';
+import OnboardingGuideCard from '../components/onboarding/OnboardingGuideCard';
 
 // three.js deck is lazy-loaded so the ~600KB 3D chunk only downloads when a
 // crew character actually has a GLB model.
@@ -95,9 +106,11 @@ const WOOD_TEX = '/assets/images/wheel-background-wood.png';
 
 /** Hatch open hint before white fade. */
 const HATCH_OPEN_MS = 320;
-/** White fade-out duration before basement navigate. */
+/** White fade-out duration before basement / cannon navigate. */
 const WHITE_FADE_MS = 480;
 const NAVIGATE_AFTER_MS = HATCH_OPEN_MS + WHITE_FADE_MS;
+const CANON_GAME_PATH = '/crew/canon';
+const TOAST_MS = 2200;
 
 /** Jukebox party length — everyone dances, sky darkens, disco ball drops. */
 const PARTY_MS = 8000;
@@ -114,6 +127,49 @@ const PARTY_SPOTS = [
 const prefersReducedMotion = () =>
   typeof window !== 'undefined' &&
   window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+/**
+ * Padlock + soft darkening + unlock hint over a locked deck hotspot.
+ * Gold badge matches the basement / main-map story lock.
+ */
+const GameLockOverlay: React.FC<{ islandLabel: string }> = ({ islandLabel }) => (
+  <span
+    className="absolute inset-0 flex flex-col items-center justify-center gap-1.5 pointer-events-none"
+    aria-hidden
+  >
+    <span
+      className="absolute inset-0"
+      style={{
+        background:
+          'radial-gradient(ellipse at center, rgba(0,0,0,0.42) 0%, rgba(0,0,0,0.24) 55%, rgba(0,0,0,0) 80%)',
+      }}
+    />
+    <span
+      className="relative flex items-center justify-center rounded-full"
+      style={{
+        width: 42,
+        height: 42,
+        background: 'linear-gradient(180deg, #F0D78C 0%, #D4A017 45%, #8B6914 100%)',
+        boxShadow:
+          '0 2px 0 #5c3a1a, 0 3px 8px rgba(0,0,0,0.45), inset 0 1px 0 rgba(255,240,200,0.55)',
+        border: '1.5px solid #F5E6A3',
+      }}
+    >
+      <Lock
+        size={19}
+        className="text-[#5c3a1a]"
+        strokeWidth={2.8}
+        fill="rgba(92,58,26,0.2)"
+      />
+    </span>
+    <span
+      className="relative px-2 font-display font-bold text-[11px] leading-tight text-[#FFE9B0] text-center"
+      style={{ textShadow: '0 1px 2px rgba(0,0,0,0.85), 0 0 8px rgba(0,0,0,0.6)' }}
+    >
+      Complete {islandLabel}!
+    </span>
+  </span>
+);
 
 /** One ocean band: marching scallop crest strip + solid body to the bottom. */
 const SeaWaveBand: React.FC<{ w: (typeof CREW_SEA_WAVES)[number] }> = ({ w }) => (
@@ -152,13 +208,21 @@ const SeaWaveBand: React.FC<{ w: (typeof CREW_SEA_WAVES)[number] }> = ({ w }) =>
  * (CrewDeck3D); tapping one opens the AI chat popup directly. The rest stand
  * as 2D avatars (image + name plaque) that also open chat on tap. Dancing
  * happens only via the jukebox party (everyone dances for 8s).
- * Wheel (bottom-left) returns to sail; open hatch → white fade → basement.
+ * Wheel (bottom-left) returns to sail; glowing cannon → Canon Golf (locked
+ * until Genesis Island is complete); open hatch → white fade → basement.
  * Crew button (bottom-right) opens the roster picker.
  */
+const isAdamCharacter = (c: UnlockedCharacter): boolean =>
+  c.id === ONBOARDING_ADAM_ID || /adam/i.test(c.name || '') || /adam/i.test(c.id || '');
+
 const CrewPage: React.FC = () => {
   const navigate = useNavigate();
+  const location = useLocation();
   const [hatchOpen, setHatchOpen] = useState(false);
+  const [enteringGame, setEnteringGame] = useState(false);
   const [whiteFade, setWhiteFade] = useState(false);
+  const [toast, setToast] = useState<string | null>(null);
+  const [gameLocks, setGameLocks] = useState(getBasementGameLockStates);
   const [crew, setCrew] = useState<UnlockedCharacter[]>([]);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [chatCharacter, setChatCharacter] = useState<UnlockedCharacter | null>(null);
@@ -175,8 +239,27 @@ const CrewPage: React.FC = () => {
   const deckRef = useRef<CrewDeckHandle>(null);
   const jukeboxArtRef = useRef<HTMLDivElement>(null);
   const timersRef = useRef<number[]>([]);
+  const toastTimerRef = useRef<number | null>(null);
   const enteringRef = useRef(false);
   const reduceMotion = prefersReducedMotion();
+  const arrivingOnboarding = isOnboardingJourneyActive();
+  const [crewGuide, setCrewGuide] = useState(arrivingOnboarding);
+  const [tapAdam, setTapAdam] = useState(
+    () => Boolean((location.state as { tapAdam?: boolean } | null)?.tapAdam),
+  );
+  const [adamAnchor, setAdamAnchor] = useState<{ x: number; y: number } | null>(null);
+  const deckBusy = hatchOpen || enteringGame;
+  const chromeLocked = deckBusy || crewGuide;
+
+  const finishCrewGuide = useCallback(() => {
+    setCrewGuide(false);
+    completeOnboardingJourney();
+    setTapAdam(true);
+    // Drop onboardingJourney from this history entry so returning from the
+    // basement (navigate(-1)) cannot replay the HS tour. Keep tapAdam so a
+    // remount still shows the Tap cue over Adam.
+    navigate('/crew', { replace: true, state: { tapAdam: true } });
+  }, [navigate]);
 
   // Crew on deck: characters unlocked from story Rewards loot boxes.
   // If the kid picked a crew roster, show that; otherwise all unlocked.
@@ -213,6 +296,21 @@ const CrewPage: React.FC = () => {
       if (changed) loadCrew();
     });
   }, [loadCrew]);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    refreshBasementGameLockStates(controller.signal)
+      .then((states) => setGameLocks(states))
+      .catch(() => {});
+    return () => controller.abort();
+  }, []);
+
+  useEffect(
+    () => () => {
+      if (toastTimerRef.current != null) window.clearTimeout(toastTimerRef.current);
+    },
+    [],
+  );
 
   const closePicker = useCallback(() => {
     setPickerOpen(false);
@@ -271,14 +369,16 @@ const CrewPage: React.FC = () => {
     [],
   );
 
-  const goBackToSail = useCallback(() => {
-    if (enteringRef.current) return;
-    if (window.history.length > 1) {
-      navigate(-1);
-    } else {
-      navigate('/sail');
-    }
-  }, [navigate]);
+  const goHome = useCallback(() => {
+    if (enteringRef.current || enteringGame) return;
+    navigate('/world', { replace: true });
+  }, [enteringGame, navigate]);
+
+  /** Journey → the sail deck, where the wheel steers between islands. */
+  const goToSail = useCallback(() => {
+    if (enteringRef.current || enteringGame) return;
+    navigate('/sail');
+  }, [enteringGame, navigate]);
 
   /** Hatch-open hint → white fade → navigate. (Runs after any 3D descent.) */
   const beginHatchTransition = useCallback(() => {
@@ -299,6 +399,34 @@ const CrewPage: React.FC = () => {
   }, [clearTimers, navigate, reduceMotion]);
 
   const crew3d = crew.filter((c) => !!c.modelUrl);
+
+  // Arrival greeting: add waving to each crew mate's animation list, then
+  // play the wave once the 3D models are on deck.
+  useEffect(() => {
+    if (crew.length === 0) return;
+    rewardsService.unlockCrewAnimation(CREW_WAVE_ANIMATION);
+    if (crew3d.length === 0 || reduceMotion) return;
+    let tries = 0;
+    const id = window.setInterval(() => {
+      tries += 1;
+      if (deckRef.current?.waveAll() || tries > 30) {
+        window.clearInterval(id);
+      }
+    }, 220);
+    return () => window.clearInterval(id);
+  }, [crew.length, crew3d.length, reduceMotion]);
+
+  useEffect(() => {
+    if (!tapAdam || crew3d.length === 0) return;
+    const adam = crew.find(isAdamCharacter) || crew[0];
+    const tick = () => {
+      const next = deckRef.current?.characterAnchor(adam?.id);
+      if (next) setAdamAnchor(next);
+    };
+    tick();
+    const id = window.setInterval(tick, 200);
+    return () => window.clearInterval(id);
+  }, [tapAdam, crew, crew3d.length]);
 
   /**
    * Depth-layer the jukebox art against the walking 3D crew: a character
@@ -334,7 +462,7 @@ const CrewPage: React.FC = () => {
   }, [crew3d.length]);
 
   const enterBasement = useCallback(() => {
-    if (enteringRef.current) return;
+    if (enteringRef.current || enteringGame) return;
     enteringRef.current = true;
     endParty(); // hatch descent cancels a running jukebox party
 
@@ -354,7 +482,7 @@ const CrewPage: React.FC = () => {
       }
     }
     beginHatchTransition();
-  }, [beginHatchTransition, crew3d, endParty, reduceMotion]);
+  }, [beginHatchTransition, crew3d, endParty, enteringGame, reduceMotion]);
   const crew2d = crew.filter((c) => !c.modelUrl);
 
   /**
@@ -366,11 +494,13 @@ const CrewPage: React.FC = () => {
   /** Tap on a character → AI chat directly (dancing is jukebox-only now). */
   const openChat = useCallback(
     (character: UnlockedCharacter) => {
+      if (crewGuide) finishCrewGuide();
+      setTapAdam(false);
       endParty(); // chat opening cancels a jukebox party…
       danceMusic.stop(); // …and silences any lingering tune
       setChatCharacter(character);
     },
-    [endParty],
+    [crewGuide, endParty, finishCrewGuide],
   );
 
   const onHatchTap = useCallback(
@@ -400,6 +530,57 @@ const CrewPage: React.FC = () => {
       startParty();
     },
     [openChat, startParty],
+  );
+
+  const showPlaque = useCallback(
+    (message: string) => {
+      if (enteringRef.current || enteringGame) return;
+      setToast(message);
+      if (toastTimerRef.current != null) window.clearTimeout(toastTimerRef.current);
+      toastTimerRef.current = window.setTimeout(() => setToast(null), TOAST_MS);
+    },
+    [enteringGame],
+  );
+
+  const openCanonGame = useCallback(() => {
+    if (enteringRef.current || hatchOpen || enteringGame) return;
+    enteringRef.current = true;
+    setEnteringGame(true);
+    setToast(null);
+    endParty();
+    clearTimers();
+
+    if (reduceMotion) {
+      setWhiteFade(true);
+      const id = window.setTimeout(() => navigate(CANON_GAME_PATH), 80);
+      timersRef.current = [id];
+      return;
+    }
+
+    setWhiteFade(true);
+    const navId = window.setTimeout(() => navigate(CANON_GAME_PATH), WHITE_FADE_MS);
+    timersRef.current = [navId];
+  }, [clearTimers, endParty, enteringGame, hatchOpen, navigate, reduceMotion]);
+
+  /**
+   * Cannon tap. Same character-raycast as hatch/jukebox so a walker standing
+   * on the left rail still opens chat instead of the game.
+   */
+  const onCannonTap = useCallback(
+    (e: React.MouseEvent) => {
+      if (hatchOpen || enteringGame) return;
+      const hit = deckRef.current?.characterAt(e.clientX, e.clientY);
+      if (hit) {
+        openChat(hit.character);
+        return;
+      }
+      if (gameLocks.canon.locked) {
+        showPlaque(gameLocks.canon.message);
+        return;
+      }
+      openCanonGame();
+    },
+    [enteringGame, gameLocks.canon, hatchOpen, openCanonGame, openChat, showPlaque],
   );
 
   return (
@@ -555,10 +736,25 @@ const CrewPage: React.FC = () => {
           <CrewDeck3D
             ref={deckRef}
             characters={crew3d}
-            paused={!!chatCharacter}
+            paused={!!chatCharacter || deckBusy}
             onCharacterTap={(character) => openChat(character)}
           />
         </Suspense>
+      )}
+
+      {tapAdam && crew3d.length > 0 && adamAnchor && (
+        <div
+          className="absolute z-[25] pointer-events-none"
+          style={{
+            left: adamAnchor.x,
+            top: adamAnchor.y,
+            transform: 'translate(-50%, -120%)',
+          }}
+        >
+          <span className="ob-tap-adam" aria-hidden>
+            Tap
+          </span>
+        </div>
       )}
 
       {/* Jukebox party FX — disco ball on a rod + sweeping spotlight cones.
@@ -632,11 +828,18 @@ const CrewPage: React.FC = () => {
             <button
               key={c.id}
               type="button"
-              onClick={() => setChatCharacter(c)}
+              onClick={() => openChat(c)}
               aria-label={`Chat with ${c.name}`}
-              className="flex flex-col items-center select-none pointer-events-auto p-0 m-0 border-0 bg-transparent appearance-none cursor-pointer active:scale-95 transition-transform focus:outline-none focus-visible:ring-2 focus-visible:ring-white/70 rounded-xl"
+              className="relative flex flex-col items-center select-none pointer-events-auto p-0 m-0 border-0 bg-transparent appearance-none cursor-pointer active:scale-95 transition-transform focus:outline-none focus-visible:ring-2 focus-visible:ring-white/70 rounded-xl"
               style={{ width: 'clamp(58px, 13vw, 84px)' }}
             >
+              {tapAdam && isAdamCharacter(c) && (
+                <span className="absolute left-1/2 top-0 -translate-x-1/2 -translate-y-full pointer-events-none z-10">
+                  <span className="ob-tap-adam" aria-hidden>
+                    Tap
+                  </span>
+                </span>
+              )}
               <div
                 className="w-full aspect-square rounded-full overflow-hidden bg-[#2a160c]/85 flex items-center justify-center"
                 style={{
@@ -679,6 +882,32 @@ const CrewPage: React.FC = () => {
         </div>
       )}
 
+      {/* Glowing cannon — left rail (image coords ~x 0–0.31, y 0.36–0.53).
+          Locked until Genesis Island is complete; then Canon Golf. Taps first
+          raycast for a character so a walker on the rail still opens chat. */}
+      <button
+        type="button"
+        onClick={onCannonTap}
+        disabled={chromeLocked}
+        aria-label={
+          gameLocks.canon.locked
+            ? `Locked — ${gameLocks.canon.message}`
+            : 'Play Canon Golf'
+        }
+        className="absolute z-20 p-0 m-0 border-0 appearance-none bg-transparent focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-200/80 focus-visible:ring-offset-2 focus-visible:ring-offset-transparent"
+        style={{
+          left: '0%',
+          top: '36%',
+          width: '31%',
+          height: '18%',
+          cursor: deckBusy ? 'default' : 'pointer',
+        }}
+      >
+        {gameLocks.canon.locked && (
+          <GameLockOverlay islandLabel={gameLocks.canon.islandLabel} />
+        )}
+      </button>
+
       {/* Open deck hatch — invisible tap target over the glowing hatch art
           (right-mid of deck; image coords ~x 0.66–0.94, y 0.53–0.70, plus a
           small margin). The glow in the art itself is the affordance. Taps
@@ -687,7 +916,7 @@ const CrewPage: React.FC = () => {
       <button
         type="button"
         onClick={onHatchTap}
-        disabled={hatchOpen}
+        disabled={chromeLocked}
         aria-label="Open hatch to the basement"
         className="absolute z-20 p-0 m-0 border-0 appearance-none focus:outline-none focus-visible:ring-2 focus-visible:ring-white/70 focus-visible:ring-offset-2 focus-visible:ring-offset-transparent"
         style={{
@@ -696,7 +925,7 @@ const CrewPage: React.FC = () => {
           width: '34%',
           height: '21%',
           borderRadius: '12%',
-          cursor: hatchOpen ? 'default' : 'pointer',
+          cursor: deckBusy ? 'default' : 'pointer',
           background: 'transparent',
         }}
       />
@@ -725,7 +954,7 @@ const CrewPage: React.FC = () => {
           height: 'max(17vw, 68px)',
           padding: '0 0 2px',
           zIndex: 6, // above the canvas (z-5) until someone walks in front
-          opacity: hatchOpen ? 0.5 : 1,
+          opacity: deckBusy ? 0.5 : 1,
           filter: 'drop-shadow(0 4px 9px rgba(0,0,0,0.45))',
         }}
       >
@@ -795,7 +1024,7 @@ const CrewPage: React.FC = () => {
       <button
         type="button"
         onClick={onJukeboxTap}
-        disabled={hatchOpen}
+        disabled={chromeLocked}
         aria-label="Jukebox — start a dance party"
         className="absolute z-30 m-0 p-0 border-0 bg-transparent appearance-none focus:outline-none focus-visible:ring-2 focus-visible:ring-white/70 focus-visible:ring-offset-2 focus-visible:ring-offset-transparent rounded-xl"
         style={{
@@ -804,16 +1033,16 @@ const CrewPage: React.FC = () => {
           transform: 'translate(-50%, -100%)',
           width: 'max(17vw, 68px)',
           height: 'max(17vw, 68px)',
-          cursor: hatchOpen ? 'default' : 'pointer',
+          cursor: deckBusy ? 'default' : 'pointer',
         }}
       />
 
-      {/* Ship wheel — bottom-left; returns to sail navigation. */}
+      {/* Ship wheel — bottom-left; returns to Home. */}
       <button
         type="button"
-        onClick={goBackToSail}
-        disabled={hatchOpen}
-        aria-label="Back to sail"
+        onClick={goHome}
+        disabled={chromeLocked}
+        aria-label="Home"
         className="absolute z-30 p-0 m-0 border-0 bg-transparent appearance-none active:scale-95 transition-transform disabled:opacity-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-white/70 focus-visible:ring-offset-2 focus-visible:ring-offset-transparent rounded-full"
         style={{
           left: 'max(10px, env(safe-area-inset-left, 0px))',
@@ -828,7 +1057,7 @@ const CrewPage: React.FC = () => {
           draggable={false}
           className="block w-full h-auto select-none pointer-events-none"
         />
-        {/* Wood plaque “Go back” — same chrome as the hatch “Open” plaque */}
+        {/* Wood plaque — same chrome as the hatch “Open” plaque */}
         <span
           aria-hidden
           className="absolute left-1/2 flex items-center justify-center gap-0.5 pointer-events-none select-none whitespace-nowrap font-display font-black uppercase tracking-[0.08em] text-[#F5E6C8]"
@@ -849,20 +1078,7 @@ const CrewPage: React.FC = () => {
               '0 1px 0 #5C2E0B, 0 2px 0 #3E1F07, 0 2px 4px rgba(0,0,0,0.45)',
           }}
         >
-          <svg
-            viewBox="0 0 24 24"
-            width="1.05em"
-            height="1.05em"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2.6"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            aria-hidden
-          >
-            <path d="M15 5l-7 7 7 7" />
-          </svg>
-          Go back
+          Home
         </span>
       </button>
 
@@ -870,7 +1086,7 @@ const CrewPage: React.FC = () => {
       <button
         type="button"
         onClick={() => setPickerOpen(true)}
-        disabled={hatchOpen}
+        disabled={chromeLocked}
         aria-label="Pick your crew"
         aria-haspopup="dialog"
         className="absolute z-30 m-0 border-0 appearance-none active:scale-95 transition-transform disabled:opacity-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-white/70 focus-visible:ring-offset-2 focus-visible:ring-offset-transparent flex items-center justify-center gap-1 select-none whitespace-nowrap font-display font-black uppercase tracking-[0.08em] text-[#F5E6C8]"
@@ -881,7 +1097,7 @@ const CrewPage: React.FC = () => {
           borderRadius: '0.55rem',
           fontSize: 'clamp(0.68rem, 3vw, 0.9rem)',
           lineHeight: 1,
-          cursor: hatchOpen ? 'default' : 'pointer',
+          cursor: deckBusy ? 'default' : 'pointer',
           backgroundImage: `url(${WOOD_TEX})`,
           backgroundSize: 'cover',
           backgroundPosition: 'center',
@@ -897,6 +1113,41 @@ const CrewPage: React.FC = () => {
         Crew
       </button>
 
+      {/* Journey — wood plaque button, bottom-center between the wheel (Home)
+          and Crew so the three planks read as one row. Sits on the same
+          baseline and uses the identical plank chrome; the deck props it
+          overlaps (jukebox / mast) are all mid-deck at top:46.5%, well above
+          this line. */}
+      <button
+        type="button"
+        onClick={goToSail}
+        disabled={chromeLocked}
+        aria-label="Journey — steer the ship to another island"
+        className="absolute z-30 m-0 border-0 appearance-none active:scale-95 transition-transform disabled:opacity-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-white/70 focus-visible:ring-offset-2 focus-visible:ring-offset-transparent flex items-center justify-center gap-1 select-none whitespace-nowrap font-display font-black uppercase tracking-[0.08em] text-[#F5E6C8]"
+        style={{
+          left: '50%',
+          transform: 'translateX(-50%)',
+          bottom: 'max(14px, calc(var(--safe-area-bottom, 0px) + 10px))',
+          padding: '0.5rem 0.85rem',
+          borderRadius: '0.55rem',
+          fontSize: 'clamp(0.68rem, 3vw, 0.9rem)',
+          lineHeight: 1,
+          cursor: deckBusy ? 'default' : 'pointer',
+          backgroundImage: `url(${WOOD_TEX})`,
+          backgroundSize: 'cover',
+          backgroundPosition: 'center',
+          border: '2px solid #6B4423',
+          boxShadow:
+            '0 2px 0 #5c3a1a, 0 3px 8px rgba(0,0,0,0.35), inset 0 1px 0 rgba(255,230,180,0.35)',
+          textShadow:
+            '0 1px 0 #5C2E0B, 0 2px 0 #3E1F07, 0 2px 4px rgba(0,0,0,0.45)',
+          filter: 'drop-shadow(0 6px 14px rgba(0,0,0,0.45))',
+        }}
+      >
+        <Compass size="1.05em" aria-hidden />
+        Journey
+      </button>
+
       <CrewPickerDropdown open={pickerOpen} onClose={closePicker} anchor="page" />
 
       {/* Tap-to-chat popup — AI conversation with the tapped crew member */}
@@ -907,7 +1158,29 @@ const CrewPage: React.FC = () => {
         />
       )}
 
-      {/* White fade → SailBoatBasement */}
+      {toast && (
+        <div
+          className="absolute left-1/2 z-40 -translate-x-1/2 px-4 py-2.5 rounded-2xl font-display font-bold text-sm text-[#3d2414] text-center max-w-[85vw]"
+          style={{
+            bottom: 'max(28px, calc(var(--safe-area-bottom, 0px) + 16px))',
+            background: 'linear-gradient(180deg, #F5E6C8 0%, #E8D4A8 100%)',
+            boxShadow:
+              '0 6px 18px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.5)',
+            border: '2px solid #8B6914',
+          }}
+          role="status"
+        >
+          {toast}
+        </div>
+      )}
+
+      {/* White fade → basement or Canon Golf */}
+      <OnboardingGuideCard
+        variant="crewShip"
+        active={crewGuide && !chatCharacter}
+        onFinished={finishCrewGuide}
+      />
+
       <div
         className="fixed inset-0 pointer-events-none"
         style={{
@@ -1029,6 +1302,29 @@ const CrewPage: React.FC = () => {
           .crew-jukebox-glow, .crew-disco-ball, .crew-party-spot {
             animation: none !important;
           }
+        }
+
+        .ob-tap-adam {
+          display: inline-flex;
+          padding: 5px 10px;
+          border-radius: 999px;
+          font-weight: 900;
+          font-size: 12px;
+          letter-spacing: 0.04em;
+          color: #3E1F07;
+          background: linear-gradient(180deg, #FFE55C 0%, #FFD700 45%, #DAA520 100%);
+          border: 2px solid #B8860B;
+          box-shadow: 0 3px 0 #8B6914, 0 8px 16px rgba(0,0,0,0.35);
+          text-shadow: 0 1px 0 rgba(255,255,255,0.45);
+          white-space: nowrap;
+          animation: ob-tap-adam-bounce 1.15s ease-in-out infinite;
+        }
+        @keyframes ob-tap-adam-bounce {
+          0%, 100% { transform: translateY(0); }
+          50% { transform: translateY(-8px); }
+        }
+        @media (prefers-reduced-motion: reduce) {
+          .ob-tap-adam { animation: none; }
         }
 
         /* Tab hidden → hold every backdrop loop in place */

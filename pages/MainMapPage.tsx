@@ -7,7 +7,10 @@ import {
   resolveBibleMapMediaUrl,
   TABLET_MIN_WIDTH,
 } from '../utils/bibleMapApi';
-import { isStoryUnlocked } from '../utils/mainMapStoryUnlock';
+import { isPlayableMainMapStory, isStoryUnlocked } from '../utils/mainMapStoryUnlock';
+import { profileService } from '../services/profileService';
+import { isOnboardingJourneyActive } from '../utils/onboardingJourney';
+import { rememberLastStoryIsland } from '../utils/lastStoryIsland';
 
 const WOOD_TEX = '/assets/images/wheel-background-wood.png';
 const CMS_FETCH_TIMEOUT_MS = 4_000;
@@ -72,6 +75,7 @@ type MainMapStory = {
   title?: string;
   displayTitle?: string;
   mapIconUrl?: string;
+  heroImageUrl?: string;
   mainMapPosition?: Partial<Record<MainMapLayoutKey, Partial<MainMapPoint>>> | null;
   mainMapSize?: Partial<Record<MainMapLayoutKey, Partial<MainMapSize>>> | null;
   /**
@@ -122,6 +126,7 @@ type NavState = {
   title?: string;
   /** Arrived from ship sail scene — back returns to sail. */
   fromSail?: boolean;
+  onboardingJourney?: boolean;
 } | null;
 
 const woodBtnStyle: React.CSSProperties = {
@@ -280,6 +285,8 @@ const MainMapPage: React.FC = () => {
   const { islandId = '' } = useParams<{ islandId: string }>();
   const location = useLocation();
   const navState = location.state as NavState;
+  const onboardingJourney =
+    Boolean(navState?.onboardingJourney) || isOnboardingJourneyActive();
 
   const [layoutKey, setLayoutKey] = useState<MainMapLayoutKey>(() =>
     detectMainMapLayoutKey(),
@@ -311,13 +318,28 @@ const MainMapPage: React.FC = () => {
   }, [islandId, location.key]);
 
   useEffect(() => {
+    if (!islandId) return;
+    rememberLastStoryIsland(islandId, {
+      title: navState?.title,
+      path: `/map/${encodeURIComponent(islandId)}/main`,
+    });
+  }, [islandId, navState?.title]);
+
+  useEffect(() => {
     const onVisible = () => {
       if (document.visibilityState === 'visible') {
         setProgressTick((t) => t + 1);
       }
     };
     document.addEventListener('visibilitychange', onVisible);
-    return () => document.removeEventListener('visibilitychange', onVisible);
+    const onProgress = () => setProgressTick((t) => t + 1);
+    window.addEventListener('islandStoryProgressUpdated', onProgress);
+    const unsub = profileService.onProfileChange(onProgress);
+    return () => {
+      document.removeEventListener('visibilitychange', onVisible);
+      window.removeEventListener('islandStoryProgressUpdated', onProgress);
+      unsub();
+    };
   }, []);
 
   useEffect(() => {
@@ -375,7 +397,7 @@ const MainMapPage: React.FC = () => {
         const list = Array.isArray(data.stories) ? data.stories : [];
         setStories(
           [...list]
-            .filter((s) => s && s._id)
+            .filter((s) => isPlayableMainMapStory(s))
             .sort((a, b) => (a.order ?? 0) - (b.order ?? 0)),
         );
       } catch {
@@ -409,6 +431,11 @@ const MainMapPage: React.FC = () => {
     }));
   }, [stories, layoutKey, islandId, progressTick]);
 
+  const firstPack = useMemo(
+    () => markers.find((m) => !m.locked) || markers[0] || null,
+    [markers],
+  );
+
   const showLockHint = useCallback(() => {
     setLockHint('Finish the story before this one!');
     if (lockHintTimerRef.current != null) {
@@ -440,17 +467,22 @@ const MainMapPage: React.FC = () => {
         showLockHint();
         return;
       }
+      if (onboardingJourney && firstPack && story._id !== firstPack.story._id) {
+        return;
+      }
       // Story intro plays only after icon tap (IslandScene), not on main map.
       const qs = `?storyId=${encodeURIComponent(story._id)}`;
       navigate(`/sail/${encodeURIComponent(islandId)}/lesson${qs}`, {
         state: {
           title: label,
+          heroImageUrl: resolveBibleMapMediaUrl(story.heroImageUrl) || undefined,
           fromMainMap: true,
           fromSail: Boolean(navState?.fromSail),
+          onboardingJourney: Boolean(onboardingJourney),
         },
       });
     },
-    [navigate, islandId, navState?.fromSail, showLockHint],
+    [navigate, islandId, navState?.fromSail, showLockHint, onboardingJourney, firstPack],
   );
 
   const hasVideo = Boolean(mainMapVideoUrl);
@@ -556,7 +588,9 @@ const MainMapPage: React.FC = () => {
                 type="button"
                 onClick={() => handleStoryTap(story, label, locked)}
                 className={`absolute flex items-center justify-center touch-manipulation focus:outline-none ${
-                  locked ? 'cursor-not-allowed' : ''
+                  locked || (onboardingJourney && firstPack && story._id !== firstPack.story._id)
+                    ? 'cursor-not-allowed'
+                    : ''
                 }`}
                 style={{
                   left: `${position.x}%`,
@@ -564,6 +598,14 @@ const MainMapPage: React.FC = () => {
                   width: `${size.w}%`,
                   height: `${size.h}%`,
                   transform: 'translate(-50%, -50%)',
+                  pointerEvents:
+                    onboardingJourney && firstPack && story._id !== firstPack.story._id
+                      ? 'none'
+                      : 'auto',
+                  filter:
+                    onboardingJourney && firstPack && story._id !== firstPack.story._id
+                      ? 'grayscale(1) brightness(0.65)'
+                      : undefined,
                   animation: reduceMotion
                     ? undefined
                     : `main-map-icon-pop 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) both`,
@@ -611,7 +653,21 @@ const MainMapPage: React.FC = () => {
         </div>
       )}
 
-      {/* Floating chrome — back only; does not redefine icon % space */}
+      {onboardingJourney && firstPack && (
+        <div
+          className="absolute z-30 pointer-events-none flex flex-col items-center"
+          style={{
+            left: `${firstPack.position.x}%`,
+            top: `${firstPack.position.y}%`,
+            transform: 'translate(-50%, calc(-100% - 18px))',
+          }}
+        >
+          <span className="ob-tap-story-pack">Tap the first story pack</span>
+        </div>
+      )}
+
+      {/* Floating chrome — back only; hidden during first-sail guided tour */}
+      {!onboardingJourney && (
       <button
         type="button"
         onClick={handleBack}
@@ -624,6 +680,7 @@ const MainMapPage: React.FC = () => {
       >
         <ArrowLeft size={22} className="text-white drop-shadow" strokeWidth={2.6} />
       </button>
+      )}
 
       <div className="absolute inset-0 z-20 pointer-events-none">
         {loading && (
@@ -658,14 +715,29 @@ const MainMapPage: React.FC = () => {
           </div>
         )}
 
+        {/* Published island with no story packs yet. The ocean
+            map taps straight in here now, so a kid can land on it: give the
+            same wood-and-gold way out the load-error state has instead of a
+            caption on an island they can do nothing with. */}
         {!loading && hasBg && markers.length === 0 && (
-          <div
-            className="absolute inset-x-0 z-20 flex justify-center px-4 pointer-events-none"
-            style={{ bottom: 'max(calc(var(--safe-area-bottom, 0px) + 40px), 40px)' }}
-          >
-            <p className="text-center text-sm font-display font-bold text-white/95 bg-black/45 rounded-xl px-4 py-2.5 max-w-[90%]">
-              No story packs on this island yet.
+          <div className="absolute inset-0 z-20 flex flex-col items-center justify-center gap-3 px-6 text-center pointer-events-auto">
+            <p className="font-display font-black text-lg text-white drop-shadow">
+              No stories on this island yet!
             </p>
+            <p className="text-white/80 text-sm max-w-xs">
+              This one is still being built. Sail back and pick another island.
+            </p>
+            <button
+              type="button"
+              onClick={handleBack}
+              className="mt-2 px-5 py-2.5 rounded-2xl font-display font-black text-[#3E1F07] border-2 border-[#B8860B] active:translate-y-[1px]"
+              style={{
+                background: 'linear-gradient(180deg, #FFE55C 0%, #FFD700 45%, #DAA520 100%)',
+                boxShadow: '0 3px 0 #8B6914',
+              }}
+            >
+              Back to Map
+            </button>
           </div>
         )}
 
@@ -715,6 +787,26 @@ const MainMapPage: React.FC = () => {
           55% { transform: translate(-50%, -50%) scale(1.14); opacity: 1; }
           75% { transform: translate(-50%, -50%) scale(0.94); }
           100% { transform: translate(-50%, -50%) scale(1); opacity: 1; }
+        }
+        .ob-tap-story-pack {
+          display: inline-flex;
+          padding: 7px 14px;
+          border-radius: 999px;
+          font-family: inherit;
+          font-weight: 900;
+          font-size: 13px;
+          letter-spacing: 0.03em;
+          color: #3E1F07;
+          white-space: nowrap;
+          background: linear-gradient(180deg, #FFE55C 0%, #FFD700 45%, #DAA520 100%);
+          border: 2px solid #B8860B;
+          box-shadow: 0 3px 0 #8B6914, 0 8px 16px rgba(0,0,0,0.35);
+          animation: ob-tap-story-bounce 1.15s ease-in-out infinite;
+          text-shadow: 0 1px 0 rgba(255,255,255,0.45);
+        }
+        @keyframes ob-tap-story-bounce {
+          0%, 100% { transform: translateY(0); }
+          50% { transform: translateY(-8px); }
         }
         @media (prefers-reduced-motion: reduce) {
           .main-map-sky-cloud-track {

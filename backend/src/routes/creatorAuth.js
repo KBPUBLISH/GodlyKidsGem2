@@ -3,6 +3,7 @@ const router = express.Router();
 const jwt = require('jsonwebtoken');
 const Creator = require('../models/Creator');
 const { centsPerToken } = require('../config/creatorEarnings');
+const { getJwtSecret, JWT_EXPIRY } = require('../config/jwt');
 
 // Middleware to authenticate creator
 const authenticateCreator = async (req, res, next) => {
@@ -20,7 +21,7 @@ const authenticateCreator = async (req, res, next) => {
             return res.status(401).json({ error: 'No token provided' });
         }
 
-        const decoded = jwt.verify(token, process.env.JWT_SECRET || 'secret');
+        const decoded = jwt.verify(token, getJwtSecret());
         
         if (decoded.role !== 'creator') {
             return res.status(403).json({ error: 'Creator access required' });
@@ -113,8 +114,8 @@ router.post('/accept-invite', async (req, res) => {
                 email: creator.email,
                 role: 'creator'
             },
-            process.env.JWT_SECRET || 'secret',
-            { expiresIn: '30d' }
+            getJwtSecret(),
+            { expiresIn: JWT_EXPIRY.session }
         );
         
         res.json({
@@ -173,8 +174,8 @@ router.post('/login', async (req, res) => {
                 email: creator.email,
                 role: 'creator'
             },
-            process.env.JWT_SECRET || 'secret',
-            { expiresIn: '30d' }
+            getJwtSecret(),
+            { expiresIn: JWT_EXPIRY.session }
         );
         
         res.json({

@@ -10,18 +10,31 @@ const TutorialEvent = require('../models/TutorialEvent');
 const EmailSubscriber = require('../models/EmailSubscriber');
 const GamePlayEvent = require('../models/GamePlayEvent');
 const { authenticateAdmin } = require('../middleware/auth');
+const { isAdminEmail } = require('../config/adminEmails');
 
 function escapeRegexForEmail(str) {
     return String(str).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
-function getProtectedAdminEmails() {
-    const envEmails = process.env.ADMIN_EMAILS;
-    if (envEmails) {
-        return envEmails.split(',').map((e) => e.trim().toLowerCase()).filter(Boolean);
-    }
-    return ['admin@godlykids.com', 'support@godlykids.com', 'hello@kbpublish.org'];
-}
+/**
+ * Authorization policy for this router.
+ *
+ * Every route here reads or writes app-user data, so all of them require an
+ * admin (a JWT whose account is on the ADMIN_EMAILS allowlist, or X-Admin-Key)
+ * except the three event-ingest POSTs:
+ *
+ *   POST /sync-stats
+ *   POST /onboarding/event
+ *   POST /tutorial/event
+ *
+ * Those are called by the kids app, which has no login at all for device-only
+ * users - services/activityTrackingService.ts posts a device id in the body
+ * with no Authorization header - so requiring a token would silently stop
+ * telemetry for most of the install base. They take an id from the caller and
+ * return only the record they just wrote, so they expose no other user's data.
+ * The trade-off is that the id is unverified: treat their contents as claims,
+ * not facts.
+ */
 
 /**
  * GET /api/analytics/users
@@ -33,7 +46,7 @@ function getProtectedAdminEmails() {
  *   sortOrder: 'desc' (default) | 'asc'
  *   timeRange: '1d' | '1w' | '1m' | '3m' | 'all' (default: 'all')
  */
-router.get('/users', async (req, res) => {
+router.get('/users', authenticateAdmin, async (req, res) => {
     try {
         const { sortBy = 'createdAt', sortOrder = 'desc', timeRange = 'all' } = req.query;
         const now = new Date();
@@ -535,6 +548,7 @@ router.get('/users', async (req, res) => {
 /**
  * POST /api/analytics/sync-stats
  * Sync activity stats from the frontend app
+ * Public: called by the kids app with no login (see the note at the top).
  */
 router.post('/sync-stats', async (req, res) => {
     try {
@@ -602,7 +616,7 @@ router.post('/sync-stats', async (req, res) => {
  * GET /api/analytics/users/:userId
  * Get detailed analytics for a specific user
  */
-router.get('/users/:userId', async (req, res) => {
+router.get('/users/:userId', authenticateAdmin, async (req, res) => {
     try {
         const { userId } = req.params;
         
@@ -647,6 +661,7 @@ router.get('/users/:userId', async (req, res) => {
 /**
  * POST /api/analytics/onboarding/event
  * Track an onboarding event from the app
+ * Public: called by the kids app with no login (see the note at the top).
  */
 router.post('/onboarding/event', async (req, res) => {
     try {
@@ -709,7 +724,7 @@ router.post('/onboarding/event', async (req, res) => {
  * Query params:
  *   days: number of days to look back (default 30)
  */
-router.get('/onboarding', async (req, res) => {
+router.get('/onboarding', authenticateAdmin, async (req, res) => {
     try {
         const days = parseInt(req.query.days) || 30;
         const startDate = new Date();
@@ -937,7 +952,7 @@ router.get('/onboarding', async (req, res) => {
  * Dive into the Bible / Create Your Story funnel and conversion analytics
  * Query params: days (default 30)
  */
-router.get('/onboarding/book-building', async (req, res) => {
+router.get('/onboarding/book-building', authenticateAdmin, async (req, res) => {
     try {
         const days = parseInt(req.query.days) || 30;
         const startDate = new Date();
@@ -1103,7 +1118,7 @@ router.get('/onboarding/book-building', async (req, res) => {
  * Global paywall funnel and conversion analytics (all sources)
  * Query params: days (default 30)
  */
-router.get('/paywall', async (req, res) => {
+router.get('/paywall', authenticateAdmin, async (req, res) => {
     try {
         const days = parseInt(req.query.days) || 30;
         const startDate = new Date();
@@ -1261,7 +1276,7 @@ router.get('/paywall', async (req, res) => {
  * List kid characters from Create Your Story / Kids Monthly books (CustomMonthlyBook).
  * Query params: days (default 30)
  */
-router.get('/onboarding/kids-characters', async (req, res) => {
+router.get('/onboarding/kids-characters', authenticateAdmin, async (req, res) => {
     try {
         const days = parseInt(req.query.days) || 30;
         const startDate = new Date();
@@ -1315,7 +1330,7 @@ router.get('/onboarding/kids-characters', async (req, res) => {
  * POST /api/analytics/admin/add-coins
  * Add coins to a user by email (admin only)
  */
-router.post('/admin/add-coins', async (req, res) => {
+router.post('/admin/add-coins', authenticateAdmin, async (req, res) => {
     try {
         const { email, coins } = req.body;
         
@@ -1381,15 +1396,13 @@ router.delete('/admin/users/:id', authenticateAdmin, async (req, res) => {
             return res.status(400).json({ success: false, message: 'Invalid user id' });
         }
 
-        const protectedEmails = getProtectedAdminEmails();
-
         if (source === 'auth') {
             const authUser = await User.findById(id);
             if (!authUser) {
                 return res.status(404).json({ success: false, message: 'Login user not found' });
             }
             const emailLower = authUser.email.toLowerCase();
-            if (protectedEmails.includes(emailLower)) {
+            if (isAdminEmail(emailLower)) {
                 return res.status(403).json({
                     success: false,
                     message: 'Cannot delete a protected admin account',
@@ -1410,7 +1423,7 @@ router.delete('/admin/users/:id', authenticateAdmin, async (req, res) => {
             return res.status(404).json({ success: false, message: 'App user not found' });
         }
         const em = (appUser.email || '').trim().toLowerCase();
-        if (em && protectedEmails.includes(em)) {
+        if (isAdminEmail(em)) {
             return res.status(403).json({
                 success: false,
                 message: 'Cannot delete a protected account',
@@ -1449,7 +1462,7 @@ router.delete('/admin/users/:id', authenticateAdmin, async (req, res) => {
  *   type: 'book' | 'playlist' | 'all' (default: 'all')
  *   timeRange: 'day' | 'week' | 'month' | 'all' (default: 'all')
  */
-router.get('/content', async (req, res) => {
+router.get('/content', authenticateAdmin, async (req, res) => {
     try {
         const PlayEvent = require('../models/PlayEvent');
         const Book = require('../models/Book');
@@ -1847,6 +1860,7 @@ const TUTORIAL_STEP_LABELS = {
 /**
  * POST /api/analytics/tutorial/event
  * Track a tutorial step event from the app
+ * Public: called by the kids app with no login (see the note at the top).
  */
 router.post('/tutorial/event', async (req, res) => {
     try {
@@ -1892,7 +1906,7 @@ router.post('/tutorial/event', async (req, res) => {
  * Query params:
  *   days: number of days to look back (default 30)
  */
-router.get('/tutorial', async (req, res) => {
+router.get('/tutorial', authenticateAdmin, async (req, res) => {
     try {
         const days = parseInt(req.query.days) || 30;
         const startDate = new Date();
@@ -2037,7 +2051,7 @@ router.get('/tutorial', async (req, res) => {
  * GET /api/analytics/onboarding/preferences
  * Get aggregated data on user-selected goals and features from onboarding
  */
-router.get('/onboarding/preferences', async (req, res) => {
+router.get('/onboarding/preferences', authenticateAdmin, async (req, res) => {
     try {
         const days = parseInt(req.query.days) || 30;
         const startDate = new Date();
@@ -2109,7 +2123,7 @@ router.get('/onboarding/preferences', async (req, res) => {
  * Query params:
  *   timeRange: 'day' | 'week' | 'month' | 'all' (default: 'all')
  */
-router.get('/games', async (req, res) => {
+router.get('/games', authenticateAdmin, async (req, res) => {
     try {
         const { timeRange = 'all' } = req.query;
         
@@ -2312,7 +2326,7 @@ router.get('/games', async (req, res) => {
  * Query params:
  *   days: number of days to look back for cohorts (default 30)
  */
-router.get('/retention', async (req, res) => {
+router.get('/retention', authenticateAdmin, async (req, res) => {
     try {
         const days = parseInt(req.query.days) || 30;
         const now = new Date();
@@ -2511,7 +2525,7 @@ router.get('/retention', async (req, res) => {
  * Lesson-specific retention: DAU, recurring vs first-time users, cohort retention, top lessons.
  * Query params: days (default 30)
  */
-router.get('/lesson-retention', async (req, res) => {
+router.get('/lesson-retention', authenticateAdmin, async (req, res) => {
     try {
         const AnalyticsEvent = require('../models/AnalyticsEvent');
         const days = parseInt(req.query.days) || 30;

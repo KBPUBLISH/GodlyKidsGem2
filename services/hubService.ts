@@ -94,16 +94,30 @@ export interface SeriesReview {
   rating: number;
   comment?: string;
   displayName: string;
+  anonymous?: boolean;
   createdAt: string;
   mine?: boolean;
   status?: 'published' | 'pending';
+}
+
+export interface SeriesReviewIdentity {
+  anonymous?: boolean;
+  displayName?: string;
+}
+
+export interface MySeriesReview {
+  rating: number;
+  comment?: string;
+  status?: 'published' | 'pending';
+  anonymous?: boolean;
+  displayName?: string;
 }
 
 export interface SeriesReviewsResult {
   averageRating: number;
   ratingCount: number;
   reviews: SeriesReview[];
-  myReview: { rating: number; comment?: string; status?: 'published' | 'pending' } | null;
+  myReview: MySeriesReview | null;
   status?: 'published' | 'pending';
   message?: string;
 }
@@ -370,7 +384,10 @@ export const hubService = {
     playlistId: string,
     rating: number,
     comment: string,
+    identity?: SeriesReviewIdentity,
   ): Promise<SeriesReviewsResult> => {
+    const anonymous = identity?.anonymous !== false;
+    const displayName = anonymous ? undefined : identity?.displayName;
     const data = await fetchHub<{
       averageRating?: number;
       ratingCount?: number;
@@ -379,14 +396,20 @@ export const hubService = {
       message?: string;
     }>(`hub/playlists/${playlistId}/reviews`, {
       method: 'POST',
-      body: { rating, comment },
+      body: { rating, comment, anonymous, displayName },
     }, 20000);
     const refreshed = await hubService.getReviews(playlistId).catch(() => null);
     return {
       averageRating: refreshed?.averageRating ?? data.averageRating ?? rating,
       ratingCount: refreshed?.ratingCount ?? data.ratingCount ?? 1,
       reviews: refreshed?.reviews ?? (data.review ? [data.review] : []),
-      myReview: refreshed?.myReview ?? { rating, comment, status: data.status },
+      myReview: refreshed?.myReview ?? {
+        rating,
+        comment,
+        status: data.status,
+        anonymous,
+        displayName: anonymous ? '' : displayName,
+      },
       status: data.status,
       message: data.message,
     };

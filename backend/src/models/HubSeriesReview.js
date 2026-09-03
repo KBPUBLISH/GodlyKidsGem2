@@ -18,7 +18,13 @@ const hubSeriesReviewSchema = new mongoose.Schema({
     },
     displayName: {
         type: String,
-        default: 'A parent',
+        default: 'A family',
+        maxlength: 24,
+    },
+    // Public attribution only. Auth uniqueness stays on userId / userEmail.
+    anonymous: {
+        type: Boolean,
+        default: true,
     },
     rating: {
         type: Number,

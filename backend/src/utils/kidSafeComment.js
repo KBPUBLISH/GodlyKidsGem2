@@ -264,9 +264,70 @@ function sanitizeKidComment(raw) {
     return { comment: det.comment };
 }
 
+const ANONYMOUS_DISPLAY_NAME = 'A family';
+const LEGACY_ANONYMOUS_NAMES = new Set(['a family', 'a parent', 'anonymous']);
+const DISPLAY_NAME_MIN = 2;
+const DISPLAY_NAME_MAX = 24;
+const DISPLAY_NAME_RE = /^[A-Za-z0-9 ]+$/;
+
+const NAME_MESSAGES = {
+    length: 'Username must be 2–24 letters, numbers, or spaces.',
+    charset: 'Username can only use letters, numbers, and spaces.',
+    links: 'Please pick a name without links or email addresses.',
+    vulgar: 'Please pick a kid-friendly username.',
+};
+
+/**
+ * Public display name for a named review. Empty comment / star-only is fine;
+ * the name itself still has to be short, alphanumeric, and kid-safe.
+ */
+function checkReviewDisplayName(raw) {
+    const displayName = String(raw || '').replace(/\s+/g, ' ').trim();
+    if (displayName.length < DISPLAY_NAME_MIN || displayName.length > DISPLAY_NAME_MAX) {
+        return { ok: false, error: NAME_MESSAGES.length, reason: 'length' };
+    }
+    if (!DISPLAY_NAME_RE.test(displayName)) {
+        return { ok: false, error: NAME_MESSAGES.charset, reason: 'charset' };
+    }
+    if (hasUrlOrEmail(displayName)) {
+        return { ok: false, error: NAME_MESSAGES.links, reason: 'links' };
+    }
+    if (hasBlockedLanguage(displayName)) {
+        return { ok: false, error: NAME_MESSAGES.vulgar, reason: 'vulgar' };
+    }
+    return { ok: true, displayName };
+}
+
+function reviewIsAnonymous(review) {
+    if (review && typeof review.anonymous === 'boolean') return review.anonymous;
+    return LEGACY_ANONYMOUS_NAMES.has(String(review?.displayName || '').trim().toLowerCase());
+}
+
+function publicReviewDisplayName(review) {
+    if (reviewIsAnonymous(review)) return ANONYMOUS_DISPLAY_NAME;
+    const name = String(review?.displayName || '').trim();
+    return name || ANONYMOUS_DISPLAY_NAME;
+}
+
+/** Default is anonymous when the client omits the flag. */
+function resolveReviewAttribution(body) {
+    const anonymous = !(body?.anonymous === false || body?.anonymous === 'false');
+    if (anonymous) {
+        return { ok: true, anonymous: true, displayName: ANONYMOUS_DISPLAY_NAME };
+    }
+    const named = checkReviewDisplayName(body?.displayName);
+    if (!named.ok) return named;
+    return { ok: true, anonymous: false, displayName: named.displayName };
+}
+
 module.exports = {
     sanitizeKidComment,
     checkReviewComment,
     checkReviewCommentDeterministic,
+    checkReviewDisplayName,
+    reviewIsAnonymous,
+    publicReviewDisplayName,
+    resolveReviewAttribution,
+    ANONYMOUS_DISPLAY_NAME,
     MESSAGES,
 };

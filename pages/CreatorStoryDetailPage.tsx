@@ -28,6 +28,32 @@ const NAVY = '#173A5E';
 const CREAM = '#F7F0E6';
 const MUTED = '#8A7A68';
 const COIN = '/assets/ui/coin.png';
+const REVIEW_NAME_KEY = 'godlykids_review_display_name';
+const REVIEW_NAME_RE = /^[A-Za-z0-9 ]+$/;
+
+const readLastReviewName = (): string => {
+  try {
+    return localStorage.getItem(REVIEW_NAME_KEY) || '';
+  } catch {
+    return '';
+  }
+};
+
+const rememberReviewName = (name: string) => {
+  try {
+    localStorage.setItem(REVIEW_NAME_KEY, name);
+  } catch {
+    // ignore quota / private mode
+  }
+};
+
+const validateReviewDisplayName = (raw: string): string | null => {
+  const name = raw.replace(/\s+/g, ' ').trim();
+  if (name.length < 2 || name.length > 24 || !REVIEW_NAME_RE.test(name)) {
+    return 'Username must be 2–24 letters, numbers, or spaces.';
+  }
+  return null;
+};
 
 const StarRating = ({ rating, reviews }: { rating: number; reviews: number }) => (
   <div className="flex items-center gap-1">
@@ -131,6 +157,8 @@ const CreatorStoryDetailPage: React.FC = () => {
   const [reviewSummary, setReviewSummary] = useState({ average: 0, count: 0 });
   const [myRating, setMyRating] = useState(0);
   const [myComment, setMyComment] = useState('');
+  const [postAnonymous, setPostAnonymous] = useState(true);
+  const [myDisplayName, setMyDisplayName] = useState(readLastReviewName);
   const [reviewBusy, setReviewBusy] = useState(false);
   const [reviewMessage, setReviewMessage] = useState<string | null>(null);
   const [reviewTone, setReviewTone] = useState<'ok' | 'err' | null>(null);
@@ -171,6 +199,11 @@ const CreatorStoryDetailPage: React.FC = () => {
           setMyRating(reviewData.myReview.rating);
           setMyComment(reviewData.myReview.comment || '');
           setMyReviewPending(reviewData.myReview.status === 'pending');
+          const named = reviewData.myReview.anonymous === false;
+          setPostAnonymous(!named);
+          if (named && reviewData.myReview.displayName) {
+            setMyDisplayName(reviewData.myReview.displayName);
+          }
         }
       }
     } catch (error) {
@@ -639,21 +672,67 @@ const CreatorStoryDetailPage: React.FC = () => {
             className="mt-3 w-full rounded-[1rem] px-3 py-2 font-display text-[13px] outline-none"
             style={{ background: '#F8EBDA', color: NAVY, minHeight: '4.5rem' }}
           />
+          <label className="mt-3 flex items-center gap-2 font-display text-[13px]" style={{ color: NAVY }}>
+            <input
+              type="checkbox"
+              checked={postAnonymous}
+              onChange={(event) => setPostAnonymous(event.target.checked)}
+              className="h-4 w-4 accent-[#173A5E]"
+            />
+            Post anonymously
+          </label>
+          {postAnonymous ? (
+            <p className="mt-1 font-display text-[11px]" style={{ color: MUTED }}>
+              Your review will show as “A family”.
+            </p>
+          ) : (
+            <>
+              <input
+                type="text"
+                value={myDisplayName}
+                onChange={(event) => setMyDisplayName(event.target.value.slice(0, 24))}
+                placeholder="Display name (2–24 letters or numbers)"
+                maxLength={24}
+                autoComplete="nickname"
+                className="mt-2 w-full rounded-[1rem] px-3 py-2 font-display text-[13px] outline-none"
+                style={{ background: '#F8EBDA', color: NAVY }}
+              />
+              <p className="mt-1 font-display text-[11px]" style={{ color: MUTED }}>
+                This name is shown on your review — not your email.
+              </p>
+            </>
+          )}
           <button
             type="button"
             disabled={reviewBusy || myRating < 1}
             onClick={() => {
               if (myRating < 1) return;
+              const trimmedName = myDisplayName.replace(/\s+/g, ' ').trim();
+              if (!postAnonymous) {
+                const nameError = validateReviewDisplayName(trimmedName);
+                if (nameError) {
+                  setReviewTone('err');
+                  setReviewMessage(nameError);
+                  return;
+                }
+              }
               setReviewBusy(true);
               setReviewMessage(null);
               setReviewTone(null);
               void hubService
-                .saveReview(story.id, myRating, myComment)
+                .saveReview(story.id, myRating, myComment, {
+                  anonymous: postAnonymous,
+                  displayName: postAnonymous ? undefined : trimmedName,
+                })
                 .then((data) => {
                   setReviews(data.reviews);
                   setReviewSummary({ average: data.averageRating, count: data.ratingCount });
                   const pending = data.status === 'pending' || data.myReview?.status === 'pending';
                   setMyReviewPending(pending);
+                  if (!postAnonymous) {
+                    setMyDisplayName(trimmedName);
+                    rememberReviewName(trimmedName);
+                  }
                   setReviewTone('ok');
                   setReviewMessage(data.message || 'Saved — thank you!');
                 })
@@ -686,7 +765,7 @@ const CreatorStoryDetailPage: React.FC = () => {
               {reviews.slice(0, 8).map((review) => (
                 <li key={review.id} className="border-t border-[#ead9c4] pt-3">
                   <p className="font-display font-bold text-[12px]" style={{ color: NAVY }}>
-                    {review.displayName}
+                    {review.displayName || 'A family'}
                     {review.mine ? ' (you)' : ''}
                   </p>
                   <StarRating rating={review.rating} reviews={0} />

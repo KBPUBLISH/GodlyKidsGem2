@@ -8,6 +8,9 @@ const {
     checkReviewCommentDeterministic,
     checkReviewComment,
     sanitizeKidComment,
+    checkReviewDisplayName,
+    resolveReviewAttribution,
+    publicReviewDisplayName,
     MESSAGES,
 } = require('../src/utils/kidSafeComment');
 
@@ -57,6 +60,22 @@ const syncReject = sanitizeKidComment('asdfghjkl');
 check('sanitizeKidComment still rejects garbage', Boolean(syncReject.error));
 const syncAccept = sanitizeKidComment('');
 check('sanitizeKidComment star-only stays empty', syncAccept.comment === '');
+
+const namedOk = checkReviewDisplayName('  Crew Mom  ');
+check('display name accepts letters and spaces', namedOk.ok === true && namedOk.displayName === 'Crew Mom');
+check('display name rejects one letter', checkReviewDisplayName('A').ok === false);
+check('display name rejects hyphen', checkReviewDisplayName('bad-name').ok === false);
+check('display name rejects email', checkReviewDisplayName('has@email.com').ok === false);
+check('display name rejects slur-like word', checkReviewDisplayName('stupid').ok === false);
+
+const defaultAttr = resolveReviewAttribution({});
+check('omitted attribution is anonymous', defaultAttr.ok === true && defaultAttr.anonymous === true && defaultAttr.displayName === 'A family');
+const namedAttr = resolveReviewAttribution({ anonymous: false, displayName: 'Noahs Dad' });
+check('named attribution keeps username', namedAttr.ok === true && namedAttr.anonymous === false && namedAttr.displayName === 'Noahs Dad');
+const badAttr = resolveReviewAttribution({ anonymous: false, displayName: 'x' });
+check('named attribution rejects short username', badAttr.ok === false);
+check('legacy A parent lists as A family', publicReviewDisplayName({ displayName: 'A parent' }) === 'A family');
+check('named review lists username not email', publicReviewDisplayName({ anonymous: false, displayName: 'The Smiths', userEmail: 'secret@example.com' }) === 'The Smiths');
 
 const savedKey = process.env.OPENAI_API_KEY;
 delete process.env.OPENAI_API_KEY;

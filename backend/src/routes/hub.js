@@ -7,7 +7,12 @@ const HubSeriesReview = require('../models/HubSeriesReview');
 const { authenticateCreator } = require('./creatorAuth');
 const { authenticateAdmin, optionalAuthenticateUser } = require('../middleware/auth');
 const { identityFromRequest } = require('../utils/appIdentity');
-const { checkReviewComment } = require('../utils/kidSafeComment');
+const {
+    checkReviewComment,
+    resolveReviewAttribution,
+    reviewIsAnonymous,
+    publicReviewDisplayName,
+} = require('../utils/kidSafeComment');
 const { getOrCreateAppUser } = require('../utils/grantTokenPack');
 
 const {
@@ -172,19 +177,30 @@ router.get('/playlists/:id/reviews', optionalAuthenticateUser, async (req, res) 
             ? await HubSeriesReview.findOne({ playlistId: req.params.id, userId: identity.userId }).lean()
             : null;
 
+        const mineAnonymous = mine ? reviewIsAnonymous(mine) : true;
         res.json({
             averageRating: playlist.averageRating || 0,
             ratingCount: playlist.ratingCount || 0,
-            reviews: reviews.map((review) => ({
-                id: review._id,
-                rating: review.rating,
-                comment: review.comment,
-                displayName: review.displayName || 'A parent',
-                createdAt: review.createdAt,
-                mine: identity.userId ? review.userId === identity.userId : false,
-            })),
+            reviews: reviews.map((review) => {
+                const anonymous = reviewIsAnonymous(review);
+                return {
+                    id: review._id,
+                    rating: review.rating,
+                    comment: review.comment,
+                    displayName: publicReviewDisplayName(review),
+                    anonymous,
+                    createdAt: review.createdAt,
+                    mine: identity.userId ? review.userId === identity.userId : false,
+                };
+            }),
             myReview: mine
-                ? { rating: mine.rating, comment: mine.comment, status: mine.status || 'published' }
+                ? {
+                    rating: mine.rating,
+                    comment: mine.comment,
+                    status: mine.status || 'published',
+                    anonymous: mineAnonymous,
+                    displayName: mineAnonymous ? '' : publicReviewDisplayName(mine),
+                }
                 : null,
         });
     } catch (error) {
@@ -216,13 +232,19 @@ router.post('/playlists/:id/reviews', optionalAuthenticateUser, async (req, res)
             return res.status(400).json({ error: cleaned.error, reason: cleaned.reason });
         }
 
+        const attribution = resolveReviewAttribution(req.body);
+        if (!attribution.ok) {
+            return res.status(400).json({ error: attribution.error, reason: attribution.reason });
+        }
+
         const review = await HubSeriesReview.findOneAndUpdate(
             { playlistId: playlist._id, userId: identity.userId },
             {
                 playlistId: playlist._id,
                 userId: identity.userId,
                 userEmail: identity.userEmail,
-                displayName: 'A parent',
+                displayName: attribution.displayName,
+                anonymous: attribution.anonymous,
                 rating,
                 comment: cleaned.comment,
                 status: cleaned.status,
@@ -244,7 +266,8 @@ router.post('/playlists/:id/reviews', optionalAuthenticateUser, async (req, res)
                 id: review._id,
                 rating: review.rating,
                 comment: review.comment,
-                displayName: review.displayName,
+                displayName: publicReviewDisplayName(review),
+                anonymous: reviewIsAnonymous(review),
                 createdAt: review.createdAt,
                 mine: true,
                 status: review.status,
@@ -930,7 +953,8 @@ router.get('/admin/pending', authenticateAdmin, async (req, res) => {
                 id: review._id,
                 rating: review.rating,
                 comment: review.comment,
-                displayName: review.displayName || 'A parent',
+                displayName: publicReviewDisplayName(review),
+                anonymous: reviewIsAnonymous(review),
                 holdReason: review.holdReason || '',
                 createdAt: review.createdAt,
                 playlistId: review.playlistId?._id || review.playlistId,

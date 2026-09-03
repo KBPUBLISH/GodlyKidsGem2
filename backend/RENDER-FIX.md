@@ -47,6 +47,24 @@ If you want to use the `render.yaml` file:
 3. Connect your GitHub repository: `https://github.com/KBPUBLISH/BackendGK2.0`
 4. Render will automatically detect `render.yaml` and create the service with correct settings
 
+## Required Environment Variables
+
+`JWT_SECRET` must be set on the service (Render → **Environment**) and in your local
+`.env` — the server throws on startup if it is missing, since there is no longer an
+insecure default secret. Generate one with `openssl rand -hex 32`. Changing it logs
+every user, admin, creator and church out.
+
+`ADMIN_EMAILS` must also be set (Render → **Environment**) to a comma-separated list of
+the addresses allowed into the admin portal, e.g.
+`admin@yourdomain.com,support@yourdomain.com`. There is no longer a hard-coded fallback
+list: app registration is open and unverified, so a default would have let anyone
+register one of those addresses and gain admin. Addresses are matched
+case-insensitively and stray whitespace is ignored.
+
+Unlike `JWT_SECRET` a missing `ADMIN_EMAILS` does **not** stop the server — the kids
+app, creator portal and church portal keep serving — but it logs an error on boot and
+**no account is an admin**, so nobody can log into the admin portal until it is set.
+
 ## Current Configuration
 
 - **Start Command:** `npm start` (which runs `node src/index.js`)

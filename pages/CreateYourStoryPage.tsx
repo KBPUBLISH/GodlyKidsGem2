@@ -10,6 +10,7 @@ import { activityTrackingService } from '../services/activityTrackingService';
 import { NotificationService } from '../services/notificationService';
 import { DespiaService } from '../services/despiaService';
 import { BookOpen, Sparkles, RotateCcw, Volume2, Mic, ChevronLeft, ChevronRight, Loader2, Compass, Check, Plus, Music } from 'lucide-react';
+import { rewardsService } from '../services/rewardsService';
 
 type Step = 1 | 2 | 3 | 4;
 
@@ -125,13 +126,29 @@ const CreateYourStoryPage: React.FC = () => {
               : Array.isArray(data)
                 ? data
                 : [];
-            setStories(list.map((b: any) => ({
+            const mapped = list.map((b: any) => ({
               _id: b._id,
               title: b.title,
               description: b.description,
               coverImage: b.files?.coverImage || b.coverImage || null,
               bibleCharacter: b.featuredCharacterId ? { displayName: b.featuredCharacterId.displayName } : undefined,
-            })));
+            }));
+            // Stub: append Rewards-unlocked monthly book templates not already in the published list
+            const unlocked = rewardsService.getUnlockedBookTemplates();
+            const seen = new Set(mapped.map((s: { _id: string }) => s._id));
+            for (const t of unlocked) {
+              if (!seen.has(t.bookId)) {
+                mapped.unshift({
+                  _id: t.bookId,
+                  title: t.title,
+                  description: undefined,
+                  coverImage: t.coverUrl || null,
+                  bibleCharacter: undefined,
+                });
+                seen.add(t.bookId);
+              }
+            }
+            setStories(mapped);
           }
         }
       } catch (e) {
@@ -1001,6 +1018,7 @@ const CreateYourStoryPage: React.FC = () => {
                 <div className="flex-shrink-0 pt-2 text-center">
                   <h2 className="text-2xl sm:text-3xl font-bold text-white">Pick your story</h2>
                   <p className="text-white/80 text-base mt-1">Choose which story you want to star in.</p>
+                  {/* Rewards book_template unlocks show NEW here; locked monthly books unlocked via loot stay in this chooser. */}
                 </div>
                 <div className="flex flex-col items-center pt-8 pb-8">
                   {!storiesLoaded && !error && <p className="text-white/70">Loading stories...</p>}
@@ -1030,10 +1048,15 @@ const CreateYourStoryPage: React.FC = () => {
                         {stories.map((s) => {
                           const coverUrl = s.coverImage?.startsWith('http') ? s.coverImage : s.coverImage ? `${getApiRoot()}${s.coverImage.startsWith('/') ? '' : '/'}${s.coverImage}` : null;
                           const isSelected = selectedBookId === s._id;
+                          const rewardTpl = rewardsService.getUnlockedBookTemplates().find((t) => t.bookId === s._id);
+                          const isRewardNew = Boolean(rewardTpl?.isNew);
                           return (
                             <button
                               key={s._id}
-                              onClick={() => setSelectedBookId(s._id)}
+                              onClick={() => {
+                                if (rewardTpl) rewardsService.markBookTemplateSeen(rewardTpl.id);
+                                setSelectedBookId(s._id);
+                              }}
                               className={`flex flex-col items-center transition-all focus:outline-none focus:ring-0 ${
                                 isSelected ? 'ring-2 ring-white rounded-2xl ring-offset-2 ring-offset-transparent' : ''
                               }`}
@@ -1049,6 +1072,11 @@ const CreateYourStoryPage: React.FC = () => {
                                     <BookOpen className="w-12 h-12 text-white/40" aria-hidden />
                                   )}
                                 </div>
+                                {isRewardNew && (
+                                  <div className="absolute top-2 left-2 bg-rose-500 text-white text-[10px] font-black px-1.5 py-0.5 rounded-full z-10 shadow">
+                                    NEW
+                                  </div>
+                                )}
                                 {/* Selection circle indicator */}
                                 <div
                                   className={`absolute top-2 right-2 w-7 h-7 rounded-full flex items-center justify-center border-2 transition-colors ${

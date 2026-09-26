@@ -57,6 +57,7 @@ router.post('/', async (req, res) => {
         // Coloring page settings
         isColoringPage: req.body.isColoringPage || false,
         coloringEndModalOnly: req.body.coloringEndModalOnly !== false, // Default to true (end modal only)
+        tapFill: req.body.tapFill || undefined,
         // Web View page settings
         isWebViewPage: req.body.isWebViewPage || false,
         webView: req.body.webView || {},

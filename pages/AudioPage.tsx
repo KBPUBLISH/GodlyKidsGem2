@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { Music, BookOpen, Play, ChevronLeft, Crown, Headphones } from 'lucide-react';
 import { ApiService } from '../services/apiService';
 import { getApiBaseUrl } from '../services/apiService';
+import CoverImage from '../components/ui/CoverImage';
 
 interface AudioItem {
     _id?: string;
@@ -330,7 +331,7 @@ const AudioPage: React.FC = () => {
                                 {/* Cover Image */}
                                 <div className="aspect-square bg-gradient-to-br from-indigo-500 to-purple-600 relative overflow-hidden">
                                     {playlist.coverImage ? (
-                                        <img
+                                        <CoverImage
                                             src={playlist.coverImage}
                                             alt={playlist.title}
                                             className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-300"

@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { Gamepad2 } from 'lucide-react';
 import { ApiService } from '../services/apiService';
 import { useUser } from '../context/UserContext';
+import { rewardsService, type UnlockedRewardGame } from '../services/rewardsService';
 
 import AvatarCompositor from '../components/avatar/AvatarCompositor';
 
@@ -44,6 +45,7 @@ const GamesPage: React.FC = () => {
   const [isErupting, setIsErupting] = useState(false);
   const [showContent, setShowContent] = useState(false);
   const [games, setGames] = useState<GameItem[]>([]);
+  const [rewardGames, setRewardGames] = useState<UnlockedRewardGame[]>([]);
   const [loading, setLoading] = useState(true);
   const [islandBlur, setIslandBlur] = useState(0);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -72,8 +74,10 @@ const GamesPage: React.FC = () => {
     try {
       const data = await ApiService.getEnabledGames({ forceRefresh });
       setGames(data);
+      setRewardGames(rewardsService.getUnlockedGames());
     } catch (error) {
       console.error('Failed to fetch games:', error);
+      setRewardGames(rewardsService.getUnlockedGames());
     } finally {
       setLoading(false);
     }
@@ -191,12 +195,46 @@ const GamesPage: React.FC = () => {
             <div className="px-4">
               {loading ? (
                 <div className="text-white font-display text-center mt-10">Loading games...</div>
-              ) : games.length === 0 ? (
+              ) : games.length === 0 && rewardGames.length === 0 ? (
                 <div className="text-white/80 font-display text-center mt-10 p-6 bg-black/20 rounded-xl backdrop-blur-sm">
                   No games available right now. Check back soon!
                 </div>
               ) : (
                 <div className="grid grid-cols-3 gap-4 max-w-md mx-auto">
+                  {rewardGames.map((rg) => (
+                      <button
+                        key={`reward-${rg.id}`}
+                        onClick={() => {
+                          rewardsService.markGameSeen(rg.id);
+                          setRewardGames(rewardsService.getUnlockedGames());
+                          navigate(`/game?url=${encodeURIComponent(rg.url)}&name=${encodeURIComponent(rg.name)}`);
+                        }}
+                        className="flex flex-col items-center gap-2 group cursor-pointer select-none focus:outline-none"
+                      >
+                        <div className="relative w-full aspect-square rounded-[22%] overflow-hidden shadow-lg border-2 border-amber-300/60 group-hover:border-amber-200 group-hover:scale-105 group-active:scale-95 transition-all">
+                          {rg.imageUrl ? (
+                            <img
+                              src={rg.imageUrl}
+                              alt={rg.name}
+                              className="w-full h-full object-cover"
+                              loading="lazy"
+                            />
+                          ) : (
+                            <div className="w-full h-full bg-gradient-to-br from-amber-500 to-orange-700 flex items-center justify-center">
+                              <Gamepad2 className="w-10 h-10 text-white/70" />
+                            </div>
+                          )}
+                          {rg.isNew && (
+                            <div className="absolute top-1 right-1 bg-rose-500 text-white text-[9px] font-black px-1.5 py-0.5 rounded-full z-10 shadow">
+                              NEW
+                            </div>
+                          )}
+                        </div>
+                        <span className="text-white text-[11px] font-display font-bold text-center leading-tight drop-shadow-md line-clamp-2 w-full">
+                          {rg.name}
+                        </span>
+                      </button>
+                  ))}
                   {games.map((game) => {
                     const displayImage = game.logo || game.coverImage;
                     return (

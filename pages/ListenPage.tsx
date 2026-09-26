@@ -12,7 +12,7 @@ import PremiumBadge from '../components/ui/PremiumBadge';
 import { getApiBaseUrl, ApiService } from '../services/apiService';
 import StormySeaError from '../components/ui/StormySeaError';
 import { playHistoryService } from '../services/playHistoryService';
-import { getCoverThumb } from '../utils/coverImage';
+import CoverImage from '../components/ui/CoverImage';
 import MusicVideosShelf from '../components/audio/MusicVideosShelf';
 
 const ageOptions = ['All Ages', '3+', '4+', '5+', '6+', '7+', '8+', '9+', '10+'];
@@ -505,7 +505,7 @@ const ListenPage: React.FC = () => {
                         {i + 1}
                       </div>
                       {playlist.coverImage ? (
-                        <img src={getCoverThumb(playlist.coverImage)} alt={playlist.title} className="w-full h-full object-cover" loading="lazy" />
+                        <CoverImage src={playlist.coverImage} alt={playlist.title} className="w-full h-full object-cover" />
                       ) : (
                         <div className="w-full h-full bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center">
                           <Music className="w-10 h-10 text-white opacity-50" />
@@ -547,7 +547,7 @@ const ListenPage: React.FC = () => {
                   >
                     <div className="relative aspect-square rounded-xl overflow-hidden border-2 border-emerald-400/40 shadow-lg group-hover:border-emerald-400/70 group-hover:scale-105 transition-all">
                       {playlist.coverImage ? (
-                        <img src={getCoverThumb(playlist.coverImage)} alt={playlist.title} className="w-full h-full object-cover" loading="lazy" />
+                        <CoverImage src={playlist.coverImage} alt={playlist.title} className="w-full h-full object-cover" />
                       ) : (
                         <div className="w-full h-full bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center">
                           <Music className="w-8 h-8 text-white opacity-50" />
@@ -734,7 +734,7 @@ const ListenPage: React.FC = () => {
                         >
                           <div className={`relative aspect-square rounded-xl overflow-hidden border-2 border-white/20 shadow-lg group-hover:border-white/40 group-hover:scale-105 transition-all ${isPlaylistLocked ? 'opacity-80' : ''}`}>
                             {playlist.coverImage ? (
-                              <img src={getCoverThumb(playlist.coverImage)} alt={playlist.title} className={`w-full h-full object-cover ${isPlaylistLocked ? 'brightness-75' : ''}`} loading="lazy" />
+                              <CoverImage src={playlist.coverImage} alt={playlist.title} className={`w-full h-full object-cover ${isPlaylistLocked ? 'brightness-75' : ''}`} />
                             ) : (
                               <div className="w-full h-full bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center">
                                 {playlist.type === 'Audiobook' ? <BookOpen className="w-10 h-10 text-white opacity-50" /> : <Music className="w-10 h-10 text-white opacity-50" />}
@@ -906,7 +906,7 @@ const ListenPage: React.FC = () => {
             {/* Wood-themed now-playing widget — over the island */}
             {isMusicIslandPlaying && activePlaylist && (() => {
               const track = activePlaylist.items[currentTrackIndex];
-              const coverImg = getCoverThumb((track as any)?.coverImage || activePlaylist.coverImage);
+              const coverSrc = (track as any)?.coverImage || activePlaylist.coverImage;
               const trackTitle = (track as any)?.title || activePlaylist.title || 'Now Playing';
               return (
                 <div className="absolute flex flex-col items-center" style={{ zIndex: 3, top: '-48%', left: '30%', width: '160%', maxWidth: 200 }}>
@@ -937,8 +937,8 @@ const ListenPage: React.FC = () => {
                     >
                       {/* Album cover */}
                       <div className="w-9 h-9 rounded-lg overflow-hidden flex-shrink-0 border border-[#8B6914]/50" style={{ boxShadow: 'inset 0 0 4px rgba(0,0,0,0.4)' }}>
-                        {coverImg ? (
-                          <img src={coverImg} alt="" className="w-full h-full object-cover" />
+                        {coverSrc ? (
+                          <CoverImage src={coverSrc} alt="" className="w-full h-full object-cover" loading="eager" />
                         ) : (
                           <div className="w-full h-full bg-[#6D4C41] flex items-center justify-center">
                             <svg width="14" height="14" viewBox="0 0 24 24" fill="#FFD700"><path d="M12 3v10.55c-.59-.34-1.27-.55-2-.55C7.79 13 6 14.79 6 17s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z"/></svg>

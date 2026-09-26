@@ -4,7 +4,7 @@ import { Mail, Gift, Sparkles, X, Check, Bell } from 'lucide-react';
 import { Capacitor } from '@capacitor/core';
 import WoodButton from '../ui/WoodButton';
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'https://godlykids-backend.onrender.com';
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'https://backendgk2-0.onrender.com';
 
 interface EmailBonusModalProps {
   isOpen: boolean;

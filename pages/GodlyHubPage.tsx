@@ -11,6 +11,7 @@ import {
   ShoppingBag
 } from 'lucide-react';
 import { tokenService, HubPlaylist, TokenBundle } from '../services/tokenService';
+import CoverImage from '../components/ui/CoverImage';
 
 const GodlyHubPage: React.FC = () => {
   const navigate = useNavigate();
@@ -55,7 +56,7 @@ const GodlyHubPage: React.FC = () => {
     >
       <div className="relative aspect-square rounded-xl overflow-hidden bg-gray-100 mb-2">
         {playlist.coverImage ? (
-          <img
+          <CoverImage
             src={playlist.coverImage}
             alt={playlist.title}
             className="w-full h-full object-cover"

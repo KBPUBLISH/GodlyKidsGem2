@@ -16,6 +16,7 @@
     "branch": "./scripts/create-work-branch.sh"
   },
   "dependencies": {
+    "@types/three": "^0.185.4",
     "audio-recorder-polyfill": "^0.4.1",
     "capacitor-rate-app": "^4.0.3",
     "despia-native": "^1.0.14",
@@ -26,7 +27,8 @@
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
     "react-onesignal": "^3.4.0",
-    "react-router-dom": "^7.9.6"
+    "react-router-dom": "^7.9.6",
+    "three": "^0.185.1"
   },
   "devDependencies": {
     "@types/node": "^22.14.0",

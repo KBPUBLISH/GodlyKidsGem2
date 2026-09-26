@@ -549,7 +549,7 @@ const SignInPage: React.FC = () => {
                   If an account exists with <span className="text-[#FFD700]">{forgotEmail}</span>, you'll receive password reset instructions.
                 </p>
                 <p className="text-white/50 text-xs mb-4">
-                  Didn't receive an email? Check your spam folder or contact us at <span className="text-[#FFD700]">support@godlykids.com</span>
+                  Didn't receive an email? Check your spam folder or contact us at <span className="text-[#FFD700]">hello@kbpublish.org</span>
                 </p>
                 <WoodButton onClick={closeForgotPasswordModal} fullWidth>
                   Back to Sign In

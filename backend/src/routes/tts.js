@@ -200,8 +200,9 @@ async function generateSingleCachedTTS(opts) {
     const apiKey = process.env.ELEVENLABS_API_KEY;
     if (!apiKey) throw new Error('apiKey is not defined');
 
-    const isMultilingual = languageCode && languageCode !== 'en';
-    const modelId = isMultilingual ? 'eleven_multilingual_v2' : 'eleven_v3';
+    // eleven_v3 is ElevenLabs' newest TTS model and covers 70+ languages,
+    // so it serves English and translated books alike.
+    const modelId = 'eleven_v3';
 
     let processedText = text;
     const bracketRegex = /\[[^\]]+\]/g;

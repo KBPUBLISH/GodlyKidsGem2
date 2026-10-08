@@ -142,6 +142,10 @@ app.use('/api/character', require('./routes/character'));
 // Devotional Stories (Personalized Stories)
 app.use('/api/devotional-stories', require('./routes/devotional-stories'));
 
+// Episode Scripts & Character Voices (Audio Production)
+app.use('/api/episode-scripts', require('./routes/episodeScriptsRoutes'));
+app.use('/api/character-voices', require('./routes/characterVoicesRoutes'));
+
 // Background Music Library (for Devotional Stories)
 app.use('/api/background-music', require('./routes/background-music'));
 
